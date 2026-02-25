@@ -1,0 +1,517 @@
+<!-- 
+  Arquivo: dashboard.html
+  Diretório: public_html/gluon/views/dashboard.html
+  
+  Pilar: Fácil Manutenção, Bonito e Rápido.
+  Cada diretório possui sua própria configuração de View. 
+  Botão de exclusão e configurações embutidos no modal de edição.
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gluon - Workspace</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        gluon: { dark: '#0f172a', primary: '#3b82f6', secondary: '#1e293b', accent: '#6366f1' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .dir-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .dir-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); }
+        .kanban-scroll::-webkit-scrollbar { width: 4px; }
+        .kanban-scroll::-webkit-scrollbar-track { background: transparent; }
+        .kanban-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        
+        /* Estilos do Radio Button Customizado (View Select no Modal) */
+        .view-radio:checked + div {
+            background-color: #3b82f6;
+            border-color: #3b82f6;
+            color: white;
+        }
+    </style>
+</head>
+<body class="bg-gluon-dark text-slate-200 min-h-screen flex flex-col font-sans selection:bg-gluon-primary selection:text-white">
+
+    <!-- Top Navigation -->
+    <nav class="bg-gluon-secondary border-b border-slate-700/50 sticky top-0 z-40 backdrop-blur-md bg-opacity-90">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-slate-800 border border-slate-600 flex items-center justify-center shadow-lg">
+                    <i class="fa-solid fa-atom text-xl text-gluon-primary"></i>
+                </div>
+                <span class="font-bold text-xl tracking-wide text-white">GLUON</span>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <!-- Botões do Topo alteram temporariamente a view atual para facilitar a navegação rápida -->
+                <div class="hidden md:flex items-center gap-2 bg-slate-800 rounded-lg p-1 border border-slate-700">
+                    <button onclick="app.setTempView('grid')" id="btn-view-grid" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Forçar Grid Temporário">
+                        <i class="fa-solid fa-border-all"></i>
+                    </button>
+                    <button onclick="app.setTempView('list')" id="btn-view-list" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Forçar List Temporário">
+                        <i class="fa-solid fa-list-ul"></i>
+                    </button>
+                    <button onclick="app.setTempView('kanban')" id="btn-view-kanban" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Forçar Kanban Temporário">
+                        <i class="fa-solid fa-columns"></i>
+                    </button>
+                </div>
+                
+                <div class="h-6 w-px bg-slate-700"></div>
+                
+                <button onclick="window.location.href='/api/auth?action=logout'" class="text-sm text-slate-400 hover:text-red-400 transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-power-off"></i> <span class="hidden sm:inline">Sair</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col h-[calc(100vh-64px)] overflow-hidden">
+        
+        <!-- Toolbar & Breadcrumbs -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 shrink-0">
+            <div class="flex items-center gap-2 text-lg text-slate-300 font-medium overflow-x-auto no-scrollbar w-full sm:w-auto" id="breadcrumbs">
+                <!-- Preenchido via JS -->
+            </div>
+
+            <button onclick="app.openModal()" class="shrink-0 bg-gluon-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2 font-medium">
+                <i class="fa-solid fa-folder-plus"></i> Novo Diretório
+            </button>
+        </div>
+
+        <!-- Loader -->
+        <div id="loader" class="hidden flex-1 flex flex-col items-center justify-center text-slate-500 gap-3">
+            <i class="fa-solid fa-circle-notch fa-spin text-3xl text-gluon-primary"></i>
+            <p>Descriptografando dados...</p>
+        </div>
+
+        <!-- Render Container -->
+        <div id="viewContainer" class="flex-1 overflow-y-auto no-scrollbar pb-10"></div>
+    </main>
+
+    <!-- Modal Unificado de Configuração de Diretório -->
+    <div id="dirModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300">
+        <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-6 transform scale-95 transition-transform duration-300" id="dirModalContent">
+            
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-semibold text-white flex items-center gap-2" id="modalTitle">
+                    <i class="fa-solid fa-folder-gear text-gluon-primary"></i> <span>Configurar Pasta</span>
+                </h3>
+                <button onclick="app.closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <form id="dirForm" onsubmit="app.saveDirectory(event)">
+                <input type="hidden" id="dirId">
+                <input type="hidden" id="dirParentId">
+
+                <!-- Nome -->
+                <div class="mb-5">
+                    <label class="block text-sm font-medium text-slate-300 mb-1">Nome da Pasta</label>
+                    <div class="relative">
+                        <i class="fa-solid fa-pen absolute left-3 top-3.5 text-slate-500 text-sm"></i>
+                        <input type="text" id="dirName" required autocomplete="off" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 pl-9 pr-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-all">
+                    </div>
+                </div>
+
+                <!-- Padrão de Visualização (Como os filhos desta pasta serão mostrados) -->
+                <div class="mb-8">
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Padrão de Visualização Padrão</label>
+                    <div class="grid grid-cols-3 gap-3">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="dirViewMode" value="grid" class="peer hidden view-radio" checked>
+                            <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-3 text-center transition-all hover:bg-slate-700">
+                                <i class="fa-solid fa-border-all block text-xl mb-1"></i>
+                                <span class="text-xs font-medium">Grid</span>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="dirViewMode" value="list" class="peer hidden view-radio">
+                            <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-3 text-center transition-all hover:bg-slate-700">
+                                <i class="fa-solid fa-list-ul block text-xl mb-1"></i>
+                                <span class="text-xs font-medium">Lista</span>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="dirViewMode" value="kanban" class="peer hidden view-radio">
+                            <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-3 text-center transition-all hover:bg-slate-700">
+                                <i class="fa-solid fa-columns block text-xl mb-1"></i>
+                                <span class="text-xs font-medium">Kanban</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Rodapé de Ações -->
+                <div class="flex justify-between items-center pt-4 border-t border-slate-700/50">
+                    <div>
+                        <!-- Botão de Excluir só aparece quando for Edição (ID preenchido) -->
+                        <button type="button" id="btnDeleteDir" onclick="app.deleteFromModal()" class="hidden text-red-400 hover:text-white hover:bg-red-500/20 px-3 py-2 rounded-lg transition-colors flex items-center gap-2 text-sm">
+                            <i class="fa-solid fa-trash"></i> <span class="hidden sm:inline">Excluir</span>
+                        </button>
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="button" onclick="app.closeModal()" class="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors text-sm font-medium">Cancelar</button>
+                        <button type="submit" id="btnSaveDir" class="px-4 py-2 bg-gluon-primary hover:bg-blue-600 text-white rounded-lg shadow-lg flex items-center gap-2 text-sm font-medium transition-all">
+                            <i class="fa-solid fa-check"></i> Salvar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Script Principal -->
+    <script>
+        const app = {
+            state: {
+                // A Raiz (Meu Cofre) começa em Grid por padrão, e guarda preferência no localStorage
+                path: [{ id: null, name: 'Meu Cofre', view: localStorage.getItem('gluon_root_view') || 'grid' }],
+                directories: [],
+                isLoading: false
+            },
+            
+            init() {
+                this.updateTopButtons();
+                this.fetchDirectories();
+            },
+
+            getCurrentParentId() {
+                return this.state.path[this.state.path.length - 1].id;
+            },
+
+            getCurrentView() {
+                return this.state.path[this.state.path.length - 1].view;
+            },
+
+            // Navegação e Estado de View
+            async enterDirectory(id, name, viewMode) {
+                // Ao entrar na pasta, o sistema herda a visualização salva no banco para ELA
+                this.state.path.push({ id, name, view: viewMode });
+                await this.fetchDirectories();
+            },
+
+            async goUpTo(index) {
+                this.state.path = this.state.path.slice(0, index + 1);
+                await this.fetchDirectories();
+            },
+
+            renderBreadcrumbs() {
+                const container = document.getElementById('breadcrumbs');
+                container.innerHTML = this.state.path.map((step, index) => {
+                    const isLast = index === this.state.path.length - 1;
+                    const color = isLast ? 'text-white font-semibold' : 'text-slate-400 hover:text-gluon-primary cursor-pointer transition-colors';
+                    const separator = isLast ? '' : '<i class="fa-solid fa-chevron-right text-sm text-slate-600 mx-2"></i>';
+                    
+                    return `
+                        <div class="flex items-center whitespace-nowrap" onclick="${isLast ? '' : `app.goUpTo(${index})`}">
+                            <span class="${color}">${index === 0 ? '<i class="fa-solid fa-vault mr-1"></i> ' : ''}${step.name}</span>
+                            ${separator}
+                        </div>
+                    `;
+                }).join('');
+            },
+
+            // --- API ---
+            async api(action, payload = {}) {
+                payload.action = action;
+                try {
+                    const res = await fetch('/api/directories', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (res.status === 401) window.location.href = '/'; 
+                    const data = await res.json();
+                    if (data.status !== 'success') throw new Error(data.message);
+                    return data;
+                } catch (err) {
+                    alert('Erro no sistema: ' + err.message);
+                    return null;
+                }
+            },
+
+            async fetchDirectories() {
+                this.setLoading(true);
+                this.renderBreadcrumbs();
+                this.updateTopButtons();
+                
+                const response = await this.api('fetch', { parent_id: this.getCurrentParentId() });
+                if (response) {
+                    this.state.directories = response.data;
+                    this.render();
+                }
+                this.setLoading(false);
+            },
+
+            // --- Modal (Criar, Editar, Excluir, View) ---
+            openModal(id = '', name = '', targetParentId = null, currentViewMode = 'grid') {
+                document.getElementById('dirId').value = id;
+                document.getElementById('dirName').value = name;
+                document.getElementById('dirParentId').value = targetParentId !== null ? targetParentId : '';
+                document.getElementById('modalTitle').innerHTML = id ? '<i class="fa-solid fa-folder-gear text-gluon-primary"></i> Configurar Pasta' : '<i class="fa-solid fa-folder-plus text-gluon-primary"></i> Nova Pasta';
+                
+                // Botão de excluir só aparece ao editar
+                const btnDelete = document.getElementById('btnDeleteDir');
+                if(id) {
+                    btnDelete.classList.remove('hidden');
+                } else {
+                    btnDelete.classList.add('hidden');
+                }
+
+                // Seta o radio button do modo de view
+                const radios = document.getElementsByName('dirViewMode');
+                for(let i = 0; i < radios.length; i++) {
+                    if(radios[i].value === currentViewMode) {
+                        radios[i].checked = true;
+                    }
+                }
+                
+                const modal = document.getElementById('dirModal');
+                const content = document.getElementById('dirModalContent');
+                
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                
+                setTimeout(() => {
+                    modal.classList.remove('opacity-0');
+                    content.classList.remove('scale-95');
+                    if(!id) document.getElementById('dirName').focus();
+                }, 10);
+            },
+
+            closeModal() {
+                const modal = document.getElementById('dirModal');
+                const content = document.getElementById('dirModalContent');
+                
+                modal.classList.add('opacity-0');
+                content.classList.add('scale-95');
+                
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                    document.getElementById('dirForm').reset();
+                }, 300);
+            },
+
+            async saveDirectory(e) {
+                e.preventDefault();
+                const id = document.getElementById('dirId').value;
+                const name = document.getElementById('dirName').value;
+                const specificParentId = document.getElementById('dirParentId').value;
+                
+                // Captura qual radio button de View está selecionado
+                let selectedView = 'grid';
+                const radios = document.getElementsByName('dirViewMode');
+                for(let i=0; i<radios.length; i++) {
+                    if(radios[i].checked) selectedView = radios[i].value;
+                }
+
+                const parentIdToUse = specificParentId !== '' ? specificParentId : this.getCurrentParentId();
+
+                const btn = document.getElementById('btnSaveDir');
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
+                btn.disabled = true;
+
+                const isEdit = id !== '';
+                const response = await this.api(isEdit ? 'update' : 'create', {
+                    id: isEdit ? id : null,
+                    parent_id: parentIdToUse,
+                    name: name,
+                    view: selectedView
+                });
+
+                if (response) {
+                    this.closeModal();
+                    await this.fetchDirectories(); 
+                }
+
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar';
+                btn.disabled = false;
+            },
+
+            async deleteFromModal() {
+                const id = document.getElementById('dirId').value;
+                const name = document.getElementById('dirName').value;
+
+                if(!id) return;
+
+                if(confirm(`Atenção: A pasta "${name}" e TODO o seu conteúdo serão apagados PERMANENTEMENTE.\nDeseja continuar?`)) {
+                    const btn = document.getElementById('btnDeleteDir');
+                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
+                    
+                    const response = await this.api('delete', { id });
+                    if(response) {
+                        this.closeModal();
+                        await this.fetchDirectories();
+                    }
+                    btn.innerHTML = '<i class="fa-solid fa-trash"></i> <span class="hidden sm:inline">Excluir</span>';
+                }
+            },
+
+            // --- UI & Rendering ---
+            setLoading(show) {
+                this.state.isLoading = show;
+                document.getElementById('loader').classList.toggle('hidden', !show);
+                document.getElementById('viewContainer').classList.toggle('hidden', show);
+            },
+
+            setTempView(viewName) {
+                // Altera a view APENAS TEMPORARIAMENTE na navegação para a pasta atual
+                this.state.path[this.state.path.length - 1].view = viewName;
+                if(this.getCurrentParentId() === null) {
+                    localStorage.setItem('gluon_root_view', viewName);
+                }
+                this.updateTopButtons();
+                this.render();
+            },
+
+            updateTopButtons() {
+                const currentView = this.getCurrentView();
+                ['grid', 'list', 'kanban'].forEach(v => {
+                    const btn = document.getElementById(`btn-view-${v}`);
+                    if(v === currentView) {
+                        btn.classList.add('bg-slate-700', 'text-white');
+                        btn.classList.remove('text-slate-400');
+                    } else {
+                        btn.classList.remove('bg-slate-700', 'text-white');
+                        btn.classList.add('text-slate-400');
+                    }
+                });
+            },
+
+            async loadKanbanContents() {
+                const promises = this.state.directories.map(async (dir) => {
+                    const res = await this.api('fetch', { parent_id: dir.id });
+                    const container = document.getElementById(`kanban-col-${dir.id}`);
+                    if (!container) return;
+                    
+                    if (res && res.data && res.data.length > 0) {
+                        let html = '';
+                        res.data.forEach(sub => {
+                            html += `
+                            <div class="bg-slate-700 hover:bg-slate-600 border border-slate-600 p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm" onclick="app.enterDirectory(${sub.id}, '${sub.name}', '${sub.view}')">
+                                <div class="flex items-center gap-2 truncate pr-2">
+                                    <i class="fa-solid fa-folder text-gluon-primary text-sm"></i>
+                                    <span class="text-sm text-slate-200 truncate font-medium">${sub.name}</span>
+                                </div>
+                                <button onclick="event.stopPropagation(); app.openModal(${sub.id}, '${sub.name}', ${dir.id}, '${sub.view}')" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 opacity-0 group-hover:opacity-100 transition-all border border-slate-600"><i class="fa-solid fa-cog text-xs"></i></button>
+                            </div>`;
+                        });
+                        container.innerHTML = html;
+                    } else {
+                        container.innerHTML = `<div class="text-center flex flex-col items-center justify-center text-slate-500 text-xs py-8 opacity-60 border-2 border-dashed border-slate-700 rounded-lg"><i class="fa-solid fa-box-open text-2xl mb-2"></i> Pasta vazia</div>`;
+                    }
+                });
+                await Promise.all(promises);
+            },
+
+            render() {
+                const container = document.getElementById('viewContainer');
+                const view = this.getCurrentView();
+                
+                if (this.state.directories.length === 0) {
+                    container.innerHTML = `
+                        <div class="h-full flex flex-col items-center justify-center text-slate-500 mt-20">
+                            <i class="fa-regular fa-folder-open text-6xl mb-4 opacity-50"></i>
+                            <h2 class="text-xl font-medium text-slate-400">Esta pasta está vazia</h2>
+                            <p class="text-sm mt-2">Clique em "Novo Diretório" para começar.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = '';
+
+                if (view === 'grid') {
+                    html = `<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">`;
+                    this.state.directories.forEach(dir => {
+                        html += `
+                        <div class="dir-card group bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-col items-center text-center cursor-pointer relative" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
+                            <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded p-1.5 shadow-lg"><i class="fa-solid fa-cog"></i></button>
+                            </div>
+                            <i class="fa-solid fa-folder text-5xl text-gluon-primary mb-3 drop-shadow-md group-hover:scale-110 transition-transform"></i>
+                            <span class="text-sm font-medium text-slate-300 w-full truncate px-2">${dir.name}</span>
+                        </div>`;
+                    });
+                    html += `</div>`;
+                } 
+                
+                else if (view === 'list') {
+                    html = `<div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+                                <table class="w-full text-left text-sm">
+                                    <thead class="bg-slate-900/50 text-slate-400">
+                                        <tr>
+                                            <th class="px-6 py-3 font-medium">Nome</th>
+                                            <th class="px-6 py-3 font-medium text-right">Configurações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-700/50">`;
+                    this.state.directories.forEach(dir => {
+                        html += `
+                        <tr class="hover:bg-slate-700/30 transition-colors group cursor-pointer" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
+                            <td class="px-6 py-4 flex items-center gap-3">
+                                <i class="fa-solid fa-folder text-xl text-gluon-primary"></i>
+                                <span class="font-medium text-slate-200">${dir.name}</span>
+                            </td>
+                            <td class="px-6 py-4 text-right">
+                                <div class="opacity-0 group-hover:opacity-100 transition-opacity flex justify-end gap-2">
+                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded p-2"><i class="fa-solid fa-cog"></i> Editar Pasta</button>
+                                </div>
+                            </td>
+                        </tr>`;
+                    });
+                    html += `</tbody></table></div>`;
+                }
+
+                else if (view === 'kanban') {
+                    html = `<div class="flex gap-6 overflow-x-auto pb-4 no-scrollbar h-full items-start">`;
+                    this.state.directories.forEach(dir => {
+                        html += `
+                        <div class="bg-slate-800 border border-slate-700 rounded-xl w-80 shrink-0 flex flex-col max-h-full shadow-lg">
+                            <div class="p-3 border-b border-slate-700 flex justify-between items-center bg-slate-900/50 rounded-t-xl group cursor-pointer hover:bg-slate-700/50 transition-colors" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
+                                <div class="flex items-center gap-2 font-semibold text-slate-200 truncate w-full">
+                                    <i class="fa-solid fa-folder-open text-gluon-primary"></i>
+                                    <span class="truncate">${dir.name}</span>
+                                </div>
+                                <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded p-1"><i class="fa-solid fa-cog text-xs"></i></button>
+                                </div>
+                            </div>
+                            <div class="p-3 flex-1 overflow-y-auto space-y-2 kanban-scroll" id="kanban-col-${dir.id}">
+                                <div class="flex justify-center py-6">
+                                    <i class="fa-solid fa-circle-notch fa-spin text-slate-500 text-2xl"></i>
+                                </div>
+                            </div>
+                            <div class="p-3 border-t border-slate-700 bg-slate-900/30 rounded-b-xl">
+                                <button onclick="app.openModal('', '', ${dir.id}, 'grid')" class="text-slate-400 hover:text-white flex items-center justify-center gap-2 text-sm transition-colors w-full py-1.5 hover:bg-slate-700 rounded-lg">
+                                    <i class="fa-solid fa-plus"></i> Nova pasta aqui
+                                </button>
+                            </div>
+                        </div>`;
+                    });
+                    html += `</div>`;
+                    
+                    setTimeout(() => this.loadKanbanContents(), 0);
+                }
+
+                container.innerHTML = html;
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => app.init());
+    </script>
+</body>
+</html>
