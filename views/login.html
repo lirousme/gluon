@@ -1,0 +1,243 @@
+<!-- 
+  Arquivo: login.html
+  Diretório: public_html/gluon/views/login.html
+  
+  Pilar: Bonito e Rápido.
+  Usa TailwindCSS via CDN para estética limpa e responsiva, e FontAwesome para ícones.
+  Toda a lógica de frontend é feita em Vanilla JS moderno (Fetch API) para máxima velocidade.
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gluon - Autenticação</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        gluon: {
+                            dark: '#0f172a',
+                            primary: '#3b82f6',
+                            secondary: '#1e293b'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gluon-dark text-slate-200 min-h-screen flex items-center justify-center p-4 selection:bg-gluon-primary selection:text-white">
+
+    <!-- Container Principal -->
+    <div class="bg-gluon-secondary w-full max-w-md rounded-2xl shadow-2xl p-8 border border-slate-700 relative overflow-hidden transition-all duration-300">
+        
+        <!-- Decoração de fundo -->
+        <div class="absolute -top-16 -right-16 w-32 h-32 bg-gluon-primary rounded-full blur-3xl opacity-20"></div>
+
+        <!-- Cabeçalho -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-800 border border-slate-600 mb-4 shadow-lg">
+                <i class="fa-solid fa-atom text-3xl text-gluon-primary"></i>
+            </div>
+            <h1 class="text-3xl font-bold tracking-tight text-white">GLUON</h1>
+            <p class="text-sm text-slate-400 mt-1">Acesso ao Sistema Core</p>
+        </div>
+
+        <!-- Mensagens de Alerta Dinâmicas -->
+        <div id="alertBox" class="hidden mb-4 p-3 rounded-lg text-sm flex items-center gap-2 font-medium"></div>
+
+        <!-- FORMULÁRIO DE LOGIN -->
+        <form id="loginForm" class="space-y-5 transition-opacity duration-300">
+            <div>
+                <label class="block text-sm font-medium text-slate-300 mb-1" for="loginId">E-mail ou Username</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fa-solid fa-user text-slate-500"></i>
+                    </div>
+                    <input type="text" id="loginId" required class="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors" placeholder="seu@email.com ou usuario">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-slate-300 mb-1" for="loginPass">Senha</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fa-solid fa-lock text-slate-500"></i>
+                    </div>
+                    <input type="password" id="loginPass" required class="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors" placeholder="••••••••">
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between">
+                <label class="flex items-center gap-2 cursor-pointer text-sm text-slate-400 hover:text-white transition-colors">
+                    <input type="checkbox" id="loginRemember" class="rounded border-slate-600 bg-slate-800 text-gluon-primary focus:ring-gluon-primary focus:ring-offset-slate-900">
+                    <span>Manter logado</span>
+                </label>
+                <a href="#" class="text-sm text-gluon-primary hover:text-blue-400 transition-colors">Esqueceu a senha?</a>
+            </div>
+
+            <button type="submit" id="btnLogin" class="w-full bg-gluon-primary hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-lg hover:shadow-blue-500/30 transition-all flex justify-center items-center gap-2">
+                <span>Entrar no Sistema</span>
+                <i class="fa-solid fa-arrow-right text-sm"></i>
+            </button>
+            
+            <p class="text-center text-sm text-slate-400 mt-6">
+                Não tem uma conta? <button type="button" onclick="toggleForms()" class="text-gluon-primary hover:underline font-medium">Criar agora</button>
+            </p>
+        </form>
+
+        <!-- FORMULÁRIO DE REGISTRO (Oculto por padrão) -->
+        <form id="registerForm" class="space-y-5 hidden transition-opacity duration-300">
+            <div>
+                <label class="block text-sm font-medium text-slate-300 mb-1" for="regUser">Username</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fa-solid fa-at text-slate-500"></i>
+                    </div>
+                    <input type="text" id="regUser" required class="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors" placeholder="nome_usuario">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-slate-300 mb-1" for="regEmail">E-mail</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fa-solid fa-envelope text-slate-500"></i>
+                    </div>
+                    <input type="email" id="regEmail" required class="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors" placeholder="seu@email.com">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-slate-300 mb-1" for="regPass">Senha (Criptografia Forte)</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fa-solid fa-shield-halved text-slate-500"></i>
+                    </div>
+                    <input type="password" id="regPass" required class="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors" placeholder="Crie uma senha forte">
+                </div>
+            </div>
+
+            <button type="submit" id="btnRegister" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-4 rounded-lg shadow-lg hover:shadow-emerald-500/30 transition-all flex justify-center items-center gap-2">
+                <i class="fa-solid fa-user-plus text-sm"></i>
+                <span>Registrar Nova Conta</span>
+            </button>
+            
+            <p class="text-center text-sm text-slate-400 mt-6">
+                Já possui acesso? <button type="button" onclick="toggleForms()" class="text-gluon-primary hover:underline font-medium">Fazer Login</button>
+            </p>
+        </form>
+    </div>
+
+    <script>
+        // Lógica de UI - Alternar entre Login e Registro
+        const loginForm = document.getElementById('loginForm');
+        const registerForm = document.getElementById('registerForm');
+        const alertBox = document.getElementById('alertBox');
+
+        function toggleForms() {
+            alertBox.classList.add('hidden'); // Limpa alertas ao trocar
+            if (loginForm.classList.contains('hidden')) {
+                registerForm.classList.add('hidden');
+                loginForm.classList.remove('hidden');
+            } else {
+                loginForm.classList.add('hidden');
+                registerForm.classList.remove('hidden');
+            }
+        }
+
+        function showAlert(message, type = 'error') {
+            alertBox.classList.remove('hidden', 'bg-red-500/20', 'text-red-400', 'bg-green-500/20', 'text-green-400');
+            if (type === 'error') {
+                alertBox.classList.add('bg-red-500/20', 'text-red-400');
+                alertBox.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> ${message}`;
+            } else {
+                alertBox.classList.add('bg-green-500/20', 'text-green-400');
+                alertBox.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${message}`;
+            }
+        }
+
+        // Lógica de Comunicação com a API (Ultra rápido via Fetch)
+        const API_URL = '/api/auth';
+
+        // Formulário de Login
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btnLogin');
+            btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Autenticando...`;
+            btn.disabled = true;
+
+            const payload = {
+                action: 'login',
+                login_id: document.getElementById('loginId').value,
+                password: document.getElementById('loginPass').value,
+                remember: document.getElementById('loginRemember').checked
+            };
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    showAlert('Acesso Autorizado. Redirecionando...', 'success');
+                    setTimeout(() => window.location.href = data.redirect, 1000);
+                } else {
+                    showAlert(data.message, 'error');
+                    btn.innerHTML = `<span>Entrar no Sistema</span> <i class="fa-solid fa-arrow-right text-sm"></i>`;
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                showAlert('Erro de comunicação com o servidor.', 'error');
+                btn.disabled = false;
+            }
+        });
+
+        // Formulário de Registro
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btnRegister');
+            btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Processando...`;
+            btn.disabled = true;
+
+            const payload = {
+                action: 'register',
+                username: document.getElementById('regUser').value,
+                email: document.getElementById('regEmail').value,
+                password: document.getElementById('regPass').value
+            };
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    showAlert(data.message, 'success');
+                    registerForm.reset();
+                    setTimeout(() => toggleForms(), 2000); // Volta pro login após sucesso
+                } else {
+                    showAlert(data.message, 'error');
+                }
+            } catch (err) {
+                showAlert('Erro de comunicação com o servidor.', 'error');
+            } finally {
+                btn.innerHTML = `<i class="fa-solid fa-user-plus text-sm"></i> <span>Registrar Nova Conta</span>`;
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
