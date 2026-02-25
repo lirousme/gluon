@@ -185,6 +185,11 @@
                     body: JSON.stringify(payload)
                 });
                 
+                // Se o servidor retornar HTML em vez de JSON (Ex: Erro fatal de PHP), captura e trata:
+                if (!response.ok && response.status === 404) {
+                    throw new Error("Endpoint da API não encontrado (Erro 404).");
+                }
+                
                 const data = await response.json();
                 
                 if (data.status === 'success') {
@@ -196,7 +201,9 @@
                     btn.disabled = false;
                 }
             } catch (err) {
-                showAlert('Erro de comunicação com o servidor.', 'error');
+                console.error("[GLUON DEBUG] Erro de rede ou JSON malformado:", err);
+                showAlert('Erro de comunicação com o servidor. Verifique o console.', 'error');
+                btn.innerHTML = `<span>Entrar no Sistema</span> <i class="fa-solid fa-arrow-right text-sm"></i>`;
                 btn.disabled = false;
             }
         });
@@ -222,6 +229,10 @@
                     body: JSON.stringify(payload)
                 });
                 
+                if (!response.ok && response.status === 404) {
+                    throw new Error("Endpoint da API não encontrado (Erro 404).");
+                }
+
                 const data = await response.json();
                 
                 if (data.status === 'success') {
@@ -232,7 +243,8 @@
                     showAlert(data.message, 'error');
                 }
             } catch (err) {
-                showAlert('Erro de comunicação com o servidor.', 'error');
+                console.error("[GLUON DEBUG] Erro de rede ou JSON malformado:", err);
+                showAlert('Erro de comunicação com o servidor. Verifique o console.', 'error');
             } finally {
                 btn.innerHTML = `<i class="fa-solid fa-user-plus text-sm"></i> <span>Registrar Nova Conta</span>`;
                 btn.disabled = false;
