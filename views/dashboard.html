@@ -3,8 +3,8 @@
   Diretório: public_html/gluon/views/dashboard.html
   
   Pilar: Fácil Manutenção, Bonito e Rápido.
-  Cada diretório possui sua própria configuração de View. 
-  Botão de exclusão e configurações embutidos no modal de edição.
+  Ao alterar a visualização (lá em cima) na Raiz, o sistema salva automaticamente no banco.
+  Nas subpastas, a alteração "lá de cima" atua como uma visualização temporária rápida.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -55,15 +55,15 @@
             </div>
             
             <div class="flex items-center gap-4">
-                <!-- Botões do Topo alteram temporariamente a view atual para facilitar a navegação rápida -->
+                <!-- Botões de Visualização (Salvam na Raiz ou Alteram Temporariamente nas pastas) -->
                 <div class="hidden md:flex items-center gap-2 bg-slate-800 rounded-lg p-1 border border-slate-700">
-                    <button onclick="app.setTempView('grid')" id="btn-view-grid" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Forçar Grid Temporário">
+                    <button onclick="app.setViewMode('grid')" id="btn-view-grid" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Visualização em Grid">
                         <i class="fa-solid fa-border-all"></i>
                     </button>
-                    <button onclick="app.setTempView('list')" id="btn-view-list" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Forçar List Temporário">
+                    <button onclick="app.setViewMode('list')" id="btn-view-list" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Visualização em Lista">
                         <i class="fa-solid fa-list-ul"></i>
                     </button>
-                    <button onclick="app.setTempView('kanban')" id="btn-view-kanban" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Forçar Kanban Temporário">
+                    <button onclick="app.setViewMode('kanban')" id="btn-view-kanban" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Visualização em Kanban">
                         <i class="fa-solid fa-columns"></i>
                     </button>
                 </div>
@@ -94,7 +94,7 @@
         <!-- Loader -->
         <div id="loader" class="hidden flex-1 flex flex-col items-center justify-center text-slate-500 gap-3">
             <i class="fa-solid fa-circle-notch fa-spin text-3xl text-gluon-primary"></i>
-            <p>Descriptografando dados...</p>
+            <p>Sincronizando cofre...</p>
         </div>
 
         <!-- Render Container -->
@@ -125,9 +125,9 @@
                     </div>
                 </div>
 
-                <!-- Padrão de Visualização (Como os filhos desta pasta serão mostrados) -->
+                <!-- Padrão de Visualização -->
                 <div class="mb-8">
-                    <label class="block text-sm font-medium text-slate-300 mb-2">Padrão de Visualização Padrão</label>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Padrão de Visualização desta Pasta</label>
                     <div class="grid grid-cols-3 gap-3">
                         <label class="cursor-pointer">
                             <input type="radio" name="dirViewMode" value="grid" class="peer hidden view-radio" checked>
@@ -176,15 +176,17 @@
     <script>
         const app = {
             state: {
-                // A Raiz (Meu Cofre) começa em Grid por padrão, e guarda preferência no localStorage
-                path: [{ id: null, name: 'Meu Cofre', view: localStorage.getItem('gluon_root_view') || 'grid' }],
+                // Inicia genérico, será substituído após buscar do banco de dados (fetchUserPrefs)
+                path: [{ id: null, name: 'Meu Cofre', view: 'grid' }],
                 directories: [],
                 isLoading: false
             },
             
-            init() {
+            async init() {
+                this.setLoading(true);
+                await this.fetchUserPrefs(); // Busca as configs do usuário primeiro (Root View)
                 this.updateTopButtons();
-                this.fetchDirectories();
+                await this.fetchDirectories();
             },
 
             getCurrentParentId() {
@@ -195,9 +197,49 @@
                 return this.state.path[this.state.path.length - 1].view;
             },
 
-            // Navegação e Estado de View
+            // --- API Base ---
+            async api(endpoint, action, payload = {}) {
+                payload.action = action;
+                try {
+                    const res = await fetch(`/api/${endpoint}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (res.status === 401) window.location.href = '/'; 
+                    const data = await res.json();
+                    if (data.status !== 'success') throw new Error(data.message);
+                    return data;
+                } catch (err) {
+                    alert('Erro no sistema: ' + err.message);
+                    return null;
+                }
+            },
+
+            // --- Buscas Iniciais ---
+            async fetchUserPrefs() {
+                const response = await this.api('user', 'get_prefs');
+                if (response && response.data) {
+                    // Atualiza a view da raiz (índice 0) com a preferência salva no banco
+                    this.state.path[0].view = response.data.root_view;
+                }
+            },
+
+            async fetchDirectories() {
+                this.setLoading(true);
+                this.renderBreadcrumbs();
+                this.updateTopButtons();
+                
+                const response = await this.api('directories', 'fetch', { parent_id: this.getCurrentParentId() });
+                if (response) {
+                    this.state.directories = response.data;
+                    this.render();
+                }
+                this.setLoading(false);
+            },
+
+            // --- Navegação ---
             async enterDirectory(id, name, viewMode) {
-                // Ao entrar na pasta, o sistema herda a visualização salva no banco para ELA
                 this.state.path.push({ id, name, view: viewMode });
                 await this.fetchDirectories();
             },
@@ -223,86 +265,64 @@
                 }).join('');
             },
 
-            // --- API ---
-            async api(action, payload = {}) {
-                payload.action = action;
-                try {
-                    const res = await fetch('/api/directories', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    if (res.status === 401) window.location.href = '/'; 
-                    const data = await res.json();
-                    if (data.status !== 'success') throw new Error(data.message);
-                    return data;
-                } catch (err) {
-                    alert('Erro no sistema: ' + err.message);
-                    return null;
-                }
-            },
-
-            async fetchDirectories() {
-                this.setLoading(true);
-                this.renderBreadcrumbs();
+            // --- Alteração de View pelo Menu de Topo ---
+            async setViewMode(viewName) {
+                // Altera na UI instantaneamente (Otimista)
+                this.state.path[this.state.path.length - 1].view = viewName;
                 this.updateTopButtons();
-                
-                const response = await this.api('fetch', { parent_id: this.getCurrentParentId() });
-                if (response) {
-                    this.state.directories = response.data;
-                    this.render();
+                this.render();
+
+                // Se o usuário clicou nisso enquanto estava na raiz (Meu Cofre),
+                // Salva permanentemente no banco de dados, em background, sem travar a tela
+                if (this.getCurrentParentId() === null) {
+                    try {
+                        await this.api('user', 'update_root_view', { view: viewName });
+                    } catch (e) {
+                        console.error("[GLUON DEBUG] Falha ao salvar view raiz no banco de dados.");
+                    }
                 }
-                this.setLoading(false);
             },
 
-            // --- Modal (Criar, Editar, Excluir, View) ---
+            updateTopButtons() {
+                const currentView = this.getCurrentView();
+                ['grid', 'list', 'kanban'].forEach(v => {
+                    const btn = document.getElementById(`btn-view-${v}`);
+                    if(v === currentView) {
+                        btn.classList.add('bg-slate-700', 'text-white');
+                        btn.classList.remove('text-slate-400');
+                    } else {
+                        btn.classList.remove('bg-slate-700', 'text-white');
+                        btn.classList.add('text-slate-400');
+                    }
+                });
+            },
+
+            // --- Modal de Diretórios (Criar, Editar, Excluir) ---
             openModal(id = '', name = '', targetParentId = null, currentViewMode = 'grid') {
                 document.getElementById('dirId').value = id;
                 document.getElementById('dirName').value = name;
                 document.getElementById('dirParentId').value = targetParentId !== null ? targetParentId : '';
                 document.getElementById('modalTitle').innerHTML = id ? '<i class="fa-solid fa-folder-gear text-gluon-primary"></i> Configurar Pasta' : '<i class="fa-solid fa-folder-plus text-gluon-primary"></i> Nova Pasta';
                 
-                // Botão de excluir só aparece ao editar
                 const btnDelete = document.getElementById('btnDeleteDir');
-                if(id) {
-                    btnDelete.classList.remove('hidden');
-                } else {
-                    btnDelete.classList.add('hidden');
-                }
+                if(id) btnDelete.classList.remove('hidden'); else btnDelete.classList.add('hidden');
 
-                // Seta o radio button do modo de view
                 const radios = document.getElementsByName('dirViewMode');
                 for(let i = 0; i < radios.length; i++) {
-                    if(radios[i].value === currentViewMode) {
-                        radios[i].checked = true;
-                    }
+                    if(radios[i].value === currentViewMode) radios[i].checked = true;
                 }
                 
                 const modal = document.getElementById('dirModal');
                 const content = document.getElementById('dirModalContent');
-                
-                modal.classList.remove('hidden');
-                modal.classList.add('flex');
-                
-                setTimeout(() => {
-                    modal.classList.remove('opacity-0');
-                    content.classList.remove('scale-95');
-                    if(!id) document.getElementById('dirName').focus();
-                }, 10);
+                modal.classList.remove('hidden'); modal.classList.add('flex');
+                setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); if(!id) document.getElementById('dirName').focus(); }, 10);
             },
 
             closeModal() {
                 const modal = document.getElementById('dirModal');
                 const content = document.getElementById('dirModalContent');
-                
-                modal.classList.add('opacity-0');
-                content.classList.add('scale-95');
-                
-                setTimeout(() => {
-                    modal.classList.add('hidden');
-                    modal.classList.remove('flex');
-                    document.getElementById('dirForm').reset();
-                }, 300);
+                modal.classList.add('opacity-0'); content.classList.add('scale-95');
+                setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); document.getElementById('dirForm').reset(); }, 300);
             },
 
             async saveDirectory(e) {
@@ -311,12 +331,9 @@
                 const name = document.getElementById('dirName').value;
                 const specificParentId = document.getElementById('dirParentId').value;
                 
-                // Captura qual radio button de View está selecionado
                 let selectedView = 'grid';
                 const radios = document.getElementsByName('dirViewMode');
-                for(let i=0; i<radios.length; i++) {
-                    if(radios[i].checked) selectedView = radios[i].value;
-                }
+                for(let i=0; i<radios.length; i++) { if(radios[i].checked) selectedView = radios[i].value; }
 
                 const parentIdToUse = specificParentId !== '' ? specificParentId : this.getCurrentParentId();
 
@@ -325,7 +342,7 @@
                 btn.disabled = true;
 
                 const isEdit = id !== '';
-                const response = await this.api(isEdit ? 'update' : 'create', {
+                const response = await this.api('directories', isEdit ? 'update' : 'create', {
                     id: isEdit ? id : null,
                     parent_id: parentIdToUse,
                     name: name,
@@ -351,7 +368,7 @@
                     const btn = document.getElementById('btnDeleteDir');
                     btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
                     
-                    const response = await this.api('delete', { id });
+                    const response = await this.api('directories', 'delete', { id });
                     if(response) {
                         this.closeModal();
                         await this.fetchDirectories();
@@ -360,40 +377,16 @@
                 }
             },
 
-            // --- UI & Rendering ---
+            // --- Rendering ---
             setLoading(show) {
                 this.state.isLoading = show;
                 document.getElementById('loader').classList.toggle('hidden', !show);
                 document.getElementById('viewContainer').classList.toggle('hidden', show);
             },
 
-            setTempView(viewName) {
-                // Altera a view APENAS TEMPORARIAMENTE na navegação para a pasta atual
-                this.state.path[this.state.path.length - 1].view = viewName;
-                if(this.getCurrentParentId() === null) {
-                    localStorage.setItem('gluon_root_view', viewName);
-                }
-                this.updateTopButtons();
-                this.render();
-            },
-
-            updateTopButtons() {
-                const currentView = this.getCurrentView();
-                ['grid', 'list', 'kanban'].forEach(v => {
-                    const btn = document.getElementById(`btn-view-${v}`);
-                    if(v === currentView) {
-                        btn.classList.add('bg-slate-700', 'text-white');
-                        btn.classList.remove('text-slate-400');
-                    } else {
-                        btn.classList.remove('bg-slate-700', 'text-white');
-                        btn.classList.add('text-slate-400');
-                    }
-                });
-            },
-
             async loadKanbanContents() {
                 const promises = this.state.directories.map(async (dir) => {
-                    const res = await this.api('fetch', { parent_id: dir.id });
+                    const res = await this.api('directories', 'fetch', { parent_id: dir.id });
                     const container = document.getElementById(`kanban-col-${dir.id}`);
                     if (!container) return;
                     
