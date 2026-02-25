@@ -10,7 +10,7 @@ public_html/gluon/
 ├── api/                      # Back-end: Endpoints que processam dados (Retornam JSON)
 │   ├── auth.php              # Login, Registro, Logout, Validação de Sessão
 │   ├── directories.php       # CRUD de Diretórios (Nomes criptografados + Preferência de View)
-│   └── user.php              # (Futuro) Atualização de perfil, etc.
+│   └── user.php              # Preferências do Usuário (Root View, Perfil, etc)
 │
 ├── views/                    # Front-end: Onde ficam os layouts (HTML/Tailwind)
 │   ├── login.html            # Interface de login e registro
@@ -30,6 +30,7 @@ username VARCHAR(50) NOT NULL UNIQUE,
 email VARCHAR(100) NOT NULL UNIQUE,
 password_hash VARCHAR(255) NOT NULL,
 remember_token VARCHAR(255) DEFAULT NULL,
+root_view VARCHAR(10) DEFAULT 'grid', -- Preferência de layout da raiz (Meu Cofre)
 encrypted_data TEXT DEFAULT NULL,
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
