@@ -3,8 +3,8 @@
   Diretório: public_html/gluon/views/dashboard.html
   
   Pilar: Fácil Manutenção, Bonito e Rápido.
-  Atualização: Remoção do botão de configuração redundante (ícone de engrenagem) ao final do breadcrumb, 
-               centralizando a ação no menu de contexto (3 pontinhos).
+  Atualização: Lógica adicionada em `deleteFromModal()` para retornar ao diretório pai 
+               automaticamente caso o usuário exclua um diretório no qual ele está dentro.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -94,7 +94,7 @@
                     <button onclick="app.setViewMode('kanban')" id="btn-view-kanban" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Kanban"><i class="fa-solid fa-columns"></i></button>
                 </div>
 
-                <!-- Menu de Opções Geral (3 pontinhos) - Agora visível também no desktop -->
+                <!-- Menu de Opções Geral (3 pontinhos) -->
                 <div class="relative">
                     <button onclick="app.toggleMobileViewMenu()" id="btn-mobile-menu-trigger" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors outline-none focus:ring-2 focus:ring-slate-700">
                         <i class="fa-solid fa-ellipsis-vertical px-1"></i>
@@ -104,19 +104,17 @@
                         <!-- Opções de Pasta Atual -->
                         <div class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Ações do Diretório</div>
                         
-                        <!-- Configurar Pasta Atual (Nova adição utilitária) -->
                         <button onclick="app.openModal(app.getCurrentParentId() || 'root'); app.toggleMobileViewMenu()" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
                             <i class="fa-solid fa-folder-gear w-5 text-center text-lg"></i> <span class="font-medium">Configurações</span>
                         </button>
 
-                        <!-- NOVO: Botão Copiar (Visibilidade controlada pelo JS) -->
                         <button onclick="app.copyCurrentDirectory(); app.toggleMobileViewMenu()" id="btn-copy-dir" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
                             <i class="fa-regular fa-copy w-5 text-center text-lg"></i> <span class="font-medium">Copiar Diretório</span>
                         </button>
 
                         <div class="h-px bg-slate-700/50 my-2 md:hidden"></div>
 
-                        <!-- Opções exclusivas do Mobile (Ocultas no Desktop) -->
+                        <!-- Opções exclusivas do Mobile -->
                         <div class="md:hidden">
                             <button onclick="app.toggleReorderMode(); app.toggleMobileViewMenu()" id="btn-reorder-mobile" class="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors border-b border-slate-700/50 mb-1">
                                 <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90 w-5 text-center text-lg"></i> <span class="font-medium">Alterar Ordem</span>
@@ -331,7 +329,6 @@
                 }
             },
 
-            // Sistema de Toast UI (Rápido e Bonito)
             showToast(message, type = 'success') {
                 let toast = document.getElementById('gluon-toast');
                 if (!toast) {
@@ -346,7 +343,6 @@
                 toast.className = `fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-xl text-white text-sm font-medium flex items-center gap-3 z-50 transition-all duration-300 transform translate-y-10 opacity-0 ${bgClass}`;
                 toast.innerHTML = `${icon} <span>${message}</span>`;
                 
-                // Trigger animation
                 setTimeout(() => {
                     toast.classList.remove('translate-y-10', 'opacity-0');
                     toast.classList.add('translate-y-0', 'opacity-100');
@@ -358,10 +354,9 @@
                 }, 3000);
             },
 
-            // Nova Função: Copiar Diretório (Área de Transferência)
             async copyCurrentDirectory() {
                 const currentId = this.getCurrentParentId();
-                if (currentId === null) return; // Segurança extra
+                if (currentId === null) return; 
 
                 const response = await this.api('user', 'copy_directory', { dir_id: currentId });
                 if (response && response.status === 'success') {
@@ -574,15 +569,12 @@
                     if(mBtn) { mBtn.className = mBtn.className.replace(/text-slate-300|text-gluon-primary|bg-slate-700\/50/g, ''); mBtn.classList.add(v === currentView ? 'text-gluon-primary' : 'text-slate-300'); if(v === currentView) mBtn.classList.add('bg-slate-700/50'); }
                 });
 
-                // Regra de Visibilidade do botão de COPIAR e Configurar Pasta
                 const btnCopy = document.getElementById('btn-copy-dir');
                 if (btnCopy) {
                     if (this.getCurrentParentId() === null) {
-                        // Se estiver na raiz, esconde o botão de copiar
                         btnCopy.classList.add('hidden');
                         btnCopy.classList.remove('flex');
                     } else {
-                        // Se estiver dentro de uma pasta, mostra o botão
                         btnCopy.classList.remove('hidden');
                         btnCopy.classList.add('flex');
                     }
@@ -741,17 +733,39 @@
                 btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar'; btn.disabled = false;
             },
 
+            // --- CORREÇÃO APLICADA AQUI ---
             async deleteFromModal() {
                 const id = document.getElementById('dirId').value;
                 const name = document.getElementById('dirName').value;
                 if(!id || id === 'root') return;
+
                 if(confirm(`Atenção: A pasta "${name}" e TODO o seu conteúdo serão apagados PERMANENTEMENTE.\nDeseja continuar?`)) {
-                    const btn = document.getElementById('btnDeleteDir'); btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
+                    const btn = document.getElementById('btnDeleteDir'); 
+                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
+                    
                     const response = await this.api('directories', 'delete', { id });
-                    if(response) { this.closeModal(); await this.fetchDirectories(); }
-                    btn.innerHTML = '<i class="fa-solid fa-trash"></i> <span>Excluir</span>';
+                    
+                    if(response) { 
+                        this.closeModal(); 
+
+                        // Verifica se o ID do diretório recém excluído existe no caminho (breadcrumb) atual.
+                        // Se existir, significa que o usuário está dentro dessa pasta (ou em uma subpasta dela).
+                        const pathIndex = this.state.path.findIndex(step => String(step.id) === String(id));
+
+                        if (pathIndex !== -1) {
+                            // Encontrou o diretório no breadcrumb. 
+                            // Volta para o diretório "pai" do diretório que foi excluído.
+                            await this.goUpTo(pathIndex - 1);
+                        } else {
+                            // A pasta excluída não impacta a visualização atual, apenas recarrega os dados.
+                            await this.fetchDirectories(); 
+                        }
+                    } else {
+                        btn.innerHTML = '<i class="fa-solid fa-trash"></i> <span>Excluir</span>';
+                    }
                 }
             },
+            // ------------------------------
 
             setLoading(show) {
                 this.state.isLoading = show;
