@@ -4,8 +4,8 @@
 
 /**
  * API DE DIRETÓRIOS E ARQUIVOS
- * Pilar: Seguro e Rápido.
- * Atualizado para suportar datas (Agenda) e type 2.
+ * Pilar: Seguro, Rápido e Escalável.
+ * Atualizado para suportar a clonagem de árvores inteiras de diretórios (Copiar/Colar).
  */
 
 require_once BASE_PATH . '/config/database.php';
@@ -20,6 +20,77 @@ $user_id = $_SESSION['user_id'];
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? '';
+
+// =========================================================================
+// FUNÇÃO HELPER: DUPLICAR ÁRVORE DE DIRETÓRIOS
+// Pilar: Fácil Manutenção e Robusto. Copia recursivamente pastas e arquivos
+// =========================================================================
+function duplicateDirectoryTree($source_id, $target_parent_id, $user_id, $pdo, $is_top_level = true) {
+    // 1. Busca os dados do diretório original
+    $stmt = $pdo->prepare("SELECT * FROM directories WHERE id = ? AND user_id = ?");
+    $stmt->execute([$source_id, $user_id]);
+    $sourceDir = $stmt->fetch();
+    if (!$sourceDir) return false;
+
+    $newNameEnc = $sourceDir['name_encrypted'];
+    
+    // Se for o diretório raiz da cópia, adiciona a tag " (Cópia)" para organização
+    if ($is_top_level) {
+        $decryptedName = Security::decryptData($newNameEnc);
+        $newNameEnc = Security::encryptData($decryptedName . " (Cópia)");
+    }
+
+    // 2. Determina a posição final (sort_order) no novo destino
+    $stmtMax = $pdo->prepare("SELECT MAX(sort_order) FROM directories WHERE user_id = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))");
+    $stmtMax->execute([$user_id, $target_parent_id, $target_parent_id]);
+    $maxOrder = $stmtMax->fetchColumn();
+    $newOrder = ($maxOrder !== null) ? (int)$maxOrder + 1 : 0;
+
+    // 3. Insere o novo diretório copiado
+    $stmtInsert = $pdo->prepare("INSERT INTO directories (user_id, parent_id, type, name_encrypted, default_view, new_item_position, sort_order, icon, icon_color_from, icon_color_to, cover_url_encrypted, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmtInsert->execute([
+        $user_id,
+        $target_parent_id,
+        $sourceDir['type'],
+        $newNameEnc,
+        $sourceDir['default_view'],
+        $sourceDir['new_item_position'],
+        $newOrder,
+        $sourceDir['icon'],
+        $sourceDir['icon_color_from'],
+        $sourceDir['icon_color_to'],
+        $sourceDir['cover_url_encrypted'],
+        $sourceDir['start_date'],
+        $sourceDir['end_date']
+    ]);
+    
+    $newDirId = $pdo->lastInsertId();
+
+    // 4. Se for um arquivo de código (type 1), duplica também o conteúdo na tabela dedicada
+    if ((int)$sourceDir['type'] === 1) {
+        $stmtCode = $pdo->prepare("SELECT language, content_encrypted FROM files_code WHERE directory_id = ?");
+        $stmtCode->execute([$source_id]);
+        $codeData = $stmtCode->fetch();
+        if ($codeData) {
+            $stmtInsertCode = $pdo->prepare("INSERT INTO files_code (directory_id, language, content_encrypted) VALUES (?, ?, ?)");
+            $stmtInsertCode->execute([$newDirId, $codeData['language'], $codeData['content_encrypted']]);
+        }
+    }
+
+    // 5. Busca todos os subdiretórios (filhos) e repete a clonagem usando Recursividade
+    $stmtChildren = $pdo->prepare("SELECT id FROM directories WHERE parent_id = ? AND user_id = ?");
+    $stmtChildren->execute([$source_id, $user_id]);
+    $children = $stmtChildren->fetchAll();
+
+    foreach ($children as $child) {
+        // Envia false para $is_top_level para não adicionar "(Cópia)" nos sub-arquivos
+        duplicateDirectoryTree($child['id'], $newDirId, $user_id, $pdo, false);
+    }
+
+    return true;
+}
+// =========================================================================
+
 
 if ($action === 'fetch') {
     $parent_id = isset($input['parent_id']) && $input['parent_id'] !== null ? (int)$input['parent_id'] : null;
@@ -185,6 +256,49 @@ elseif ($action === 'delete') {
         echo json_encode(['status' => 'success', 'message' => 'Excluído com sucesso.']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao excluir.']);
+    }
+}
+
+elseif ($action === 'paste') {
+    // Endereço de destino atual onde o usuário quer colar os arquivos
+    $target_parent_id = isset($input['target_parent_id']) && $input['target_parent_id'] !== null ? (int)$input['target_parent_id'] : null;
+
+    // Obtém o ID do diretório que o usuário copiou na área de transferência (banco de dados)
+    $stmtUser = $pdo->prepare("SELECT copied_directory_id FROM users WHERE id = ?");
+    $stmtUser->execute([$user_id]);
+    $copied_id = $stmtUser->fetchColumn();
+
+    if (!$copied_id) {
+        die(json_encode(['status' => 'error', 'message' => 'Nenhum diretório copiado para colar.']));
+    }
+
+    // PILAR: Segurança -> Verificação contra recursão infinita (não pode colar uma pasta dentro dela mesma)
+    $currTarget = $target_parent_id;
+    while ($currTarget !== null) {
+        if ($currTarget == $copied_id) {
+            die(json_encode(['status' => 'error', 'message' => 'Erro: Não é possível colar um diretório dentro dele mesmo ou de seus subdiretórios.']));
+        }
+        $stmtCheck = $pdo->prepare("SELECT parent_id FROM directories WHERE id = ? AND user_id = ?");
+        $stmtCheck->execute([$currTarget, $user_id]);
+        $parent = $stmtCheck->fetchColumn();
+        $currTarget = $parent ? $parent : null;
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        // Aciona o Helper declarado no topo do arquivo para copiar recursivamente
+        if (duplicateDirectoryTree($copied_id, $target_parent_id, $user_id, $pdo, true)) {
+            $pdo->commit();
+            echo json_encode(['status' => 'success', 'message' => 'Diretório colado com sucesso!']);
+        } else {
+            $pdo->rollBack();
+            echo json_encode(['status' => 'error', 'message' => 'Erro ao colar: Diretório de origem não encontrado.']);
+        }
+
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        echo json_encode(['status' => 'error', 'message' => 'Erro interno na base de dados ao colar o diretório.']);
     }
 }
 
