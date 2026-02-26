@@ -3,8 +3,8 @@
   Diretório: public_html/gluon/views/dashboard.html
   
   Pilar: Fácil Manutenção, Bonito e Rápido.
-  Ao alterar a visualização (lá em cima) na Raiz, o sistema salva automaticamente no banco.
-  Nas subpastas, a alteração "lá de cima" atua como uma visualização temporária rápida.
+  Usa SortableJS para manipular eventos complexos de Drag and Drop em Desktop e Touch(Mobile).
+  (Correção: forceFallback ativado para evitar bugs de scroll horizontal no Kanban no Desktop)
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -14,6 +14,8 @@
     <title>Gluon - Workspace</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Biblioteca levíssima para reordenação nativa mobile/desktop -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -34,11 +36,43 @@
         .kanban-scroll::-webkit-scrollbar-track { background: transparent; }
         .kanban-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
         
-        /* Estilos do Radio Button Customizado (View Select no Modal) */
+        /* Modal Radio Buttons */
         .view-radio:checked + div {
             background-color: #3b82f6;
             border-color: #3b82f6;
             color: white;
+        }
+
+        /* ----- ESTILOS DO MODO DE REORDENAÇÃO ----- */
+        .reorder-active .draggable-item {
+            cursor: grab !important;
+            border-color: #22c55e !important; /* Borda Verde (Success) */
+            box-shadow: 0 4px 6px -1px rgba(34, 197, 94, 0.1);
+        }
+        .reorder-active .draggable-item:active {
+            cursor: grabbing !important;
+        }
+        .reorder-active .grip-handle {
+            display: flex !important; /* Mostra o ícone de arrastar */
+        }
+        .reorder-active .cog-btn {
+            display: none !important; /* Esconde o botão de config para não atrapalhar */
+        }
+        
+        /* CORREÇÃO DO KANBAN: Desativa o Scroll Snap (imã) durante o drag para não bugar o Desktop */
+        .reorder-active.snap-x { scroll-snap-type: none !important; }
+        .reorder-active .snap-start { scroll-snap-align: none !important; }
+
+        /* Classes do SortableJS */
+        .sortable-ghost {
+            opacity: 0.3;
+            background-color: #1e293b !important;
+            border: 2px dashed #22c55e !important;
+        }
+        .sortable-drag {
+            opacity: 1 !important;
+            cursor: grabbing !important;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important;
         }
     </style>
 </head>
@@ -54,29 +88,43 @@
                 <span class="font-bold text-xl tracking-wide text-white">GLUON</span>
             </div>
             
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2 sm:gap-4">
                 
+                <!-- Botão de Alterar Ordem (DESKTOP) -->
+                <button onclick="app.toggleReorderMode()" id="btn-reorder-desktop" class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent font-medium text-sm transition-all text-slate-400 hover:text-white hover:bg-slate-700" title="Ativar Modo de Reordenação">
+                    <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90"></i>
+                    <span>Ordem</span>
+                </button>
+
+                <div class="hidden md:block w-px h-6 bg-slate-700 mx-1"></div>
+
                 <!-- Botões de Visualização (DESKTOP) -->
-                <div class="hidden md:flex items-center gap-2 bg-slate-800 rounded-lg p-1 border border-slate-700">
-                    <button onclick="app.setViewMode('grid')" id="btn-view-grid" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Visualização em Grid">
+                <div class="hidden md:flex items-center gap-1 bg-slate-800 rounded-lg p-1 border border-slate-700">
+                    <button onclick="app.setViewMode('grid')" id="btn-view-grid" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Grid">
                         <i class="fa-solid fa-border-all"></i>
                     </button>
-                    <button onclick="app.setViewMode('list')" id="btn-view-list" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Visualização em Lista">
+                    <button onclick="app.setViewMode('list')" id="btn-view-list" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Lista">
                         <i class="fa-solid fa-list-ul"></i>
                     </button>
-                    <button onclick="app.setViewMode('kanban')" id="btn-view-kanban" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Visualização em Kanban">
+                    <button onclick="app.setViewMode('kanban')" id="btn-view-kanban" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Kanban">
                         <i class="fa-solid fa-columns"></i>
                     </button>
                 </div>
 
-                <!-- Menu de Visualização (MOBILE - 3 pontinhos) -->
+                <!-- Menu de Visualização (MOBILE) -->
                 <div class="relative md:hidden">
                     <button onclick="app.toggleMobileViewMenu()" id="btn-mobile-menu-trigger" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors outline-none focus:ring-2 focus:ring-slate-700">
                         <i class="fa-solid fa-ellipsis-vertical px-1"></i>
                     </button>
                     
                     <!-- Dropdown Mobile -->
-                    <div id="mobileViewMenu" class="hidden absolute right-0 top-12 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 origin-top-right transition-all">
+                    <div id="mobileViewMenu" class="hidden absolute right-0 top-12 w-52 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 origin-top-right transition-all">
+                        
+                        <!-- Alterar Ordem Mobile -->
+                        <button onclick="app.toggleReorderMode(); app.toggleMobileViewMenu()" id="btn-reorder-mobile" class="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors border-b border-slate-700/50 mb-1">
+                            <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90 w-5 text-center text-lg"></i> <span class="font-medium">Alterar Ordem</span>
+                        </button>
+
                         <div class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Visualização</div>
                         
                         <button onclick="app.setViewMode('grid'); app.toggleMobileViewMenu()" id="btn-mobile-view-grid" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
@@ -111,6 +159,11 @@
                 <!-- Preenchido via JS -->
             </div>
 
+            <!-- Hint de Reordenação -->
+            <div id="reorder-hint" class="hidden animate-pulse text-green-400 text-sm font-medium flex-1 text-center bg-green-500/10 py-2 px-4 rounded-lg border border-green-500/20">
+                <i class="fa-solid fa-hand-pointer mr-2"></i> Arraste os itens para reordenar
+            </div>
+
             <button onclick="app.openModal()" class="w-full sm:w-auto shrink-0 bg-gluon-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 font-medium">
                 <i class="fa-solid fa-folder-plus"></i> Novo Diretório
             </button>
@@ -123,7 +176,7 @@
         </div>
 
         <!-- Render Container -->
-        <div id="viewContainer" class="flex-1 overflow-y-auto no-scrollbar pb-10"></div>
+        <div id="viewContainer" class="flex-1 overflow-y-auto no-scrollbar pb-10 transition-all"></div>
     </main>
 
     <!-- Modal Unificado de Configuração de Diretório -->
@@ -141,7 +194,6 @@
                 <input type="hidden" id="dirId">
                 <input type="hidden" id="dirParentId">
 
-                <!-- Nome -->
                 <div class="mb-5">
                     <label class="block text-sm font-medium text-slate-300 mb-1">Nome da Pasta</label>
                     <div class="relative">
@@ -150,7 +202,6 @@
                     </div>
                 </div>
 
-                <!-- Padrão de Visualização -->
                 <div class="mb-8">
                     <label class="block text-sm font-medium text-slate-300 mb-2">Padrão de Visualização desta Pasta</label>
                     <div class="grid grid-cols-3 gap-2 sm:gap-3">
@@ -178,10 +229,8 @@
                     </div>
                 </div>
 
-                <!-- Rodapé de Ações -->
                 <div class="flex flex-col-reverse sm:flex-row justify-between items-center pt-4 border-t border-slate-700/50 gap-3">
                     <div class="w-full sm:w-auto">
-                        <!-- Botão de Excluir só aparece quando for Edição (ID preenchido) -->
                         <button type="button" id="btnDeleteDir" onclick="app.deleteFromModal()" class="hidden w-full text-red-400 hover:text-white hover:bg-red-500/20 px-3 py-2 rounded-lg transition-colors flex justify-center items-center gap-2 text-sm">
                             <i class="fa-solid fa-trash"></i> <span>Excluir</span>
                         </button>
@@ -201,28 +250,27 @@
     <script>
         const app = {
             state: {
-                // Inicia genérico, será substituído após buscar do banco de dados (fetchUserPrefs)
                 path: [{ id: null, name: 'Meu Cofre', view: 'grid' }],
                 directories: [],
-                isLoading: false
+                isLoading: false,
+                reorderMode: false,
             },
             
+            sortableInstance: null,
+
             async init() {
                 this.setLoading(true);
-                await this.fetchUserPrefs(); // Busca as configs do usuário primeiro (Root View)
+                await this.fetchUserPrefs(); 
                 this.updateTopButtons();
                 await this.fetchDirectories();
                 this.setupEventListeners();
             },
 
             setupEventListeners() {
-                // Lógica para fechar o dropdown mobile ao clicar fora dele
                 document.addEventListener('click', (event) => {
                     const menu = document.getElementById('mobileViewMenu');
                     const trigger = document.getElementById('btn-mobile-menu-trigger');
-                    
                     if (menu && !menu.classList.contains('hidden')) {
-                        // Se o clique não foi no menu nem no botão que abre ele, esconde.
                         if (!menu.contains(event.target) && !trigger.contains(event.target)) {
                             menu.classList.add('hidden');
                         }
@@ -230,15 +278,9 @@
                 });
             },
 
-            getCurrentParentId() {
-                return this.state.path[this.state.path.length - 1].id;
-            },
+            getCurrentParentId() { return this.state.path[this.state.path.length - 1].id; },
+            getCurrentView() { return this.state.path[this.state.path.length - 1].view; },
 
-            getCurrentView() {
-                return this.state.path[this.state.path.length - 1].view;
-            },
-
-            // --- API Base ---
             async api(endpoint, action, payload = {}) {
                 payload.action = action;
                 try {
@@ -252,17 +294,14 @@
                     if (data.status !== 'success') throw new Error(data.message);
                     return data;
                 } catch (err) {
-                    alert('Erro no sistema: ' + err.message);
+                    console.error('Erro:', err.message);
                     return null;
                 }
             },
 
-            // --- Buscas Iniciais ---
             async fetchUserPrefs() {
                 const response = await this.api('user', 'get_prefs');
-                if (response && response.data) {
-                    this.state.path[0].view = response.data.root_view;
-                }
+                if (response && response.data) this.state.path[0].view = response.data.root_view;
             },
 
             async fetchDirectories() {
@@ -278,14 +317,18 @@
                 this.setLoading(false);
             },
 
-            // --- Navegação ---
             async enterDirectory(id, name, viewMode) {
+                if(this.state.reorderMode) return; 
                 this.state.path.push({ id, name, view: viewMode });
+                
+                if (this.state.reorderMode) this.toggleReorderMode();
+                
                 await this.fetchDirectories();
             },
 
             async goUpTo(index) {
                 this.state.path = this.state.path.slice(0, index + 1);
+                if (this.state.reorderMode) this.toggleReorderMode();
                 await this.fetchDirectories();
             },
 
@@ -295,7 +338,6 @@
                     const isLast = index === this.state.path.length - 1;
                     const color = isLast ? 'text-white font-semibold' : 'text-slate-400 hover:text-gluon-primary cursor-pointer transition-colors';
                     const separator = isLast ? '' : '<i class="fa-solid fa-chevron-right text-sm text-slate-600 mx-2"></i>';
-                    
                     return `
                         <div class="flex items-center whitespace-nowrap" onclick="${isLast ? '' : `app.goUpTo(${index})`}">
                             <span class="${color}">${index === 0 ? '<i class="fa-solid fa-vault mr-1"></i> ' : ''}${step.name}</span>
@@ -305,32 +347,114 @@
                 }).join('');
             },
 
-            // --- Menu Mobile e Alteração de View ---
-            toggleMobileViewMenu() {
-                const menu = document.getElementById('mobileViewMenu');
-                menu.classList.toggle('hidden');
-            },
+            toggleMobileViewMenu() { document.getElementById('mobileViewMenu').classList.toggle('hidden'); },
 
             async setViewMode(viewName) {
-                // Altera na UI instantaneamente (Otimista)
                 this.state.path[this.state.path.length - 1].view = viewName;
                 this.updateTopButtons();
                 this.render();
 
-                // Salva permanentemente se estiver na raiz
                 if (this.getCurrentParentId() === null) {
-                    try {
-                        await this.api('user', 'update_root_view', { view: viewName });
-                    } catch (e) {
-                        console.error("[GLUON DEBUG] Falha ao salvar view raiz no banco de dados.");
-                    }
+                    this.api('user', 'update_root_view', { view: viewName });
                 }
+            },
+
+            // --- LÓGICA DE REORDENAÇÃO MELHORADA ---
+            toggleReorderMode() {
+                this.state.reorderMode = !this.state.reorderMode;
+                
+                const btnDesk = document.getElementById('btn-reorder-desktop');
+                if(this.state.reorderMode) {
+                    btnDesk.classList.add('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20');
+                    btnDesk.classList.remove('text-slate-400', 'hover:bg-slate-700');
+                } else {
+                    btnDesk.classList.remove('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20');
+                    btnDesk.classList.add('text-slate-400', 'hover:bg-slate-700');
+                }
+
+                const btnMob = document.getElementById('btn-reorder-mobile');
+                if(this.state.reorderMode) {
+                    btnMob.classList.add('text-green-400', 'bg-slate-700/50');
+                    btnMob.classList.remove('text-slate-300');
+                } else {
+                    btnMob.classList.remove('text-green-400', 'bg-slate-700/50');
+                    btnMob.classList.add('text-slate-300');
+                }
+
+                const container = document.getElementById('viewContainer');
+                const wrapper = document.getElementById('sortable-wrapper');
+                const hint = document.getElementById('reorder-hint');
+                
+                if(this.state.reorderMode) {
+                    container.classList.add('reorder-active');
+                    if(wrapper) wrapper.classList.add('reorder-active'); // Adiciona na div pai também para tratar CSS
+                    hint.classList.remove('hidden');
+                } else {
+                    container.classList.remove('reorder-active');
+                    if(wrapper) wrapper.classList.remove('reorder-active');
+                    hint.classList.add('hidden');
+                }
+
+                this.initSortable();
+            },
+
+            initSortable() {
+                if (this.sortableInstance) {
+                    this.sortableInstance.destroy();
+                    this.sortableInstance = null;
+                }
+
+                if (!this.state.reorderMode) return;
+
+                const wrapper = document.getElementById('sortable-wrapper');
+                const currentView = this.getCurrentView();
+
+                if (wrapper) {
+                    this.sortableInstance = new Sortable(wrapper, {
+                        animation: 250,
+                        delay: 150, 
+                        delayOnTouchOnly: true,
+                        ghostClass: 'sortable-ghost',
+                        dragClass: 'sortable-drag',
+                        
+                        // CONFIGURAÇÕES MÁGICAS PARA O KANBAN NO DESKTOP:
+                        // forceFallback desativa o Drag do HTML5 (que causa o bug visual de pulo no desktop)
+                        // e cria um clone via Javascript nativo, garantindo total suavidade.
+                        forceFallback: true, 
+                        fallbackOnBody: true, 
+                        
+                        scroll: true,
+                        scrollSensitivity: 80, // Área sensível nas bordas para disparar o scroll automático
+                        scrollSpeed: 15,       // Velocidade agradável
+                        direction: currentView === 'kanban' ? 'horizontal' : (currentView === 'list' ? 'vertical' : undefined),
+                        
+                        onEnd: () => {
+                            this.saveNewOrder();
+                        }
+                    });
+                }
+            },
+
+            async saveNewOrder() {
+                const wrapper = document.getElementById('sortable-wrapper');
+                if (!wrapper) return;
+
+                const items = Array.from(wrapper.children);
+                const orderIds = items.map(item => item.getAttribute('data-id')).filter(id => id !== null);
+
+                const newDirsState = [];
+                orderIds.forEach(id => {
+                    const dir = this.state.directories.find(d => d.id == id);
+                    if(dir) newDirsState.push(dir);
+                });
+                this.state.directories = newDirsState;
+
+                await this.api('directories', 'reorder', { order: orderIds });
             },
 
             updateTopButtons() {
                 const currentView = this.getCurrentView();
                 ['grid', 'list', 'kanban'].forEach(v => {
-                    // Update Desktop Buttons
                     const btn = document.getElementById(`btn-view-${v}`);
                     if(btn) {
                         if(v === currentView) {
@@ -342,7 +466,6 @@
                         }
                     }
 
-                    // Update Mobile Menu Buttons
                     const mobileBtn = document.getElementById(`btn-mobile-view-${v}`);
                     if(mobileBtn) {
                         if(v === currentView) {
@@ -356,8 +479,9 @@
                 });
             },
 
-            // --- Modal de Diretórios (Criar, Editar, Excluir) ---
             openModal(id = '', name = '', targetParentId = null, currentViewMode = 'grid') {
+                if(this.state.reorderMode) return; 
+
                 document.getElementById('dirId').value = id;
                 document.getElementById('dirName').value = name;
                 document.getElementById('dirParentId').value = targetParentId !== null ? targetParentId : '';
@@ -394,8 +518,6 @@
                 const radios = document.getElementsByName('dirViewMode');
                 for(let i=0; i<radios.length; i++) { if(radios[i].checked) selectedView = radios[i].value; }
 
-                const parentIdToUse = specificParentId !== '' ? specificParentId : this.getCurrentParentId();
-
                 const btn = document.getElementById('btnSaveDir');
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
                 btn.disabled = true;
@@ -403,7 +525,7 @@
                 const isEdit = id !== '';
                 const response = await this.api('directories', isEdit ? 'update' : 'create', {
                     id: isEdit ? id : null,
-                    parent_id: parentIdToUse,
+                    parent_id: specificParentId !== '' ? specificParentId : this.getCurrentParentId(),
                     name: name,
                     view: selectedView
                 });
@@ -420,23 +542,16 @@
             async deleteFromModal() {
                 const id = document.getElementById('dirId').value;
                 const name = document.getElementById('dirName').value;
-
                 if(!id) return;
-
                 if(confirm(`Atenção: A pasta "${name}" e TODO o seu conteúdo serão apagados PERMANENTEMENTE.\nDeseja continuar?`)) {
                     const btn = document.getElementById('btnDeleteDir');
                     btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
-                    
                     const response = await this.api('directories', 'delete', { id });
-                    if(response) {
-                        this.closeModal();
-                        await this.fetchDirectories();
-                    }
+                    if(response) { this.closeModal(); await this.fetchDirectories(); }
                     btn.innerHTML = '<i class="fa-solid fa-trash"></i> <span>Excluir</span>';
                 }
             },
 
-            // --- Rendering ---
             setLoading(show) {
                 this.state.isLoading = show;
                 document.getElementById('loader').classList.toggle('hidden', !show);
@@ -487,11 +602,14 @@
                 let html = '';
 
                 if (view === 'grid') {
-                    html = `<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">`;
+                    html = `<div id="sortable-wrapper" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">`;
                     this.state.directories.forEach(dir => {
                         html += `
-                        <div class="dir-card group bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-col items-center text-center cursor-pointer relative" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
-                            <div class="absolute top-2 right-2 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div data-id="${dir.id}" class="dir-card draggable-item group bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-col items-center text-center cursor-pointer relative" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
+                            <div class="absolute top-3 left-3 text-green-500 hidden grip-handle bg-slate-900/50 rounded p-1">
+                                <i class="fa-solid fa-grip-vertical"></i>
+                            </div>
+                            <div class="absolute top-2 right-2 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn">
                                 <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded p-1.5 shadow-lg"><i class="fa-solid fa-cog"></i></button>
                             </div>
                             <i class="fa-solid fa-folder text-4xl sm:text-5xl text-gluon-primary mb-3 drop-shadow-md sm:group-hover:scale-110 transition-transform"></i>
@@ -506,20 +624,24 @@
                                 <table class="w-full text-left text-sm min-w-[300px]">
                                     <thead class="bg-slate-900/50 text-slate-400">
                                         <tr>
+                                            <th class="px-4 py-3 font-medium w-10 text-center hidden grip-handle">#</th>
                                             <th class="px-4 sm:px-6 py-3 font-medium">Nome</th>
                                             <th class="px-4 sm:px-6 py-3 font-medium text-right">Ações</th>
                                         </tr>
                                     </thead>
-                                    <tbody class="divide-y divide-slate-700/50">`;
+                                    <tbody id="sortable-wrapper" class="divide-y divide-slate-700/50">`;
                     this.state.directories.forEach(dir => {
                         html += `
-                        <tr class="hover:bg-slate-700/30 transition-colors group cursor-pointer" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
+                        <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/30 transition-colors group cursor-pointer border-l-2 border-transparent" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
+                            <td class="px-2 py-3 text-center hidden grip-handle text-green-500 bg-slate-900/20">
+                                <i class="fa-solid fa-grip-vertical"></i>
+                            </td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3">
                                 <i class="fa-solid fa-folder text-lg sm:text-xl text-gluon-primary"></i>
                                 <span class="font-medium text-slate-200 truncate">${dir.name}</span>
                             </td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-right">
-                                <div class="sm:opacity-0 group-hover:opacity-100 transition-opacity flex justify-end gap-2">
+                                <div class="sm:opacity-0 group-hover:opacity-100 transition-opacity flex justify-end gap-2 cog-btn">
                                     <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded p-2 text-xs sm:text-sm"><i class="fa-solid fa-cog"></i> <span class="hidden sm:inline">Editar</span></button>
                                 </div>
                             </td>
@@ -529,16 +651,18 @@
                 }
 
                 else if (view === 'kanban') {
-                    html = `<div class="flex gap-4 sm:gap-6 overflow-x-auto pb-4 no-scrollbar h-full items-start snap-x">`;
+                    // Note que 'snap-x' tem seu funcionamento inibido via CSS quando reorder-active entra na div principal
+                    html = `<div id="sortable-wrapper" class="flex gap-4 sm:gap-6 overflow-x-auto pb-4 no-scrollbar h-full items-start snap-x">`;
                     this.state.directories.forEach(dir => {
                         html += `
-                        <div class="bg-slate-800 border border-slate-700 rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg snap-start">
+                        <div data-id="${dir.id}" class="draggable-item snap-start bg-slate-800 border border-slate-700 rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg relative transition-colors">
                             <div class="p-3 border-b border-slate-700 flex justify-between items-center bg-slate-900/50 rounded-t-xl group cursor-pointer hover:bg-slate-700/50 transition-colors" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
                                 <div class="flex items-center gap-2 font-semibold text-slate-200 truncate w-full">
+                                    <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
                                     <i class="fa-solid fa-folder-open text-gluon-primary"></i>
                                     <span class="truncate text-sm sm:text-base">${dir.name}</span>
                                 </div>
-                                <div class="flex gap-1 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div class="flex gap-1 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn">
                                     <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded p-1.5"><i class="fa-solid fa-cog text-xs"></i></button>
                                 </div>
                             </div>
@@ -560,6 +684,12 @@
                 }
 
                 container.innerHTML = html;
+                
+                if (this.state.reorderMode) {
+                    // Adiciona as tags CSS caso renderize direto no modo de edição (pra ignorar o snap)
+                    document.getElementById('sortable-wrapper').classList.add('reorder-active');
+                    this.initSortable();
+                }
             }
         };
 
