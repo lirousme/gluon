@@ -265,9 +265,6 @@ elseif ($action === 'update') {
     $color_to = preg_match('/^#[a-fA-F0-9]{6}$/', $input['color_to'] ?? '') ? $input['color_to'] : '#6366f1';
     $cover_url = trim($input['cover_url'] ?? '');
 
-    $start_date = !empty($input['start_date']) ? $input['start_date'] : null;
-    $end_date = !empty($input['end_date']) ? $input['end_date'] : null;
-
     if (empty($name) || $id === 0) {
         die(json_encode(['status' => 'error', 'message' => 'Dados inválidos.']));
     }
@@ -282,8 +279,20 @@ elseif ($action === 'update') {
     $name_encrypted = Security::encryptData($name);
     $cover_url_encrypted = !empty($cover_url) ? Security::encryptData($cover_url) : null;
     
-    $stmt = $pdo->prepare("UPDATE directories SET name_encrypted = ?, default_view = ?, new_item_position = ?, icon = ?, icon_color_from = ?, icon_color_to = ?, cover_url_encrypted = ?, start_date = ?, end_date = ? WHERE id = ? AND user_id = ?");
-    if ($stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $start_date, $end_date, $id, $user_id])) {
+    // CORREÇÃO: Atualização Parcial de Datas
+    // Se as datas não foram enviadas no payload (edição via modal), ignoramos essa coluna para não perder os agendamentos já existentes.
+    if (array_key_exists('start_date', $input) || array_key_exists('end_date', $input)) {
+        $start_date = !empty($input['start_date']) ? $input['start_date'] : null;
+        $end_date = !empty($input['end_date']) ? $input['end_date'] : null;
+
+        $stmt = $pdo->prepare("UPDATE directories SET name_encrypted = ?, default_view = ?, new_item_position = ?, icon = ?, icon_color_from = ?, icon_color_to = ?, cover_url_encrypted = ?, start_date = ?, end_date = ? WHERE id = ? AND user_id = ?");
+        $result = $stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $start_date, $end_date, $id, $user_id]);
+    } else {
+        $stmt = $pdo->prepare("UPDATE directories SET name_encrypted = ?, default_view = ?, new_item_position = ?, icon = ?, icon_color_from = ?, icon_color_to = ?, cover_url_encrypted = ? WHERE id = ? AND user_id = ?");
+        $result = $stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $id, $user_id]);
+    }
+
+    if ($result) {
         echo json_encode(['status' => 'success', 'message' => 'Item atualizado.']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar.']);
