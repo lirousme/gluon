@@ -4,8 +4,8 @@
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
   Atualização: 
-    - Desempenho extremo no Custom Scrollbar: Implementado requestAnimationFrame e translate3d para aceleração via GPU a 60 FPS.
-    - Resolvido o "engasgo": O scroll snap (snap-x) é temporariamente removido durante o arrastar (drag) para evitar conflitos com o motor de física do navegador.
+    - Desempenho extremo no Custom Scrollbar.
+    - Botão de Logout trocado por "Perfil" redirecionando para a central de configurações (settings.html).
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -28,14 +28,12 @@
         }
     </script>
     <style>
-        /* Esconde a barra nativa para substituirmos pela nossa barra JS no desktop */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
         .dir-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
         .dir-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); }
         
-        /* Scroll vertical interno das colunas do Kanban */
         .kanban-scroll::-webkit-scrollbar { width: 4px; }
         .kanban-scroll::-webkit-scrollbar-track { background: transparent; }
         .kanban-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
@@ -78,7 +76,7 @@
     <!-- Top Navigation -->
     <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 backdrop-blur-md bg-opacity-90">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="window.location.reload()">
                 <div class="w-10 h-10 rounded-lg bg-slate-800 border border-slate-600 flex items-center justify-center shadow-lg">
                     <i class="fa-solid fa-atom text-xl text-gluon-primary"></i>
                 </div>
@@ -106,7 +104,6 @@
                     </button>
                     <div id="mobileViewMenu" class="hidden absolute right-0 top-12 w-56 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 origin-top-right transition-all">
                         
-                        <!-- Opções de Pasta Atual -->
                         <div class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Ações do Diretório</div>
                         
                         <button onclick="app.openModal(app.getCurrentParentId() || 'root'); app.toggleMobileViewMenu()" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
@@ -133,12 +130,17 @@
                 </div>
                 
                 <div class="h-6 w-px bg-slate-700"></div>
-                <button onclick="window.location.href='/api/auth?action=logout'" class="text-sm text-slate-400 hover:text-red-400 transition-colors flex items-center gap-2"><i class="fa-solid fa-power-off"></i> <span class="hidden sm:inline">Sair</span></button>
+                
+                <!-- Botão de Perfil (Atualizado) -->
+                <button onclick="window.location.href='/settings'" class="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2" title="Meu Perfil">
+                    <i class="fa-solid fa-circle-user text-xl"></i> 
+                    <span class="hidden sm:inline font-medium">Perfil</span>
+                </button>
             </div>
         </div>
     </nav>
 
-    <!-- Main Workspace com padding inferior ZERO -->
+    <!-- Main Workspace -->
     <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-0 flex flex-col overflow-hidden relative">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 shrink-0">
             <div class="block text-sm text-slate-300 font-medium w-full flex-1 leading-relaxed break-words" id="breadcrumbs"></div>
@@ -160,9 +162,8 @@
         <div id="viewContainer" class="flex-1 transition-all min-h-0 relative"></div>
     </main>
 
-    <!-- BARRA DE ROLAGEM CUSTOMIZADA (DOM JS/HTML) -->
+    <!-- BARRA DE ROLAGEM CUSTOMIZADA -->
     <div id="gluon-custom-scrollbar" class="hidden md:hidden fixed bottom-0 left-0 right-0 h-10 bg-[#0f172a] border-t border-slate-800 z-[60] flex items-center px-1">
-        <!-- O Arrasto (Thumb) com translate3d GPU Acelerado -->
         <div id="gluon-scroll-thumb" class="h-6 bg-gluon-primary rounded-full cursor-grab active:cursor-grabbing active:bg-blue-400 hover:bg-blue-400 transition-colors will-change-transform shadow-lg"></div>
     </div>
 
@@ -177,7 +178,6 @@
                 <button onclick="app.closeModal()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
             </div>
 
-            <!-- Modal Tabs -->
             <div class="flex border-b border-slate-700 bg-slate-900/30">
                 <button type="button" onclick="app.switchModalTab('geral')" id="tab-btn-geral" class="flex-1 py-3 text-sm font-medium border-b-2 border-gluon-primary text-white transition-colors">Geral</button>
                 <button type="button" onclick="app.switchModalTab('apar')" id="tab-btn-apar" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Aparência</button>
@@ -187,7 +187,6 @@
                 <input type="hidden" id="dirId">
                 <input type="hidden" id="dirParentId">
 
-                <!-- ABA GERAL -->
                 <div id="tab-geral" class="p-6 overflow-y-auto flex-1">
                     <div id="dirNameContainer" class="mb-5">
                         <label class="block text-sm font-medium text-slate-300 mb-1">Nome da Pasta</label>
@@ -234,9 +233,7 @@
                     </div>
                 </div>
 
-                <!-- ABA APARÊNCIA -->
                 <div id="tab-apar" class="hidden p-6 overflow-y-auto flex-1 space-y-5">
-                    
                     <div>
                         <label class="block text-sm font-medium text-slate-300 mb-1"><i class="fa-regular fa-image mr-1"></i> Imagem de Capa (Galeria)</label>
                         <input type="file" id="dirCoverFile" accept="image/*" class="w-full text-sm text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 transition-all cursor-pointer bg-slate-800 border border-slate-600 rounded-lg">
@@ -262,13 +259,10 @@
 
                     <div>
                         <label class="block text-sm font-medium text-slate-300 mb-2"><i class="fa-solid fa-icons mr-1"></i> Selecionar Ícone</label>
-                        <div class="grid grid-cols-5 gap-2 max-h-40 overflow-y-auto no-scrollbar p-1" id="icon-picker">
-                            <!-- Injetado via JS -->
-                        </div>
+                        <div class="grid grid-cols-5 gap-2 max-h-40 overflow-y-auto no-scrollbar p-1" id="icon-picker"></div>
                     </div>
                 </div>
 
-                <!-- Footer do Modal -->
                 <div class="p-5 border-t border-slate-700 bg-slate-800/50 flex flex-col-reverse sm:flex-row justify-between items-center gap-3 shrink-0">
                     <div class="w-full sm:w-auto">
                         <button type="button" id="btnDeleteDir" onclick="app.deleteFromModal()" class="hidden w-full text-red-400 hover:text-white hover:bg-red-500/20 px-3 py-2 rounded-lg transition-colors flex justify-center items-center gap-2 text-sm">
@@ -304,7 +298,6 @@
             
             sortableInstances: [],
 
-            // ====== SISTEMA DE SCROLL CUSTOMIZADO ULTRA FLUIDO ======
             customScroll: {
                 active: false,
                 isDragging: false,
@@ -312,7 +305,7 @@
                 syncRAF: null,
                 
                 init() {
-                    if(window.innerWidth < 768) return; // Apenas no Desktop
+                    if(window.innerWidth < 768) return; 
                     this.track = document.getElementById('gluon-custom-scrollbar');
                     this.thumb = document.getElementById('gluon-scroll-thumb');
                     this.wrapper = document.getElementById('sortable-wrapper');
@@ -380,7 +373,6 @@
                     this.sync();
                 },
 
-                // Sincroniza a barra baseada na rolagem nativa/trackpad
                 sync() {
                     if(!this.active || this.isDragging || !this.wrapper) return;
                     if(this.syncRAF) cancelAnimationFrame(this.syncRAF);
@@ -396,7 +388,6 @@
                         const maxThumbLeft = trackW - thumbW;
                         const scrollRatio = scrollLeft / maxScroll;
                         
-                        // translate3d força GPU acceleration (MUITO mais fluido que left/margin)
                         this.thumb.style.transform = `translate3d(${scrollRatio * maxThumbLeft}px, 0, 0)`;
                     });
                 },
@@ -409,21 +400,18 @@
                     this.startScroll = this.wrapper.scrollLeft;
                     document.body.style.userSelect = 'none';
                     
-                    // O SEGREDO: Remover o snap (encaixe) enquanto arrasta para não conflitar com o JS
                     this.wrapper.classList.remove('snap-x');
-                    // E remover qualquer transição de scroll-behavior nativa
                     this.wrapper.style.scrollBehavior = 'auto';
                     
                     document.addEventListener('mousemove', this.onDrag, { passive: false });
                     document.addEventListener('mouseup', this.stopDrag);
                 },
 
-                // Calcula e aplica a rolagem ao arrastar o thumb
                 onDrag(e) {
                     if(!this.isDragging) return;
-                    this.currentX = e.pageX; // Guarda a posição atual do rato
+                    this.currentX = e.pageX; 
                     
-                    if(this.dragRAF) return; // Se já estamos processando um frame, ignora (evita lag)
+                    if(this.dragRAF) return; 
                     
                     this.dragRAF = requestAnimationFrame(() => {
                         const dx = this.currentX - this.startX;
@@ -436,11 +424,10 @@
                         const scrollDx = (dx / maxThumbLeft) * maxScroll;
                         this.wrapper.scrollLeft = this.startScroll + scrollDx;
                         
-                        // Atualização visual imediata do thumb com aceleração 3D
                         const newLeft = Math.max(0, Math.min(maxThumbLeft, (this.wrapper.scrollLeft / maxScroll) * maxThumbLeft));
                         this.thumb.style.transform = `translate3d(${newLeft}px, 0, 0)`;
                         
-                        this.dragRAF = null; // Libera para o próximo frame
+                        this.dragRAF = null; 
                     });
                 },
 
@@ -448,7 +435,6 @@
                     this.isDragging = false;
                     document.body.style.userSelect = '';
                     
-                    // Devolvemos o snap para as rolagens nativas normais ou cliques
                     this.wrapper.classList.add('snap-x');
                     this.wrapper.style.scrollBehavior = '';
                     
@@ -473,9 +459,7 @@
                     this.wrapper.scrollTo({ left: newScroll, behavior: 'smooth' });
                 }
             },
-            // ===========================================
 
-            // Helper de Segurança (Anti-XSS e Anti-quebra de HTML)
             escapeHTML(str) {
                 if (!str) return '';
                 return str.replace(/[&<>'"]/g, tag => 
@@ -868,17 +852,14 @@
                 const modal = document.getElementById('dirModal');
                 const content = document.getElementById('dirModalContent');
                 
-                // Aplica a animação de saída
                 modal.classList.add('opacity-0'); 
                 content.classList.add('scale-95');
                 
-                // Aguarda a animação acabar (300ms) e reseta TUDO de uma vez só no background
                 setTimeout(() => { 
                     modal.classList.add('hidden'); 
                     modal.classList.remove('flex'); 
                     document.getElementById('dirForm').reset(); 
                     
-                    // Reseta os estados de loading dos botões aqui
                     const btnSave = document.getElementById('btnSaveDir');
                     if (btnSave) {
                         btnSave.innerHTML = '<i class="fa-solid fa-check"></i> Salvar';
@@ -950,7 +931,6 @@
                     this.closeModal(); 
                     await this.fetchDirectories(); 
                 } else {
-                    // Se falhar, reseta o botão manualmente pois o modal não vai fechar
                     btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar'; 
                     btn.disabled = false;
                 }
@@ -964,17 +944,16 @@
                 if(confirm(`Atenção: A pasta "${name}" e TODO o seu conteúdo serão apagados PERMANENTEMENTE.\nDeseja continuar?`)) {
                     const btn = document.getElementById('btnDeleteDir'); 
                     btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
-                    btn.disabled = true; // Impede duplo clique no botão deletar
+                    btn.disabled = true; 
                     
                     const response = await this.api('directories', 'delete', { id });
                     
                     if(response) { 
-                        this.closeModal(); // O closeModal agora limpa o botão automaticamente de forma invisível
+                        this.closeModal(); 
                         const pathIndex = this.state.path.findIndex(step => String(step.id) === String(id));
                         if (pathIndex !== -1) { await this.goUpTo(pathIndex - 1); } 
                         else { await this.fetchDirectories(); }
                     } else {
-                        // Se houver erro, volta o botão ao estado normal
                         btn.innerHTML = '<i class="fa-solid fa-trash"></i> <span>Excluir</span>';
                         btn.disabled = false;
                     }
@@ -1015,7 +994,6 @@
                 });
                 await Promise.all(promises);
                 
-                // Quando o Kanban acaba de carregar, atualizamos o Scroll Customizado JS
                 if(this.getCurrentView() === 'kanban') {
                     this.customScroll.update();
                 }
@@ -1027,7 +1005,6 @@
                 const container = document.getElementById('viewContainer');
                 const view = this.getCurrentView();
                 
-                // Sempre garantimos que a custom scroll é destruída se sairmos do Kanban
                 if(view !== 'kanban') this.customScroll.destroy();
 
                 if (this.state.directories.length === 0) {
@@ -1035,7 +1012,6 @@
                     return;
                 }
 
-                // Ajuste no Kanban: container totalmente flexível para preencher a tela inteira.
                 if (view === 'kanban') {
                     container.className = "flex-1 flex flex-col overflow-hidden transition-all min-h-0 w-full";
                 } else {
@@ -1086,7 +1062,6 @@
                 }
 
                 else if (view === 'kanban') {
-                    // pb-12 adicionado ao wrapper: isso cria 48px de margem interna no final, garantindo que os cards NUNCA fiquem escondidos pela nossa nova barra gigante de 40px no rodapé.
                     html = `<div id="sortable-wrapper" class="flex-1 flex gap-4 sm:gap-6 overflow-x-auto items-start snap-x w-full pb-12 relative">`;
                     this.state.directories.forEach(dir => {
                         html += `
@@ -1117,7 +1092,6 @@
                     });
                     html += `</div>`;
                     
-                    // Inicia o nosso Scrollbar JS após inserir no DOM
                     setTimeout(() => {
                         this.customScroll.init();
                         this.loadKanbanContents();
