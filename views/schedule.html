@@ -3,7 +3,8 @@
   Diretório: public_html/gluon/views/schedule.html
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
-  View customizada para gerenciar eventos de uma Agenda/Schedule (Type 2).
+  View customizada para gerenciar eventos de uma Agenda/Schedule.
+  Integrada com o modal nativo e navegação de deep linking do sistema Core.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -30,7 +31,7 @@
         
         .event-card {
             position: absolute;
-            left: 50px; /* Space for time labels */
+            left: 50px;
             right: 10px;
             border-radius: 6px;
             padding: 4px 8px;
@@ -40,6 +41,7 @@
             border: 1px solid rgba(255,255,255,0.1);
             user-select: none;
             transition: box-shadow 0.2s;
+            cursor: pointer;
         }
         .event-card:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); z-index: 10; }
         
@@ -56,6 +58,21 @@
         
         .dragging { opacity: 0.7; cursor: grabbing !important; z-index: 50 !important; }
         .resizing { cursor: ns-resize !important; z-index: 50 !important; }
+
+        /* Estilos de inputs para o modal robusto */
+        .view-radio:checked + div, .type-radio:checked + div { background-color: #3b82f6; border-color: #3b82f6; color: white; }
+        .icon-radio:checked + div { background-color: #1e293b; border-color: #3b82f6; color: #3b82f6; }
+        
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: none;
+            width: 100%;
+            height: 40px;
+            border-radius: 0.5rem;
+            cursor: pointer;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 0.5rem; }
     </style>
 </head>
 <body class="bg-gluon-dark text-slate-200 h-screen flex flex-col font-sans overflow-hidden">
@@ -74,8 +91,8 @@
         </div>
         
         <div class="flex items-center gap-3">
-            <button onclick="scheduleApp.openTaskModal()" class="bg-gluon-primary hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg shadow-lg transition-all flex items-center gap-2 text-sm">
-                <i class="fa-solid fa-plus"></i> <span class="hidden sm:inline">Nova Tarefa</span>
+            <button onclick="scheduleApp.openModal()" class="bg-gluon-primary hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg shadow-lg transition-all flex items-center gap-2 text-sm">
+                <i class="fa-solid fa-plus"></i> <span class="hidden sm:inline">Novo Item</span>
             </button>
         </div>
     </nav>
@@ -87,7 +104,7 @@
         <aside class="w-64 sm:w-80 bg-slate-900 border-r border-slate-700/50 flex flex-col shrink-0">
             <div class="p-4 border-b border-slate-800 bg-slate-800/30">
                 <h3 class="font-semibold text-slate-300 flex items-center gap-2"><i class="fa-solid fa-inbox text-slate-500"></i> Sem Data (Backlog)</h3>
-                <p class="text-xs text-slate-500 mt-1">Tarefas não agendadas. Arraste para a linha do tempo.</p>
+                <p class="text-xs text-slate-500 mt-1">Tarefas/Itens não agendados. Arraste para a linha do tempo.</p>
             </div>
             <div id="unscheduledList" class="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
                 <!-- Itens injetados via JS -->
@@ -124,19 +141,140 @@
         </div>
     </main>
 
-    <!-- Modal Rápido de Criação de Tarefa -->
-    <div id="taskModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
-        <div class="bg-gluon-secondary border border-slate-700 rounded-xl w-full max-w-sm p-6 transform scale-95 transition-transform duration-300" id="taskModalContent">
-            <h3 class="text-lg font-semibold text-white mb-4"><i class="fa-solid fa-bolt text-gluon-primary mr-2"></i> Adicionar Tarefa</h3>
-            <form onsubmit="scheduleApp.saveTask(event)">
-                <input type="hidden" id="taskId">
-                <div class="mb-4">
-                    <label class="block text-sm text-slate-300 mb-1">Título</label>
-                    <input type="text" id="taskName" required autocomplete="off" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-gluon-primary">
+    <!-- Modal Completo de Configurações (Igual ao do Dashboard) -->
+    <div id="dirModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
+        <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-0 transform scale-95 transition-transform duration-300 overflow-hidden flex flex-col max-h-[90vh]" id="dirModalContent">
+            
+            <div class="p-5 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
+                <h3 class="text-xl font-semibold text-white flex items-center gap-2" id="modalTitle">
+                    <i class="fa-solid fa-plus text-gluon-primary"></i> <span>Novo Item</span>
+                </h3>
+                <button type="button" onclick="scheduleApp.closeModal()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="flex border-b border-slate-700 bg-slate-900/30">
+                <button type="button" onclick="scheduleApp.switchModalTab('geral')" id="tab-btn-geral" class="flex-1 py-3 text-sm font-medium border-b-2 border-gluon-primary text-white transition-colors">Geral</button>
+                <button type="button" onclick="scheduleApp.switchModalTab('apar')" id="tab-btn-apar" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Aparência</button>
+            </div>
+
+            <form id="dirForm" onsubmit="scheduleApp.saveDirectory(event)" class="flex flex-col flex-1 overflow-hidden">
+                <input type="hidden" id="dirId">
+
+                <div id="tab-geral" class="p-6 overflow-y-auto flex-1">
+                    
+                    <div id="typeSelectorContainer" class="mb-5">
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Tipo de Item</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="cursor-pointer" onclick="scheduleApp.handleTypeChange(0)">
+                                <input type="radio" name="itemType" value="0" class="peer hidden type-radio" checked>
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-folder block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Pasta / Tarefa</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer" onclick="scheduleApp.handleTypeChange(1)">
+                                <input type="radio" name="itemType" value="1" class="peer hidden type-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-file-code block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Cód. Fonte</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer" onclick="scheduleApp.handleTypeChange(2)">
+                                <input type="radio" name="itemType" value="2" class="peer hidden type-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-calendar-days block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Agenda</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="dirNameContainer" class="mb-5">
+                        <label class="block text-sm font-medium text-slate-300 mb-1" id="nameLabel">Nome do Item</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-pen absolute left-3 top-3.5 text-slate-500 text-sm"></i>
+                            <textarea id="dirName" rows="1" autocomplete="off" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 pl-9 pr-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-all resize-none overflow-hidden min-h-[44px]"></textarea>
+                        </div>
+                    </div>
+
+                    <div id="folderSettingsGroup">
+                        <div class="mb-5">
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Padrão de Visualização Interna</label>
+                            <div class="grid grid-cols-3 gap-2 sm:gap-3">
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="dirViewMode" value="grid" class="peer hidden view-radio" checked>
+                                    <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-border-all block text-xl mb-1"></i><span class="text-xs font-medium">Grid</span></div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="dirViewMode" value="list" class="peer hidden view-radio">
+                                    <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-list-ul block text-xl mb-1"></i><span class="text-xs font-medium">Lista</span></div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="dirViewMode" value="kanban" class="peer hidden view-radio">
+                                    <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-columns block text-xl mb-1"></i><span class="text-xs font-medium">Kanban</span></div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Adicionar novos itens no:</label>
+                            <div class="grid grid-cols-2 gap-2 sm:gap-3">
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="dirItemPosition" value="start" class="peer hidden view-radio">
+                                    <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
+                                        <i class="fa-solid fa-arrow-up block text-xl mb-1"></i><span class="text-xs font-medium">Início</span>
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="dirItemPosition" value="end" class="peer hidden view-radio" checked>
+                                    <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
+                                        <i class="fa-solid fa-arrow-down block text-xl mb-1"></i><span class="text-xs font-medium">Final</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="flex gap-2 justify-end mt-6">
-                    <button type="button" onclick="scheduleApp.closeTaskModal()" class="px-4 py-2 rounded-lg text-slate-400 hover:text-white transition-colors text-sm font-medium">Cancelar</button>
-                    <button type="submit" id="btnSaveTask" class="px-4 py-2 bg-gluon-primary hover:bg-blue-600 text-white rounded-lg shadow transition-all text-sm font-medium">Salvar</button>
+
+                <div id="tab-apar" class="hidden p-6 overflow-y-auto flex-1 space-y-5">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1"><i class="fa-regular fa-image mr-1"></i> Imagem de Capa (Opcional)</label>
+                        <input type="file" id="dirCoverFile" accept="image/*" class="w-full text-sm text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 transition-all cursor-pointer bg-slate-800 border border-slate-600 rounded-lg">
+                        <input type="hidden" id="dirCoverBase64">
+                        <div id="coverPreview" class="mt-3 hidden w-full h-24 rounded-lg bg-cover bg-center border border-slate-600 shadow-inner"></div>
+                        <button type="button" id="btnRemoveCover" class="hidden mt-2 text-xs text-red-400 hover:text-red-300 flex items-center gap-1"><i class="fa-solid fa-trash"></i> Remover capa</button>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2"><i class="fa-solid fa-palette mr-1"></i> Cores do Ícone (Gradient)</label>
+                        <div class="flex gap-4 items-center">
+                            <div class="flex-1">
+                                <span class="text-xs text-slate-500 block mb-1">Início</span>
+                                <input type="color" id="dirColorFrom" value="#3b82f6" class="bg-slate-800 border border-slate-600">
+                            </div>
+                            <i class="fa-solid fa-arrow-right text-slate-500 mt-4"></i>
+                            <div class="flex-1">
+                                <span class="text-xs text-slate-500 block mb-1">Fim</span>
+                                <input type="color" id="dirColorTo" value="#6366f1" class="bg-slate-800 border border-slate-600">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="iconPickerContainer">
+                        <label class="block text-sm font-medium text-slate-300 mb-2"><i class="fa-solid fa-icons mr-1"></i> Selecionar Ícone</label>
+                        <div class="grid grid-cols-5 gap-2 max-h-40 overflow-y-auto no-scrollbar p-1" id="icon-picker"></div>
+                    </div>
+                </div>
+
+                <div class="p-5 border-t border-slate-700 bg-slate-800/50 flex flex-col-reverse sm:flex-row justify-between items-center gap-3 shrink-0">
+                    <div class="w-full sm:w-auto">
+                        <button type="button" id="btnDeleteDir" onclick="scheduleApp.deleteFromModal()" class="hidden w-full text-red-400 hover:text-white hover:bg-red-500/20 px-3 py-2 rounded-lg transition-colors flex justify-center items-center gap-2 text-sm">
+                            <i class="fa-solid fa-trash"></i> <span>Excluir</span>
+                        </button>
+                    </div>
+                    <div class="flex gap-2 w-full sm:w-auto justify-end">
+                        <button type="button" onclick="scheduleApp.closeModal()" class="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors text-sm font-medium">Cancelar</button>
+                        <button type="submit" id="btnSaveDir" class="px-4 py-2 bg-gluon-primary hover:bg-blue-600 text-white rounded-lg shadow-lg flex items-center gap-2 text-sm font-medium transition-all">
+                            <i class="fa-solid fa-check"></i> Salvar
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -148,10 +286,19 @@
             items: [],
             isDragging: false,
             isResizing: false,
+            wasDragged: false,
             dragElement: null,
             startY: 0,
             startTop: 0,
             startHeight: 0,
+
+            state: {
+                directoryCache: new Map(),
+                availableIcons: [
+                    'fa-folder', 'fa-folder-open', 'fa-check-circle', 'fa-file-code', 'fa-calendar-days', 'fa-door-open', 'fa-clock', 'fa-file-lines', 'fa-file-image', 'fa-file-pdf', 'fa-star', 'fa-heart', 'fa-image', 'fa-music', 'fa-video', 
+                    'fa-code', 'fa-terminal', 'fa-database', 'fa-server', 'fa-lock', 'fa-vault', 'fa-book', 'fa-briefcase', 'fa-globe', 'fa-list-check'
+                ]
+            },
 
             async init() {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -164,12 +311,49 @@
 
                 document.getElementById('currentDate').valueAsDate = new Date();
                 
+                this.renderIconPicker();
+                this.setupFormListeners();
+                
                 await this.fetchAgendaInfo();
                 await this.loadData();
                 this.setupMouseEvents();
 
-                // Scroll para as 8h da manhã
+                // Scroll para as 8h da manhã por padrão
                 document.getElementById('timelineScroll').scrollTop = 8 * 60 - 20;
+            },
+
+            setupFormListeners() {
+                document.getElementById('dirCoverFile').addEventListener('change', (e) => this.handleCoverUpload(e));
+                
+                const dirNameInput = document.getElementById('dirName');
+                if (dirNameInput) {
+                    dirNameInput.addEventListener('input', function() {
+                        this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; 
+                    });
+                    dirNameInput.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.saveDirectory(e); }
+                    });
+                }
+            },
+
+            escapeHTML(str) {
+                if (!str) return '';
+                return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
+            },
+
+            getTextGradientStyle(from, to) { 
+                return `background: -webkit-linear-gradient(135deg, ${from || '#3b82f6'}, ${to || '#6366f1'}); -webkit-background-clip: text; -webkit-text-fill-color: transparent;`; 
+            },
+
+            showToast(message, type = 'success') {
+                let toast = document.getElementById('gluon-toast');
+                if (!toast) { toast = document.createElement('div'); toast.id = 'gluon-toast'; document.body.appendChild(toast); }
+                const icon = type === 'success' ? '<i class="fa-solid fa-circle-check"></i>' : '<i class="fa-solid fa-circle-exclamation"></i>';
+                const bgClass = type === 'success' ? 'bg-green-600' : 'bg-red-600';
+                toast.className = `fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-xl text-white text-sm font-medium flex items-center gap-3 z-50 transition-all duration-300 transform translate-y-10 opacity-0 ${bgClass}`;
+                toast.innerHTML = `${icon} <span>${message}</span>`;
+                setTimeout(() => { toast.classList.remove('translate-y-10', 'opacity-0'); toast.classList.add('translate-y-0', 'opacity-100'); }, 10);
+                setTimeout(() => { toast.classList.remove('translate-y-0', 'opacity-100'); toast.classList.add('translate-y-10', 'opacity-0'); }, 3000);
             },
 
             async api(endpoint, action, payload = {}) {
@@ -180,7 +364,7 @@
                     const data = await res.json();
                     if (data.status !== 'success') throw new Error(data.message);
                     return data;
-                } catch (err) { console.error(err); return null; }
+                } catch (err) { console.error(err); this.showToast(err.message || 'Erro de conexão.', 'error'); return null; }
             },
 
             async fetchAgendaInfo() {
@@ -188,16 +372,17 @@
                 if (res && res.data) {
                     const iconEl = document.getElementById('agendaIcon');
                     iconEl.className = `fa-solid ${res.data.icon} text-xl`;
-                    iconEl.style = `background: -webkit-linear-gradient(135deg, ${res.data.color_from}, ${res.data.color_to}); -webkit-background-clip: text; -webkit-text-fill-color: transparent;`;
+                    iconEl.style = this.getTextGradientStyle(res.data.color_from, res.data.color_to);
                     document.getElementById('agendaName').innerText = res.data.name;
                 }
             },
 
             async loadData() {
-                // Traz todos os filhos da Agenda
                 const res = await this.api('directories', 'fetch', { parent_id: this.agendaId });
                 if (res) {
                     this.items = res.data;
+                    this.state.directoryCache.clear();
+                    res.data.forEach(d => this.state.directoryCache.set(Number(d.id), d));
                     this.render();
                 }
             },
@@ -219,27 +404,36 @@
                     if (!item.start_date || !item.end_date) {
                         // Sem data (Backlog)
                         unscheduledContainer.innerHTML += `
-                            <div id="evt-${item.id}" draggable="true" ondragstart="scheduleApp.dragStart(event, ${item.id})" class="bg-slate-800 border border-slate-700 p-3 rounded-lg shadow-sm cursor-grab active:cursor-grabbing hover:bg-slate-700 transition-colors flex items-center gap-2">
-                                <i class="fa-solid fa-grip-vertical text-slate-500"></i>
-                                <span class="font-medium text-sm text-slate-200 truncate flex-1">${item.name}</span>
+                            <div id="evt-${item.id}" draggable="true" ondragstart="scheduleApp.dragStart(event, ${item.id})" class="bg-slate-800 border border-slate-700 p-3 rounded-lg shadow-sm cursor-grab active:cursor-grabbing hover:bg-slate-700 transition-colors flex justify-between items-center group relative overflow-hidden" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                                ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10" style="background-image: url('${item.cover_url}')"></div>` : ''}
+                                <div class="flex items-center gap-2 truncate pointer-events-none z-10">
+                                    <i class="fa-solid fa-grip-vertical text-slate-500"></i>
+                                    <i class="fa-solid ${item.icon} text-sm" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
+                                    <span class="font-medium text-sm text-slate-200 truncate flex-1">${this.escapeHTML(item.name)}</span>
+                                </div>
+                                <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20"><i class="fa-solid fa-cog"></i></button>
                             </div>
                         `;
                     } else {
-                        // Verifica se pertence ao dia selecionado
                         const sDate = new Date(item.start_date);
                         const eDate = new Date(item.end_date);
                         const dStr = sDate.toISOString().split('T')[0];
                         
                         if (dStr === selectedDateStr) {
-                            // Calcula posições em pixels (1px = 1 min)
                             const startMins = sDate.getHours() * 60 + sDate.getMinutes();
                             const endMins = eDate.getHours() * 60 + eDate.getMinutes();
                             const duration = endMins - startMins;
                             
                             eventsLayer.innerHTML += `
-                                <div id="evt-${item.id}" class="event-card group" data-id="${item.id}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle} ${borderLeft}">
-                                    <div class="font-bold truncate pointer-events-none">${item.name}</div>
-                                    <div class="text-[10px] opacity-70 pointer-events-none">${sDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${eDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                <div id="evt-${item.id}" class="event-card group" data-id="${item.id}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle} ${borderLeft}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                                    ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
+                                    <div class="flex justify-between items-start pointer-events-none z-10 relative">
+                                        <div class="font-bold truncate">${this.escapeHTML(item.name)}</div>
+                                    </div>
+                                    <div class="text-[10px] opacity-70 pointer-events-none z-10 relative">${sDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${eDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                    
+                                    <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="absolute top-1 right-1 text-white/70 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20 bg-black/30 rounded"><i class="fa-solid fa-cog text-xs"></i></button>
+
                                     <div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>
                                 </div>
                             `;
@@ -247,45 +441,46 @@
                     }
                 });
 
-                // Adiciona listener de drag nos eventos agendados
                 document.querySelectorAll('.event-card').forEach(el => {
                     el.addEventListener('mousedown', (e) => {
-                        if(e.target.classList.contains('resize-handle')) return;
+                        if(e.target.classList.contains('resize-handle') || e.target.closest('button')) return;
                         this.startDragTimeline(e, el);
                     });
                 });
             },
 
-            // --- DRAG & DROP DO BACKLOG PARA TIMELINE (HTML5 Native) ---
-            dragStart(ev, id) {
-                ev.dataTransfer.setData("text/plain", id);
-            },
-            allowDrop(ev) { ev.preventDefault(); },
-            async dropOnTimeline(ev) {
-                ev.preventDefault();
-                const id = ev.dataTransfer.getData("text/plain");
-                if (!id) return;
-
-                const containerRect = document.getElementById('timelineScroll').getBoundingClientRect();
-                const y = ev.clientY - containerRect.top + document.getElementById('timelineScroll').scrollTop;
-                
-                // Snap to 30 mins (30px)
-                const snappedY = Math.floor(y / 30) * 30;
-                const hours = Math.floor(snappedY / 60);
-                const minutes = snappedY % 60;
-
-                const baseDate = document.getElementById('currentDate').value;
-                const startObj = new Date(`${baseDate}T${hours.toString().padStart(2,'0')}:${minutes.toString().padStart(2,'0')}:00`);
-                // Padrão: 1 hora de duração
-                const endObj = new Date(startObj.getTime() + 60*60000);
-
-                await this.updateItemDates(id, startObj, endObj);
+            // --- NAVEGAÇÃO AO CLICAR ---
+            handleEventClick(e, id) {
+                // Se o mouse moveu durante o clique, foi um Drag/Resize e não abrimos a pasta
+                if (this.wasDragged) {
+                    this.wasDragged = false;
+                    return;
+                }
+                this.enterDirectoryOrFile(id);
             },
 
-            // --- DRAG INTERNO DA TIMELINE (Custom Mouse Events) ---
+            async enterDirectoryOrFile(id) {
+                const item = this.state.directoryCache.get(Number(id));
+                if(!item) return;
+
+                if (item.type === 1) {
+                    window.location.href = `/editor?id=${id}`;
+                } else if (item.type === 2) {
+                    window.location.href = `/schedule?id=${id}`;
+                } else if (item.type === 3) {
+                    if (!item.target_id) return this.showToast('Portal corrompido: Destino não encontrado.', 'error');
+                    window.location.href = `/dashboard?id=${item.target_id}`;
+                } else {
+                    // Direciona pastas normais para o Dashboard abrindo diretamente nelas
+                    window.location.href = `/dashboard?id=${id}`;
+                }
+            },
+
+            // --- DRAG INTERNO DA TIMELINE ---
             startDragTimeline(e, el) {
-                if (e.button !== 0) return; // Só click esquerdo
+                if (e.button !== 0) return;
                 this.isDragging = true;
+                this.wasDragged = false;
                 this.dragElement = el;
                 this.startY = e.clientY;
                 this.startTop = parseInt(el.style.top || 0);
@@ -293,11 +488,10 @@
                 e.preventDefault();
             },
 
-            // --- RESIZE (Custom Mouse Events) ---
             startResize(e, id) {
-                e.preventDefault();
-                e.stopPropagation();
+                e.preventDefault(); e.stopPropagation();
                 this.isResizing = true;
+                this.wasDragged = false;
                 this.dragElement = document.getElementById(`evt-${id}`);
                 this.startY = e.clientY;
                 this.startHeight = parseInt(this.dragElement.style.height || 60);
@@ -305,22 +499,20 @@
             },
 
             setupMouseEvents() {
-                const container = document.getElementById('timelineScroll');
-                
                 document.addEventListener('mousemove', (e) => {
                     if (this.isDragging && this.dragElement) {
+                        this.wasDragged = true;
                         const deltaY = e.clientY - this.startY;
                         let newTop = this.startTop + deltaY;
-                        // Snap 15 min
                         newTop = Math.floor(newTop / 15) * 15;
                         if (newTop < 0) newTop = 0;
                         this.dragElement.style.top = newTop + 'px';
                         this.updateLabelRealtime(this.dragElement, newTop, parseInt(this.dragElement.style.height));
                     }
                     if (this.isResizing && this.dragElement) {
+                        this.wasDragged = true;
                         const deltaY = e.clientY - this.startY;
                         let newHeight = this.startHeight + deltaY;
-                        // Snap 15 min, min 15
                         newHeight = Math.max(15, Math.floor(newHeight / 15) * 15);
                         this.dragElement.style.height = newHeight + 'px';
                         this.updateLabelRealtime(this.dragElement, parseInt(this.dragElement.style.top), newHeight);
@@ -331,13 +523,13 @@
                     if (this.isDragging && this.dragElement) {
                         this.dragElement.classList.remove('dragging');
                         this.isDragging = false;
-                        await this.commitTimelineChanges(this.dragElement);
+                        if(this.wasDragged) await this.commitTimelineChanges(this.dragElement);
                         this.dragElement = null;
                     }
                     if (this.isResizing && this.dragElement) {
                         this.dragElement.classList.remove('resizing');
                         this.isResizing = false;
-                        await this.commitTimelineChanges(this.dragElement);
+                        if(this.wasDragged) await this.commitTimelineChanges(this.dragElement);
                         this.dragElement = null;
                     }
                 });
@@ -347,9 +539,7 @@
                 const sh = Math.floor(top/60); const sm = top%60;
                 const end = top + height;
                 const eh = Math.floor(end/60); const em = end%60;
-                
-                const timeStr = `${sh.toString().padStart(2,'0')}:${sm.toString().padStart(2,'0')} - ${eh.toString().padStart(2,'0')}:${em.toString().padStart(2,'0')}`;
-                el.children[1].innerText = timeStr;
+                el.children[1].innerText = `${sh.toString().padStart(2,'0')}:${sm.toString().padStart(2,'0')} - ${eh.toString().padStart(2,'0')}:${em.toString().padStart(2,'0')}`;
             },
 
             async commitTimelineChanges(el) {
@@ -358,7 +548,6 @@
                 const height = parseInt(el.style.height);
 
                 const baseDate = document.getElementById('currentDate').value;
-                
                 const sh = Math.floor(top/60); const sm = top%60;
                 const startObj = new Date(`${baseDate}T${sh.toString().padStart(2,'0')}:${sm.toString().padStart(2,'0')}:00`);
                 
@@ -369,7 +558,6 @@
                 await this.updateItemDates(id, startObj, endObj);
             },
 
-            // Formata YYYY-MM-DD HH:MM:SS para MySQL
             toMySQLFormat(dateObj) {
                 return dateObj.getFullYear() + '-' +
                     ('0' + (dateObj.getMonth()+1)).slice(-2) + '-' +
@@ -379,51 +567,299 @@
             },
 
             async updateItemDates(id, startObj, endObj) {
-                const payload = {
-                    id: id,
-                    start_date: this.toMySQLFormat(startObj),
-                    end_date: this.toMySQLFormat(endObj)
-                };
-                
-                // Atualiza em background pra manter rápido
+                const payload = { id: id, start_date: this.toMySQLFormat(startObj), end_date: this.toMySQLFormat(endObj) };
                 this.api('schedule', 'update_times', payload).then(() => this.loadData());
             },
 
-            // --- CRIAÇÃO RÁPIDA DE TAREFA ---
-            openTaskModal() {
-                const modal = document.getElementById('taskModal');
-                const content = document.getElementById('taskModalContent');
-                document.getElementById('taskName').value = '';
+            // --- DRAG & DROP NATIVO HTML5 (Do Backlog para Timeline) ---
+            dragStart(ev, id) { ev.dataTransfer.setData("text/plain", id); },
+            allowDrop(ev) { ev.preventDefault(); },
+            async dropOnTimeline(ev) {
+                ev.preventDefault();
+                const id = ev.dataTransfer.getData("text/plain");
+                if (!id) return;
+                const containerRect = document.getElementById('timelineScroll').getBoundingClientRect();
+                const y = ev.clientY - containerRect.top + document.getElementById('timelineScroll').scrollTop;
+                const snappedY = Math.floor(y / 30) * 30;
+                const hours = Math.floor(snappedY / 60);
+                const minutes = snappedY % 60;
+
+                const baseDate = document.getElementById('currentDate').value;
+                const startObj = new Date(`${baseDate}T${hours.toString().padStart(2,'0')}:${minutes.toString().padStart(2,'0')}:00`);
+                const endObj = new Date(startObj.getTime() + 60*60000);
+
+                await this.updateItemDates(id, startObj, endObj);
+            },
+
+            // ==========================================
+            // LÓGICA DO MODAL (Igual do Dashboard)
+            // ==========================================
+
+            renderIconPicker() {
+                const container = document.getElementById('icon-picker');
+                container.innerHTML = this.state.availableIcons.map(icon => `
+                    <label class="cursor-pointer">
+                        <input type="radio" name="dirIcon" value="${icon}" class="peer hidden icon-radio" ${icon === 'fa-folder' ? 'checked' : ''}>
+                        <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 flex items-center justify-center transition-all hover:bg-slate-700 hover:text-white h-10">
+                            <i class="fa-solid ${icon} text-lg"></i>
+                        </div>
+                    </label>
+                `).join('');
+            },
+
+            autoChangeIcon(iconClass) {
+                const radios = document.getElementsByName('dirIcon');
+                for(let i=0; i<radios.length; i++) { if(radios[i].value === iconClass) radios[i].checked = true; }
+            },
+
+            switchModalTab(tabName) {
+                const tGeral = document.getElementById('tab-geral'); const tApar = document.getElementById('tab-apar');
+                const bGeral = document.getElementById('tab-btn-geral'); const bApar = document.getElementById('tab-btn-apar');
+
+                if(tabName === 'geral') {
+                    tGeral.classList.remove('hidden'); tApar.classList.add('hidden');
+                    bGeral.classList.add('border-gluon-primary', 'text-white'); bGeral.classList.remove('border-transparent', 'text-slate-400');
+                    bApar.classList.add('border-transparent', 'text-slate-400'); bApar.classList.remove('border-gluon-primary', 'text-white');
+                } else {
+                    tApar.classList.remove('hidden'); tGeral.classList.add('hidden');
+                    bApar.classList.add('border-gluon-primary', 'text-white'); bApar.classList.remove('border-transparent', 'text-slate-400');
+                    bGeral.classList.add('border-transparent', 'text-slate-400'); bGeral.classList.remove('border-gluon-primary', 'text-white');
+                }
+            },
+
+            handleTypeChange(typeValue) {
+                const folderSettings = document.getElementById('folderSettingsGroup');
+                const nameLabel = document.getElementById('nameLabel');
                 
+                if (typeValue === 0) {
+                    folderSettings.style.display = 'block';
+                    nameLabel.innerText = 'Nome da Pasta / Tarefa';
+                    this.autoChangeIcon('fa-check-circle');
+                } else if (typeValue === 1) {
+                    folderSettings.style.display = 'none';
+                    nameLabel.innerText = 'Nome do Arquivo (Ex: script.js)';
+                    this.autoChangeIcon('fa-file-code');
+                } else if (typeValue === 2) {
+                    folderSettings.style.display = 'none';
+                    nameLabel.innerText = 'Nome da Agenda / Cronograma';
+                    this.autoChangeIcon('fa-calendar-days');
+                }
+            },
+
+            handleCoverUpload(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 600; const MAX_HEIGHT = 400;
+                        let width = img.width; let height = img.height;
+                        if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
+                        else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
+                        canvas.width = width; canvas.height = height;
+                        const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
+                        const base64 = canvas.toDataURL('image/jpeg', 0.6);
+                        document.getElementById('dirCoverBase64').value = base64;
+                        const preview = document.getElementById('coverPreview');
+                        preview.style.backgroundImage = `url('${base64}')`;
+                        preview.classList.remove('hidden');
+                        document.getElementById('btnRemoveCover').classList.remove('hidden');
+                    }
+                    img.src = event.target.result;
+                }
+                reader.readAsDataURL(file);
+            },
+
+            removeCover() {
+                document.getElementById('dirCoverFile').value = ''; document.getElementById('dirCoverBase64').value = '';
+                const preview = document.getElementById('coverPreview');
+                if (preview) { preview.classList.add('hidden'); preview.style.backgroundImage = 'none'; }
+                const btn = document.getElementById('btnRemoveCover'); if (btn) btn.classList.add('hidden');
+            },
+
+            openModal(id = '', name = '') {
+                this.switchModalTab('geral');
+                document.getElementById('dirId').value = id;
+                
+                let dirObj = null;
+                const dirNameInput = document.getElementById('dirName');
+                const typeSelector = document.getElementById('typeSelectorContainer');
+                const folderSettings = document.getElementById('folderSettingsGroup');
+                const nameLabel = document.getElementById('nameLabel');
+                const iconPickerContainer = document.getElementById('iconPickerContainer');
+
+                if (id) {
+                    dirObj = this.state.directoryCache.get(Number(id));
+                    
+                    let titleText = 'Item';
+                    if(dirObj.type === 0) titleText = 'Tarefa / Pasta';
+                    if(dirObj.type === 1) titleText = 'Arquivo';
+                    if(dirObj.type === 2) titleText = 'Agenda';
+                    if(dirObj.type === 3) titleText = 'Portal';
+
+                    document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-gear text-gluon-primary"></i> <span>Configurar ${titleText}</span>`;
+                    typeSelector.classList.add('hidden');
+                    
+                    if(dirObj.type === 0) { folderSettings.style.display = 'block'; nameLabel.innerText = 'Nome da Tarefa/Pasta'; iconPickerContainer.style.display = 'block'; } 
+                    else if(dirObj.type === 1) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Arquivo'; iconPickerContainer.style.display = 'block'; } 
+                    else if(dirObj.type === 2) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome da Agenda'; iconPickerContainer.style.display = 'block'; }
+                    else if(dirObj.type === 3) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Portal'; iconPickerContainer.style.display = 'none'; }
+                } else {
+                    document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus text-gluon-primary"></i> <span>Novo Item</span>';
+                    typeSelector.classList.remove('hidden');
+                    iconPickerContainer.style.display = 'block';
+                    
+                    const typeRadios = document.getElementsByName('itemType');
+                    typeRadios[0].checked = true;
+                    this.handleTypeChange(0);
+                }
+
+                dirNameInput.value = dirObj ? dirObj.name : name;
+
+                this.removeCover();
+                if (dirObj && dirObj.cover_url) {
+                    document.getElementById('dirCoverBase64').value = dirObj.cover_url;
+                    document.getElementById('coverPreview').style.backgroundImage = `url('${dirObj.cover_url}')`;
+                    document.getElementById('coverPreview').classList.remove('hidden');
+                    document.getElementById('btnRemoveCover').classList.remove('hidden');
+                }
+
+                document.getElementById('dirColorFrom').value = (dirObj && dirObj.color_from) ? dirObj.color_from : '#3b82f6';
+                document.getElementById('dirColorTo').value = (dirObj && dirObj.color_to) ? dirObj.color_to : '#6366f1';
+                
+                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : (dirObj?.type === 3 ? 'fa-door-open' : 'fa-check-circle'))); 
+                this.autoChangeIcon(iconToSelect);
+
+                const posToSelect = (dirObj && dirObj.new_item_position) ? dirObj.new_item_position : 'end';
+                const posRadios = document.getElementsByName('dirItemPosition');
+                for(let i=0; i<posRadios.length; i++) { posRadios[i].checked = (posRadios[i].value === posToSelect); }
+
+                const btnDelete = document.getElementById('btnDeleteDir');
+                if(id) btnDelete.classList.remove('hidden'); else btnDelete.classList.add('hidden');
+
+                const viewToSelect = (dirObj && dirObj.view) ? dirObj.view : 'grid';
+                const viewRadios = document.getElementsByName('dirViewMode');
+                for(let i=0; i<viewRadios.length; i++) { viewRadios[i].checked = (viewRadios[i].value === viewToSelect); }
+                
+                const modal = document.getElementById('dirModal');
+                const content = document.getElementById('dirModalContent');
                 modal.classList.remove('hidden'); modal.classList.add('flex');
-                setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); document.getElementById('taskName').focus(); }, 10);
+                
+                setTimeout(() => { 
+                    modal.classList.remove('opacity-0'); 
+                    content.classList.remove('scale-95'); 
+                    
+                    dirNameInput.style.height = 'auto';
+                    if (dirNameInput.scrollHeight > 0) {
+                        dirNameInput.style.height = dirNameInput.scrollHeight + 'px';
+                    }
+
+                    if(!id) dirNameInput.focus(); 
+                }, 20);
             },
 
-            closeTaskModal() {
-                const modal = document.getElementById('taskModal');
-                const content = document.getElementById('taskModalContent');
-                modal.classList.add('opacity-0'); content.classList.add('scale-95');
-                setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+            closeModal() {
+                const modal = document.getElementById('dirModal');
+                const content = document.getElementById('dirModalContent');
+                
+                modal.classList.add('opacity-0'); 
+                content.classList.add('scale-95');
+                
+                setTimeout(() => { 
+                    modal.classList.add('hidden'); 
+                    modal.classList.remove('flex'); 
+                    document.getElementById('dirForm').reset(); 
+                    
+                    const btnSave = document.getElementById('btnSaveDir');
+                    if (btnSave) {
+                        btnSave.innerHTML = '<i class="fa-solid fa-check"></i> Salvar';
+                        btnSave.disabled = false;
+                    }
+                    
+                    const btnDelete = document.getElementById('btnDeleteDir');
+                    if (btnDelete) {
+                        btnDelete.innerHTML = '<i class="fa-solid fa-trash"></i> <span>Excluir</span>';
+                        btnDelete.disabled = false;
+                    }
+
+                }, 300);
             },
 
-            async saveTask(e) {
-                e.preventDefault();
-                const name = document.getElementById('taskName').value;
-                const btn = document.getElementById('btnSaveTask');
-                btn.innerHTML = 'Salvando...'; btn.disabled = true;
+            async saveDirectory(e) {
+                if (e && e.preventDefault) e.preventDefault();
+                
+                const id = document.getElementById('dirId').value;
+                
+                if (!document.getElementById('dirName').value.trim()) {
+                    return this.showToast("O nome do item é obrigatório.", "error");
+                }
 
-                // Usa API de diretórios para criar uma pasta (Tarefa) sem datas vinculada a Agenda atual
+                let selectedView = 'grid';
+                const viewRadios = document.getElementsByName('dirViewMode');
+                for(let i=0; i<viewRadios.length; i++) { if(viewRadios[i].checked) selectedView = viewRadios[i].value; }
+
+                let selectedPos = 'end';
+                const posRadios = document.getElementsByName('dirItemPosition');
+                for(let i=0; i<posRadios.length; i++) { if(posRadios[i].checked) selectedPos = posRadios[i].value; }
+
+                let selectedType = 0;
+                const typeRadios = document.getElementsByName('itemType');
+                for(let i=0; i<typeRadios.length; i++) { if(typeRadios[i].checked) selectedType = parseInt(typeRadios[i].value); }
+
+                let selectedIcon = 'fa-check-circle';
+                const iconRadios = document.getElementsByName('dirIcon');
+                for(let i=0; i<iconRadios.length; i++) { if(iconRadios[i].checked) selectedIcon = iconRadios[i].value; }
+
+                const btn = document.getElementById('btnSaveDir');
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
+                btn.disabled = true;
+
                 const payload = {
-                    name: name,
-                    parent_id: this.agendaId,
-                    type: 0, // Tarefa internamente age como pasta base
-                    icon: 'fa-check-circle'
+                    id: id !== '' ? id : null,
+                    parent_id: this.agendaId, // SEMPRE atrela ao calendário atual
+                    type: selectedType,
+                    name: document.getElementById('dirName').value.trim(),
+                    view: selectedView,
+                    new_item_position: selectedPos,
+                    cover_url: document.getElementById('dirCoverBase64').value,
+                    color_from: document.getElementById('dirColorFrom').value || '#3b82f6',
+                    color_to: document.getElementById('dirColorTo').value || '#6366f1',
+                    icon: selectedIcon
                 };
 
-                await this.api('directories', 'create', payload);
-                this.closeTaskModal();
-                btn.innerHTML = 'Salvar'; btn.disabled = false;
-                await this.loadData();
+                const response = await this.api('directories', id !== '' ? 'update' : 'create', payload);
+
+                if (response) { 
+                    this.closeModal(); 
+                    await this.loadData(); 
+                } else {
+                    btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar'; 
+                    btn.disabled = false;
+                }
+            },
+
+            async deleteFromModal() {
+                const id = document.getElementById('dirId').value;
+                const name = document.getElementById('dirName').value;
+                if(!id) return;
+
+                if(confirm(`Atenção: "${name}" será apagado PERMANENTEMENTE.\nDeseja continuar?`)) {
+                    const btn = document.getElementById('btnDeleteDir'); 
+                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
+                    btn.disabled = true; 
+                    
+                    const response = await this.api('directories', 'delete', { id });
+                    
+                    if(response) { 
+                        this.closeModal(); 
+                        await this.loadData();
+                    } else {
+                        btn.innerHTML = '<i class="fa-solid fa-trash"></i> <span>Excluir</span>';
+                        btn.disabled = false;
+                    }
+                }
             }
         };
 
