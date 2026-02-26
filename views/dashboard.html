@@ -3,8 +3,8 @@
   Diretório: public_html/gluon/views/dashboard.html
   
   Pilar: Fácil Manutenção, Bonito e Rápido.
-  Usa SortableJS para manipular eventos complexos de Drag and Drop em Desktop e Touch(Mobile).
-  Agora inclui reordenação inter-colunas nativa para o Kanban.
+  Adicionado sistema de Cache (directoryCache) para que o Modal recupere as configurações
+  estéticas e de imagem instantaneamente, mesmo para subitens carregados assincronamente no Kanban.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -14,7 +14,6 @@
     <title>Gluon - Workspace</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Biblioteca levíssima para reordenação nativa mobile/desktop -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script>
         tailwind.config = {
@@ -36,65 +35,40 @@
         .kanban-scroll::-webkit-scrollbar-track { background: transparent; }
         .kanban-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
         
-        /* Modal Radio Buttons */
-        .view-radio:checked + div {
-            background-color: #3b82f6;
-            border-color: #3b82f6;
-            color: white;
-        }
+        .view-radio:checked + div { background-color: #3b82f6; border-color: #3b82f6; color: white; }
+        .icon-radio:checked + div { background-color: #1e293b; border-color: #3b82f6; color: #3b82f6; }
 
-        /* ----- ESTILOS DO MODO DE REORDENAÇÃO ----- */
-        .reorder-active .draggable-item {
-            border-color: #22c55e !important; /* Borda Verde (Success) */
-            box-shadow: 0 4px 6px -1px rgba(34, 197, 94, 0.1);
-        }
-        
-        /* Modificadores de cursor para o drag universal */
-        .reorder-active .draggable-item, 
-        .reorder-active .kanban-col-handle,
-        .reorder-active .kanban-item {
-            cursor: grab !important;
-        }
-
-        .reorder-active .draggable-item:active, 
-        .reorder-active .kanban-col-handle:active,
-        .reorder-active .kanban-item:active {
-            cursor: grabbing !important;
-        }
-
-        /* Itens internos do Kanban no modo de reordenação */
-        .reorder-active .kanban-item {
-            border-color: #22c55e !important;
-            background-color: #1e293b !important;
-        }
-
-        .reorder-active .grip-handle {
-            display: inline-block !important; /* Mostra o ícone de arrastar */
-        }
-        .reorder-active .cog-btn {
-            display: none !important; /* Esconde o botão de config para não atrapalhar */
-        }
-        
-        /* Magia CSS: Oculta o texto de "Pasta Vazia" automaticamente se um item for solto nela */
-        .kanban-scroll .kanban-empty:not(:only-child) {
-            display: none !important;
-        }
-        
-        /* CORREÇÃO DO KANBAN: Desativa o Scroll Snap (imã) durante o drag para não bugar o Desktop */
+        /* Estilos Reordenação */
+        .reorder-active .draggable-item { border-color: #22c55e !important; box-shadow: 0 4px 6px -1px rgba(34, 197, 94, 0.1); }
+        .reorder-active .draggable-item, .reorder-active .kanban-col-handle, .reorder-active .kanban-item { cursor: grab !important; }
+        .reorder-active .draggable-item:active, .reorder-active .kanban-col-handle:active, .reorder-active .kanban-item:active { cursor: grabbing !important; }
+        .reorder-active .kanban-item { border-color: #22c55e !important; background-color: #1e293b !important; }
+        .reorder-active .grip-handle { display: inline-block !important; }
+        .reorder-active .cog-btn { display: none !important; }
+        .kanban-scroll .kanban-empty:not(:only-child) { display: none !important; }
         .reorder-active.snap-x { scroll-snap-type: none !important; }
         .reorder-active .snap-start { scroll-snap-align: none !important; }
+        .sortable-ghost { opacity: 0.3; background-color: #1e293b !important; border: 2px dashed #22c55e !important; }
+        .sortable-drag { opacity: 1 !important; cursor: grabbing !important; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important; }
 
-        /* Classes do SortableJS */
-        .sortable-ghost {
-            opacity: 0.3;
-            background-color: #1e293b !important;
-            border: 2px dashed #22c55e !important;
+        /* Magia para Texto Gradient com Ícones */
+        .icon-gradient {
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: inline-block;
         }
-        .sortable-drag {
-            opacity: 1 !important;
-            cursor: grabbing !important;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important;
+
+        /* Input de Cor Customizado */
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: none;
+            width: 100%;
+            height: 40px;
+            border-radius: 0.5rem;
+            cursor: pointer;
         }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 0.5rem; }
     </style>
 </head>
 <body class="bg-gluon-dark text-slate-200 min-h-screen flex flex-col font-sans selection:bg-gluon-primary selection:text-white">
@@ -110,8 +84,6 @@
             </div>
             
             <div class="flex items-center gap-2 sm:gap-4">
-                
-                <!-- Botão de Alterar Ordem (DESKTOP) -->
                 <button onclick="app.toggleReorderMode()" id="btn-reorder-desktop" class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent font-medium text-sm transition-all text-slate-400 hover:text-white hover:bg-slate-700" title="Ativar Modo de Reordenação">
                     <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90"></i>
                     <span>Ordem</span>
@@ -119,138 +91,141 @@
 
                 <div class="hidden md:block w-px h-6 bg-slate-700 mx-1"></div>
 
-                <!-- Botões de Visualização (DESKTOP) -->
                 <div class="hidden md:flex items-center gap-1 bg-slate-800 rounded-lg p-1 border border-slate-700">
-                    <button onclick="app.setViewMode('grid')" id="btn-view-grid" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Grid">
-                        <i class="fa-solid fa-border-all"></i>
-                    </button>
-                    <button onclick="app.setViewMode('list')" id="btn-view-list" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Lista">
-                        <i class="fa-solid fa-list-ul"></i>
-                    </button>
-                    <button onclick="app.setViewMode('kanban')" id="btn-view-kanban" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Kanban">
-                        <i class="fa-solid fa-columns"></i>
-                    </button>
+                    <button onclick="app.setViewMode('grid')" id="btn-view-grid" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Grid"><i class="fa-solid fa-border-all"></i></button>
+                    <button onclick="app.setViewMode('list')" id="btn-view-list" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Lista"><i class="fa-solid fa-list-ul"></i></button>
+                    <button onclick="app.setViewMode('kanban')" id="btn-view-kanban" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Kanban"><i class="fa-solid fa-columns"></i></button>
                 </div>
 
-                <!-- Menu de Visualização (MOBILE) -->
                 <div class="relative md:hidden">
-                    <button onclick="app.toggleMobileViewMenu()" id="btn-mobile-menu-trigger" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors outline-none focus:ring-2 focus:ring-slate-700">
-                        <i class="fa-solid fa-ellipsis-vertical px-1"></i>
-                    </button>
-                    
-                    <!-- Dropdown Mobile -->
+                    <button onclick="app.toggleMobileViewMenu()" id="btn-mobile-menu-trigger" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors outline-none focus:ring-2 focus:ring-slate-700"><i class="fa-solid fa-ellipsis-vertical px-1"></i></button>
                     <div id="mobileViewMenu" class="hidden absolute right-0 top-12 w-52 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 origin-top-right transition-all">
-                        
-                        <!-- Alterar Ordem Mobile -->
                         <button onclick="app.toggleReorderMode(); app.toggleMobileViewMenu()" id="btn-reorder-mobile" class="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors border-b border-slate-700/50 mb-1">
                             <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90 w-5 text-center text-lg"></i> <span class="font-medium">Alterar Ordem</span>
                         </button>
-
                         <div class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Visualização</div>
-                        
-                        <button onclick="app.setViewMode('grid'); app.toggleMobileViewMenu()" id="btn-mobile-view-grid" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
-                            <i class="fa-solid fa-border-all w-5 text-center text-lg"></i> <span class="font-medium">Grid</span>
-                        </button>
-                        
-                        <button onclick="app.setViewMode('list'); app.toggleMobileViewMenu()" id="btn-mobile-view-list" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
-                            <i class="fa-solid fa-list-ul w-5 text-center text-lg"></i> <span class="font-medium">Lista</span>
-                        </button>
-                        
-                        <button onclick="app.setViewMode('kanban'); app.toggleMobileViewMenu()" id="btn-mobile-view-kanban" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
-                            <i class="fa-solid fa-columns w-5 text-center text-lg"></i> <span class="font-medium">Kanban</span>
-                        </button>
+                        <button onclick="app.setViewMode('grid'); app.toggleMobileViewMenu()" id="btn-mobile-view-grid" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors"><i class="fa-solid fa-border-all w-5 text-center text-lg"></i> <span class="font-medium">Grid</span></button>
+                        <button onclick="app.setViewMode('list'); app.toggleMobileViewMenu()" id="btn-mobile-view-list" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors"><i class="fa-solid fa-list-ul w-5 text-center text-lg"></i> <span class="font-medium">Lista</span></button>
+                        <button onclick="app.setViewMode('kanban'); app.toggleMobileViewMenu()" id="btn-mobile-view-kanban" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors"><i class="fa-solid fa-columns w-5 text-center text-lg"></i> <span class="font-medium">Kanban</span></button>
                     </div>
                 </div>
                 
                 <div class="h-6 w-px bg-slate-700"></div>
-                
-                <button onclick="window.location.href='/api/auth?action=logout'" class="text-sm text-slate-400 hover:text-red-400 transition-colors flex items-center gap-2">
-                    <i class="fa-solid fa-power-off"></i> <span class="hidden sm:inline">Sair</span>
-                </button>
+                <button onclick="window.location.href='/api/auth?action=logout'" class="text-sm text-slate-400 hover:text-red-400 transition-colors flex items-center gap-2"><i class="fa-solid fa-power-off"></i> <span class="hidden sm:inline">Sair</span></button>
             </div>
         </div>
     </nav>
 
     <!-- Main Workspace -->
     <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col h-[calc(100vh-64px)] overflow-hidden">
-        
-        <!-- Toolbar & Breadcrumbs -->
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 shrink-0">
-            <div class="flex items-center gap-2 text-lg text-slate-300 font-medium overflow-x-auto no-scrollbar w-full sm:w-auto" id="breadcrumbs">
-                <!-- Preenchido via JS -->
-            </div>
-
-            <!-- Hint de Reordenação -->
+            <div class="flex items-center gap-2 text-lg text-slate-300 font-medium overflow-x-auto no-scrollbar w-full sm:w-auto" id="breadcrumbs"></div>
             <div id="reorder-hint" class="hidden animate-pulse text-green-400 text-sm font-medium flex-1 text-center bg-green-500/10 py-2 px-4 rounded-lg border border-green-500/20">
                 <i class="fa-solid fa-hand-pointer mr-2"></i> Arraste os itens para reordenar
             </div>
-
             <button onclick="app.openModal()" class="w-full sm:w-auto shrink-0 bg-gluon-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 font-medium">
                 <i class="fa-solid fa-folder-plus"></i> Novo Diretório
             </button>
         </div>
 
-        <!-- Loader -->
         <div id="loader" class="hidden flex-1 flex flex-col items-center justify-center text-slate-500 gap-3">
             <i class="fa-solid fa-circle-notch fa-spin text-3xl text-gluon-primary"></i>
             <p>Sincronizando cofre...</p>
         </div>
 
-        <!-- Render Container -->
         <div id="viewContainer" class="flex-1 overflow-y-auto no-scrollbar pb-10 transition-all"></div>
     </main>
 
-    <!-- Modal Unificado de Configuração de Diretório -->
+    <!-- Modal com Abas -->
     <div id="dirModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
-        <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-6 transform scale-95 transition-transform duration-300" id="dirModalContent">
+        <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-0 transform scale-95 transition-transform duration-300 overflow-hidden flex flex-col max-h-[90vh]" id="dirModalContent">
             
-            <div class="flex justify-between items-center mb-6">
+            <div class="p-5 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
                 <h3 class="text-xl font-semibold text-white flex items-center gap-2" id="modalTitle">
-                    <i class="fa-solid fa-folder-gear text-gluon-primary"></i> <span>Configurar Pasta</span>
+                    <i class="fa-solid fa-folder-gear text-gluon-primary"></i> <span>Configuração</span>
                 </h3>
                 <button onclick="app.closeModal()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
             </div>
 
-            <form id="dirForm" onsubmit="app.saveDirectory(event)">
+            <!-- Modal Tabs -->
+            <div class="flex border-b border-slate-700 bg-slate-900/30">
+                <button type="button" onclick="app.switchModalTab('geral')" id="tab-btn-geral" class="flex-1 py-3 text-sm font-medium border-b-2 border-gluon-primary text-white transition-colors">Geral</button>
+                <button type="button" onclick="app.switchModalTab('apar')" id="tab-btn-apar" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Aparência</button>
+            </div>
+
+            <form id="dirForm" onsubmit="app.saveDirectory(event)" class="flex flex-col flex-1 overflow-hidden">
                 <input type="hidden" id="dirId">
                 <input type="hidden" id="dirParentId">
 
-                <div class="mb-5">
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Nome da Pasta</label>
-                    <div class="relative">
-                        <i class="fa-solid fa-pen absolute left-3 top-3.5 text-slate-500 text-sm"></i>
-                        <input type="text" id="dirName" required autocomplete="off" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 pl-9 pr-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-all">
+                <!-- ABA GERAL -->
+                <div id="tab-geral" class="p-6 overflow-y-auto flex-1">
+                    <div class="mb-5">
+                        <label class="block text-sm font-medium text-slate-300 mb-1">Nome da Pasta</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-pen absolute left-3 top-3.5 text-slate-500 text-sm"></i>
+                            <input type="text" id="dirName" required autocomplete="off" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 pl-9 pr-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-all">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Padrão de Visualização Interna</label>
+                        <div class="grid grid-cols-3 gap-2 sm:gap-3">
+                            <label class="cursor-pointer">
+                                <input type="radio" name="dirViewMode" value="grid" class="peer hidden view-radio" checked>
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-border-all block text-xl mb-1"></i><span class="text-xs font-medium">Grid</span></div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="dirViewMode" value="list" class="peer hidden view-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-list-ul block text-xl mb-1"></i><span class="text-xs font-medium">Lista</span></div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="dirViewMode" value="kanban" class="peer hidden view-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-columns block text-xl mb-1"></i><span class="text-xs font-medium">Kanban</span></div>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
-                <div class="mb-8">
-                    <label class="block text-sm font-medium text-slate-300 mb-2">Padrão de Visualização desta Pasta</label>
-                    <div class="grid grid-cols-3 gap-2 sm:gap-3">
-                        <label class="cursor-pointer">
-                            <input type="radio" name="dirViewMode" value="grid" class="peer hidden view-radio" checked>
-                            <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
-                                <i class="fa-solid fa-border-all block text-xl mb-1"></i>
-                                <span class="text-xs font-medium">Grid</span>
+                <!-- ABA APARÊNCIA -->
+                <div id="tab-apar" class="hidden p-6 overflow-y-auto flex-1 space-y-5">
+                    
+                    <!-- Capa da Galeria -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1"><i class="fa-regular fa-image mr-1"></i> Imagem de Capa (Galeria)</label>
+                        <input type="file" id="dirCoverFile" accept="image/*" class="w-full text-sm text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 transition-all cursor-pointer bg-slate-800 border border-slate-600 rounded-lg">
+                        <input type="hidden" id="dirCoverBase64">
+                        <div id="coverPreview" class="mt-3 hidden w-full h-24 rounded-lg bg-cover bg-center border border-slate-600 shadow-inner"></div>
+                        <button type="button" id="btnRemoveCover" class="hidden mt-2 text-xs text-red-400 hover:text-red-300 flex items-center gap-1"><i class="fa-solid fa-trash"></i> Remover capa</button>
+                        <p class="text-xs text-slate-500 mt-2">Aparece no fundo do modo Grid e no cabeçalho do Kanban. Arquivos grandes serão otimizados automaticamente.</p>
+                    </div>
+
+                    <!-- Cores Gradient -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2"><i class="fa-solid fa-palette mr-1"></i> Cor do Ícone (Gradient)</label>
+                        <div class="flex gap-4 items-center">
+                            <div class="flex-1">
+                                <span class="text-xs text-slate-500 block mb-1">Início</span>
+                                <input type="color" id="dirColorFrom" value="#3b82f6" class="bg-slate-800 border border-slate-600">
                             </div>
-                        </label>
-                        <label class="cursor-pointer">
-                            <input type="radio" name="dirViewMode" value="list" class="peer hidden view-radio">
-                            <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
-                                <i class="fa-solid fa-list-ul block text-xl mb-1"></i>
-                                <span class="text-xs font-medium">Lista</span>
+                            <i class="fa-solid fa-arrow-right text-slate-500 mt-4"></i>
+                            <div class="flex-1">
+                                <span class="text-xs text-slate-500 block mb-1">Fim</span>
+                                <input type="color" id="dirColorTo" value="#6366f1" class="bg-slate-800 border border-slate-600">
                             </div>
-                        </label>
-                        <label class="cursor-pointer">
-                            <input type="radio" name="dirViewMode" value="kanban" class="peer hidden view-radio">
-                            <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
-                                <i class="fa-solid fa-columns block text-xl mb-1"></i>
-                                <span class="text-xs font-medium">Kanban</span>
-                            </div>
-                        </label>
+                        </div>
+                    </div>
+
+                    <!-- Ícone -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2"><i class="fa-solid fa-icons mr-1"></i> Selecionar Ícone</label>
+                        <div class="grid grid-cols-5 gap-2 max-h-40 overflow-y-auto no-scrollbar p-1" id="icon-picker">
+                            <!-- Injetado via JS -->
+                        </div>
                     </div>
                 </div>
 
-                <div class="flex flex-col-reverse sm:flex-row justify-between items-center pt-4 border-t border-slate-700/50 gap-3">
+                <!-- Footer do Modal -->
+                <div class="p-5 border-t border-slate-700 bg-slate-800/50 flex flex-col-reverse sm:flex-row justify-between items-center gap-3 shrink-0">
                     <div class="w-full sm:w-auto">
                         <button type="button" id="btnDeleteDir" onclick="app.deleteFromModal()" class="hidden w-full text-red-400 hover:text-white hover:bg-red-500/20 px-3 py-2 rounded-lg transition-colors flex justify-center items-center gap-2 text-sm">
                             <i class="fa-solid fa-trash"></i> <span>Excluir</span>
@@ -267,20 +242,25 @@
         </div>
     </div>
 
-    <!-- Script Principal -->
     <script>
         const app = {
             state: {
                 path: [{ id: null, name: 'Meu Cofre', view: 'grid' }],
                 directories: [],
+                directoryCache: new Map(), // NOVO: Armazena TODOS os itens carregados para rápido acesso
                 isLoading: false,
                 reorderMode: false,
+                availableIcons: [
+                    'fa-folder', 'fa-folder-open', 'fa-star', 'fa-heart', 'fa-file', 'fa-image', 'fa-music', 'fa-video', 
+                    'fa-code', 'fa-lock', 'fa-vault', 'fa-book', 'fa-briefcase', 'fa-camera', 'fa-gamepad', 'fa-globe',
+                    'fa-key', 'fa-layer-group', 'fa-cube', 'fa-rocket'
+                ]
             },
             
-            // Alterado para um Array para suportar múltiplas instâncias no Kanban
             sortableInstances: [],
 
             async init() {
+                this.renderIconPicker();
                 this.setLoading(true);
                 await this.fetchUserPrefs(); 
                 this.updateTopButtons();
@@ -289,15 +269,80 @@
             },
 
             setupEventListeners() {
+                // Fechar dropdown mobile
                 document.addEventListener('click', (event) => {
                     const menu = document.getElementById('mobileViewMenu');
                     const trigger = document.getElementById('btn-mobile-menu-trigger');
-                    if (menu && !menu.classList.contains('hidden')) {
-                        if (!menu.contains(event.target) && !trigger.contains(event.target)) {
-                            menu.classList.add('hidden');
-                        }
+                    if (menu && !menu.classList.contains('hidden') && !menu.contains(event.target) && !trigger.contains(event.target)) {
+                        menu.classList.add('hidden');
                     }
                 });
+
+                // Listeners do Upload de Imagem
+                document.getElementById('dirCoverFile').addEventListener('change', (e) => this.handleCoverUpload(e));
+                document.getElementById('btnRemoveCover').addEventListener('click', () => this.removeCover());
+            },
+
+            handleCoverUpload(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 600;
+                        const MAX_HEIGHT = 400;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                        } else {
+                            if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        const base64 = canvas.toDataURL('image/jpeg', 0.6);
+                        document.getElementById('dirCoverBase64').value = base64;
+                        
+                        const preview = document.getElementById('coverPreview');
+                        preview.style.backgroundImage = `url('${base64}')`;
+                        preview.classList.remove('hidden');
+                        document.getElementById('btnRemoveCover').classList.remove('hidden');
+                    }
+                    img.src = event.target.result;
+                }
+                reader.readAsDataURL(file);
+            },
+
+            removeCover() {
+                document.getElementById('dirCoverFile').value = '';
+                document.getElementById('dirCoverBase64').value = '';
+                const preview = document.getElementById('coverPreview');
+                if (preview) {
+                    preview.classList.add('hidden');
+                    preview.style.backgroundImage = 'none';
+                }
+                const btn = document.getElementById('btnRemoveCover');
+                if (btn) btn.classList.add('hidden');
+            },
+
+            renderIconPicker() {
+                const container = document.getElementById('icon-picker');
+                container.innerHTML = this.state.availableIcons.map(icon => `
+                    <label class="cursor-pointer">
+                        <input type="radio" name="dirIcon" value="${icon}" class="peer hidden icon-radio" ${icon === 'fa-folder' ? 'checked' : ''}>
+                        <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 flex items-center justify-center transition-all hover:bg-slate-700 hover:text-white h-10">
+                            <i class="fa-solid ${icon} text-lg"></i>
+                        </div>
+                    </label>
+                `).join('');
             },
 
             getCurrentParentId() { return this.state.path[this.state.path.length - 1].id; },
@@ -306,19 +351,12 @@
             async api(endpoint, action, payload = {}) {
                 payload.action = action;
                 try {
-                    const res = await fetch(`/api/${endpoint}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
+                    const res = await fetch(`/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     if (res.status === 401) window.location.href = '/'; 
                     const data = await res.json();
                     if (data.status !== 'success') throw new Error(data.message);
                     return data;
-                } catch (err) {
-                    console.error('Erro:', err.message);
-                    return null;
-                }
+                } catch (err) { console.error('Erro:', err.message); return null; }
             },
 
             async fetchUserPrefs() {
@@ -330,11 +368,12 @@
                 this.setLoading(true);
                 this.renderBreadcrumbs();
                 this.updateTopButtons();
-                
                 const response = await this.api('directories', 'fetch', { parent_id: this.getCurrentParentId() });
-                if (response) {
-                    this.state.directories = response.data;
-                    this.render();
+                if (response) { 
+                    this.state.directories = response.data; 
+                    // Alimenta o cache com os diretórios principais visualizados
+                    response.data.forEach(d => this.state.directoryCache.set(Number(d.id), d));
+                    this.render(); 
                 }
                 this.setLoading(false);
             },
@@ -342,9 +381,7 @@
             async enterDirectory(id, name, viewMode) {
                 if(this.state.reorderMode) return; 
                 this.state.path.push({ id, name, view: viewMode });
-                
                 if (this.state.reorderMode) this.toggleReorderMode();
-                
                 await this.fetchDirectories();
             },
 
@@ -360,12 +397,7 @@
                     const isLast = index === this.state.path.length - 1;
                     const color = isLast ? 'text-white font-semibold' : 'text-slate-400 hover:text-gluon-primary cursor-pointer transition-colors';
                     const separator = isLast ? '' : '<i class="fa-solid fa-chevron-right text-sm text-slate-600 mx-2"></i>';
-                    return `
-                        <div class="flex items-center whitespace-nowrap" onclick="${isLast ? '' : `app.goUpTo(${index})`}">
-                            <span class="${color}">${index === 0 ? '<i class="fa-solid fa-vault mr-1"></i> ' : ''}${step.name}</span>
-                            ${separator}
-                        </div>
-                    `;
+                    return `<div class="flex items-center whitespace-nowrap" onclick="${isLast ? '' : `app.goUpTo(${index})`}"><span class="${color}">${index === 0 ? '<i class="fa-solid fa-vault mr-1"></i> ' : ''}${step.name}</span>${separator}</div>`;
                 }).join('');
             },
 
@@ -375,195 +407,134 @@
                 this.state.path[this.state.path.length - 1].view = viewName;
                 this.updateTopButtons();
                 this.render();
-
-                if (this.getCurrentParentId() === null) {
-                    this.api('user', 'update_root_view', { view: viewName });
-                }
+                if (this.getCurrentParentId() === null) this.api('user', 'update_root_view', { view: viewName });
             },
 
-            // --- LÓGICA DE REORDENAÇÃO AVANÇADA ---
             toggleReorderMode() {
                 this.state.reorderMode = !this.state.reorderMode;
-                
                 const btnDesk = document.getElementById('btn-reorder-desktop');
-                if(this.state.reorderMode) {
-                    btnDesk.classList.add('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20');
-                    btnDesk.classList.remove('text-slate-400', 'hover:bg-slate-700');
-                } else {
-                    btnDesk.classList.remove('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20');
-                    btnDesk.classList.add('text-slate-400', 'hover:bg-slate-700');
-                }
-
                 const btnMob = document.getElementById('btn-reorder-mobile');
-                if(this.state.reorderMode) {
-                    btnMob.classList.add('text-green-400', 'bg-slate-700/50');
-                    btnMob.classList.remove('text-slate-300');
-                } else {
-                    btnMob.classList.remove('text-green-400', 'bg-slate-700/50');
-                    btnMob.classList.add('text-slate-300');
-                }
-
                 const container = document.getElementById('viewContainer');
                 const wrapper = document.getElementById('sortable-wrapper');
                 const hint = document.getElementById('reorder-hint');
-                
-                if(this.state.reorderMode) {
-                    container.classList.add('reorder-active');
-                    if(wrapper) wrapper.classList.add('reorder-active');
-                    hint.classList.remove('hidden');
-                } else {
-                    container.classList.remove('reorder-active');
-                    if(wrapper) wrapper.classList.remove('reorder-active');
-                    hint.classList.add('hidden');
-                }
 
+                if(this.state.reorderMode) {
+                    btnDesk.classList.add('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20'); btnDesk.classList.remove('text-slate-400', 'hover:bg-slate-700');
+                    btnMob.classList.add('text-green-400', 'bg-slate-700/50'); btnMob.classList.remove('text-slate-300');
+                    container.classList.add('reorder-active'); if(wrapper) wrapper.classList.add('reorder-active'); hint.classList.remove('hidden');
+                } else {
+                    btnDesk.classList.remove('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20'); btnDesk.classList.add('text-slate-400', 'hover:bg-slate-700');
+                    btnMob.classList.remove('text-green-400', 'bg-slate-700/50'); btnMob.classList.add('text-slate-300');
+                    container.classList.remove('reorder-active'); if(wrapper) wrapper.classList.remove('reorder-active'); hint.classList.add('hidden');
+                }
                 this.initSortable();
             },
 
             initSortable() {
-                // Destrói TODAS as instâncias anteriores (Principal e Colunas Kanban)
-                if (this.sortableInstances.length > 0) {
-                    this.sortableInstances.forEach(inst => inst.destroy());
-                    this.sortableInstances = [];
-                }
-
+                if (this.sortableInstances.length > 0) { this.sortableInstances.forEach(inst => inst.destroy()); this.sortableInstances = []; }
                 if (!this.state.reorderMode) return;
-
                 const wrapper = document.getElementById('sortable-wrapper');
                 const currentView = this.getCurrentView();
 
-                // 1. Instância Principal (Grid, List, ou as próprias Colunas do Kanban)
                 if (wrapper) {
-                    const mainSortable = new Sortable(wrapper, {
-                        animation: 250,
-                        delay: 150, 
-                        delayOnTouchOnly: true,
-                        ghostClass: 'sortable-ghost',
-                        dragClass: 'sortable-drag',
-                        forceFallback: true, 
-                        fallbackOnBody: true, 
-                        scroll: true,
-                        scrollSensitivity: 80,
-                        scrollSpeed: 15,       
+                    this.sortableInstances.push(new Sortable(wrapper, {
+                        animation: 250, delay: 150, delayOnTouchOnly: true, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', forceFallback: true, fallbackOnBody: true, scroll: true, scrollSensitivity: 80, scrollSpeed: 15,       
                         direction: currentView === 'kanban' ? 'horizontal' : (currentView === 'list' ? 'vertical' : undefined),
-                        // No Kanban, usamos handle para não arrastar a coluna ao tentar arrastar itens internos
                         handle: currentView === 'kanban' ? '.kanban-col-handle' : undefined,
-                        onEnd: () => {
-                            this.saveNewOrder();
-                        }
-                    });
-                    this.sortableInstances.push(mainSortable);
+                        onEnd: () => this.saveNewOrder()
+                    }));
                 }
 
-                // 2. Instâncias Internas (Drag n Drop avançado DENTRO e ENTRE colunas do Kanban)
                 if (currentView === 'kanban') {
-                    const kanbanCols = document.querySelectorAll('.kanban-scroll');
-                    kanbanCols.forEach(col => {
-                        const colSortable = new Sortable(col, {
-                            group: 'kanban-items', // O segredo da magia: Permite arrastar ENTRE diferentes colunas!
-                            animation: 250,
-                            delay: 150,
-                            delayOnTouchOnly: true,
-                            ghostClass: 'sortable-ghost',
-                            dragClass: 'sortable-drag',
-                            forceFallback: true,
-                            fallbackOnBody: true,
-                            scroll: true,
-                            scrollSensitivity: 60,
-                            scrollSpeed: 15,
+                    document.querySelectorAll('.kanban-scroll').forEach(col => {
+                        this.sortableInstances.push(new Sortable(col, {
+                            group: 'kanban-items', animation: 250, delay: 150, delayOnTouchOnly: true, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', forceFallback: true, fallbackOnBody: true, scroll: true, scrollSensitivity: 60, scrollSpeed: 15,
                             onEnd: (evt) => {
-                                const toList = evt.to;
-                                const fromList = evt.from;
-                                const toParentId = toList.getAttribute('data-parent-id');
-                                const fromParentId = fromList.getAttribute('data-parent-id');
-                                
-                                // Salva a ordem da coluna de destino (E se trocou de coluna, atualiza o BD com o novo parent_id)
-                                this.saveInnerOrder(toList, toParentId);
-                                
-                                // Se o item foi movido para outra coluna, salva a ordem da coluna de origem também
-                                if (toList !== fromList) {
-                                    this.saveInnerOrder(fromList, fromParentId);
-                                }
+                                const toId = evt.to.getAttribute('data-parent-id');
+                                const fromId = evt.from.getAttribute('data-parent-id');
+                                this.saveInnerOrder(evt.to, toId);
+                                if (evt.to !== evt.from) this.saveInnerOrder(evt.from, fromId);
                             }
-                        });
-                        this.sortableInstances.push(colSortable);
+                        }));
                     });
                 }
             },
 
-            // Salva a ordem principal (Root, Grid ou Colunas do Kanban)
             async saveNewOrder() {
                 const wrapper = document.getElementById('sortable-wrapper');
                 if (!wrapper) return;
-
-                const items = Array.from(wrapper.children);
-                const orderIds = items.map(item => item.getAttribute('data-id')).filter(id => id !== null);
-
-                // Atualiza o state local (Apenas as pastas raízes da visualização)
-                const newDirsState = [];
-                orderIds.forEach(id => {
-                    const dir = this.state.directories.find(d => d.id == id);
-                    if(dir) newDirsState.push(dir);
-                });
-                this.state.directories = newDirsState;
-
+                const orderIds = Array.from(wrapper.children).map(item => item.getAttribute('data-id')).filter(id => id !== null);
+                this.state.directories = orderIds.map(id => this.state.directories.find(d => d.id == id)).filter(Boolean);
                 await this.api('directories', 'reorder', { order: orderIds });
             },
 
-            // Salva a ordem dos itens DENTRO do Kanban (suporta mudança de parent_id via API)
             async saveInnerOrder(columnEl, newParentId) {
                 if (!columnEl) return;
-                const items = Array.from(columnEl.querySelectorAll('.kanban-item'));
-                const orderIds = items.map(item => item.getAttribute('data-id')).filter(id => id !== null);
-
-                await this.api('directories', 'reorder', { 
-                    order: orderIds, 
-                    parent_id: newParentId ? parseInt(newParentId) : null 
-                });
+                const orderIds = Array.from(columnEl.querySelectorAll('.kanban-item')).map(item => item.getAttribute('data-id')).filter(id => id !== null);
+                await this.api('directories', 'reorder', { order: orderIds, parent_id: newParentId ? parseInt(newParentId) : null });
             },
 
             updateTopButtons() {
                 const currentView = this.getCurrentView();
                 ['grid', 'list', 'kanban'].forEach(v => {
                     const btn = document.getElementById(`btn-view-${v}`);
-                    if(btn) {
-                        if(v === currentView) {
-                            btn.classList.add('bg-slate-700', 'text-white');
-                            btn.classList.remove('text-slate-400');
-                        } else {
-                            btn.classList.remove('bg-slate-700', 'text-white');
-                            btn.classList.add('text-slate-400');
-                        }
-                    }
-
-                    const mobileBtn = document.getElementById(`btn-mobile-view-${v}`);
-                    if(mobileBtn) {
-                        if(v === currentView) {
-                            mobileBtn.classList.add('text-gluon-primary', 'bg-slate-700/50');
-                            mobileBtn.classList.remove('text-slate-300');
-                        } else {
-                            mobileBtn.classList.remove('text-gluon-primary', 'bg-slate-700/50');
-                            mobileBtn.classList.add('text-slate-300');
-                        }
-                    }
+                    if(btn) { btn.className = btn.className.replace(/text-slate-400|bg-slate-700|text-white/g, ''); btn.classList.add(v === currentView ? 'bg-slate-700' : 'text-slate-400'); if(v === currentView) btn.classList.add('text-white'); }
+                    const mBtn = document.getElementById(`btn-mobile-view-${v}`);
+                    if(mBtn) { mBtn.className = mBtn.className.replace(/text-slate-300|text-gluon-primary|bg-slate-700\/50/g, ''); mBtn.classList.add(v === currentView ? 'text-gluon-primary' : 'text-slate-300'); if(v === currentView) mBtn.classList.add('bg-slate-700/50'); }
                 });
+            },
+
+            switchModalTab(tabName) {
+                const tGeral = document.getElementById('tab-geral');
+                const tApar = document.getElementById('tab-apar');
+                const bGeral = document.getElementById('tab-btn-geral');
+                const bApar = document.getElementById('tab-btn-apar');
+
+                if(tabName === 'geral') {
+                    tGeral.classList.remove('hidden'); tApar.classList.add('hidden');
+                    bGeral.classList.add('border-gluon-primary', 'text-white'); bGeral.classList.remove('border-transparent', 'text-slate-400');
+                    bApar.classList.add('border-transparent', 'text-slate-400'); bApar.classList.remove('border-gluon-primary', 'text-white');
+                } else {
+                    tApar.classList.remove('hidden'); tGeral.classList.add('hidden');
+                    bApar.classList.add('border-gluon-primary', 'text-white'); bApar.classList.remove('border-transparent', 'text-slate-400');
+                    bGeral.classList.add('border-transparent', 'text-slate-400'); bGeral.classList.remove('border-gluon-primary', 'text-white');
+                }
             },
 
             openModal(id = '', name = '', targetParentId = null, currentViewMode = 'grid') {
                 if(this.state.reorderMode) return; 
 
+                this.switchModalTab('geral');
                 document.getElementById('dirId').value = id;
                 document.getElementById('dirName').value = name;
                 document.getElementById('dirParentId').value = targetParentId !== null ? targetParentId : '';
                 document.getElementById('modalTitle').innerHTML = id ? '<i class="fa-solid fa-folder-gear text-gluon-primary"></i> <span>Configurar Pasta</span>' : '<i class="fa-solid fa-folder-plus text-gluon-primary"></i> <span>Nova Pasta</span>';
                 
+                // UTILIZA O CACHE PARA RECUPERAR OS DADOS (Mesmo que seja um item do Kanban)
+                let dirObj = id ? this.state.directoryCache.get(Number(id)) : null;
+                
+                // Reseta e preenche Estética de Capa
+                this.removeCover(); // Limpa estado anterior por precaução
+                if (dirObj && dirObj.cover_url) {
+                    document.getElementById('dirCoverBase64').value = dirObj.cover_url;
+                    document.getElementById('coverPreview').style.backgroundImage = `url('${dirObj.cover_url}')`;
+                    document.getElementById('coverPreview').classList.remove('hidden');
+                    document.getElementById('btnRemoveCover').classList.remove('hidden');
+                }
+
+                // Reseta e preenche Cor e Ícone
+                document.getElementById('dirColorFrom').value = (dirObj && dirObj.color_from) ? dirObj.color_from : '#3b82f6';
+                document.getElementById('dirColorTo').value = (dirObj && dirObj.color_to) ? dirObj.color_to : '#6366f1';
+                
+                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : 'fa-folder'; 
+                const iconRadios = document.getElementsByName('dirIcon');
+                for(let i=0; i<iconRadios.length; i++) { iconRadios[i].checked = (iconRadios[i].value === iconToSelect); }
+
                 const btnDelete = document.getElementById('btnDeleteDir');
                 if(id) btnDelete.classList.remove('hidden'); else btnDelete.classList.add('hidden');
 
                 const radios = document.getElementsByName('dirViewMode');
-                for(let i = 0; i < radios.length; i++) {
-                    if(radios[i].value === currentViewMode) radios[i].checked = true;
-                }
+                for(let i=0; i<radios.length; i++) { if(radios[i].value === currentViewMode) radios[i].checked = true; }
                 
                 const modal = document.getElementById('dirModal');
                 const content = document.getElementById('dirModalContent');
@@ -581,32 +552,34 @@
             async saveDirectory(e) {
                 e.preventDefault();
                 const id = document.getElementById('dirId').value;
-                const name = document.getElementById('dirName').value;
-                const specificParentId = document.getElementById('dirParentId').value;
                 
                 let selectedView = 'grid';
                 const radios = document.getElementsByName('dirViewMode');
                 for(let i=0; i<radios.length; i++) { if(radios[i].checked) selectedView = radios[i].value; }
 
+                let selectedIcon = 'fa-folder';
+                const iconRadios = document.getElementsByName('dirIcon');
+                for(let i=0; i<iconRadios.length; i++) { if(iconRadios[i].checked) selectedIcon = iconRadios[i].value; }
+
+                const payload = {
+                    id: id !== '' ? id : null,
+                    parent_id: document.getElementById('dirParentId').value !== '' ? document.getElementById('dirParentId').value : this.getCurrentParentId(),
+                    name: document.getElementById('dirName').value,
+                    view: selectedView,
+                    cover_url: document.getElementById('dirCoverBase64').value,
+                    color_from: document.getElementById('dirColorFrom').value || '#3b82f6',
+                    color_to: document.getElementById('dirColorTo').value || '#6366f1',
+                    icon: selectedIcon
+                };
+
                 const btn = document.getElementById('btnSaveDir');
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
                 btn.disabled = true;
 
-                const isEdit = id !== '';
-                const response = await this.api('directories', isEdit ? 'update' : 'create', {
-                    id: isEdit ? id : null,
-                    parent_id: specificParentId !== '' ? specificParentId : this.getCurrentParentId(),
-                    name: name,
-                    view: selectedView
-                });
+                const response = await this.api('directories', id !== '' ? 'update' : 'create', payload);
 
-                if (response) {
-                    this.closeModal();
-                    await this.fetchDirectories(); 
-                }
-
-                btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar';
-                btn.disabled = false;
+                if (response) { this.closeModal(); await this.fetchDirectories(); }
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar'; btn.disabled = false;
             },
 
             async deleteFromModal() {
@@ -614,8 +587,7 @@
                 const name = document.getElementById('dirName').value;
                 if(!id) return;
                 if(confirm(`Atenção: A pasta "${name}" e TODO o seu conteúdo serão apagados PERMANENTEMENTE.\nDeseja continuar?`)) {
-                    const btn = document.getElementById('btnDeleteDir');
-                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
+                    const btn = document.getElementById('btnDeleteDir'); btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
                     const response = await this.api('directories', 'delete', { id });
                     if(response) { this.closeModal(); await this.fetchDirectories(); }
                     btn.innerHTML = '<i class="fa-solid fa-trash"></i> <span>Excluir</span>';
@@ -628,6 +600,13 @@
                 document.getElementById('viewContainer').classList.toggle('hidden', show);
             },
 
+            getGradientStyle(from, to) {
+                return `background: linear-gradient(135deg, ${from}, ${to});`;
+            },
+            getTextGradientStyle(from, to) {
+                return `background: -webkit-linear-gradient(135deg, ${from}, ${to}); -webkit-background-clip: text; -webkit-text-fill-color: transparent;`;
+            },
+
             async loadKanbanContents() {
                 const promises = this.state.directories.map(async (dir) => {
                     const res = await this.api('directories', 'fetch', { parent_id: dir.id });
@@ -635,29 +614,25 @@
                     if (!container) return;
                     
                     if (res && res.data && res.data.length > 0) {
-                        let html = '';
-                        res.data.forEach(sub => {
-                            html += `
-                            <div data-id="${sub.id}" class="kanban-item bg-slate-700 hover:bg-slate-600 border border-slate-600 p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm mb-2" onclick="app.enterDirectory(${sub.id}, '${sub.name}', '${sub.view}')">
-                                <div class="flex items-center gap-2 truncate pr-2">
+                        // Alimenta o cache com os subitens do Kanban!
+                        res.data.forEach(d => this.state.directoryCache.set(Number(d.id), d));
+
+                        container.innerHTML = res.data.map(sub => `
+                            <div data-id="${sub.id}" class="kanban-item bg-slate-700 hover:bg-slate-600 border border-slate-600 p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm mb-2 relative overflow-hidden" onclick="app.enterDirectory(${sub.id}, '${sub.name}', '${sub.view}')">
+                                ${sub.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10" style="background-image: url('${sub.cover_url}')"></div>` : ''}
+                                <div class="flex items-center gap-2 truncate pr-2 relative z-10">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
-                                    <i class="fa-solid fa-folder text-gluon-primary text-sm"></i>
+                                    <i class="fa-solid ${sub.icon} text-sm" style="${this.getTextGradientStyle(sub.color_from, sub.color_to)}"></i>
                                     <span class="text-sm text-slate-200 truncate font-medium">${sub.name}</span>
                                 </div>
-                                <button onclick="event.stopPropagation(); app.openModal(${sub.id}, '${sub.name}', ${dir.id}, '${sub.view}')" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 sm:opacity-0 group-hover:opacity-100 transition-all border border-slate-600 cog-btn"><i class="fa-solid fa-cog text-xs"></i></button>
-                            </div>`;
-                        });
-                        container.innerHTML = html;
+                                <button onclick="event.stopPropagation(); app.openModal(${sub.id}, '${sub.name}', ${dir.id}, '${sub.view}')" class="relative z-10 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 sm:opacity-0 group-hover:opacity-100 transition-all border border-slate-600 cog-btn"><i class="fa-solid fa-cog text-xs"></i></button>
+                            </div>`).join('');
                     } else {
                         container.innerHTML = `<div class="kanban-empty text-center flex flex-col items-center justify-center text-slate-500 text-xs py-8 opacity-60 border-2 border-dashed border-slate-700 rounded-lg"><i class="fa-solid fa-box-open text-2xl mb-2"></i> Pasta vazia</div>`;
                     }
                 });
                 await Promise.all(promises);
-
-                // Re-inicia os manipuladores se o drag estiver ativado ao carregar os itens assíncronos
-                if (this.state.reorderMode) {
-                    this.initSortable();
-                }
+                if (this.state.reorderMode) this.initSortable();
             },
 
             render() {
@@ -665,13 +640,7 @@
                 const view = this.getCurrentView();
                 
                 if (this.state.directories.length === 0) {
-                    container.innerHTML = `
-                        <div class="h-full flex flex-col items-center justify-center text-slate-500 mt-20 px-4 text-center">
-                            <i class="fa-regular fa-folder-open text-5xl sm:text-6xl mb-4 opacity-50"></i>
-                            <h2 class="text-lg sm:text-xl font-medium text-slate-400">Esta pasta está vazia</h2>
-                            <p class="text-sm mt-2">Clique em "Novo Diretório" para começar.</p>
-                        </div>
-                    `;
+                    container.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-500 mt-20 px-4 text-center"><i class="fa-regular fa-folder-open text-5xl sm:text-6xl mb-4 opacity-50"></i><h2 class="text-lg sm:text-xl font-medium text-slate-400">Esta pasta está vazia</h2><p class="text-sm mt-2">Clique em "Novo Diretório" para começar.</p></div>`;
                     return;
                 }
 
@@ -681,44 +650,41 @@
                     html = `<div id="sortable-wrapper" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">`;
                     this.state.directories.forEach(dir => {
                         html += `
-                        <div data-id="${dir.id}" class="dir-card draggable-item group bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-col items-center text-center cursor-pointer relative" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
-                            <div class="absolute top-3 left-3 text-green-500 hidden grip-handle bg-slate-900/50 rounded p-1">
-                                <i class="fa-solid fa-grip-vertical"></i>
+                        <div data-id="${dir.id}" class="dir-card draggable-item group bg-slate-800 border border-slate-700 rounded-xl flex flex-col items-center text-center cursor-pointer relative overflow-hidden min-h-[140px]" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
+                            <!-- Fundo / Capa -->
+                            ${dir.cover_url ? 
+                              `<div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110" style="background-image: url('${dir.cover_url}')"></div>
+                               <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/80 to-slate-900/40"></div>` 
+                              : ''}
+                            
+                            <div class="absolute top-2 left-2 text-green-500 hidden grip-handle bg-slate-900/80 backdrop-blur rounded p-1 z-20"><i class="fa-solid fa-grip-vertical"></i></div>
+                            <div class="absolute top-2 right-2 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn z-20">
+                                <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-900/80 backdrop-blur hover:bg-slate-700 rounded p-1.5 shadow-lg"><i class="fa-solid fa-cog"></i></button>
                             </div>
-                            <div class="absolute top-2 right-2 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn">
-                                <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded p-1.5 shadow-lg"><i class="fa-solid fa-cog"></i></button>
+                            
+                            <!-- Conteúdo (Ícone e Título) -->
+                            <div class="relative z-10 flex flex-col items-center justify-center w-full h-full p-4 pt-6">
+                                <i class="fa-solid ${dir.icon} text-4xl sm:text-5xl mb-3 drop-shadow-md sm:group-hover:scale-110 transition-transform" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>
+                                <span class="text-xs sm:text-sm font-medium text-slate-200 w-full truncate px-1 drop-shadow-md">${dir.name}</span>
                             </div>
-                            <i class="fa-solid fa-folder text-4xl sm:text-5xl text-gluon-primary mb-3 drop-shadow-md sm:group-hover:scale-110 transition-transform"></i>
-                            <span class="text-xs sm:text-sm font-medium text-slate-300 w-full truncate px-1">${dir.name}</span>
                         </div>`;
                     });
                     html += `</div>`;
                 } 
                 
                 else if (view === 'list') {
-                    html = `<div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
-                                <table class="w-full text-left text-sm min-w-[300px]">
-                                    <thead class="bg-slate-900/50 text-slate-400">
-                                        <tr>
-                                            <th class="px-4 py-3 font-medium w-10 text-center hidden grip-handle">#</th>
-                                            <th class="px-4 sm:px-6 py-3 font-medium">Nome</th>
-                                            <th class="px-4 sm:px-6 py-3 font-medium text-right">Ações</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="sortable-wrapper" class="divide-y divide-slate-700/50">`;
+                    html = `<div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto"><table class="w-full text-left text-sm min-w-[300px]"><thead class="bg-slate-900/50 text-slate-400"><tr><th class="px-4 py-3 font-medium w-10 text-center hidden grip-handle">#</th><th class="px-4 sm:px-6 py-3 font-medium w-12"></th><th class="px-4 py-3 font-medium">Nome</th><th class="px-4 sm:px-6 py-3 font-medium text-right">Ações</th></tr></thead><tbody id="sortable-wrapper" class="divide-y divide-slate-700/50">`;
                     this.state.directories.forEach(dir => {
                         html += `
-                        <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/30 transition-colors group cursor-pointer border-l-2 border-transparent" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
-                            <td class="px-2 py-3 text-center hidden grip-handle text-green-500 bg-slate-900/20">
-                                <i class="fa-solid fa-grip-vertical"></i>
+                        <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/50 transition-colors group cursor-pointer border-l-2 border-transparent relative overflow-hidden" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
+                            <td class="px-2 py-3 text-center hidden grip-handle text-green-500 bg-slate-900/20"><i class="fa-solid fa-grip-vertical"></i></td>
+                            <td class="px-4 sm:px-6 py-3 sm:py-4 text-center">
+                                ${dir.cover_url ? `<div class="w-8 h-8 rounded bg-cover bg-center border border-slate-600 inline-block shadow-sm" style="background-image: url('${dir.cover_url}')"></div>` : `<i class="fa-solid ${dir.icon} text-xl" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>`}
                             </td>
-                            <td class="px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3">
-                                <i class="fa-solid fa-folder text-lg sm:text-xl text-gluon-primary"></i>
-                                <span class="font-medium text-slate-200 truncate">${dir.name}</span>
-                            </td>
+                            <td class="px-4 py-3 sm:py-4 font-medium text-slate-200">${dir.name}</td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-right">
                                 <div class="sm:opacity-0 group-hover:opacity-100 transition-opacity flex justify-end gap-2 cog-btn">
-                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded p-2 text-xs sm:text-sm"><i class="fa-solid fa-cog"></i> <span class="hidden sm:inline">Editar</span></button>
+                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-600 border border-slate-600 rounded p-2 text-xs sm:text-sm shadow"><i class="fa-solid fa-cog"></i> <span class="hidden sm:inline">Editar</span></button>
                                 </div>
                             </td>
                         </tr>`;
@@ -730,23 +696,26 @@
                     html = `<div id="sortable-wrapper" class="flex gap-4 sm:gap-6 overflow-x-auto pb-4 no-scrollbar h-full items-start snap-x">`;
                     this.state.directories.forEach(dir => {
                         html += `
-                        <div data-id="${dir.id}" class="draggable-item snap-start bg-slate-800 border border-slate-700 rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg relative transition-colors">
-                            <div class="p-3 border-b border-slate-700 flex justify-between items-center bg-slate-900/50 rounded-t-xl group cursor-pointer hover:bg-slate-700/50 transition-colors kanban-col-handle" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
-                                <div class="flex items-center gap-2 font-semibold text-slate-200 truncate w-full">
+                        <div data-id="${dir.id}" class="draggable-item snap-start bg-slate-800 border border-slate-700 rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg relative transition-colors overflow-hidden">
+                            <!-- Kanban Header com Capa -->
+                            <div class="p-4 border-b border-slate-700 flex justify-between items-center rounded-t-xl group cursor-pointer hover:bg-slate-700/50 transition-colors kanban-col-handle relative overflow-hidden min-h-[60px]" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
+                                ${dir.cover_url ? `<div class="absolute inset-0 bg-cover bg-center" style="background-image: url('${dir.cover_url}')"></div><div class="absolute inset-0 bg-slate-900/80 backdrop-blur-[2px]"></div>` : `<div class="absolute inset-0 bg-slate-900/50"></div>`}
+                                
+                                <div class="flex items-center gap-2 font-semibold text-slate-100 truncate w-full relative z-10 drop-shadow-md">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
-                                    <i class="fa-solid fa-folder-open text-gluon-primary"></i>
+                                    <i class="fa-solid ${dir.icon} text-lg" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>
                                     <span class="truncate text-sm sm:text-base">${dir.name}</span>
                                 </div>
-                                <div class="flex gap-1 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn">
-                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded p-1.5"><i class="fa-solid fa-cog text-xs"></i></button>
+                                <div class="flex gap-1 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn relative z-10">
+                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-300 hover:text-white bg-slate-800/80 backdrop-blur hover:bg-slate-600 rounded p-1.5 shadow"><i class="fa-solid fa-cog text-xs"></i></button>
                                 </div>
                             </div>
+                            
                             <div class="p-3 flex-1 overflow-y-auto kanban-scroll" id="kanban-col-${dir.id}" data-parent-id="${dir.id}">
-                                <div class="flex justify-center py-6">
-                                    <i class="fa-solid fa-circle-notch fa-spin text-slate-500 text-2xl"></i>
-                                </div>
+                                <div class="flex justify-center py-6"><i class="fa-solid fa-circle-notch fa-spin text-slate-500 text-2xl"></i></div>
                             </div>
-                            <div class="p-3 border-t border-slate-700 bg-slate-900/30 rounded-b-xl">
+                            
+                            <div class="p-3 border-t border-slate-700 bg-slate-900/30 rounded-b-xl z-10 relative">
                                 <button onclick="app.openModal('', '', ${dir.id}, 'grid')" class="text-slate-400 hover:text-white flex items-center justify-center gap-2 text-xs sm:text-sm transition-colors w-full py-2 hover:bg-slate-700 rounded-lg border border-slate-700/50 border-dashed">
                                     <i class="fa-solid fa-plus"></i> Nova pasta aqui
                                 </button>
@@ -754,16 +723,11 @@
                         </div>`;
                     });
                     html += `</div>`;
-                    
                     setTimeout(() => this.loadKanbanContents(), 0);
                 }
 
                 container.innerHTML = html;
-                
-                if (this.state.reorderMode) {
-                    document.getElementById('sortable-wrapper').classList.add('reorder-active');
-                    this.initSortable();
-                }
+                if (this.state.reorderMode) { document.getElementById('sortable-wrapper').classList.add('reorder-active'); this.initSortable(); }
             }
         };
 
