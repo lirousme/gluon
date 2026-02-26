@@ -3,7 +3,7 @@
   Diretório: public_html/gluon/views/dashboard.html
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
-  Suporte completo a Pastas, Arquivos de Código e Agendas (Schedule).
+  Suporte completo a Pastas, Arquivos de Código, Agendas e Copiar/Colar.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -108,8 +108,12 @@
                             <i class="fa-solid fa-folder-gear w-5 text-center text-lg"></i> <span class="font-medium">Configurações</span>
                         </button>
 
-                        <button onclick="app.copyCurrentDirectory(); app.toggleMobileViewMenu()" id="btn-copy-dir" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                        <button onclick="app.copyCurrentDirectory(); app.toggleMobileViewMenu()" id="btn-copy-dir" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors hidden">
                             <i class="fa-regular fa-copy w-5 text-center text-lg"></i> <span class="font-medium">Copiar Diretório</span>
+                        </button>
+
+                        <button onclick="app.pasteDirectory(); app.toggleMobileViewMenu()" id="btn-paste-dir" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors hidden">
+                            <i class="fa-solid fa-paste w-5 text-center text-lg"></i> <span class="font-medium">Colar Arquivos</span>
                         </button>
 
                         <div class="h-px bg-slate-700/50 my-2 md:hidden"></div>
@@ -312,7 +316,7 @@
                 path: [{ id: null, name: 'Meu Cofre', view: 'grid' }],
                 directories: [],
                 directoryCache: new Map(), 
-                rootPrefs: { view: 'grid', new_item_position: 'end' }, 
+                rootPrefs: { view: 'grid', new_item_position: 'end', copied_directory_id: null }, 
                 isLoading: false,
                 reorderMode: false,
                 availableIcons: [
@@ -572,13 +576,30 @@
 
             async copyCurrentDirectory() {
                 const currentId = this.getCurrentParentId();
-                if (currentId === null) return; 
+                if (currentId === null) {
+                    this.showToast("Cofre Raiz não pode ser copiado.", "error");
+                    return; 
+                }
 
                 const response = await this.api('user', 'copy_directory', { dir_id: currentId });
                 if (response && response.status === 'success') {
+                    this.state.rootPrefs.copied_directory_id = currentId; // Atualiza estado local
+                    this.updateTopButtons(); // Exibe botão "Colar"
                     this.showToast(response.message, 'success');
                 } else {
                     this.showToast(response ? response.message : 'Erro ao copiar', 'error');
+                }
+            },
+
+            async pasteDirectory() {
+                const targetParentId = this.getCurrentParentId(); // null se estiver na raiz
+                
+                const response = await this.api('directories', 'paste', { target_parent_id: targetParentId });
+                if (response && response.status === 'success') {
+                    this.showToast(response.message, 'success');
+                    await this.fetchDirectories(); // Recarrega tela
+                } else {
+                    this.showToast(response ? response.message : 'Erro ao colar', 'error');
                 }
             },
 
@@ -659,7 +680,8 @@
                 if (response && response.data) {
                     this.state.rootPrefs = {
                         view: response.data.root_view || 'grid',
-                        new_item_position: response.data.root_new_item_position || 'end'
+                        new_item_position: response.data.root_new_item_position || 'end',
+                        copied_directory_id: response.data.copied_directory_id // Resgata do DB a memória do Copiar/Colar
                     };
                     this.state.path[0].view = this.state.rootPrefs.view;
                 }
@@ -801,6 +823,7 @@
                     if(mBtn) { mBtn.className = mBtn.className.replace(/text-slate-300|text-gluon-primary|bg-slate-700\/50/g, ''); mBtn.classList.add(v === currentView ? 'text-gluon-primary' : 'text-slate-300'); if(v === currentView) mBtn.classList.add('bg-slate-700/50'); }
                 });
 
+                // Controle do Botão "Copiar"
                 const btnCopy = document.getElementById('btn-copy-dir');
                 if (btnCopy) {
                     if (this.getCurrentParentId() === null) {
@@ -809,6 +832,18 @@
                     } else {
                         btnCopy.classList.remove('hidden');
                         btnCopy.classList.add('flex');
+                    }
+                }
+
+                // Controle do Botão "Colar"
+                const btnPaste = document.getElementById('btn-paste-dir');
+                if (btnPaste) {
+                    if (this.state.rootPrefs.copied_directory_id !== null && this.state.rootPrefs.copied_directory_id !== undefined) {
+                        btnPaste.classList.remove('hidden');
+                        btnPaste.classList.add('flex');
+                    } else {
+                        btnPaste.classList.add('hidden');
+                        btnPaste.classList.remove('flex');
                     }
                 }
             },
