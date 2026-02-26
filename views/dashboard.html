@@ -3,7 +3,7 @@
   Diretório: public_html/gluon/views/dashboard.html
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
-  Suporte completo a Pastas, Arquivos de Código, Agendas e Copiar/Colar.
+  Suporte completo a Pastas, Arquivos de Código, Agendas, Copiar/Colar e Mover.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -115,6 +115,10 @@
                         <button onclick="app.pasteDirectory(); app.toggleMobileViewMenu()" id="btn-paste-dir" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors hidden">
                             <i class="fa-solid fa-paste w-5 text-center text-lg"></i> <span class="font-medium">Colar Arquivos</span>
                         </button>
+                        
+                        <button onclick="app.moveDirectory(); app.toggleMobileViewMenu()" id="btn-move-dir" class="w-full text-left px-4 py-2.5 text-sm text-amber-400 hover:bg-slate-700 hover:text-amber-300 flex items-center gap-3 transition-colors hidden">
+                            <i class="fa-solid fa-truck-fast w-5 text-center text-lg"></i> <span class="font-medium">Mover para cá</span>
+                        </button>
 
                         <div class="h-px bg-slate-700/50 my-2 md:hidden"></div>
 
@@ -223,7 +227,7 @@
                         </div>
                     </div>
 
-                    <!-- GRUPO DE CONFIGURAÇÕES DE PASTA (Escondido se for arquivo ou agenda) -->
+                    <!-- GRUPO DE CONFIGURAÇÕES DE PASTA -->
                     <div id="folderSettingsGroup">
                         <div class="mb-5">
                             <label class="block text-sm font-medium text-slate-300 mb-2">Padrão de Visualização Interna</label>
@@ -577,14 +581,14 @@
             async copyCurrentDirectory() {
                 const currentId = this.getCurrentParentId();
                 if (currentId === null) {
-                    this.showToast("Cofre Raiz não pode ser copiado.", "error");
+                    this.showToast("Cofre Raiz não pode ser selecionado desta forma.", "error");
                     return; 
                 }
 
                 const response = await this.api('user', 'copy_directory', { dir_id: currentId });
                 if (response && response.status === 'success') {
                     this.state.rootPrefs.copied_directory_id = currentId; // Atualiza estado local
-                    this.updateTopButtons(); // Exibe botão "Colar"
+                    this.updateTopButtons(); // Exibe botões "Colar" e "Mover"
                     this.showToast(response.message, 'success');
                 } else {
                     this.showToast(response ? response.message : 'Erro ao copiar', 'error');
@@ -600,6 +604,20 @@
                     await this.fetchDirectories(); // Recarrega tela
                 } else {
                     this.showToast(response ? response.message : 'Erro ao colar', 'error');
+                }
+            },
+
+            async moveDirectory() {
+                const targetParentId = this.getCurrentParentId(); // null se estiver na raiz
+                
+                const response = await this.api('directories', 'move', { target_parent_id: targetParentId });
+                if (response && response.status === 'success') {
+                    this.state.rootPrefs.copied_directory_id = null; // Limpa área de transferência local
+                    this.updateTopButtons(); // Oculta os botões Colar/Mover
+                    this.showToast(response.message, 'success');
+                    await this.fetchDirectories(); // Recarrega tela
+                } else {
+                    this.showToast(response ? response.message : 'Erro ao mover', 'error');
                 }
             },
 
@@ -681,7 +699,7 @@
                     this.state.rootPrefs = {
                         view: response.data.root_view || 'grid',
                         new_item_position: response.data.root_new_item_position || 'end',
-                        copied_directory_id: response.data.copied_directory_id // Resgata do DB a memória do Copiar/Colar
+                        copied_directory_id: response.data.copied_directory_id // Resgata do DB a memória do Copiar/Mover
                     };
                     this.state.path[0].view = this.state.rootPrefs.view;
                 }
@@ -823,7 +841,7 @@
                     if(mBtn) { mBtn.className = mBtn.className.replace(/text-slate-300|text-gluon-primary|bg-slate-700\/50/g, ''); mBtn.classList.add(v === currentView ? 'text-gluon-primary' : 'text-slate-300'); if(v === currentView) mBtn.classList.add('bg-slate-700/50'); }
                 });
 
-                // Controle do Botão "Copiar"
+                // Controle do Botão "Copiar Diretório" (Apenas esconde na raiz)
                 const btnCopy = document.getElementById('btn-copy-dir');
                 if (btnCopy) {
                     if (this.getCurrentParentId() === null) {
@@ -835,15 +853,16 @@
                     }
                 }
 
-                // Controle do Botão "Colar"
+                // Controle dos Botões "Colar Arquivos" e "Mover para cá"
                 const btnPaste = document.getElementById('btn-paste-dir');
-                if (btnPaste) {
+                const btnMove = document.getElementById('btn-move-dir');
+                if (btnPaste && btnMove) {
                     if (this.state.rootPrefs.copied_directory_id !== null && this.state.rootPrefs.copied_directory_id !== undefined) {
-                        btnPaste.classList.remove('hidden');
-                        btnPaste.classList.add('flex');
+                        btnPaste.classList.remove('hidden'); btnPaste.classList.add('flex');
+                        btnMove.classList.remove('hidden'); btnMove.classList.add('flex');
                     } else {
-                        btnPaste.classList.add('hidden');
-                        btnPaste.classList.remove('flex');
+                        btnPaste.classList.add('hidden'); btnPaste.classList.remove('flex');
+                        btnMove.classList.add('hidden'); btnMove.classList.remove('flex');
                     }
                 }
             },
