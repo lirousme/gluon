@@ -5,8 +5,8 @@
   Pilar: Fácil Manutenção, Bonito e Rápido.
   Adicionado controle independente de posição de criação (Início/Fim),
   atalho de Configurações no Breadcrumb e campo de nome (textarea) expansível.
-  Atualização: Breadcrumbs (Caminhos) agora utilizam fonte menor (text-sm), 
-  com quebra de linha ativada e mostrando textos completos sem scroll horizontal.
+  Atualização: Botão de configuração movido em definitivo para o início absoluto do breadcrumb
+  substituindo o ícone de cofre (Ex: Config > Meu Cofre > Diretório).
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -422,22 +422,25 @@
 
             renderBreadcrumbs() {
                 const container = document.getElementById('breadcrumbs');
-                container.innerHTML = this.state.path.map((step, index) => {
+                const currentStep = this.state.path[this.state.path.length - 1];
+                
+                // Botão de configuração da pasta atual movido definitivamente para o início absoluto (antes do "Meu Cofre")
+                const settingsBtn = `<button onclick="event.stopPropagation(); app.openModal('${currentStep.id || 'root'}')" class="text-slate-400 hover:text-gluon-primary transition-colors focus:outline-none flex items-center" title="Configurar pasta atual"><i class="fa-solid fa-cog"></i></button>`;
+
+                const pathHtml = this.state.path.map((step, index) => {
                     const isLast = index === this.state.path.length - 1;
                     const color = isLast ? 'text-white font-semibold' : 'text-slate-400 hover:text-gluon-primary transition-colors';
                     const separator = isLast ? '' : '<i class="fa-solid fa-chevron-right text-[10px] text-slate-600 mx-1 sm:mx-2 mt-0.5"></i>';
-                    
-                    const settingsBtn = isLast ? `<button onclick="event.stopPropagation(); app.openModal('${step.id || 'root'}')" class="ml-2 text-slate-500 hover:text-gluon-primary transition-colors focus:outline-none" title="Configurar padrão desta pasta"><i class="fa-solid fa-cog"></i></button>` : '';
 
-                    // Removido "whitespace-nowrap" e adicionado flex-wrap/break-words para o texto poder quebrar se for longo
-                    return `<div class="inline-flex items-center flex-wrap" ${!isLast ? `onclick="app.goUpTo(${index})"` : ''}>
-                        <span class="${color} ${!isLast ? 'cursor-pointer' : ''} break-all sm:break-words leading-tight max-w-full">
-                            ${index === 0 ? '<i class="fa-solid fa-vault mr-1"></i> ' : ''}${step.name}
+                    return `<div class="inline-flex items-center flex-wrap">
+                        <span class="${color} ${!isLast ? 'cursor-pointer' : ''} break-all sm:break-words leading-tight max-w-full flex items-center" ${!isLast ? `onclick="app.goUpTo(${index})"` : ''}>
+                            ${step.name}
                         </span>
-                        ${settingsBtn}
                         ${separator}
                     </div>`;
                 }).join('');
+
+                container.innerHTML = settingsBtn + pathHtml;
             },
 
             toggleMobileViewMenu() { document.getElementById('mobileViewMenu').classList.toggle('hidden'); },
