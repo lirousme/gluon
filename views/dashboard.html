@@ -2,9 +2,11 @@
   Arquivo: dashboard.html
   Diretório: public_html/gluon/views/dashboard.html
   
-  Pilar: Fácil Manutenção, Bonito e Rápido.
-  Atualização: Lógica adicionada em `deleteFromModal()` para retornar ao diretório pai 
-               automaticamente caso o usuário exclua um diretório no qual ele está dentro.
+  Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
+  Atualização: 
+    - Adicionado escapeHTML() para prevenir XSS e quebra de DOM.
+    - Funções inline (onclick) otimizadas para passar apenas o ID e buscar dados no cache de memória, 
+      evitando quebra de atributos HTML quando o diretório possui aspas no nome.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -292,6 +294,14 @@
             
             sortableInstances: [],
 
+            // Helper de Segurança (Anti-XSS e Anti-quebra de HTML)
+            escapeHTML(str) {
+                if (!str) return '';
+                return str.replace(/[&<>'"]/g, tag => 
+                    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag])
+                );
+            },
+
             async init() {
                 this.renderIconPicker();
                 this.setLoading(true);
@@ -455,9 +465,13 @@
                 this.setLoading(false);
             },
 
-            async enterDirectory(id, name, viewMode) {
+            // Otimização: Agora usa apenas o ID e puxa do cache (Evita falhas de escape de string no HTML)
+            async enterDirectory(id) {
                 if(this.state.reorderMode) return; 
-                this.state.path.push({ id, name, view: viewMode });
+                const dir = this.state.directoryCache.get(Number(id));
+                if(!dir) return;
+
+                this.state.path.push({ id: dir.id, name: dir.name, view: dir.view });
                 if (this.state.reorderMode) this.toggleReorderMode();
                 await this.fetchDirectories();
             },
@@ -478,7 +492,7 @@
 
                     return `<span class="inline" ${!isLast ? `onclick="app.goUpTo(${index})"` : ''}>
                         <span class="${color} ${!isLast ? 'cursor-pointer hover:underline' : ''} transition-colors">
-                            ${index === 0 ? '<i class="fa-solid fa-vault mr-1"></i>' : ''}${step.name}
+                            ${index === 0 ? '<i class="fa-solid fa-vault mr-1"></i>' : ''}${this.escapeHTML(step.name)}
                         </span>${separator}
                     </span>`;
                 }).join('');
@@ -615,6 +629,7 @@
                     document.getElementById('dirNameContainer').classList.add('hidden');
                     document.getElementById('tab-btn-apar').classList.add('hidden');
                 } else if (id) {
+                    // Puxa do cache da memória RAM em vez de receber string injetada via HTML
                     dirObj = this.state.directoryCache.get(Number(id));
                     document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-folder-gear text-gluon-primary"></i> <span>Configurar Pasta</span>';
                     document.getElementById('dirNameContainer').classList.remove('hidden');
@@ -733,7 +748,6 @@
                 btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar'; btn.disabled = false;
             },
 
-            // --- CORREÇÃO APLICADA AQUI ---
             async deleteFromModal() {
                 const id = document.getElementById('dirId').value;
                 const name = document.getElementById('dirName').value;
@@ -747,25 +761,14 @@
                     
                     if(response) { 
                         this.closeModal(); 
-
-                        // Verifica se o ID do diretório recém excluído existe no caminho (breadcrumb) atual.
-                        // Se existir, significa que o usuário está dentro dessa pasta (ou em uma subpasta dela).
                         const pathIndex = this.state.path.findIndex(step => String(step.id) === String(id));
-
-                        if (pathIndex !== -1) {
-                            // Encontrou o diretório no breadcrumb. 
-                            // Volta para o diretório "pai" do diretório que foi excluído.
-                            await this.goUpTo(pathIndex - 1);
-                        } else {
-                            // A pasta excluída não impacta a visualização atual, apenas recarrega os dados.
-                            await this.fetchDirectories(); 
-                        }
+                        if (pathIndex !== -1) { await this.goUpTo(pathIndex - 1); } 
+                        else { await this.fetchDirectories(); }
                     } else {
                         btn.innerHTML = '<i class="fa-solid fa-trash"></i> <span>Excluir</span>';
                     }
                 }
             },
-            // ------------------------------
 
             setLoading(show) {
                 this.state.isLoading = show;
@@ -786,14 +789,14 @@
                         res.data.forEach(d => this.state.directoryCache.set(Number(d.id), d));
 
                         container.innerHTML = res.data.map(sub => `
-                            <div data-id="${sub.id}" class="kanban-item bg-slate-700 hover:bg-slate-600 border border-slate-600 p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm mb-2 relative overflow-hidden" onclick="app.enterDirectory(${sub.id}, '${sub.name.replace(/'/g, "\\'")}', '${sub.view}')">
+                            <div data-id="${sub.id}" class="kanban-item bg-slate-700 hover:bg-slate-600 border border-slate-600 p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm mb-2 relative overflow-hidden" onclick="app.enterDirectory(${sub.id})">
                                 ${sub.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10" style="background-image: url('${sub.cover_url}')"></div>` : ''}
                                 <div class="flex items-center gap-2 truncate pr-2 relative z-10">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
                                     <i class="fa-solid ${sub.icon} text-sm" style="${this.getTextGradientStyle(sub.color_from, sub.color_to)}"></i>
-                                    <span class="text-sm text-slate-200 truncate font-medium">${sub.name}</span>
+                                    <span class="text-sm text-slate-200 truncate font-medium">${this.escapeHTML(sub.name)}</span>
                                 </div>
-                                <button onclick="event.stopPropagation(); app.openModal(${sub.id}, '${sub.name.replace(/'/g, "\\'")}', ${dir.id}, '${sub.view}')" class="relative z-10 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 sm:opacity-0 group-hover:opacity-100 transition-all border border-slate-600 cog-btn"><i class="fa-solid fa-cog text-xs"></i></button>
+                                <button onclick="event.stopPropagation(); app.openModal(${sub.id})" class="relative z-10 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 sm:opacity-0 group-hover:opacity-100 transition-all border border-slate-600 cog-btn"><i class="fa-solid fa-cog text-xs"></i></button>
                             </div>`).join('');
                     } else {
                         container.innerHTML = `<div class="kanban-empty text-center flex flex-col items-center justify-center text-slate-500 text-xs py-8 opacity-60 border-2 border-dashed border-slate-700 rounded-lg"><i class="fa-solid fa-box-open text-2xl mb-2"></i> Pasta vazia</div>`;
@@ -818,17 +821,17 @@
                     html = `<div id="sortable-wrapper" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">`;
                     this.state.directories.forEach(dir => {
                         html += `
-                        <div data-id="${dir.id}" class="dir-card draggable-item group bg-slate-800 border border-slate-700 rounded-xl flex flex-col items-center text-center cursor-pointer relative overflow-hidden min-h-[140px]" onclick="app.enterDirectory(${dir.id}, '${dir.name.replace(/'/g, "\\'")}', '${dir.view}')">
+                        <div data-id="${dir.id}" class="dir-card draggable-item group bg-slate-800 border border-slate-700 rounded-xl flex flex-col items-center text-center cursor-pointer relative overflow-hidden min-h-[140px]" onclick="app.enterDirectory(${dir.id})">
                             ${dir.cover_url ? `<div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110" style="background-image: url('${dir.cover_url}')"></div><div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/80 to-slate-900/40"></div>` : ''}
                             
                             <div class="absolute top-2 left-2 text-green-500 hidden grip-handle bg-slate-900/80 backdrop-blur rounded p-1 z-20"><i class="fa-solid fa-grip-vertical"></i></div>
                             <div class="absolute top-2 right-2 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn z-20">
-                                <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name.replace(/'/g, "\\'")}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-900/80 backdrop-blur hover:bg-slate-700 rounded p-1.5 shadow-lg"><i class="fa-solid fa-cog"></i></button>
+                                <button onclick="event.stopPropagation(); app.openModal(${dir.id})" class="text-slate-400 hover:text-white bg-slate-900/80 backdrop-blur hover:bg-slate-700 rounded p-1.5 shadow-lg"><i class="fa-solid fa-cog"></i></button>
                             </div>
                             
                             <div class="relative z-10 flex flex-col items-center justify-center w-full h-full p-4 pt-6">
                                 <i class="fa-solid ${dir.icon} text-4xl sm:text-5xl mb-3 drop-shadow-md sm:group-hover:scale-110 transition-transform" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>
-                                <span class="text-xs sm:text-sm font-medium text-slate-200 w-full truncate px-1 drop-shadow-md">${dir.name}</span>
+                                <span class="text-xs sm:text-sm font-medium text-slate-200 w-full truncate px-1 drop-shadow-md">${this.escapeHTML(dir.name)}</span>
                             </div>
                         </div>`;
                     });
@@ -839,15 +842,15 @@
                     html = `<div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto"><table class="w-full text-left text-sm min-w-[300px]"><thead class="bg-slate-900/50 text-slate-400"><tr><th class="px-4 py-3 font-medium w-10 text-center hidden grip-handle">#</th><th class="px-4 sm:px-6 py-3 font-medium w-12"></th><th class="px-4 py-3 font-medium">Nome</th><th class="px-4 sm:px-6 py-3 font-medium text-right">Ações</th></tr></thead><tbody id="sortable-wrapper" class="divide-y divide-slate-700/50">`;
                     this.state.directories.forEach(dir => {
                         html += `
-                        <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/50 transition-colors group cursor-pointer border-l-2 border-transparent relative overflow-hidden" onclick="app.enterDirectory(${dir.id}, '${dir.name.replace(/'/g, "\\'")}', '${dir.view}')">
+                        <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/50 transition-colors group cursor-pointer border-l-2 border-transparent relative overflow-hidden" onclick="app.enterDirectory(${dir.id})">
                             <td class="px-2 py-3 text-center hidden grip-handle text-green-500 bg-slate-900/20"><i class="fa-solid fa-grip-vertical"></i></td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-center">
                                 ${dir.cover_url ? `<div class="w-8 h-8 rounded bg-cover bg-center border border-slate-600 inline-block shadow-sm" style="background-image: url('${dir.cover_url}')"></div>` : `<i class="fa-solid ${dir.icon} text-xl" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>`}
                             </td>
-                            <td class="px-4 py-3 sm:py-4 font-medium text-slate-200">${dir.name}</td>
+                            <td class="px-4 py-3 sm:py-4 font-medium text-slate-200">${this.escapeHTML(dir.name)}</td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-right">
                                 <div class="sm:opacity-0 group-hover:opacity-100 transition-opacity flex justify-end gap-2 cog-btn">
-                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name.replace(/'/g, "\\'")}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-600 border border-slate-600 rounded p-2 text-xs sm:text-sm shadow"><i class="fa-solid fa-cog"></i> <span class="hidden sm:inline">Editar</span></button>
+                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id})" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-600 border border-slate-600 rounded p-2 text-xs sm:text-sm shadow"><i class="fa-solid fa-cog"></i> <span class="hidden sm:inline">Editar</span></button>
                                 </div>
                             </td>
                         </tr>`;
@@ -860,16 +863,16 @@
                     this.state.directories.forEach(dir => {
                         html += `
                         <div data-id="${dir.id}" class="draggable-item snap-start bg-slate-800 border border-slate-700 rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg relative transition-colors overflow-hidden">
-                            <div class="p-4 border-b border-slate-700 flex justify-between items-center rounded-t-xl group cursor-pointer hover:bg-slate-700/50 transition-colors kanban-col-handle relative overflow-hidden min-h-[60px]" onclick="app.enterDirectory(${dir.id}, '${dir.name.replace(/'/g, "\\'")}', '${dir.view}')">
+                            <div class="p-4 border-b border-slate-700 flex justify-between items-center rounded-t-xl group cursor-pointer hover:bg-slate-700/50 transition-colors kanban-col-handle relative overflow-hidden min-h-[60px]" onclick="app.enterDirectory(${dir.id})">
                                 ${dir.cover_url ? `<div class="absolute inset-0 bg-cover bg-center" style="background-image: url('${dir.cover_url}')"></div><div class="absolute inset-0 bg-slate-900/80 backdrop-blur-[2px]"></div>` : `<div class="absolute inset-0 bg-slate-900/50"></div>`}
                                 
                                 <div class="flex items-center gap-2 font-semibold text-slate-100 truncate w-full relative z-10 drop-shadow-md">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
                                     <i class="fa-solid ${dir.icon} text-lg" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>
-                                    <span class="truncate text-sm sm:text-base">${dir.name}</span>
+                                    <span class="truncate text-sm sm:text-base">${this.escapeHTML(dir.name)}</span>
                                 </div>
                                 <div class="flex gap-1 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn relative z-10">
-                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name.replace(/'/g, "\\'")}', null, '${dir.view}')" class="text-slate-300 hover:text-white bg-slate-800/80 backdrop-blur hover:bg-slate-600 rounded p-1.5 shadow"><i class="fa-solid fa-cog text-xs"></i></button>
+                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id})" class="text-slate-300 hover:text-white bg-slate-800/80 backdrop-blur hover:bg-slate-600 rounded p-1.5 shadow"><i class="fa-solid fa-cog text-xs"></i></button>
                                 </div>
                             </div>
                             
