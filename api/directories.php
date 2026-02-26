@@ -6,6 +6,7 @@
  * API DE DIRETÓRIOS
  * Pilar: Seguro e Rápido.
  * Nomes criptografados + Gerenciamento individual de Views + Ordenação (Sort)
+ * Atualização: Suporte a mover itens entre pastas na reordenação (Drag n Drop avançado no Kanban).
  */
 
 require_once BASE_PATH . '/config/database.php';
@@ -103,6 +104,10 @@ elseif ($action === 'update') {
 elseif ($action === 'reorder') {
     // Ação ultra-rápida para salvar a nova ordem no banco
     $order = $input['order'] ?? [];
+    // Permite mover o item entre pastas se o parent_id for enviado
+    $has_parent_id = array_key_exists('parent_id', $input);
+    $new_parent_id = $has_parent_id ? $input['parent_id'] : null;
+
     if (!is_array($order)) {
         die(json_encode(['status' => 'error', 'message' => 'Formato de ordem inválido.']));
     }
@@ -110,10 +115,19 @@ elseif ($action === 'reorder') {
     try {
         // Usa transação para garantir integridade e velocidade máxima
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare("UPDATE directories SET sort_order = ? WHERE id = ? AND user_id = ?");
         
-        foreach ($order as $index => $id) {
-            $stmt->execute([$index, (int)$id, $user_id]);
+        if ($has_parent_id) {
+            // Atualiza ordem E a pasta pai (Drag n Drop entre colunas do Kanban)
+            $stmt = $pdo->prepare("UPDATE directories SET sort_order = ?, parent_id = ? WHERE id = ? AND user_id = ?");
+            foreach ($order as $index => $id) {
+                $stmt->execute([$index, $new_parent_id, (int)$id, $user_id]);
+            }
+        } else {
+            // Atualiza apenas a ordem (Grid/Lista principal)
+            $stmt = $pdo->prepare("UPDATE directories SET sort_order = ? WHERE id = ? AND user_id = ?");
+            foreach ($order as $index => $id) {
+                $stmt->execute([$index, (int)$id, $user_id]);
+            }
         }
         
         $pdo->commit();
