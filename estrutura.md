@@ -7,14 +7,15 @@ public_html/gluon/
 │   ├── database.php          # Conexão PDO e chaves de criptografia AES
 │   └── env.php               # Variáveis de ambiente (senhas do BD, etc.)
 │
-├── api/                      # Back-end: Endpoints que processam dados (Retornam JSON)
-│   ├── auth.php              # Login, Registro, Logout, Validação de Sessão
-│   ├── directories.php       # CRUD de Diretórios (Nomes criptografados + Estética)
-│   └── user.php              # Preferências do Usuário (Root View, Perfil, Copy, etc)
+├── api/                      # Back-end: Endpoints que processam dados (Retornam JSON via POST)
+│   ├── auth.php              # Login, Registro, Logout e Validação (check_remember)
+│   ├── directories.php       # CRUD de Diretórios e Lógicas Visuais
+│   └── user.php              # Gets/Updates de Perfil (Username/Email), Exclusão de Conta, e Prefs.
 │
-├── views/                    # Front-end: Onde ficam os layouts (HTML/Tailwind)
+├── views/                    # Front-end: Onde ficam os layouts (Vanilla JS Rápido / Tailwind)
 │   ├── login.html            # Interface de login e registro
 │   ├── dashboard.html        # Área logada com Abas de Estética, Grid/List/Kanban
+│   ├── settings.html         # Configurações do perfil, Logout e Exclusão da conta
 │   └── errors/               # Páginas de erro (404, 500)
 │
 └── assets/                   # Arquivos estáticos públicos
@@ -38,7 +39,7 @@ password_hash VARCHAR(255) NOT NULL,
 remember_token VARCHAR(255) DEFAULT NULL,
 root_view VARCHAR(10) DEFAULT 'grid',
 root_new_item_position VARCHAR(10) DEFAULT 'end',
-copied_directory_id INT UNSIGNED DEFAULT NULL, -- NOVO: Guarda o ID do diretório copiado
+copied_directory_id INT UNSIGNED DEFAULT NULL, -- Guarda o ID do diretório copiado
 encrypted_data TEXT DEFAULT NULL,
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
