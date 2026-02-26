@@ -4,28 +4,23 @@ public_html/gluon/
 ├── .htaccess                 # Redirecionamentos Apache
 │
 ├── config/
-
 │   ├── database.php          # Conexão PDO e Criptografia AES
 │   └── env.php
-
 │
 ├── api/                      # Back-end API (JSON/POST)
 │   ├── auth.php
-
-│   ├── directories.php       # CRUD de Diretórios/Arquivos
+│   ├── directories.php       # CRUD de Diretórios/Arquivos/Agendas
 │   ├── user.php
-
-│   └── editor.php            # NOVO: Gerencia leitura e gravação de códigos
+│   ├── editor.php            # Gerencia leitura e gravação de códigos
+│   └── schedule.php          # NOVO: Micro-API para arrastar/redimensionar eventos
 │
 ├── views/                    # Front-end (Vanilla JS + Tailwind)
 │   ├── login.html
-
-│   ├── dashboard.html        # ATUALIZADO: Suporte a arquivos
+│   ├── dashboard.html        # ATUALIZADO: Suporte a Agenda
 │   ├── settings.html
-
-│   ├── editor.html           # NOVO: Interface do editor de código
+│   ├── editor.html           # Interface do editor de código
+│   ├── schedule.html         # NOVO: Interface da Linha do Tempo / Agenda
 │   └── errors/
-
 │
 └── assets/
 
@@ -66,14 +61,17 @@ icon VARCHAR(50) DEFAULT 'fa-folder',      -- Ícone FontAwesome
 icon_color_from VARCHAR(7) DEFAULT '#3b82f6', -- Cor inicial do Gradient (Hex)
 icon_color_to VARCHAR(7) DEFAULT '#6366f1',   -- Cor final do Gradient (Hex)
 cover_url_encrypted TEXT DEFAULT NULL,     -- URL da imagem de capa (Criptografado)
+start_date DATETIME DEFAULT NULL,    -- NOVO: Início da tarefa/evento na agenda
+end_date DATETIME DEFAULT NULL,      -- NOVO: Fim da tarefa/evento na agenda
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 FOREIGN KEY (parent_id) REFERENCES directories(id) ON DELETE CASCADE,
 INDEX idx_user_parent (user_id, parent_id),
-INDEX idx_sort_order (sort_order)
-INDEX idx_type (type)
+INDEX idx_sort_order (sort_order),
+INDEX idx_type (type),
+INDEX idx_dates (start_date, end_date),
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================
