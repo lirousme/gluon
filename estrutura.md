@@ -9,12 +9,12 @@ public_html/gluon/
 │
 ├── api/                      # Back-end: Endpoints que processam dados (Retornam JSON)
 │   ├── auth.php              # Login, Registro, Logout, Validação de Sessão
-│   ├── directories.php       # CRUD de Diretórios (Nomes criptografados + Preferência de View)
+│   ├── directories.php       # CRUD de Diretórios (Nomes criptografados + View + Ordem)
 │   └── user.php              # Preferências do Usuário (Root View, Perfil, etc)
 │
 ├── views/                    # Front-end: Onde ficam os layouts (HTML/Tailwind)
 │   ├── login.html            # Interface de login e registro
-│   ├── dashboard.html        # Área logada com Grid/List/Kanban de diretórios
+│   ├── dashboard.html        # Área logada com Grid/List/Kanban e Reordenação
 │   └── errors/               # Páginas de erro (404, 500)
 │
 └── assets/                   # Arquivos estáticos públicos
@@ -46,10 +46,12 @@ user_id INT UNSIGNED NOT NULL,
 parent_id INT UNSIGNED DEFAULT NULL, -- NULL significa que está na Raiz
 name_encrypted TEXT NOT NULL, -- Nome do diretório criptografado
 default_view VARCHAR(10) DEFAULT 'grid', -- Preferência de layout desta pasta (grid, list, kanban)
+sort_order INT DEFAULT 0, -- Índice de ordenação visual do usuário
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 FOREIGN KEY (parent_id) REFERENCES directories(id) ON DELETE CASCADE,
-INDEX idx_user_parent (user_id, parent_id)
+INDEX idx_user_parent (user_id, parent_id),
+INDEX idx_sort_order (sort_order)
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
