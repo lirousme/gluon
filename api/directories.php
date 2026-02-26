@@ -5,7 +5,7 @@
 /**
  * API DE DIRETÓRIOS
  * Pilar: Seguro e Rápido.
- * Nomes criptografados + Gerenciamento individual de Views (Grid/List/Kanban)
+ * Nomes criptografados + Gerenciamento individual de Views + Ordenação (Sort)
  */
 
 require_once BASE_PATH . '/config/database.php';
@@ -25,10 +25,10 @@ if ($action === 'fetch') {
     $parent_id = isset($input['parent_id']) && $input['parent_id'] !== null ? (int)$input['parent_id'] : null;
 
     if ($parent_id === null) {
-        $stmt = $pdo->prepare("SELECT id, name_encrypted, parent_id, default_view FROM directories WHERE user_id = ? AND parent_id IS NULL");
+        $stmt = $pdo->prepare("SELECT id, name_encrypted, parent_id, default_view, sort_order FROM directories WHERE user_id = ? AND parent_id IS NULL");
         $stmt->execute([$user_id]);
     } else {
-        $stmt = $pdo->prepare("SELECT id, name_encrypted, parent_id, default_view FROM directories WHERE user_id = ? AND parent_id = ?");
+        $stmt = $pdo->prepare("SELECT id, name_encrypted, parent_id, default_view, sort_order FROM directories WHERE user_id = ? AND parent_id = ?");
         $stmt->execute([$user_id, $parent_id]);
     }
     
@@ -40,12 +40,17 @@ if ($action === 'fetch') {
             'id' => $dir['id'],
             'parent_id' => $dir['parent_id'],
             'view' => $dir['default_view'] ?? 'grid',
+            'sort_order' => (int)($dir['sort_order'] ?? 0),
             'name' => Security::decryptData($dir['name_encrypted'])
         ];
     }
 
+    // Ordena primeiro pela ordem escolhida pelo usuário, depois alfabeticamente
     usort($response, function($a, $b) {
-        return strcasecmp($a['name'], $b['name']);
+        if ($a['sort_order'] === $b['sort_order']) {
+            return strcasecmp($a['name'], $b['name']);
+        }
+        return $a['sort_order'] <=> $b['sort_order'];
     });
 
     echo json_encode(['status' => 'success', 'data' => $response]);
@@ -62,8 +67,14 @@ elseif ($action === 'create') {
 
     $name_encrypted = Security::encryptData($name);
 
-    $stmt = $pdo->prepare("INSERT INTO directories (user_id, parent_id, name_encrypted, default_view) VALUES (?, ?, ?, ?)");
-    if ($stmt->execute([$user_id, $parent_id, $name_encrypted, $view])) {
+    // Coloca a nova pasta por último por padrão
+    $stmtMax = $pdo->prepare("SELECT MAX(sort_order) as max_order FROM directories WHERE user_id = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))");
+    $stmtMax->execute([$user_id, $parent_id, $parent_id]);
+    $maxOrder = (int)$stmtMax->fetchColumn();
+    $newOrder = $maxOrder + 1;
+
+    $stmt = $pdo->prepare("INSERT INTO directories (user_id, parent_id, name_encrypted, default_view, sort_order) VALUES (?, ?, ?, ?, ?)");
+    if ($stmt->execute([$user_id, $parent_id, $name_encrypted, $view, $newOrder])) {
         echo json_encode(['status' => 'success', 'message' => 'Diretório criado.']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao criar diretório.']);
@@ -86,6 +97,30 @@ elseif ($action === 'update') {
         echo json_encode(['status' => 'success', 'message' => 'Diretório atualizado.']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar.']);
+    }
+}
+
+elseif ($action === 'reorder') {
+    // Ação ultra-rápida para salvar a nova ordem no banco
+    $order = $input['order'] ?? [];
+    if (!is_array($order)) {
+        die(json_encode(['status' => 'error', 'message' => 'Formato de ordem inválido.']));
+    }
+
+    try {
+        // Usa transação para garantir integridade e velocidade máxima
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare("UPDATE directories SET sort_order = ? WHERE id = ? AND user_id = ?");
+        
+        foreach ($order as $index => $id) {
+            $stmt->execute([$index, (int)$id, $user_id]);
+        }
+        
+        $pdo->commit();
+        echo json_encode(['status' => 'success', 'message' => 'Ordem atualizada.']);
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        echo json_encode(['status' => 'error', 'message' => 'Erro ao reordenar.']);
     }
 }
 
