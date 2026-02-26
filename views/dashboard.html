@@ -3,8 +3,9 @@
   Diretório: public_html/gluon/views/dashboard.html
   
   Pilar: Fácil Manutenção, Bonito e Rápido.
-  Adicionado controle independente de posição de criação (Início/Fim) 
-  e atalho de Configurações no Breadcrumb.
+  Adicionado controle independente de posição de criação (Início/Fim),
+  atalho de Configurações no Breadcrumb e campo de nome (textarea) expansível 
+  automaticamente na vertical conforme o texto digitado.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -160,7 +161,8 @@
                         <label class="block text-sm font-medium text-slate-300 mb-1">Nome da Pasta</label>
                         <div class="relative">
                             <i class="fa-solid fa-pen absolute left-3 top-3.5 text-slate-500 text-sm"></i>
-                            <input type="text" id="dirName" autocomplete="off" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 pl-9 pr-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-all">
+                            <!-- Transformado em Textarea que cresce automaticamente -->
+                            <textarea id="dirName" rows="1" autocomplete="off" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 pl-9 pr-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-all resize-none overflow-hidden min-h-[44px]"></textarea>
                         </div>
                     </div>
 
@@ -262,7 +264,7 @@
                 path: [{ id: null, name: 'Meu Cofre', view: 'grid' }],
                 directories: [],
                 directoryCache: new Map(), 
-                rootPrefs: { view: 'grid', new_item_position: 'end' }, // Adicionado Preferências da Raiz
+                rootPrefs: { view: 'grid', new_item_position: 'end' }, 
                 isLoading: false,
                 reorderMode: false,
                 availableIcons: [
@@ -294,6 +296,23 @@
 
                 document.getElementById('dirCoverFile').addEventListener('change', (e) => this.handleCoverUpload(e));
                 document.getElementById('btnRemoveCover').addEventListener('click', () => this.removeCover());
+                
+                // Lógica de Redimensionamento Automático do Textarea
+                const dirNameInput = document.getElementById('dirName');
+                if (dirNameInput) {
+                    dirNameInput.addEventListener('input', function() {
+                        this.style.height = 'auto'; // Reseta altura para calcular
+                        this.style.height = (this.scrollHeight) + 'px'; // Define a nova altura exata
+                    });
+                    
+                    // UX: Pressionar Enter salva o formulário, Shift+Enter pula linha
+                    dirNameInput.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault(); // Evita pular a linha
+                            app.saveDirectory(e); // Chama a função de salvamento
+                        }
+                    });
+                }
             },
 
             handleCoverUpload(e) {
@@ -405,7 +424,6 @@
                     const color = isLast ? 'text-white font-semibold' : 'text-slate-400 hover:text-gluon-primary transition-colors';
                     const separator = isLast ? '' : '<i class="fa-solid fa-chevron-right text-sm text-slate-600 mx-2"></i>';
                     
-                    // Adicionada a engrenagem (Cog) para editar a pasta que você está dentro agora mesmo
                     const settingsBtn = isLast ? `<button onclick="event.stopPropagation(); app.openModal('${step.id || 'root'}')" class="ml-3 text-slate-500 hover:text-gluon-primary transition-colors focus:outline-none" title="Configurar padrão desta pasta"><i class="fa-solid fa-cog"></i></button>` : '';
 
                     return `<div class="flex items-center whitespace-nowrap" ${!isLast ? `onclick="app.goUpTo(${index})"` : ''}><span class="${color} ${!isLast ? 'cursor-pointer' : ''}">${index === 0 ? '<i class="fa-solid fa-vault mr-1"></i> ' : ''}${step.name}</span>${settingsBtn}${separator}</div>`;
@@ -524,6 +542,7 @@
                 
                 let dirObj = null;
                 const isRootSettings = id === 'root';
+                const dirNameInput = document.getElementById('dirName');
 
                 if (isRootSettings) {
                     dirObj = { name: 'Meu Cofre (Raiz)', view: this.state.rootPrefs.view, new_item_position: this.state.rootPrefs.new_item_position };
@@ -541,7 +560,7 @@
                     document.getElementById('tab-btn-apar').classList.remove('hidden');
                 }
 
-                document.getElementById('dirName').value = dirObj ? dirObj.name : name;
+                dirNameInput.value = dirObj ? dirObj.name : name;
 
                 this.removeCover();
                 if (dirObj && dirObj.cover_url) {
@@ -558,7 +577,6 @@
                 const iconRadios = document.getElementsByName('dirIcon');
                 for(let i=0; i<iconRadios.length; i++) { iconRadios[i].checked = (iconRadios[i].value === iconToSelect); }
 
-                // Define as posições Início/Fim
                 const posToSelect = (dirObj && dirObj.new_item_position) ? dirObj.new_item_position : 'end';
                 const posRadios = document.getElementsByName('dirItemPosition');
                 for(let i=0; i<posRadios.length; i++) { posRadios[i].checked = (posRadios[i].value === posToSelect); }
@@ -573,11 +591,20 @@
                 const modal = document.getElementById('dirModal');
                 const content = document.getElementById('dirModalContent');
                 modal.classList.remove('hidden'); modal.classList.add('flex');
+                
+                // Animação e ajustes de focos e expansão do textarea
                 setTimeout(() => { 
                     modal.classList.remove('opacity-0'); 
                     content.classList.remove('scale-95'); 
-                    if(!id && !isRootSettings) document.getElementById('dirName').focus(); 
-                }, 10);
+                    
+                    // Ajustar altura inicial do textarea baseado no valor preenchido
+                    dirNameInput.style.height = 'auto';
+                    if (dirNameInput.scrollHeight > 0) {
+                        dirNameInput.style.height = dirNameInput.scrollHeight + 'px';
+                    }
+
+                    if(!id && !isRootSettings) dirNameInput.focus(); 
+                }, 20);
             },
 
             closeModal() {
@@ -588,7 +615,8 @@
             },
 
             async saveDirectory(e) {
-                e.preventDefault();
+                if (e && e.preventDefault) e.preventDefault();
+                
                 const id = document.getElementById('dirId').value;
                 const isRootSettings = id === 'root';
                 
@@ -610,7 +638,6 @@
 
                 let response;
 
-                // Se estamos editando a RAIZ, mandamos pra API de User
                 if (isRootSettings) {
                     this.state.rootPrefs.view = selectedView;
                     this.state.rootPrefs.new_item_position = selectedPos;
@@ -620,7 +647,6 @@
                         this.updateTopButtons();
                     }
                 } else {
-                    // Pasta normal
                     let selectedIcon = 'fa-folder';
                     const iconRadios = document.getElementsByName('dirIcon');
                     for(let i=0; i<iconRadios.length; i++) { if(iconRadios[i].checked) selectedIcon = iconRadios[i].value; }
@@ -628,7 +654,7 @@
                     const payload = {
                         id: id !== '' ? id : null,
                         parent_id: document.getElementById('dirParentId').value !== '' ? document.getElementById('dirParentId').value : this.getCurrentParentId(),
-                        name: document.getElementById('dirName').value,
+                        name: document.getElementById('dirName').value.trim(),
                         view: selectedView,
                         new_item_position: selectedPos,
                         cover_url: document.getElementById('dirCoverBase64').value,
@@ -675,14 +701,14 @@
                         res.data.forEach(d => this.state.directoryCache.set(Number(d.id), d));
 
                         container.innerHTML = res.data.map(sub => `
-                            <div data-id="${sub.id}" class="kanban-item bg-slate-700 hover:bg-slate-600 border border-slate-600 p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm mb-2 relative overflow-hidden" onclick="app.enterDirectory(${sub.id}, '${sub.name}', '${sub.view}')">
+                            <div data-id="${sub.id}" class="kanban-item bg-slate-700 hover:bg-slate-600 border border-slate-600 p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm mb-2 relative overflow-hidden" onclick="app.enterDirectory(${sub.id}, '${sub.name.replace(/'/g, "\\'")}', '${sub.view}')">
                                 ${sub.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10" style="background-image: url('${sub.cover_url}')"></div>` : ''}
                                 <div class="flex items-center gap-2 truncate pr-2 relative z-10">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
                                     <i class="fa-solid ${sub.icon} text-sm" style="${this.getTextGradientStyle(sub.color_from, sub.color_to)}"></i>
                                     <span class="text-sm text-slate-200 truncate font-medium">${sub.name}</span>
                                 </div>
-                                <button onclick="event.stopPropagation(); app.openModal(${sub.id}, '${sub.name}', ${dir.id}, '${sub.view}')" class="relative z-10 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 sm:opacity-0 group-hover:opacity-100 transition-all border border-slate-600 cog-btn"><i class="fa-solid fa-cog text-xs"></i></button>
+                                <button onclick="event.stopPropagation(); app.openModal(${sub.id}, '${sub.name.replace(/'/g, "\\'")}', ${dir.id}, '${sub.view}')" class="relative z-10 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 sm:opacity-0 group-hover:opacity-100 transition-all border border-slate-600 cog-btn"><i class="fa-solid fa-cog text-xs"></i></button>
                             </div>`).join('');
                     } else {
                         container.innerHTML = `<div class="kanban-empty text-center flex flex-col items-center justify-center text-slate-500 text-xs py-8 opacity-60 border-2 border-dashed border-slate-700 rounded-lg"><i class="fa-solid fa-box-open text-2xl mb-2"></i> Pasta vazia</div>`;
@@ -707,12 +733,12 @@
                     html = `<div id="sortable-wrapper" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">`;
                     this.state.directories.forEach(dir => {
                         html += `
-                        <div data-id="${dir.id}" class="dir-card draggable-item group bg-slate-800 border border-slate-700 rounded-xl flex flex-col items-center text-center cursor-pointer relative overflow-hidden min-h-[140px]" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
+                        <div data-id="${dir.id}" class="dir-card draggable-item group bg-slate-800 border border-slate-700 rounded-xl flex flex-col items-center text-center cursor-pointer relative overflow-hidden min-h-[140px]" onclick="app.enterDirectory(${dir.id}, '${dir.name.replace(/'/g, "\\'")}', '${dir.view}')">
                             ${dir.cover_url ? `<div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110" style="background-image: url('${dir.cover_url}')"></div><div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/80 to-slate-900/40"></div>` : ''}
                             
                             <div class="absolute top-2 left-2 text-green-500 hidden grip-handle bg-slate-900/80 backdrop-blur rounded p-1 z-20"><i class="fa-solid fa-grip-vertical"></i></div>
                             <div class="absolute top-2 right-2 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn z-20">
-                                <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-900/80 backdrop-blur hover:bg-slate-700 rounded p-1.5 shadow-lg"><i class="fa-solid fa-cog"></i></button>
+                                <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name.replace(/'/g, "\\'")}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-900/80 backdrop-blur hover:bg-slate-700 rounded p-1.5 shadow-lg"><i class="fa-solid fa-cog"></i></button>
                             </div>
                             
                             <div class="relative z-10 flex flex-col items-center justify-center w-full h-full p-4 pt-6">
@@ -728,7 +754,7 @@
                     html = `<div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto"><table class="w-full text-left text-sm min-w-[300px]"><thead class="bg-slate-900/50 text-slate-400"><tr><th class="px-4 py-3 font-medium w-10 text-center hidden grip-handle">#</th><th class="px-4 sm:px-6 py-3 font-medium w-12"></th><th class="px-4 py-3 font-medium">Nome</th><th class="px-4 sm:px-6 py-3 font-medium text-right">Ações</th></tr></thead><tbody id="sortable-wrapper" class="divide-y divide-slate-700/50">`;
                     this.state.directories.forEach(dir => {
                         html += `
-                        <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/50 transition-colors group cursor-pointer border-l-2 border-transparent relative overflow-hidden" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
+                        <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/50 transition-colors group cursor-pointer border-l-2 border-transparent relative overflow-hidden" onclick="app.enterDirectory(${dir.id}, '${dir.name.replace(/'/g, "\\'")}', '${dir.view}')">
                             <td class="px-2 py-3 text-center hidden grip-handle text-green-500 bg-slate-900/20"><i class="fa-solid fa-grip-vertical"></i></td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-center">
                                 ${dir.cover_url ? `<div class="w-8 h-8 rounded bg-cover bg-center border border-slate-600 inline-block shadow-sm" style="background-image: url('${dir.cover_url}')"></div>` : `<i class="fa-solid ${dir.icon} text-xl" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>`}
@@ -736,7 +762,7 @@
                             <td class="px-4 py-3 sm:py-4 font-medium text-slate-200">${dir.name}</td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-right">
                                 <div class="sm:opacity-0 group-hover:opacity-100 transition-opacity flex justify-end gap-2 cog-btn">
-                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-600 border border-slate-600 rounded p-2 text-xs sm:text-sm shadow"><i class="fa-solid fa-cog"></i> <span class="hidden sm:inline">Editar</span></button>
+                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name.replace(/'/g, "\\'")}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-600 border border-slate-600 rounded p-2 text-xs sm:text-sm shadow"><i class="fa-solid fa-cog"></i> <span class="hidden sm:inline">Editar</span></button>
                                 </div>
                             </td>
                         </tr>`;
@@ -749,7 +775,7 @@
                     this.state.directories.forEach(dir => {
                         html += `
                         <div data-id="${dir.id}" class="draggable-item snap-start bg-slate-800 border border-slate-700 rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg relative transition-colors overflow-hidden">
-                            <div class="p-4 border-b border-slate-700 flex justify-between items-center rounded-t-xl group cursor-pointer hover:bg-slate-700/50 transition-colors kanban-col-handle relative overflow-hidden min-h-[60px]" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
+                            <div class="p-4 border-b border-slate-700 flex justify-between items-center rounded-t-xl group cursor-pointer hover:bg-slate-700/50 transition-colors kanban-col-handle relative overflow-hidden min-h-[60px]" onclick="app.enterDirectory(${dir.id}, '${dir.name.replace(/'/g, "\\'")}', '${dir.view}')">
                                 ${dir.cover_url ? `<div class="absolute inset-0 bg-cover bg-center" style="background-image: url('${dir.cover_url}')"></div><div class="absolute inset-0 bg-slate-900/80 backdrop-blur-[2px]"></div>` : `<div class="absolute inset-0 bg-slate-900/50"></div>`}
                                 
                                 <div class="flex items-center gap-2 font-semibold text-slate-100 truncate w-full relative z-10 drop-shadow-md">
@@ -758,7 +784,7 @@
                                     <span class="truncate text-sm sm:text-base">${dir.name}</span>
                                 </div>
                                 <div class="flex gap-1 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn relative z-10">
-                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-300 hover:text-white bg-slate-800/80 backdrop-blur hover:bg-slate-600 rounded p-1.5 shadow"><i class="fa-solid fa-cog text-xs"></i></button>
+                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name.replace(/'/g, "\\'")}', null, '${dir.view}')" class="text-slate-300 hover:text-white bg-slate-800/80 backdrop-blur hover:bg-slate-600 rounded p-1.5 shadow"><i class="fa-solid fa-cog text-xs"></i></button>
                                 </div>
                             </div>
                             
