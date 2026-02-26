@@ -4,9 +4,8 @@
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
   Atualização: 
-    - Adicionado escapeHTML() para prevenir XSS e quebra de DOM.
-    - Funções inline (onclick) otimizadas para passar apenas o ID e buscar dados no cache de memória.
-    - BUGFIX: Reseta o visual dos botões de ação ("Excluindo..." / "Salvando...") dentro do closeModal().
+    - Desempenho extremo no Custom Scrollbar: Implementado requestAnimationFrame e translate3d para aceleração via GPU a 60 FPS.
+    - Resolvido o "engasgo": O scroll snap (snap-x) é temporariamente removido durante o arrastar (drag) para evitar conflitos com o motor de física do navegador.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -29,14 +28,18 @@
         }
     </script>
     <style>
+        /* Esconde a barra nativa para substituirmos pela nossa barra JS no desktop */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
         .dir-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
         .dir-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); }
+        
+        /* Scroll vertical interno das colunas do Kanban */
         .kanban-scroll::-webkit-scrollbar { width: 4px; }
         .kanban-scroll::-webkit-scrollbar-track { background: transparent; }
         .kanban-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-        
+
         .view-radio:checked + div { background-color: #3b82f6; border-color: #3b82f6; color: white; }
         .icon-radio:checked + div { background-color: #1e293b; border-color: #3b82f6; color: #3b82f6; }
 
@@ -70,10 +73,10 @@
         input[type="color"]::-webkit-color-swatch { border: none; border-radius: 0.5rem; }
     </style>
 </head>
-<body class="bg-gluon-dark text-slate-200 min-h-screen flex flex-col font-sans selection:bg-gluon-primary selection:text-white relative">
+<body class="bg-gluon-dark text-slate-200 h-screen overflow-hidden flex flex-col font-sans selection:bg-gluon-primary selection:text-white relative">
 
     <!-- Top Navigation -->
-    <nav class="bg-gluon-secondary border-b border-slate-700/50 sticky top-0 z-40 backdrop-blur-md bg-opacity-90">
+    <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 backdrop-blur-md bg-opacity-90">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg bg-slate-800 border border-slate-600 flex items-center justify-center shadow-lg">
@@ -135,8 +138,8 @@
         </div>
     </nav>
 
-    <!-- Main Workspace -->
-    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col h-[calc(100vh-64px)] overflow-hidden">
+    <!-- Main Workspace com padding inferior ZERO -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-0 flex flex-col overflow-hidden relative">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 shrink-0">
             <div class="block text-sm text-slate-300 font-medium w-full flex-1 leading-relaxed break-words" id="breadcrumbs"></div>
             
@@ -153,8 +156,15 @@
             <p>Sincronizando cofre...</p>
         </div>
 
-        <div id="viewContainer" class="flex-1 overflow-y-auto no-scrollbar pb-10 transition-all"></div>
+        <!-- Render Target -->
+        <div id="viewContainer" class="flex-1 transition-all min-h-0 relative"></div>
     </main>
+
+    <!-- BARRA DE ROLAGEM CUSTOMIZADA (DOM JS/HTML) -->
+    <div id="gluon-custom-scrollbar" class="hidden md:hidden fixed bottom-0 left-0 right-0 h-10 bg-[#0f172a] border-t border-slate-800 z-[60] flex items-center px-1">
+        <!-- O Arrasto (Thumb) com translate3d GPU Acelerado -->
+        <div id="gluon-scroll-thumb" class="h-6 bg-gluon-primary rounded-full cursor-grab active:cursor-grabbing active:bg-blue-400 hover:bg-blue-400 transition-colors will-change-transform shadow-lg"></div>
+    </div>
 
     <!-- Modal com Abas -->
     <div id="dirModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
@@ -293,6 +303,177 @@
             },
             
             sortableInstances: [],
+
+            // ====== SISTEMA DE SCROLL CUSTOMIZADO ULTRA FLUIDO ======
+            customScroll: {
+                active: false,
+                isDragging: false,
+                dragRAF: null,
+                syncRAF: null,
+                
+                init() {
+                    if(window.innerWidth < 768) return; // Apenas no Desktop
+                    this.track = document.getElementById('gluon-custom-scrollbar');
+                    this.thumb = document.getElementById('gluon-scroll-thumb');
+                    this.wrapper = document.getElementById('sortable-wrapper');
+                    
+                    if(!this.track || !this.thumb || !this.wrapper) return;
+
+                    this.active = true;
+                    this.track.classList.remove('hidden', 'md:hidden');
+                    this.track.classList.add('md:flex');
+                    this.wrapper.classList.add('no-scrollbar');
+
+                    this.update = this.update.bind(this);
+                    this.sync = this.sync.bind(this);
+                    this.startDrag = this.startDrag.bind(this);
+                    this.onDrag = this.onDrag.bind(this);
+                    this.stopDrag = this.stopDrag.bind(this);
+                    this.trackClick = this.trackClick.bind(this);
+
+                    this.wrapper.addEventListener('scroll', this.sync, { passive: true });
+                    window.addEventListener('resize', this.update, { passive: true });
+                    this.thumb.addEventListener('mousedown', this.startDrag);
+                    this.track.addEventListener('mousedown', this.trackClick);
+                    
+                    if(window.ResizeObserver) {
+                        this.resizeObserver = new ResizeObserver(this.update);
+                        this.resizeObserver.observe(this.wrapper);
+                    }
+
+                    setTimeout(this.update, 100);
+                },
+
+                destroy() {
+                    this.active = false;
+                    if(this.dragRAF) cancelAnimationFrame(this.dragRAF);
+                    if(this.syncRAF) cancelAnimationFrame(this.syncRAF);
+                    
+                    if(this.track) {
+                        this.track.classList.add('hidden', 'md:hidden');
+                        this.track.classList.remove('md:flex');
+                    }
+                    if(this.wrapper) {
+                        this.wrapper.removeEventListener('scroll', this.sync);
+                        this.wrapper.classList.remove('no-scrollbar');
+                    }
+                    if(this.resizeObserver && this.wrapper) this.resizeObserver.unobserve(this.wrapper);
+                    window.removeEventListener('resize', this.update);
+                    if(this.thumb) this.thumb.removeEventListener('mousedown', this.startDrag);
+                    if(this.track) this.track.removeEventListener('mousedown', this.trackClick);
+                },
+
+                update() {
+                    if(!this.active || !this.wrapper) return;
+                    const { scrollWidth, clientWidth } = this.wrapper;
+                    
+                    if (scrollWidth <= clientWidth + 2) {
+                        this.track.style.display = 'none';
+                        return;
+                    }
+                    this.track.style.display = '';
+                    
+                    const ratio = clientWidth / scrollWidth;
+                    const thumbW = Math.max(80, clientWidth * ratio); 
+                    this.thumb.style.width = `${thumbW}px`;
+                    
+                    this.sync();
+                },
+
+                // Sincroniza a barra baseada na rolagem nativa/trackpad
+                sync() {
+                    if(!this.active || this.isDragging || !this.wrapper) return;
+                    if(this.syncRAF) cancelAnimationFrame(this.syncRAF);
+                    
+                    this.syncRAF = requestAnimationFrame(() => {
+                        const { scrollWidth, clientWidth, scrollLeft } = this.wrapper;
+                        const trackW = this.track.clientWidth;
+                        const thumbW = parseFloat(this.thumb.style.width);
+                        
+                        const maxScroll = scrollWidth - clientWidth;
+                        if(maxScroll <= 0) return;
+
+                        const maxThumbLeft = trackW - thumbW;
+                        const scrollRatio = scrollLeft / maxScroll;
+                        
+                        // translate3d força GPU acceleration (MUITO mais fluido que left/margin)
+                        this.thumb.style.transform = `translate3d(${scrollRatio * maxThumbLeft}px, 0, 0)`;
+                    });
+                },
+
+                startDrag(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.isDragging = true;
+                    this.startX = e.pageX;
+                    this.startScroll = this.wrapper.scrollLeft;
+                    document.body.style.userSelect = 'none';
+                    
+                    // O SEGREDO: Remover o snap (encaixe) enquanto arrasta para não conflitar com o JS
+                    this.wrapper.classList.remove('snap-x');
+                    // E remover qualquer transição de scroll-behavior nativa
+                    this.wrapper.style.scrollBehavior = 'auto';
+                    
+                    document.addEventListener('mousemove', this.onDrag, { passive: false });
+                    document.addEventListener('mouseup', this.stopDrag);
+                },
+
+                // Calcula e aplica a rolagem ao arrastar o thumb
+                onDrag(e) {
+                    if(!this.isDragging) return;
+                    this.currentX = e.pageX; // Guarda a posição atual do rato
+                    
+                    if(this.dragRAF) return; // Se já estamos processando um frame, ignora (evita lag)
+                    
+                    this.dragRAF = requestAnimationFrame(() => {
+                        const dx = this.currentX - this.startX;
+                        const trackW = this.track.clientWidth;
+                        const thumbW = parseFloat(this.thumb.style.width);
+                        
+                        const maxThumbLeft = trackW - thumbW;
+                        const maxScroll = this.wrapper.scrollWidth - this.wrapper.clientWidth;
+                        
+                        const scrollDx = (dx / maxThumbLeft) * maxScroll;
+                        this.wrapper.scrollLeft = this.startScroll + scrollDx;
+                        
+                        // Atualização visual imediata do thumb com aceleração 3D
+                        const newLeft = Math.max(0, Math.min(maxThumbLeft, (this.wrapper.scrollLeft / maxScroll) * maxThumbLeft));
+                        this.thumb.style.transform = `translate3d(${newLeft}px, 0, 0)`;
+                        
+                        this.dragRAF = null; // Libera para o próximo frame
+                    });
+                },
+
+                stopDrag() {
+                    this.isDragging = false;
+                    document.body.style.userSelect = '';
+                    
+                    // Devolvemos o snap para as rolagens nativas normais ou cliques
+                    this.wrapper.classList.add('snap-x');
+                    this.wrapper.style.scrollBehavior = '';
+                    
+                    document.removeEventListener('mousemove', this.onDrag);
+                    document.removeEventListener('mouseup', this.stopDrag);
+                },
+
+                trackClick(e) {
+                    if(e.target === this.thumb) return;
+                    const trackRect = this.track.getBoundingClientRect();
+                    const clickX = e.clientX - trackRect.left;
+                    const thumbW = parseFloat(this.thumb.style.width);
+                    
+                    const trackW = this.track.clientWidth;
+                    const maxThumbLeft = trackW - thumbW;
+                    const maxScroll = this.wrapper.scrollWidth - this.wrapper.clientWidth;
+                    
+                    let newThumbLeft = clickX - (thumbW / 2);
+                    newThumbLeft = Math.max(0, Math.min(maxThumbLeft, newThumbLeft));
+                    
+                    const newScroll = (newThumbLeft / maxThumbLeft) * maxScroll;
+                    this.wrapper.scrollTo({ left: newScroll, behavior: 'smooth' });
+                }
+            },
+            // ===========================================
 
             // Helper de Segurança (Anti-XSS e Anti-quebra de HTML)
             escapeHTML(str) {
@@ -833,6 +1014,12 @@
                     }
                 });
                 await Promise.all(promises);
+                
+                // Quando o Kanban acaba de carregar, atualizamos o Scroll Customizado JS
+                if(this.getCurrentView() === 'kanban') {
+                    this.customScroll.update();
+                }
+                
                 if (this.state.reorderMode) this.initSortable();
             },
 
@@ -840,9 +1027,19 @@
                 const container = document.getElementById('viewContainer');
                 const view = this.getCurrentView();
                 
+                // Sempre garantimos que a custom scroll é destruída se sairmos do Kanban
+                if(view !== 'kanban') this.customScroll.destroy();
+
                 if (this.state.directories.length === 0) {
                     container.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-500 mt-20 px-4 text-center"><i class="fa-regular fa-folder-open text-5xl sm:text-6xl mb-4 opacity-50"></i><h2 class="text-lg sm:text-xl font-medium text-slate-400">Esta pasta está vazia</h2><p class="text-sm mt-2">Clique em "Novo Diretório" para começar.</p></div>`;
                     return;
+                }
+
+                // Ajuste no Kanban: container totalmente flexível para preencher a tela inteira.
+                if (view === 'kanban') {
+                    container.className = "flex-1 flex flex-col overflow-hidden transition-all min-h-0 w-full";
+                } else {
+                    container.className = "flex-1 overflow-y-auto no-scrollbar pb-10 transition-all min-h-0";
                 }
 
                 let html = '';
@@ -889,7 +1086,8 @@
                 }
 
                 else if (view === 'kanban') {
-                    html = `<div id="sortable-wrapper" class="flex gap-4 sm:gap-6 overflow-x-auto pb-4 no-scrollbar h-full items-start snap-x">`;
+                    // pb-12 adicionado ao wrapper: isso cria 48px de margem interna no final, garantindo que os cards NUNCA fiquem escondidos pela nossa nova barra gigante de 40px no rodapé.
+                    html = `<div id="sortable-wrapper" class="flex-1 flex gap-4 sm:gap-6 overflow-x-auto items-start snap-x w-full pb-12 relative">`;
                     this.state.directories.forEach(dir => {
                         html += `
                         <div data-id="${dir.id}" class="draggable-item snap-start bg-slate-800 border border-slate-700 rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg relative transition-colors overflow-hidden">
@@ -918,7 +1116,12 @@
                         </div>`;
                     });
                     html += `</div>`;
-                    setTimeout(() => this.loadKanbanContents(), 0);
+                    
+                    // Inicia o nosso Scrollbar JS após inserir no DOM
+                    setTimeout(() => {
+                        this.customScroll.init();
+                        this.loadKanbanContents();
+                    }, 0);
                 }
 
                 container.innerHTML = html;
