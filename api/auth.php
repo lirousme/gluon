@@ -4,7 +4,7 @@
 
 /**
  * API DE AUTENTICAÇÃO
- * Gerencia Login, Registro e "Manter Logado".
+ * Gerencia Login, Registro, Logout Seguro e "Manter Logado".
  */
 
 require_once BASE_PATH . '/config/database.php';
@@ -26,22 +26,18 @@ if ($action === 'register') {
     $email = trim($input['email'] ?? '');
     $password = $input['password'] ?? '';
 
-    // Validação básica
     if (empty($username) || empty($email) || empty($password)) {
         die(json_encode(['status' => 'error', 'message' => 'Preencha todos os campos.']));
     }
 
-    // Verifica se usuário ou email já existe
     $stmt = $pdo->prepare("SELECT id FROM users WHERE username = ? OR email = ?");
     $stmt->execute([$username, $email]);
     if ($stmt->fetch()) {
         die(json_encode(['status' => 'error', 'message' => 'Usuário ou E-mail já cadastrado.']));
     }
 
-    // Hash da senha seguro (Argon2id)
     $password_hash = password_hash($password, PASSWORD_ARGON2ID);
 
-    // Insere no banco
     $stmt = $pdo->prepare("INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)");
     if ($stmt->execute([$username, $email, $password_hash])) {
         echo json_encode(['status' => 'success', 'message' => 'Conta criada com sucesso! Você já pode fazer login.']);
@@ -51,7 +47,7 @@ if ($action === 'register') {
 } 
 
 elseif ($action === 'login') {
-    $login_id = trim($input['login_id'] ?? ''); // Pode ser email ou username
+    $login_id = trim($input['login_id'] ?? '');
     $password = $input['password'] ?? '';
     $remember = $input['remember'] ?? false;
 
@@ -59,28 +55,21 @@ elseif ($action === 'login') {
         die(json_encode(['status' => 'error', 'message' => 'Preencha todos os campos.']));
     }
 
-    // Busca ultra-rápida por email ou username
     $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ? OR username = ? LIMIT 1");
     $stmt->execute([$login_id, $login_id]);
     $user = $stmt->fetch();
 
     if ($user && password_verify($password, $user['password_hash'])) {
-        // Sucesso no login
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['username'] = $user['username'];
 
-        // Lógica de "Manter logado"
         if ($remember) {
-            // Gera um token criptograficamente seguro
             $token = bin2hex(random_bytes(32)); 
-            // Salva o hash do token no banco de dados
             $token_hash = hash('sha256', $token);
             
             $stmt = $pdo->prepare("UPDATE users SET remember_token = ? WHERE id = ?");
             $stmt->execute([$token_hash, $user['id']]);
 
-            // Define o cookie no navegador do usuário (Válido por 30 dias)
-            // HttpOnly = true impede que Javascript malicioso roube o cookie
             setcookie('gluon_remember', $token, time() + (86400 * 30), "/", "", false, true);
         }
 
@@ -90,8 +79,24 @@ elseif ($action === 'login') {
     }
 }
 
+elseif ($action === 'logout') {
+    // Apaga o token de remember me do banco de dados (Segurança de sessão persistente)
+    if (isset($_SESSION['user_id'])) {
+        $stmt = $pdo->prepare("UPDATE users SET remember_token = NULL WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+    }
+    
+    // Mata a sessão
+    session_unset();
+    session_destroy();
+    
+    // Deleta o cookie do navegador definindo data de expiração no passado
+    setcookie('gluon_remember', '', time() - 3600, "/", "", false, true);
+    
+    echo json_encode(['status' => 'success', 'message' => 'Deslogado com sucesso.']);
+}
+
 elseif ($action === 'check_remember') {
-    // Lógica executada automaticamente caso a sessão expire mas o cookie exista
     if (!isset($_SESSION['user_id']) && isset($_COOKIE['gluon_remember'])) {
         $token = $_COOKIE['gluon_remember'];
         $token_hash = hash('sha256', $token);
