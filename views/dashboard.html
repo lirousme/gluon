@@ -3,7 +3,7 @@
   Diretório: public_html/gluon/views/dashboard.html
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
-  Atualizado com suporte completo a Pastas e Arquivos de Código.
+  Suporte completo a Pastas, Arquivos de Código e Agendas (Schedule).
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -172,7 +172,7 @@
                 <h3 class="text-xl font-semibold text-white flex items-center gap-2" id="modalTitle">
                     <i class="fa-solid fa-folder-plus text-gluon-primary"></i> <span>Configuração</span>
                 </h3>
-                <button onclick="app.closeModal()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+                <button type="button" onclick="app.closeModal()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
             </div>
 
             <div class="flex border-b border-slate-700 bg-slate-900/30">
@@ -186,34 +186,40 @@
 
                 <div id="tab-geral" class="p-6 overflow-y-auto flex-1">
                     
-                    <!-- SELETOR DE TIPO (Apenas visível na Criação) -->
+                    <!-- SELETOR DE TIPO (Atualizado com Agenda) -->
                     <div id="typeSelectorContainer" class="mb-5">
                         <label class="block text-sm font-medium text-slate-300 mb-2">Tipo de Item</label>
-                        <div class="grid grid-cols-2 gap-3">
-                            <label class="cursor-pointer" onclick="app.autoChangeIcon('fa-folder')">
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="cursor-pointer" onclick="app.handleTypeChange(0)">
                                 <input type="radio" name="itemType" value="0" class="peer hidden type-radio" checked>
-                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-3 text-center transition-all hover:bg-slate-700">
-                                    <i class="fa-solid fa-folder block text-xl mb-1"></i><span class="text-xs font-medium">Pasta</span>
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-folder block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Pasta</span>
                                 </div>
                             </label>
-                            <label class="cursor-pointer" onclick="app.autoChangeIcon('fa-file-code')">
+                            <label class="cursor-pointer" onclick="app.handleTypeChange(1)">
                                 <input type="radio" name="itemType" value="1" class="peer hidden type-radio">
-                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-3 text-center transition-all hover:bg-slate-700">
-                                    <i class="fa-solid fa-file-code block text-xl mb-1"></i><span class="text-xs font-medium">Arquivo de Código</span>
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-file-code block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Cód. Fonte</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer" onclick="app.handleTypeChange(2)">
+                                <input type="radio" name="itemType" value="2" class="peer hidden type-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-calendar-days block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Agenda</span>
                                 </div>
                             </label>
                         </div>
                     </div>
 
                     <div id="dirNameContainer" class="mb-5">
-                        <label class="block text-sm font-medium text-slate-300 mb-1" id="nameLabel">Nome</label>
+                        <label class="block text-sm font-medium text-slate-300 mb-1" id="nameLabel">Nome da Pasta</label>
                         <div class="relative">
                             <i class="fa-solid fa-pen absolute left-3 top-3.5 text-slate-500 text-sm"></i>
                             <textarea id="dirName" rows="1" autocomplete="off" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 pl-9 pr-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-all resize-none overflow-hidden min-h-[44px]"></textarea>
                         </div>
                     </div>
 
-                    <!-- GRUPO DE CONFIGURAÇÕES DE PASTA (Escondido se for arquivo) -->
+                    <!-- GRUPO DE CONFIGURAÇÕES DE PASTA (Escondido se for arquivo ou agenda) -->
                     <div id="folderSettingsGroup">
                         <div class="mb-5">
                             <label class="block text-sm font-medium text-slate-300 mb-2">Padrão de Visualização Interna</label>
@@ -310,8 +316,8 @@
                 isLoading: false,
                 reorderMode: false,
                 availableIcons: [
-                    'fa-folder', 'fa-folder-open', 'fa-file-code', 'fa-file-lines', 'fa-file-image', 'fa-file-pdf', 'fa-star', 'fa-heart', 'fa-image', 'fa-music', 'fa-video', 
-                    'fa-code', 'fa-terminal', 'fa-database', 'fa-server', 'fa-lock', 'fa-vault', 'fa-book', 'fa-briefcase', 'fa-globe'
+                    'fa-folder', 'fa-folder-open', 'fa-file-code', 'fa-calendar-days', 'fa-clock', 'fa-file-lines', 'fa-file-image', 'fa-file-pdf', 'fa-star', 'fa-heart', 'fa-image', 'fa-music', 'fa-video', 
+                    'fa-code', 'fa-terminal', 'fa-database', 'fa-server', 'fa-lock', 'fa-vault', 'fa-book', 'fa-briefcase', 'fa-globe', 'fa-list-check'
                 ]
             },
             
@@ -490,15 +496,6 @@
                 this.updateTopButtons();
                 await this.fetchDirectories();
                 this.setupEventListeners();
-
-                // Lógica Dinâmica do Tipo de Item (Pasta vs Arquivo)
-                document.querySelectorAll('input[name="itemType"]').forEach(radio => {
-                    radio.addEventListener('change', (e) => {
-                        const isFile = e.target.value === '1';
-                        document.getElementById('folderSettingsGroup').style.display = isFile ? 'none' : 'block';
-                        document.getElementById('nameLabel').innerText = isFile ? 'Nome do Arquivo (Ex: script.js)' : 'Nome da Pasta';
-                    });
-                });
             },
 
             setupEventListeners() {
@@ -526,6 +523,25 @@
                             app.saveDirectory(e); 
                         }
                     });
+                }
+            },
+
+            handleTypeChange(typeValue) {
+                const folderSettings = document.getElementById('folderSettingsGroup');
+                const nameLabel = document.getElementById('nameLabel');
+                
+                if (typeValue === 0) {
+                    folderSettings.style.display = 'block';
+                    nameLabel.innerText = 'Nome da Pasta';
+                    this.autoChangeIcon('fa-folder');
+                } else if (typeValue === 1) {
+                    folderSettings.style.display = 'none';
+                    nameLabel.innerText = 'Nome do Arquivo (Ex: script.js)';
+                    this.autoChangeIcon('fa-file-code');
+                } else if (typeValue === 2) {
+                    folderSettings.style.display = 'none';
+                    nameLabel.innerText = 'Nome da Agenda / Cronograma';
+                    this.autoChangeIcon('fa-calendar-days');
                 }
             },
 
@@ -668,10 +684,10 @@
                 if(!item) return;
 
                 if (item.type === 1) {
-                    // É um Arquivo de Código. Abre a View do Editor via Front Controller.
                     window.location.href = `/editor?id=${id}`;
+                } else if (item.type === 2) {
+                    window.location.href = `/schedule?id=${id}`;
                 } else {
-                    // É uma Pasta. Abre no Workspace
                     this.state.path.push({ id: item.id, name: item.name, view: item.view });
                     if (this.state.reorderMode) this.toggleReorderMode();
                     await this.fetchDirectories();
@@ -826,6 +842,7 @@
                 const dirNameInput = document.getElementById('dirName');
                 const typeSelector = document.getElementById('typeSelectorContainer');
                 const folderSettings = document.getElementById('folderSettingsGroup');
+                const nameLabel = document.getElementById('nameLabel');
 
                 if (isRootSettings) {
                     dirObj = { name: 'Meu Cofre (Raiz)', view: this.state.rootPrefs.view, new_item_position: this.state.rootPrefs.new_item_position, type: 0 };
@@ -835,24 +852,35 @@
                     typeSelector.classList.add('hidden');
                 } else if (id) {
                     dirObj = this.state.directoryCache.get(Number(id));
-                    document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-gear text-gluon-primary"></i> <span>Configurar ${dirObj.type === 1 ? 'Arquivo' : 'Pasta'}</span>`;
+                    
+                    let titleText = 'Pasta';
+                    if(dirObj.type === 1) titleText = 'Arquivo';
+                    if(dirObj.type === 2) titleText = 'Agenda';
+
+                    document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-gear text-gluon-primary"></i> <span>Configurar ${titleText}</span>`;
                     document.getElementById('dirNameContainer').classList.remove('hidden');
                     document.getElementById('tab-btn-apar').classList.remove('hidden');
-                    typeSelector.classList.add('hidden'); // Oculta a troca de tipo se já existe
-                    folderSettings.style.display = dirObj.type === 1 ? 'none' : 'block';
-                    document.getElementById('nameLabel').innerText = dirObj.type === 1 ? 'Nome do Arquivo' : 'Nome da Pasta';
+                    typeSelector.classList.add('hidden');
+                    
+                    if(dirObj.type === 0) {
+                        folderSettings.style.display = 'block';
+                        nameLabel.innerText = 'Nome da Pasta';
+                    } else if(dirObj.type === 1) {
+                        folderSettings.style.display = 'none';
+                        nameLabel.innerText = 'Nome do Arquivo';
+                    } else if(dirObj.type === 2) {
+                        folderSettings.style.display = 'none';
+                        nameLabel.innerText = 'Nome da Agenda';
+                    }
                 } else {
                     document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus text-gluon-primary"></i> <span>Novo Item</span>';
                     document.getElementById('dirNameContainer').classList.remove('hidden');
                     document.getElementById('tab-btn-apar').classList.remove('hidden');
                     typeSelector.classList.remove('hidden');
                     
-                    // Resetar o modal para "Pasta" no estado inicial da criação
                     const typeRadios = document.getElementsByName('itemType');
                     typeRadios[0].checked = true;
-                    folderSettings.style.display = 'block';
-                    document.getElementById('nameLabel').innerText = 'Nome da Pasta';
-                    this.autoChangeIcon('fa-folder');
+                    this.handleTypeChange(0);
                 }
 
                 dirNameInput.value = dirObj ? dirObj.name : name;
@@ -868,7 +896,7 @@
                 document.getElementById('dirColorFrom').value = (dirObj && dirObj.color_from) ? dirObj.color_from : '#3b82f6';
                 document.getElementById('dirColorTo').value = (dirObj && dirObj.color_to) ? dirObj.color_to : '#6366f1';
                 
-                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (isRootSettings ? 'fa-folder' : (dirObj?.type === 1 ? 'fa-file-code' : 'fa-folder')); 
+                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (isRootSettings ? 'fa-folder' : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : 'fa-folder'))); 
                 this.autoChangeIcon(iconToSelect);
 
                 const posToSelect = (dirObj && dirObj.new_item_position) ? dirObj.new_item_position : 'end';
@@ -944,7 +972,7 @@
                 const posRadios = document.getElementsByName('dirItemPosition');
                 for(let i=0; i<posRadios.length; i++) { if(posRadios[i].checked) selectedPos = posRadios[i].value; }
 
-                let selectedType = 0; // Padrão: Pasta
+                let selectedType = 0;
                 const typeRadios = document.getElementsByName('itemType');
                 for(let i=0; i<typeRadios.length; i++) { if(typeRadios[i].checked) selectedType = parseInt(typeRadios[i].value); }
 
@@ -1030,8 +1058,6 @@
                     const container = document.getElementById(`kanban-col-${dir.id}`);
                     if (!container) return;
                     
-                    // Se for um Arquivo de Código (type 1), não busca sub-diretórios, pois arquivos não têm filhos.
-                    // Apresenta apenas uma arte bloqueando a coluna elegantemente.
                     if (dir.type === 1) {
                          container.innerHTML = `
                             <div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60">
@@ -1039,17 +1065,29 @@
                                 <span class="text-sm font-medium">Arquivo de Código</span>
                                 <span class="text-xs mt-1 text-center px-4">Clique no topo da coluna para abrir o editor</span>
                             </div>`;
-                         return; // Sai da função assíncrona para este arquivo
+                         return; 
+                    } else if (dir.type === 2) {
+                         container.innerHTML = `
+                            <div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60">
+                                <i class="fa-solid fa-calendar-days text-4xl mb-3" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>
+                                <span class="text-sm font-medium">Agenda</span>
+                                <span class="text-xs mt-1 text-center px-4">Clique no topo da coluna para abrir o calendário</span>
+                            </div>`;
+                         return; 
                     }
 
-                    // Se for Pasta (type 0), carrega filhos normalmente
                     const res = await this.api('directories', 'fetch', { parent_id: dir.id });
                     
                     if (res && res.data && res.data.length > 0) {
                         res.data.forEach(d => this.state.directoryCache.set(Number(d.id), d));
 
-                        container.innerHTML = res.data.map(sub => `
-                            <div data-id="${sub.id}" class="kanban-item bg-slate-700 hover:bg-slate-600 border ${sub.type === 1 ? 'border-indigo-500/50' : 'border-slate-600'} p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm mb-2 relative overflow-hidden" onclick="app.enterDirectoryOrFile(${sub.id})">
+                        container.innerHTML = res.data.map(sub => {
+                            let itemBorder = 'border-slate-600';
+                            if(sub.type === 1) itemBorder = 'border-indigo-500/50';
+                            if(sub.type === 2) itemBorder = 'border-emerald-500/50';
+
+                            return `
+                            <div data-id="${sub.id}" class="kanban-item bg-slate-700 hover:bg-slate-600 border ${itemBorder} p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm mb-2 relative overflow-hidden" onclick="app.enterDirectoryOrFile(${sub.id})">
                                 ${sub.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10" style="background-image: url('${sub.cover_url}')"></div>` : ''}
                                 <div class="flex items-center gap-2 truncate pr-2 relative z-10">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
@@ -1057,7 +1095,8 @@
                                     <span class="text-sm text-slate-200 truncate font-medium">${this.escapeHTML(sub.name)}</span>
                                 </div>
                                 <button onclick="event.stopPropagation(); app.openModal(${sub.id})" class="relative z-10 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 sm:opacity-0 group-hover:opacity-100 transition-all border border-slate-600 cog-btn"><i class="fa-solid fa-cog text-xs"></i></button>
-                            </div>`).join('');
+                            </div>`;
+                        }).join('');
                     } else {
                         container.innerHTML = `<div class="kanban-empty text-center flex flex-col items-center justify-center text-slate-500 text-xs py-8 opacity-60 border-2 border-dashed border-slate-700 rounded-lg"><i class="fa-solid fa-box-open text-2xl mb-2"></i> Pasta vazia</div>`;
                     }
@@ -1093,9 +1132,12 @@
                 if (view === 'grid') {
                     html = `<div id="sortable-wrapper" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">`;
                     this.state.directories.forEach(dir => {
-                        // Arquivos de código (type 1) ganham uma borda indigo mais estilizada no Grid
+                        let borderClass = 'border-slate-700';
+                        if(dir.type === 1) borderClass = 'border-indigo-600/50';
+                        if(dir.type === 2) borderClass = 'border-emerald-600/50';
+
                         html += `
-                        <div data-id="${dir.id}" class="dir-card draggable-item group bg-slate-800 border ${dir.type === 1 ? 'border-indigo-600/50' : 'border-slate-700'} rounded-xl flex flex-col items-center text-center cursor-pointer relative overflow-hidden min-h-[140px]" onclick="app.enterDirectoryOrFile(${dir.id})">
+                        <div data-id="${dir.id}" class="dir-card draggable-item group bg-slate-800 border ${borderClass} rounded-xl flex flex-col items-center text-center cursor-pointer relative overflow-hidden min-h-[140px]" onclick="app.enterDirectoryOrFile(${dir.id})">
                             ${dir.cover_url ? `<div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110" style="background-image: url('${dir.cover_url}')"></div><div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/80 to-slate-900/40"></div>` : ''}
                             
                             <div class="absolute top-2 left-2 text-green-500 hidden grip-handle bg-slate-900/80 backdrop-blur rounded p-1 z-20"><i class="fa-solid fa-grip-vertical"></i></div>
@@ -1115,8 +1157,12 @@
                 else if (view === 'list') {
                     html = `<div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto"><table class="w-full text-left text-sm min-w-[300px]"><thead class="bg-slate-900/50 text-slate-400"><tr><th class="px-4 py-3 font-medium w-10 text-center hidden grip-handle">#</th><th class="px-4 sm:px-6 py-3 font-medium w-12"></th><th class="px-4 py-3 font-medium">Nome</th><th class="px-4 sm:px-6 py-3 font-medium text-right">Ações</th></tr></thead><tbody id="sortable-wrapper" class="divide-y divide-slate-700/50">`;
                     this.state.directories.forEach(dir => {
+                        let borderClass = 'border-l-transparent';
+                        if(dir.type === 1) borderClass = 'border-l-indigo-500';
+                        if(dir.type === 2) borderClass = 'border-l-emerald-500';
+
                         html += `
-                        <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/50 transition-colors group cursor-pointer border-l-2 ${dir.type === 1 ? 'border-l-indigo-500' : 'border-l-transparent'} relative overflow-hidden" onclick="app.enterDirectoryOrFile(${dir.id})">
+                        <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/50 transition-colors group cursor-pointer border-l-2 ${borderClass} relative overflow-hidden" onclick="app.enterDirectoryOrFile(${dir.id})">
                             <td class="px-2 py-3 text-center hidden grip-handle text-green-500 bg-slate-900/20"><i class="fa-solid fa-grip-vertical"></i></td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-center">
                                 ${dir.cover_url ? `<div class="w-8 h-8 rounded bg-cover bg-center border border-slate-600 inline-block shadow-sm" style="background-image: url('${dir.cover_url}')"></div>` : `<i class="fa-solid ${dir.icon} text-xl" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>`}
@@ -1135,8 +1181,12 @@
                 else if (view === 'kanban') {
                     html = `<div id="sortable-wrapper" class="flex-1 flex gap-4 sm:gap-6 overflow-x-auto items-start snap-x w-full pb-12 relative">`;
                     this.state.directories.forEach(dir => {
+                        let headerBorder = 'border-slate-700';
+                        if(dir.type === 1) headerBorder = 'border-indigo-700';
+                        if(dir.type === 2) headerBorder = 'border-emerald-700';
+
                         html += `
-                        <div data-id="${dir.id}" class="draggable-item snap-start bg-slate-800 border ${dir.type === 1 ? 'border-indigo-700' : 'border-slate-700'} rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg relative transition-colors overflow-hidden">
+                        <div data-id="${dir.id}" class="draggable-item snap-start bg-slate-800 border ${headerBorder} rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg relative transition-colors overflow-hidden">
                             <div class="p-4 border-b border-slate-700 flex justify-between items-center rounded-t-xl group cursor-pointer hover:bg-slate-700/50 transition-colors kanban-col-handle relative overflow-hidden min-h-[60px]" onclick="app.enterDirectoryOrFile(${dir.id})">
                                 ${dir.cover_url ? `<div class="absolute inset-0 bg-cover bg-center" style="background-image: url('${dir.cover_url}')"></div><div class="absolute inset-0 bg-slate-900/80 backdrop-blur-[2px]"></div>` : `<div class="absolute inset-0 bg-slate-900/50"></div>`}
                                 
