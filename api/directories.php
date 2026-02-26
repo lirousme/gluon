@@ -5,7 +5,7 @@
 /**
  * API DE DIRETÓRIOS E ARQUIVOS
  * Pilar: Seguro, Rápido e Escalável.
- * Atualizado para suportar a clonagem de árvores inteiras de diretórios (Copiar/Colar).
+ * Atualizado para suportar a clonagem de árvores (Copiar/Colar) e Transferência (Mover).
  */
 
 require_once BASE_PATH . '/config/database.php';
@@ -260,23 +260,22 @@ elseif ($action === 'delete') {
 }
 
 elseif ($action === 'paste') {
-    // Endereço de destino atual onde o usuário quer colar os arquivos
+    // Endereço de destino atual onde o usuário quer colar os arquivos (Cópia)
     $target_parent_id = isset($input['target_parent_id']) && $input['target_parent_id'] !== null ? (int)$input['target_parent_id'] : null;
 
-    // Obtém o ID do diretório que o usuário copiou na área de transferência (banco de dados)
     $stmtUser = $pdo->prepare("SELECT copied_directory_id FROM users WHERE id = ?");
     $stmtUser->execute([$user_id]);
     $copied_id = $stmtUser->fetchColumn();
 
     if (!$copied_id) {
-        die(json_encode(['status' => 'error', 'message' => 'Nenhum diretório copiado para colar.']));
+        die(json_encode(['status' => 'error', 'message' => 'Nenhum diretório na área de transferência.']));
     }
 
-    // PILAR: Segurança -> Verificação contra recursão infinita (não pode colar uma pasta dentro dela mesma)
+    // Pilares de Segurança: Evitar recursão
     $currTarget = $target_parent_id;
     while ($currTarget !== null) {
         if ($currTarget == $copied_id) {
-            die(json_encode(['status' => 'error', 'message' => 'Erro: Não é possível colar um diretório dentro dele mesmo ou de seus subdiretórios.']));
+            die(json_encode(['status' => 'error', 'message' => 'Erro: Não é possível colar um diretório dentro dele mesmo.']));
         }
         $stmtCheck = $pdo->prepare("SELECT parent_id FROM directories WHERE id = ? AND user_id = ?");
         $stmtCheck->execute([$currTarget, $user_id]);
@@ -287,18 +286,67 @@ elseif ($action === 'paste') {
     try {
         $pdo->beginTransaction();
 
-        // Aciona o Helper declarado no topo do arquivo para copiar recursivamente
         if (duplicateDirectoryTree($copied_id, $target_parent_id, $user_id, $pdo, true)) {
             $pdo->commit();
             echo json_encode(['status' => 'success', 'message' => 'Diretório colado com sucesso!']);
         } else {
             $pdo->rollBack();
-            echo json_encode(['status' => 'error', 'message' => 'Erro ao colar: Diretório de origem não encontrado.']);
+            echo json_encode(['status' => 'error', 'message' => 'Erro ao colar: Diretório original não encontrado.']);
         }
 
     } catch (Exception $e) {
         $pdo->rollBack();
         echo json_encode(['status' => 'error', 'message' => 'Erro interno na base de dados ao colar o diretório.']);
+    }
+}
+
+elseif ($action === 'move') {
+    // Endereço de destino atual onde o usuário quer Mover os arquivos
+    $target_parent_id = isset($input['target_parent_id']) && $input['target_parent_id'] !== null ? (int)$input['target_parent_id'] : null;
+
+    $stmtUser = $pdo->prepare("SELECT copied_directory_id FROM users WHERE id = ?");
+    $stmtUser->execute([$user_id]);
+    $copied_id = $stmtUser->fetchColumn();
+
+    if (!$copied_id) {
+        die(json_encode(['status' => 'error', 'message' => 'Nenhum diretório selecionado para mover.']));
+    }
+
+    // Pilares de Segurança: Evitar mover uma pasta para dentro de si mesma (Paradoxo de recursão)
+    $currTarget = $target_parent_id;
+    while ($currTarget !== null) {
+        if ($currTarget == $copied_id) {
+            die(json_encode(['status' => 'error', 'message' => 'Erro: Não é possível mover um diretório para dentro dele mesmo ou de seus subdiretórios.']));
+        }
+        $stmtCheck = $pdo->prepare("SELECT parent_id FROM directories WHERE id = ? AND user_id = ?");
+        $stmtCheck->execute([$currTarget, $user_id]);
+        $parent = $stmtCheck->fetchColumn();
+        $currTarget = $parent ? $parent : null;
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        // 1. Determina a posição final (sort_order) no novo destino para que vá para o final da fila
+        $stmtMax = $pdo->prepare("SELECT MAX(sort_order) FROM directories WHERE user_id = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))");
+        $stmtMax->execute([$user_id, $target_parent_id, $target_parent_id]);
+        $maxOrder = $stmtMax->fetchColumn();
+        $newOrder = ($maxOrder !== null) ? (int)$maxOrder + 1 : 0;
+
+        // 2. Atualiza o parent_id (Isso move toda a árvore instantaneamente devido ao modelo relacional)
+        $stmtMove = $pdo->prepare("UPDATE directories SET parent_id = ?, sort_order = ? WHERE id = ? AND user_id = ?");
+        $stmtMove->execute([$target_parent_id, $newOrder, $copied_id, $user_id]);
+
+        // 3. Limpa a área de transferência do usuário (Opcional, mas boa prática ao "Mover")
+        $stmtClear = $pdo->prepare("UPDATE users SET copied_directory_id = NULL WHERE id = ?");
+        $stmtClear->execute([$user_id]);
+
+        $pdo->commit();
+        echo json_encode(['status' => 'success', 'message' => 'Diretório movido com sucesso!']);
+
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        echo json_encode(['status' => 'error', 'message' => 'Erro interno na base de dados ao mover o diretório.']);
     }
 }
 
