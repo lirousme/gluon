@@ -3,8 +3,8 @@
   Diretório: public_html/gluon/views/dashboard.html
   
   Pilar: Fácil Manutenção, Bonito e Rápido.
-  Adicionado sistema de Cache (directoryCache) para que o Modal recupere as configurações
-  estéticas e de imagem instantaneamente, mesmo para subitens carregados assincronamente no Kanban.
+  Adicionado controle independente de posição de criação (Início/Fim) 
+  e atalho de Configurações no Breadcrumb.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -38,7 +38,6 @@
         .view-radio:checked + div { background-color: #3b82f6; border-color: #3b82f6; color: white; }
         .icon-radio:checked + div { background-color: #1e293b; border-color: #3b82f6; color: #3b82f6; }
 
-        /* Estilos Reordenação */
         .reorder-active .draggable-item { border-color: #22c55e !important; box-shadow: 0 4px 6px -1px rgba(34, 197, 94, 0.1); }
         .reorder-active .draggable-item, .reorder-active .kanban-col-handle, .reorder-active .kanban-item { cursor: grab !important; }
         .reorder-active .draggable-item:active, .reorder-active .kanban-col-handle:active, .reorder-active .kanban-item:active { cursor: grabbing !important; }
@@ -51,14 +50,12 @@
         .sortable-ghost { opacity: 0.3; background-color: #1e293b !important; border: 2px dashed #22c55e !important; }
         .sortable-drag { opacity: 1 !important; cursor: grabbing !important; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important; }
 
-        /* Magia para Texto Gradient com Ícones */
         .icon-gradient {
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             display: inline-block;
         }
 
-        /* Input de Cor Customizado */
         input[type="color"] {
             -webkit-appearance: none;
             border: none;
@@ -159,15 +156,15 @@
 
                 <!-- ABA GERAL -->
                 <div id="tab-geral" class="p-6 overflow-y-auto flex-1">
-                    <div class="mb-5">
+                    <div id="dirNameContainer" class="mb-5">
                         <label class="block text-sm font-medium text-slate-300 mb-1">Nome da Pasta</label>
                         <div class="relative">
                             <i class="fa-solid fa-pen absolute left-3 top-3.5 text-slate-500 text-sm"></i>
-                            <input type="text" id="dirName" required autocomplete="off" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 pl-9 pr-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-all">
+                            <input type="text" id="dirName" autocomplete="off" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 pl-9 pr-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-all">
                         </div>
                     </div>
 
-                    <div>
+                    <div class="mb-5">
                         <label class="block text-sm font-medium text-slate-300 mb-2">Padrão de Visualização Interna</label>
                         <div class="grid grid-cols-3 gap-2 sm:gap-3">
                             <label class="cursor-pointer">
@@ -184,6 +181,24 @@
                             </label>
                         </div>
                     </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Adicionar novos itens no:</label>
+                        <div class="grid grid-cols-2 gap-2 sm:gap-3">
+                            <label class="cursor-pointer">
+                                <input type="radio" name="dirItemPosition" value="start" class="peer hidden view-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-arrow-up block text-xl mb-1"></i><span class="text-xs font-medium">Início da Lista</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="dirItemPosition" value="end" class="peer hidden view-radio" checked>
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-arrow-down block text-xl mb-1"></i><span class="text-xs font-medium">Final da Lista</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ABA APARÊNCIA -->
@@ -196,7 +211,6 @@
                         <input type="hidden" id="dirCoverBase64">
                         <div id="coverPreview" class="mt-3 hidden w-full h-24 rounded-lg bg-cover bg-center border border-slate-600 shadow-inner"></div>
                         <button type="button" id="btnRemoveCover" class="hidden mt-2 text-xs text-red-400 hover:text-red-300 flex items-center gap-1"><i class="fa-solid fa-trash"></i> Remover capa</button>
-                        <p class="text-xs text-slate-500 mt-2">Aparece no fundo do modo Grid e no cabeçalho do Kanban. Arquivos grandes serão otimizados automaticamente.</p>
                     </div>
 
                     <!-- Cores Gradient -->
@@ -247,7 +261,8 @@
             state: {
                 path: [{ id: null, name: 'Meu Cofre', view: 'grid' }],
                 directories: [],
-                directoryCache: new Map(), // NOVO: Armazena TODOS os itens carregados para rápido acesso
+                directoryCache: new Map(), 
+                rootPrefs: { view: 'grid', new_item_position: 'end' }, // Adicionado Preferências da Raiz
                 isLoading: false,
                 reorderMode: false,
                 availableIcons: [
@@ -269,7 +284,6 @@
             },
 
             setupEventListeners() {
-                // Fechar dropdown mobile
                 document.addEventListener('click', (event) => {
                     const menu = document.getElementById('mobileViewMenu');
                     const trigger = document.getElementById('btn-mobile-menu-trigger');
@@ -278,7 +292,6 @@
                     }
                 });
 
-                // Listeners do Upload de Imagem
                 document.getElementById('dirCoverFile').addEventListener('change', (e) => this.handleCoverUpload(e));
                 document.getElementById('btnRemoveCover').addEventListener('click', () => this.removeCover());
             },
@@ -292,21 +305,13 @@
                     const img = new Image();
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
-                        const MAX_WIDTH = 600;
-                        const MAX_HEIGHT = 400;
-                        let width = img.width;
-                        let height = img.height;
+                        const MAX_WIDTH = 600; const MAX_HEIGHT = 400;
+                        let width = img.width; let height = img.height;
+                        if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                        } else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
 
-                        if (width > height) {
-                            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-                        } else {
-                            if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-                        }
-
-                        canvas.width = width;
-                        canvas.height = height;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, width, height);
+                        canvas.width = width; canvas.height = height;
+                        const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
                         
                         const base64 = canvas.toDataURL('image/jpeg', 0.6);
                         document.getElementById('dirCoverBase64').value = base64;
@@ -325,10 +330,7 @@
                 document.getElementById('dirCoverFile').value = '';
                 document.getElementById('dirCoverBase64').value = '';
                 const preview = document.getElementById('coverPreview');
-                if (preview) {
-                    preview.classList.add('hidden');
-                    preview.style.backgroundImage = 'none';
-                }
+                if (preview) { preview.classList.add('hidden'); preview.style.backgroundImage = 'none'; }
                 const btn = document.getElementById('btnRemoveCover');
                 if (btn) btn.classList.add('hidden');
             },
@@ -361,7 +363,13 @@
 
             async fetchUserPrefs() {
                 const response = await this.api('user', 'get_prefs');
-                if (response && response.data) this.state.path[0].view = response.data.root_view;
+                if (response && response.data) {
+                    this.state.rootPrefs = {
+                        view: response.data.root_view || 'grid',
+                        new_item_position: response.data.root_new_item_position || 'end'
+                    };
+                    this.state.path[0].view = this.state.rootPrefs.view;
+                }
             },
 
             async fetchDirectories() {
@@ -371,7 +379,6 @@
                 const response = await this.api('directories', 'fetch', { parent_id: this.getCurrentParentId() });
                 if (response) { 
                     this.state.directories = response.data; 
-                    // Alimenta o cache com os diretórios principais visualizados
                     response.data.forEach(d => this.state.directoryCache.set(Number(d.id), d));
                     this.render(); 
                 }
@@ -395,9 +402,13 @@
                 const container = document.getElementById('breadcrumbs');
                 container.innerHTML = this.state.path.map((step, index) => {
                     const isLast = index === this.state.path.length - 1;
-                    const color = isLast ? 'text-white font-semibold' : 'text-slate-400 hover:text-gluon-primary cursor-pointer transition-colors';
+                    const color = isLast ? 'text-white font-semibold' : 'text-slate-400 hover:text-gluon-primary transition-colors';
                     const separator = isLast ? '' : '<i class="fa-solid fa-chevron-right text-sm text-slate-600 mx-2"></i>';
-                    return `<div class="flex items-center whitespace-nowrap" onclick="${isLast ? '' : `app.goUpTo(${index})`}"><span class="${color}">${index === 0 ? '<i class="fa-solid fa-vault mr-1"></i> ' : ''}${step.name}</span>${separator}</div>`;
+                    
+                    // Adicionada a engrenagem (Cog) para editar a pasta que você está dentro agora mesmo
+                    const settingsBtn = isLast ? `<button onclick="event.stopPropagation(); app.openModal('${step.id || 'root'}')" class="ml-3 text-slate-500 hover:text-gluon-primary transition-colors focus:outline-none" title="Configurar padrão desta pasta"><i class="fa-solid fa-cog"></i></button>` : '';
+
+                    return `<div class="flex items-center whitespace-nowrap" ${!isLast ? `onclick="app.goUpTo(${index})"` : ''}><span class="${color} ${!isLast ? 'cursor-pointer' : ''}">${index === 0 ? '<i class="fa-solid fa-vault mr-1"></i> ' : ''}${step.name}</span>${settingsBtn}${separator}</div>`;
                 }).join('');
             },
 
@@ -407,7 +418,10 @@
                 this.state.path[this.state.path.length - 1].view = viewName;
                 this.updateTopButtons();
                 this.render();
-                if (this.getCurrentParentId() === null) this.api('user', 'update_root_view', { view: viewName });
+                if (this.getCurrentParentId() === null) {
+                    this.state.rootPrefs.view = viewName;
+                    this.api('user', 'update_root_prefs', this.state.rootPrefs);
+                }
             },
 
             toggleReorderMode() {
@@ -506,15 +520,30 @@
 
                 this.switchModalTab('geral');
                 document.getElementById('dirId').value = id;
-                document.getElementById('dirName').value = name;
                 document.getElementById('dirParentId').value = targetParentId !== null ? targetParentId : '';
-                document.getElementById('modalTitle').innerHTML = id ? '<i class="fa-solid fa-folder-gear text-gluon-primary"></i> <span>Configurar Pasta</span>' : '<i class="fa-solid fa-folder-plus text-gluon-primary"></i> <span>Nova Pasta</span>';
                 
-                // UTILIZA O CACHE PARA RECUPERAR OS DADOS (Mesmo que seja um item do Kanban)
-                let dirObj = id ? this.state.directoryCache.get(Number(id)) : null;
-                
-                // Reseta e preenche Estética de Capa
-                this.removeCover(); // Limpa estado anterior por precaução
+                let dirObj = null;
+                const isRootSettings = id === 'root';
+
+                if (isRootSettings) {
+                    dirObj = { name: 'Meu Cofre (Raiz)', view: this.state.rootPrefs.view, new_item_position: this.state.rootPrefs.new_item_position };
+                    document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-vault text-gluon-primary"></i> <span>Configurar Raiz</span>';
+                    document.getElementById('dirNameContainer').classList.add('hidden');
+                    document.getElementById('tab-btn-apar').classList.add('hidden');
+                } else if (id) {
+                    dirObj = this.state.directoryCache.get(Number(id));
+                    document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-folder-gear text-gluon-primary"></i> <span>Configurar Pasta</span>';
+                    document.getElementById('dirNameContainer').classList.remove('hidden');
+                    document.getElementById('tab-btn-apar').classList.remove('hidden');
+                } else {
+                    document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-folder-plus text-gluon-primary"></i> <span>Nova Pasta</span>';
+                    document.getElementById('dirNameContainer').classList.remove('hidden');
+                    document.getElementById('tab-btn-apar').classList.remove('hidden');
+                }
+
+                document.getElementById('dirName').value = dirObj ? dirObj.name : name;
+
+                this.removeCover();
                 if (dirObj && dirObj.cover_url) {
                     document.getElementById('dirCoverBase64').value = dirObj.cover_url;
                     document.getElementById('coverPreview').style.backgroundImage = `url('${dirObj.cover_url}')`;
@@ -522,7 +551,6 @@
                     document.getElementById('btnRemoveCover').classList.remove('hidden');
                 }
 
-                // Reseta e preenche Cor e Ícone
                 document.getElementById('dirColorFrom').value = (dirObj && dirObj.color_from) ? dirObj.color_from : '#3b82f6';
                 document.getElementById('dirColorTo').value = (dirObj && dirObj.color_to) ? dirObj.color_to : '#6366f1';
                 
@@ -530,16 +558,26 @@
                 const iconRadios = document.getElementsByName('dirIcon');
                 for(let i=0; i<iconRadios.length; i++) { iconRadios[i].checked = (iconRadios[i].value === iconToSelect); }
 
-                const btnDelete = document.getElementById('btnDeleteDir');
-                if(id) btnDelete.classList.remove('hidden'); else btnDelete.classList.add('hidden');
+                // Define as posições Início/Fim
+                const posToSelect = (dirObj && dirObj.new_item_position) ? dirObj.new_item_position : 'end';
+                const posRadios = document.getElementsByName('dirItemPosition');
+                for(let i=0; i<posRadios.length; i++) { posRadios[i].checked = (posRadios[i].value === posToSelect); }
 
-                const radios = document.getElementsByName('dirViewMode');
-                for(let i=0; i<radios.length; i++) { if(radios[i].value === currentViewMode) radios[i].checked = true; }
+                const btnDelete = document.getElementById('btnDeleteDir');
+                if(id && !isRootSettings) btnDelete.classList.remove('hidden'); else btnDelete.classList.add('hidden');
+
+                const viewToSelect = (dirObj && dirObj.view) ? dirObj.view : currentViewMode;
+                const viewRadios = document.getElementsByName('dirViewMode');
+                for(let i=0; i<viewRadios.length; i++) { viewRadios[i].checked = (viewRadios[i].value === viewToSelect); }
                 
                 const modal = document.getElementById('dirModal');
                 const content = document.getElementById('dirModalContent');
                 modal.classList.remove('hidden'); modal.classList.add('flex');
-                setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); if(!id) document.getElementById('dirName').focus(); }, 10);
+                setTimeout(() => { 
+                    modal.classList.remove('opacity-0'); 
+                    content.classList.remove('scale-95'); 
+                    if(!id && !isRootSettings) document.getElementById('dirName').focus(); 
+                }, 10);
             },
 
             closeModal() {
@@ -552,31 +590,55 @@
             async saveDirectory(e) {
                 e.preventDefault();
                 const id = document.getElementById('dirId').value;
+                const isRootSettings = id === 'root';
                 
+                if (!isRootSettings && !document.getElementById('dirName').value.trim()) {
+                    return alert("O nome da pasta é obrigatório.");
+                }
+
                 let selectedView = 'grid';
-                const radios = document.getElementsByName('dirViewMode');
-                for(let i=0; i<radios.length; i++) { if(radios[i].checked) selectedView = radios[i].value; }
+                const viewRadios = document.getElementsByName('dirViewMode');
+                for(let i=0; i<viewRadios.length; i++) { if(viewRadios[i].checked) selectedView = viewRadios[i].value; }
 
-                let selectedIcon = 'fa-folder';
-                const iconRadios = document.getElementsByName('dirIcon');
-                for(let i=0; i<iconRadios.length; i++) { if(iconRadios[i].checked) selectedIcon = iconRadios[i].value; }
-
-                const payload = {
-                    id: id !== '' ? id : null,
-                    parent_id: document.getElementById('dirParentId').value !== '' ? document.getElementById('dirParentId').value : this.getCurrentParentId(),
-                    name: document.getElementById('dirName').value,
-                    view: selectedView,
-                    cover_url: document.getElementById('dirCoverBase64').value,
-                    color_from: document.getElementById('dirColorFrom').value || '#3b82f6',
-                    color_to: document.getElementById('dirColorTo').value || '#6366f1',
-                    icon: selectedIcon
-                };
+                let selectedPos = 'end';
+                const posRadios = document.getElementsByName('dirItemPosition');
+                for(let i=0; i<posRadios.length; i++) { if(posRadios[i].checked) selectedPos = posRadios[i].value; }
 
                 const btn = document.getElementById('btnSaveDir');
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
                 btn.disabled = true;
 
-                const response = await this.api('directories', id !== '' ? 'update' : 'create', payload);
+                let response;
+
+                // Se estamos editando a RAIZ, mandamos pra API de User
+                if (isRootSettings) {
+                    this.state.rootPrefs.view = selectedView;
+                    this.state.rootPrefs.new_item_position = selectedPos;
+                    response = await this.api('user', 'update_root_prefs', this.state.rootPrefs);
+                    if (this.state.path.length === 1) {
+                        this.state.path[0].view = selectedView;
+                        this.updateTopButtons();
+                    }
+                } else {
+                    // Pasta normal
+                    let selectedIcon = 'fa-folder';
+                    const iconRadios = document.getElementsByName('dirIcon');
+                    for(let i=0; i<iconRadios.length; i++) { if(iconRadios[i].checked) selectedIcon = iconRadios[i].value; }
+
+                    const payload = {
+                        id: id !== '' ? id : null,
+                        parent_id: document.getElementById('dirParentId').value !== '' ? document.getElementById('dirParentId').value : this.getCurrentParentId(),
+                        name: document.getElementById('dirName').value,
+                        view: selectedView,
+                        new_item_position: selectedPos,
+                        cover_url: document.getElementById('dirCoverBase64').value,
+                        color_from: document.getElementById('dirColorFrom').value || '#3b82f6',
+                        color_to: document.getElementById('dirColorTo').value || '#6366f1',
+                        icon: selectedIcon
+                    };
+
+                    response = await this.api('directories', id !== '' ? 'update' : 'create', payload);
+                }
 
                 if (response) { this.closeModal(); await this.fetchDirectories(); }
                 btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar'; btn.disabled = false;
@@ -585,7 +647,7 @@
             async deleteFromModal() {
                 const id = document.getElementById('dirId').value;
                 const name = document.getElementById('dirName').value;
-                if(!id) return;
+                if(!id || id === 'root') return;
                 if(confirm(`Atenção: A pasta "${name}" e TODO o seu conteúdo serão apagados PERMANENTEMENTE.\nDeseja continuar?`)) {
                     const btn = document.getElementById('btnDeleteDir'); btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
                     const response = await this.api('directories', 'delete', { id });
@@ -600,12 +662,8 @@
                 document.getElementById('viewContainer').classList.toggle('hidden', show);
             },
 
-            getGradientStyle(from, to) {
-                return `background: linear-gradient(135deg, ${from}, ${to});`;
-            },
-            getTextGradientStyle(from, to) {
-                return `background: -webkit-linear-gradient(135deg, ${from}, ${to}); -webkit-background-clip: text; -webkit-text-fill-color: transparent;`;
-            },
+            getGradientStyle(from, to) { return `background: linear-gradient(135deg, ${from}, ${to});`; },
+            getTextGradientStyle(from, to) { return `background: -webkit-linear-gradient(135deg, ${from}, ${to}); -webkit-background-clip: text; -webkit-text-fill-color: transparent;`; },
 
             async loadKanbanContents() {
                 const promises = this.state.directories.map(async (dir) => {
@@ -614,7 +672,6 @@
                     if (!container) return;
                     
                     if (res && res.data && res.data.length > 0) {
-                        // Alimenta o cache com os subitens do Kanban!
                         res.data.forEach(d => this.state.directoryCache.set(Number(d.id), d));
 
                         container.innerHTML = res.data.map(sub => `
@@ -651,18 +708,13 @@
                     this.state.directories.forEach(dir => {
                         html += `
                         <div data-id="${dir.id}" class="dir-card draggable-item group bg-slate-800 border border-slate-700 rounded-xl flex flex-col items-center text-center cursor-pointer relative overflow-hidden min-h-[140px]" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
-                            <!-- Fundo / Capa -->
-                            ${dir.cover_url ? 
-                              `<div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110" style="background-image: url('${dir.cover_url}')"></div>
-                               <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/80 to-slate-900/40"></div>` 
-                              : ''}
+                            ${dir.cover_url ? `<div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110" style="background-image: url('${dir.cover_url}')"></div><div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/80 to-slate-900/40"></div>` : ''}
                             
                             <div class="absolute top-2 left-2 text-green-500 hidden grip-handle bg-slate-900/80 backdrop-blur rounded p-1 z-20"><i class="fa-solid fa-grip-vertical"></i></div>
                             <div class="absolute top-2 right-2 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn z-20">
                                 <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-900/80 backdrop-blur hover:bg-slate-700 rounded p-1.5 shadow-lg"><i class="fa-solid fa-cog"></i></button>
                             </div>
                             
-                            <!-- Conteúdo (Ícone e Título) -->
                             <div class="relative z-10 flex flex-col items-center justify-center w-full h-full p-4 pt-6">
                                 <i class="fa-solid ${dir.icon} text-4xl sm:text-5xl mb-3 drop-shadow-md sm:group-hover:scale-110 transition-transform" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>
                                 <span class="text-xs sm:text-sm font-medium text-slate-200 w-full truncate px-1 drop-shadow-md">${dir.name}</span>
@@ -697,7 +749,6 @@
                     this.state.directories.forEach(dir => {
                         html += `
                         <div data-id="${dir.id}" class="draggable-item snap-start bg-slate-800 border border-slate-700 rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg relative transition-colors overflow-hidden">
-                            <!-- Kanban Header com Capa -->
                             <div class="p-4 border-b border-slate-700 flex justify-between items-center rounded-t-xl group cursor-pointer hover:bg-slate-700/50 transition-colors kanban-col-handle relative overflow-hidden min-h-[60px]" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
                                 ${dir.cover_url ? `<div class="absolute inset-0 bg-cover bg-center" style="background-image: url('${dir.cover_url}')"></div><div class="absolute inset-0 bg-slate-900/80 backdrop-blur-[2px]"></div>` : `<div class="absolute inset-0 bg-slate-900/50"></div>`}
                                 
