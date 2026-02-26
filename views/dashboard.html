@@ -3,10 +3,8 @@
   Diretório: public_html/gluon/views/dashboard.html
   
   Pilar: Fácil Manutenção, Bonito e Rápido.
-  Adicionado controle independente de posição de criação (Início/Fim),
-  atalho de Configurações no Breadcrumb e campo de nome (textarea) expansível.
-  Atualização: Botão de configuração movido em definitivo para o início absoluto do breadcrumb
-  substituindo o ícone de cofre (Ex: Config > Meu Cofre > Diretório).
+  Atualização: Correção do layout do breadcrumb. Removido o Flexbox do container
+  para que os itens fluam como um parágrafo contínuo usando elementos inline.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -118,8 +116,8 @@
     <!-- Main Workspace -->
     <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col h-[calc(100vh-64px)] overflow-hidden">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 shrink-0">
-            <!-- Breadcrumbs modificados: Fonte menor (text-sm), com quebra de linha ativada -->
-            <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-300 font-medium w-full flex-1" id="breadcrumbs"></div>
+            <!-- Breadcrumbs modificado: Container "block" e "break-words" para agir puramente como texto -->
+            <div class="block text-sm text-slate-300 font-medium w-full flex-1 leading-relaxed break-words" id="breadcrumbs"></div>
             
             <div id="reorder-hint" class="hidden animate-pulse text-green-400 text-sm font-medium flex-1 text-center bg-green-500/10 py-2 px-4 rounded-lg border border-green-500/20">
                 <i class="fa-solid fa-hand-pointer mr-2"></i> Arraste os itens para reordenar
@@ -164,7 +162,6 @@
                         <label class="block text-sm font-medium text-slate-300 mb-1">Nome da Pasta</label>
                         <div class="relative">
                             <i class="fa-solid fa-pen absolute left-3 top-3.5 text-slate-500 text-sm"></i>
-                            <!-- Transformado em Textarea que cresce automaticamente -->
                             <textarea id="dirName" rows="1" autocomplete="off" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 pl-9 pr-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-all resize-none overflow-hidden min-h-[44px]"></textarea>
                         </div>
                     </div>
@@ -422,25 +419,24 @@
 
             renderBreadcrumbs() {
                 const container = document.getElementById('breadcrumbs');
-                const currentStep = this.state.path[this.state.path.length - 1];
                 
-                // Botão de configuração da pasta atual movido definitivamente para o início absoluto (antes do "Meu Cofre")
-                const settingsBtn = `<button onclick="event.stopPropagation(); app.openModal('${currentStep.id || 'root'}')" class="text-slate-400 hover:text-gluon-primary transition-colors focus:outline-none flex items-center" title="Configurar pasta atual"><i class="fa-solid fa-cog"></i></button>`;
-
-                const pathHtml = this.state.path.map((step, index) => {
+                // Geração do HTML puramente inline (sem Flexbox), o que faz o texto
+                // quebrar nativamente e fluir na mesma linha, imitando um parágrafo.
+                container.innerHTML = this.state.path.map((step, index) => {
                     const isLast = index === this.state.path.length - 1;
                     const color = isLast ? 'text-white font-semibold' : 'text-slate-400 hover:text-gluon-primary transition-colors';
-                    const separator = isLast ? '' : '<i class="fa-solid fa-chevron-right text-[10px] text-slate-600 mx-1 sm:mx-2 mt-0.5"></i>';
+                    
+                    // Os espaços vazios (" ") em volta da tag <i> garantem o espaçamento contínuo do texto.
+                    const separator = isLast ? '' : ' <i class="fa-solid fa-chevron-right text-[10px] text-slate-600 mx-1"></i> ';
+                    
+                    const settingsBtn = isLast ? ` <button onclick="event.stopPropagation(); app.openModal('${step.id || 'root'}')" class="inline-block text-slate-500 hover:text-gluon-primary transition-colors focus:outline-none" title="Configurar padrão desta pasta"><i class="fa-solid fa-cog"></i></button>` : '';
 
-                    return `<div class="inline-flex items-center flex-wrap">
-                        <span class="${color} ${!isLast ? 'cursor-pointer' : ''} break-all sm:break-words leading-tight max-w-full flex items-center" ${!isLast ? `onclick="app.goUpTo(${index})"` : ''}>
-                            ${step.name}
-                        </span>
-                        ${separator}
-                    </div>`;
+                    return `<span class="inline" ${!isLast ? `onclick="app.goUpTo(${index})"` : ''}>
+                        <span class="${color} ${!isLast ? 'cursor-pointer hover:underline' : ''} transition-colors">
+                            ${index === 0 ? '<i class="fa-solid fa-vault mr-1"></i>' : ''}${step.name}
+                        </span>${settingsBtn}${separator}
+                    </span>`;
                 }).join('');
-
-                container.innerHTML = settingsBtn + pathHtml;
             },
 
             toggleMobileViewMenu() { document.getElementById('mobileViewMenu').classList.toggle('hidden'); },
