@@ -3,8 +3,7 @@
   Diretório: public_html/gluon/views/schedule.html
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
-  View customizada para gerenciar eventos de uma Agenda/Schedule.
-  Integrada com o modal nativo e navegação de deep linking do sistema Core.
+  Suporta Múltiplas Visualizações: Linha do Tempo, Kanban Semanal e Lista.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -14,6 +13,10 @@
     <title>Gluon - Agenda</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- SortableJS para Drag & Drop Mágico no Kanban e Lista -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
     <script>
         tailwind.config = {
             theme: { extend: { colors: { gluon: { dark: '#0f172a', primary: '#3b82f6', secondary: '#1e293b' } } } }
@@ -23,12 +26,11 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* Grid base 60px = 1 hora (1px por minuto) */
+        /* TIMELINE CSS */
         .timeline-grid {
             background-image: linear-gradient(to bottom, #334155 1px, transparent 1px), linear-gradient(to bottom, #1e293b 1px, transparent 1px);
             background-size: 100% 60px, 100% 30px;
         }
-        
         .event-card {
             position: absolute;
             left: 50px;
@@ -43,8 +45,7 @@
             transition: box-shadow 0.2s;
             cursor: pointer;
         }
-        .event-card:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); z-index: 10; }
-        
+        .event-card:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); z-index: 30 !important; }
         .resize-handle {
             position: absolute;
             bottom: 0; left: 0; right: 0;
@@ -56,10 +57,14 @@
         }
         .event-card:hover .resize-handle { opacity: 1; }
         
+        /* DRAG STATE CSS */
         .dragging { opacity: 0.7; cursor: grabbing !important; z-index: 50 !important; }
         .resizing { cursor: ns-resize !important; z-index: 50 !important; }
+        
+        .sortable-ghost { opacity: 0.4; background-color: #1e293b !important; border: 2px dashed #3b82f6 !important; }
+        .sortable-drag { opacity: 1 !important; cursor: grabbing !important; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5) !important; transform: scale(1.02); }
 
-        /* Estilos de inputs para o modal robusto */
+        /* MODAL CSS */
         .view-radio:checked + div, .type-radio:checked + div { background-color: #3b82f6; border-color: #3b82f6; color: white; }
         .icon-radio:checked + div { background-color: #1e293b; border-color: #3b82f6; color: #3b82f6; }
         
@@ -75,7 +80,7 @@
         input[type="color"]::-webkit-color-swatch { border: none; border-radius: 0.5rem; }
     </style>
 </head>
-<body class="bg-gluon-dark text-slate-200 h-screen flex flex-col font-sans overflow-hidden">
+<body class="bg-gluon-dark text-slate-200 h-screen flex flex-col font-sans overflow-hidden selection:bg-gluon-primary selection:text-white">
 
     <!-- Top Navigation -->
     <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-16 flex items-center justify-between px-4 sm:px-6">
@@ -100,44 +105,39 @@
     <!-- Main Content -->
     <main class="flex-1 w-full flex overflow-hidden">
         
-        <!-- Sidebar: Sem Data -->
-        <aside class="w-64 sm:w-80 bg-slate-900 border-r border-slate-700/50 flex flex-col shrink-0">
+        <!-- Sidebar: Sem Data (Backlog) -->
+        <aside class="w-64 sm:w-80 bg-slate-900 border-r border-slate-700/50 flex flex-col shrink-0 z-30 shadow-xl relative">
             <div class="p-4 border-b border-slate-800 bg-slate-800/30">
                 <h3 class="font-semibold text-slate-300 flex items-center gap-2"><i class="fa-solid fa-inbox text-slate-500"></i> Sem Data (Backlog)</h3>
-                <p class="text-xs text-slate-500 mt-1">Tarefas/Itens não agendados. Arraste para a linha do tempo.</p>
+                <p class="text-xs text-slate-500 mt-1">Tarefas não agendadas.</p>
             </div>
-            <div id="unscheduledList" class="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
-                <!-- Itens injetados via JS -->
+            <div id="unscheduledList" class="flex-1 overflow-y-auto p-4 no-scrollbar">
+                <!-- Itens Injetados via JS -->
             </div>
         </aside>
 
-        <!-- Main: Timeline -->
+        <!-- Main Workspace: Dinâmico baseado na View -->
         <div class="flex-1 relative flex flex-col bg-gluon-dark overflow-hidden">
             
-            <div class="p-4 border-b border-slate-700 bg-slate-800/80 backdrop-blur shrink-0 flex justify-between items-center z-20">
-                <div class="flex items-center gap-3">
-                    <input type="date" id="currentDate" class="bg-slate-900 border border-slate-600 rounded text-sm text-white px-3 py-1.5 focus:outline-none focus:border-gluon-primary">
-                    <button onclick="scheduleApp.loadData()" class="text-slate-400 hover:text-white" title="Atualizar"><i class="fa-solid fa-rotate-right"></i></button>
+            <!-- Barra de Controles da Agenda -->
+            <div class="p-3 sm:p-4 border-b border-slate-700 bg-slate-800/80 backdrop-blur shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 z-20">
+                <div class="flex items-center gap-3 w-full sm:w-auto">
+                    <input type="date" id="currentDate" onchange="scheduleApp.render()" class="bg-slate-900 border border-slate-600 rounded text-sm text-white px-3 py-1.5 focus:outline-none focus:border-gluon-primary cursor-pointer shadow-inner">
+                    <span id="dateRangeLabel" class="text-xs text-slate-400 font-medium"></span>
+                </div>
+                
+                <div class="flex items-center gap-1 bg-slate-900 rounded-lg p-1 border border-slate-700 w-full sm:w-auto justify-center">
+                    <button onclick="scheduleApp.setViewMode('timeline')" id="btn-view-timeline" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition-colors" title="Linha do Tempo (1 Dia)"><i class="fa-solid fa-clock"></i></button>
+                    <button onclick="scheduleApp.setViewMode('kanban')" id="btn-view-kanban" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition-colors" title="Kanban Semanal (7 Dias)"><i class="fa-solid fa-columns"></i></button>
+                    <button onclick="scheduleApp.setViewMode('list')" id="btn-view-list" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition-colors" title="Lista por Dia (7 Dias)"><i class="fa-solid fa-list"></i></button>
                 </div>
             </div>
 
-            <!-- Scrollable Grid -->
-            <div id="timelineScroll" class="flex-1 overflow-y-auto relative no-scrollbar">
-                <div id="timelineContainer" class="relative w-full h-[1440px] timeline-grid" ondragover="scheduleApp.allowDrop(event)" ondrop="scheduleApp.dropOnTimeline(event)">
-                    
-                    <!-- Time Labels -->
-                    <div class="absolute left-0 top-0 bottom-0 w-12 border-r border-slate-700/50 bg-slate-900/50 z-0">
-                        <script>
-                            for(let i=0; i<24; i++) {
-                                document.write(`<div class="absolute w-full text-right pr-2 text-xs text-slate-500 font-medium" style="top: ${i*60 - 8}px">${i.toString().padStart(2, '0')}:00</div>`);
-                            }
-                        </script>
-                    </div>
-
-                    <!-- Eventos Injetados Aqui -->
-                    <div id="eventsLayer" class="absolute inset-0 z-10"></div>
-                </div>
+            <!-- Container onde as views são renderizadas -->
+            <div id="viewContainer" class="flex-1 overflow-hidden relative flex flex-col">
+                <!-- Conteúdo Injetado via JS -->
             </div>
+            
         </div>
     </main>
 
@@ -168,7 +168,7 @@
                             <label class="cursor-pointer" onclick="scheduleApp.handleTypeChange(0)">
                                 <input type="radio" name="itemType" value="0" class="peer hidden type-radio" checked>
                                 <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
-                                    <i class="fa-solid fa-folder block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Pasta / Tarefa</span>
+                                    <i class="fa-solid fa-check-circle block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Tarefa / Pasta</span>
                                 </div>
                             </label>
                             <label class="cursor-pointer" onclick="scheduleApp.handleTypeChange(1)">
@@ -284,6 +284,8 @@
         const scheduleApp = {
             agendaId: null,
             items: [],
+            
+            // Controle da Timeline Nativa
             isDragging: false,
             isResizing: false,
             wasDragged: false,
@@ -292,7 +294,11 @@
             startTop: 0,
             startHeight: 0,
 
+            // Controle do Kanban/List
+            sortableInstances: [],
+
             state: {
+                view: 'timeline', // timeline, kanban, list
                 directoryCache: new Map(),
                 availableIcons: [
                     'fa-folder', 'fa-folder-open', 'fa-check-circle', 'fa-file-code', 'fa-calendar-days', 'fa-door-open', 'fa-clock', 'fa-file-lines', 'fa-file-image', 'fa-file-pdf', 'fa-star', 'fa-heart', 'fa-image', 'fa-music', 'fa-video', 
@@ -316,24 +322,6 @@
                 
                 await this.fetchAgendaInfo();
                 await this.loadData();
-                this.setupMouseEvents();
-
-                // Scroll para as 8h da manhã por padrão
-                document.getElementById('timelineScroll').scrollTop = 8 * 60 - 20;
-            },
-
-            setupFormListeners() {
-                document.getElementById('dirCoverFile').addEventListener('change', (e) => this.handleCoverUpload(e));
-                
-                const dirNameInput = document.getElementById('dirName');
-                if (dirNameInput) {
-                    dirNameInput.addEventListener('input', function() {
-                        this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; 
-                    });
-                    dirNameInput.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.saveDirectory(e); }
-                    });
-                }
             },
 
             escapeHTML(str) {
@@ -374,7 +362,35 @@
                     iconEl.className = `fa-solid ${res.data.icon} text-xl`;
                     iconEl.style = this.getTextGradientStyle(res.data.color_from, res.data.color_to);
                     document.getElementById('agendaName').innerText = res.data.name;
+                    
+                    // Configura a visualização preferida da agenda
+                    let savedView = res.data.view;
+                    if (!['timeline', 'kanban', 'list'].includes(savedView)) savedView = 'timeline';
+                    this.state.view = savedView;
+                    this.updateViewButtons();
                 }
+            },
+
+            async setViewMode(view) {
+                this.state.view = view;
+                this.updateViewButtons();
+                this.render();
+                // Salva a preferência de forma assíncrona
+                this.api('schedule', 'update_view', { id: this.agendaId, view: view });
+            },
+
+            updateViewButtons() {
+                ['timeline', 'kanban', 'list'].forEach(v => {
+                    const btn = document.getElementById(`btn-view-${v}`);
+                    if(btn) {
+                        btn.classList.remove('bg-slate-700', 'text-white');
+                        btn.classList.add('text-slate-400');
+                        if(v === this.state.view) {
+                            btn.classList.remove('text-slate-400');
+                            btn.classList.add('bg-slate-700', 'text-white');
+                        }
+                    }
+                });
             },
 
             async loadData() {
@@ -387,57 +403,188 @@
                 }
             },
 
-            render() {
-                const selectedDateStr = document.getElementById('currentDate').value;
-                const unscheduledContainer = document.getElementById('unscheduledList');
-                const eventsLayer = document.getElementById('eventsLayer');
+            // ==========================================
+            // RENDERIZAÇÃO DO WORKSPACE E BACKLOG
+            // ==========================================
+
+            getDatesArray(startDate, days) {
+                let dates = [];
+                let curr = new Date(startDate);
+                for(let i=0; i<days; i++) {
+                    dates.push(new Date(curr));
+                    curr.setDate(curr.getDate() + 1);
+                }
+                return dates;
+            },
+
+            getTimelineHTML() {
+                let labelsHTML = '';
+                for(let i=0; i<24; i++) {
+                    labelsHTML += `<div class="absolute w-full text-right pr-2 text-xs text-slate-500 font-medium" style="top: ${i*60 - 8}px">${i.toString().padStart(2, '0')}:00</div>`;
+                }
+
+                return `
+                <div id="timelineScroll" class="flex-1 overflow-y-auto relative no-scrollbar">
+                    <div id="timelineContainer" class="relative w-full h-[1440px] timeline-grid" ondragover="scheduleApp.allowDrop(event)" ondrop="scheduleApp.dropOnTimeline(event)">
+                        <div class="absolute left-0 top-0 bottom-0 w-12 border-r border-slate-700/50 bg-slate-900/50 z-0">${labelsHTML}</div>
+                        <div id="eventsLayer" class="absolute inset-0 z-10"></div>
+                    </div>
+                </div>`;
+            },
+
+            getKanbanHTML(startDate) {
+                const dates = this.getDatesArray(startDate, 7);
+                const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
                 
+                let html = `<div class="flex-1 flex gap-4 overflow-x-auto p-4 snap-x relative h-full items-start">`;
+                dates.forEach(d => {
+                    const dStr = d.toISOString().split('T')[0];
+                    const displayDate = `${dayNames[d.getDay()]}, ${('0'+d.getDate()).slice(-2)}/${('0'+(d.getMonth()+1)).slice(-2)}`;
+                    const isToday = dStr === new Date().toISOString().split('T')[0];
+                    const headerClass = isToday ? 'text-gluon-primary font-bold' : 'text-slate-300 font-semibold';
+                    
+                    html += `
+                    <div class="snap-start bg-slate-800/80 border border-slate-700 rounded-xl w-[280px] shrink-0 flex flex-col max-h-full shadow-lg relative overflow-hidden">
+                        <div class="p-3 border-b border-slate-700 text-center ${headerClass} bg-slate-900/50">${displayDate}</div>
+                        <div class="p-2 flex-1 overflow-y-auto sortable-day-col no-scrollbar min-h-[100px]" data-date="${dStr}">
+                            <!-- items -->
+                        </div>
+                    </div>`;
+                });
+                html += `</div>`;
+                return html;
+            },
+
+            getListHTML(startDate) {
+                const dates = this.getDatesArray(startDate, 7);
+                const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+                
+                let html = `<div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 relative h-full no-scrollbar pb-20">`;
+                dates.forEach(d => {
+                    const dStr = d.toISOString().split('T')[0];
+                    const displayDate = `${dayNames[d.getDay()]}, ${('0'+d.getDate()).slice(-2)} de ${d.toLocaleString('pt-BR', {month:'long'})}`;
+                    const isToday = dStr === new Date().toISOString().split('T')[0];
+                    const headerClass = isToday ? 'text-gluon-primary' : 'text-slate-300';
+                    
+                    html += `
+                    <div class="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden shadow-sm">
+                        <h3 class="font-bold text-lg border-b border-slate-700/50 px-4 py-3 sticky top-0 bg-slate-800 z-10 ${headerClass}">${displayDate}</h3>
+                        <div class="sortable-day-col p-3 min-h-[60px] flex flex-col gap-2" data-date="${dStr}">
+                            <!-- items -->
+                        </div>
+                    </div>`;
+                });
+                html += `</div>`;
+                return html;
+            },
+
+            render() {
+                const viewContainer = document.getElementById('viewContainer');
+                const dStr = document.getElementById('currentDate').value;
+                const selectedDate = new Date(dStr + 'T00:00:00'); 
+                const label = document.getElementById('dateRangeLabel');
+
+                // Atualiza Rótulos
+                if (this.state.view === 'timeline') {
+                    label.innerText = 'Exibição: 1 Dia';
+                } else {
+                    const endDate = new Date(selectedDate);
+                    endDate.setDate(endDate.getDate() + 6);
+                    label.innerText = `Exibição: ${dStr.split('-').reverse().join('/')} até ${endDate.toISOString().split('T')[0].split('-').reverse().join('/')}`;
+                }
+
+                // Renderiza Backlog
+                const unscheduledContainer = document.getElementById('unscheduledList');
                 unscheduledContainer.innerHTML = '';
+                
+                let backlogItems = this.items.filter(item => !item.start_date || !item.end_date);
+                let scheduledItems = this.items.filter(item => item.start_date && item.end_date);
+
+                backlogItems.forEach(item => {
+                    unscheduledContainer.innerHTML += this.generateBacklogCard(item);
+                });
+
+                // Limpa SortableJS anterior
+                this.sortableInstances.forEach(s => s.destroy());
+                this.sortableInstances = [];
+
+                // Renderiza Container Principal e Itens
+                if (this.state.view === 'timeline') {
+                    viewContainer.innerHTML = this.getTimelineHTML();
+                    this.renderTimelineItems(scheduledItems, dStr);
+                    this.setupTimelineMouseEvents();
+                    
+                    // Rola a Timeline para as 8h da manhã automaticamente (se ainda não rolou)
+                    setTimeout(() => {
+                        const scrollEl = document.getElementById('timelineScroll');
+                        if(scrollEl.scrollTop === 0) scrollEl.scrollTop = 8 * 60 - 20;
+                    }, 50);
+
+                } else if (this.state.view === 'kanban') {
+                    viewContainer.innerHTML = this.getKanbanHTML(selectedDate);
+                    this.renderColumnsItems(scheduledItems, selectedDate, 'kanban');
+                } else if (this.state.view === 'list') {
+                    viewContainer.innerHTML = this.getListHTML(selectedDate);
+                    this.renderColumnsItems(scheduledItems, selectedDate, 'list');
+                }
+
+                // Inicializa Drag & Drop (Nativo p/ Timeline, Sortable p/ Kanban e Lista)
+                if (this.state.view === 'kanban' || this.state.view === 'list') {
+                    this.initSortable();
+                } else {
+                    document.querySelectorAll('#unscheduledList .backlog-item').forEach(el => {
+                        el.setAttribute('draggable', 'true');
+                        el.ondragstart = (e) => this.dragStart(e, el.getAttribute('data-id'));
+                    });
+                }
+            },
+
+            generateBacklogCard(item) {
+                return `
+                <div data-id="${item.id}" class="backlog-item bg-slate-800 border border-slate-700 p-3 rounded-lg shadow-sm cursor-grab hover:bg-slate-700 transition-colors flex justify-between items-center group relative overflow-hidden mb-3" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                    ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10" style="background-image: url('${item.cover_url}')"></div>` : ''}
+                    <div class="flex items-center gap-2 truncate pointer-events-none z-10 flex-1 pr-2">
+                        <i class="fa-solid fa-grip-vertical text-slate-500 handle hidden sortable-handle"></i>
+                        <i class="fa-solid ${item.icon} text-sm" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
+                        <span class="font-medium text-sm text-slate-200 truncate w-full">${this.escapeHTML(item.name)}</span>
+                    </div>
+                    <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20"><i class="fa-solid fa-cog"></i></button>
+                </div>`;
+            },
+
+            renderTimelineItems(scheduledItems, selectedDateStr) {
+                const eventsLayer = document.getElementById('eventsLayer');
                 eventsLayer.innerHTML = '';
+                
+                scheduledItems.forEach(item => {
+                    const sDate = new Date(item.start_date.replace(' ', 'T'));
+                    const eDate = new Date(item.end_date.replace(' ', 'T'));
+                    const dStr = item.start_date.split(' ')[0];
+                    
+                    if (dStr === selectedDateStr) {
+                        const startMins = sDate.getHours() * 60 + sDate.getMinutes();
+                        const endMins = eDate.getHours() * 60 + eDate.getMinutes();
+                        const duration = endMins - startMins;
+                        
+                        const fromColor = item.color_from || '#3b82f6';
+                        const toColor = item.color_to || '#6366f1';
+                        const bgStyle = `background: linear-gradient(135deg, ${fromColor}33, ${toColor}33); border-color: ${fromColor}80; color: #fff; border-left: 4px solid ${fromColor};`;
 
-                this.items.forEach(item => {
-                    const fromColor = item.color_from || '#3b82f6';
-                    const toColor = item.color_to || '#6366f1';
-                    const bgStyle = `background: linear-gradient(135deg, ${fromColor}33, ${toColor}33); border-color: ${fromColor}80; color: #fff;`;
-                    const borderLeft = `border-left: 4px solid ${fromColor};`;
-
-                    if (!item.start_date || !item.end_date) {
-                        // Sem data (Backlog)
-                        unscheduledContainer.innerHTML += `
-                            <div id="evt-${item.id}" draggable="true" ondragstart="scheduleApp.dragStart(event, ${item.id})" class="bg-slate-800 border border-slate-700 p-3 rounded-lg shadow-sm cursor-grab active:cursor-grabbing hover:bg-slate-700 transition-colors flex justify-between items-center group relative overflow-hidden" onclick="scheduleApp.handleEventClick(event, ${item.id})">
-                                ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10" style="background-image: url('${item.cover_url}')"></div>` : ''}
-                                <div class="flex items-center gap-2 truncate pointer-events-none z-10">
-                                    <i class="fa-solid fa-grip-vertical text-slate-500"></i>
-                                    <i class="fa-solid ${item.icon} text-sm" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
-                                    <span class="font-medium text-sm text-slate-200 truncate flex-1">${this.escapeHTML(item.name)}</span>
+                        eventsLayer.innerHTML += `
+                            <div id="evt-${item.id}" class="event-card group" data-id="${item.id}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                                ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
+                                <div class="flex justify-between items-start pointer-events-none z-10 relative">
+                                    <div class="font-bold truncate text-sm flex items-center gap-1.5 w-full pr-6">
+                                        <i class="fa-solid ${item.icon} text-xs"></i> <span class="truncate">${this.escapeHTML(item.name)}</span>
+                                    </div>
                                 </div>
-                                <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20"><i class="fa-solid fa-cog"></i></button>
+                                <div class="text-[10px] opacity-70 pointer-events-none z-10 relative font-medium">${sDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${eDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                
+                                <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="absolute top-1 right-1 text-white/70 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 z-20 bg-black/40 rounded shadow-md"><i class="fa-solid fa-cog text-xs"></i></button>
+
+                                <div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>
                             </div>
                         `;
-                    } else {
-                        const sDate = new Date(item.start_date);
-                        const eDate = new Date(item.end_date);
-                        const dStr = sDate.toISOString().split('T')[0];
-                        
-                        if (dStr === selectedDateStr) {
-                            const startMins = sDate.getHours() * 60 + sDate.getMinutes();
-                            const endMins = eDate.getHours() * 60 + eDate.getMinutes();
-                            const duration = endMins - startMins;
-                            
-                            eventsLayer.innerHTML += `
-                                <div id="evt-${item.id}" class="event-card group" data-id="${item.id}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle} ${borderLeft}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
-                                    ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
-                                    <div class="flex justify-between items-start pointer-events-none z-10 relative">
-                                        <div class="font-bold truncate">${this.escapeHTML(item.name)}</div>
-                                    </div>
-                                    <div class="text-[10px] opacity-70 pointer-events-none z-10 relative">${sDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${eDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                                    
-                                    <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="absolute top-1 right-1 text-white/70 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20 bg-black/30 rounded"><i class="fa-solid fa-cog text-xs"></i></button>
-
-                                    <div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>
-                                </div>
-                            `;
-                        }
                     }
                 });
 
@@ -449,9 +596,63 @@
                 });
             },
 
-            // --- NAVEGAÇÃO AO CLICAR ---
+            renderColumnsItems(scheduledItems, startDate, viewType) {
+                const dates = this.getDatesArray(startDate, 7).map(d => d.toISOString().split('T')[0]);
+                
+                scheduledItems.forEach(item => {
+                    const itemDateStr = item.start_date.split(' ')[0];
+                    if (dates.includes(itemDateStr)) {
+                        const col = document.querySelector(`.sortable-day-col[data-date="${itemDateStr}"]`);
+                        if (col) {
+                            col.innerHTML += this.generateItemCard(item, viewType);
+                        }
+                    }
+                });
+            },
+
+            generateItemCard(item, viewType) {
+                const fromColor = item.color_from || '#3b82f6';
+                const sDate = new Date(item.start_date.replace(' ', 'T'));
+                const eDate = new Date(item.end_date.replace(' ', 'T'));
+                const timeStr = `${sDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${eDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+
+                if (viewType === 'kanban') {
+                    return `
+                    <div data-id="${item.id}" class="kanban-item bg-slate-700/80 border border-slate-600 p-2.5 rounded-lg shadow-sm cursor-grab hover:bg-slate-600 transition-colors flex flex-col group relative overflow-hidden mb-2" style="border-left: 4px solid ${fromColor};" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                        ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
+                        <div class="flex justify-between items-start z-10 relative">
+                            <div class="flex items-center gap-1.5 truncate w-full pr-5">
+                                <i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>
+                                <i class="fa-solid ${item.icon} text-xs" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
+                                <span class="font-bold text-sm text-slate-100 truncate">${this.escapeHTML(item.name)}</span>
+                            </div>
+                        </div>
+                        <div class="text-[10px] text-slate-400 mt-1 z-10 relative font-medium"><i class="fa-regular fa-clock"></i> ${timeStr}</div>
+                        <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="absolute top-1.5 right-1.5 text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20 bg-slate-800/80 rounded border border-slate-600"><i class="fa-solid fa-cog text-xs"></i></button>
+                    </div>`;
+                } else {
+                    return `
+                    <div data-id="${item.id}" class="list-item bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 p-3 rounded-lg shadow-sm cursor-grab transition-colors flex items-center justify-between group relative overflow-hidden" style="border-left: 4px solid ${fromColor};" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                        ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
+                        <div class="flex items-center gap-3 z-10 relative overflow-hidden flex-1 pr-2">
+                            <i class="fa-solid fa-grip-vertical text-slate-500 handle hidden sortable-handle text-sm"></i>
+                            <div class="flex flex-col min-w-[80px] text-center border-r border-slate-600 pr-3 mr-1">
+                                <span class="text-xs text-slate-300 font-semibold tracking-wide">${timeStr.split(' - ')[0]}</span>
+                                <span class="text-[10px] text-slate-500">${timeStr.split(' - ')[1]}</span>
+                            </div>
+                            <i class="fa-solid ${item.icon} text-lg shrink-0" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
+                            <span class="font-semibold text-sm text-slate-200 truncate flex-1">${this.escapeHTML(item.name)}</span>
+                        </div>
+                        <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-2 z-20 shrink-0 bg-slate-800 rounded shadow"><i class="fa-solid fa-cog"></i></button>
+                    </div>`;
+                }
+            },
+
+            // ==========================================
+            // NAVEGAÇÃO
+            // ==========================================
+            
             handleEventClick(e, id) {
-                // Se o mouse moveu durante o clique, foi um Drag/Resize e não abrimos a pasta
                 if (this.wasDragged) {
                     this.wasDragged = false;
                     return;
@@ -471,12 +672,71 @@
                     if (!item.target_id) return this.showToast('Portal corrompido: Destino não encontrado.', 'error');
                     window.location.href = `/dashboard?id=${item.target_id}`;
                 } else {
-                    // Direciona pastas normais para o Dashboard abrindo diretamente nelas
                     window.location.href = `/dashboard?id=${id}`;
                 }
             },
 
-            // --- DRAG INTERNO DA TIMELINE ---
+            // ==========================================
+            // SORTABLE JS (KANBAN & LISTA)
+            // ==========================================
+            
+            initSortable() {
+                const commonOptions = {
+                    group: 'schedule',
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    dragClass: 'sortable-drag',
+                    delay: 100, delayOnTouchOnly: true,
+                    onEnd: (evt) => this.handleSortableEnd(evt)
+                };
+
+                const unscheduled = document.getElementById('unscheduledList');
+                if (unscheduled) {
+                    this.sortableInstances.push(new Sortable(unscheduled, { ...commonOptions, sort: false }));
+                }
+
+                document.querySelectorAll('.sortable-day-col').forEach(col => {
+                    this.sortableInstances.push(new Sortable(col, { ...commonOptions }));
+                });
+            },
+
+            async handleSortableEnd(evt) {
+                const itemEl = evt.item;
+                const itemId = itemEl.getAttribute('data-id');
+                const toEl = evt.to;
+                const fromEl = evt.from;
+                
+                if (toEl === fromEl) {
+                    // Ordenou dentro do mesmo dia. Não usamos o 'sort_order' estrito da Timeline, mas vamos manter a sanidade.
+                    return;
+                }
+                
+                if (toEl.id === 'unscheduledList') {
+                    await this.updateItemDates(itemId, null, null);
+                } else {
+                    const targetDateStr = toEl.getAttribute('data-date');
+                    const item = this.state.directoryCache.get(Number(itemId));
+                    
+                    let newStart, newEnd;
+                    
+                    if (item && item.start_date && item.end_date) {
+                        const sTime = item.start_date.split(' ')[1];
+                        const eTime = item.end_date.split(' ')[1];
+                        newStart = `${targetDateStr} ${sTime}`;
+                        newEnd = `${targetDateStr} ${eTime}`;
+                    } else {
+                        newStart = `${targetDateStr} 08:00:00`;
+                        newEnd = `${targetDateStr} 09:00:00`;
+                    }
+                    
+                    await this.updateItemDates(itemId, newStart, newEnd);
+                }
+            },
+
+            // ==========================================
+            // DRAG & DROP NATIVO (TIMELINE)
+            // ==========================================
+
             startDragTimeline(e, el) {
                 if (e.button !== 0) return;
                 this.isDragging = true;
@@ -498,8 +758,12 @@
                 this.dragElement.classList.add('resizing');
             },
 
-            setupMouseEvents() {
-                document.addEventListener('mousemove', (e) => {
+            setupTimelineMouseEvents() {
+                // Remove listeners antigos para evitar duplicação em re-renders
+                if (this._onMouseMove) document.removeEventListener('mousemove', this._onMouseMove);
+                if (this._onMouseUp) document.removeEventListener('mouseup', this._onMouseUp);
+
+                this._onMouseMove = (e) => {
                     if (this.isDragging && this.dragElement) {
                         this.wasDragged = true;
                         const deltaY = e.clientY - this.startY;
@@ -517,9 +781,9 @@
                         this.dragElement.style.height = newHeight + 'px';
                         this.updateLabelRealtime(this.dragElement, parseInt(this.dragElement.style.top), newHeight);
                     }
-                });
+                };
 
-                document.addEventListener('mouseup', async () => {
+                this._onMouseUp = async () => {
                     if (this.isDragging && this.dragElement) {
                         this.dragElement.classList.remove('dragging');
                         this.isDragging = false;
@@ -532,14 +796,19 @@
                         if(this.wasDragged) await this.commitTimelineChanges(this.dragElement);
                         this.dragElement = null;
                     }
-                });
+                };
+
+                document.addEventListener('mousemove', this._onMouseMove);
+                document.addEventListener('mouseup', this._onMouseUp);
             },
 
             updateLabelRealtime(el, top, height) {
                 const sh = Math.floor(top/60); const sm = top%60;
                 const end = top + height;
                 const eh = Math.floor(end/60); const em = end%60;
-                el.children[1].innerText = `${sh.toString().padStart(2,'0')}:${sm.toString().padStart(2,'0')} - ${eh.toString().padStart(2,'0')}:${em.toString().padStart(2,'0')}`;
+                // Atualiza o texto visual enquanto arrasta
+                const labelEl = el.querySelector('.text-\\[10px\\]');
+                if (labelEl) labelEl.innerText = `${sh.toString().padStart(2,'0')}:${sm.toString().padStart(2,'0')} - ${eh.toString().padStart(2,'0')}:${em.toString().padStart(2,'0')}`;
             },
 
             async commitTimelineChanges(el) {
@@ -558,7 +827,33 @@
                 await this.updateItemDates(id, startObj, endObj);
             },
 
+            dragStart(ev, id) { ev.dataTransfer.setData("text/plain", id); },
+            allowDrop(ev) { ev.preventDefault(); },
+            
+            async dropOnTimeline(ev) {
+                ev.preventDefault();
+                const id = ev.dataTransfer.getData("text/plain");
+                if (!id) return;
+                const containerRect = document.getElementById('timelineScroll').getBoundingClientRect();
+                const y = ev.clientY - containerRect.top + document.getElementById('timelineScroll').scrollTop;
+                const snappedY = Math.floor(y / 30) * 30; // Arrasta em slots de 30 min
+                const hours = Math.floor(snappedY / 60);
+                const minutes = snappedY % 60;
+
+                const baseDate = document.getElementById('currentDate').value;
+                const startObj = new Date(`${baseDate}T${hours.toString().padStart(2,'0')}:${minutes.toString().padStart(2,'0')}:00`);
+                const endObj = new Date(startObj.getTime() + 60*60000); // 1 hora padrão
+
+                await this.updateItemDates(id, startObj, endObj);
+            },
+
+            // ==========================================
+            // UTILITÁRIOS DA API E BANCO
+            // ==========================================
+            
             toMySQLFormat(dateObj) {
+                if (!dateObj) return null;
+                if (typeof dateObj === 'string') return dateObj; // Já está no formato
                 return dateObj.getFullYear() + '-' +
                     ('0' + (dateObj.getMonth()+1)).slice(-2) + '-' +
                     ('0' + dateObj.getDate()).slice(-2) + ' ' +
@@ -566,40 +861,39 @@
                     ('0' + dateObj.getMinutes()).slice(-2) + ':00';
             },
 
-            async updateItemDates(id, startObj, endObj) {
-                const payload = { id: id, start_date: this.toMySQLFormat(startObj), end_date: this.toMySQLFormat(endObj) };
-                this.api('schedule', 'update_times', payload).then(() => this.loadData());
-            },
-
-            // --- DRAG & DROP NATIVO HTML5 (Do Backlog para Timeline) ---
-            dragStart(ev, id) { ev.dataTransfer.setData("text/plain", id); },
-            allowDrop(ev) { ev.preventDefault(); },
-            async dropOnTimeline(ev) {
-                ev.preventDefault();
-                const id = ev.dataTransfer.getData("text/plain");
-                if (!id) return;
-                const containerRect = document.getElementById('timelineScroll').getBoundingClientRect();
-                const y = ev.clientY - containerRect.top + document.getElementById('timelineScroll').scrollTop;
-                const snappedY = Math.floor(y / 30) * 30;
-                const hours = Math.floor(snappedY / 60);
-                const minutes = snappedY % 60;
-
-                const baseDate = document.getElementById('currentDate').value;
-                const startObj = new Date(`${baseDate}T${hours.toString().padStart(2,'0')}:${minutes.toString().padStart(2,'0')}:00`);
-                const endObj = new Date(startObj.getTime() + 60*60000);
-
-                await this.updateItemDates(id, startObj, endObj);
+            async updateItemDates(id, startVal, endVal) {
+                const payload = { 
+                    id: id, 
+                    start_date: this.toMySQLFormat(startVal), 
+                    end_date: this.toMySQLFormat(endVal) 
+                };
+                await this.api('schedule', 'update_times', payload);
+                await this.loadData();
             },
 
             // ==========================================
-            // LÓGICA DO MODAL (Igual do Dashboard)
+            // LÓGICA DO MODAL DE EDIÇÃO
             // ==========================================
+
+            setupFormListeners() {
+                document.getElementById('dirCoverFile').addEventListener('change', (e) => this.handleCoverUpload(e));
+                
+                const dirNameInput = document.getElementById('dirName');
+                if (dirNameInput) {
+                    dirNameInput.addEventListener('input', function() {
+                        this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; 
+                    });
+                    dirNameInput.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.saveDirectory(e); }
+                    });
+                }
+            },
 
             renderIconPicker() {
                 const container = document.getElementById('icon-picker');
                 container.innerHTML = this.state.availableIcons.map(icon => `
                     <label class="cursor-pointer">
-                        <input type="radio" name="dirIcon" value="${icon}" class="peer hidden icon-radio" ${icon === 'fa-folder' ? 'checked' : ''}>
+                        <input type="radio" name="dirIcon" value="${icon}" class="peer hidden icon-radio" ${icon === 'fa-check-circle' ? 'checked' : ''}>
                         <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 flex items-center justify-center transition-all hover:bg-slate-700 hover:text-white h-10">
                             <i class="fa-solid ${icon} text-lg"></i>
                         </div>
@@ -818,7 +1112,7 @@
 
                 const payload = {
                     id: id !== '' ? id : null,
-                    parent_id: this.agendaId, // SEMPRE atrela ao calendário atual
+                    parent_id: this.agendaId, 
                     type: selectedType,
                     name: document.getElementById('dirName').value.trim(),
                     view: selectedView,
