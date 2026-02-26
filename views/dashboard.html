@@ -4,7 +4,7 @@
   
   Pilar: Fácil Manutenção, Bonito e Rápido.
   Usa SortableJS para manipular eventos complexos de Drag and Drop em Desktop e Touch(Mobile).
-  (Correção: forceFallback ativado para evitar bugs de scroll horizontal no Kanban no Desktop)
+  Agora inclui reordenação inter-colunas nativa para o Kanban.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -45,18 +45,39 @@
 
         /* ----- ESTILOS DO MODO DE REORDENAÇÃO ----- */
         .reorder-active .draggable-item {
-            cursor: grab !important;
             border-color: #22c55e !important; /* Borda Verde (Success) */
             box-shadow: 0 4px 6px -1px rgba(34, 197, 94, 0.1);
         }
-        .reorder-active .draggable-item:active {
+        
+        /* Modificadores de cursor para o drag universal */
+        .reorder-active .draggable-item, 
+        .reorder-active .kanban-col-handle,
+        .reorder-active .kanban-item {
+            cursor: grab !important;
+        }
+
+        .reorder-active .draggable-item:active, 
+        .reorder-active .kanban-col-handle:active,
+        .reorder-active .kanban-item:active {
             cursor: grabbing !important;
         }
+
+        /* Itens internos do Kanban no modo de reordenação */
+        .reorder-active .kanban-item {
+            border-color: #22c55e !important;
+            background-color: #1e293b !important;
+        }
+
         .reorder-active .grip-handle {
-            display: flex !important; /* Mostra o ícone de arrastar */
+            display: inline-block !important; /* Mostra o ícone de arrastar */
         }
         .reorder-active .cog-btn {
             display: none !important; /* Esconde o botão de config para não atrapalhar */
+        }
+        
+        /* Magia CSS: Oculta o texto de "Pasta Vazia" automaticamente se um item for solto nela */
+        .kanban-scroll .kanban-empty:not(:only-child) {
+            display: none !important;
         }
         
         /* CORREÇÃO DO KANBAN: Desativa o Scroll Snap (imã) durante o drag para não bugar o Desktop */
@@ -256,7 +277,8 @@
                 reorderMode: false,
             },
             
-            sortableInstance: null,
+            // Alterado para um Array para suportar múltiplas instâncias no Kanban
+            sortableInstances: [],
 
             async init() {
                 this.setLoading(true);
@@ -359,7 +381,7 @@
                 }
             },
 
-            // --- LÓGICA DE REORDENAÇÃO MELHORADA ---
+            // --- LÓGICA DE REORDENAÇÃO AVANÇADA ---
             toggleReorderMode() {
                 this.state.reorderMode = !this.state.reorderMode;
                 
@@ -387,7 +409,7 @@
                 
                 if(this.state.reorderMode) {
                     container.classList.add('reorder-active');
-                    if(wrapper) wrapper.classList.add('reorder-active'); // Adiciona na div pai também para tratar CSS
+                    if(wrapper) wrapper.classList.add('reorder-active');
                     hint.classList.remove('hidden');
                 } else {
                     container.classList.remove('reorder-active');
@@ -399,9 +421,10 @@
             },
 
             initSortable() {
-                if (this.sortableInstance) {
-                    this.sortableInstance.destroy();
-                    this.sortableInstance = null;
+                // Destrói TODAS as instâncias anteriores (Principal e Colunas Kanban)
+                if (this.sortableInstances.length > 0) {
+                    this.sortableInstances.forEach(inst => inst.destroy());
+                    this.sortableInstances = [];
                 }
 
                 if (!this.state.reorderMode) return;
@@ -409,32 +432,66 @@
                 const wrapper = document.getElementById('sortable-wrapper');
                 const currentView = this.getCurrentView();
 
+                // 1. Instância Principal (Grid, List, ou as próprias Colunas do Kanban)
                 if (wrapper) {
-                    this.sortableInstance = new Sortable(wrapper, {
+                    const mainSortable = new Sortable(wrapper, {
                         animation: 250,
                         delay: 150, 
                         delayOnTouchOnly: true,
                         ghostClass: 'sortable-ghost',
                         dragClass: 'sortable-drag',
-                        
-                        // CONFIGURAÇÕES MÁGICAS PARA O KANBAN NO DESKTOP:
-                        // forceFallback desativa o Drag do HTML5 (que causa o bug visual de pulo no desktop)
-                        // e cria um clone via Javascript nativo, garantindo total suavidade.
                         forceFallback: true, 
                         fallbackOnBody: true, 
-                        
                         scroll: true,
-                        scrollSensitivity: 80, // Área sensível nas bordas para disparar o scroll automático
-                        scrollSpeed: 15,       // Velocidade agradável
+                        scrollSensitivity: 80,
+                        scrollSpeed: 15,       
                         direction: currentView === 'kanban' ? 'horizontal' : (currentView === 'list' ? 'vertical' : undefined),
-                        
+                        // No Kanban, usamos handle para não arrastar a coluna ao tentar arrastar itens internos
+                        handle: currentView === 'kanban' ? '.kanban-col-handle' : undefined,
                         onEnd: () => {
                             this.saveNewOrder();
                         }
                     });
+                    this.sortableInstances.push(mainSortable);
+                }
+
+                // 2. Instâncias Internas (Drag n Drop avançado DENTRO e ENTRE colunas do Kanban)
+                if (currentView === 'kanban') {
+                    const kanbanCols = document.querySelectorAll('.kanban-scroll');
+                    kanbanCols.forEach(col => {
+                        const colSortable = new Sortable(col, {
+                            group: 'kanban-items', // O segredo da magia: Permite arrastar ENTRE diferentes colunas!
+                            animation: 250,
+                            delay: 150,
+                            delayOnTouchOnly: true,
+                            ghostClass: 'sortable-ghost',
+                            dragClass: 'sortable-drag',
+                            forceFallback: true,
+                            fallbackOnBody: true,
+                            scroll: true,
+                            scrollSensitivity: 60,
+                            scrollSpeed: 15,
+                            onEnd: (evt) => {
+                                const toList = evt.to;
+                                const fromList = evt.from;
+                                const toParentId = toList.getAttribute('data-parent-id');
+                                const fromParentId = fromList.getAttribute('data-parent-id');
+                                
+                                // Salva a ordem da coluna de destino (E se trocou de coluna, atualiza o BD com o novo parent_id)
+                                this.saveInnerOrder(toList, toParentId);
+                                
+                                // Se o item foi movido para outra coluna, salva a ordem da coluna de origem também
+                                if (toList !== fromList) {
+                                    this.saveInnerOrder(fromList, fromParentId);
+                                }
+                            }
+                        });
+                        this.sortableInstances.push(colSortable);
+                    });
                 }
             },
 
+            // Salva a ordem principal (Root, Grid ou Colunas do Kanban)
             async saveNewOrder() {
                 const wrapper = document.getElementById('sortable-wrapper');
                 if (!wrapper) return;
@@ -442,6 +499,7 @@
                 const items = Array.from(wrapper.children);
                 const orderIds = items.map(item => item.getAttribute('data-id')).filter(id => id !== null);
 
+                // Atualiza o state local (Apenas as pastas raízes da visualização)
                 const newDirsState = [];
                 orderIds.forEach(id => {
                     const dir = this.state.directories.find(d => d.id == id);
@@ -450,6 +508,18 @@
                 this.state.directories = newDirsState;
 
                 await this.api('directories', 'reorder', { order: orderIds });
+            },
+
+            // Salva a ordem dos itens DENTRO do Kanban (suporta mudança de parent_id via API)
+            async saveInnerOrder(columnEl, newParentId) {
+                if (!columnEl) return;
+                const items = Array.from(columnEl.querySelectorAll('.kanban-item'));
+                const orderIds = items.map(item => item.getAttribute('data-id')).filter(id => id !== null);
+
+                await this.api('directories', 'reorder', { 
+                    order: orderIds, 
+                    parent_id: newParentId ? parseInt(newParentId) : null 
+                });
             },
 
             updateTopButtons() {
@@ -568,20 +638,26 @@
                         let html = '';
                         res.data.forEach(sub => {
                             html += `
-                            <div class="bg-slate-700 hover:bg-slate-600 border border-slate-600 p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm mb-2" onclick="app.enterDirectory(${sub.id}, '${sub.name}', '${sub.view}')">
+                            <div data-id="${sub.id}" class="kanban-item bg-slate-700 hover:bg-slate-600 border border-slate-600 p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm mb-2" onclick="app.enterDirectory(${sub.id}, '${sub.name}', '${sub.view}')">
                                 <div class="flex items-center gap-2 truncate pr-2">
+                                    <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
                                     <i class="fa-solid fa-folder text-gluon-primary text-sm"></i>
                                     <span class="text-sm text-slate-200 truncate font-medium">${sub.name}</span>
                                 </div>
-                                <button onclick="event.stopPropagation(); app.openModal(${sub.id}, '${sub.name}', ${dir.id}, '${sub.view}')" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 sm:opacity-0 group-hover:opacity-100 transition-all border border-slate-600"><i class="fa-solid fa-cog text-xs"></i></button>
+                                <button onclick="event.stopPropagation(); app.openModal(${sub.id}, '${sub.name}', ${dir.id}, '${sub.view}')" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 sm:opacity-0 group-hover:opacity-100 transition-all border border-slate-600 cog-btn"><i class="fa-solid fa-cog text-xs"></i></button>
                             </div>`;
                         });
                         container.innerHTML = html;
                     } else {
-                        container.innerHTML = `<div class="text-center flex flex-col items-center justify-center text-slate-500 text-xs py-8 opacity-60 border-2 border-dashed border-slate-700 rounded-lg"><i class="fa-solid fa-box-open text-2xl mb-2"></i> Pasta vazia</div>`;
+                        container.innerHTML = `<div class="kanban-empty text-center flex flex-col items-center justify-center text-slate-500 text-xs py-8 opacity-60 border-2 border-dashed border-slate-700 rounded-lg"><i class="fa-solid fa-box-open text-2xl mb-2"></i> Pasta vazia</div>`;
                     }
                 });
                 await Promise.all(promises);
+
+                // Re-inicia os manipuladores se o drag estiver ativado ao carregar os itens assíncronos
+                if (this.state.reorderMode) {
+                    this.initSortable();
+                }
             },
 
             render() {
@@ -651,12 +727,11 @@
                 }
 
                 else if (view === 'kanban') {
-                    // Note que 'snap-x' tem seu funcionamento inibido via CSS quando reorder-active entra na div principal
                     html = `<div id="sortable-wrapper" class="flex gap-4 sm:gap-6 overflow-x-auto pb-4 no-scrollbar h-full items-start snap-x">`;
                     this.state.directories.forEach(dir => {
                         html += `
                         <div data-id="${dir.id}" class="draggable-item snap-start bg-slate-800 border border-slate-700 rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg relative transition-colors">
-                            <div class="p-3 border-b border-slate-700 flex justify-between items-center bg-slate-900/50 rounded-t-xl group cursor-pointer hover:bg-slate-700/50 transition-colors" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
+                            <div class="p-3 border-b border-slate-700 flex justify-between items-center bg-slate-900/50 rounded-t-xl group cursor-pointer hover:bg-slate-700/50 transition-colors kanban-col-handle" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
                                 <div class="flex items-center gap-2 font-semibold text-slate-200 truncate w-full">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
                                     <i class="fa-solid fa-folder-open text-gluon-primary"></i>
@@ -666,7 +741,7 @@
                                     <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded p-1.5"><i class="fa-solid fa-cog text-xs"></i></button>
                                 </div>
                             </div>
-                            <div class="p-3 flex-1 overflow-y-auto kanban-scroll" id="kanban-col-${dir.id}">
+                            <div class="p-3 flex-1 overflow-y-auto kanban-scroll" id="kanban-col-${dir.id}" data-parent-id="${dir.id}">
                                 <div class="flex justify-center py-6">
                                     <i class="fa-solid fa-circle-notch fa-spin text-slate-500 text-2xl"></i>
                                 </div>
@@ -686,7 +761,6 @@
                 container.innerHTML = html;
                 
                 if (this.state.reorderMode) {
-                    // Adiciona as tags CSS caso renderize direto no modo de edição (pra ignorar o snap)
                     document.getElementById('sortable-wrapper').classList.add('reorder-active');
                     this.initSortable();
                 }
