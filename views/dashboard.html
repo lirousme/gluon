@@ -3,9 +3,7 @@
   Diretório: public_html/gluon/views/dashboard.html
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
-  Atualização: 
-    - Desempenho extremo no Custom Scrollbar.
-    - Botão de Logout trocado por "Perfil" redirecionando para a central de configurações (settings.html).
+  Atualizado com suporte completo a Pastas e Arquivos de Código.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -38,7 +36,7 @@
         .kanban-scroll::-webkit-scrollbar-track { background: transparent; }
         .kanban-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
 
-        .view-radio:checked + div { background-color: #3b82f6; border-color: #3b82f6; color: white; }
+        .view-radio:checked + div, .type-radio:checked + div { background-color: #3b82f6; border-color: #3b82f6; color: white; }
         .icon-radio:checked + div { background-color: #1e293b; border-color: #3b82f6; color: #3b82f6; }
 
         .reorder-active .draggable-item { border-color: #22c55e !important; box-shadow: 0 4px 6px -1px rgba(34, 197, 94, 0.1); }
@@ -131,7 +129,6 @@
                 
                 <div class="h-6 w-px bg-slate-700"></div>
                 
-                <!-- Botão de Perfil (Atualizado) -->
                 <button onclick="window.location.href='/settings'" class="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2" title="Meu Perfil">
                     <i class="fa-solid fa-circle-user text-xl"></i> 
                     <span class="hidden sm:inline font-medium">Perfil</span>
@@ -149,7 +146,7 @@
                 <i class="fa-solid fa-hand-pointer mr-2"></i> Arraste os itens para reordenar
             </div>
             <button onclick="app.openModal()" class="w-full sm:w-auto shrink-0 bg-gluon-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 font-medium">
-                <i class="fa-solid fa-folder-plus"></i> Novo Diretório
+                <i class="fa-solid fa-plus"></i> Novo Item
             </button>
         </div>
 
@@ -167,13 +164,13 @@
         <div id="gluon-scroll-thumb" class="h-6 bg-gluon-primary rounded-full cursor-grab active:cursor-grabbing active:bg-blue-400 hover:bg-blue-400 transition-colors will-change-transform shadow-lg"></div>
     </div>
 
-    <!-- Modal com Abas -->
+    <!-- Modal com Abas para Criação/Edição -->
     <div id="dirModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
         <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-0 transform scale-95 transition-transform duration-300 overflow-hidden flex flex-col max-h-[90vh]" id="dirModalContent">
             
             <div class="p-5 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
                 <h3 class="text-xl font-semibold text-white flex items-center gap-2" id="modalTitle">
-                    <i class="fa-solid fa-folder-gear text-gluon-primary"></i> <span>Configuração</span>
+                    <i class="fa-solid fa-folder-plus text-gluon-primary"></i> <span>Configuração</span>
                 </h3>
                 <button onclick="app.closeModal()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
             </div>
@@ -188,54 +185,77 @@
                 <input type="hidden" id="dirParentId">
 
                 <div id="tab-geral" class="p-6 overflow-y-auto flex-1">
+                    
+                    <!-- SELETOR DE TIPO (Apenas visível na Criação) -->
+                    <div id="typeSelectorContainer" class="mb-5">
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Tipo de Item</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="cursor-pointer" onclick="app.autoChangeIcon('fa-folder')">
+                                <input type="radio" name="itemType" value="0" class="peer hidden type-radio" checked>
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-3 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-folder block text-xl mb-1"></i><span class="text-xs font-medium">Pasta</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer" onclick="app.autoChangeIcon('fa-file-code')">
+                                <input type="radio" name="itemType" value="1" class="peer hidden type-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-3 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-file-code block text-xl mb-1"></i><span class="text-xs font-medium">Arquivo de Código</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
                     <div id="dirNameContainer" class="mb-5">
-                        <label class="block text-sm font-medium text-slate-300 mb-1">Nome da Pasta</label>
+                        <label class="block text-sm font-medium text-slate-300 mb-1" id="nameLabel">Nome</label>
                         <div class="relative">
                             <i class="fa-solid fa-pen absolute left-3 top-3.5 text-slate-500 text-sm"></i>
                             <textarea id="dirName" rows="1" autocomplete="off" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 pl-9 pr-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-all resize-none overflow-hidden min-h-[44px]"></textarea>
                         </div>
                     </div>
 
-                    <div class="mb-5">
-                        <label class="block text-sm font-medium text-slate-300 mb-2">Padrão de Visualização Interna</label>
-                        <div class="grid grid-cols-3 gap-2 sm:gap-3">
-                            <label class="cursor-pointer">
-                                <input type="radio" name="dirViewMode" value="grid" class="peer hidden view-radio" checked>
-                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-border-all block text-xl mb-1"></i><span class="text-xs font-medium">Grid</span></div>
-                            </label>
-                            <label class="cursor-pointer">
-                                <input type="radio" name="dirViewMode" value="list" class="peer hidden view-radio">
-                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-list-ul block text-xl mb-1"></i><span class="text-xs font-medium">Lista</span></div>
-                            </label>
-                            <label class="cursor-pointer">
-                                <input type="radio" name="dirViewMode" value="kanban" class="peer hidden view-radio">
-                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-columns block text-xl mb-1"></i><span class="text-xs font-medium">Kanban</span></div>
-                            </label>
+                    <!-- GRUPO DE CONFIGURAÇÕES DE PASTA (Escondido se for arquivo) -->
+                    <div id="folderSettingsGroup">
+                        <div class="mb-5">
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Padrão de Visualização Interna</label>
+                            <div class="grid grid-cols-3 gap-2 sm:gap-3">
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="dirViewMode" value="grid" class="peer hidden view-radio" checked>
+                                    <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-border-all block text-xl mb-1"></i><span class="text-xs font-medium">Grid</span></div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="dirViewMode" value="list" class="peer hidden view-radio">
+                                    <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-list-ul block text-xl mb-1"></i><span class="text-xs font-medium">Lista</span></div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="dirViewMode" value="kanban" class="peer hidden view-radio">
+                                    <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-columns block text-xl mb-1"></i><span class="text-xs font-medium">Kanban</span></div>
+                                </label>
+                            </div>
                         </div>
-                    </div>
 
-                    <div>
-                        <label class="block text-sm font-medium text-slate-300 mb-2">Adicionar novos itens no:</label>
-                        <div class="grid grid-cols-2 gap-2 sm:gap-3">
-                            <label class="cursor-pointer">
-                                <input type="radio" name="dirItemPosition" value="start" class="peer hidden view-radio">
-                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
-                                    <i class="fa-solid fa-arrow-up block text-xl mb-1"></i><span class="text-xs font-medium">Início da Lista</span>
-                                </div>
-                            </label>
-                            <label class="cursor-pointer">
-                                <input type="radio" name="dirItemPosition" value="end" class="peer hidden view-radio" checked>
-                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
-                                    <i class="fa-solid fa-arrow-down block text-xl mb-1"></i><span class="text-xs font-medium">Final da Lista</span>
-                                </div>
-                            </label>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Adicionar novos itens no:</label>
+                            <div class="grid grid-cols-2 gap-2 sm:gap-3">
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="dirItemPosition" value="start" class="peer hidden view-radio">
+                                    <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
+                                        <i class="fa-solid fa-arrow-up block text-xl mb-1"></i><span class="text-xs font-medium">Início</span>
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="dirItemPosition" value="end" class="peer hidden view-radio" checked>
+                                    <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
+                                        <i class="fa-solid fa-arrow-down block text-xl mb-1"></i><span class="text-xs font-medium">Final</span>
+                                    </div>
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <div id="tab-apar" class="hidden p-6 overflow-y-auto flex-1 space-y-5">
                     <div>
-                        <label class="block text-sm font-medium text-slate-300 mb-1"><i class="fa-regular fa-image mr-1"></i> Imagem de Capa (Galeria)</label>
+                        <label class="block text-sm font-medium text-slate-300 mb-1"><i class="fa-regular fa-image mr-1"></i> Imagem de Capa (Opcional)</label>
                         <input type="file" id="dirCoverFile" accept="image/*" class="w-full text-sm text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 transition-all cursor-pointer bg-slate-800 border border-slate-600 rounded-lg">
                         <input type="hidden" id="dirCoverBase64">
                         <div id="coverPreview" class="mt-3 hidden w-full h-24 rounded-lg bg-cover bg-center border border-slate-600 shadow-inner"></div>
@@ -243,7 +263,7 @@
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-slate-300 mb-2"><i class="fa-solid fa-palette mr-1"></i> Cor do Ícone (Gradient)</label>
+                        <label class="block text-sm font-medium text-slate-300 mb-2"><i class="fa-solid fa-palette mr-1"></i> Cores do Ícone (Gradient)</label>
                         <div class="flex gap-4 items-center">
                             <div class="flex-1">
                                 <span class="text-xs text-slate-500 block mb-1">Início</span>
@@ -290,9 +310,8 @@
                 isLoading: false,
                 reorderMode: false,
                 availableIcons: [
-                    'fa-folder', 'fa-folder-open', 'fa-star', 'fa-heart', 'fa-file', 'fa-image', 'fa-music', 'fa-video', 
-                    'fa-code', 'fa-lock', 'fa-vault', 'fa-book', 'fa-briefcase', 'fa-camera', 'fa-gamepad', 'fa-globe',
-                    'fa-key', 'fa-layer-group', 'fa-cube', 'fa-rocket'
+                    'fa-folder', 'fa-folder-open', 'fa-file-code', 'fa-file-lines', 'fa-file-image', 'fa-file-pdf', 'fa-star', 'fa-heart', 'fa-image', 'fa-music', 'fa-video', 
+                    'fa-code', 'fa-terminal', 'fa-database', 'fa-server', 'fa-lock', 'fa-vault', 'fa-book', 'fa-briefcase', 'fa-globe'
                 ]
             },
             
@@ -410,7 +429,6 @@
                 onDrag(e) {
                     if(!this.isDragging) return;
                     this.currentX = e.pageX; 
-                    
                     if(this.dragRAF) return; 
                     
                     this.dragRAF = requestAnimationFrame(() => {
@@ -434,10 +452,8 @@
                 stopDrag() {
                     this.isDragging = false;
                     document.body.style.userSelect = '';
-                    
                     this.wrapper.classList.add('snap-x');
                     this.wrapper.style.scrollBehavior = '';
-                    
                     document.removeEventListener('mousemove', this.onDrag);
                     document.removeEventListener('mouseup', this.stopDrag);
                 },
@@ -474,6 +490,15 @@
                 this.updateTopButtons();
                 await this.fetchDirectories();
                 this.setupEventListeners();
+
+                // Lógica Dinâmica do Tipo de Item (Pasta vs Arquivo)
+                document.querySelectorAll('input[name="itemType"]').forEach(radio => {
+                    radio.addEventListener('change', (e) => {
+                        const isFile = e.target.value === '1';
+                        document.getElementById('folderSettingsGroup').style.display = isFile ? 'none' : 'block';
+                        document.getElementById('nameLabel').innerText = isFile ? 'Nome do Arquivo (Ex: script.js)' : 'Nome da Pasta';
+                    });
+                });
             },
 
             setupEventListeners() {
@@ -592,6 +617,13 @@
                 `).join('');
             },
 
+            autoChangeIcon(iconClass) {
+                const radios = document.getElementsByName('dirIcon');
+                for(let i=0; i<radios.length; i++) { 
+                    if(radios[i].value === iconClass) radios[i].checked = true; 
+                }
+            },
+
             getCurrentParentId() { return this.state.path[this.state.path.length - 1].id; },
             getCurrentView() { return this.state.path[this.state.path.length - 1].view; },
 
@@ -630,14 +662,20 @@
                 this.setLoading(false);
             },
 
-            async enterDirectory(id) {
+            async enterDirectoryOrFile(id) {
                 if(this.state.reorderMode) return; 
-                const dir = this.state.directoryCache.get(Number(id));
-                if(!dir) return;
+                const item = this.state.directoryCache.get(Number(id));
+                if(!item) return;
 
-                this.state.path.push({ id: dir.id, name: dir.name, view: dir.view });
-                if (this.state.reorderMode) this.toggleReorderMode();
-                await this.fetchDirectories();
+                if (item.type === 1) {
+                    // É um Arquivo de Código. Abre a View do Editor via Front Controller.
+                    window.location.href = `/editor?id=${id}`;
+                } else {
+                    // É uma Pasta. Abre no Workspace
+                    this.state.path.push({ id: item.id, name: item.name, view: item.view });
+                    if (this.state.reorderMode) this.toggleReorderMode();
+                    await this.fetchDirectories();
+                }
             },
 
             async goUpTo(index) {
@@ -786,21 +824,35 @@
                 let dirObj = null;
                 const isRootSettings = id === 'root';
                 const dirNameInput = document.getElementById('dirName');
+                const typeSelector = document.getElementById('typeSelectorContainer');
+                const folderSettings = document.getElementById('folderSettingsGroup');
 
                 if (isRootSettings) {
-                    dirObj = { name: 'Meu Cofre (Raiz)', view: this.state.rootPrefs.view, new_item_position: this.state.rootPrefs.new_item_position };
+                    dirObj = { name: 'Meu Cofre (Raiz)', view: this.state.rootPrefs.view, new_item_position: this.state.rootPrefs.new_item_position, type: 0 };
                     document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-vault text-gluon-primary"></i> <span>Configurar Raiz</span>';
                     document.getElementById('dirNameContainer').classList.add('hidden');
                     document.getElementById('tab-btn-apar').classList.add('hidden');
+                    typeSelector.classList.add('hidden');
                 } else if (id) {
                     dirObj = this.state.directoryCache.get(Number(id));
-                    document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-folder-gear text-gluon-primary"></i> <span>Configurar Pasta</span>';
+                    document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-gear text-gluon-primary"></i> <span>Configurar ${dirObj.type === 1 ? 'Arquivo' : 'Pasta'}</span>`;
                     document.getElementById('dirNameContainer').classList.remove('hidden');
                     document.getElementById('tab-btn-apar').classList.remove('hidden');
+                    typeSelector.classList.add('hidden'); // Oculta a troca de tipo se já existe
+                    folderSettings.style.display = dirObj.type === 1 ? 'none' : 'block';
+                    document.getElementById('nameLabel').innerText = dirObj.type === 1 ? 'Nome do Arquivo' : 'Nome da Pasta';
                 } else {
-                    document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-folder-plus text-gluon-primary"></i> <span>Nova Pasta</span>';
+                    document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus text-gluon-primary"></i> <span>Novo Item</span>';
                     document.getElementById('dirNameContainer').classList.remove('hidden');
                     document.getElementById('tab-btn-apar').classList.remove('hidden');
+                    typeSelector.classList.remove('hidden');
+                    
+                    // Resetar o modal para "Pasta" no estado inicial da criação
+                    const typeRadios = document.getElementsByName('itemType');
+                    typeRadios[0].checked = true;
+                    folderSettings.style.display = 'block';
+                    document.getElementById('nameLabel').innerText = 'Nome da Pasta';
+                    this.autoChangeIcon('fa-folder');
                 }
 
                 dirNameInput.value = dirObj ? dirObj.name : name;
@@ -816,9 +868,8 @@
                 document.getElementById('dirColorFrom').value = (dirObj && dirObj.color_from) ? dirObj.color_from : '#3b82f6';
                 document.getElementById('dirColorTo').value = (dirObj && dirObj.color_to) ? dirObj.color_to : '#6366f1';
                 
-                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : 'fa-folder'; 
-                const iconRadios = document.getElementsByName('dirIcon');
-                for(let i=0; i<iconRadios.length; i++) { iconRadios[i].checked = (iconRadios[i].value === iconToSelect); }
+                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (isRootSettings ? 'fa-folder' : (dirObj?.type === 1 ? 'fa-file-code' : 'fa-folder')); 
+                this.autoChangeIcon(iconToSelect);
 
                 const posToSelect = (dirObj && dirObj.new_item_position) ? dirObj.new_item_position : 'end';
                 const posRadios = document.getElementsByName('dirItemPosition');
@@ -882,7 +933,7 @@
                 const isRootSettings = id === 'root';
                 
                 if (!isRootSettings && !document.getElementById('dirName').value.trim()) {
-                    return this.showToast("O nome da pasta é obrigatório.", "error");
+                    return this.showToast("O nome do item é obrigatório.", "error");
                 }
 
                 let selectedView = 'grid';
@@ -892,6 +943,10 @@
                 let selectedPos = 'end';
                 const posRadios = document.getElementsByName('dirItemPosition');
                 for(let i=0; i<posRadios.length; i++) { if(posRadios[i].checked) selectedPos = posRadios[i].value; }
+
+                let selectedType = 0; // Padrão: Pasta
+                const typeRadios = document.getElementsByName('itemType');
+                for(let i=0; i<typeRadios.length; i++) { if(typeRadios[i].checked) selectedType = parseInt(typeRadios[i].value); }
 
                 const btn = document.getElementById('btnSaveDir');
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
@@ -915,6 +970,7 @@
                     const payload = {
                         id: id !== '' ? id : null,
                         parent_id: document.getElementById('dirParentId').value !== '' ? document.getElementById('dirParentId').value : this.getCurrentParentId(),
+                        type: selectedType,
                         name: document.getElementById('dirName').value.trim(),
                         view: selectedView,
                         new_item_position: selectedPos,
@@ -941,7 +997,7 @@
                 const name = document.getElementById('dirName').value;
                 if(!id || id === 'root') return;
 
-                if(confirm(`Atenção: A pasta "${name}" e TODO o seu conteúdo serão apagados PERMANENTEMENTE.\nDeseja continuar?`)) {
+                if(confirm(`Atenção: "${name}" será apagado PERMANENTEMENTE.\nDeseja continuar?`)) {
                     const btn = document.getElementById('btnDeleteDir'); 
                     btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
                     btn.disabled = true; 
@@ -971,15 +1027,29 @@
 
             async loadKanbanContents() {
                 const promises = this.state.directories.map(async (dir) => {
-                    const res = await this.api('directories', 'fetch', { parent_id: dir.id });
                     const container = document.getElementById(`kanban-col-${dir.id}`);
                     if (!container) return;
+                    
+                    // Se for um Arquivo de Código (type 1), não busca sub-diretórios, pois arquivos não têm filhos.
+                    // Apresenta apenas uma arte bloqueando a coluna elegantemente.
+                    if (dir.type === 1) {
+                         container.innerHTML = `
+                            <div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60">
+                                <i class="fa-solid fa-file-code text-4xl mb-3" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>
+                                <span class="text-sm font-medium">Arquivo de Código</span>
+                                <span class="text-xs mt-1 text-center px-4">Clique no topo da coluna para abrir o editor</span>
+                            </div>`;
+                         return; // Sai da função assíncrona para este arquivo
+                    }
+
+                    // Se for Pasta (type 0), carrega filhos normalmente
+                    const res = await this.api('directories', 'fetch', { parent_id: dir.id });
                     
                     if (res && res.data && res.data.length > 0) {
                         res.data.forEach(d => this.state.directoryCache.set(Number(d.id), d));
 
                         container.innerHTML = res.data.map(sub => `
-                            <div data-id="${sub.id}" class="kanban-item bg-slate-700 hover:bg-slate-600 border border-slate-600 p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm mb-2 relative overflow-hidden" onclick="app.enterDirectory(${sub.id})">
+                            <div data-id="${sub.id}" class="kanban-item bg-slate-700 hover:bg-slate-600 border ${sub.type === 1 ? 'border-indigo-500/50' : 'border-slate-600'} p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm mb-2 relative overflow-hidden" onclick="app.enterDirectoryOrFile(${sub.id})">
                                 ${sub.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10" style="background-image: url('${sub.cover_url}')"></div>` : ''}
                                 <div class="flex items-center gap-2 truncate pr-2 relative z-10">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
@@ -1008,7 +1078,7 @@
                 if(view !== 'kanban') this.customScroll.destroy();
 
                 if (this.state.directories.length === 0) {
-                    container.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-500 mt-20 px-4 text-center"><i class="fa-regular fa-folder-open text-5xl sm:text-6xl mb-4 opacity-50"></i><h2 class="text-lg sm:text-xl font-medium text-slate-400">Esta pasta está vazia</h2><p class="text-sm mt-2">Clique em "Novo Diretório" para começar.</p></div>`;
+                    container.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-500 mt-20 px-4 text-center"><i class="fa-regular fa-folder-open text-5xl sm:text-6xl mb-4 opacity-50"></i><h2 class="text-lg sm:text-xl font-medium text-slate-400">Esta pasta está vazia</h2><p class="text-sm mt-2">Clique em "Novo Item" para começar.</p></div>`;
                     return;
                 }
 
@@ -1023,8 +1093,9 @@
                 if (view === 'grid') {
                     html = `<div id="sortable-wrapper" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">`;
                     this.state.directories.forEach(dir => {
+                        // Arquivos de código (type 1) ganham uma borda indigo mais estilizada no Grid
                         html += `
-                        <div data-id="${dir.id}" class="dir-card draggable-item group bg-slate-800 border border-slate-700 rounded-xl flex flex-col items-center text-center cursor-pointer relative overflow-hidden min-h-[140px]" onclick="app.enterDirectory(${dir.id})">
+                        <div data-id="${dir.id}" class="dir-card draggable-item group bg-slate-800 border ${dir.type === 1 ? 'border-indigo-600/50' : 'border-slate-700'} rounded-xl flex flex-col items-center text-center cursor-pointer relative overflow-hidden min-h-[140px]" onclick="app.enterDirectoryOrFile(${dir.id})">
                             ${dir.cover_url ? `<div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110" style="background-image: url('${dir.cover_url}')"></div><div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/80 to-slate-900/40"></div>` : ''}
                             
                             <div class="absolute top-2 left-2 text-green-500 hidden grip-handle bg-slate-900/80 backdrop-blur rounded p-1 z-20"><i class="fa-solid fa-grip-vertical"></i></div>
@@ -1045,7 +1116,7 @@
                     html = `<div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto"><table class="w-full text-left text-sm min-w-[300px]"><thead class="bg-slate-900/50 text-slate-400"><tr><th class="px-4 py-3 font-medium w-10 text-center hidden grip-handle">#</th><th class="px-4 sm:px-6 py-3 font-medium w-12"></th><th class="px-4 py-3 font-medium">Nome</th><th class="px-4 sm:px-6 py-3 font-medium text-right">Ações</th></tr></thead><tbody id="sortable-wrapper" class="divide-y divide-slate-700/50">`;
                     this.state.directories.forEach(dir => {
                         html += `
-                        <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/50 transition-colors group cursor-pointer border-l-2 border-transparent relative overflow-hidden" onclick="app.enterDirectory(${dir.id})">
+                        <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/50 transition-colors group cursor-pointer border-l-2 ${dir.type === 1 ? 'border-l-indigo-500' : 'border-l-transparent'} relative overflow-hidden" onclick="app.enterDirectoryOrFile(${dir.id})">
                             <td class="px-2 py-3 text-center hidden grip-handle text-green-500 bg-slate-900/20"><i class="fa-solid fa-grip-vertical"></i></td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-center">
                                 ${dir.cover_url ? `<div class="w-8 h-8 rounded bg-cover bg-center border border-slate-600 inline-block shadow-sm" style="background-image: url('${dir.cover_url}')"></div>` : `<i class="fa-solid ${dir.icon} text-xl" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>`}
@@ -1065,8 +1136,8 @@
                     html = `<div id="sortable-wrapper" class="flex-1 flex gap-4 sm:gap-6 overflow-x-auto items-start snap-x w-full pb-12 relative">`;
                     this.state.directories.forEach(dir => {
                         html += `
-                        <div data-id="${dir.id}" class="draggable-item snap-start bg-slate-800 border border-slate-700 rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg relative transition-colors overflow-hidden">
-                            <div class="p-4 border-b border-slate-700 flex justify-between items-center rounded-t-xl group cursor-pointer hover:bg-slate-700/50 transition-colors kanban-col-handle relative overflow-hidden min-h-[60px]" onclick="app.enterDirectory(${dir.id})">
+                        <div data-id="${dir.id}" class="draggable-item snap-start bg-slate-800 border ${dir.type === 1 ? 'border-indigo-700' : 'border-slate-700'} rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg relative transition-colors overflow-hidden">
+                            <div class="p-4 border-b border-slate-700 flex justify-between items-center rounded-t-xl group cursor-pointer hover:bg-slate-700/50 transition-colors kanban-col-handle relative overflow-hidden min-h-[60px]" onclick="app.enterDirectoryOrFile(${dir.id})">
                                 ${dir.cover_url ? `<div class="absolute inset-0 bg-cover bg-center" style="background-image: url('${dir.cover_url}')"></div><div class="absolute inset-0 bg-slate-900/80 backdrop-blur-[2px]"></div>` : `<div class="absolute inset-0 bg-slate-900/50"></div>`}
                                 
                                 <div class="flex items-center gap-2 font-semibold text-slate-100 truncate w-full relative z-10 drop-shadow-md">
@@ -1083,11 +1154,13 @@
                                 <div class="flex justify-center py-6"><i class="fa-solid fa-circle-notch fa-spin text-slate-500 text-2xl"></i></div>
                             </div>
                             
+                            <!-- Somente exibe botão de "Adicionar" no rodapé de Kanban se for uma PASTA -->
+                            ${dir.type === 0 ? `
                             <div class="p-3 border-t border-slate-700 bg-slate-900/30 rounded-b-xl z-10 relative">
                                 <button onclick="app.openModal('', '', ${dir.id}, 'grid')" class="text-slate-400 hover:text-white flex items-center justify-center gap-2 text-xs sm:text-sm transition-colors w-full py-2 hover:bg-slate-700 rounded-lg border border-slate-700/50 border-dashed">
-                                    <i class="fa-solid fa-plus"></i> Nova pasta aqui
+                                    <i class="fa-solid fa-plus"></i> Novo Item
                                 </button>
-                            </div>
+                            </div>` : ''}
                         </div>`;
                     });
                     html += `</div>`;
