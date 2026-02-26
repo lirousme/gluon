@@ -3,7 +3,8 @@
   Diretório: public_html/gluon/views/dashboard.html
   
   Pilar: Fácil Manutenção, Bonito e Rápido.
-  Atualização: Implementação do botão "Copiar" dinâmico no menu e sistema de Toast Notification.
+  Atualização: Remoção do botão de configuração redundante (ícone de engrenagem) ao final do breadcrumb, 
+               centralizando a ação no menu de contexto (3 pontinhos).
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -479,12 +480,11 @@
                     const isLast = index === this.state.path.length - 1;
                     const color = isLast ? 'text-white font-semibold' : 'text-slate-400 hover:text-gluon-primary transition-colors';
                     const separator = isLast ? '' : ' <i class="fa-solid fa-chevron-right text-[10px] text-slate-600 mx-1"></i> ';
-                    const settingsBtn = isLast ? ` <button onclick="event.stopPropagation(); app.openModal('${step.id || 'root'}')" class="inline-block text-slate-500 hover:text-gluon-primary transition-colors focus:outline-none" title="Configurar padrão desta pasta"><i class="fa-solid fa-cog"></i></button>` : '';
 
                     return `<span class="inline" ${!isLast ? `onclick="app.goUpTo(${index})"` : ''}>
                         <span class="${color} ${!isLast ? 'cursor-pointer hover:underline' : ''} transition-colors">
                             ${index === 0 ? '<i class="fa-solid fa-vault mr-1"></i>' : ''}${step.name}
-                        </span>${settingsBtn}${separator}
+                        </span>${separator}
                     </span>`;
                 }).join('');
             },
