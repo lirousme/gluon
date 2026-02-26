@@ -9,12 +9,12 @@ public_html/gluon/
 │
 ├── api/                      # Back-end: Endpoints que processam dados (Retornam JSON)
 │   ├── auth.php              # Login, Registro, Logout, Validação de Sessão
-│   ├── directories.php       # CRUD de Diretórios (Nomes criptografados + View + Ordem)
+│   ├── directories.php       # CRUD de Diretórios (Nomes criptografados + Estética)
 │   └── user.php              # Preferências do Usuário (Root View, Perfil, etc)
 │
 ├── views/                    # Front-end: Onde ficam os layouts (HTML/Tailwind)
 │   ├── login.html            # Interface de login e registro
-│   ├── dashboard.html        # Área logada com Grid/List/Kanban e Reordenação
+│   ├── dashboard.html        # Área logada com Abas de Estética, Grid/List/Kanban
 │   └── errors/               # Páginas de erro (404, 500)
 │
 └── assets/                   # Arquivos estáticos públicos
@@ -30,7 +30,7 @@ username VARCHAR(50) NOT NULL UNIQUE,
 email VARCHAR(100) NOT NULL UNIQUE,
 password_hash VARCHAR(255) NOT NULL,
 remember_token VARCHAR(255) DEFAULT NULL,
-root_view VARCHAR(10) DEFAULT 'grid', -- Preferência de layout da raiz (Meu Cofre)
+root_view VARCHAR(10) DEFAULT 'grid',
 encrypted_data TEXT DEFAULT NULL,
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -44,9 +44,13 @@ TABELA: directories
 id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 user_id INT UNSIGNED NOT NULL,
 parent_id INT UNSIGNED DEFAULT NULL, -- NULL significa que está na Raiz
-name_encrypted TEXT NOT NULL, -- Nome do diretório criptografado
-default_view VARCHAR(10) DEFAULT 'grid', -- Preferência de layout desta pasta (grid, list, kanban)
-sort_order INT DEFAULT 0, -- Índice de ordenação visual do usuário
+name_encrypted TEXT NOT NULL,        -- Nome do diretório criptografado
+default_view VARCHAR(10) DEFAULT 'grid',
+sort_order INT DEFAULT 0,
+icon VARCHAR(50) DEFAULT 'fa-folder',      -- Ícone FontAwesome
+icon_color_from VARCHAR(7) DEFAULT '#3b82f6', -- Cor inicial do Gradient (Hex)
+icon_color_to VARCHAR(7) DEFAULT '#6366f1',   -- Cor final do Gradient (Hex)
+cover_url_encrypted TEXT DEFAULT NULL,     -- URL da imagem de capa (Criptografado)
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
