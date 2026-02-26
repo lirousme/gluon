@@ -1,0 +1,186 @@
+<!-- 
+  Arquivo: editor.html
+  Diretório: public_html/gluon/views/editor.html
+  
+  Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
+  Usa CodeMirror 5 via CDN para carregamento instantâneo.
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gluon - Editor de Código</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- CodeMirror Estilos Core e Tema -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/dracula.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: { extend: { colors: { gluon: { dark: '#0f172a', primary: '#3b82f6', secondary: '#1e293b' } } } }
+        }
+    </script>
+    <style>
+        /* Ajustes para o CodeMirror preencher a tela */
+        .CodeMirror { height: 100% !important; font-family: 'Fira Code', 'Consolas', monospace; font-size: 14px; }
+        .cm-s-dracula.CodeMirror { background-color: #0f172a !important; }
+        .CodeMirror-gutters { background-color: #1e293b !important; border-right: 1px solid #334155 !important; }
+        .CodeMirror-linenumber { color: #64748b !important; }
+    </style>
+</head>
+<body class="bg-gluon-dark text-slate-200 h-screen flex flex-col font-sans overflow-hidden">
+
+    <!-- Header do Editor -->
+    <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-14 flex items-center justify-between px-4">
+        <div class="flex items-center gap-4">
+            <button onclick="window.location.href='/dashboard'" class="text-slate-400 hover:text-white transition-colors" title="Voltar">
+                <i class="fa-solid fa-arrow-left text-lg"></i>
+            </button>
+            <div class="h-6 w-px bg-slate-700"></div>
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-file-code text-gluon-primary"></i>
+                <span id="fileName" class="font-medium text-sm text-slate-200 tracking-wide">Carregando...</span>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-3">
+            <div id="saveStatus" class="text-xs text-slate-500 hidden sm:block">Salvo na nuvem</div>
+            
+            <select id="langSelect" onchange="editorApp.changeLanguage()" class="bg-slate-800 border border-slate-600 text-slate-300 text-xs rounded px-2 py-1.5 outline-none focus:border-gluon-primary">
+                <option value="javascript">JavaScript</option>
+                <option value="htmlmixed">HTML</option>
+                <option value="css">CSS</option>
+                <option value="php">PHP</option>
+                <option value="python">Python</option>
+                <option value="sql">SQL</option>
+            </select>
+
+            <button onclick="editorApp.saveContent()" id="btnSave" class="bg-gluon-primary hover:bg-blue-600 text-white text-sm font-medium py-1.5 px-4 rounded shadow-lg transition-all flex items-center gap-2">
+                <i class="fa-solid fa-floppy-disk"></i> <span class="hidden sm:inline">Salvar</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Container do CodeMirror -->
+    <main class="flex-1 w-full relative" id="editorContainer"></main>
+
+    <!-- Scripts do CodeMirror -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/htmlmixed/htmlmixed.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/php/php.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/sql/sql.min.js"></script>
+
+    <script>
+        const editorApp = {
+            cm: null,
+            fileId: null,
+            isDirty: false,
+
+            async init() {
+                const urlParams = new URLSearchParams(window.location.search);
+                this.fileId = urlParams.get('id');
+
+                if (!this.fileId) {
+                    alert("ID do arquivo não fornecido.");
+                    window.location.href = '/dashboard';
+                    return;
+                }
+
+                // Instancia o editor vazio
+                this.cm = CodeMirror(document.getElementById('editorContainer'), {
+                    value: "// Inicializando módulo criptográfico...",
+                    mode: "javascript",
+                    theme: "dracula",
+                    lineNumbers: true,
+                    indentUnit: 4,
+                    lineWrapping: true,
+                    autoCloseBrackets: true
+                });
+
+                this.cm.on('change', () => {
+                    this.isDirty = true;
+                    document.getElementById('saveStatus').innerText = 'Não salvo *';
+                    document.getElementById('saveStatus').classList.add('text-amber-500');
+                    document.getElementById('saveStatus').classList.remove('text-slate-500');
+                });
+
+                // Atalho Ctrl+S para salvar
+                document.addEventListener('keydown', (e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                        e.preventDefault();
+                        this.saveContent();
+                    }
+                });
+
+                await this.loadContent();
+            },
+
+            async api(action, payload = {}) {
+                payload.action = action;
+                try {
+                    const res = await fetch(`/api/editor`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (res.status === 401) window.location.href = '/'; 
+                    const data = await res.json();
+                    if (data.status !== 'success') throw new Error(data.message);
+                    return data;
+                } catch (err) { alert(err.message); return null; }
+            },
+
+            async loadContent() {
+                const res = await this.api('get_content', { id: this.fileId });
+                if (res && res.data) {
+                    document.getElementById('fileName').innerText = res.data.name;
+                    document.getElementById('langSelect').value = res.data.language;
+                    
+                    this.cm.setOption("mode", res.data.language);
+                    this.cm.setValue(res.data.content || '');
+                    this.cm.clearHistory();
+                    
+                    this.isDirty = false;
+                    document.getElementById('saveStatus').innerText = 'Sincronizado';
+                }
+            },
+
+            async saveContent() {
+                const btn = document.getElementById('btnSave');
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+                btn.disabled = true;
+
+                const payload = {
+                    id: this.fileId,
+                    content: this.cm.getValue(),
+                    language: document.getElementById('langSelect').value
+                };
+
+                const res = await this.api('save_content', payload);
+                
+                if (res) {
+                    this.isDirty = false;
+                    document.getElementById('saveStatus').innerText = 'Salvo na nuvem';
+                    document.getElementById('saveStatus').classList.remove('text-amber-500');
+                    document.getElementById('saveStatus').classList.add('text-slate-500');
+                }
+
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            },
+
+            changeLanguage() {
+                const lang = document.getElementById('langSelect').value;
+                this.cm.setOption("mode", lang);
+                this.isDirty = true; // Força aviso de não salvo ao mudar a linguagem
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => editorApp.init());
+    </script>
+</body>
+</html>
