@@ -3,8 +3,7 @@
   Diretório: public_html/gluon/views/dashboard.html
   
   Pilar: Fácil Manutenção, Bonito e Rápido.
-  Atualização: Correção do layout do breadcrumb. Removido o Flexbox do container
-  para que os itens fluam como um parágrafo contínuo usando elementos inline.
+  Atualização: Implementação do botão "Copiar" dinâmico no menu e sistema de Toast Notification.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -68,7 +67,7 @@
         input[type="color"]::-webkit-color-swatch { border: none; border-radius: 0.5rem; }
     </style>
 </head>
-<body class="bg-gluon-dark text-slate-200 min-h-screen flex flex-col font-sans selection:bg-gluon-primary selection:text-white">
+<body class="bg-gluon-dark text-slate-200 min-h-screen flex flex-col font-sans selection:bg-gluon-primary selection:text-white relative">
 
     <!-- Top Navigation -->
     <nav class="bg-gluon-secondary border-b border-slate-700/50 sticky top-0 z-40 backdrop-blur-md bg-opacity-90">
@@ -94,16 +93,38 @@
                     <button onclick="app.setViewMode('kanban')" id="btn-view-kanban" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Kanban"><i class="fa-solid fa-columns"></i></button>
                 </div>
 
-                <div class="relative md:hidden">
-                    <button onclick="app.toggleMobileViewMenu()" id="btn-mobile-menu-trigger" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors outline-none focus:ring-2 focus:ring-slate-700"><i class="fa-solid fa-ellipsis-vertical px-1"></i></button>
-                    <div id="mobileViewMenu" class="hidden absolute right-0 top-12 w-52 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 origin-top-right transition-all">
-                        <button onclick="app.toggleReorderMode(); app.toggleMobileViewMenu()" id="btn-reorder-mobile" class="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors border-b border-slate-700/50 mb-1">
-                            <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90 w-5 text-center text-lg"></i> <span class="font-medium">Alterar Ordem</span>
+                <!-- Menu de Opções Geral (3 pontinhos) - Agora visível também no desktop -->
+                <div class="relative">
+                    <button onclick="app.toggleMobileViewMenu()" id="btn-mobile-menu-trigger" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors outline-none focus:ring-2 focus:ring-slate-700">
+                        <i class="fa-solid fa-ellipsis-vertical px-1"></i>
+                    </button>
+                    <div id="mobileViewMenu" class="hidden absolute right-0 top-12 w-56 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 origin-top-right transition-all">
+                        
+                        <!-- Opções de Pasta Atual -->
+                        <div class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Ações do Diretório</div>
+                        
+                        <!-- Configurar Pasta Atual (Nova adição utilitária) -->
+                        <button onclick="app.openModal(app.getCurrentParentId() || 'root'); app.toggleMobileViewMenu()" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                            <i class="fa-solid fa-folder-gear w-5 text-center text-lg"></i> <span class="font-medium">Configurações</span>
                         </button>
-                        <div class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Visualização</div>
-                        <button onclick="app.setViewMode('grid'); app.toggleMobileViewMenu()" id="btn-mobile-view-grid" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors"><i class="fa-solid fa-border-all w-5 text-center text-lg"></i> <span class="font-medium">Grid</span></button>
-                        <button onclick="app.setViewMode('list'); app.toggleMobileViewMenu()" id="btn-mobile-view-list" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors"><i class="fa-solid fa-list-ul w-5 text-center text-lg"></i> <span class="font-medium">Lista</span></button>
-                        <button onclick="app.setViewMode('kanban'); app.toggleMobileViewMenu()" id="btn-mobile-view-kanban" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors"><i class="fa-solid fa-columns w-5 text-center text-lg"></i> <span class="font-medium">Kanban</span></button>
+
+                        <!-- NOVO: Botão Copiar (Visibilidade controlada pelo JS) -->
+                        <button onclick="app.copyCurrentDirectory(); app.toggleMobileViewMenu()" id="btn-copy-dir" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                            <i class="fa-regular fa-copy w-5 text-center text-lg"></i> <span class="font-medium">Copiar Diretório</span>
+                        </button>
+
+                        <div class="h-px bg-slate-700/50 my-2 md:hidden"></div>
+
+                        <!-- Opções exclusivas do Mobile (Ocultas no Desktop) -->
+                        <div class="md:hidden">
+                            <button onclick="app.toggleReorderMode(); app.toggleMobileViewMenu()" id="btn-reorder-mobile" class="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors border-b border-slate-700/50 mb-1">
+                                <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90 w-5 text-center text-lg"></i> <span class="font-medium">Alterar Ordem</span>
+                            </button>
+                            <div class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Visualização</div>
+                            <button onclick="app.setViewMode('grid'); app.toggleMobileViewMenu()" id="btn-mobile-view-grid" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors"><i class="fa-solid fa-border-all w-5 text-center text-lg"></i> <span class="font-medium">Grid</span></button>
+                            <button onclick="app.setViewMode('list'); app.toggleMobileViewMenu()" id="btn-mobile-view-list" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors"><i class="fa-solid fa-list-ul w-5 text-center text-lg"></i> <span class="font-medium">Lista</span></button>
+                            <button onclick="app.setViewMode('kanban'); app.toggleMobileViewMenu()" id="btn-mobile-view-kanban" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors"><i class="fa-solid fa-columns w-5 text-center text-lg"></i> <span class="font-medium">Kanban</span></button>
+                        </div>
                     </div>
                 </div>
                 
@@ -116,7 +137,6 @@
     <!-- Main Workspace -->
     <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col h-[calc(100vh-64px)] overflow-hidden">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 shrink-0">
-            <!-- Breadcrumbs modificado: Container "block" e "break-words" para agir puramente como texto -->
             <div class="block text-sm text-slate-300 font-medium w-full flex-1 leading-relaxed break-words" id="breadcrumbs"></div>
             
             <div id="reorder-hint" class="hidden animate-pulse text-green-400 text-sm font-medium flex-1 text-center bg-green-500/10 py-2 px-4 rounded-lg border border-green-500/20">
@@ -206,7 +226,6 @@
                 <!-- ABA APARÊNCIA -->
                 <div id="tab-apar" class="hidden p-6 overflow-y-auto flex-1 space-y-5">
                     
-                    <!-- Capa da Galeria -->
                     <div>
                         <label class="block text-sm font-medium text-slate-300 mb-1"><i class="fa-regular fa-image mr-1"></i> Imagem de Capa (Galeria)</label>
                         <input type="file" id="dirCoverFile" accept="image/*" class="w-full text-sm text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 transition-all cursor-pointer bg-slate-800 border border-slate-600 rounded-lg">
@@ -215,7 +234,6 @@
                         <button type="button" id="btnRemoveCover" class="hidden mt-2 text-xs text-red-400 hover:text-red-300 flex items-center gap-1"><i class="fa-solid fa-trash"></i> Remover capa</button>
                     </div>
 
-                    <!-- Cores Gradient -->
                     <div>
                         <label class="block text-sm font-medium text-slate-300 mb-2"><i class="fa-solid fa-palette mr-1"></i> Cor do Ícone (Gradient)</label>
                         <div class="flex gap-4 items-center">
@@ -231,7 +249,6 @@
                         </div>
                     </div>
 
-                    <!-- Ícone -->
                     <div>
                         <label class="block text-sm font-medium text-slate-300 mb-2"><i class="fa-solid fa-icons mr-1"></i> Selecionar Ícone</label>
                         <div class="grid grid-cols-5 gap-2 max-h-40 overflow-y-auto no-scrollbar p-1" id="icon-picker">
@@ -297,21 +314,59 @@
                 document.getElementById('dirCoverFile').addEventListener('change', (e) => this.handleCoverUpload(e));
                 document.getElementById('btnRemoveCover').addEventListener('click', () => this.removeCover());
                 
-                // Lógica de Redimensionamento Automático do Textarea
                 const dirNameInput = document.getElementById('dirName');
                 if (dirNameInput) {
                     dirNameInput.addEventListener('input', function() {
-                        this.style.height = 'auto'; // Reseta altura para calcular
-                        this.style.height = (this.scrollHeight) + 'px'; // Define a nova altura exata
+                        this.style.height = 'auto'; 
+                        this.style.height = (this.scrollHeight) + 'px'; 
                     });
                     
-                    // UX: Pressionar Enter salva o formulário, Shift+Enter pula linha
                     dirNameInput.addEventListener('keydown', function(e) {
                         if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault(); // Evita pular a linha
-                            app.saveDirectory(e); // Chama a função de salvamento
+                            e.preventDefault(); 
+                            app.saveDirectory(e); 
                         }
                     });
+                }
+            },
+
+            // Sistema de Toast UI (Rápido e Bonito)
+            showToast(message, type = 'success') {
+                let toast = document.getElementById('gluon-toast');
+                if (!toast) {
+                    toast = document.createElement('div');
+                    toast.id = 'gluon-toast';
+                    document.body.appendChild(toast);
+                }
+                
+                const icon = type === 'success' ? '<i class="fa-solid fa-circle-check"></i>' : '<i class="fa-solid fa-circle-exclamation"></i>';
+                const bgClass = type === 'success' ? 'bg-green-600' : 'bg-red-600';
+                
+                toast.className = `fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-xl text-white text-sm font-medium flex items-center gap-3 z-50 transition-all duration-300 transform translate-y-10 opacity-0 ${bgClass}`;
+                toast.innerHTML = `${icon} <span>${message}</span>`;
+                
+                // Trigger animation
+                setTimeout(() => {
+                    toast.classList.remove('translate-y-10', 'opacity-0');
+                    toast.classList.add('translate-y-0', 'opacity-100');
+                }, 10);
+
+                setTimeout(() => {
+                    toast.classList.remove('translate-y-0', 'opacity-100');
+                    toast.classList.add('translate-y-10', 'opacity-0');
+                }, 3000);
+            },
+
+            // Nova Função: Copiar Diretório (Área de Transferência)
+            async copyCurrentDirectory() {
+                const currentId = this.getCurrentParentId();
+                if (currentId === null) return; // Segurança extra
+
+                const response = await this.api('user', 'copy_directory', { dir_id: currentId });
+                if (response && response.status === 'success') {
+                    this.showToast(response.message, 'success');
+                } else {
+                    this.showToast(response ? response.message : 'Erro ao copiar', 'error');
                 }
             },
 
@@ -420,15 +475,10 @@
             renderBreadcrumbs() {
                 const container = document.getElementById('breadcrumbs');
                 
-                // Geração do HTML puramente inline (sem Flexbox), o que faz o texto
-                // quebrar nativamente e fluir na mesma linha, imitando um parágrafo.
                 container.innerHTML = this.state.path.map((step, index) => {
                     const isLast = index === this.state.path.length - 1;
                     const color = isLast ? 'text-white font-semibold' : 'text-slate-400 hover:text-gluon-primary transition-colors';
-                    
-                    // Os espaços vazios (" ") em volta da tag <i> garantem o espaçamento contínuo do texto.
                     const separator = isLast ? '' : ' <i class="fa-solid fa-chevron-right text-[10px] text-slate-600 mx-1"></i> ';
-                    
                     const settingsBtn = isLast ? ` <button onclick="event.stopPropagation(); app.openModal('${step.id || 'root'}')" class="inline-block text-slate-500 hover:text-gluon-primary transition-colors focus:outline-none" title="Configurar padrão desta pasta"><i class="fa-solid fa-cog"></i></button>` : '';
 
                     return `<span class="inline" ${!isLast ? `onclick="app.goUpTo(${index})"` : ''}>
@@ -461,11 +511,11 @@
 
                 if(this.state.reorderMode) {
                     btnDesk.classList.add('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20'); btnDesk.classList.remove('text-slate-400', 'hover:bg-slate-700');
-                    btnMob.classList.add('text-green-400', 'bg-slate-700/50'); btnMob.classList.remove('text-slate-300');
+                    if(btnMob) { btnMob.classList.add('text-green-400', 'bg-slate-700/50'); btnMob.classList.remove('text-slate-300'); }
                     container.classList.add('reorder-active'); if(wrapper) wrapper.classList.add('reorder-active'); hint.classList.remove('hidden');
                 } else {
                     btnDesk.classList.remove('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20'); btnDesk.classList.add('text-slate-400', 'hover:bg-slate-700');
-                    btnMob.classList.remove('text-green-400', 'bg-slate-700/50'); btnMob.classList.add('text-slate-300');
+                    if(btnMob) { btnMob.classList.remove('text-green-400', 'bg-slate-700/50'); btnMob.classList.add('text-slate-300'); }
                     container.classList.remove('reorder-active'); if(wrapper) wrapper.classList.remove('reorder-active'); hint.classList.add('hidden');
                 }
                 this.initSortable();
@@ -523,6 +573,20 @@
                     const mBtn = document.getElementById(`btn-mobile-view-${v}`);
                     if(mBtn) { mBtn.className = mBtn.className.replace(/text-slate-300|text-gluon-primary|bg-slate-700\/50/g, ''); mBtn.classList.add(v === currentView ? 'text-gluon-primary' : 'text-slate-300'); if(v === currentView) mBtn.classList.add('bg-slate-700/50'); }
                 });
+
+                // Regra de Visibilidade do botão de COPIAR e Configurar Pasta
+                const btnCopy = document.getElementById('btn-copy-dir');
+                if (btnCopy) {
+                    if (this.getCurrentParentId() === null) {
+                        // Se estiver na raiz, esconde o botão de copiar
+                        btnCopy.classList.add('hidden');
+                        btnCopy.classList.remove('flex');
+                    } else {
+                        // Se estiver dentro de uma pasta, mostra o botão
+                        btnCopy.classList.remove('hidden');
+                        btnCopy.classList.add('flex');
+                    }
+                }
             },
 
             switchModalTab(tabName) {
@@ -601,12 +665,10 @@
                 const content = document.getElementById('dirModalContent');
                 modal.classList.remove('hidden'); modal.classList.add('flex');
                 
-                // Animação e ajustes de focos e expansão do textarea
                 setTimeout(() => { 
                     modal.classList.remove('opacity-0'); 
                     content.classList.remove('scale-95'); 
                     
-                    // Ajustar altura inicial do textarea baseado no valor preenchido
                     dirNameInput.style.height = 'auto';
                     if (dirNameInput.scrollHeight > 0) {
                         dirNameInput.style.height = dirNameInput.scrollHeight + 'px';
@@ -630,7 +692,7 @@
                 const isRootSettings = id === 'root';
                 
                 if (!isRootSettings && !document.getElementById('dirName').value.trim()) {
-                    return alert("O nome da pasta é obrigatório.");
+                    return this.showToast("O nome da pasta é obrigatório.", "error");
                 }
 
                 let selectedView = 'grid';
