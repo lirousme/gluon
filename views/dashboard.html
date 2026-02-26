@@ -55,7 +55,8 @@
             </div>
             
             <div class="flex items-center gap-4">
-                <!-- Botões de Visualização (Salvam na Raiz ou Alteram Temporariamente nas pastas) -->
+                
+                <!-- Botões de Visualização (DESKTOP) -->
                 <div class="hidden md:flex items-center gap-2 bg-slate-800 rounded-lg p-1 border border-slate-700">
                     <button onclick="app.setViewMode('grid')" id="btn-view-grid" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Visualização em Grid">
                         <i class="fa-solid fa-border-all"></i>
@@ -66,6 +67,30 @@
                     <button onclick="app.setViewMode('kanban')" id="btn-view-kanban" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Visualização em Kanban">
                         <i class="fa-solid fa-columns"></i>
                     </button>
+                </div>
+
+                <!-- Menu de Visualização (MOBILE - 3 pontinhos) -->
+                <div class="relative md:hidden">
+                    <button onclick="app.toggleMobileViewMenu()" id="btn-mobile-menu-trigger" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors outline-none focus:ring-2 focus:ring-slate-700">
+                        <i class="fa-solid fa-ellipsis-vertical px-1"></i>
+                    </button>
+                    
+                    <!-- Dropdown Mobile -->
+                    <div id="mobileViewMenu" class="hidden absolute right-0 top-12 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 origin-top-right transition-all">
+                        <div class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Visualização</div>
+                        
+                        <button onclick="app.setViewMode('grid'); app.toggleMobileViewMenu()" id="btn-mobile-view-grid" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                            <i class="fa-solid fa-border-all w-5 text-center text-lg"></i> <span class="font-medium">Grid</span>
+                        </button>
+                        
+                        <button onclick="app.setViewMode('list'); app.toggleMobileViewMenu()" id="btn-mobile-view-list" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                            <i class="fa-solid fa-list-ul w-5 text-center text-lg"></i> <span class="font-medium">Lista</span>
+                        </button>
+                        
+                        <button onclick="app.setViewMode('kanban'); app.toggleMobileViewMenu()" id="btn-mobile-view-kanban" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                            <i class="fa-solid fa-columns w-5 text-center text-lg"></i> <span class="font-medium">Kanban</span>
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="h-6 w-px bg-slate-700"></div>
@@ -78,7 +103,7 @@
     </nav>
 
     <!-- Main Workspace -->
-    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col h-[calc(100vh-64px)] overflow-hidden">
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col h-[calc(100vh-64px)] overflow-hidden">
         
         <!-- Toolbar & Breadcrumbs -->
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 shrink-0">
@@ -86,7 +111,7 @@
                 <!-- Preenchido via JS -->
             </div>
 
-            <button onclick="app.openModal()" class="shrink-0 bg-gluon-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2 font-medium">
+            <button onclick="app.openModal()" class="w-full sm:w-auto shrink-0 bg-gluon-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 font-medium">
                 <i class="fa-solid fa-folder-plus"></i> Novo Diretório
             </button>
         </div>
@@ -102,14 +127,14 @@
     </main>
 
     <!-- Modal Unificado de Configuração de Diretório -->
-    <div id="dirModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300">
+    <div id="dirModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
         <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-6 transform scale-95 transition-transform duration-300" id="dirModalContent">
             
             <div class="flex justify-between items-center mb-6">
                 <h3 class="text-xl font-semibold text-white flex items-center gap-2" id="modalTitle">
                     <i class="fa-solid fa-folder-gear text-gluon-primary"></i> <span>Configurar Pasta</span>
                 </h3>
-                <button onclick="app.closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+                <button onclick="app.closeModal()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
             </div>
 
             <form id="dirForm" onsubmit="app.saveDirectory(event)">
@@ -128,24 +153,24 @@
                 <!-- Padrão de Visualização -->
                 <div class="mb-8">
                     <label class="block text-sm font-medium text-slate-300 mb-2">Padrão de Visualização desta Pasta</label>
-                    <div class="grid grid-cols-3 gap-3">
+                    <div class="grid grid-cols-3 gap-2 sm:gap-3">
                         <label class="cursor-pointer">
                             <input type="radio" name="dirViewMode" value="grid" class="peer hidden view-radio" checked>
-                            <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-3 text-center transition-all hover:bg-slate-700">
+                            <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
                                 <i class="fa-solid fa-border-all block text-xl mb-1"></i>
                                 <span class="text-xs font-medium">Grid</span>
                             </div>
                         </label>
                         <label class="cursor-pointer">
                             <input type="radio" name="dirViewMode" value="list" class="peer hidden view-radio">
-                            <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-3 text-center transition-all hover:bg-slate-700">
+                            <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
                                 <i class="fa-solid fa-list-ul block text-xl mb-1"></i>
                                 <span class="text-xs font-medium">Lista</span>
                             </div>
                         </label>
                         <label class="cursor-pointer">
                             <input type="radio" name="dirViewMode" value="kanban" class="peer hidden view-radio">
-                            <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-3 text-center transition-all hover:bg-slate-700">
+                            <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
                                 <i class="fa-solid fa-columns block text-xl mb-1"></i>
                                 <span class="text-xs font-medium">Kanban</span>
                             </div>
@@ -154,14 +179,14 @@
                 </div>
 
                 <!-- Rodapé de Ações -->
-                <div class="flex justify-between items-center pt-4 border-t border-slate-700/50">
-                    <div>
+                <div class="flex flex-col-reverse sm:flex-row justify-between items-center pt-4 border-t border-slate-700/50 gap-3">
+                    <div class="w-full sm:w-auto">
                         <!-- Botão de Excluir só aparece quando for Edição (ID preenchido) -->
-                        <button type="button" id="btnDeleteDir" onclick="app.deleteFromModal()" class="hidden text-red-400 hover:text-white hover:bg-red-500/20 px-3 py-2 rounded-lg transition-colors flex items-center gap-2 text-sm">
-                            <i class="fa-solid fa-trash"></i> <span class="hidden sm:inline">Excluir</span>
+                        <button type="button" id="btnDeleteDir" onclick="app.deleteFromModal()" class="hidden w-full text-red-400 hover:text-white hover:bg-red-500/20 px-3 py-2 rounded-lg transition-colors flex justify-center items-center gap-2 text-sm">
+                            <i class="fa-solid fa-trash"></i> <span>Excluir</span>
                         </button>
                     </div>
-                    <div class="flex gap-2">
+                    <div class="flex gap-2 w-full sm:w-auto justify-end">
                         <button type="button" onclick="app.closeModal()" class="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors text-sm font-medium">Cancelar</button>
                         <button type="submit" id="btnSaveDir" class="px-4 py-2 bg-gluon-primary hover:bg-blue-600 text-white rounded-lg shadow-lg flex items-center gap-2 text-sm font-medium transition-all">
                             <i class="fa-solid fa-check"></i> Salvar
@@ -187,6 +212,22 @@
                 await this.fetchUserPrefs(); // Busca as configs do usuário primeiro (Root View)
                 this.updateTopButtons();
                 await this.fetchDirectories();
+                this.setupEventListeners();
+            },
+
+            setupEventListeners() {
+                // Lógica para fechar o dropdown mobile ao clicar fora dele
+                document.addEventListener('click', (event) => {
+                    const menu = document.getElementById('mobileViewMenu');
+                    const trigger = document.getElementById('btn-mobile-menu-trigger');
+                    
+                    if (menu && !menu.classList.contains('hidden')) {
+                        // Se o clique não foi no menu nem no botão que abre ele, esconde.
+                        if (!menu.contains(event.target) && !trigger.contains(event.target)) {
+                            menu.classList.add('hidden');
+                        }
+                    }
+                });
             },
 
             getCurrentParentId() {
@@ -220,7 +261,6 @@
             async fetchUserPrefs() {
                 const response = await this.api('user', 'get_prefs');
                 if (response && response.data) {
-                    // Atualiza a view da raiz (índice 0) com a preferência salva no banco
                     this.state.path[0].view = response.data.root_view;
                 }
             },
@@ -265,15 +305,19 @@
                 }).join('');
             },
 
-            // --- Alteração de View pelo Menu de Topo ---
+            // --- Menu Mobile e Alteração de View ---
+            toggleMobileViewMenu() {
+                const menu = document.getElementById('mobileViewMenu');
+                menu.classList.toggle('hidden');
+            },
+
             async setViewMode(viewName) {
                 // Altera na UI instantaneamente (Otimista)
                 this.state.path[this.state.path.length - 1].view = viewName;
                 this.updateTopButtons();
                 this.render();
 
-                // Se o usuário clicou nisso enquanto estava na raiz (Meu Cofre),
-                // Salva permanentemente no banco de dados, em background, sem travar a tela
+                // Salva permanentemente se estiver na raiz
                 if (this.getCurrentParentId() === null) {
                     try {
                         await this.api('user', 'update_root_view', { view: viewName });
@@ -286,13 +330,28 @@
             updateTopButtons() {
                 const currentView = this.getCurrentView();
                 ['grid', 'list', 'kanban'].forEach(v => {
+                    // Update Desktop Buttons
                     const btn = document.getElementById(`btn-view-${v}`);
-                    if(v === currentView) {
-                        btn.classList.add('bg-slate-700', 'text-white');
-                        btn.classList.remove('text-slate-400');
-                    } else {
-                        btn.classList.remove('bg-slate-700', 'text-white');
-                        btn.classList.add('text-slate-400');
+                    if(btn) {
+                        if(v === currentView) {
+                            btn.classList.add('bg-slate-700', 'text-white');
+                            btn.classList.remove('text-slate-400');
+                        } else {
+                            btn.classList.remove('bg-slate-700', 'text-white');
+                            btn.classList.add('text-slate-400');
+                        }
+                    }
+
+                    // Update Mobile Menu Buttons
+                    const mobileBtn = document.getElementById(`btn-mobile-view-${v}`);
+                    if(mobileBtn) {
+                        if(v === currentView) {
+                            mobileBtn.classList.add('text-gluon-primary', 'bg-slate-700/50');
+                            mobileBtn.classList.remove('text-slate-300');
+                        } else {
+                            mobileBtn.classList.remove('text-gluon-primary', 'bg-slate-700/50');
+                            mobileBtn.classList.add('text-slate-300');
+                        }
                     }
                 });
             },
@@ -302,7 +361,7 @@
                 document.getElementById('dirId').value = id;
                 document.getElementById('dirName').value = name;
                 document.getElementById('dirParentId').value = targetParentId !== null ? targetParentId : '';
-                document.getElementById('modalTitle').innerHTML = id ? '<i class="fa-solid fa-folder-gear text-gluon-primary"></i> Configurar Pasta' : '<i class="fa-solid fa-folder-plus text-gluon-primary"></i> Nova Pasta';
+                document.getElementById('modalTitle').innerHTML = id ? '<i class="fa-solid fa-folder-gear text-gluon-primary"></i> <span>Configurar Pasta</span>' : '<i class="fa-solid fa-folder-plus text-gluon-primary"></i> <span>Nova Pasta</span>';
                 
                 const btnDelete = document.getElementById('btnDeleteDir');
                 if(id) btnDelete.classList.remove('hidden'); else btnDelete.classList.add('hidden');
@@ -373,7 +432,7 @@
                         this.closeModal();
                         await this.fetchDirectories();
                     }
-                    btn.innerHTML = '<i class="fa-solid fa-trash"></i> <span class="hidden sm:inline">Excluir</span>';
+                    btn.innerHTML = '<i class="fa-solid fa-trash"></i> <span>Excluir</span>';
                 }
             },
 
@@ -394,12 +453,12 @@
                         let html = '';
                         res.data.forEach(sub => {
                             html += `
-                            <div class="bg-slate-700 hover:bg-slate-600 border border-slate-600 p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm" onclick="app.enterDirectory(${sub.id}, '${sub.name}', '${sub.view}')">
+                            <div class="bg-slate-700 hover:bg-slate-600 border border-slate-600 p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm mb-2" onclick="app.enterDirectory(${sub.id}, '${sub.name}', '${sub.view}')">
                                 <div class="flex items-center gap-2 truncate pr-2">
                                     <i class="fa-solid fa-folder text-gluon-primary text-sm"></i>
                                     <span class="text-sm text-slate-200 truncate font-medium">${sub.name}</span>
                                 </div>
-                                <button onclick="event.stopPropagation(); app.openModal(${sub.id}, '${sub.name}', ${dir.id}, '${sub.view}')" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 opacity-0 group-hover:opacity-100 transition-all border border-slate-600"><i class="fa-solid fa-cog text-xs"></i></button>
+                                <button onclick="event.stopPropagation(); app.openModal(${sub.id}, '${sub.name}', ${dir.id}, '${sub.view}')" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 sm:opacity-0 group-hover:opacity-100 transition-all border border-slate-600"><i class="fa-solid fa-cog text-xs"></i></button>
                             </div>`;
                         });
                         container.innerHTML = html;
@@ -416,9 +475,9 @@
                 
                 if (this.state.directories.length === 0) {
                     container.innerHTML = `
-                        <div class="h-full flex flex-col items-center justify-center text-slate-500 mt-20">
-                            <i class="fa-regular fa-folder-open text-6xl mb-4 opacity-50"></i>
-                            <h2 class="text-xl font-medium text-slate-400">Esta pasta está vazia</h2>
+                        <div class="h-full flex flex-col items-center justify-center text-slate-500 mt-20 px-4 text-center">
+                            <i class="fa-regular fa-folder-open text-5xl sm:text-6xl mb-4 opacity-50"></i>
+                            <h2 class="text-lg sm:text-xl font-medium text-slate-400">Esta pasta está vazia</h2>
                             <p class="text-sm mt-2">Clique em "Novo Diretório" para começar.</p>
                         </div>
                     `;
@@ -428,40 +487,40 @@
                 let html = '';
 
                 if (view === 'grid') {
-                    html = `<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">`;
+                    html = `<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">`;
                     this.state.directories.forEach(dir => {
                         html += `
                         <div class="dir-card group bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-col items-center text-center cursor-pointer relative" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
-                            <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div class="absolute top-2 right-2 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded p-1.5 shadow-lg"><i class="fa-solid fa-cog"></i></button>
                             </div>
-                            <i class="fa-solid fa-folder text-5xl text-gluon-primary mb-3 drop-shadow-md group-hover:scale-110 transition-transform"></i>
-                            <span class="text-sm font-medium text-slate-300 w-full truncate px-2">${dir.name}</span>
+                            <i class="fa-solid fa-folder text-4xl sm:text-5xl text-gluon-primary mb-3 drop-shadow-md sm:group-hover:scale-110 transition-transform"></i>
+                            <span class="text-xs sm:text-sm font-medium text-slate-300 w-full truncate px-1">${dir.name}</span>
                         </div>`;
                     });
                     html += `</div>`;
                 } 
                 
                 else if (view === 'list') {
-                    html = `<div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-                                <table class="w-full text-left text-sm">
+                    html = `<div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
+                                <table class="w-full text-left text-sm min-w-[300px]">
                                     <thead class="bg-slate-900/50 text-slate-400">
                                         <tr>
-                                            <th class="px-6 py-3 font-medium">Nome</th>
-                                            <th class="px-6 py-3 font-medium text-right">Configurações</th>
+                                            <th class="px-4 sm:px-6 py-3 font-medium">Nome</th>
+                                            <th class="px-4 sm:px-6 py-3 font-medium text-right">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-slate-700/50">`;
                     this.state.directories.forEach(dir => {
                         html += `
                         <tr class="hover:bg-slate-700/30 transition-colors group cursor-pointer" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
-                            <td class="px-6 py-4 flex items-center gap-3">
-                                <i class="fa-solid fa-folder text-xl text-gluon-primary"></i>
-                                <span class="font-medium text-slate-200">${dir.name}</span>
+                            <td class="px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3">
+                                <i class="fa-solid fa-folder text-lg sm:text-xl text-gluon-primary"></i>
+                                <span class="font-medium text-slate-200 truncate">${dir.name}</span>
                             </td>
-                            <td class="px-6 py-4 text-right">
-                                <div class="opacity-0 group-hover:opacity-100 transition-opacity flex justify-end gap-2">
-                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded p-2"><i class="fa-solid fa-cog"></i> Editar Pasta</button>
+                            <td class="px-4 sm:px-6 py-3 sm:py-4 text-right">
+                                <div class="sm:opacity-0 group-hover:opacity-100 transition-opacity flex justify-end gap-2">
+                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded p-2 text-xs sm:text-sm"><i class="fa-solid fa-cog"></i> <span class="hidden sm:inline">Editar</span></button>
                                 </div>
                             </td>
                         </tr>`;
@@ -470,26 +529,26 @@
                 }
 
                 else if (view === 'kanban') {
-                    html = `<div class="flex gap-6 overflow-x-auto pb-4 no-scrollbar h-full items-start">`;
+                    html = `<div class="flex gap-4 sm:gap-6 overflow-x-auto pb-4 no-scrollbar h-full items-start snap-x">`;
                     this.state.directories.forEach(dir => {
                         html += `
-                        <div class="bg-slate-800 border border-slate-700 rounded-xl w-80 shrink-0 flex flex-col max-h-full shadow-lg">
+                        <div class="bg-slate-800 border border-slate-700 rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg snap-start">
                             <div class="p-3 border-b border-slate-700 flex justify-between items-center bg-slate-900/50 rounded-t-xl group cursor-pointer hover:bg-slate-700/50 transition-colors" onclick="app.enterDirectory(${dir.id}, '${dir.name}', '${dir.view}')">
                                 <div class="flex items-center gap-2 font-semibold text-slate-200 truncate w-full">
                                     <i class="fa-solid fa-folder-open text-gluon-primary"></i>
-                                    <span class="truncate">${dir.name}</span>
+                                    <span class="truncate text-sm sm:text-base">${dir.name}</span>
                                 </div>
-                                <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded p-1"><i class="fa-solid fa-cog text-xs"></i></button>
+                                <div class="flex gap-1 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded p-1.5"><i class="fa-solid fa-cog text-xs"></i></button>
                                 </div>
                             </div>
-                            <div class="p-3 flex-1 overflow-y-auto space-y-2 kanban-scroll" id="kanban-col-${dir.id}">
+                            <div class="p-3 flex-1 overflow-y-auto kanban-scroll" id="kanban-col-${dir.id}">
                                 <div class="flex justify-center py-6">
                                     <i class="fa-solid fa-circle-notch fa-spin text-slate-500 text-2xl"></i>
                                 </div>
                             </div>
                             <div class="p-3 border-t border-slate-700 bg-slate-900/30 rounded-b-xl">
-                                <button onclick="app.openModal('', '', ${dir.id}, 'grid')" class="text-slate-400 hover:text-white flex items-center justify-center gap-2 text-sm transition-colors w-full py-1.5 hover:bg-slate-700 rounded-lg">
+                                <button onclick="app.openModal('', '', ${dir.id}, 'grid')" class="text-slate-400 hover:text-white flex items-center justify-center gap-2 text-xs sm:text-sm transition-colors w-full py-2 hover:bg-slate-700 rounded-lg border border-slate-700/50 border-dashed">
                                     <i class="fa-solid fa-plus"></i> Nova pasta aqui
                                 </button>
                             </div>
