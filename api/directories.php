@@ -5,7 +5,7 @@
 /**
  * API DE DIRETÓRIOS E ARQUIVOS
  * Pilar: Seguro e Rápido.
- * Atualizado para suportar o campo 'type' (0 = Pasta, 1 = Arquivo).
+ * Atualizado para suportar datas (Agenda) e type 2.
  */
 
 require_once BASE_PATH . '/config/database.php';
@@ -25,10 +25,10 @@ if ($action === 'fetch') {
     $parent_id = isset($input['parent_id']) && $input['parent_id'] !== null ? (int)$input['parent_id'] : null;
 
     if ($parent_id === null) {
-        $stmt = $pdo->prepare("SELECT id, type, name_encrypted, parent_id, default_view, new_item_position, sort_order, icon, icon_color_from, icon_color_to, cover_url_encrypted FROM directories WHERE user_id = ? AND parent_id IS NULL");
+        $stmt = $pdo->prepare("SELECT id, type, name_encrypted, parent_id, default_view, new_item_position, sort_order, icon, icon_color_from, icon_color_to, cover_url_encrypted, start_date, end_date FROM directories WHERE user_id = ? AND parent_id IS NULL");
         $stmt->execute([$user_id]);
     } else {
-        $stmt = $pdo->prepare("SELECT id, type, name_encrypted, parent_id, default_view, new_item_position, sort_order, icon, icon_color_from, icon_color_to, cover_url_encrypted FROM directories WHERE user_id = ? AND parent_id = ?");
+        $stmt = $pdo->prepare("SELECT id, type, name_encrypted, parent_id, default_view, new_item_position, sort_order, icon, icon_color_from, icon_color_to, cover_url_encrypted, start_date, end_date FROM directories WHERE user_id = ? AND parent_id = ?");
         $stmt->execute([$user_id, $parent_id]);
     }
     
@@ -38,7 +38,7 @@ if ($action === 'fetch') {
     foreach ($directories as $dir) {
         $response[] = [
             'id' => $dir['id'],
-            'type' => (int)($dir['type'] ?? 0), // 0: Pasta, 1: Arquivo
+            'type' => (int)($dir['type'] ?? 0),
             'parent_id' => $dir['parent_id'],
             'view' => $dir['default_view'] ?? 'grid',
             'new_item_position' => $dir['new_item_position'] ?? 'end',
@@ -47,7 +47,9 @@ if ($action === 'fetch') {
             'icon' => $dir['icon'] ?? 'fa-folder',
             'color_from' => $dir['icon_color_from'] ?? '#3b82f6',
             'color_to' => $dir['icon_color_to'] ?? '#6366f1',
-            'cover_url' => !empty($dir['cover_url_encrypted']) ? Security::decryptData($dir['cover_url_encrypted']) : ''
+            'cover_url' => !empty($dir['cover_url_encrypted']) ? Security::decryptData($dir['cover_url_encrypted']) : '',
+            'start_date' => $dir['start_date'],
+            'end_date' => $dir['end_date']
         ];
     }
 
@@ -64,14 +66,23 @@ if ($action === 'fetch') {
 elseif ($action === 'create') {
     $name = trim($input['name'] ?? '');
     $parent_id = isset($input['parent_id']) && $input['parent_id'] !== null ? (int)$input['parent_id'] : null;
-    $type = isset($input['type']) ? (int)$input['type'] : 0; // Novo campo
+    $type = isset($input['type']) ? (int)$input['type'] : 0; 
     $view = in_array($input['view'] ?? '', ['grid', 'list', 'kanban']) ? $input['view'] : 'grid';
     $new_item_position = in_array($input['new_item_position'] ?? '', ['start', 'end']) ? $input['new_item_position'] : 'end';
     
-    $icon = preg_match('/^fa-[a-z0-9-]+$/', $input['icon'] ?? '') ? $input['icon'] : ($type === 1 ? 'fa-file-code' : 'fa-folder');
+    // Fallback inteligente de ícone baseado no tipo
+    $default_icon = 'fa-folder';
+    if($type === 1) $default_icon = 'fa-file-code';
+    if($type === 2) $default_icon = 'fa-calendar-days';
+
+    $icon = preg_match('/^fa-[a-z0-9-]+$/', $input['icon'] ?? '') ? $input['icon'] : $default_icon;
     $color_from = preg_match('/^#[a-fA-F0-9]{6}$/', $input['color_from'] ?? '') ? $input['color_from'] : '#3b82f6';
     $color_to = preg_match('/^#[a-fA-F0-9]{6}$/', $input['color_to'] ?? '') ? $input['color_to'] : '#6366f1';
     $cover_url = trim($input['cover_url'] ?? '');
+
+    // Datas para Agenda
+    $start_date = !empty($input['start_date']) ? $input['start_date'] : null;
+    $end_date = !empty($input['end_date']) ? $input['end_date'] : null;
 
     if (empty($name)) {
         die(json_encode(['status' => 'error', 'message' => 'O nome não pode ser vazio.']));
@@ -102,9 +113,9 @@ elseif ($action === 'create') {
         $newOrder = ($maxOrder !== null) ? (int)$maxOrder + 1 : 0;
     }
 
-    $stmt = $pdo->prepare("INSERT INTO directories (user_id, parent_id, type, name_encrypted, default_view, new_item_position, sort_order, icon, icon_color_from, icon_color_to, cover_url_encrypted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    if ($stmt->execute([$user_id, $parent_id, $type, $name_encrypted, $view, $new_item_position, $newOrder, $icon, $color_from, $color_to, $cover_url_encrypted])) {
-        echo json_encode(['status' => 'success', 'message' => $type === 1 ? 'Arquivo criado.' : 'Diretório criado.']);
+    $stmt = $pdo->prepare("INSERT INTO directories (user_id, parent_id, type, name_encrypted, default_view, new_item_position, sort_order, icon, icon_color_from, icon_color_to, cover_url_encrypted, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    if ($stmt->execute([$user_id, $parent_id, $type, $name_encrypted, $view, $new_item_position, $newOrder, $icon, $color_from, $color_to, $cover_url_encrypted, $start_date, $end_date])) {
+        echo json_encode(['status' => 'success', 'message' => 'Item criado com sucesso.']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao criar item.']);
     }
@@ -121,6 +132,9 @@ elseif ($action === 'update') {
     $color_to = preg_match('/^#[a-fA-F0-9]{6}$/', $input['color_to'] ?? '') ? $input['color_to'] : '#6366f1';
     $cover_url = trim($input['cover_url'] ?? '');
 
+    $start_date = !empty($input['start_date']) ? $input['start_date'] : null;
+    $end_date = !empty($input['end_date']) ? $input['end_date'] : null;
+
     if (empty($name) || $id === 0) {
         die(json_encode(['status' => 'error', 'message' => 'Dados inválidos.']));
     }
@@ -128,8 +142,8 @@ elseif ($action === 'update') {
     $name_encrypted = Security::encryptData($name);
     $cover_url_encrypted = !empty($cover_url) ? Security::encryptData($cover_url) : null;
     
-    $stmt = $pdo->prepare("UPDATE directories SET name_encrypted = ?, default_view = ?, new_item_position = ?, icon = ?, icon_color_from = ?, icon_color_to = ?, cover_url_encrypted = ? WHERE id = ? AND user_id = ?");
-    if ($stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $id, $user_id])) {
+    $stmt = $pdo->prepare("UPDATE directories SET name_encrypted = ?, default_view = ?, new_item_position = ?, icon = ?, icon_color_from = ?, icon_color_to = ?, cover_url_encrypted = ?, start_date = ?, end_date = ? WHERE id = ? AND user_id = ?");
+    if ($stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $start_date, $end_date, $id, $user_id])) {
         echo json_encode(['status' => 'success', 'message' => 'Item atualizado.']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar.']);
@@ -137,7 +151,6 @@ elseif ($action === 'update') {
 }
 
 elseif ($action === 'reorder') {
-    // Mantido sem alterações lógicas (Otimizado)
     $order = $input['order'] ?? [];
     $has_parent_id = array_key_exists('parent_id', $input);
     $new_parent_id = $has_parent_id ? $input['parent_id'] : null;
@@ -167,8 +180,6 @@ elseif ($action === 'delete') {
     $id = (int)($input['id'] ?? 0);
     if ($id === 0) die(json_encode(['status' => 'error', 'message' => 'ID inválido.']));
 
-    // Devido ao ON DELETE CASCADE na tabela files_code e diretorios filhos, 
-    // deletar aqui apaga todo o rastro automaticamente no BD.
     $stmt = $pdo->prepare("DELETE FROM directories WHERE id = ? AND user_id = ?");
     if ($stmt->execute([$id, $user_id])) {
         echo json_encode(['status' => 'success', 'message' => 'Excluído com sucesso.']);
