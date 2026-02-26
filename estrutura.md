@@ -22,7 +22,11 @@ public_html/gluon/
 ├── css/                  # CSS customizado (se necessário além do Tailwind)
 └── img/                  # Imagens e ícones
 
-BANCO DE DADOS:
+BANCO DE DADOS (ATUALIZADO):
+
+-- Comando SQL útil caso já tenha o banco criado:
+-- ALTER TABLE users ADD COLUMN root_new_item_position VARCHAR(10) DEFAULT 'end' AFTER root_view;
+-- ALTER TABLE directories ADD COLUMN new_item_position VARCHAR(10) DEFAULT 'end' AFTER default_view;
 
 TABELA: users
 id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -31,6 +35,7 @@ email VARCHAR(100) NOT NULL UNIQUE,
 password_hash VARCHAR(255) NOT NULL,
 remember_token VARCHAR(255) DEFAULT NULL,
 root_view VARCHAR(10) DEFAULT 'grid',
+root_new_item_position VARCHAR(10) DEFAULT 'end', -- NOVO: Início/Fim para a raiz
 encrypted_data TEXT DEFAULT NULL,
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -46,6 +51,7 @@ user_id INT UNSIGNED NOT NULL,
 parent_id INT UNSIGNED DEFAULT NULL, -- NULL significa que está na Raiz
 name_encrypted TEXT NOT NULL,        -- Nome do diretório criptografado
 default_view VARCHAR(10) DEFAULT 'grid',
+new_item_position VARCHAR(10) DEFAULT 'end', -- NOVO: Preferência para itens criados AQUI dentro
 sort_order INT DEFAULT 0,
 icon VARCHAR(50) DEFAULT 'fa-folder',      -- Ícone FontAwesome
 icon_color_from VARCHAR(7) DEFAULT '#3b82f6', -- Cor inicial do Gradient (Hex)
