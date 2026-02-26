@@ -5,8 +5,8 @@
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
   Atualização: 
     - Adicionado escapeHTML() para prevenir XSS e quebra de DOM.
-    - Funções inline (onclick) otimizadas para passar apenas o ID e buscar dados no cache de memória, 
-      evitando quebra de atributos HTML quando o diretório possui aspas no nome.
+    - Funções inline (onclick) otimizadas para passar apenas o ID e buscar dados no cache de memória.
+    - BUGFIX: Reseta o visual dos botões de ação ("Excluindo..." / "Salvando...") dentro do closeModal().
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -465,7 +465,6 @@
                 this.setLoading(false);
             },
 
-            // Otimização: Agora usa apenas o ID e puxa do cache (Evita falhas de escape de string no HTML)
             async enterDirectory(id) {
                 if(this.state.reorderMode) return; 
                 const dir = this.state.directoryCache.get(Number(id));
@@ -629,7 +628,6 @@
                     document.getElementById('dirNameContainer').classList.add('hidden');
                     document.getElementById('tab-btn-apar').classList.add('hidden');
                 } else if (id) {
-                    // Puxa do cache da memória RAM em vez de receber string injetada via HTML
                     dirObj = this.state.directoryCache.get(Number(id));
                     document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-folder-gear text-gluon-primary"></i> <span>Configurar Pasta</span>';
                     document.getElementById('dirNameContainer').classList.remove('hidden');
@@ -688,8 +686,31 @@
             closeModal() {
                 const modal = document.getElementById('dirModal');
                 const content = document.getElementById('dirModalContent');
-                modal.classList.add('opacity-0'); content.classList.add('scale-95');
-                setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); document.getElementById('dirForm').reset(); }, 300);
+                
+                // Aplica a animação de saída
+                modal.classList.add('opacity-0'); 
+                content.classList.add('scale-95');
+                
+                // Aguarda a animação acabar (300ms) e reseta TUDO de uma vez só no background
+                setTimeout(() => { 
+                    modal.classList.add('hidden'); 
+                    modal.classList.remove('flex'); 
+                    document.getElementById('dirForm').reset(); 
+                    
+                    // Reseta os estados de loading dos botões aqui
+                    const btnSave = document.getElementById('btnSaveDir');
+                    if (btnSave) {
+                        btnSave.innerHTML = '<i class="fa-solid fa-check"></i> Salvar';
+                        btnSave.disabled = false;
+                    }
+                    
+                    const btnDelete = document.getElementById('btnDeleteDir');
+                    if (btnDelete) {
+                        btnDelete.innerHTML = '<i class="fa-solid fa-trash"></i> <span>Excluir</span>';
+                        btnDelete.disabled = false;
+                    }
+
+                }, 300);
             },
 
             async saveDirectory(e) {
@@ -744,8 +765,14 @@
                     response = await this.api('directories', id !== '' ? 'update' : 'create', payload);
                 }
 
-                if (response) { this.closeModal(); await this.fetchDirectories(); }
-                btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar'; btn.disabled = false;
+                if (response) { 
+                    this.closeModal(); 
+                    await this.fetchDirectories(); 
+                } else {
+                    // Se falhar, reseta o botão manualmente pois o modal não vai fechar
+                    btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar'; 
+                    btn.disabled = false;
+                }
             },
 
             async deleteFromModal() {
@@ -756,16 +783,19 @@
                 if(confirm(`Atenção: A pasta "${name}" e TODO o seu conteúdo serão apagados PERMANENTEMENTE.\nDeseja continuar?`)) {
                     const btn = document.getElementById('btnDeleteDir'); 
                     btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
+                    btn.disabled = true; // Impede duplo clique no botão deletar
                     
                     const response = await this.api('directories', 'delete', { id });
                     
                     if(response) { 
-                        this.closeModal(); 
+                        this.closeModal(); // O closeModal agora limpa o botão automaticamente de forma invisível
                         const pathIndex = this.state.path.findIndex(step => String(step.id) === String(id));
                         if (pathIndex !== -1) { await this.goUpTo(pathIndex - 1); } 
                         else { await this.fetchDirectories(); }
                     } else {
+                        // Se houver erro, volta o botão ao estado normal
                         btn.innerHTML = '<i class="fa-solid fa-trash"></i> <span>Excluir</span>';
+                        btn.disabled = false;
                     }
                 }
             },
