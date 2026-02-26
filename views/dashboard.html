@@ -490,6 +490,17 @@
                 this.renderIconPicker();
                 this.setLoading(true);
                 await this.fetchUserPrefs(); 
+                
+                // NOVO: Verifica se há um ID de diretório na URL (Deep linking vindo da Agenda)
+                const urlParams = new URLSearchParams(window.location.search);
+                const startId = urlParams.get('id');
+                if (startId) {
+                    const pathRes = await this.api('directories', 'get_path', { id: startId });
+                    if (pathRes && pathRes.status === 'success') {
+                        this.state.path = [{ id: null, name: 'Meu Cofre', view: this.state.rootPrefs.view }, ...pathRes.data];
+                    }
+                }
+
                 this.updateTopButtons();
                 await this.fetchDirectories();
                 this.setupEventListeners();
