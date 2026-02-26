@@ -3,9 +3,8 @@
   Diretório: public_html/gluon/views/dashboard.html
   
   Pilar: Fácil Manutenção, Bonito e Rápido.
-  Atualização: Adicionado "Modo de Edição" global. Os botões de configuração (engrenagem) 
-               agora são ocultos por padrão e só aparecem ao clicar no Modo Edição.
-               O botão fica fora do menu mobile para fácil acesso.
+  Atualização: Lógica adicionada em `deleteFromModal()` para retornar ao diretório pai 
+               automaticamente caso o usuário exclua um diretório no qual ele está dentro.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -39,26 +38,12 @@
         .view-radio:checked + div { background-color: #3b82f6; border-color: #3b82f6; color: white; }
         .icon-radio:checked + div { background-color: #1e293b; border-color: #3b82f6; color: #3b82f6; }
 
-        /* --- LÓGICA DO MODO DE EDIÇÃO E REORDENAÇÃO --- */
-        
-        /* Oculta as engrenagens de configuração por padrão para interface limpa */
-        .cog-btn { display: none !important; }
-        
-        /* Mostra as engrenagens APENAS quando o Modo Edição estiver ativo */
-        .edit-active .dir-card .cog-btn { display: block !important; }
-        .edit-active td .cog-btn { display: flex !important; }
-        .edit-active .kanban-col-handle .cog-btn { display: flex !important; }
-        .edit-active .kanban-item .cog-btn { display: block !important; }
-
-        /* Lógica do Modo Reordenar */
         .reorder-active .draggable-item { border-color: #22c55e !important; box-shadow: 0 4px 6px -1px rgba(34, 197, 94, 0.1); }
         .reorder-active .draggable-item, .reorder-active .kanban-col-handle, .reorder-active .kanban-item { cursor: grab !important; }
         .reorder-active .draggable-item:active, .reorder-active .kanban-col-handle:active, .reorder-active .kanban-item:active { cursor: grabbing !important; }
         .reorder-active .kanban-item { border-color: #22c55e !important; background-color: #1e293b !important; }
         .reorder-active .grip-handle { display: inline-block !important; }
-        /* Reordenar tem prioridade visual sobre Edição. Esconde engrenagens se estiver arrastando */
-        .reorder-active .cog-btn { display: none !important; } 
-        
+        .reorder-active .cog-btn { display: none !important; }
         .kanban-scroll .kanban-empty:not(:only-child) { display: none !important; }
         .reorder-active.snap-x { scroll-snap-type: none !important; }
         .reorder-active .snap-start { scroll-snap-align: none !important; }
@@ -96,13 +81,6 @@
             </div>
             
             <div class="flex items-center gap-2 sm:gap-4">
-                
-                <!-- NOVO: Botão de Edição (Visível no Mobile e Desktop, fora do menu) -->
-                <button onclick="app.toggleEditMode()" id="btn-edit-mode" class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent font-medium text-sm transition-all text-slate-400 hover:text-white hover:bg-slate-700" title="Ativar Modo de Edição">
-                    <i class="fa-solid fa-pen-to-square"></i>
-                    <span class="hidden sm:inline">Editar</span>
-                </button>
-
                 <button onclick="app.toggleReorderMode()" id="btn-reorder-desktop" class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent font-medium text-sm transition-all text-slate-400 hover:text-white hover:bg-slate-700" title="Ativar Modo de Reordenação">
                     <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90"></i>
                     <span>Ordem</span>
@@ -173,11 +151,10 @@
             <p>Sincronizando cofre...</p>
         </div>
 
-        <!-- viewContainer recebe as classes dinâmicas reorder-active ou edit-active -->
         <div id="viewContainer" class="flex-1 overflow-y-auto no-scrollbar pb-10 transition-all"></div>
     </main>
 
-    <!-- Modal com Abas (Inalterado) -->
+    <!-- Modal com Abas -->
     <div id="dirModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
         <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-0 transform scale-95 transition-transform duration-300 overflow-hidden flex flex-col max-h-[90vh]" id="dirModalContent">
             
@@ -188,6 +165,7 @@
                 <button onclick="app.closeModal()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
             </div>
 
+            <!-- Modal Tabs -->
             <div class="flex border-b border-slate-700 bg-slate-900/30">
                 <button type="button" onclick="app.switchModalTab('geral')" id="tab-btn-geral" class="flex-1 py-3 text-sm font-medium border-b-2 border-gluon-primary text-white transition-colors">Geral</button>
                 <button type="button" onclick="app.switchModalTab('apar')" id="tab-btn-apar" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Aparência</button>
@@ -197,6 +175,7 @@
                 <input type="hidden" id="dirId">
                 <input type="hidden" id="dirParentId">
 
+                <!-- ABA GERAL -->
                 <div id="tab-geral" class="p-6 overflow-y-auto flex-1">
                     <div id="dirNameContainer" class="mb-5">
                         <label class="block text-sm font-medium text-slate-300 mb-1">Nome da Pasta</label>
@@ -243,7 +222,9 @@
                     </div>
                 </div>
 
+                <!-- ABA APARÊNCIA -->
                 <div id="tab-apar" class="hidden p-6 overflow-y-auto flex-1 space-y-5">
+                    
                     <div>
                         <label class="block text-sm font-medium text-slate-300 mb-1"><i class="fa-regular fa-image mr-1"></i> Imagem de Capa (Galeria)</label>
                         <input type="file" id="dirCoverFile" accept="image/*" class="w-full text-sm text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 transition-all cursor-pointer bg-slate-800 border border-slate-600 rounded-lg">
@@ -269,10 +250,13 @@
 
                     <div>
                         <label class="block text-sm font-medium text-slate-300 mb-2"><i class="fa-solid fa-icons mr-1"></i> Selecionar Ícone</label>
-                        <div class="grid grid-cols-5 gap-2 max-h-40 overflow-y-auto no-scrollbar p-1" id="icon-picker"></div>
+                        <div class="grid grid-cols-5 gap-2 max-h-40 overflow-y-auto no-scrollbar p-1" id="icon-picker">
+                            <!-- Injetado via JS -->
+                        </div>
                     </div>
                 </div>
 
+                <!-- Footer do Modal -->
                 <div class="p-5 border-t border-slate-700 bg-slate-800/50 flex flex-col-reverse sm:flex-row justify-between items-center gap-3 shrink-0">
                     <div class="w-full sm:w-auto">
                         <button type="button" id="btnDeleteDir" onclick="app.deleteFromModal()" class="hidden w-full text-red-400 hover:text-white hover:bg-red-500/20 px-3 py-2 rounded-lg transition-colors flex justify-center items-center gap-2 text-sm">
@@ -299,7 +283,6 @@
                 rootPrefs: { view: 'grid', new_item_position: 'end' }, 
                 isLoading: false,
                 reorderMode: false,
-                editMode: false, // NOVO: Estado para Modo Edição
                 availableIcons: [
                     'fa-folder', 'fa-folder-open', 'fa-star', 'fa-heart', 'fa-file', 'fa-image', 'fa-music', 'fa-video', 
                     'fa-code', 'fa-lock', 'fa-vault', 'fa-book', 'fa-briefcase', 'fa-camera', 'fa-gamepad', 'fa-globe',
@@ -473,15 +456,15 @@
             },
 
             async enterDirectory(id, name, viewMode) {
-                if(this.state.reorderMode || this.state.editMode) return; // Impede entrar na pasta se estiver editando ou reordenando
+                if(this.state.reorderMode) return; 
                 this.state.path.push({ id, name, view: viewMode });
+                if (this.state.reorderMode) this.toggleReorderMode();
                 await this.fetchDirectories();
             },
 
             async goUpTo(index) {
                 this.state.path = this.state.path.slice(0, index + 1);
                 if (this.state.reorderMode) this.toggleReorderMode();
-                if (this.state.editMode) this.toggleEditMode();
                 await this.fetchDirectories();
             },
 
@@ -513,29 +496,8 @@
                 }
             },
 
-            // --- NOVO: Função para Ativar Modo Edição ---
-            toggleEditMode() {
-                this.state.editMode = !this.state.editMode;
-                if(this.state.reorderMode && this.state.editMode) this.toggleReorderMode(); // Desliga o outro modo
-
-                const btn = document.getElementById('btn-edit-mode');
-                const container = document.getElementById('viewContainer');
-
-                if(this.state.editMode) {
-                    btn.classList.add('bg-blue-600', 'text-white', 'border-blue-500', 'shadow-lg', 'shadow-blue-500/20');
-                    btn.classList.remove('text-slate-400', 'hover:bg-slate-700');
-                    container.classList.add('edit-active');
-                } else {
-                    btn.classList.remove('bg-blue-600', 'text-white', 'border-blue-500', 'shadow-lg', 'shadow-blue-500/20');
-                    btn.classList.add('text-slate-400', 'hover:bg-slate-700');
-                    container.classList.remove('edit-active');
-                }
-            },
-
             toggleReorderMode() {
                 this.state.reorderMode = !this.state.reorderMode;
-                if(this.state.reorderMode && this.state.editMode) this.toggleEditMode(); // Desliga o outro modo
-
                 const btnDesk = document.getElementById('btn-reorder-desktop');
                 const btnMob = document.getElementById('btn-reorder-mobile');
                 const container = document.getElementById('viewContainer');
@@ -771,6 +733,7 @@
                 btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar'; btn.disabled = false;
             },
 
+            // --- CORREÇÃO APLICADA AQUI ---
             async deleteFromModal() {
                 const id = document.getElementById('dirId').value;
                 const name = document.getElementById('dirName').value;
@@ -785,11 +748,16 @@
                     if(response) { 
                         this.closeModal(); 
 
+                        // Verifica se o ID do diretório recém excluído existe no caminho (breadcrumb) atual.
+                        // Se existir, significa que o usuário está dentro dessa pasta (ou em uma subpasta dela).
                         const pathIndex = this.state.path.findIndex(step => String(step.id) === String(id));
 
                         if (pathIndex !== -1) {
+                            // Encontrou o diretório no breadcrumb. 
+                            // Volta para o diretório "pai" do diretório que foi excluído.
                             await this.goUpTo(pathIndex - 1);
                         } else {
+                            // A pasta excluída não impacta a visualização atual, apenas recarrega os dados.
                             await this.fetchDirectories(); 
                         }
                     } else {
@@ -797,6 +765,7 @@
                     }
                 }
             },
+            // ------------------------------
 
             setLoading(show) {
                 this.state.isLoading = show;
@@ -824,8 +793,7 @@
                                     <i class="fa-solid ${sub.icon} text-sm" style="${this.getTextGradientStyle(sub.color_from, sub.color_to)}"></i>
                                     <span class="text-sm text-slate-200 truncate font-medium">${sub.name}</span>
                                 </div>
-                                <!-- NOTA: Removido o efeito de group-hover na cog-btn -->
-                                <button onclick="event.stopPropagation(); app.openModal(${sub.id}, '${sub.name.replace(/'/g, "\\'")}', ${dir.id}, '${sub.view}')" class="relative z-10 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 transition-all border border-slate-600 cog-btn"><i class="fa-solid fa-cog text-xs"></i></button>
+                                <button onclick="event.stopPropagation(); app.openModal(${sub.id}, '${sub.name.replace(/'/g, "\\'")}', ${dir.id}, '${sub.view}')" class="relative z-10 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 sm:opacity-0 group-hover:opacity-100 transition-all border border-slate-600 cog-btn"><i class="fa-solid fa-cog text-xs"></i></button>
                             </div>`).join('');
                     } else {
                         container.innerHTML = `<div class="kanban-empty text-center flex flex-col items-center justify-center text-slate-500 text-xs py-8 opacity-60 border-2 border-dashed border-slate-700 rounded-lg"><i class="fa-solid fa-box-open text-2xl mb-2"></i> Pasta vazia</div>`;
@@ -854,8 +822,7 @@
                             ${dir.cover_url ? `<div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110" style="background-image: url('${dir.cover_url}')"></div><div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/80 to-slate-900/40"></div>` : ''}
                             
                             <div class="absolute top-2 left-2 text-green-500 hidden grip-handle bg-slate-900/80 backdrop-blur rounded p-1 z-20"><i class="fa-solid fa-grip-vertical"></i></div>
-                            <!-- NOTA: Efeito hover removido. Apenas cog-btn gerencia a visibilidade -->
-                            <div class="absolute top-2 right-2 transition-opacity cog-btn z-20">
+                            <div class="absolute top-2 right-2 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn z-20">
                                 <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name.replace(/'/g, "\\'")}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-900/80 backdrop-blur hover:bg-slate-700 rounded p-1.5 shadow-lg"><i class="fa-solid fa-cog"></i></button>
                             </div>
                             
@@ -879,8 +846,7 @@
                             </td>
                             <td class="px-4 py-3 sm:py-4 font-medium text-slate-200">${dir.name}</td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-right">
-                                <!-- NOTA: Efeito hover removido. Apenas cog-btn gerencia a visibilidade -->
-                                <div class="transition-opacity flex justify-end gap-2 cog-btn">
+                                <div class="sm:opacity-0 group-hover:opacity-100 transition-opacity flex justify-end gap-2 cog-btn">
                                     <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name.replace(/'/g, "\\'")}', null, '${dir.view}')" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-600 border border-slate-600 rounded p-2 text-xs sm:text-sm shadow"><i class="fa-solid fa-cog"></i> <span class="hidden sm:inline">Editar</span></button>
                                 </div>
                             </td>
@@ -902,8 +868,7 @@
                                     <i class="fa-solid ${dir.icon} text-lg" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>
                                     <span class="truncate text-sm sm:text-base">${dir.name}</span>
                                 </div>
-                                <!-- NOTA: Efeito hover removido. Apenas cog-btn gerencia a visibilidade -->
-                                <div class="flex gap-1 transition-opacity cog-btn relative z-10">
+                                <div class="flex gap-1 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn relative z-10">
                                     <button onclick="event.stopPropagation(); app.openModal(${dir.id}, '${dir.name.replace(/'/g, "\\'")}', null, '${dir.view}')" class="text-slate-300 hover:text-white bg-slate-800/80 backdrop-blur hover:bg-slate-600 rounded p-1.5 shadow"><i class="fa-solid fa-cog text-xs"></i></button>
                                 </div>
                             </div>
@@ -924,10 +889,7 @@
                 }
 
                 container.innerHTML = html;
-                
-                // Restaura as classes se a view for re-renderizada com algum modo ativo
                 if (this.state.reorderMode) { document.getElementById('sortable-wrapper').classList.add('reorder-active'); this.initSortable(); }
-                // Nota: O Modo de Edição usa classe no `viewContainer` que não é destruído pelo innerHTML, portanto ele se mantém perfeitamente intacto ao re-renderizar.
             }
         };
 
