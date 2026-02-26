@@ -5,7 +5,7 @@
 /**
  * MICRO-API DA AGENDA / SCHEDULE
  * Pilar: Rápido e Fácil Manutenção.
- * Separa a responsabilidade de atualizar tempos na linha do tempo.
+ * Separa a responsabilidade de atualizar tempos na linha do tempo e visualizações.
  */
 
 require_once BASE_PATH . '/config/database.php';
@@ -38,10 +38,28 @@ if ($action === 'update_times') {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar horário.']);
     }
 } 
-else if ($action === 'get_agenda_info') {
-    // Busca informações básicas da pasta Agenda atual (Nome e Capa)
+else if ($action === 'update_view') {
     $id = (int)($input['id'] ?? 0);
-    $stmt = $pdo->prepare("SELECT name_encrypted, icon, icon_color_from, icon_color_to FROM directories WHERE id = ? AND user_id = ? AND type = 2");
+    // Aceita as 3 opções de view da Agenda
+    $view = in_array($input['view'] ?? '', ['timeline', 'kanban', 'list']) ? $input['view'] : 'timeline';
+
+    if ($id === 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID de agenda inválido.']));
+    }
+
+    // Atualiza a view salva diretamente na pasta da agenda (Type 2)
+    $stmt = $pdo->prepare("UPDATE directories SET default_view = ? WHERE id = ? AND user_id = ? AND type = 2");
+    
+    if ($stmt->execute([$view, $id, $user_id])) {
+        echo json_encode(['status' => 'success', 'message' => 'Preferência de visualização salva.']);
+    } else {
+        echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar visualização.']);
+    }
+}
+else if ($action === 'get_agenda_info') {
+    // Busca informações básicas da pasta Agenda atual (Nome, Capa e View Preferida)
+    $id = (int)($input['id'] ?? 0);
+    $stmt = $pdo->prepare("SELECT name_encrypted, icon, icon_color_from, icon_color_to, default_view FROM directories WHERE id = ? AND user_id = ? AND type = 2");
     $stmt->execute([$id, $user_id]);
     $agenda = $stmt->fetch();
 
@@ -52,7 +70,8 @@ else if ($action === 'get_agenda_info') {
                 'name' => Security::decryptData($agenda['name_encrypted']),
                 'icon' => $agenda['icon'],
                 'color_from' => $agenda['icon_color_from'],
-                'color_to' => $agenda['icon_color_to']
+                'color_to' => $agenda['icon_color_to'],
+                'view' => $agenda['default_view'] ?? 'timeline'
             ]
         ]);
     } else {
