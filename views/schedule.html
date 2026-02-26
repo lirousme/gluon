@@ -1,0 +1,433 @@
+<!-- 
+  Arquivo: schedule.html
+  Diretório: public_html/gluon/views/schedule.html
+  
+  Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
+  View customizada para gerenciar eventos de uma Agenda/Schedule (Type 2).
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gluon - Agenda</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: { extend: { colors: { gluon: { dark: '#0f172a', primary: '#3b82f6', secondary: '#1e293b' } } } }
+        }
+    </script>
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Grid base 60px = 1 hora (1px por minuto) */
+        .timeline-grid {
+            background-image: linear-gradient(to bottom, #334155 1px, transparent 1px), linear-gradient(to bottom, #1e293b 1px, transparent 1px);
+            background-size: 100% 60px, 100% 30px;
+        }
+        
+        .event-card {
+            position: absolute;
+            left: 50px; /* Space for time labels */
+            right: 10px;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            user-select: none;
+            transition: box-shadow 0.2s;
+        }
+        .event-card:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); z-index: 10; }
+        
+        .resize-handle {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 8px;
+            cursor: ns-resize;
+            background: rgba(255,255,255,0.2);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .event-card:hover .resize-handle { opacity: 1; }
+        
+        .dragging { opacity: 0.7; cursor: grabbing !important; z-index: 50 !important; }
+        .resizing { cursor: ns-resize !important; z-index: 50 !important; }
+    </style>
+</head>
+<body class="bg-gluon-dark text-slate-200 h-screen flex flex-col font-sans overflow-hidden">
+
+    <!-- Top Navigation -->
+    <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-16 flex items-center justify-between px-4 sm:px-6">
+        <div class="flex items-center gap-4">
+            <button onclick="window.location.href='/dashboard'" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg border border-slate-700" title="Voltar">
+                <i class="fa-solid fa-arrow-left"></i>
+            </button>
+            <div class="h-6 w-px bg-slate-700 hidden sm:block"></div>
+            <div class="flex items-center gap-2">
+                <i id="agendaIcon" class="fa-solid fa-calendar-days text-gluon-primary text-xl"></i>
+                <span id="agendaName" class="font-bold text-lg text-white tracking-wide">Carregando...</span>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-3">
+            <button onclick="scheduleApp.openTaskModal()" class="bg-gluon-primary hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg shadow-lg transition-all flex items-center gap-2 text-sm">
+                <i class="fa-solid fa-plus"></i> <span class="hidden sm:inline">Nova Tarefa</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-1 w-full flex overflow-hidden">
+        
+        <!-- Sidebar: Sem Data -->
+        <aside class="w-64 sm:w-80 bg-slate-900 border-r border-slate-700/50 flex flex-col shrink-0">
+            <div class="p-4 border-b border-slate-800 bg-slate-800/30">
+                <h3 class="font-semibold text-slate-300 flex items-center gap-2"><i class="fa-solid fa-inbox text-slate-500"></i> Sem Data (Backlog)</h3>
+                <p class="text-xs text-slate-500 mt-1">Tarefas não agendadas. Arraste para a linha do tempo.</p>
+            </div>
+            <div id="unscheduledList" class="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
+                <!-- Itens injetados via JS -->
+            </div>
+        </aside>
+
+        <!-- Main: Timeline -->
+        <div class="flex-1 relative flex flex-col bg-gluon-dark overflow-hidden">
+            
+            <div class="p-4 border-b border-slate-700 bg-slate-800/80 backdrop-blur shrink-0 flex justify-between items-center z-20">
+                <div class="flex items-center gap-3">
+                    <input type="date" id="currentDate" class="bg-slate-900 border border-slate-600 rounded text-sm text-white px-3 py-1.5 focus:outline-none focus:border-gluon-primary">
+                    <button onclick="scheduleApp.loadData()" class="text-slate-400 hover:text-white" title="Atualizar"><i class="fa-solid fa-rotate-right"></i></button>
+                </div>
+            </div>
+
+            <!-- Scrollable Grid -->
+            <div id="timelineScroll" class="flex-1 overflow-y-auto relative no-scrollbar">
+                <div id="timelineContainer" class="relative w-full h-[1440px] timeline-grid" ondragover="scheduleApp.allowDrop(event)" ondrop="scheduleApp.dropOnTimeline(event)">
+                    
+                    <!-- Time Labels -->
+                    <div class="absolute left-0 top-0 bottom-0 w-12 border-r border-slate-700/50 bg-slate-900/50 z-0">
+                        <script>
+                            for(let i=0; i<24; i++) {
+                                document.write(`<div class="absolute w-full text-right pr-2 text-xs text-slate-500 font-medium" style="top: ${i*60 - 8}px">${i.toString().padStart(2, '0')}:00</div>`);
+                            }
+                        </script>
+                    </div>
+
+                    <!-- Eventos Injetados Aqui -->
+                    <div id="eventsLayer" class="absolute inset-0 z-10"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal Rápido de Criação de Tarefa -->
+    <div id="taskModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
+        <div class="bg-gluon-secondary border border-slate-700 rounded-xl w-full max-w-sm p-6 transform scale-95 transition-transform duration-300" id="taskModalContent">
+            <h3 class="text-lg font-semibold text-white mb-4"><i class="fa-solid fa-bolt text-gluon-primary mr-2"></i> Adicionar Tarefa</h3>
+            <form onsubmit="scheduleApp.saveTask(event)">
+                <input type="hidden" id="taskId">
+                <div class="mb-4">
+                    <label class="block text-sm text-slate-300 mb-1">Título</label>
+                    <input type="text" id="taskName" required autocomplete="off" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-gluon-primary">
+                </div>
+                <div class="flex gap-2 justify-end mt-6">
+                    <button type="button" onclick="scheduleApp.closeTaskModal()" class="px-4 py-2 rounded-lg text-slate-400 hover:text-white transition-colors text-sm font-medium">Cancelar</button>
+                    <button type="submit" id="btnSaveTask" class="px-4 py-2 bg-gluon-primary hover:bg-blue-600 text-white rounded-lg shadow transition-all text-sm font-medium">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const scheduleApp = {
+            agendaId: null,
+            items: [],
+            isDragging: false,
+            isResizing: false,
+            dragElement: null,
+            startY: 0,
+            startTop: 0,
+            startHeight: 0,
+
+            async init() {
+                const urlParams = new URLSearchParams(window.location.search);
+                this.agendaId = urlParams.get('id');
+
+                if (!this.agendaId) {
+                    window.location.href = '/dashboard';
+                    return;
+                }
+
+                document.getElementById('currentDate').valueAsDate = new Date();
+                
+                await this.fetchAgendaInfo();
+                await this.loadData();
+                this.setupMouseEvents();
+
+                // Scroll para as 8h da manhã
+                document.getElementById('timelineScroll').scrollTop = 8 * 60 - 20;
+            },
+
+            async api(endpoint, action, payload = {}) {
+                payload.action = action;
+                try {
+                    const res = await fetch(`/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (res.status === 401) window.location.href = '/'; 
+                    const data = await res.json();
+                    if (data.status !== 'success') throw new Error(data.message);
+                    return data;
+                } catch (err) { console.error(err); return null; }
+            },
+
+            async fetchAgendaInfo() {
+                const res = await this.api('schedule', 'get_agenda_info', { id: this.agendaId });
+                if (res && res.data) {
+                    const iconEl = document.getElementById('agendaIcon');
+                    iconEl.className = `fa-solid ${res.data.icon} text-xl`;
+                    iconEl.style = `background: -webkit-linear-gradient(135deg, ${res.data.color_from}, ${res.data.color_to}); -webkit-background-clip: text; -webkit-text-fill-color: transparent;`;
+                    document.getElementById('agendaName').innerText = res.data.name;
+                }
+            },
+
+            async loadData() {
+                // Traz todos os filhos da Agenda
+                const res = await this.api('directories', 'fetch', { parent_id: this.agendaId });
+                if (res) {
+                    this.items = res.data;
+                    this.render();
+                }
+            },
+
+            render() {
+                const selectedDateStr = document.getElementById('currentDate').value;
+                const unscheduledContainer = document.getElementById('unscheduledList');
+                const eventsLayer = document.getElementById('eventsLayer');
+                
+                unscheduledContainer.innerHTML = '';
+                eventsLayer.innerHTML = '';
+
+                this.items.forEach(item => {
+                    const fromColor = item.color_from || '#3b82f6';
+                    const toColor = item.color_to || '#6366f1';
+                    const bgStyle = `background: linear-gradient(135deg, ${fromColor}33, ${toColor}33); border-color: ${fromColor}80; color: #fff;`;
+                    const borderLeft = `border-left: 4px solid ${fromColor};`;
+
+                    if (!item.start_date || !item.end_date) {
+                        // Sem data (Backlog)
+                        unscheduledContainer.innerHTML += `
+                            <div id="evt-${item.id}" draggable="true" ondragstart="scheduleApp.dragStart(event, ${item.id})" class="bg-slate-800 border border-slate-700 p-3 rounded-lg shadow-sm cursor-grab active:cursor-grabbing hover:bg-slate-700 transition-colors flex items-center gap-2">
+                                <i class="fa-solid fa-grip-vertical text-slate-500"></i>
+                                <span class="font-medium text-sm text-slate-200 truncate flex-1">${item.name}</span>
+                            </div>
+                        `;
+                    } else {
+                        // Verifica se pertence ao dia selecionado
+                        const sDate = new Date(item.start_date);
+                        const eDate = new Date(item.end_date);
+                        const dStr = sDate.toISOString().split('T')[0];
+                        
+                        if (dStr === selectedDateStr) {
+                            // Calcula posições em pixels (1px = 1 min)
+                            const startMins = sDate.getHours() * 60 + sDate.getMinutes();
+                            const endMins = eDate.getHours() * 60 + eDate.getMinutes();
+                            const duration = endMins - startMins;
+                            
+                            eventsLayer.innerHTML += `
+                                <div id="evt-${item.id}" class="event-card group" data-id="${item.id}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle} ${borderLeft}">
+                                    <div class="font-bold truncate pointer-events-none">${item.name}</div>
+                                    <div class="text-[10px] opacity-70 pointer-events-none">${sDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${eDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                    <div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>
+                                </div>
+                            `;
+                        }
+                    }
+                });
+
+                // Adiciona listener de drag nos eventos agendados
+                document.querySelectorAll('.event-card').forEach(el => {
+                    el.addEventListener('mousedown', (e) => {
+                        if(e.target.classList.contains('resize-handle')) return;
+                        this.startDragTimeline(e, el);
+                    });
+                });
+            },
+
+            // --- DRAG & DROP DO BACKLOG PARA TIMELINE (HTML5 Native) ---
+            dragStart(ev, id) {
+                ev.dataTransfer.setData("text/plain", id);
+            },
+            allowDrop(ev) { ev.preventDefault(); },
+            async dropOnTimeline(ev) {
+                ev.preventDefault();
+                const id = ev.dataTransfer.getData("text/plain");
+                if (!id) return;
+
+                const containerRect = document.getElementById('timelineScroll').getBoundingClientRect();
+                const y = ev.clientY - containerRect.top + document.getElementById('timelineScroll').scrollTop;
+                
+                // Snap to 30 mins (30px)
+                const snappedY = Math.floor(y / 30) * 30;
+                const hours = Math.floor(snappedY / 60);
+                const minutes = snappedY % 60;
+
+                const baseDate = document.getElementById('currentDate').value;
+                const startObj = new Date(`${baseDate}T${hours.toString().padStart(2,'0')}:${minutes.toString().padStart(2,'0')}:00`);
+                // Padrão: 1 hora de duração
+                const endObj = new Date(startObj.getTime() + 60*60000);
+
+                await this.updateItemDates(id, startObj, endObj);
+            },
+
+            // --- DRAG INTERNO DA TIMELINE (Custom Mouse Events) ---
+            startDragTimeline(e, el) {
+                if (e.button !== 0) return; // Só click esquerdo
+                this.isDragging = true;
+                this.dragElement = el;
+                this.startY = e.clientY;
+                this.startTop = parseInt(el.style.top || 0);
+                el.classList.add('dragging');
+                e.preventDefault();
+            },
+
+            // --- RESIZE (Custom Mouse Events) ---
+            startResize(e, id) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.isResizing = true;
+                this.dragElement = document.getElementById(`evt-${id}`);
+                this.startY = e.clientY;
+                this.startHeight = parseInt(this.dragElement.style.height || 60);
+                this.dragElement.classList.add('resizing');
+            },
+
+            setupMouseEvents() {
+                const container = document.getElementById('timelineScroll');
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (this.isDragging && this.dragElement) {
+                        const deltaY = e.clientY - this.startY;
+                        let newTop = this.startTop + deltaY;
+                        // Snap 15 min
+                        newTop = Math.floor(newTop / 15) * 15;
+                        if (newTop < 0) newTop = 0;
+                        this.dragElement.style.top = newTop + 'px';
+                        this.updateLabelRealtime(this.dragElement, newTop, parseInt(this.dragElement.style.height));
+                    }
+                    if (this.isResizing && this.dragElement) {
+                        const deltaY = e.clientY - this.startY;
+                        let newHeight = this.startHeight + deltaY;
+                        // Snap 15 min, min 15
+                        newHeight = Math.max(15, Math.floor(newHeight / 15) * 15);
+                        this.dragElement.style.height = newHeight + 'px';
+                        this.updateLabelRealtime(this.dragElement, parseInt(this.dragElement.style.top), newHeight);
+                    }
+                });
+
+                document.addEventListener('mouseup', async () => {
+                    if (this.isDragging && this.dragElement) {
+                        this.dragElement.classList.remove('dragging');
+                        this.isDragging = false;
+                        await this.commitTimelineChanges(this.dragElement);
+                        this.dragElement = null;
+                    }
+                    if (this.isResizing && this.dragElement) {
+                        this.dragElement.classList.remove('resizing');
+                        this.isResizing = false;
+                        await this.commitTimelineChanges(this.dragElement);
+                        this.dragElement = null;
+                    }
+                });
+            },
+
+            updateLabelRealtime(el, top, height) {
+                const sh = Math.floor(top/60); const sm = top%60;
+                const end = top + height;
+                const eh = Math.floor(end/60); const em = end%60;
+                
+                const timeStr = `${sh.toString().padStart(2,'0')}:${sm.toString().padStart(2,'0')} - ${eh.toString().padStart(2,'0')}:${em.toString().padStart(2,'0')}`;
+                el.children[1].innerText = timeStr;
+            },
+
+            async commitTimelineChanges(el) {
+                const id = el.getAttribute('data-id');
+                const top = parseInt(el.style.top);
+                const height = parseInt(el.style.height);
+
+                const baseDate = document.getElementById('currentDate').value;
+                
+                const sh = Math.floor(top/60); const sm = top%60;
+                const startObj = new Date(`${baseDate}T${sh.toString().padStart(2,'0')}:${sm.toString().padStart(2,'0')}:00`);
+                
+                const end = top + height;
+                const eh = Math.floor(end/60); const em = end%60;
+                const endObj = new Date(`${baseDate}T${eh.toString().padStart(2,'0')}:${em.toString().padStart(2,'0')}:00`);
+
+                await this.updateItemDates(id, startObj, endObj);
+            },
+
+            // Formata YYYY-MM-DD HH:MM:SS para MySQL
+            toMySQLFormat(dateObj) {
+                return dateObj.getFullYear() + '-' +
+                    ('0' + (dateObj.getMonth()+1)).slice(-2) + '-' +
+                    ('0' + dateObj.getDate()).slice(-2) + ' ' +
+                    ('0' + dateObj.getHours()).slice(-2) + ':' +
+                    ('0' + dateObj.getMinutes()).slice(-2) + ':00';
+            },
+
+            async updateItemDates(id, startObj, endObj) {
+                const payload = {
+                    id: id,
+                    start_date: this.toMySQLFormat(startObj),
+                    end_date: this.toMySQLFormat(endObj)
+                };
+                
+                // Atualiza em background pra manter rápido
+                this.api('schedule', 'update_times', payload).then(() => this.loadData());
+            },
+
+            // --- CRIAÇÃO RÁPIDA DE TAREFA ---
+            openTaskModal() {
+                const modal = document.getElementById('taskModal');
+                const content = document.getElementById('taskModalContent');
+                document.getElementById('taskName').value = '';
+                
+                modal.classList.remove('hidden'); modal.classList.add('flex');
+                setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); document.getElementById('taskName').focus(); }, 10);
+            },
+
+            closeTaskModal() {
+                const modal = document.getElementById('taskModal');
+                const content = document.getElementById('taskModalContent');
+                modal.classList.add('opacity-0'); content.classList.add('scale-95');
+                setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+            },
+
+            async saveTask(e) {
+                e.preventDefault();
+                const name = document.getElementById('taskName').value;
+                const btn = document.getElementById('btnSaveTask');
+                btn.innerHTML = 'Salvando...'; btn.disabled = true;
+
+                // Usa API de diretórios para criar uma pasta (Tarefa) sem datas vinculada a Agenda atual
+                const payload = {
+                    name: name,
+                    parent_id: this.agendaId,
+                    type: 0, // Tarefa internamente age como pasta base
+                    icon: 'fa-check-circle'
+                };
+
+                await this.api('directories', 'create', payload);
+                this.closeTaskModal();
+                btn.innerHTML = 'Salvar'; btn.disabled = false;
+                await this.loadData();
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => scheduleApp.init());
+    </script>
+</body>
+</html>
