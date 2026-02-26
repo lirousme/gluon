@@ -1,35 +1,35 @@
 public_html/gluon/
 │
-├── index.php                 # Front Controller: Recebe e direciona TODAS as requisições.
-├── .htaccess                 # (Para Apache) Redireciona tudo para o index.php
+├── index.php                 # Front Controller
+├── .htaccess                 # Redirecionamentos Apache
 │
-├── config/                   # Configurações globais e de segurança
-│   ├── database.php          # Conexão PDO e chaves de criptografia AES
-│   └── env.php               # Variáveis de ambiente (senhas do BD, etc.)
-│
-├── api/                      # Back-end: Endpoints que processam dados (Retornam JSON via POST)
-│   ├── auth.php              # Login, Registro, Logout e Validação (check_remember)
-│   ├── directories.php       # CRUD de Diretórios e Lógicas Visuais
-│   └── user.php              # Gets/Updates de Perfil (Username/Email), Exclusão de Conta, e Prefs.
-│
-├── views/                    # Front-end: Onde ficam os layouts (Vanilla JS Rápido / Tailwind)
-│   ├── login.html            # Interface de login e registro
-│   ├── dashboard.html        # Área logada com Abas de Estética, Grid/List/Kanban
-│   ├── settings.html         # Configurações do perfil, Logout e Exclusão da conta
-│   └── errors/               # Páginas de erro (404, 500)
-│
-└── assets/                   # Arquivos estáticos públicos
-├── js/                   # Scripts globais
-├── css/                  # CSS customizado (se necessário além do Tailwind)
-└── img/                  # Imagens e ícones
+├── config/
 
-BANCO DE DADOS (ATUALIZADO):
+│   ├── database.php          # Conexão PDO e Criptografia AES
+│   └── env.php
 
--- Comandos SQL úteis para atualizar um banco já existente:
--- ALTER TABLE users ADD COLUMN root_new_item_position VARCHAR(10) DEFAULT 'end' AFTER root_view;
--- ALTER TABLE directories ADD COLUMN new_item_position VARCHAR(10) DEFAULT 'end' AFTER default_view;
--- ALTER TABLE users ADD COLUMN copied_directory_id INT UNSIGNED DEFAULT NULL AFTER root_new_item_position;
--- ALTER TABLE users ADD CONSTRAINT fk_copied_dir FOREIGN KEY (copied_directory_id) REFERENCES directories(id) ON DELETE SET NULL;
+│
+├── api/                      # Back-end API (JSON/POST)
+│   ├── auth.php
+
+│   ├── directories.php       # CRUD de Diretórios/Arquivos
+│   ├── user.php
+
+│   └── editor.php            # NOVO: Gerencia leitura e gravação de códigos
+│
+├── views/                    # Front-end (Vanilla JS + Tailwind)
+│   ├── login.html
+
+│   ├── dashboard.html        # ATUALIZADO: Suporte a arquivos
+│   ├── settings.html
+
+│   ├── editor.html           # NOVO: Interface do editor de código
+│   └── errors/
+
+│
+└── assets/
+
+======================================================================
 
 TABELA: users
 id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -47,13 +47,17 @@ updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 INDEX idx_username (username),
 INDEX idx_email (email),
 INDEX idx_remember_token (remember_token),
+INDEX fk_users_copied_directory (copied_directory_id),
 FOREIGN KEY (copied_directory_id) REFERENCES directories(id) ON DELETE SET NULL
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+======================================================================
 
 TABELA: directories
 id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 user_id INT UNSIGNED NOT NULL,
 parent_id INT UNSIGNED DEFAULT NULL, -- NULL significa que está na Raiz
+type TINYINT DEFAULT 0,              -- NOVO: 0 = Pasta, 1 = Arquivo de Código
 name_encrypted TEXT NOT NULL,        -- Nome do diretório criptografado
 default_view VARCHAR(10) DEFAULT 'grid',
 new_item_position VARCHAR(10) DEFAULT 'end',
@@ -69,4 +73,19 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 FOREIGN KEY (parent_id) REFERENCES directories(id) ON DELETE CASCADE,
 INDEX idx_user_parent (user_id, parent_id),
 INDEX idx_sort_order (sort_order)
+INDEX idx_type (type)
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+======================================================================
+
+TABELA: files_code (NOVA TABELA SEPARADA PARA ESCALABILIDADE)
+id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+directory_id INT UNSIGNED NOT NULL, -- FK referenciando directories
+language VARCHAR(20) DEFAULT 'javascript',
+content_encrypted LONGTEXT,         -- Código fonte salvo com criptografia
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
+INDEX idx_directory (directory_id)
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
