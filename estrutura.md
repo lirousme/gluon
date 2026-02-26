@@ -52,6 +52,7 @@ TABELA: directories
 id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 user_id INT UNSIGNED NOT NULL,
 parent_id INT UNSIGNED DEFAULT NULL, -- NULL significa que está na Raiz
+target_id INT UNSIGNED DEFAULT NULL, -- NOVO: ID do diretório alvo (Apenas para Portais)
 type TINYINT DEFAULT 0,              -- NOVO: 0 = Pasta, 1 = Arquivo de Código
 name_encrypted TEXT NOT NULL,        -- Nome do diretório criptografado
 default_view VARCHAR(10) DEFAULT 'grid',
@@ -68,6 +69,7 @@ updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 FOREIGN KEY (parent_id) REFERENCES directories(id) ON DELETE CASCADE,
+FOREIGN KEY (target_id) REFERENCES directories(id) ON DELETE CASCADE,
 INDEX idx_user_parent (user_id, parent_id),
 INDEX idx_sort_order (sort_order),
 INDEX idx_type (type),
