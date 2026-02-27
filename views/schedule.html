@@ -142,7 +142,7 @@
         </div>
     </main>
 
-    <!-- Modal Completo de Configurações (Igual ao do Dashboard) -->
+    <!-- Modal Completo de Configurações -->
     <div id="dirModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
         <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-0 transform scale-95 transition-transform duration-300 overflow-hidden flex flex-col max-h-[90vh]" id="dirModalContent">
             
@@ -160,6 +160,8 @@
 
             <form id="dirForm" onsubmit="scheduleApp.saveDirectory(event)" class="flex flex-col flex-1 overflow-hidden">
                 <input type="hidden" id="dirId">
+                <input type="hidden" id="dirStartDate">
+                <input type="hidden" id="dirEndDate">
 
                 <div id="tab-geral" class="p-6 overflow-y-auto flex-1">
                     
@@ -281,6 +283,16 @@
         </div>
     </div>
 
+    <!-- Menu de Contexto da Timeline (Pop-up dinâmico) -->
+    <div id="timelineContextMenu" class="hidden absolute bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-1.5 z-50 min-w-[170px] transition-opacity">
+        <button onclick="scheduleApp.triggerModalFromMenu()" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+            <i class="fa-solid fa-plus text-gluon-primary text-center w-4"></i> <span class="font-medium">Criar Tarefa</span>
+        </button>
+        <button onclick="scheduleApp.triggerPortalFromMenu()" class="w-full text-left px-4 py-2.5 text-sm text-fuchsia-400 hover:bg-slate-700 hover:text-fuchsia-300 flex items-center gap-3 transition-colors border-t border-slate-700/50 mt-1">
+            <i class="fa-solid fa-door-open text-center w-4"></i> <span class="font-medium">Criar Portal</span>
+        </button>
+    </div>
+
     <script>
         const scheduleApp = {
             agendaId: null,
@@ -302,6 +314,9 @@
             state: {
                 view: 'timeline', // timeline, kanban, list
                 directoryCache: new Map(),
+                copied_directory_id: null,
+                pendingStartDate: null,
+                pendingEndDate: null,
                 availableIcons: [
                     'fa-folder', 'fa-folder-open', 'fa-check-circle', 'fa-file-code', 'fa-calendar-days', 'fa-door-open', 'fa-clock', 'fa-file-lines', 'fa-file-image', 'fa-file-pdf', 'fa-star', 'fa-heart', 'fa-image', 'fa-music', 'fa-video', 
                     'fa-code', 'fa-terminal', 'fa-database', 'fa-server', 'fa-lock', 'fa-vault', 'fa-book', 'fa-briefcase', 'fa-globe', 'fa-list-check'
@@ -321,6 +336,7 @@
                 this.renderIconPicker();
                 this.setupFormListeners();
                 
+                await this.fetchUserPrefs();
                 await this.fetchAgendaInfo();
                 await this.loadData();
             },
@@ -354,6 +370,13 @@
                     if (data.status !== 'success') throw new Error(data.message);
                     return data;
                 } catch (err) { console.error(err); this.showToast(err.message || 'Erro de conexão.', 'error'); return null; }
+            },
+
+            async fetchUserPrefs() {
+                const response = await this.api('user', 'get_prefs');
+                if (response && response.data) {
+                    this.state.copied_directory_id = response.data.copied_directory_id;
+                }
             },
 
             async fetchAgendaInfo() {
@@ -405,9 +428,82 @@
             },
 
             // ==========================================
-            // CONTROLE DINÂMICO DE DATA
+            // CONTROLE DINÂMICO DE DATA E CLIQUE NA TIMELINE
             // ==========================================
             
+            handleTimelineClick(e) {
+                // Se clicou num card, num botão ou se tava arrastando, aborta
+                if (e.target.closest('.event-card') || this.wasDragged || this.isDragging || this.isResizing) return;
+
+                const containerRect = document.getElementById('timelineScroll').getBoundingClientRect();
+                const clickY = e.clientY - containerRect.top + document.getElementById('timelineScroll').scrollTop;
+                
+                // Arredonda para blocos de 30 minutos
+                const snappedY = Math.floor(clickY / 30) * 30; 
+                const hours = Math.floor(snappedY / 60);
+                const minutes = snappedY % 60;
+
+                const y = this.currentDateObj.getFullYear();
+                const m = String(this.currentDateObj.getMonth() + 1).padStart(2, '0');
+                const d = String(this.currentDateObj.getDate()).padStart(2, '0');
+                const baseDate = `${y}-${m}-${d}`;
+
+                const startObj = new Date(`${baseDate}T${hours.toString().padStart(2,'0')}:${minutes.toString().padStart(2,'0')}:00`);
+                const endObj = new Date(startObj.getTime() + 60*60000); // Tarefa padrão 1 hora
+
+                this.state.pendingStartDate = this.toMySQLFormat(startObj);
+                this.state.pendingEndDate = this.toMySQLFormat(endObj);
+
+                if (this.state.copied_directory_id) {
+                    // Tem item copiado na área de transferência: mostra Pop-up dinâmico
+                    const menu = document.getElementById('timelineContextMenu');
+                    
+                    // Prevenir sair da tela
+                    let posX = e.pageX;
+                    let posY = e.pageY;
+                    menu.classList.remove('hidden');
+                    if (posX + menu.offsetWidth > window.innerWidth) posX = window.innerWidth - menu.offsetWidth - 10;
+                    if (posY + menu.offsetHeight > window.innerHeight) posY = window.innerHeight - menu.offsetHeight - 10;
+                    
+                    menu.style.left = `${posX}px`;
+                    menu.style.top = `${posY}px`;
+
+                    const closeMenu = (evt) => {
+                        if (!menu.contains(evt.target)) {
+                            menu.classList.add('hidden');
+                            document.removeEventListener('click', closeMenu);
+                        }
+                    };
+                    setTimeout(() => document.addEventListener('click', closeMenu), 10);
+                } else {
+                    // Abre o modal diretamente agendado naquele horário
+                    this.openModal(null, '', this.state.pendingStartDate, this.state.pendingEndDate);
+                }
+            },
+
+            triggerModalFromMenu() {
+                document.getElementById('timelineContextMenu').classList.add('hidden');
+                this.openModal(null, '', this.state.pendingStartDate, this.state.pendingEndDate);
+            },
+
+            async triggerPortalFromMenu() {
+                document.getElementById('timelineContextMenu').classList.add('hidden');
+                
+                const response = await this.api('directories', 'create_portal', {
+                    target_parent_id: this.agendaId,
+                    start_date: this.state.pendingStartDate,
+                    end_date: this.state.pendingEndDate
+                });
+                
+                if (response && response.status === 'success') {
+                    this.state.copied_directory_id = null; // Limpa para evitar reuso contínuo acidental
+                    this.showToast('Portal criado e agendado com sucesso!', 'success');
+                    await this.loadData();
+                } else {
+                    this.showToast(response ? response.message : 'Erro ao criar portal agendado', 'error');
+                }
+            },
+
             renderDateControls() {
                 const container = document.getElementById('dateControlContainer');
                 const dateObj = this.currentDateObj;
@@ -491,7 +587,7 @@
 
                 return `
                 <div id="timelineScroll" class="flex-1 overflow-y-auto relative no-scrollbar">
-                    <div id="timelineContainer" class="relative w-full h-[1440px] timeline-grid" ondragover="scheduleApp.allowDrop(event)" ondrop="scheduleApp.dropOnTimeline(event)">
+                    <div id="timelineContainer" class="relative w-full h-[1440px] timeline-grid" ondragover="scheduleApp.allowDrop(event)" ondrop="scheduleApp.dropOnTimeline(event)" onclick="scheduleApp.handleTimelineClick(event)">
                         <div class="absolute left-0 top-0 bottom-0 w-12 border-r border-slate-700/50 bg-slate-900/50 z-0">${labelsHTML}</div>
                         <div id="eventsLayer" class="absolute inset-0 z-10"></div>
                     </div>
@@ -1008,7 +1104,7 @@
                 
                 if (typeValue === 0) {
                     folderSettings.style.display = 'block';
-                    nameLabel.innerText = 'Nome da Pasta / Tarefa';
+                    nameLabel.innerText = 'Nome da Tarefa / Pasta';
                     this.autoChangeIcon('fa-check-circle');
                 } else if (typeValue === 1) {
                     folderSettings.style.display = 'none';
@@ -1054,9 +1150,11 @@
                 const btn = document.getElementById('btnRemoveCover'); if (btn) btn.classList.add('hidden');
             },
 
-            openModal(id = '', name = '') {
+            openModal(id = '', name = '', startDate = null, endDate = null) {
                 this.switchModalTab('geral');
                 document.getElementById('dirId').value = id;
+                document.getElementById('dirStartDate').value = startDate || '';
+                document.getElementById('dirEndDate').value = endDate || '';
                 
                 let dirObj = null;
                 const dirNameInput = document.getElementById('dirName');
@@ -1146,6 +1244,8 @@
                     modal.classList.add('hidden'); 
                     modal.classList.remove('flex'); 
                     document.getElementById('dirForm').reset(); 
+                    document.getElementById('dirStartDate').value = '';
+                    document.getElementById('dirEndDate').value = '';
                     
                     const btnSave = document.getElementById('btnSaveDir');
                     if (btnSave) {
@@ -1201,7 +1301,9 @@
                     cover_url: document.getElementById('dirCoverBase64').value,
                     color_from: document.getElementById('dirColorFrom').value || '#3b82f6',
                     color_to: document.getElementById('dirColorTo').value || '#6366f1',
-                    icon: selectedIcon
+                    icon: selectedIcon,
+                    start_date: document.getElementById('dirStartDate').value,
+                    end_date: document.getElementById('dirEndDate').value
                 };
 
                 const response = await this.api('directories', id !== '' ? 'update' : 'create', payload);
