@@ -5,8 +5,12 @@
 /**
  * API DE DIRETÓRIOS E ARQUIVOS
  * Pilar: Seguro, Rápido e Escalável.
- * Suporta Árvores de Pastas, Código, Agendas e Portais (Atalhos Dinâmicos).
+ * Suporta Árvores de Pastas, Código, Agendas, Portais (Atalhos Dinâmicos) e Recorrências.
  */
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 
 require_once BASE_PATH . '/config/database.php';
 
@@ -20,6 +24,38 @@ $user_id = $_SESSION['user_id'];
 $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? '';
+
+// =========================================================================
+// FUNÇÃO HELPER: CALCULAR A PRÓXIMA DATA DE RECORRÊNCIA
+// =========================================================================
+function calculateNextRunDate($type, $interval, $days_of_week, $custom_dates, $base_date) {
+    // Se não houver data base, assume o momento atual
+    $date = $base_date ? new DateTime($base_date) : new DateTime();
+    $interval = (int)$interval > 0 ? (int)$interval : 1;
+
+    if ($type === 'daily') {
+        $date->modify("+$interval day");
+    } elseif ($type === 'weekly') {
+        $date->modify("+$interval week");
+    } elseif ($type === 'monthly') {
+        $date->modify("+$interval month");
+    } elseif ($type === 'yearly') {
+        $date->modify("+$interval year");
+    } elseif ($type === 'custom' && !empty($custom_dates)) {
+        // Lógica para datas personalizadas
+        $dates = json_decode($custom_dates, true);
+        if (is_array($dates) && count($dates) > 0) {
+            sort($dates);
+            $now = new DateTime();
+            foreach ($dates as $d) {
+                $cd = new DateTime($d);
+                if ($cd > $now) return $cd->format('Y-m-d H:i:s');
+            }
+            return null; // Não há datas futuras programadas
+        }
+    }
+    return $date->format('Y-m-d H:i:s');
+}
 
 // =========================================================================
 // FUNÇÃO HELPER: DUPLICAR ÁRVORE DE DIRETÓRIOS
@@ -42,8 +78,8 @@ function duplicateDirectoryTree($source_id, $target_parent_id, $user_id, $pdo, $
     $maxOrder = $stmtMax->fetchColumn();
     $newOrder = ($maxOrder !== null) ? (int)$maxOrder + 1 : 0;
 
-    // Atualizado para suportar target_id ao clonar portais
-    $stmtInsert = $pdo->prepare("INSERT INTO directories (user_id, parent_id, target_id, type, name_encrypted, default_view, new_item_position, sort_order, icon, icon_color_from, icon_color_to, cover_url_encrypted, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    // Inserir na tabela directories suportando is_recurring
+    $stmtInsert = $pdo->prepare("INSERT INTO directories (user_id, parent_id, target_id, type, name_encrypted, default_view, new_item_position, sort_order, icon, icon_color_from, icon_color_to, cover_url_encrypted, start_date, end_date, is_recurring) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $stmtInsert->execute([
         $user_id,
         $target_parent_id,
@@ -58,11 +94,24 @@ function duplicateDirectoryTree($source_id, $target_parent_id, $user_id, $pdo, $
         $sourceDir['icon_color_to'],
         $sourceDir['cover_url_encrypted'],
         $sourceDir['start_date'],
-        $sourceDir['end_date']
+        $sourceDir['end_date'],
+        $sourceDir['is_recurring']
     ]);
     
     $newDirId = $pdo->lastInsertId();
 
+    // Clonar a regra de recorrência, se existir
+    if ($sourceDir['is_recurring'] == 1) {
+        $stmtRec = $pdo->prepare("SELECT * FROM directory_recurrences WHERE directory_id = ?");
+        $stmtRec->execute([$source_id]);
+        $rec = $stmtRec->fetch();
+        if ($rec) {
+            $stmtInsRec = $pdo->prepare("INSERT INTO directory_recurrences (directory_id, type, interval_value, days_of_week, custom_dates, end_date, next_run_date) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmtInsRec->execute([$newDirId, $rec['type'], $rec['interval_value'], $rec['days_of_week'], $rec['custom_dates'], $rec['end_date'], $rec['next_run_date']]);
+        }
+    }
+
+    // Clonar conteúdo do ficheiro de código, se for do tipo 1
     if ((int)$sourceDir['type'] === 1) {
         $stmtCode = $pdo->prepare("SELECT language, content_encrypted FROM files_code WHERE directory_id = ?");
         $stmtCode->execute([$source_id]);
@@ -73,6 +122,7 @@ function duplicateDirectoryTree($source_id, $target_parent_id, $user_id, $pdo, $
         }
     }
 
+    // Clonar recursivamente subdiretórios
     $stmtChildren = $pdo->prepare("SELECT id FROM directories WHERE parent_id = ? AND user_id = ?");
     $stmtChildren->execute([$source_id, $user_id]);
     $children = $stmtChildren->fetchAll();
@@ -90,10 +140,10 @@ if ($action === 'fetch') {
     $parent_id = isset($input['parent_id']) && $input['parent_id'] !== null ? (int)$input['parent_id'] : null;
 
     if ($parent_id === null) {
-        $stmt = $pdo->prepare("SELECT id, type, target_id, name_encrypted, parent_id, default_view, new_item_position, sort_order, icon, icon_color_from, icon_color_to, cover_url_encrypted, start_date, end_date FROM directories WHERE user_id = ? AND parent_id IS NULL");
+        $stmt = $pdo->prepare("SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to, d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, dr.type as rec_type, dr.interval_value as rec_interval, dr.days_of_week as rec_days, dr.custom_dates as rec_custom, dr.end_date as rec_end FROM directories d LEFT JOIN directory_recurrences dr ON d.id = dr.directory_id WHERE d.user_id = ? AND d.parent_id IS NULL");
         $stmt->execute([$user_id]);
     } else {
-        $stmt = $pdo->prepare("SELECT id, type, target_id, name_encrypted, parent_id, default_view, new_item_position, sort_order, icon, icon_color_from, icon_color_to, cover_url_encrypted, start_date, end_date FROM directories WHERE user_id = ? AND parent_id = ?");
+        $stmt = $pdo->prepare("SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to, d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, dr.type as rec_type, dr.interval_value as rec_interval, dr.days_of_week as rec_days, dr.custom_dates as rec_custom, dr.end_date as rec_end FROM directories d LEFT JOIN directory_recurrences dr ON d.id = dr.directory_id WHERE d.user_id = ? AND d.parent_id = ?");
         $stmt->execute([$user_id, $parent_id]);
     }
     
@@ -115,7 +165,13 @@ if ($action === 'fetch') {
             'color_to' => $dir['icon_color_to'] ?? '#6366f1',
             'cover_url' => !empty($dir['cover_url_encrypted']) ? Security::decryptData($dir['cover_url_encrypted']) : '',
             'start_date' => $dir['start_date'],
-            'end_date' => $dir['end_date']
+            'end_date' => $dir['end_date'],
+            'is_recurring' => (int)($dir['is_recurring'] ?? 0),
+            'rec_type' => $dir['rec_type'] ?? 'daily',
+            'rec_interval' => (int)($dir['rec_interval'] ?? 1),
+            'rec_days' => $dir['rec_days'] ?? '',
+            'rec_custom' => $dir['rec_custom'] ?? '',
+            'rec_end' => $dir['rec_end'] ?? ''
         ];
     }
 
@@ -174,6 +230,14 @@ elseif ($action === 'create') {
     $start_date = !empty($input['start_date']) ? $input['start_date'] : null;
     $end_date = !empty($input['end_date']) ? $input['end_date'] : null;
 
+    // Campos de Recorrência
+    $is_recurring = isset($input['is_recurring']) ? (int)$input['is_recurring'] : 0;
+    $rec_type = $input['rec_type'] ?? 'daily';
+    $rec_interval = (int)($input['rec_interval'] ?? 1);
+    $rec_days = !empty($input['rec_days']) ? $input['rec_days'] : null;
+    $rec_custom = !empty($input['rec_custom']) ? $input['rec_custom'] : null;
+    $rec_end = !empty($input['rec_end']) ? $input['rec_end'] : null;
+
     if (empty($name)) {
         die(json_encode(['status' => 'error', 'message' => 'O nome não pode ser vazio.']));
     }
@@ -203,10 +267,27 @@ elseif ($action === 'create') {
         $newOrder = ($maxOrder !== null) ? (int)$maxOrder + 1 : 0;
     }
 
-    $stmt = $pdo->prepare("INSERT INTO directories (user_id, parent_id, type, name_encrypted, default_view, new_item_position, sort_order, icon, icon_color_from, icon_color_to, cover_url_encrypted, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    if ($stmt->execute([$user_id, $parent_id, $type, $name_encrypted, $view, $new_item_position, $newOrder, $icon, $color_from, $color_to, $cover_url_encrypted, $start_date, $end_date])) {
+    try {
+        $pdo->beginTransaction();
+
+        $stmt = $pdo->prepare("INSERT INTO directories (user_id, parent_id, type, name_encrypted, default_view, new_item_position, sort_order, icon, icon_color_from, icon_color_to, cover_url_encrypted, start_date, end_date, is_recurring) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$user_id, $parent_id, $type, $name_encrypted, $view, $new_item_position, $newOrder, $icon, $color_from, $color_to, $cover_url_encrypted, $start_date, $end_date, $is_recurring]);
+        
+        $new_dir_id = $pdo->lastInsertId();
+
+        // Se ativado, processa a recorrência para que o CRON saiba quando atuar
+        if ($is_recurring) {
+            $next_run = calculateNextRunDate($rec_type, $rec_interval, $rec_days, $rec_custom, $start_date);
+            if ($next_run) {
+                $stmtRec = $pdo->prepare("INSERT INTO directory_recurrences (directory_id, type, interval_value, days_of_week, custom_dates, end_date, next_run_date) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                $stmtRec->execute([$new_dir_id, $rec_type, $rec_interval, $rec_days, $rec_custom, $rec_end, $next_run]);
+            }
+        }
+
+        $pdo->commit();
         echo json_encode(['status' => 'success', 'message' => 'Item criado com sucesso.']);
-    } else {
+    } catch (Exception $e) {
+        $pdo->rollBack();
         echo json_encode(['status' => 'error', 'message' => 'Erro ao criar item.']);
     }
 }
@@ -216,7 +297,6 @@ elseif ($action === 'create_portal') {
     $start_date = !empty($input['start_date']) ? $input['start_date'] : null;
     $end_date = !empty($input['end_date']) ? $input['end_date'] : null;
 
-    // Pega o ID alvo (Diretório que foi "Copiado" para atalho)
     $stmtUser = $pdo->prepare("SELECT copied_directory_id FROM users WHERE id = ?");
     $stmtUser->execute([$user_id]);
     $target_id = $stmtUser->fetchColumn();
@@ -225,7 +305,6 @@ elseif ($action === 'create_portal') {
         die(json_encode(['status' => 'error', 'message' => 'Nenhum diretório alvo selecionado. Use "Copiar Diretório" antes.']));
     }
 
-    // Pega nome do diretório alvo para criar o nome do portal
     $stmtOrig = $pdo->prepare("SELECT name_encrypted, icon_color_from, icon_color_to FROM directories WHERE id = ? AND user_id = ?");
     $stmtOrig->execute([$target_id, $user_id]);
     $original = $stmtOrig->fetch();
@@ -237,17 +316,14 @@ elseif ($action === 'create_portal') {
     $decryptedName = Security::decryptData($original['name_encrypted']);
     $newNameEnc = Security::encryptData($decryptedName);
 
-    // Define ordem no final da lista
     $stmtMax = $pdo->prepare("SELECT MAX(sort_order) FROM directories WHERE user_id = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))");
     $stmtMax->execute([$user_id, $target_parent_id, $target_parent_id]);
     $maxOrder = $stmtMax->fetchColumn();
     $newOrder = ($maxOrder !== null) ? (int)$maxOrder + 1 : 0;
 
-    // ATUALIZADO: Agora suporta receber start_date e end_date
     $stmtInsert = $pdo->prepare("INSERT INTO directories (user_id, parent_id, target_id, type, name_encrypted, sort_order, icon, icon_color_from, icon_color_to, start_date, end_date) VALUES (?, ?, ?, 3, ?, ?, 'fa-door-open', ?, ?, ?, ?)");
     if ($stmtInsert->execute([$user_id, $target_parent_id, $target_id, $newNameEnc, $newOrder, $original['icon_color_from'], $original['icon_color_to'], $start_date, $end_date])) {
         
-        // Limpa a memória após criar o portal
         $stmtClear = $pdo->prepare("UPDATE users SET copied_directory_id = NULL WHERE id = ?");
         $stmtClear->execute([$user_id]);
 
@@ -268,6 +344,14 @@ elseif ($action === 'update') {
     $color_to = preg_match('/^#[a-fA-F0-9]{6}$/', $input['color_to'] ?? '') ? $input['color_to'] : '#6366f1';
     $cover_url = trim($input['cover_url'] ?? '');
 
+    // Campos de Recorrência
+    $is_recurring = isset($input['is_recurring']) ? (int)$input['is_recurring'] : 0;
+    $rec_type = $input['rec_type'] ?? 'daily';
+    $rec_interval = (int)($input['rec_interval'] ?? 1);
+    $rec_days = !empty($input['rec_days']) ? $input['rec_days'] : null;
+    $rec_custom = !empty($input['rec_custom']) ? $input['rec_custom'] : null;
+    $rec_end = !empty($input['rec_end']) ? $input['rec_end'] : null;
+
     if (empty($name) || $id === 0) {
         die(json_encode(['status' => 'error', 'message' => 'Dados inválidos.']));
     }
@@ -281,20 +365,38 @@ elseif ($action === 'update') {
     $name_encrypted = Security::encryptData($name);
     $cover_url_encrypted = !empty($cover_url) ? Security::encryptData($cover_url) : null;
     
-    if (array_key_exists('start_date', $input) || array_key_exists('end_date', $input)) {
-        $start_date = !empty($input['start_date']) ? $input['start_date'] : null;
-        $end_date = !empty($input['end_date']) ? $input['end_date'] : null;
+    try {
+        $pdo->beginTransaction();
 
-        $stmt = $pdo->prepare("UPDATE directories SET name_encrypted = ?, default_view = ?, new_item_position = ?, icon = ?, icon_color_from = ?, icon_color_to = ?, cover_url_encrypted = ?, start_date = ?, end_date = ? WHERE id = ? AND user_id = ?");
-        $result = $stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $start_date, $end_date, $id, $user_id]);
-    } else {
-        $stmt = $pdo->prepare("UPDATE directories SET name_encrypted = ?, default_view = ?, new_item_position = ?, icon = ?, icon_color_from = ?, icon_color_to = ?, cover_url_encrypted = ? WHERE id = ? AND user_id = ?");
-        $result = $stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $id, $user_id]);
-    }
+        if (array_key_exists('start_date', $input) || array_key_exists('end_date', $input)) {
+            $start_date = !empty($input['start_date']) ? $input['start_date'] : null;
+            $end_date = !empty($input['end_date']) ? $input['end_date'] : null;
 
-    if ($result) {
+            $stmt = $pdo->prepare("UPDATE directories SET name_encrypted = ?, default_view = ?, new_item_position = ?, icon = ?, icon_color_from = ?, icon_color_to = ?, cover_url_encrypted = ?, start_date = ?, end_date = ?, is_recurring = ? WHERE id = ? AND user_id = ?");
+            $stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $start_date, $end_date, $is_recurring, $id, $user_id]);
+        } else {
+            $stmt = $pdo->prepare("UPDATE directories SET name_encrypted = ?, default_view = ?, new_item_position = ?, icon = ?, icon_color_from = ?, icon_color_to = ?, cover_url_encrypted = ?, is_recurring = ? WHERE id = ? AND user_id = ?");
+            $stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $is_recurring, $id, $user_id]);
+        }
+
+        // Gere a tabela de recorrência (Atualiza/Insere ou Apaga se a opção foi desmarcada)
+        if ($is_recurring) {
+            $base_date = $start_date ?? null; 
+            $next_run = calculateNextRunDate($rec_type, $rec_interval, $rec_days, $rec_custom, $base_date);
+            
+            // Usamos ON DUPLICATE KEY UPDATE para não dar erro se já existir regra
+            $stmtRec = $pdo->prepare("INSERT INTO directory_recurrences (directory_id, type, interval_value, days_of_week, custom_dates, end_date, next_run_date) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE type=VALUES(type), interval_value=VALUES(interval_value), days_of_week=VALUES(days_of_week), custom_dates=VALUES(custom_dates), end_date=VALUES(end_date), next_run_date=VALUES(next_run_date)");
+            $stmtRec->execute([$id, $rec_type, $rec_interval, $rec_days, $rec_custom, $rec_end, $next_run]);
+        } else {
+            // Se is_recurring for 0, limpamos qualquer regra velha
+            $stmtDelRec = $pdo->prepare("DELETE FROM directory_recurrences WHERE directory_id = ?");
+            $stmtDelRec->execute([$id]);
+        }
+
+        $pdo->commit();
         echo json_encode(['status' => 'success', 'message' => 'Item atualizado.']);
-    } else {
+    } catch (Exception $e) {
+        $pdo->rollBack();
         echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar.']);
     }
 }
@@ -329,6 +431,7 @@ elseif ($action === 'delete') {
     $id = (int)($input['id'] ?? 0);
     if ($id === 0) die(json_encode(['status' => 'error', 'message' => 'ID inválido.']));
 
+    // A tabela directory_recurrences será apagada de forma limpa devido ao ON DELETE CASCADE no MySQL.
     $stmt = $pdo->prepare("DELETE FROM directories WHERE id = ? AND user_id = ?");
     if ($stmt->execute([$id, $user_id])) {
         echo json_encode(['status' => 'success', 'message' => 'Excluído com sucesso.']);
