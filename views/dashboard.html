@@ -319,7 +319,8 @@
     <script>
         const app = {
             state: {
-                path: [{ id: null, name: 'Meu Cofre', view: 'grid' }],
+                // NOVO: Adicionado o type (tipo de diretório) ao estado do path
+                path: [{ id: null, name: 'Meu Cofre', view: 'grid', type: 0 }],
                 directories: [],
                 directoryCache: new Map(), 
                 rootPrefs: { view: 'grid', new_item_position: 'end', copied_directory_id: null }, 
@@ -496,8 +497,19 @@
                 const startId = urlParams.get('id');
                 if (startId) {
                     const pathRes = await this.api('directories', 'get_path', { id: startId });
-                    if (pathRes && pathRes.status === 'success') {
-                        this.state.path = [{ id: null, name: 'Meu Cofre', view: this.state.rootPrefs.view }, ...pathRes.data];
+                    if (pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
+                        const targetDir = pathRes.data[pathRes.data.length - 1];
+                        
+                        // Checagem Defensiva: Se tentou abrir algo que não seja tipo pasta no dashboard, redireciona
+                        if (targetDir.type === 1) {
+                            window.location.href = `/editor?id=${targetDir.id}`;
+                            return;
+                        } else if (targetDir.type === 2) {
+                            window.location.href = `/schedule?id=${targetDir.id}`;
+                            return;
+                        }
+
+                        this.state.path = [{ id: null, name: 'Meu Cofre', view: this.state.rootPrefs.view, type: 0 }, ...pathRes.data];
                     }
                 }
 
@@ -708,8 +720,19 @@
                     if (!item.target_id) return this.showToast('Portal corrompido: Destino não encontrado.', 'error');
                     this.setLoading(true);
                     const pathRes = await this.api('directories', 'get_path', { id: item.target_id });
-                    if(pathRes && pathRes.status === 'success') {
-                        this.state.path = [{ id: null, name: 'Meu Cofre', view: this.state.rootPrefs.view }, ...pathRes.data];
+                    if(pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
+                        const targetDir = pathRes.data[pathRes.data.length - 1];
+                        
+                        // Direciona caso o destino final seja um arquivo ou agenda
+                        if (targetDir.type === 1) {
+                            window.location.href = `/editor?id=${targetDir.id}`;
+                            return;
+                        } else if (targetDir.type === 2) {
+                            window.location.href = `/schedule?id=${targetDir.id}`;
+                            return;
+                        }
+
+                        this.state.path = [{ id: null, name: 'Meu Cofre', view: this.state.rootPrefs.view, type: 0 }, ...pathRes.data];
                         if (this.state.reorderMode) this.toggleReorderMode();
                         await this.fetchDirectories();
                     } else {
@@ -717,13 +740,27 @@
                         this.showToast('Erro ao abrir portal. Destino não existe mais.', 'error');
                     }
                 } else {
-                    this.state.path.push({ id: item.id, name: item.name, view: item.view });
+                    // Adicionado controle de type ao push()
+                    this.state.path.push({ id: item.id, name: item.name, view: item.view, type: item.type });
                     if (this.state.reorderMode) this.toggleReorderMode();
                     await this.fetchDirectories();
                 }
             },
 
             async goUpTo(index) {
+                const targetStep = this.state.path[index];
+                
+                // Trata a subida segura através do pão de forma caso esbarre em arquivos ou agendas
+                if (targetStep.id !== null) {
+                    if (targetStep.type === 1) {
+                        window.location.href = `/editor?id=${targetStep.id}`;
+                        return;
+                    } else if (targetStep.type === 2) {
+                        window.location.href = `/schedule?id=${targetStep.id}`;
+                        return;
+                    }
+                }
+
                 this.state.path = this.state.path.slice(0, index + 1);
                 if (this.state.reorderMode) this.toggleReorderMode();
                 await this.fetchDirectories();
