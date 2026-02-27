@@ -129,7 +129,6 @@ if ($action === 'fetch') {
     echo json_encode(['status' => 'success', 'data' => $response]);
 } 
 
-// NOVO: Resolve a trilha completa de breadcrumbs até um diretório (Para viagem via Portal)
 elseif ($action === 'get_path') {
     $dir_id = isset($input['id']) && $input['id'] !== null ? (int)$input['id'] : null;
     $path = [];
@@ -213,6 +212,8 @@ elseif ($action === 'create') {
 
 elseif ($action === 'create_portal') {
     $target_parent_id = isset($input['target_parent_id']) && $input['target_parent_id'] !== null ? (int)$input['target_parent_id'] : null;
+    $start_date = !empty($input['start_date']) ? $input['start_date'] : null;
+    $end_date = !empty($input['end_date']) ? $input['end_date'] : null;
 
     // Pega o ID alvo (Diretório que foi "Copiado" para atalho)
     $stmtUser = $pdo->prepare("SELECT copied_directory_id FROM users WHERE id = ?");
@@ -241,8 +242,9 @@ elseif ($action === 'create_portal') {
     $maxOrder = $stmtMax->fetchColumn();
     $newOrder = ($maxOrder !== null) ? (int)$maxOrder + 1 : 0;
 
-    $stmtInsert = $pdo->prepare("INSERT INTO directories (user_id, parent_id, target_id, type, name_encrypted, sort_order, icon, icon_color_from, icon_color_to) VALUES (?, ?, ?, 3, ?, ?, 'fa-door-open', ?, ?)");
-    if ($stmtInsert->execute([$user_id, $target_parent_id, $target_id, $newNameEnc, $newOrder, $original['icon_color_from'], $original['icon_color_to']])) {
+    // ATUALIZADO: Agora suporta receber start_date e end_date
+    $stmtInsert = $pdo->prepare("INSERT INTO directories (user_id, parent_id, target_id, type, name_encrypted, sort_order, icon, icon_color_from, icon_color_to, start_date, end_date) VALUES (?, ?, ?, 3, ?, ?, 'fa-door-open', ?, ?, ?, ?)");
+    if ($stmtInsert->execute([$user_id, $target_parent_id, $target_id, $newNameEnc, $newOrder, $original['icon_color_from'], $original['icon_color_to'], $start_date, $end_date])) {
         
         // Limpa a memória após criar o portal
         $stmtClear = $pdo->prepare("UPDATE users SET copied_directory_id = NULL WHERE id = ?");
@@ -269,7 +271,6 @@ elseif ($action === 'update') {
         die(json_encode(['status' => 'error', 'message' => 'Dados inválidos.']));
     }
 
-    // TRAVA DE SEGURANÇA: Se for portal (type 3), força o ícone a ser sempre a porta.
     $stmtType = $pdo->prepare("SELECT type FROM directories WHERE id = ? AND user_id = ?");
     $stmtType->execute([$id, $user_id]);
     if ($stmtType->fetchColumn() == 3) {
@@ -279,8 +280,6 @@ elseif ($action === 'update') {
     $name_encrypted = Security::encryptData($name);
     $cover_url_encrypted = !empty($cover_url) ? Security::encryptData($cover_url) : null;
     
-    // CORREÇÃO: Atualização Parcial de Datas
-    // Se as datas não foram enviadas no payload (edição via modal), ignoramos essa coluna para não perder os agendamentos já existentes.
     if (array_key_exists('start_date', $input) || array_key_exists('end_date', $input)) {
         $start_date = !empty($input['start_date']) ? $input['start_date'] : null;
         $end_date = !empty($input['end_date']) ? $input['end_date'] : null;
