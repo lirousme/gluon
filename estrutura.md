@@ -13,6 +13,7 @@ public_html/gluon/
 │   ├── user.php
 │   ├── editor.php            # Gerencia leitura e gravação de códigos
 │   └── schedule.php          # NOVO: Micro-API para arrastar/redimensionar eventos
+│   └── cron_recurrence.php   # NOVO: Motor autônomo de repetição de tarefas (via CRON)
 │
 ├── views/                    # Front-end (Vanilla JS + Tailwind)
 │   ├── login.html
@@ -64,6 +65,7 @@ icon_color_to VARCHAR(7) DEFAULT '#6366f1',   -- Cor final do Gradient (Hex)
 cover_url_encrypted TEXT DEFAULT NULL,     -- URL da imagem de capa (Criptografado)
 start_date DATETIME DEFAULT NULL,    -- NOVO: Início da tarefa/evento na agenda
 end_date DATETIME DEFAULT NULL,      -- NOVO: Fim da tarefa/evento na agenda
+is_recurring TINYINT(1) DEFAULT 0,   -- NOVO: Flag para saber se tem regra de recorrência
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
@@ -74,6 +76,24 @@ INDEX idx_user_parent (user_id, parent_id),
 INDEX idx_sort_order (sort_order),
 INDEX idx_type (type),
 INDEX idx_dates (start_date, end_date),
+INDEX idx_is_recurring (is_recurring),
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+======================================================================
+
+TABELA: directory_recurrences
+directory_id INT UNSIGNED PRIMARY KEY,
+type VARCHAR(20) NOT NULL COMMENT 'daily, weekly, monthly, yearly, custom',
+interval_value INT DEFAULT 1 COMMENT 'Ex: a cada 2 dias/semanas',
+days_of_week VARCHAR(50) DEFAULT NULL COMMENT 'Dias específicos da semana (0-6)',
+custom_dates JSON DEFAULT NULL COMMENT 'Lista de datas exatas em formato JSON',
+end_date DATETIME DEFAULT NULL COMMENT 'Data limite para parar a repetição',
+next_run_date DATETIME NOT NULL COMMENT 'A próxima vez que a rotina deve clonar a tarefa',
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
+INDEX idx_next_run (next_run_date)
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================
