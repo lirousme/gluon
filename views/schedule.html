@@ -5,6 +5,7 @@
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
   Suporta Múltiplas Visualizações: Linha do Tempo, Kanban Semanal, Lista e agora Recorrências com Projeção Visual!
   *Atualizado: Ao clicar em um Portal, ele redireciona para o Dashboard via Soft Symlink mantendo o contexto.
+  *Atualizado: Suporte total a copiar, colar, transferir e criar portais direto da Agenda.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -99,6 +100,34 @@
         </div>
         
         <div class="flex items-center gap-3">
+            
+            <!-- Menu de Opções Geral (3 pontinhos) -->
+            <div class="relative">
+                <button onclick="scheduleApp.toggleMobileViewMenu()" id="btn-mobile-menu-trigger" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors outline-none focus:ring-2 focus:ring-slate-700">
+                    <i class="fa-solid fa-ellipsis-vertical px-1"></i>
+                </button>
+                <div id="mobileViewMenu" class="hidden absolute right-0 top-12 w-56 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 origin-top-right transition-all">
+                    
+                    <div class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Ações da Agenda</div>
+                    
+                    <button onclick="scheduleApp.copyCurrentDirectory(); scheduleApp.toggleMobileViewMenu()" id="btn-copy-dir" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                        <i class="fa-regular fa-copy w-5 text-center text-lg"></i> <span class="font-medium">Copiar Agenda</span>
+                    </button>
+
+                    <button onclick="scheduleApp.pasteDirectory(); scheduleApp.toggleMobileViewMenu()" id="btn-paste-dir" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors hidden">
+                        <i class="fa-solid fa-paste w-5 text-center text-lg"></i> <span class="font-medium">Colar Arquivos</span>
+                    </button>
+                    
+                    <button onclick="scheduleApp.moveDirectory(); scheduleApp.toggleMobileViewMenu()" id="btn-move-dir" class="w-full text-left px-4 py-2.5 text-sm text-amber-400 hover:bg-slate-700 hover:text-amber-300 flex items-center gap-3 transition-colors hidden">
+                        <i class="fa-solid fa-truck-fast w-5 text-center text-lg"></i> <span class="font-medium">Mover para cá</span>
+                    </button>
+
+                    <button onclick="scheduleApp.createPortal(); scheduleApp.toggleMobileViewMenu()" id="btn-create-portal" class="w-full text-left px-4 py-2.5 text-sm text-fuchsia-400 hover:bg-slate-700 hover:text-fuchsia-300 flex items-center gap-3 transition-colors hidden">
+                        <i class="fa-solid fa-door-open w-5 text-center text-lg"></i> <span class="font-medium">Criar Portal</span>
+                    </button>
+                </div>
+            </div>
+
             <button onclick="scheduleApp.openModal()" class="bg-gluon-primary hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg shadow-lg transition-all flex items-center gap-2 text-sm">
                 <i class="fa-solid fa-plus"></i> <span class="hidden sm:inline">Novo Item</span>
             </button>
@@ -364,6 +393,83 @@
                 await this.fetchUserPrefs();
                 await this.fetchAgendaInfo();
                 await this.loadData();
+                
+                // Event listener para fechar o menu mobile ao clicar fora
+                document.addEventListener('click', (event) => {
+                    const menu = document.getElementById('mobileViewMenu');
+                    const trigger = document.getElementById('btn-mobile-menu-trigger');
+                    if (menu && !menu.classList.contains('hidden') && !menu.contains(event.target) && !trigger.contains(event.target)) {
+                        menu.classList.add('hidden');
+                    }
+                });
+            },
+
+            toggleMobileViewMenu() { 
+                document.getElementById('mobileViewMenu').classList.toggle('hidden'); 
+            },
+
+            updateTopButtons() {
+                const btnCopy = document.getElementById('btn-copy-dir');
+                const btnPaste = document.getElementById('btn-paste-dir');
+                const btnMove = document.getElementById('btn-move-dir');
+                const btnPortal = document.getElementById('btn-create-portal');
+                
+                if (btnPaste && btnMove && btnPortal) {
+                    if (this.state.copied_directory_id !== null && this.state.copied_directory_id !== undefined) {
+                        btnPaste.classList.remove('hidden'); btnPaste.classList.add('flex');
+                        btnMove.classList.remove('hidden'); btnMove.classList.add('flex');
+                        btnPortal.classList.remove('hidden'); btnPortal.classList.add('flex');
+                    } else {
+                        btnPaste.classList.add('hidden'); btnPaste.classList.remove('flex');
+                        btnMove.classList.add('hidden'); btnMove.classList.remove('flex');
+                        btnPortal.classList.add('hidden'); btnPortal.classList.remove('flex');
+                    }
+                }
+            },
+
+            async copyCurrentDirectory() {
+                const response = await this.api('user', 'copy_directory', { dir_id: this.agendaId });
+                if (response && response.status === 'success') {
+                    this.state.copied_directory_id = this.agendaId; 
+                    this.updateTopButtons(); 
+                    this.showToast(response.message, 'success');
+                } else {
+                    this.showToast(response ? response.message : 'Erro ao copiar', 'error');
+                }
+            },
+
+            async pasteDirectory() {
+                const response = await this.api('directories', 'paste', { target_parent_id: this.agendaId });
+                if (response && response.status === 'success') {
+                    this.showToast(response.message, 'success');
+                    await this.loadData(); 
+                } else {
+                    this.showToast(response ? response.message : 'Erro ao colar', 'error');
+                }
+            },
+
+            async moveDirectory() {
+                const response = await this.api('directories', 'move', { target_parent_id: this.agendaId });
+                if (response && response.status === 'success') {
+                    this.state.copied_directory_id = null; 
+                    this.updateTopButtons(); 
+                    this.showToast(response.message, 'success');
+                    await this.loadData(); 
+                } else {
+                    this.showToast(response ? response.message : 'Erro ao mover', 'error');
+                }
+            },
+
+            async createPortal() {
+                const response = await this.api('directories', 'create_portal', { target_parent_id: this.agendaId });
+                if (response && response.status === 'success') {
+                    this.state.copied_directory_id = null;
+                    this.updateTopButtons();
+                    this.showToast(response.message, 'success');
+                    await this.loadData();
+                } else {
+                    this.showToast(response ? response.message : 'Erro ao criar portal', 'error');
+                }
             },
 
             getLocalYYYYMMDD(dateObj) {
@@ -408,6 +514,7 @@
                 const response = await this.api('user', 'get_prefs');
                 if (response && response.data) {
                     this.state.copied_directory_id = response.data.copied_directory_id;
+                    this.updateTopButtons();
                 }
             },
 
@@ -551,6 +658,7 @@
                 
                 if (response && response.status === 'success') {
                     this.state.copied_directory_id = null;
+                    this.updateTopButtons();
                     this.showToast('Portal criado e agendado com sucesso!', 'success');
                     await this.loadData();
                 } else {
