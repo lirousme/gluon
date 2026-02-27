@@ -3,7 +3,7 @@
   Diretório: public_html/gluon/views/schedule.html
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
-  Suporta Múltiplas Visualizações: Linha do Tempo, Kanban Semanal e Lista.
+  Suporta Múltiplas Visualizações: Linha do Tempo, Kanban Semanal, Lista e agora Recorrências com Projeção Visual!
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -14,7 +14,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- SortableJS para Drag & Drop Mágico no Kanban e Lista -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 
     <script>
@@ -26,7 +25,6 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* TIMELINE CSS */
         .timeline-grid {
             background-image: linear-gradient(to bottom, #334155 1px, transparent 1px), linear-gradient(to bottom, #1e293b 1px, transparent 1px);
             background-size: 100% 60px, 100% 30px;
@@ -57,14 +55,12 @@
         }
         .event-card:hover .resize-handle { opacity: 1; }
         
-        /* DRAG STATE CSS */
         .dragging { opacity: 0.7; cursor: grabbing !important; z-index: 50 !important; }
         .resizing { cursor: ns-resize !important; z-index: 50 !important; }
         
         .sortable-ghost { opacity: 0.4; background-color: #1e293b !important; border: 2px dashed #3b82f6 !important; }
         .sortable-drag { opacity: 1 !important; cursor: grabbing !important; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5) !important; transform: scale(1.02); }
 
-        /* MODAL CSS */
         .view-radio:checked + div, .type-radio:checked + div { background-color: #3b82f6; border-color: #3b82f6; color: white; }
         .icon-radio:checked + div { background-color: #1e293b; border-color: #3b82f6; color: #3b82f6; }
         
@@ -78,11 +74,18 @@
         }
         input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
         input[type="color"]::-webkit-color-swatch { border: none; border-radius: 0.5rem; }
+
+        /* Estilo para projeções de tarefas (futuro) */
+        .virtual-task {
+            border-style: dashed !important;
+            border-width: 2px !important;
+            opacity: 0.7;
+        }
+        .virtual-task:hover { opacity: 0.9; }
     </style>
 </head>
 <body class="bg-gluon-dark text-slate-200 h-screen flex flex-col font-sans overflow-hidden selection:bg-gluon-primary selection:text-white">
 
-    <!-- Top Navigation -->
     <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-16 flex items-center justify-between px-4 sm:px-6">
         <div class="flex items-center gap-4">
             <button onclick="window.location.href='/dashboard'" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg border border-slate-700" title="Voltar">
@@ -102,30 +105,22 @@
         </div>
     </nav>
 
-    <!-- Main Content -->
     <main class="flex-1 w-full flex overflow-hidden">
         
-        <!-- Sidebar: Sem Data (Backlog) -->
+        <!-- Sidebar -->
         <aside class="w-64 sm:w-80 bg-slate-900 border-r border-slate-700/50 flex flex-col shrink-0 z-30 shadow-xl relative">
             <div class="p-4 border-b border-slate-800 bg-slate-800/30">
                 <h3 class="font-semibold text-slate-300 flex items-center gap-2"><i class="fa-solid fa-inbox text-slate-500"></i> Sem Data (Backlog)</h3>
                 <p class="text-xs text-slate-500 mt-1">Tarefas não agendadas.</p>
             </div>
-            <div id="unscheduledList" class="flex-1 overflow-y-auto p-4 no-scrollbar">
-                <!-- Itens Injetados via JS -->
-            </div>
+            <div id="unscheduledList" class="flex-1 overflow-y-auto p-4 no-scrollbar"></div>
         </aside>
 
-        <!-- Main Workspace: Dinâmico baseado na View -->
         <div class="flex-1 relative flex flex-col bg-gluon-dark overflow-hidden">
             
-            <!-- Barra de Controles da Agenda -->
             <div class="p-3 sm:p-4 border-b border-slate-700 bg-slate-800/80 backdrop-blur shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 z-20">
                 
-                <!-- Container Dinâmico da Data -->
-                <div id="dateControlContainer" class="flex items-center gap-2 w-full sm:w-auto">
-                    <!-- Controles injetados via JS -->
-                </div>
+                <div id="dateControlContainer" class="flex items-center gap-2 w-full sm:w-auto"></div>
                 
                 <div class="flex items-center gap-1 bg-slate-900 rounded-lg p-1 border border-slate-700 w-full sm:w-auto justify-center">
                     <button onclick="scheduleApp.setViewMode('timeline')" id="btn-view-timeline" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition-colors" title="Linha do Tempo (1 Dia)"><i class="fa-solid fa-clock"></i></button>
@@ -134,10 +129,7 @@
                 </div>
             </div>
 
-            <!-- Container onde as views são renderizadas -->
-            <div id="viewContainer" class="flex-1 overflow-hidden relative flex flex-col">
-                <!-- Conteúdo Injetado via JS -->
-            </div>
+            <div id="viewContainer" class="flex-1 overflow-hidden relative flex flex-col"></div>
             
         </div>
     </main>
@@ -156,6 +148,7 @@
             <div class="flex border-b border-slate-700 bg-slate-900/30">
                 <button type="button" onclick="scheduleApp.switchModalTab('geral')" id="tab-btn-geral" class="flex-1 py-3 text-sm font-medium border-b-2 border-gluon-primary text-white transition-colors">Geral</button>
                 <button type="button" onclick="scheduleApp.switchModalTab('apar')" id="tab-btn-apar" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Aparência</button>
+                <button type="button" onclick="scheduleApp.switchModalTab('recor')" id="tab-btn-recor" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Repetição</button>
             </div>
 
             <form id="dirForm" onsubmit="scheduleApp.saveDirectory(event)" class="flex flex-col flex-1 overflow-hidden">
@@ -266,6 +259,42 @@
                     </div>
                 </div>
 
+                <!-- Nova Aba: Repetição -->
+                <div id="tab-recor" class="hidden p-6 overflow-y-auto flex-1 space-y-5">
+                    <label class="flex items-center gap-2 cursor-pointer mb-2">
+                        <input type="checkbox" id="is_recurring" class="rounded border-slate-600 bg-slate-800 text-gluon-primary focus:ring-gluon-primary transition-colors" onchange="scheduleApp.toggleRecurrenceFields()">
+                        <span class="text-sm font-medium text-slate-300">Ativar Repetição Automática</span>
+                    </label>
+                    
+                    <div id="recurrence_fields" class="hidden space-y-4 border-t border-slate-700 pt-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Frequência</label>
+                            <select id="rec_type" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors" onchange="scheduleApp.handleRecurrenceTypeChange()">
+                                <option value="daily">Diariamente</option>
+                                <option value="weekly">Semanalmente</option>
+                                <option value="monthly">Mensalmente</option>
+                                <option value="yearly">Anualmente</option>
+                                <option value="custom">Datas Específicas</option>
+                            </select>
+                        </div>
+                        
+                        <div id="rec_interval_container">
+                            <label class="block text-sm font-medium text-slate-300 mb-1">A cada (intervalo)</label>
+                            <input type="number" id="rec_interval" min="1" value="1" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors">
+                        </div>
+                        
+                        <div id="rec_custom_container" class="hidden">
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Datas (formato JSON)</label>
+                            <input type="text" id="rec_custom" placeholder='Ex: ["2026-03-01", "2026-04-05"]' class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors font-mono text-sm">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Parar de repetir em (Opcional)</label>
+                            <input type="date" id="rec_end" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors">
+                        </div>
+                    </div>
+                </div>
+
                 <div class="p-5 border-t border-slate-700 bg-slate-800/50 flex flex-col-reverse sm:flex-row justify-between items-center gap-3 shrink-0">
                     <div class="w-full sm:w-auto">
                         <button type="button" id="btnDeleteDir" onclick="scheduleApp.deleteFromModal()" class="hidden w-full text-red-400 hover:text-white hover:bg-red-500/20 px-3 py-2 rounded-lg transition-colors flex justify-center items-center gap-2 text-sm">
@@ -283,7 +312,7 @@
         </div>
     </div>
 
-    <!-- Menu de Contexto da Timeline (Pop-up dinâmico) -->
+    <!-- Menu de Contexto da Timeline -->
     <div id="timelineContextMenu" class="hidden absolute bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-1.5 z-50 min-w-[170px] transition-opacity">
         <button onclick="scheduleApp.triggerModalFromMenu()" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
             <i class="fa-solid fa-plus text-gluon-primary text-center w-4"></i> <span class="font-medium">Criar Tarefa</span>
@@ -299,7 +328,6 @@
             items: [],
             currentDateObj: null,
             
-            // Controle da Timeline Nativa
             isDragging: false,
             isResizing: false,
             wasDragged: false,
@@ -308,11 +336,10 @@
             startTop: 0,
             startHeight: 0,
 
-            // Controle do Kanban/List
             sortableInstances: [],
 
             state: {
-                view: 'timeline', // timeline, kanban, list
+                view: 'timeline',
                 directoryCache: new Map(),
                 copied_directory_id: null,
                 pendingStartDate: null,
@@ -324,7 +351,7 @@
             },
 
             async init() {
-                this.currentDateObj = new Date(); // Inicializa o estado de data
+                this.currentDateObj = new Date(); 
                 const urlParams = new URLSearchParams(window.location.search);
                 this.agendaId = urlParams.get('id');
 
@@ -341,7 +368,6 @@
                 await this.loadData();
             },
 
-            // NOVA FUNÇÃO: Garante o formato local para prevenir bug de fuso horário UTC (toISOString)
             getLocalYYYYMMDD(dateObj) {
                 const y = dateObj.getFullYear();
                 const m = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -395,7 +421,6 @@
                     iconEl.style = this.getTextGradientStyle(res.data.color_from, res.data.color_to);
                     document.getElementById('agendaName').innerText = res.data.name;
                     
-                    // Configura a visualização preferida da agenda
                     let savedView = res.data.view;
                     if (!['timeline', 'kanban', 'list'].includes(savedView)) savedView = 'timeline';
                     this.state.view = savedView;
@@ -407,7 +432,6 @@
                 this.state.view = view;
                 this.updateViewButtons();
                 this.render();
-                // Salva a preferência de forma assíncrona
                 this.api('schedule', 'update_view', { id: this.agendaId, view: view });
             },
 
@@ -435,18 +459,57 @@
                 }
             },
 
-            // ==========================================
-            // CONTROLE DINÂMICO DE DATA E CLIQUE NA TIMELINE
-            // ==========================================
-            
+            /**
+             * LÓGICA CORE: Calcula se a tarefa deve aparecer num dia específico no futuro
+             */
+            isTaskOnDate(item, targetDateStr) {
+                const baseDateStr = item.start_date ? item.start_date.split(' ')[0] : null;
+                if (!baseDateStr) return false;
+                
+                // Sempre mostrar na data original base
+                if (baseDateStr === targetDateStr) return true;
+
+                if (item.is_recurring !== 1) return false;
+
+                // Não projetar para o passado (antes do start_date original)
+                if (targetDateStr < baseDateStr) return false;
+
+                // Não projetar para além da data de fim da repetição
+                if (item.rec_end && targetDateStr > item.rec_end.split(' ')[0]) return false;
+
+                // Força as datas a começarem às 00:00 para evitar diferenças de fuso
+                const baseD = new Date(baseDateStr + 'T00:00:00');
+                const targetD = new Date(targetDateStr + 'T00:00:00');
+                
+                const diffTime = targetD.getTime() - baseD.getTime();
+                const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                const interval = parseInt(item.rec_interval) || 1;
+
+                if (item.rec_type === 'daily') {
+                    return diffDays % interval === 0;
+                } else if (item.rec_type === 'weekly') {
+                    return diffDays % (interval * 7) === 0;
+                } else if (item.rec_type === 'monthly') {
+                    const mDiff = (targetD.getFullYear() - baseD.getFullYear()) * 12 + (targetD.getMonth() - baseD.getMonth());
+                    return mDiff % interval === 0 && targetD.getDate() === baseD.getDate();
+                } else if (item.rec_type === 'yearly') {
+                    const yDiff = targetD.getFullYear() - baseD.getFullYear();
+                    return yDiff % interval === 0 && targetD.getMonth() === baseD.getMonth() && targetD.getDate() === baseD.getDate();
+                } else if (item.rec_type === 'custom') {
+                    try {
+                        const dates = JSON.parse(item.rec_custom || '[]');
+                        return dates.includes(targetDateStr);
+                    } catch(e) { return false; }
+                }
+                return false;
+            },
+
             handleTimelineClick(e) {
-                // Se clicou num card, num botão ou se tava arrastando, aborta
                 if (e.target.closest('.event-card') || this.wasDragged || this.isDragging || this.isResizing) return;
 
                 const containerRect = document.getElementById('timelineScroll').getBoundingClientRect();
                 const clickY = e.clientY - containerRect.top + document.getElementById('timelineScroll').scrollTop;
                 
-                // Arredonda para blocos de 30 minutos
                 const snappedY = Math.floor(clickY / 30) * 30; 
                 const hours = Math.floor(snappedY / 60);
                 const minutes = snappedY % 60;
@@ -457,16 +520,14 @@
                 const baseDate = `${y}-${m}-${d}`;
 
                 const startObj = new Date(`${baseDate}T${hours.toString().padStart(2,'0')}:${minutes.toString().padStart(2,'0')}:00`);
-                const endObj = new Date(startObj.getTime() + 60*60000); // Tarefa padrão 1 hora
+                const endObj = new Date(startObj.getTime() + 60*60000); 
 
                 this.state.pendingStartDate = this.toMySQLFormat(startObj);
                 this.state.pendingEndDate = this.toMySQLFormat(endObj);
 
                 if (this.state.copied_directory_id) {
-                    // Tem item copiado na área de transferência: mostra Pop-up dinâmico
                     const menu = document.getElementById('timelineContextMenu');
                     
-                    // Prevenir sair da tela
                     let posX = e.pageX;
                     let posY = e.pageY;
                     menu.classList.remove('hidden');
@@ -484,7 +545,6 @@
                     };
                     setTimeout(() => document.addEventListener('click', closeMenu), 10);
                 } else {
-                    // Abre o modal diretamente agendado naquele horário
                     this.openModal(null, '', this.state.pendingStartDate, this.state.pendingEndDate);
                 }
             },
@@ -504,7 +564,7 @@
                 });
                 
                 if (response && response.status === 'success') {
-                    this.state.copied_directory_id = null; // Limpa para evitar reuso contínuo acidental
+                    this.state.copied_directory_id = null;
                     this.showToast('Portal criado e agendado com sucesso!', 'success');
                     await this.loadData();
                 } else {
@@ -557,7 +617,6 @@
             },
 
             navigateDays(direction) {
-                // Avança 1 dia na Linha do Tempo e 7 dias (uma semana completa) no Kanban ou Lista
                 const delta = this.state.view === 'timeline' ? direction : direction * 7;
                 this.currentDateObj.setDate(this.currentDateObj.getDate() + delta);
                 this.render();
@@ -572,10 +631,6 @@
                 this.currentDateObj.setFullYear(parseInt(e.target.value));
                 this.render();
             },
-
-            // ==========================================
-            // RENDERIZAÇÃO DO WORKSPACE E BACKLOG
-            // ==========================================
 
             getDatesArray(startDate, days) {
                 let dates = [];
@@ -608,7 +663,7 @@
                 
                 let html = `<div class="flex-1 flex gap-4 overflow-x-auto p-4 snap-x relative h-full items-start">`;
                 dates.forEach(d => {
-                    const dStr = this.getLocalYYYYMMDD(d); // Usa Fuso Local
+                    const dStr = this.getLocalYYYYMMDD(d); 
                     const displayDate = `${dayNames[d.getDay()]}, ${('0'+d.getDate()).slice(-2)}/${('0'+(d.getMonth()+1)).slice(-2)}`;
                     const isToday = dStr === this.getLocalYYYYMMDD(new Date());
                     const headerClass = isToday ? 'text-gluon-primary font-bold' : 'text-slate-300 font-semibold';
@@ -631,7 +686,7 @@
                 
                 let html = `<div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 relative h-full no-scrollbar pb-20">`;
                 dates.forEach(d => {
-                    const dStr = this.getLocalYYYYMMDD(d); // Usa Fuso Local
+                    const dStr = this.getLocalYYYYMMDD(d); 
                     const displayDate = `${dayNames[d.getDay()]}, ${('0'+d.getDate()).slice(-2)} de ${d.toLocaleString('pt-BR', {month:'long'})}`;
                     const isToday = dStr === this.getLocalYYYYMMDD(new Date());
                     const headerClass = isToday ? 'text-gluon-primary' : 'text-slate-300';
@@ -653,13 +708,12 @@
                 
                 const viewContainer = document.getElementById('viewContainer');
                 const selectedDate = this.currentDateObj;
-                const dStr = this.getLocalYYYYMMDD(selectedDate); // Usa Fuso Local
+                const dStr = this.getLocalYYYYMMDD(selectedDate); 
                 const y = selectedDate.getFullYear();
                 const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
                 const d = String(selectedDate.getDate()).padStart(2, '0');
                 const label = document.getElementById('dateRangeLabel');
 
-                // Atualiza Rótulos dependendo da view
                 if (this.state.view === 'timeline') {
                     if (label) label.innerText = 'Exibição: 1 Dia';
                 } else {
@@ -671,7 +725,6 @@
                     if (label) label.innerText = `Exibição: ${d}/${m}/${y} até ${endD}/${endM}/${endY}`;
                 }
 
-                // Renderiza Backlog
                 const unscheduledContainer = document.getElementById('unscheduledList');
                 unscheduledContainer.innerHTML = '';
                 
@@ -682,20 +735,17 @@
                     unscheduledContainer.innerHTML += this.generateBacklogCard(item);
                 });
 
-                // Limpa SortableJS anterior
                 this.sortableInstances.forEach(s => s.destroy());
                 this.sortableInstances = [];
 
-                // Renderiza Container Principal e Itens
                 if (this.state.view === 'timeline') {
                     viewContainer.innerHTML = this.getTimelineHTML();
                     this.renderTimelineItems(scheduledItems, dStr);
                     this.setupTimelineMouseEvents();
                     
-                    // Rola a Timeline para as 8h da manhã automaticamente (se ainda não rolou)
                     setTimeout(() => {
                         const scrollEl = document.getElementById('timelineScroll');
-                        if(scrollEl.scrollTop === 0) scrollEl.scrollTop = 8 * 60 - 20;
+                        if(scrollEl && scrollEl.scrollTop === 0) scrollEl.scrollTop = 8 * 60 - 20;
                     }, 50);
 
                 } else if (this.state.view === 'kanban') {
@@ -706,7 +756,6 @@
                     this.renderColumnsItems(scheduledItems, selectedDate, 'list');
                 }
 
-                // Inicializa Drag & Drop (Nativo p/ Timeline, Sortable p/ Kanban e Lista)
                 if (this.state.view === 'kanban' || this.state.view === 'list') {
                     this.initSortable();
                 } else {
@@ -718,13 +767,14 @@
             },
 
             generateBacklogCard(item) {
+                const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
                 return `
                 <div data-id="${item.id}" class="backlog-item bg-slate-800 border border-slate-700 p-3 rounded-lg shadow-sm cursor-grab hover:bg-slate-700 transition-colors flex justify-between items-center group relative overflow-hidden mb-3" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                     ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10" style="background-image: url('${item.cover_url}')"></div>` : ''}
                     <div class="flex items-center gap-2 truncate pointer-events-none z-10 flex-1 pr-2">
                         <i class="fa-solid fa-grip-vertical text-slate-500 handle hidden sortable-handle"></i>
                         <i class="fa-solid ${item.icon} text-sm" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
-                        <span class="font-medium text-sm text-slate-200 truncate w-full">${this.escapeHTML(item.name)}</span>
+                        <span class="font-medium text-sm text-slate-200 truncate w-full">${this.escapeHTML(item.name)} ${repeatIcon}</span>
                     </div>
                     <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20"><i class="fa-solid fa-cog"></i></button>
                 </div>`;
@@ -735,32 +785,40 @@
                 eventsLayer.innerHTML = '';
                 
                 scheduledItems.forEach(item => {
-                    const sDate = new Date(item.start_date.replace(' ', 'T'));
-                    const eDate = new Date(item.end_date.replace(' ', 'T'));
-                    const dStr = item.start_date.split(' ')[0];
-                    
-                    if (dStr === selectedDateStr) {
+                    // VERIFICAR PROJEÇÃO COM O isTaskOnDate
+                    if (this.isTaskOnDate(item, selectedDateStr)) {
+                        const isProjection = item.start_date.split(' ')[0] !== selectedDateStr;
+                        const sDate = new Date(item.start_date.replace(' ', 'T'));
+                        const eDate = new Date(item.end_date.replace(' ', 'T'));
+                        
+                        // Extraímos os minutos para posicionar verticalmente (o dia é irrelevante aqui)
                         const startMins = sDate.getHours() * 60 + sDate.getMinutes();
                         const endMins = eDate.getHours() * 60 + eDate.getMinutes();
                         const duration = endMins - startMins;
                         
                         const fromColor = item.color_from || '#3b82f6';
                         const toColor = item.color_to || '#6366f1';
-                        const bgStyle = `background: linear-gradient(135deg, ${fromColor}33, ${toColor}33); border-color: ${fromColor}80; color: #fff; border-left: 4px solid ${fromColor};`;
+                        
+                        const borderStyle = isProjection ? 'border-style: dashed; border-width: 2px;' : `border-left: 4px solid ${fromColor};`;
+                        const bgStyle = `background: linear-gradient(135deg, ${fromColor}33, ${toColor}33); border-color: ${fromColor}80; color: #fff; ${borderStyle}`;
+                        
+                        const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 opacity-80" title="Tarefa Recorrente"></i>` : '';
+                        const projClass = isProjection ? 'virtual-task opacity-80' : '';
+                        const resizeHTML = isProjection ? '' : `<div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>`;
 
                         eventsLayer.innerHTML += `
-                            <div id="evt-${item.id}" class="event-card group" data-id="${item.id}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                            <div id="evt-${item.id}${isProjection ? '-proj' : ''}" class="event-card group ${projClass}" data-id="${item.id}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                                 ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                                 <div class="flex justify-between items-start pointer-events-none z-10 relative">
                                     <div class="font-bold truncate text-sm flex items-center gap-1.5 w-full pr-6">
-                                        <i class="fa-solid ${item.icon} text-xs"></i> <span class="truncate">${this.escapeHTML(item.name)}</span>
+                                        <i class="fa-solid ${item.icon} text-xs"></i> <span class="truncate">${this.escapeHTML(item.name)} ${repeatIcon}</span>
                                     </div>
                                 </div>
                                 <div class="text-[10px] opacity-70 pointer-events-none z-10 relative font-medium">${sDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${eDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                                 
                                 <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="absolute top-1 right-1 text-white/70 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 z-20 bg-black/40 rounded shadow-md"><i class="fa-solid fa-cog text-xs"></i></button>
 
-                                <div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>
+                                ${resizeHTML}
                             </div>
                         `;
                     }
@@ -768,6 +826,7 @@
 
                 document.querySelectorAll('.event-card').forEach(el => {
                     el.addEventListener('mousedown', (e) => {
+                        if(el.classList.contains('virtual-task')) return; // Impede arrastar o "fantasma" do futuro
                         if(e.target.classList.contains('resize-handle') || e.target.closest('button')) return;
                         this.startDragTimeline(e, el);
                     });
@@ -775,35 +834,43 @@
             },
 
             renderColumnsItems(scheduledItems, startDate, viewType) {
-                // Modificado para usar o formatador Local YYYY-MM-DD
                 const dates = this.getDatesArray(startDate, 7).map(d => this.getLocalYYYYMMDD(d));
                 
                 scheduledItems.forEach(item => {
-                    const itemDateStr = item.start_date.split(' ')[0];
-                    if (dates.includes(itemDateStr)) {
-                        const col = document.querySelector(`.sortable-day-col[data-date="${itemDateStr}"]`);
-                        if (col) {
-                            col.innerHTML += this.generateItemCard(item, viewType);
+                    dates.forEach(dateStr => {
+                        // Verifica se a tarefa cai neste dia, quer seja original ou projeção de repetição
+                        if (this.isTaskOnDate(item, dateStr)) {
+                            const col = document.querySelector(`.sortable-day-col[data-date="${dateStr}"]`);
+                            if (col) {
+                                const isProjection = item.start_date.split(' ')[0] !== dateStr;
+                                col.innerHTML += this.generateItemCard(item, viewType, isProjection);
+                            }
                         }
-                    }
+                    });
                 });
             },
 
-            generateItemCard(item, viewType) {
+            generateItemCard(item, viewType, isProjection = false) {
                 const fromColor = item.color_from || '#3b82f6';
                 const sDate = new Date(item.start_date.replace(' ', 'T'));
                 const eDate = new Date(item.end_date.replace(' ', 'T'));
                 const timeStr = `${sDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${eDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+                const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
+
+                // Estilos específicos para a projeção futura
+                const projectionClass = isProjection ? 'virtual-task' : 'cursor-grab';
+                const borderStyle = isProjection ? '' : `border-left: 4px solid ${fromColor};`;
+                const handleHTML = isProjection ? '' : `<i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>`;
 
                 if (viewType === 'kanban') {
                     return `
-                    <div data-id="${item.id}" class="kanban-item bg-slate-700/80 border border-slate-600 p-2.5 rounded-lg shadow-sm cursor-grab hover:bg-slate-600 transition-colors flex flex-col group relative overflow-hidden mb-2" style="border-left: 4px solid ${fromColor};" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                    <div data-id="${item.id}" class="kanban-item bg-slate-700/80 border ${isProjection ? 'border-slate-500' : 'border-slate-600'} p-2.5 rounded-lg shadow-sm hover:bg-slate-600 transition-colors flex flex-col group relative overflow-hidden mb-2 ${projectionClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                         ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                         <div class="flex justify-between items-start z-10 relative">
                             <div class="flex items-center gap-1.5 truncate w-full pr-5">
-                                <i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>
+                                ${handleHTML}
                                 <i class="fa-solid ${item.icon} text-xs" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
-                                <span class="font-bold text-sm text-slate-100 truncate">${this.escapeHTML(item.name)}</span>
+                                <span class="font-bold text-sm text-slate-100 truncate">${this.escapeHTML(item.name)} ${repeatIcon}</span>
                             </div>
                         </div>
                         <div class="text-[10px] text-slate-400 mt-1 z-10 relative font-medium"><i class="fa-regular fa-clock"></i> ${timeStr}</div>
@@ -811,26 +878,22 @@
                     </div>`;
                 } else {
                     return `
-                    <div data-id="${item.id}" class="list-item bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 p-3 rounded-lg shadow-sm cursor-grab transition-colors flex items-center justify-between group relative overflow-hidden" style="border-left: 4px solid ${fromColor};" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                    <div data-id="${item.id}" class="list-item bg-slate-700/50 hover:bg-slate-700 border ${isProjection ? 'border-slate-500' : 'border-slate-600/50'} p-3 rounded-lg shadow-sm transition-colors flex items-center justify-between group relative overflow-hidden ${projectionClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                         ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                         <div class="flex items-center gap-3 z-10 relative overflow-hidden flex-1 pr-2">
-                            <i class="fa-solid fa-grip-vertical text-slate-500 handle hidden sortable-handle text-sm"></i>
+                            ${handleHTML}
                             <div class="flex flex-col min-w-[80px] text-center border-r border-slate-600 pr-3 mr-1">
                                 <span class="text-xs text-slate-300 font-semibold tracking-wide">${timeStr.split(' - ')[0]}</span>
                                 <span class="text-[10px] text-slate-500">${timeStr.split(' - ')[1]}</span>
                             </div>
                             <i class="fa-solid ${item.icon} text-lg shrink-0" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
-                            <span class="font-semibold text-sm text-slate-200 truncate flex-1">${this.escapeHTML(item.name)}</span>
+                            <span class="font-semibold text-sm text-slate-200 truncate flex-1">${this.escapeHTML(item.name)} ${repeatIcon}</span>
                         </div>
                         <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-2 z-20 shrink-0 bg-slate-800 rounded shadow"><i class="fa-solid fa-cog"></i></button>
                     </div>`;
                 }
             },
 
-            // ==========================================
-            // NAVEGAÇÃO
-            // ==========================================
-            
             handleEventClick(e, id) {
                 if (this.wasDragged) {
                     this.wasDragged = false;
@@ -855,10 +918,6 @@
                 }
             },
 
-            // ==========================================
-            // SORTABLE JS (KANBAN & LISTA)
-            // ==========================================
-            
             initSortable() {
                 const commonOptions = {
                     group: 'schedule',
@@ -866,6 +925,8 @@
                     ghostClass: 'sortable-ghost',
                     dragClass: 'sortable-drag',
                     delay: 100, delayOnTouchOnly: true,
+                    filter: '.virtual-task', // Ignora elementos projetados (não permite arrastar o futuro)
+                    preventOnFilter: false,
                     onEnd: (evt) => this.handleSortableEnd(evt)
                 };
 
@@ -911,10 +972,6 @@
                 }
             },
 
-            // ==========================================
-            // DRAG & DROP NATIVO (TIMELINE)
-            // ==========================================
-
             startDragTimeline(e, el) {
                 if (e.button !== 0) return;
                 this.isDragging = true;
@@ -937,7 +994,6 @@
             },
 
             setupTimelineMouseEvents() {
-                // Remove listeners antigos para evitar duplicação em re-renders
                 if (this._onMouseMove) document.removeEventListener('mousemove', this._onMouseMove);
                 if (this._onMouseUp) document.removeEventListener('mouseup', this._onMouseUp);
 
@@ -984,7 +1040,6 @@
                 const sh = Math.floor(top/60); const sm = top%60;
                 const end = top + height;
                 const eh = Math.floor(end/60); const em = end%60;
-                // Atualiza o texto visual enquanto arrasta
                 const labelEl = el.querySelector('.text-\\[10px\\]');
                 if (labelEl) labelEl.innerText = `${sh.toString().padStart(2,'0')}:${sm.toString().padStart(2,'0')} - ${eh.toString().padStart(2,'0')}:${em.toString().padStart(2,'0')}`;
             },
@@ -1018,7 +1073,7 @@
                 if (!id) return;
                 const containerRect = document.getElementById('timelineScroll').getBoundingClientRect();
                 const dropY = ev.clientY - containerRect.top + document.getElementById('timelineScroll').scrollTop;
-                const snappedY = Math.floor(dropY / 30) * 30; // Arrasta em slots de 30 min
+                const snappedY = Math.floor(dropY / 30) * 30; 
                 const hours = Math.floor(snappedY / 60);
                 const minutes = snappedY % 60;
 
@@ -1028,18 +1083,14 @@
                 const baseDate = `${y}-${m}-${d}`;
 
                 const startObj = new Date(`${baseDate}T${hours.toString().padStart(2,'0')}:${minutes.toString().padStart(2,'0')}:00`);
-                const endObj = new Date(startObj.getTime() + 60*60000); // 1 hora padrão
+                const endObj = new Date(startObj.getTime() + 60*60000); 
 
                 await this.updateItemDates(id, startObj, endObj);
             },
 
-            // ==========================================
-            // UTILITÁRIOS DA API E BANCO
-            // ==========================================
-            
             toMySQLFormat(dateObj) {
                 if (!dateObj) return null;
-                if (typeof dateObj === 'string') return dateObj; // Já está no formato
+                if (typeof dateObj === 'string') return dateObj; 
                 return dateObj.getFullYear() + '-' +
                     ('0' + (dateObj.getMonth()+1)).slice(-2) + '-' +
                     ('0' + dateObj.getDate()).slice(-2) + ' ' +
@@ -1056,10 +1107,6 @@
                 await this.api('schedule', 'update_times', payload);
                 await this.loadData();
             },
-
-            // ==========================================
-            // LÓGICA DO MODAL DE EDIÇÃO
-            // ==========================================
 
             setupFormListeners() {
                 document.getElementById('dirCoverFile').addEventListener('change', (e) => this.handleCoverUpload(e));
@@ -1093,17 +1140,42 @@
             },
 
             switchModalTab(tabName) {
-                const tGeral = document.getElementById('tab-geral'); const tApar = document.getElementById('tab-apar');
-                const bGeral = document.getElementById('tab-btn-geral'); const bApar = document.getElementById('tab-btn-apar');
+                const tabs = ['geral', 'apar', 'recor'];
+                tabs.forEach(t => {
+                    const tEl = document.getElementById(`tab-${t}`);
+                    const bEl = document.getElementById(`tab-btn-${t}`);
+                    if (tEl && bEl) {
+                        if (t === tabName) {
+                            tEl.classList.remove('hidden');
+                            bEl.classList.add('border-gluon-primary', 'text-white'); 
+                            bEl.classList.remove('border-transparent', 'text-slate-400');
+                        } else {
+                            tEl.classList.add('hidden');
+                            bEl.classList.add('border-transparent', 'text-slate-400'); 
+                            bEl.classList.remove('border-gluon-primary', 'text-white');
+                        }
+                    }
+                });
+            },
 
-                if(tabName === 'geral') {
-                    tGeral.classList.remove('hidden'); tApar.classList.add('hidden');
-                    bGeral.classList.add('border-gluon-primary', 'text-white'); bGeral.classList.remove('border-transparent', 'text-slate-400');
-                    bApar.classList.add('border-transparent', 'text-slate-400'); bApar.classList.remove('border-gluon-primary', 'text-white');
+            toggleRecurrenceFields() {
+                const isChecked = document.getElementById('is_recurring').checked;
+                const fields = document.getElementById('recurrence_fields');
+                if (isChecked) fields.classList.remove('hidden');
+                else fields.classList.add('hidden');
+            },
+
+            handleRecurrenceTypeChange() {
+                const type = document.getElementById('rec_type').value;
+                const intervalCont = document.getElementById('rec_interval_container');
+                const customCont = document.getElementById('rec_custom_container');
+
+                if (type === 'custom') {
+                    intervalCont.classList.add('hidden');
+                    customCont.classList.remove('hidden');
                 } else {
-                    tApar.classList.remove('hidden'); tGeral.classList.add('hidden');
-                    bApar.classList.add('border-gluon-primary', 'text-white'); bApar.classList.remove('border-transparent', 'text-slate-400');
-                    bGeral.classList.add('border-transparent', 'text-slate-400'); bGeral.classList.remove('border-gluon-primary', 'text-white');
+                    intervalCont.classList.remove('hidden');
+                    customCont.classList.add('hidden');
                 }
             },
 
@@ -1163,7 +1235,6 @@
                 this.switchModalTab('geral');
                 document.getElementById('dirId').value = id;
                 
-                // Pré-preenche caso esteja sendo criado novo num slot de horário (clique duplo)
                 document.getElementById('dirStartDate').value = startDate || '';
                 document.getElementById('dirEndDate').value = endDate || '';
                 
@@ -1173,6 +1244,7 @@
                 const folderSettings = document.getElementById('folderSettingsGroup');
                 const nameLabel = document.getElementById('nameLabel');
                 const iconPickerContainer = document.getElementById('iconPickerContainer');
+                const btnRecor = document.getElementById('tab-btn-recor');
 
                 if (id) {
                     dirObj = this.state.directoryCache.get(Number(id));
@@ -1190,15 +1262,17 @@
 
                     document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-gear text-gluon-primary"></i> <span>Configurar ${titleText}</span>`;
                     typeSelector.classList.add('hidden');
+                    btnRecor.classList.remove('hidden');
                     
                     if(dirObj.type === 0) { folderSettings.style.display = 'block'; nameLabel.innerText = 'Nome da Tarefa/Pasta'; iconPickerContainer.style.display = 'block'; } 
                     else if(dirObj.type === 1) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Arquivo'; iconPickerContainer.style.display = 'block'; } 
                     else if(dirObj.type === 2) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome da Agenda'; iconPickerContainer.style.display = 'block'; }
-                    else if(dirObj.type === 3) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Portal'; iconPickerContainer.style.display = 'none'; }
+                    else if(dirObj.type === 3) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Portal'; iconPickerContainer.style.display = 'none'; btnRecor.classList.add('hidden');}
                 } else {
                     document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus text-gluon-primary"></i> <span>Novo Item</span>';
                     typeSelector.classList.remove('hidden');
                     iconPickerContainer.style.display = 'block';
+                    btnRecor.classList.remove('hidden');
                     
                     const typeRadios = document.getElementsByName('itemType');
                     typeRadios[0].checked = true;
@@ -1224,6 +1298,15 @@
                 const posToSelect = (dirObj && dirObj.new_item_position) ? dirObj.new_item_position : 'end';
                 const posRadios = document.getElementsByName('dirItemPosition');
                 for(let i=0; i<posRadios.length; i++) { posRadios[i].checked = (posRadios[i].value === posToSelect); }
+
+                // Preencher campos de recorrência
+                document.getElementById('is_recurring').checked = (dirObj && dirObj.is_recurring === 1);
+                document.getElementById('rec_type').value = (dirObj && dirObj.rec_type) ? dirObj.rec_type : 'daily';
+                document.getElementById('rec_interval').value = (dirObj && dirObj.rec_interval) ? dirObj.rec_interval : 1;
+                document.getElementById('rec_custom').value = (dirObj && dirObj.rec_custom) ? dirObj.rec_custom : '';
+                document.getElementById('rec_end').value = (dirObj && dirObj.rec_end) ? dirObj.rec_end.split(' ')[0] : '';
+                this.toggleRecurrenceFields();
+                this.handleRecurrenceTypeChange();
 
                 const btnDelete = document.getElementById('btnDeleteDir');
                 if(id) btnDelete.classList.remove('hidden'); else btnDelete.classList.add('hidden');
@@ -1303,6 +1386,13 @@
                 const iconRadios = document.getElementsByName('dirIcon');
                 for(let i=0; i<iconRadios.length; i++) { if(iconRadios[i].checked) selectedIcon = iconRadios[i].value; }
 
+                // Extrair valores de recorrência
+                const is_recurring = document.getElementById('is_recurring').checked ? 1 : 0;
+                const rec_type = document.getElementById('rec_type').value;
+                const rec_interval = parseInt(document.getElementById('rec_interval').value) || 1;
+                const rec_custom = document.getElementById('rec_custom').value;
+                const rec_end = document.getElementById('rec_end').value || null;
+
                 const btn = document.getElementById('btnSaveDir');
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
                 btn.disabled = true;
@@ -1319,7 +1409,12 @@
                     color_to: document.getElementById('dirColorTo').value || '#6366f1',
                     icon: selectedIcon,
                     start_date: document.getElementById('dirStartDate').value,
-                    end_date: document.getElementById('dirEndDate').value
+                    end_date: document.getElementById('dirEndDate').value,
+                    is_recurring: is_recurring,
+                    rec_type: rec_type,
+                    rec_interval: rec_interval,
+                    rec_custom: rec_custom,
+                    rec_end: rec_end
                 };
 
                 const response = await this.api('directories', id !== '' ? 'update' : 'create', payload);
