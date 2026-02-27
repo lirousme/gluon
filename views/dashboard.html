@@ -4,6 +4,7 @@
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
   Suporte completo a Pastas, Arquivos, Agendas, Portais (Atalhos), Drag&Drop e Recorrência.
+  *Atualizado: Portais agora agem como Soft Symlinks, mantendo a trilha de navegação original (Contexto Visual).
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -751,7 +752,10 @@
                 } else if (item.type === 3) {
                     if (!item.target_id) return this.showToast('Portal corrompido: Destino não encontrado.', 'error');
                     this.setLoading(true);
+                    
+                    // Lógica Atualizada (Soft Symlink): Em vez de substituir toda a trilha, pegamos as info do alvo e empurramos o contexto
                     const pathRes = await this.api('directories', 'get_path', { id: item.target_id });
+                    
                     if(pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
                         const targetDir = pathRes.data[pathRes.data.length - 1];
                         
@@ -763,7 +767,14 @@
                             return;
                         }
 
-                        this.state.path = [{ id: null, name: 'Meu Cofre', view: this.state.rootPrefs.view, type: 0 }, ...pathRes.data];
+                        // Mantém a trilha e empurra a pasta Alvo (mas usando o Nome Visual do Portal)
+                        this.state.path.push({ 
+                            id: targetDir.id, 
+                            name: item.name, 
+                            view: item.view, 
+                            type: 0 
+                        });
+                        
                         if (this.state.reorderMode) this.toggleReorderMode();
                         await this.fetchDirectories();
                     } else {
