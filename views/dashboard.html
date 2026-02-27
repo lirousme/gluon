@@ -3,8 +3,9 @@
   Diretório: public_html/gluon/views/dashboard.html
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
-  Suporte completo a Pastas, Arquivos, Agendas, Portais (Atalhos), Drag&Drop e Recorrência.
-  *Atualizado: Portais agora agem como Soft Symlinks, mantendo a trilha de navegação original (Contexto Visual).
+  Suporte completo a Pastas, Arquivos, Agendas, Portais (Atalhos), Drag&Drop, Recorrência.
+  *Atualizado: Integração completa com a History API (HTML5) para salvar os passos ("pegadas")
+   do usuário, permitindo o uso fluido dos botões Voltar/Avançar do navegador.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -75,7 +76,7 @@
     <!-- Top Navigation -->
     <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 backdrop-blur-md bg-opacity-90">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div class="flex items-center gap-3 cursor-pointer" onclick="window.location.reload()">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="window.location.href='/dashboard'">
                 <div class="w-10 h-10 rounded-lg bg-slate-800 border border-slate-600 flex items-center justify-center shadow-lg">
                     <i class="fa-solid fa-atom text-xl text-gluon-primary"></i>
                 </div>
@@ -301,7 +302,7 @@
                     </div>
                 </div>
 
-                <!-- Nova Aba: Repetição -->
+                <!-- Aba de Repetição -->
                 <div id="tab-recor" class="hidden p-6 overflow-y-auto flex-1 space-y-5">
                     <label class="flex items-center gap-2 cursor-pointer mb-2">
                         <input type="checkbox" id="is_recurring" class="rounded border-slate-600 bg-slate-800 text-gluon-primary focus:ring-gluon-primary transition-colors" onchange="app.toggleRecurrenceFields()">
@@ -524,6 +525,17 @@
                 return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
             },
 
+            // --- Gerenciamento da History API ---
+            updateHistoryState(id, portalId = null) {
+                let url = window.location.pathname;
+                if (portalId) {
+                    url += `?id=${portalId}&target_id=${id}&portal=1`;
+                } else if (id !== null) {
+                    url += `?id=${id}`;
+                }
+                history.pushState({ path: JSON.parse(JSON.stringify(this.state.path)) }, '', url);
+            },
+
             async init() {
                 this.renderIconPicker();
                 this.setLoading(true);
@@ -531,6 +543,7 @@
                 
                 const urlParams = new URLSearchParams(window.location.search);
                 const startId = urlParams.get('id');
+                
                 if (startId) {
                     const pathRes = await this.api('directories', 'get_path', { id: startId });
                     if (pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
@@ -547,6 +560,20 @@
                         this.state.path = [{ id: null, name: 'Meu Cofre', view: this.state.rootPrefs.view, type: 0 }, ...pathRes.data];
                     }
                 }
+
+                // Salva o estado inicial no histórico para garantir consistência
+                history.replaceState({ path: JSON.parse(JSON.stringify(this.state.path)) }, '', window.location.href);
+
+                // Escuta os eventos do botão Voltar / Avançar do Navegador
+                window.addEventListener('popstate', async (event) => {
+                    if (event.state && event.state.path) {
+                        this.state.path = event.state.path;
+                        if (this.state.reorderMode) this.toggleReorderMode();
+                        await this.fetchDirectories();
+                    } else {
+                        window.location.reload();
+                    }
+                });
 
                 this.updateTopButtons();
                 await this.fetchDirectories();
@@ -753,7 +780,6 @@
                     if (!item.target_id) return this.showToast('Portal corrompido: Destino não encontrado.', 'error');
                     this.setLoading(true);
                     
-                    // Lógica Atualizada (Soft Symlink): Em vez de substituir toda a trilha, pegamos as info do alvo e empurramos o contexto
                     const pathRes = await this.api('directories', 'get_path', { id: item.target_id });
                     
                     if(pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
@@ -767,13 +793,15 @@
                             return;
                         }
 
-                        // Mantém a trilha e empurra a pasta Alvo (mas usando o Nome Visual do Portal)
                         this.state.path.push({ 
                             id: targetDir.id, 
                             name: item.name, 
                             view: item.view, 
                             type: 0 
                         });
+                        
+                        // Guarda o rastro do portal no histórico para voltar perfeitamente
+                        this.updateHistoryState(targetDir.id, item.id);
                         
                         if (this.state.reorderMode) this.toggleReorderMode();
                         await this.fetchDirectories();
@@ -783,13 +811,18 @@
                     }
                 } else {
                     this.state.path.push({ id: item.id, name: item.name, view: item.view, type: item.type });
+                    
+                    // Empurra a nova navegação pro histórico nativo
+                    this.updateHistoryState(item.id);
+                    
                     if (this.state.reorderMode) this.toggleReorderMode();
                     await this.fetchDirectories();
                 }
             },
 
             async goUpTo(index) {
-                const targetStep = this.state.path[index];
+                this.state.path = this.state.path.slice(0, index + 1);
+                const targetStep = this.state.path[this.state.path.length - 1];
                 
                 if (targetStep.id !== null) {
                     if (targetStep.type === 1) {
@@ -800,8 +833,10 @@
                         return;
                     }
                 }
+                
+                // Registra que voltamos para a pasta no histórico
+                this.updateHistoryState(targetStep.id);
 
-                this.state.path = this.state.path.slice(0, index + 1);
                 if (this.state.reorderMode) this.toggleReorderMode();
                 await this.fetchDirectories();
             },
@@ -826,6 +861,10 @@
                 this.state.path[this.state.path.length - 1].view = viewName;
                 this.updateTopButtons();
                 this.render();
+                
+                // Substitui (replace) o estado para manter a preferência de view se o usuário der F5 ou Voltar
+                history.replaceState({ path: JSON.parse(JSON.stringify(this.state.path)) }, '', window.location.href);
+
                 if (this.getCurrentParentId() === null) {
                     this.state.rootPrefs.view = viewName;
                     this.api('user', 'update_root_prefs', this.state.rootPrefs);
