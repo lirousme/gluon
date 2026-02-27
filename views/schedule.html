@@ -4,7 +4,7 @@
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
   Suporta Múltiplas Visualizações: Linha do Tempo, Kanban Semanal, Lista e agora Recorrências com Projeção Visual!
-  *Atualizado: Ordenação cronológica automática das tarefas na visualização Kanban e Lista.
+  *Atualizado: Ao clicar em um Portal, ele redireciona para o Dashboard via Soft Symlink mantendo o contexto.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -76,7 +76,6 @@
         input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
         input[type="color"]::-webkit-color-swatch { border: none; border-radius: 0.5rem; }
 
-        /* Estilo para projeções de tarefas (futuro) */
         .virtual-task {
             border-style: dashed !important;
             border-width: 2px !important;
@@ -260,7 +259,6 @@
                     </div>
                 </div>
 
-                <!-- Nova Aba: Repetição -->
                 <div id="tab-recor" class="hidden p-6 overflow-y-auto flex-1 space-y-5">
                     <label class="flex items-center gap-2 cursor-pointer mb-2">
                         <input type="checkbox" id="is_recurring" class="rounded border-slate-600 bg-slate-800 text-gluon-primary focus:ring-gluon-primary transition-colors" onchange="scheduleApp.toggleRecurrenceFields()">
@@ -313,7 +311,6 @@
         </div>
     </div>
 
-    <!-- Menu de Contexto da Timeline -->
     <div id="timelineContextMenu" class="hidden absolute bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-1.5 z-50 min-w-[170px] transition-opacity">
         <button onclick="scheduleApp.triggerModalFromMenu()" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
             <i class="fa-solid fa-plus text-gluon-primary text-center w-4"></i> <span class="font-medium">Criar Tarefa</span>
@@ -460,28 +457,16 @@
                 }
             },
 
-            /**
-             * LÓGICA CORE: Calcula se a tarefa deve aparecer num dia específico no futuro
-             */
             isTaskOnDate(item, targetDateStr) {
                 const baseDateStr = item.start_date ? item.start_date.split(' ')[0] : null;
                 if (!baseDateStr) return false;
-                
-                // Sempre mostrar na data original base
                 if (baseDateStr === targetDateStr) return true;
-
                 if (item.is_recurring !== 1) return false;
-
-                // Não projetar para o passado (antes do start_date original)
                 if (targetDateStr < baseDateStr) return false;
-
-                // Não projetar para além da data de fim da repetição
                 if (item.rec_end && targetDateStr > item.rec_end.split(' ')[0]) return false;
 
-                // Força as datas a começarem às 00:00 para evitar diferenças de fuso
                 const baseD = new Date(baseDateStr + 'T00:00:00');
                 const targetD = new Date(targetDateStr + 'T00:00:00');
-                
                 const diffTime = targetD.getTime() - baseD.getTime();
                 const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
                 const interval = parseInt(item.rec_interval) || 1;
@@ -732,7 +717,6 @@
                 let backlogItems = this.items.filter(item => !item.start_date || !item.end_date);
                 let scheduledItems = this.items.filter(item => item.start_date && item.end_date);
 
-                // NOVO: Ordenar por horário para que a exibição no Kanban e Lista siga a ordem cronológica estrita
                 scheduledItems.sort((a, b) => {
                     const timeA = a.start_date ? a.start_date.split(' ')[1] : '00:00:00';
                     const timeB = b.start_date ? b.start_date.split(' ')[1] : '00:00:00';
@@ -796,13 +780,11 @@
                 eventsLayer.innerHTML = '';
                 
                 scheduledItems.forEach(item => {
-                    // VERIFICAR PROJEÇÃO COM O isTaskOnDate
                     if (this.isTaskOnDate(item, selectedDateStr)) {
                         const isProjection = item.start_date.split(' ')[0] !== selectedDateStr;
                         const sDate = new Date(item.start_date.replace(' ', 'T'));
                         const eDate = new Date(item.end_date.replace(' ', 'T'));
                         
-                        // Extraímos os minutos para posicionar verticalmente (o dia é irrelevante aqui)
                         const startMins = sDate.getHours() * 60 + sDate.getMinutes();
                         const endMins = eDate.getHours() * 60 + eDate.getMinutes();
                         const duration = endMins - startMins;
@@ -837,7 +819,7 @@
 
                 document.querySelectorAll('.event-card').forEach(el => {
                     el.addEventListener('mousedown', (e) => {
-                        if(el.classList.contains('virtual-task')) return; // Impede arrastar o "fantasma" do futuro
+                        if(el.classList.contains('virtual-task')) return; 
                         if(e.target.classList.contains('resize-handle') || e.target.closest('button')) return;
                         this.startDragTimeline(e, el);
                     });
@@ -849,7 +831,6 @@
                 
                 scheduledItems.forEach(item => {
                     dates.forEach(dateStr => {
-                        // Verifica se a tarefa cai neste dia, quer seja original ou projeção de repetição
                         if (this.isTaskOnDate(item, dateStr)) {
                             const col = document.querySelector(`.sortable-day-col[data-date="${dateStr}"]`);
                             if (col) {
@@ -868,7 +849,6 @@
                 const timeStr = `${sDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${eDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
                 const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
 
-                // Estilos específicos para a projeção futura
                 const projectionClass = isProjection ? 'virtual-task' : 'cursor-grab';
                 const borderStyle = isProjection ? '' : `border-left: 4px solid ${fromColor};`;
                 const handleHTML = isProjection ? '' : `<i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>`;
@@ -923,7 +903,26 @@
                     window.location.href = `/schedule?id=${id}`;
                 } else if (item.type === 3) {
                     if (!item.target_id) return this.showToast('Portal corrompido: Destino não encontrado.', 'error');
-                    window.location.href = `/dashboard?id=${item.target_id}`;
+                    
+                    // Busca o caminho do alvo para sabermos se o portal aponta para arquivo, agenda ou pasta
+                    const pathRes = await this.api('directories', 'get_path', { id: item.target_id });
+                    
+                    if(pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
+                        const targetDir = pathRes.data[pathRes.data.length - 1];
+                        
+                        if (targetDir.type === 1) {
+                            window.location.href = `/editor?id=${targetDir.id}`;
+                            return;
+                        } else if (targetDir.type === 2) {
+                            window.location.href = `/schedule?id=${targetDir.id}`;
+                            return;
+                        }
+
+                        // Se é uma pasta/diretório normal, vai pro dashboard mandando a flag de Soft Symlink
+                        window.location.href = `/dashboard?id=${id}&target_id=${item.target_id}&portal=1`;
+                    } else {
+                        this.showToast('Erro ao abrir portal. O destino pode não existir mais.', 'error');
+                    }
                 } else {
                     window.location.href = `/dashboard?id=${id}`;
                 }
@@ -936,7 +935,7 @@
                     ghostClass: 'sortable-ghost',
                     dragClass: 'sortable-drag',
                     delay: 100, delayOnTouchOnly: true,
-                    filter: '.virtual-task', // Ignora elementos projetados (não permite arrastar o futuro)
+                    filter: '.virtual-task', 
                     preventOnFilter: false,
                     onEnd: (evt) => this.handleSortableEnd(evt)
                 };
@@ -1310,7 +1309,6 @@
                 const posRadios = document.getElementsByName('dirItemPosition');
                 for(let i=0; i<posRadios.length; i++) { posRadios[i].checked = (posRadios[i].value === posToSelect); }
 
-                // Preencher campos de recorrência
                 document.getElementById('is_recurring').checked = (dirObj && dirObj.is_recurring === 1);
                 document.getElementById('rec_type').value = (dirObj && dirObj.rec_type) ? dirObj.rec_type : 'daily';
                 document.getElementById('rec_interval').value = (dirObj && dirObj.rec_interval) ? dirObj.rec_interval : 1;
@@ -1397,7 +1395,6 @@
                 const iconRadios = document.getElementsByName('dirIcon');
                 for(let i=0; i<iconRadios.length; i++) { if(iconRadios[i].checked) selectedIcon = iconRadios[i].value; }
 
-                // Extrair valores de recorrência
                 const is_recurring = document.getElementById('is_recurring').checked ? 1 : 0;
                 const rec_type = document.getElementById('rec_type').value;
                 const rec_interval = parseInt(document.getElementById('rec_interval').value) || 1;
