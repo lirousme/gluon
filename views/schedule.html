@@ -4,6 +4,7 @@
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
   Suporta Múltiplas Visualizações: Linha do Tempo, Kanban Semanal, Lista e agora Recorrências com Projeção Visual!
+  *Atualizado: Ordenação cronológica automática das tarefas na visualização Kanban e Lista.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -730,6 +731,16 @@
                 
                 let backlogItems = this.items.filter(item => !item.start_date || !item.end_date);
                 let scheduledItems = this.items.filter(item => item.start_date && item.end_date);
+
+                // NOVO: Ordenar por horário para que a exibição no Kanban e Lista siga a ordem cronológica estrita
+                scheduledItems.sort((a, b) => {
+                    const timeA = a.start_date ? a.start_date.split(' ')[1] : '00:00:00';
+                    const timeB = b.start_date ? b.start_date.split(' ')[1] : '00:00:00';
+                    if (timeA === timeB) {
+                        return (a.name || '').localeCompare(b.name || '');
+                    }
+                    return timeA.localeCompare(timeB);
+                });
 
                 backlogItems.forEach(item => {
                     unscheduledContainer.innerHTML += this.generateBacklogCard(item);
