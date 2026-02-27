@@ -3,7 +3,7 @@
   Diretório: public_html/gluon/views/dashboard.html
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
-  Suporte completo a Pastas, Arquivos, Agendas, Portais (Atalhos) e Drag&Drop.
+  Suporte completo a Pastas, Arquivos, Agendas, Portais (Atalhos), Drag&Drop e Recorrência.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -190,6 +190,7 @@
             <div class="flex border-b border-slate-700 bg-slate-900/30">
                 <button type="button" onclick="app.switchModalTab('geral')" id="tab-btn-geral" class="flex-1 py-3 text-sm font-medium border-b-2 border-gluon-primary text-white transition-colors">Geral</button>
                 <button type="button" onclick="app.switchModalTab('apar')" id="tab-btn-apar" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Aparência</button>
+                <button type="button" onclick="app.switchModalTab('recor')" id="tab-btn-recor" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Repetição</button>
             </div>
 
             <form id="dirForm" onsubmit="app.saveDirectory(event)" class="flex flex-col flex-1 overflow-hidden">
@@ -299,6 +300,42 @@
                     </div>
                 </div>
 
+                <!-- Nova Aba: Repetição -->
+                <div id="tab-recor" class="hidden p-6 overflow-y-auto flex-1 space-y-5">
+                    <label class="flex items-center gap-2 cursor-pointer mb-2">
+                        <input type="checkbox" id="is_recurring" class="rounded border-slate-600 bg-slate-800 text-gluon-primary focus:ring-gluon-primary transition-colors" onchange="app.toggleRecurrenceFields()">
+                        <span class="text-sm font-medium text-slate-300">Ativar Repetição Automática</span>
+                    </label>
+                    
+                    <div id="recurrence_fields" class="hidden space-y-4 border-t border-slate-700 pt-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Frequência</label>
+                            <select id="rec_type" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors" onchange="app.handleRecurrenceTypeChange()">
+                                <option value="daily">Diariamente</option>
+                                <option value="weekly">Semanalmente</option>
+                                <option value="monthly">Mensalmente</option>
+                                <option value="yearly">Anualmente</option>
+                                <option value="custom">Datas Específicas</option>
+                            </select>
+                        </div>
+                        
+                        <div id="rec_interval_container">
+                            <label class="block text-sm font-medium text-slate-300 mb-1">A cada (intervalo)</label>
+                            <input type="number" id="rec_interval" min="1" value="1" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors">
+                        </div>
+                        
+                        <div id="rec_custom_container" class="hidden">
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Datas (formato JSON)</label>
+                            <input type="text" id="rec_custom" placeholder='Ex: ["2026-03-01", "2026-04-05"]' class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors font-mono text-sm">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Parar de repetir em (Opcional)</label>
+                            <input type="date" id="rec_end" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors">
+                        </div>
+                    </div>
+                </div>
+
                 <div class="p-5 border-t border-slate-700 bg-slate-800/50 flex flex-col-reverse sm:flex-row justify-between items-center gap-3 shrink-0">
                     <div class="w-full sm:w-auto">
                         <button type="button" id="btnDeleteDir" onclick="app.deleteFromModal()" class="hidden w-full text-red-400 hover:text-white hover:bg-red-500/20 px-3 py-2 rounded-lg transition-colors flex justify-center items-center gap-2 text-sm">
@@ -319,7 +356,6 @@
     <script>
         const app = {
             state: {
-                // NOVO: Adicionado o type (tipo de diretório) ao estado do path
                 path: [{ id: null, name: 'Meu Cofre', view: 'grid', type: 0 }],
                 directories: [],
                 directoryCache: new Map(), 
@@ -492,7 +528,6 @@
                 this.setLoading(true);
                 await this.fetchUserPrefs(); 
                 
-                // NOVO: Verifica se há um ID de diretório na URL (Deep linking vindo da Agenda)
                 const urlParams = new URLSearchParams(window.location.search);
                 const startId = urlParams.get('id');
                 if (startId) {
@@ -500,7 +535,6 @@
                     if (pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
                         const targetDir = pathRes.data[pathRes.data.length - 1];
                         
-                        // Checagem Defensiva: Se tentou abrir algo que não seja tipo pasta no dashboard, redireciona
                         if (targetDir.type === 1) {
                             window.location.href = `/editor?id=${targetDir.id}`;
                             return;
@@ -603,12 +637,11 @@
                 } else this.showToast(response ? response.message : 'Erro ao mover', 'error');
             },
 
-            // NOVO: Função para criar portais
             async createPortal() {
                 const targetParentId = this.getCurrentParentId();
                 const response = await this.api('directories', 'create_portal', { target_parent_id: targetParentId });
                 if (response && response.status === 'success') {
-                    this.state.rootPrefs.copied_directory_id = null; // Limpa para evitar loops confusos
+                    this.state.rootPrefs.copied_directory_id = null;
                     this.updateTopButtons();
                     this.showToast(response.message, 'success');
                     await this.fetchDirectories();
@@ -716,14 +749,12 @@
                 } else if (item.type === 2) {
                     window.location.href = `/schedule?id=${id}`;
                 } else if (item.type === 3) {
-                    // Viaja pelo Portal buscando a trilha completa de volta na API
                     if (!item.target_id) return this.showToast('Portal corrompido: Destino não encontrado.', 'error');
                     this.setLoading(true);
                     const pathRes = await this.api('directories', 'get_path', { id: item.target_id });
                     if(pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
                         const targetDir = pathRes.data[pathRes.data.length - 1];
                         
-                        // Direciona caso o destino final seja um arquivo ou agenda
                         if (targetDir.type === 1) {
                             window.location.href = `/editor?id=${targetDir.id}`;
                             return;
@@ -740,7 +771,6 @@
                         this.showToast('Erro ao abrir portal. Destino não existe mais.', 'error');
                     }
                 } else {
-                    // Adicionado controle de type ao push()
                     this.state.path.push({ id: item.id, name: item.name, view: item.view, type: item.type });
                     if (this.state.reorderMode) this.toggleReorderMode();
                     await this.fetchDirectories();
@@ -750,7 +780,6 @@
             async goUpTo(index) {
                 const targetStep = this.state.path[index];
                 
-                // Trata a subida segura através do pão de forma caso esbarre em arquivos ou agendas
                 if (targetStep.id !== null) {
                     if (targetStep.type === 1) {
                         window.location.href = `/editor?id=${targetStep.id}`;
@@ -874,7 +903,6 @@
                     }
                 }
 
-                // Habilita Mover, Colar e Criar Portal se houver algo copiado
                 const btnPaste = document.getElementById('btn-paste-dir');
                 const btnMove = document.getElementById('btn-move-dir');
                 const btnPortal = document.getElementById('btn-create-portal');
@@ -893,17 +921,42 @@
             },
 
             switchModalTab(tabName) {
-                const tGeral = document.getElementById('tab-geral'); const tApar = document.getElementById('tab-apar');
-                const bGeral = document.getElementById('tab-btn-geral'); const bApar = document.getElementById('tab-btn-apar');
+                const tabs = ['geral', 'apar', 'recor'];
+                tabs.forEach(t => {
+                    const tEl = document.getElementById(`tab-${t}`);
+                    const bEl = document.getElementById(`tab-btn-${t}`);
+                    if (tEl && bEl) {
+                        if (t === tabName) {
+                            tEl.classList.remove('hidden');
+                            bEl.classList.add('border-gluon-primary', 'text-white'); 
+                            bEl.classList.remove('border-transparent', 'text-slate-400');
+                        } else {
+                            tEl.classList.add('hidden');
+                            bEl.classList.add('border-transparent', 'text-slate-400'); 
+                            bEl.classList.remove('border-gluon-primary', 'text-white');
+                        }
+                    }
+                });
+            },
 
-                if(tabName === 'geral') {
-                    tGeral.classList.remove('hidden'); tApar.classList.add('hidden');
-                    bGeral.classList.add('border-gluon-primary', 'text-white'); bGeral.classList.remove('border-transparent', 'text-slate-400');
-                    bApar.classList.add('border-transparent', 'text-slate-400'); bApar.classList.remove('border-gluon-primary', 'text-white');
+            toggleRecurrenceFields() {
+                const isChecked = document.getElementById('is_recurring').checked;
+                const fields = document.getElementById('recurrence_fields');
+                if (isChecked) fields.classList.remove('hidden');
+                else fields.classList.add('hidden');
+            },
+
+            handleRecurrenceTypeChange() {
+                const type = document.getElementById('rec_type').value;
+                const intervalCont = document.getElementById('rec_interval_container');
+                const customCont = document.getElementById('rec_custom_container');
+
+                if (type === 'custom') {
+                    intervalCont.classList.add('hidden');
+                    customCont.classList.remove('hidden');
                 } else {
-                    tApar.classList.remove('hidden'); tGeral.classList.add('hidden');
-                    bApar.classList.add('border-gluon-primary', 'text-white'); bApar.classList.remove('border-transparent', 'text-slate-400');
-                    bGeral.classList.add('border-transparent', 'text-slate-400'); bGeral.classList.remove('border-gluon-primary', 'text-white');
+                    intervalCont.classList.remove('hidden');
+                    customCont.classList.add('hidden');
                 }
             },
 
@@ -921,41 +974,47 @@
                 const folderSettings = document.getElementById('folderSettingsGroup');
                 const nameLabel = document.getElementById('nameLabel');
                 const iconPickerContainer = document.getElementById('iconPickerContainer');
+                const btnApar = document.getElementById('tab-btn-apar');
+                const btnRecor = document.getElementById('tab-btn-recor');
 
                 if (isRootSettings) {
                     dirObj = { name: 'Meu Cofre (Raiz)', view: this.state.rootPrefs.view, new_item_position: this.state.rootPrefs.new_item_position, type: 0 };
                     document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-vault text-gluon-primary"></i> <span>Configurar Raiz</span>';
                     document.getElementById('dirNameContainer').classList.add('hidden');
-                    document.getElementById('tab-btn-apar').classList.add('hidden');
+                    btnApar.classList.add('hidden');
+                    btnRecor.classList.add('hidden');
                     typeSelector.classList.add('hidden');
                     iconPickerContainer.style.display = 'block';
-                } else if (id) {
-                    dirObj = this.state.directoryCache.get(Number(id));
-                    
-                    let titleText = 'Pasta';
-                    if(dirObj.type === 1) titleText = 'Arquivo';
-                    if(dirObj.type === 2) titleText = 'Agenda';
-                    if(dirObj.type === 3) titleText = 'Portal';
-
-                    document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-gear text-gluon-primary"></i> <span>Configurar ${titleText}</span>`;
-                    document.getElementById('dirNameContainer').classList.remove('hidden');
-                    document.getElementById('tab-btn-apar').classList.remove('hidden');
-                    typeSelector.classList.add('hidden');
-                    
-                    if(dirObj.type === 0) { folderSettings.style.display = 'block'; nameLabel.innerText = 'Nome da Pasta'; iconPickerContainer.style.display = 'block'; } 
-                    else if(dirObj.type === 1) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Arquivo'; iconPickerContainer.style.display = 'block'; } 
-                    else if(dirObj.type === 2) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome da Agenda'; iconPickerContainer.style.display = 'block'; }
-                    else if(dirObj.type === 3) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Portal'; iconPickerContainer.style.display = 'none'; }
                 } else {
-                    document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus text-gluon-primary"></i> <span>Novo Item</span>';
-                    document.getElementById('dirNameContainer').classList.remove('hidden');
-                    document.getElementById('tab-btn-apar').classList.remove('hidden');
-                    typeSelector.classList.remove('hidden');
-                    iconPickerContainer.style.display = 'block';
+                    btnApar.classList.remove('hidden');
+                    btnRecor.classList.remove('hidden');
                     
-                    const typeRadios = document.getElementsByName('itemType');
-                    typeRadios[0].checked = true;
-                    this.handleTypeChange(0);
+                    if (id) {
+                        dirObj = this.state.directoryCache.get(Number(id));
+                        
+                        let titleText = 'Pasta';
+                        if(dirObj.type === 1) titleText = 'Arquivo';
+                        if(dirObj.type === 2) titleText = 'Agenda';
+                        if(dirObj.type === 3) titleText = 'Portal';
+
+                        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-gear text-gluon-primary"></i> <span>Configurar ${titleText}</span>`;
+                        document.getElementById('dirNameContainer').classList.remove('hidden');
+                        typeSelector.classList.add('hidden');
+                        
+                        if(dirObj.type === 0) { folderSettings.style.display = 'block'; nameLabel.innerText = 'Nome da Pasta'; iconPickerContainer.style.display = 'block'; } 
+                        else if(dirObj.type === 1) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Arquivo'; iconPickerContainer.style.display = 'block'; } 
+                        else if(dirObj.type === 2) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome da Agenda'; iconPickerContainer.style.display = 'block'; }
+                        else if(dirObj.type === 3) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Portal'; iconPickerContainer.style.display = 'none'; btnRecor.classList.add('hidden'); }
+                    } else {
+                        document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus text-gluon-primary"></i> <span>Novo Item</span>';
+                        document.getElementById('dirNameContainer').classList.remove('hidden');
+                        typeSelector.classList.remove('hidden');
+                        iconPickerContainer.style.display = 'block';
+                        
+                        const typeRadios = document.getElementsByName('itemType');
+                        typeRadios[0].checked = true;
+                        this.handleTypeChange(0);
+                    }
                 }
 
                 dirNameInput.value = dirObj ? dirObj.name : name;
@@ -977,6 +1036,15 @@
                 const posToSelect = (dirObj && dirObj.new_item_position) ? dirObj.new_item_position : 'end';
                 const posRadios = document.getElementsByName('dirItemPosition');
                 for(let i=0; i<posRadios.length; i++) { posRadios[i].checked = (posRadios[i].value === posToSelect); }
+
+                // Preencher campos de recorrência
+                document.getElementById('is_recurring').checked = (dirObj && dirObj.is_recurring === 1);
+                document.getElementById('rec_type').value = (dirObj && dirObj.rec_type) ? dirObj.rec_type : 'daily';
+                document.getElementById('rec_interval').value = (dirObj && dirObj.rec_interval) ? dirObj.rec_interval : 1;
+                document.getElementById('rec_custom').value = (dirObj && dirObj.rec_custom) ? dirObj.rec_custom : '';
+                document.getElementById('rec_end').value = (dirObj && dirObj.rec_end) ? dirObj.rec_end.split(' ')[0] : '';
+                this.toggleRecurrenceFields();
+                this.handleRecurrenceTypeChange();
 
                 const btnDelete = document.getElementById('btnDeleteDir');
                 if(id && !isRootSettings) btnDelete.classList.remove('hidden'); else btnDelete.classList.add('hidden');
@@ -1051,6 +1119,13 @@
                 const typeRadios = document.getElementsByName('itemType');
                 for(let i=0; i<typeRadios.length; i++) { if(typeRadios[i].checked) selectedType = parseInt(typeRadios[i].value); }
 
+                // Extrair valores de recorrência
+                const is_recurring = document.getElementById('is_recurring').checked ? 1 : 0;
+                const rec_type = document.getElementById('rec_type').value;
+                const rec_interval = parseInt(document.getElementById('rec_interval').value) || 1;
+                const rec_custom = document.getElementById('rec_custom').value;
+                const rec_end = document.getElementById('rec_end').value || null;
+
                 const btn = document.getElementById('btnSaveDir');
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
                 btn.disabled = true;
@@ -1080,7 +1155,12 @@
                         cover_url: document.getElementById('dirCoverBase64').value,
                         color_from: document.getElementById('dirColorFrom').value || '#3b82f6',
                         color_to: document.getElementById('dirColorTo').value || '#6366f1',
-                        icon: selectedIcon
+                        icon: selectedIcon,
+                        is_recurring: is_recurring,
+                        rec_type: rec_type,
+                        rec_interval: rec_interval,
+                        rec_custom: rec_custom,
+                        rec_end: rec_end
                     };
 
                     response = await this.api('directories', id !== '' ? 'update' : 'create', payload);
@@ -1141,7 +1221,6 @@
                          return; 
                     }
 
-                    // Se for Portal (3), busca pelo target_id; se for Pasta (0), busca pelo id normal
                     const targetFetchId = dir.type === 3 ? dir.target_id : dir.id;
                     
                     if (!targetFetchId) {
@@ -1159,6 +1238,8 @@
                             if(sub.type === 1) itemBorder = 'border-indigo-500/50';
                             if(sub.type === 2) itemBorder = 'border-emerald-500/50';
                             if(sub.type === 3) itemBorder = 'border-fuchsia-500/50';
+                            
+                            const repeatIcon = sub.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
 
                             return `
                             <div data-id="${sub.id}" class="kanban-item bg-slate-700 hover:bg-slate-600 border ${itemBorder} p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm mb-2 relative overflow-hidden" onclick="app.enterDirectoryOrFile(${sub.id})">
@@ -1166,7 +1247,7 @@
                                 <div class="flex items-center gap-2 truncate pr-2 relative z-10">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
                                     <i class="fa-solid ${sub.icon} text-sm" style="${this.getTextGradientStyle(sub.color_from, sub.color_to)}"></i>
-                                    <span class="text-sm text-slate-200 truncate font-medium">${this.escapeHTML(sub.name)}</span>
+                                    <span class="text-sm text-slate-200 truncate font-medium">${this.escapeHTML(sub.name)} ${repeatIcon}</span>
                                 </div>
                                 <button onclick="event.stopPropagation(); app.openModal(${sub.id})" class="relative z-10 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 sm:opacity-0 group-hover:opacity-100 transition-all border border-slate-600 cog-btn"><i class="fa-solid fa-cog text-xs"></i></button>
                             </div>`;
@@ -1209,13 +1290,16 @@
                         let borderClass = 'border-slate-700';
                         if(dir.type === 1) borderClass = 'border-indigo-600/50';
                         if(dir.type === 2) borderClass = 'border-emerald-600/50';
-                        if(dir.type === 3) borderClass = 'border-fuchsia-600/50'; // Tema do Portal
+                        if(dir.type === 3) borderClass = 'border-fuchsia-600/50';
+                        
+                        const repeatIcon = dir.is_recurring === 1 ? `<div class="absolute top-2 left-2 bg-slate-900/80 backdrop-blur rounded p-1.5 z-20 text-gluon-primary" title="Tarefa Recorrente"><i class="fa-solid fa-repeat"></i></div>` : '';
 
                         html += `
                         <div data-id="${dir.id}" class="dir-card draggable-item group bg-slate-800 border ${borderClass} rounded-xl flex flex-col items-center text-center cursor-pointer relative overflow-hidden min-h-[140px]" onclick="app.enterDirectoryOrFile(${dir.id})">
                             ${dir.cover_url ? `<div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110" style="background-image: url('${dir.cover_url}')"></div><div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/80 to-slate-900/40"></div>` : ''}
                             
                             <div class="absolute top-2 left-2 text-green-500 hidden grip-handle bg-slate-900/80 backdrop-blur rounded p-1 z-20"><i class="fa-solid fa-grip-vertical"></i></div>
+                            ${repeatIcon}
                             <div class="absolute top-2 right-2 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn z-20">
                                 <button onclick="event.stopPropagation(); app.openModal(${dir.id})" class="text-slate-400 hover:text-white bg-slate-900/80 backdrop-blur hover:bg-slate-700 rounded p-1.5 shadow-lg"><i class="fa-solid fa-cog"></i></button>
                             </div>
@@ -1237,13 +1321,15 @@
                         if(dir.type === 2) borderClass = 'border-l-emerald-500';
                         if(dir.type === 3) borderClass = 'border-l-fuchsia-500';
 
+                        const repeatIcon = dir.is_recurring === 1 ? `<i class="fa-solid fa-repeat ml-2 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
+
                         html += `
                         <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/50 transition-colors group cursor-pointer border-l-2 ${borderClass} relative overflow-hidden" onclick="app.enterDirectoryOrFile(${dir.id})">
                             <td class="px-2 py-3 text-center hidden grip-handle text-green-500 bg-slate-900/20"><i class="fa-solid fa-grip-vertical"></i></td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-center">
                                 ${dir.cover_url ? `<div class="w-8 h-8 rounded bg-cover bg-center border border-slate-600 inline-block shadow-sm" style="background-image: url('${dir.cover_url}')"></div>` : `<i class="fa-solid ${dir.icon} text-xl" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>`}
                             </td>
-                            <td class="px-4 py-3 sm:py-4 font-medium text-slate-200">${this.escapeHTML(dir.name)}</td>
+                            <td class="px-4 py-3 sm:py-4 font-medium text-slate-200">${this.escapeHTML(dir.name)} ${repeatIcon}</td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-right">
                                 <div class="sm:opacity-0 group-hover:opacity-100 transition-opacity flex justify-end gap-2 cog-btn">
                                     <button onclick="event.stopPropagation(); app.openModal(${dir.id})" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-600 border border-slate-600 rounded p-2 text-xs sm:text-sm shadow"><i class="fa-solid fa-cog"></i> <span class="hidden sm:inline">Editar</span></button>
@@ -1262,8 +1348,8 @@
                         if(dir.type === 2) headerBorder = 'border-emerald-700';
                         if(dir.type === 3) headerBorder = 'border-fuchsia-700';
 
-                        // Define qual será o ID pai dos itens dessa coluna (Necessário para o SortableJS)
                         const dropTargetId = dir.type === 3 ? dir.target_id : dir.id;
+                        const repeatIcon = dir.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-sm ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
 
                         html += `
                         <div data-id="${dir.id}" class="draggable-item snap-start bg-slate-800 border ${headerBorder} rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg relative transition-colors overflow-hidden">
@@ -1273,7 +1359,7 @@
                                 <div class="flex items-center gap-2 font-semibold text-slate-100 truncate w-full relative z-10 drop-shadow-md">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
                                     <i class="fa-solid ${dir.icon} text-lg" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>
-                                    <span class="truncate text-sm sm:text-base">${this.escapeHTML(dir.name)}</span>
+                                    <span class="truncate text-sm sm:text-base">${this.escapeHTML(dir.name)} ${repeatIcon}</span>
                                 </div>
                                 <div class="flex gap-1 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn relative z-10">
                                     <button onclick="event.stopPropagation(); app.openModal(${dir.id})" class="text-slate-300 hover:text-white bg-slate-800/80 backdrop-blur hover:bg-slate-600 rounded p-1.5 shadow"><i class="fa-solid fa-cog text-xs"></i></button>
@@ -1284,7 +1370,6 @@
                                 <div class="flex justify-center py-6"><i class="fa-solid fa-circle-notch fa-spin text-slate-500 text-2xl"></i></div>
                             </div>
                             
-                            <!-- Somente exibe botão de "Adicionar" no rodapé de Kanban se for uma PASTA (0) ou PORTAL (3) -->
                             ${(dir.type === 0 || dir.type === 3) ? `
                             <div class="p-3 border-t border-slate-700 bg-slate-900/30 rounded-b-xl z-10 relative">
                                 <button onclick="app.openModal('', '', ${dropTargetId}, 'grid')" class="text-slate-400 hover:text-white flex items-center justify-center gap-2 text-xs sm:text-sm transition-colors w-full py-2 hover:bg-slate-700 rounded-lg border border-slate-700/50 border-dashed">
