@@ -135,13 +135,14 @@ elseif ($action === 'get_path') {
     $curr = $dir_id;
     
     while ($curr !== null) {
-        $stmt = $pdo->prepare("SELECT id, name_encrypted, default_view, parent_id FROM directories WHERE id = ? AND user_id = ?");
+        $stmt = $pdo->prepare("SELECT id, type, name_encrypted, default_view, parent_id FROM directories WHERE id = ? AND user_id = ?");
         $stmt->execute([$curr, $user_id]);
         $dir = $stmt->fetch();
         
         if ($dir) {
             array_unshift($path, [
                 'id' => $dir['id'],
+                'type' => (int)$dir['type'],
                 'name' => Security::decryptData($dir['name_encrypted']),
                 'view' => $dir['default_view']
             ]);
