@@ -1153,6 +1153,8 @@
             openModal(id = '', name = '', startDate = null, endDate = null) {
                 this.switchModalTab('geral');
                 document.getElementById('dirId').value = id;
+                
+                // Pré-preenche caso esteja sendo criado novo num slot de horário (clique duplo)
                 document.getElementById('dirStartDate').value = startDate || '';
                 document.getElementById('dirEndDate').value = endDate || '';
                 
@@ -1165,6 +1167,14 @@
 
                 if (id) {
                     dirObj = this.state.directoryCache.get(Number(id));
+                    
+                    // FIX PRINCIPAL AQUI:
+                    // Resgata as datas que já existem no item do banco de dados, para que
+                    // os inputs ocultos não sejam enviados vazios apagando os horários!
+                    if (dirObj) {
+                        if (dirObj.start_date) document.getElementById('dirStartDate').value = dirObj.start_date;
+                        if (dirObj.end_date) document.getElementById('dirEndDate').value = dirObj.end_date;
+                    }
                     
                     let titleText = 'Item';
                     if(dirObj.type === 0) titleText = 'Tarefa / Pasta';
