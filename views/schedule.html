@@ -6,6 +6,7 @@
   Suporta Múltiplas Visualizações: Linha do Tempo, Kanban Semanal, Lista e agora Recorrências com Projeção Visual!
   *Atualizado: Ao clicar em um Portal, ele redireciona para o Dashboard via Soft Symlink mantendo o contexto.
   *Atualizado: Suporte total a copiar, colar, transferir e criar portais direto da Agenda.
+  *Atualizado: Sistema de Toggle do Backlog com animação fluída e persistência de estado.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -137,21 +138,33 @@
     <main class="flex-1 w-full flex overflow-hidden">
         
         <!-- Sidebar -->
-        <aside class="w-64 sm:w-80 bg-slate-900 border-r border-slate-700/50 flex flex-col shrink-0 z-30 shadow-xl relative">
-            <div class="p-4 border-b border-slate-800 bg-slate-800/30">
-                <h3 class="font-semibold text-slate-300 flex items-center gap-2"><i class="fa-solid fa-inbox text-slate-500"></i> Sem Data (Backlog)</h3>
-                <p class="text-xs text-slate-500 mt-1">Tarefas não agendadas.</p>
+        <aside id="backlogSidebar" class="w-64 sm:w-80 bg-slate-900 border-r border-slate-700/50 flex flex-col shrink-0 z-30 shadow-xl relative transition-all duration-300 overflow-hidden">
+            <div class="p-4 border-b border-slate-800 bg-slate-800/30 flex justify-between items-start min-w-[250px]">
+                <div class="overflow-hidden">
+                    <h3 class="font-semibold text-slate-300 flex items-center gap-2 whitespace-nowrap"><i class="fa-solid fa-inbox text-slate-500"></i> Sem Data (Backlog)</h3>
+                    <p class="text-xs text-slate-500 mt-1 whitespace-nowrap">Tarefas não agendadas.</p>
+                </div>
+                <button onclick="scheduleApp.toggleSidebar()" class="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-700 transition-colors shrink-0" title="Recolher Backlog">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
             </div>
-            <div id="unscheduledList" class="flex-1 overflow-y-auto p-4 no-scrollbar"></div>
+            <div id="unscheduledList" class="flex-1 overflow-y-auto p-4 no-scrollbar min-w-[250px]"></div>
         </aside>
 
         <div class="flex-1 relative flex flex-col bg-gluon-dark overflow-hidden">
             
             <div class="p-3 sm:p-4 border-b border-slate-700 bg-slate-800/80 backdrop-blur shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 z-20">
                 
-                <div id="dateControlContainer" class="flex items-center gap-2 w-full sm:w-auto"></div>
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <!-- Botão Toggle da Sidebar (Fica visível no lugar do backlog quando ele é recolhido) -->
+                    <button onclick="scheduleApp.toggleSidebar()" id="btnToggleSidebarNav" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors bg-slate-900 border border-slate-700 shadow-sm shrink-0" title="Alternar Backlog">
+                        <i class="fa-solid fa-inbox"></i>
+                    </button>
+                    
+                    <div id="dateControlContainer" class="flex items-center gap-2 w-full sm:w-auto"></div>
+                </div>
                 
-                <div class="flex items-center gap-1 bg-slate-900 rounded-lg p-1 border border-slate-700 w-full sm:w-auto justify-center">
+                <div class="flex items-center gap-1 bg-slate-900 rounded-lg p-1 border border-slate-700 w-full sm:w-auto justify-center shrink-0">
                     <button onclick="scheduleApp.setViewMode('timeline')" id="btn-view-timeline" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition-colors" title="Linha do Tempo (1 Dia)"><i class="fa-solid fa-clock"></i></button>
                     <button onclick="scheduleApp.setViewMode('kanban')" id="btn-view-kanban" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition-colors" title="Kanban Semanal (7 Dias)"><i class="fa-solid fa-columns"></i></button>
                     <button onclick="scheduleApp.setViewMode('list')" id="btn-view-list" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition-colors" title="Lista por Dia (7 Dias)"><i class="fa-solid fa-list"></i></button>
@@ -367,6 +380,7 @@
 
             state: {
                 view: 'timeline',
+                sidebarOpen: true,
                 directoryCache: new Map(),
                 copied_directory_id: null,
                 pendingStartDate: null,
@@ -390,6 +404,22 @@
                 this.renderIconPicker();
                 this.setupFormListeners();
                 
+                // Restaura o estado da barra lateral (Backlog)
+                const savedSidebar = localStorage.getItem('gluon_agenda_sidebar');
+                if (savedSidebar === 'false') {
+                    this.state.sidebarOpen = false;
+                    const sidebar = document.getElementById('backlogSidebar');
+                    if (sidebar) {
+                        sidebar.classList.add('w-0', 'border-r-0', 'opacity-0');
+                        sidebar.classList.remove('w-64', 'sm:w-80', 'border-r');
+                    }
+                    const btnNav = document.getElementById('btnToggleSidebarNav');
+                    if(btnNav) {
+                        btnNav.classList.remove('text-slate-400');
+                        btnNav.classList.add('text-gluon-primary', 'bg-slate-800');
+                    }
+                }
+
                 await this.fetchUserPrefs();
                 await this.fetchAgendaInfo();
                 await this.loadData();
@@ -402,6 +432,29 @@
                         menu.classList.add('hidden');
                     }
                 });
+            },
+
+            toggleSidebar() {
+                this.state.sidebarOpen = !this.state.sidebarOpen;
+                const sidebar = document.getElementById('backlogSidebar');
+                const btnNav = document.getElementById('btnToggleSidebarNav');
+                
+                if (this.state.sidebarOpen) {
+                    sidebar.classList.remove('w-0', 'border-r-0', 'opacity-0');
+                    sidebar.classList.add('w-64', 'sm:w-80', 'border-r');
+                    if(btnNav) {
+                        btnNav.classList.add('text-slate-400');
+                        btnNav.classList.remove('text-gluon-primary', 'bg-slate-800');
+                    }
+                } else {
+                    sidebar.classList.add('w-0', 'border-r-0', 'opacity-0');
+                    sidebar.classList.remove('w-64', 'sm:w-80', 'border-r');
+                    if(btnNav) {
+                        btnNav.classList.remove('text-slate-400');
+                        btnNav.classList.add('text-gluon-primary', 'bg-slate-800');
+                    }
+                }
+                localStorage.setItem('gluon_agenda_sidebar', this.state.sidebarOpen);
             },
 
             toggleMobileViewMenu() { 
