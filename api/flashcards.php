@@ -49,7 +49,7 @@ if ($action === 'fetch') {
 
     $response = [];
     $total_score = 0;
-    $max_possible_score = count($cards) * 10;
+    $max_possible_score = count($cards) * 20; // Alterado para 20
 
     foreach ($cards as $card) {
         $score = (int)$card['score'];
@@ -97,11 +97,11 @@ elseif ($action === 'update_score') {
     }
 
     // Usa UPSERT (ON DUPLICATE KEY UPDATE) para performance extrema e evitar condições de corrida
-    // A função LEAST(score + 1, 10) garante que nunca passe de 10.
+    // A função LEAST(score + 1, 20) garante que nunca passe de 20.
     $stmt = $pdo->prepare("
         INSERT INTO flashcard_scores (user_id, flashcard_id, score) 
         VALUES (?, ?, 1) 
-        ON DUPLICATE KEY UPDATE score = LEAST(score + 1, 10), last_reviewed_at = CURRENT_TIMESTAMP
+        ON DUPLICATE KEY UPDATE score = LEAST(score + 1, 20), last_reviewed_at = CURRENT_TIMESTAMP
     ");
     
     if ($stmt->execute([$user_id, $card_id])) {
