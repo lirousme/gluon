@@ -221,6 +221,7 @@ elseif ($action === 'create') {
     $default_icon = 'fa-folder';
     if($type === 1) $default_icon = 'fa-file-code';
     if($type === 2) $default_icon = 'fa-calendar-days';
+    if($type === 5) $default_icon = 'fa-list-check';
 
     $icon = preg_match('/^fa-[a-z0-9-]+$/', $input['icon'] ?? '') ? $input['icon'] : $default_icon;
     $color_from = preg_match('/^#[a-fA-F0-9]{6}$/', $input['color_from'] ?? '') ? $input['color_from'] : '#3b82f6';
