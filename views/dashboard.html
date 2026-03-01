@@ -1,257 +1,362 @@
 <!-- 
-  Arquivo: flashcards.html
-  Diretório: public_html/gluon/views/flashcards.html
+  Arquivo: dashboard.html
+  Diretório: public_html/gluon/views/dashboard.html
   
-  Pilar: Rápido, Seguro, Bonito e Escalável.
-  Atualização: Sistema de Maestria ampliado (Pontuação por Card de 0 a 20).
-  Inclusão de efeito visual de preenchimento de metade da bolinha para escalonamento visual contínuo.
+  Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
+  Suporte completo a Pastas, Arquivos, Agendas, Portais (Atalhos), Drag&Drop, Recorrência e Flashcards.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gluon - Flashcards</title>
+    <title>Gluon - Workspace</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script>
         tailwind.config = {
-            theme: { extend: { colors: { gluon: { dark: '#0f172a', primary: '#3b82f6', secondary: '#1e293b', accent: '#6366f1' } } } }
+            theme: {
+                extend: {
+                    colors: {
+                        gluon: { dark: '#0f172a', primary: '#3b82f6', secondary: '#1e293b', accent: '#6366f1' }
+                    }
+                }
+            }
         }
     </script>
     <style>
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* Perspectiva 3D para a cena do Card */
-        .scene {
-            perspective: 1000px;
-            width: 100%;
-            max-width: 600px;
-            height: 400px;
-            margin: 0 auto;
+        .dir-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .dir-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); }
+        
+        .kanban-scroll::-webkit-scrollbar { width: 4px; }
+        .kanban-scroll::-webkit-scrollbar-track { background: transparent; }
+        .kanban-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+
+        .view-radio:checked + div, .type-radio:checked + div { background-color: #3b82f6; border-color: #3b82f6; color: white; }
+        .icon-radio:checked + div { background-color: #1e293b; border-color: #3b82f6; color: #3b82f6; }
+
+        .reorder-active .draggable-item { border-color: #22c55e !important; box-shadow: 0 4px 6px -1px rgba(34, 197, 94, 0.1); }
+        .reorder-active .draggable-item, .reorder-active .kanban-col-handle, .reorder-active .kanban-item { cursor: grab !important; }
+        .reorder-active .draggable-item:active, .reorder-active .kanban-col-handle:active, .reorder-active .kanban-item:active { cursor: grabbing !important; }
+        .reorder-active .kanban-item { border-color: #22c55e !important; background-color: #1e293b !important; }
+        .reorder-active .grip-handle { display: inline-block !important; }
+        .reorder-active .cog-btn { display: none !important; }
+        .kanban-scroll .kanban-empty:not(:only-child) { display: none !important; }
+        .reorder-active.snap-x { scroll-snap-type: none !important; }
+        .reorder-active .snap-start { scroll-snap-align: none !important; }
+        .sortable-ghost { opacity: 0.3; background-color: #1e293b !important; border: 2px dashed #22c55e !important; }
+        .sortable-drag { opacity: 1 !important; cursor: grabbing !important; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important; }
+
+        .icon-gradient {
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: inline-block;
         }
 
-        .card-3d {
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: none;
             width: 100%;
-            height: 100%;
-            transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
-            transform-style: preserve-3d;
-            position: relative;
+            height: 40px;
+            border-radius: 0.5rem;
             cursor: pointer;
         }
-
-        .card-3d.is-flipped { transform: rotateY(180deg); }
-
-        .card-face {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            backface-visibility: hidden;
-            -webkit-backface-visibility: hidden;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-            border-radius: 1rem;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
-            text-align: center;
-            overflow: hidden;
-        }
-
-        .card-front {
-            background: linear-gradient(145deg, #1e293b, #0f172a);
-            border: 1px solid #334155;
-            color: #f8fafc;
-        }
-
-        .card-back {
-            background: linear-gradient(145deg, #3b82f6, #1d4ed8);
-            border: 1px solid #60a5fa;
-            color: #ffffff;
-            transform: rotateY(180deg);
-        }
-
-        .card-text {
-            flex-grow: 1;
-            display: flex;
-            align-items: center;
-            font-size: 1.5rem;
-            line-height: 1.4;
-            white-space: pre-wrap;
-            word-break: break-word;
-            overflow-y: auto;
-            width: 100%;
-            justify-content: center;
-            padding: 1rem 0;
-        }
-        
-        .score-dots {
-            display: flex;
-            gap: 4px;
-            margin-top: auto;
-            padding-top: 1rem;
-        }
-
-        .score-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background-color: #334155; /* cor vazia frente */
-            transition: all 0.3s ease;
-        }
-
-        .card-back .score-dot {
-            background-color: #2563eb; /* cor vazia verso */
-        }
-        
-        /* Cor de preenchimento do ponto total (Maestria) */
-        .score-dot.filled { background-color: #22c55e !important; box-shadow: 0 0 5px rgba(34, 197, 94, 0.5); }
-        .card-back .score-dot.filled { background-color: #10b981 !important; box-shadow: 0 0 5px rgba(16, 185, 129, 0.5); }
-
-        /* Cor de preenchimento de metade do ponto (Escalonamento para 20 pontos em 10 bolinhas) */
-        .score-dot.half-filled { background: linear-gradient(to right, #22c55e 50%, #334155 50%) !important; box-shadow: 0 0 3px rgba(34, 197, 94, 0.3); }
-        .card-back .score-dot.half-filled { background: linear-gradient(to right, #10b981 50%, #2563eb 50%) !important; box-shadow: 0 0 3px rgba(16, 185, 129, 0.3); }
-
-        @media (max-width: 640px) {
-            .scene { height: 350px; }
-            .card-text { font-size: 1.25rem; }
-            .score-dot { width: 8px; height: 8px; }
-        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 0.5rem; }
     </style>
 </head>
-<body class="bg-gluon-dark text-slate-200 h-screen flex flex-col font-sans overflow-hidden selection:bg-gluon-primary selection:text-white">
+<body class="bg-gluon-dark text-slate-200 h-screen overflow-hidden flex flex-col font-sans selection:bg-gluon-primary selection:text-white relative">
 
-    <!-- Navbar -->
-    <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-16 flex items-center justify-between px-4 sm:px-6 relative">
-        <div class="flex items-center gap-4">
-            <button onclick="window.location.href='/dashboard'" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg border border-slate-700 shadow-sm" title="Voltar">
-                <i class="fa-solid fa-arrow-left"></i>
-            </button>
-            <div class="h-6 w-px bg-slate-700 hidden sm:block"></div>
-            <div class="flex items-center gap-3">
-                <i class="fa-solid fa-layer-group text-gluon-primary text-xl"></i>
-                <span id="deckName" class="font-bold text-lg text-white tracking-wide truncate max-w-[120px] sm:max-w-xs">Carregando Deck...</span>
-                
-                <!-- Badge de Maestria Geral do Deck -->
-                <div id="deckMasteryBadge" class="hidden items-center gap-1.5 bg-slate-800/80 border border-slate-600 px-2 py-1 rounded-md text-xs font-semibold text-emerald-400 shadow-inner">
-                    <i class="fa-solid fa-ranking-star"></i> <span id="deckPercentage">0%</span>
+    <!-- Top Navigation -->
+    <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 backdrop-blur-md bg-opacity-90">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="window.location.href='/dashboard'">
+                <div class="w-10 h-10 rounded-lg bg-slate-800 border border-slate-600 flex items-center justify-center shadow-lg">
+                    <i class="fa-solid fa-atom text-xl text-gluon-primary"></i>
                 </div>
+                <span class="font-bold text-xl tracking-wide text-white">GLUON</span>
             </div>
-        </div>
-        
-        <div class="flex items-center gap-2 sm:gap-3">
-            <button onclick="flashcardApp.openSingleModal()" class="text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 font-medium py-2 px-3 sm:px-4 rounded-lg shadow transition-all flex items-center gap-2 text-sm" title="Adicionar Card Unitário">
-                <i class="fa-solid fa-plus text-gluon-primary"></i> <span class="hidden sm:inline">Add Card</span>
-            </button>
-            <button onclick="flashcardApp.openBulkModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 px-3 sm:px-4 rounded-lg shadow-lg transition-all flex items-center gap-2 text-sm" title="Importar do Excel">
-                <i class="fa-solid fa-file-excel"></i> <span class="hidden sm:inline">Importar</span>
-            </button>
-        </div>
-        
-        <!-- Barra de Progresso Fina no fundo da Navbar -->
-        <div class="absolute bottom-0 left-0 h-0.5 bg-slate-700 w-full">
-            <div id="deckProgressBar" class="h-full bg-emerald-500 transition-all duration-700 ease-out" style="width: 0%;"></div>
+            
+            <div class="flex items-center gap-2 sm:gap-4">
+                <button onclick="app.toggleReorderMode()" id="btn-reorder-desktop" class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent font-medium text-sm transition-all text-slate-400 hover:text-white hover:bg-slate-700" title="Ativar Modo de Reordenação">
+                    <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90"></i>
+                    <span>Ordem</span>
+                </button>
+
+                <div class="hidden md:block w-px h-6 bg-slate-700 mx-1"></div>
+
+                <div class="hidden md:flex items-center gap-1 bg-slate-800 rounded-lg p-1 border border-slate-700">
+                    <button onclick="app.setViewMode('grid')" id="btn-view-grid" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Grid"><i class="fa-solid fa-border-all"></i></button>
+                    <button onclick="app.setViewMode('list')" id="btn-view-list" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Lista"><i class="fa-solid fa-list-ul"></i></button>
+                    <button onclick="app.setViewMode('kanban')" id="btn-view-kanban" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Kanban"><i class="fa-solid fa-columns"></i></button>
+                </div>
+
+                <!-- Menu de Opções Geral (3 pontinhos) -->
+                <div class="relative">
+                    <button onclick="app.toggleMobileViewMenu()" id="btn-mobile-menu-trigger" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors outline-none focus:ring-2 focus:ring-slate-700">
+                        <i class="fa-solid fa-ellipsis-vertical px-1"></i>
+                    </button>
+                    <div id="mobileViewMenu" class="hidden absolute right-0 top-12 w-56 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 origin-top-right transition-all">
+                        
+                        <div class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Ações do Diretório</div>
+                        
+                        <button onclick="app.openModal(app.getCurrentParentId() || 'root'); app.toggleMobileViewMenu()" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                            <i class="fa-solid fa-folder-gear w-5 text-center text-lg"></i> <span class="font-medium">Configurações</span>
+                        </button>
+
+                        <button onclick="app.copyCurrentDirectory(); app.toggleMobileViewMenu()" id="btn-copy-dir" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors hidden">
+                            <i class="fa-regular fa-copy w-5 text-center text-lg"></i> <span class="font-medium">Copiar Diretório</span>
+                        </button>
+
+                        <button onclick="app.pasteDirectory(); app.toggleMobileViewMenu()" id="btn-paste-dir" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors hidden">
+                            <i class="fa-solid fa-paste w-5 text-center text-lg"></i> <span class="font-medium">Colar Arquivos</span>
+                        </button>
+                        
+                        <button onclick="app.moveDirectory(); app.toggleMobileViewMenu()" id="btn-move-dir" class="w-full text-left px-4 py-2.5 text-sm text-amber-400 hover:bg-slate-700 hover:text-amber-300 flex items-center gap-3 transition-colors hidden">
+                            <i class="fa-solid fa-truck-fast w-5 text-center text-lg"></i> <span class="font-medium">Mover para cá</span>
+                        </button>
+
+                        <button onclick="app.createPortal(); app.toggleMobileViewMenu()" id="btn-create-portal" class="w-full text-left px-4 py-2.5 text-sm text-fuchsia-400 hover:bg-slate-700 hover:text-fuchsia-300 flex items-center gap-3 transition-colors hidden">
+                            <i class="fa-solid fa-door-open w-5 text-center text-lg"></i> <span class="font-medium">Criar Portal</span>
+                        </button>
+
+                        <div class="h-px bg-slate-700/50 my-2 md:hidden"></div>
+
+                        <!-- Opções exclusivas do Mobile -->
+                        <div class="md:hidden">
+                            <button onclick="app.toggleReorderMode(); app.toggleMobileViewMenu()" id="btn-reorder-mobile" class="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors border-b border-slate-700/50 mb-1">
+                                <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90 w-5 text-center text-lg"></i> <span class="font-medium">Alterar Ordem</span>
+                            </button>
+                            <div class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Visualização</div>
+                            <button onclick="app.setViewMode('grid'); app.toggleMobileViewMenu()" id="btn-mobile-view-grid" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors"><i class="fa-solid fa-border-all w-5 text-center text-lg"></i> <span class="font-medium">Grid</span></button>
+                            <button onclick="app.setViewMode('list'); app.toggleMobileViewMenu()" id="btn-mobile-view-list" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors"><i class="fa-solid fa-list-ul w-5 text-center text-lg"></i> <span class="font-medium">Lista</span></button>
+                            <button onclick="app.setViewMode('kanban'); app.toggleMobileViewMenu()" id="btn-mobile-view-kanban" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors"><i class="fa-solid fa-columns w-5 text-center text-lg"></i> <span class="font-medium">Kanban</span></button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="h-6 w-px bg-slate-700"></div>
+                
+                <button onclick="window.location.href='/settings'" class="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2" title="Meu Perfil">
+                    <i class="fa-solid fa-circle-user text-xl"></i> 
+                    <span class="hidden sm:inline font-medium">Perfil</span>
+                </button>
+            </div>
         </div>
     </nav>
 
-    <!-- Main Content -->
-    <main class="flex-1 w-full flex flex-col items-center justify-center p-4 relative">
-        
-        <!-- Indicador de Posição -->
-        <div class="absolute top-6 left-0 right-0 text-center z-10">
-            <span id="cardCounter" class="bg-slate-800 text-slate-400 font-medium px-4 py-1.5 rounded-full text-sm border border-slate-700 shadow-sm">
-                0 / 0
-            </span>
-        </div>
-
-        <!-- Cena 3D e Card -->
-        <div class="scene" id="cardScene" style="display: none;">
-            <div class="card-3d" id="flashcard" onclick="flashcardApp.flipCard()">
-                
-                <!-- Frente -->
-                <div class="card-face card-front">
-                    <span class="absolute top-4 left-4 text-xs font-bold text-slate-500 tracking-wider uppercase">Frente</span>
-                    <i class="fa-solid fa-rotate absolute top-4 right-4 text-slate-600 opacity-50"></i>
-                    
-                    <div class="card-text no-scrollbar" id="cardFrontText"></div>
-                    
-                    <div class="score-dots" id="frontScoreDots">
-                        <!-- Gerado via JS -->
-                    </div>
-                </div>
-
-                <!-- Verso -->
-                <div class="card-face card-back">
-                    <span class="absolute top-4 left-4 text-xs font-bold text-blue-200 tracking-wider uppercase">Verso</span>
-                    <i class="fa-solid fa-rotate absolute top-4 right-4 text-blue-300 opacity-50"></i>
-                    
-                    <div class="card-text no-scrollbar drop-shadow-md" id="cardBackText"></div>
-                    
-                    <div class="score-dots" id="backScoreDots">
-                        <!-- Gerado via JS -->
-                    </div>
-                </div>
-
+    <!-- Main Workspace -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-0 flex flex-col overflow-hidden relative min-h-0">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 shrink-0">
+            <div class="block text-sm text-slate-300 font-medium w-full flex-1 leading-relaxed break-words" id="breadcrumbs"></div>
+            
+            <div id="reorder-hint" class="hidden animate-pulse text-green-400 text-sm font-medium flex-1 text-center bg-green-500/10 py-2 px-4 rounded-lg border border-green-500/20">
+                <i class="fa-solid fa-hand-pointer mr-2"></i> Arraste os itens para reordenar
             </div>
-        </div>
-
-        <!-- Tela Vazia -->
-        <div id="emptyState" class="flex flex-col items-center justify-center text-center max-w-sm mt-10">
-            <i class="fa-solid fa-clone text-6xl text-slate-600 mb-4 opacity-50"></i>
-            <h2 class="text-xl font-bold text-slate-300 mb-2">Este deck está vazio</h2>
-            <p class="text-slate-500 text-sm mb-6">Adicione seu primeiro card manualmente ou importe uma lista do Excel para começar a estudar.</p>
-        </div>
-
-        <!-- Carregamento -->
-        <div id="loader" class="flex flex-col items-center justify-center">
-            <i class="fa-solid fa-circle-notch fa-spin text-4xl text-gluon-primary mb-3"></i>
-            <span class="text-slate-400">Descriptografando cards...</span>
-        </div>
-
-        <!-- Controles Inferiores -->
-        <div class="absolute bottom-10 left-0 right-0 flex justify-center items-center gap-6 px-4 z-10" id="controls" style="display: none;">
-            <button onclick="flashcardApp.prevCard()" id="btnPrev" class="w-14 h-14 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center text-xl shadow-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed">
-                <i class="fa-solid fa-arrow-left"></i>
-            </button>
-            <span class="text-xs text-slate-500 font-medium hidden sm:block">Use setas Direita/Esquerda ou Espaço</span>
-            <button onclick="flashcardApp.nextCard()" id="btnNext" class="w-14 h-14 rounded-full bg-gluon-primary hover:bg-blue-600 text-white flex items-center justify-center text-xl shadow-lg shadow-blue-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Próximo (+1 Ponto de Maestria)">
-                <i class="fa-solid fa-arrow-right"></i>
+            <button onclick="app.openModal()" class="w-full sm:w-auto shrink-0 bg-gluon-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 font-medium">
+                <i class="fa-solid fa-plus"></i> Novo Item
             </button>
         </div>
+
+        <div id="loader" class="hidden flex-1 flex flex-col items-center justify-center text-slate-500 gap-3">
+            <i class="fa-solid fa-circle-notch fa-spin text-3xl text-gluon-primary"></i>
+            <p>Sincronizando cofre...</p>
+        </div>
+
+        <!-- Render Target -->
+        <div id="viewContainer" class="flex-1 transition-all min-h-0 relative"></div>
     </main>
 
-    <!-- Modal: Adicionar Card Unitário -->
-    <div id="singleModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
-        <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg p-0 transform scale-95 transition-transform duration-300 overflow-hidden" id="singleModalContent">
-            <div class="p-5 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
-                <h3 class="text-lg font-semibold text-white flex items-center gap-2">
-                    <i class="fa-solid fa-plus text-gluon-primary"></i> Adicionar Flashcard
+    <!-- BARRA DE ROLAGEM CUSTOMIZADA -->
+    <div id="gluon-custom-scrollbar" class="hidden md:hidden fixed bottom-0 left-0 right-0 h-10 bg-[#0f172a] border-t border-slate-800 z-[60] flex items-center px-1">
+        <div id="gluon-scroll-thumb" class="h-6 bg-gluon-primary rounded-full cursor-grab active:cursor-grabbing active:bg-blue-400 hover:bg-blue-400 transition-colors will-change-transform shadow-lg"></div>
+    </div>
+
+    <!-- Modal com Abas para Criação/Edição -->
+    <div id="dirModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
+        <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-0 transform scale-95 transition-transform duration-300 overflow-hidden flex flex-col max-h-[90vh]" id="dirModalContent">
+            
+            <div class="p-5 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
+                <h3 class="text-xl font-semibold text-white flex items-center gap-2" id="modalTitle">
+                    <i class="fa-solid fa-folder-plus text-gluon-primary"></i> <span>Configuração</span>
                 </h3>
-                <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+                <button type="button" onclick="app.closeModal()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <form onsubmit="flashcardApp.saveSingleCard(event)" class="p-6 space-y-5">
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-2">Frente (Pergunta / Termo)</label>
-                    <textarea id="singleFront" rows="3" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors resize-none"></textarea>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-blue-300 mb-2">Verso (Resposta / Definição)</label>
-                    <textarea id="singleBack" rows="4" class="w-full bg-slate-900 border border-blue-500/50 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors resize-none"></textarea>
-                </div>
-                
-                <div class="flex flex-col sm:flex-row justify-between items-center pt-2 border-t border-slate-700 mt-6 gap-3">
-                    <button type="button" id="btnTranslate" onclick="flashcardApp.translateCard()" class="w-full sm:w-auto px-4 py-2.5 rounded-lg text-fuchsia-400 hover:bg-fuchsia-400/10 hover:text-fuchsia-300 transition-colors font-medium flex items-center justify-center gap-2 text-sm border border-fuchsia-400/20">
-                        <i class="fa-solid fa-language"></i> Traduzir via IA
-                    </button>
+
+            <div class="flex border-b border-slate-700 bg-slate-900/30">
+                <button type="button" onclick="app.switchModalTab('geral')" id="tab-btn-geral" class="flex-1 py-3 text-sm font-medium border-b-2 border-gluon-primary text-white transition-colors">Geral</button>
+                <button type="button" onclick="app.switchModalTab('apar')" id="tab-btn-apar" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Aparência</button>
+                <button type="button" onclick="app.switchModalTab('recor')" id="tab-btn-recor" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Repetição</button>
+            </div>
+
+            <form id="dirForm" onsubmit="app.saveDirectory(event)" class="flex flex-col flex-1 overflow-hidden">
+                <input type="hidden" id="dirId">
+                <input type="hidden" id="dirParentId">
+
+                <div id="tab-geral" class="p-6 overflow-y-auto flex-1">
                     
-                    <div class="flex gap-3 w-full sm:w-auto">
-                        <button type="button" onclick="flashcardApp.closeModals()" class="flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
-                        <button type="submit" id="btnSaveSingle" class="flex-1 sm:flex-none px-5 py-2.5 bg-gluon-primary hover:bg-blue-600 text-white rounded-lg shadow-lg font-medium transition-all flex items-center justify-center gap-2">
+                    <div id="typeSelectorContainer" class="mb-5">
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Tipo de Item</label>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <label class="cursor-pointer" onclick="app.handleTypeChange(0)">
+                                <input type="radio" name="itemType" value="0" class="peer hidden type-radio" checked>
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-folder block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Pasta</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer" onclick="app.handleTypeChange(1)">
+                                <input type="radio" name="itemType" value="1" class="peer hidden type-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-file-code block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Cód. Fonte</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer" onclick="app.handleTypeChange(2)">
+                                <input type="radio" name="itemType" value="2" class="peer hidden type-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-calendar-days block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Agenda</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer" onclick="app.handleTypeChange(4)">
+                                <input type="radio" name="itemType" value="4" class="peer hidden type-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-layer-group block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Flashcards</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer" onclick="app.handleTypeChange(5)">
+                                <input type="radio" name="itemType" value="5" class="peer hidden type-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-list-check block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Controle</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="dirNameContainer" class="mb-5">
+                        <label class="block text-sm font-medium text-slate-300 mb-1" id="nameLabel">Nome da Pasta</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-pen absolute left-3 top-3.5 text-slate-500 text-sm"></i>
+                            <textarea id="dirName" rows="1" autocomplete="off" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 pl-9 pr-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-all resize-none overflow-hidden min-h-[44px]"></textarea>
+                        </div>
+                    </div>
+
+                    <div id="folderSettingsGroup">
+                        <div class="mb-5">
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Padrão de Visualização Interna</label>
+                            <div class="grid grid-cols-3 gap-2 sm:gap-3">
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="dirViewMode" value="grid" class="peer hidden view-radio" checked>
+                                    <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-border-all block text-xl mb-1"></i><span class="text-xs font-medium">Grid</span></div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="dirViewMode" value="list" class="peer hidden view-radio">
+                                    <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-list-ul block text-xl mb-1"></i><span class="text-xs font-medium">Lista</span></div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="dirViewMode" value="kanban" class="peer hidden view-radio">
+                                    <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-columns block text-xl mb-1"></i><span class="text-xs font-medium">Kanban</span></div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Adicionar novos itens no:</label>
+                            <div class="grid grid-cols-2 gap-2 sm:gap-3">
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="dirItemPosition" value="start" class="peer hidden view-radio">
+                                    <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
+                                        <i class="fa-solid fa-arrow-up block text-xl mb-1"></i><span class="text-xs font-medium">Início</span>
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="dirItemPosition" value="end" class="peer hidden view-radio" checked>
+                                    <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
+                                        <i class="fa-solid fa-arrow-down block text-xl mb-1"></i><span class="text-xs font-medium">Final</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab-apar" class="hidden p-6 overflow-y-auto flex-1 space-y-5">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1"><i class="fa-regular fa-image mr-1"></i> Imagem de Capa (Opcional)</label>
+                        <input type="file" id="dirCoverFile" accept="image/*" class="w-full text-sm text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 transition-all cursor-pointer bg-slate-800 border border-slate-600 rounded-lg">
+                        <input type="hidden" id="dirCoverBase64">
+                        <div id="coverPreview" class="mt-3 hidden w-full h-24 rounded-lg bg-cover bg-center border border-slate-600 shadow-inner"></div>
+                        <button type="button" id="btnRemoveCover" class="hidden mt-2 text-xs text-red-400 hover:text-red-300 flex items-center gap-1"><i class="fa-solid fa-trash"></i> Remover capa</button>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2"><i class="fa-solid fa-palette mr-1"></i> Cores do Ícone (Gradient)</label>
+                        <div class="flex gap-4 items-center">
+                            <div class="flex-1">
+                                <span class="text-xs text-slate-500 block mb-1">Início</span>
+                                <input type="color" id="dirColorFrom" value="#3b82f6" class="bg-slate-800 border border-slate-600">
+                            </div>
+                            <i class="fa-solid fa-arrow-right text-slate-500 mt-4"></i>
+                            <div class="flex-1">
+                                <span class="text-xs text-slate-500 block mb-1">Fim</span>
+                                <input type="color" id="dirColorTo" value="#6366f1" class="bg-slate-800 border border-slate-600">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="iconPickerContainer">
+                        <label class="block text-sm font-medium text-slate-300 mb-2"><i class="fa-solid fa-icons mr-1"></i> Selecionar Ícone</label>
+                        <div class="grid grid-cols-5 gap-2 max-h-40 overflow-y-auto no-scrollbar p-1" id="icon-picker"></div>
+                    </div>
+                </div>
+
+                <!-- Aba de Repetição -->
+                <div id="tab-recor" class="hidden p-6 overflow-y-auto flex-1 space-y-5">
+                    <label class="flex items-center gap-2 cursor-pointer mb-2">
+                        <input type="checkbox" id="is_recurring" class="rounded border-slate-600 bg-slate-800 text-gluon-primary focus:ring-gluon-primary transition-colors" onchange="app.toggleRecurrenceFields()">
+                        <span class="text-sm font-medium text-slate-300">Ativar Repetição Automática</span>
+                    </label>
+                    
+                    <div id="recurrence_fields" class="hidden space-y-4 border-t border-slate-700 pt-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Frequência</label>
+                            <select id="rec_type" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors" onchange="app.handleRecurrenceTypeChange()">
+                                <option value="daily">Diariamente</option>
+                                <option value="weekly">Semanalmente</option>
+                                <option value="monthly">Mensalmente</option>
+                                <option value="yearly">Anualmente</option>
+                                <option value="custom">Datas Específicas</option>
+                            </select>
+                        </div>
+                        
+                        <div id="rec_interval_container">
+                            <label class="block text-sm font-medium text-slate-300 mb-1">A cada (intervalo)</label>
+                            <input type="number" id="rec_interval" min="1" value="1" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors">
+                        </div>
+                        
+                        <div id="rec_custom_container" class="hidden">
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Datas (formato JSON)</label>
+                            <input type="text" id="rec_custom" placeholder='Ex: ["2026-03-01", "2026-04-05"]' class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors font-mono text-sm">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Parar de repetir em (Opcional)</label>
+                            <input type="date" id="rec_end" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-5 border-t border-slate-700 bg-slate-800/50 flex flex-col-reverse sm:flex-row justify-between items-center gap-3 shrink-0">
+                    <div class="w-full sm:w-auto">
+                        <button type="button" id="btnDeleteDir" onclick="app.deleteFromModal()" class="hidden w-full text-red-400 hover:text-white hover:bg-red-500/20 px-3 py-2 rounded-lg transition-colors flex justify-center items-center gap-2 text-sm">
+                            <i class="fa-solid fa-trash"></i> <span>Excluir</span>
+                        </button>
+                    </div>
+                    <div class="flex gap-2 w-full sm:w-auto justify-end">
+                        <button type="button" onclick="app.closeModal()" class="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors text-sm font-medium">Cancelar</button>
+                        <button type="submit" id="btnSaveDir" class="px-4 py-2 bg-gluon-primary hover:bg-blue-600 text-white rounded-lg shadow-lg flex items-center gap-2 text-sm font-medium transition-all">
                             <i class="fa-solid fa-check"></i> Salvar
                         </button>
                     </div>
@@ -260,59 +365,279 @@
         </div>
     </div>
 
-    <!-- Modal: Importar em Massa (Excel) -->
-    <div id="bulkModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
-        <div class="bg-gluon-secondary border border-emerald-900/50 rounded-xl shadow-2xl w-full max-w-2xl p-0 transform scale-95 transition-transform duration-300 overflow-hidden" id="bulkModalContent">
-            <div class="p-5 border-b border-emerald-900/50 bg-emerald-900/20 flex justify-between items-center">
-                <h3 class="text-lg font-semibold text-emerald-400 flex items-center gap-2">
-                    <i class="fa-solid fa-file-excel"></i> Importar do Excel / Tabela
-                </h3>
-                <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <form onsubmit="flashcardApp.saveBulkCards(event)" class="p-6 flex flex-col h-[60vh] sm:h-[500px]">
-                <div class="mb-4 bg-slate-900/50 p-3 rounded-lg border border-slate-700 text-sm text-slate-300">
-                    <p class="font-medium text-white mb-1"><i class="fa-solid fa-circle-info text-gluon-primary mr-1"></i> Como usar:</p>
-                    <p>No Excel (ou Planilhas do Google), crie duas colunas. A primeira coluna será a <strong>Frente</strong> e a segunda o <strong>Verso</strong>. Copie as linhas e cole na caixa abaixo.</p>
-                </div>
-                
-                <div class="flex-1 flex flex-col relative">
-                    <textarea id="bulkData" required placeholder="Cole os dados do Excel aqui...&#10;&#10;Exemplo:&#10;Gato    Cat&#10;Cachorro    Dog" class="flex-1 w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors resize-none font-mono text-sm whitespace-pre"></textarea>
-                </div>
-
-                <div class="flex justify-between items-center pt-5 border-t border-slate-700 mt-5 shrink-0">
-                    <span id="bulkCount" class="text-sm text-emerald-400 font-medium">0 cards detectados</span>
-                    <div class="flex gap-3">
-                        <button type="button" onclick="flashcardApp.closeModals()" class="px-5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
-                        <button type="submit" id="btnSaveBulk" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow-lg font-medium transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                            <i class="fa-solid fa-cloud-arrow-up"></i> Importar Cards
-                        </button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <script>
-        const flashcardApp = {
-            deckId: null,
-            cards: [],
-            deckPercentage: 0,
-            currentIndex: 0,
-            isFlipped: false,
-            scoredThisSession: new Set(), // Impede farmar pontos infinitos segurando a seta na mesma sessão
+        const app = {
+            state: {
+                path: [{ id: null, name: 'Meu Cofre', view: 'grid', type: 0 }],
+                directories: [],
+                directoryCache: new Map(), 
+                rootPrefs: { view: 'grid', new_item_position: 'end', copied_directory_id: null }, 
+                isLoading: false,
+                reorderMode: false,
+                availableIcons: [
+                    'fa-folder', 'fa-folder-open', 'fa-file-code', 'fa-calendar-days', 'fa-layer-group', 'fa-door-open', 'fa-clock', 'fa-file-lines', 'fa-file-image', 'fa-file-pdf', 'fa-star', 'fa-heart', 'fa-image', 'fa-music', 'fa-video', 
+                    'fa-code', 'fa-terminal', 'fa-database', 'fa-server', 'fa-lock', 'fa-vault', 'fa-book', 'fa-briefcase', 'fa-globe', 'fa-list-check'
+                ]
+            },
+            
+            sortableInstances: [],
+
+            customScroll: {
+                active: false,
+                isDragging: false,
+                dragRAF: null,
+                syncRAF: null,
+                
+                init() {
+                    if(window.innerWidth < 768) return; 
+                    this.track = document.getElementById('gluon-custom-scrollbar');
+                    this.thumb = document.getElementById('gluon-scroll-thumb');
+                    this.wrapper = document.getElementById('sortable-wrapper');
+                    
+                    if(!this.track || !this.thumb || !this.wrapper) return;
+
+                    this.active = true;
+                    this.track.classList.remove('hidden', 'md:hidden');
+                    this.track.classList.add('md:flex');
+                    this.wrapper.classList.add('no-scrollbar');
+
+                    this.update = this.update.bind(this);
+                    this.sync = this.sync.bind(this);
+                    this.startDrag = this.startDrag.bind(this);
+                    this.onDrag = this.onDrag.bind(this);
+                    this.stopDrag = this.stopDrag.bind(this);
+                    this.trackClick = this.trackClick.bind(this);
+
+                    this.wrapper.addEventListener('scroll', this.sync, { passive: true });
+                    window.addEventListener('resize', this.update, { passive: true });
+                    this.thumb.addEventListener('mousedown', this.startDrag);
+                    this.track.addEventListener('mousedown', this.trackClick);
+                    
+                    if(window.ResizeObserver) {
+                        this.resizeObserver = new ResizeObserver(this.update);
+                        this.resizeObserver.observe(this.wrapper);
+                    }
+
+                    setTimeout(this.update, 100);
+                },
+
+                destroy() {
+                    this.active = false;
+                    if(this.dragRAF) cancelAnimationFrame(this.dragRAF);
+                    if(this.syncRAF) cancelAnimationFrame(this.syncRAF);
+                    
+                    if(this.track) {
+                        this.track.classList.add('hidden', 'md:hidden');
+                        this.track.classList.remove('md:flex');
+                    }
+                    if(this.wrapper) {
+                        this.wrapper.removeEventListener('scroll', this.sync);
+                        this.wrapper.classList.remove('no-scrollbar');
+                    }
+                    if(this.resizeObserver && this.wrapper) this.resizeObserver.unobserve(this.wrapper);
+                    window.removeEventListener('resize', this.update);
+                    if(this.thumb) this.thumb.removeEventListener('mousedown', this.startDrag);
+                    if(this.track) this.track.removeEventListener('mousedown', this.trackClick);
+                },
+
+                update() {
+                    if(!this.active || !this.wrapper) return;
+                    const { scrollWidth, clientWidth } = this.wrapper;
+                    
+                    if (scrollWidth <= clientWidth + 2) {
+                        this.track.style.display = 'none';
+                        return;
+                    }
+                    this.track.style.display = '';
+                    
+                    const ratio = clientWidth / scrollWidth;
+                    const thumbW = Math.max(80, clientWidth * ratio); 
+                    this.thumb.style.width = `${thumbW}px`;
+                    
+                    this.sync();
+                },
+
+                sync() {
+                    if(!this.active || this.isDragging || !this.wrapper) return;
+                    if(this.syncRAF) cancelAnimationFrame(this.syncRAF);
+                    
+                    this.syncRAF = requestAnimationFrame(() => {
+                        const { scrollWidth, clientWidth, scrollLeft } = this.wrapper;
+                        const trackW = this.track.clientWidth;
+                        const thumbW = parseFloat(this.thumb.style.width);
+                        
+                        const maxScroll = scrollWidth - clientWidth;
+                        if(maxScroll <= 0) return;
+
+                        const maxThumbLeft = trackW - thumbW;
+                        const scrollRatio = scrollLeft / maxScroll;
+                        
+                        this.thumb.style.transform = `translate3d(${scrollRatio * maxThumbLeft}px, 0, 0)`;
+                    });
+                },
+
+                startDrag(e) {
+                    e.preventDefault(); e.stopPropagation();
+                    this.isDragging = true;
+                    this.startX = e.pageX;
+                    this.startScroll = this.wrapper.scrollLeft;
+                    document.body.style.userSelect = 'none';
+                    this.wrapper.classList.remove('snap-x');
+                    this.wrapper.style.scrollBehavior = 'auto';
+                    document.addEventListener('mousemove', this.onDrag, { passive: false });
+                    document.addEventListener('mouseup', this.stopDrag);
+                },
+
+                onDrag(e) {
+                    if(!this.isDragging) return;
+                    this.currentX = e.pageX; 
+                    if(this.dragRAF) return; 
+                    this.dragRAF = requestAnimationFrame(() => {
+                        const dx = this.currentX - this.startX;
+                        const trackW = this.track.clientWidth;
+                        const thumbW = parseFloat(this.thumb.style.width);
+                        const maxThumbLeft = trackW - thumbW;
+                        const maxScroll = this.wrapper.scrollWidth - this.wrapper.clientWidth;
+                        const scrollDx = (dx / maxThumbLeft) * maxScroll;
+                        this.wrapper.scrollLeft = this.startScroll + scrollDx;
+                        const newLeft = Math.max(0, Math.min(maxThumbLeft, (this.wrapper.scrollLeft / maxScroll) * maxThumbLeft));
+                        this.thumb.style.transform = `translate3d(${newLeft}px, 0, 0)`;
+                        this.dragRAF = null; 
+                    });
+                },
+
+                stopDrag() {
+                    this.isDragging = false;
+                    document.body.style.userSelect = '';
+                    this.wrapper.classList.add('snap-x');
+                    this.wrapper.style.scrollBehavior = '';
+                    document.removeEventListener('mousemove', this.onDrag);
+                    document.removeEventListener('mouseup', this.stopDrag);
+                },
+
+                trackClick(e) {
+                    if(e.target === this.thumb) return;
+                    const trackRect = this.track.getBoundingClientRect();
+                    const clickX = e.clientX - trackRect.left;
+                    const thumbW = parseFloat(this.thumb.style.width);
+                    const trackW = this.track.clientWidth;
+                    const maxThumbLeft = trackW - thumbW;
+                    const maxScroll = this.wrapper.scrollWidth - this.wrapper.clientWidth;
+                    let newThumbLeft = clickX - (thumbW / 2);
+                    newThumbLeft = Math.max(0, Math.min(maxThumbLeft, newThumbLeft));
+                    const newScroll = (newThumbLeft / maxThumbLeft) * maxScroll;
+                    this.wrapper.scrollTo({ left: newScroll, behavior: 'smooth' });
+                }
+            },
+
+            escapeHTML(str) {
+                if (!str) return '';
+                return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
+            },
+
+            updateHistoryState(id, portalId = null) {
+                let url = window.location.pathname;
+                if (portalId) {
+                    url += `?id=${portalId}&target_id=${id}&portal=1`;
+                } else if (id !== null) {
+                    url += `?id=${id}`;
+                }
+                history.pushState({ path: JSON.parse(JSON.stringify(this.state.path)) }, '', url);
+            },
 
             async init() {
+                this.renderIconPicker();
+                this.setLoading(true);
+                await this.fetchUserPrefs(); 
+                
                 const urlParams = new URLSearchParams(window.location.search);
-                this.deckId = urlParams.get('id');
+                const startId = urlParams.get('id');
+                
+                if (startId) {
+                    const pathRes = await this.api('directories', 'get_path', { id: startId });
+                    if (pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
+                        const targetDir = pathRes.data[pathRes.data.length - 1];
+                        
+                        if (targetDir.type === 1) {
+                            window.location.href = `/editor?id=${targetDir.id}`;
+                            return;
+                        } else if (targetDir.type === 2) {
+                            window.location.href = `/schedule?id=${targetDir.id}`;
+                            return;
+                        } else if (targetDir.type === 4) {
+                            window.location.href = `/flashcards?id=${targetDir.id}`;
+                            return;
+                        }
 
-                if (!this.deckId) {
-                    window.location.href = '/dashboard';
-                    return;
+                        this.state.path = [{ id: null, name: 'Meu Cofre', view: this.state.rootPrefs.view, type: 0 }, ...pathRes.data];
+                    }
                 }
 
-                this.setupKeyboardListeners();
-                this.setupBulkListener();
-                await this.loadDeck();
+                history.replaceState({ path: JSON.parse(JSON.stringify(this.state.path)) }, '', window.location.href);
+
+                window.addEventListener('popstate', async (event) => {
+                    if (event.state && event.state.path) {
+                        this.state.path = event.state.path;
+                        if (this.state.reorderMode) this.toggleReorderMode();
+                        await this.fetchDirectories();
+                    } else {
+                        window.location.reload();
+                    }
+                });
+
+                this.updateTopButtons();
+                await this.fetchDirectories();
+                this.setupEventListeners();
+            },
+
+            setupEventListeners() {
+                document.addEventListener('click', (event) => {
+                    const menu = document.getElementById('mobileViewMenu');
+                    const trigger = document.getElementById('btn-mobile-menu-trigger');
+                    if (menu && !menu.classList.contains('hidden') && !menu.contains(event.target) && !trigger.contains(event.target)) {
+                        menu.classList.add('hidden');
+                    }
+                });
+
+                document.getElementById('dirCoverFile').addEventListener('change', (e) => this.handleCoverUpload(e));
+                document.getElementById('btnRemoveCover').addEventListener('click', () => this.removeCover());
+                
+                const dirNameInput = document.getElementById('dirName');
+                if (dirNameInput) {
+                    dirNameInput.addEventListener('input', function() {
+                        this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; 
+                    });
+                    dirNameInput.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); app.saveDirectory(e); }
+                    });
+                }
+            },
+
+            handleTypeChange(typeValue) {
+                const folderSettings = document.getElementById('folderSettingsGroup');
+                const nameLabel = document.getElementById('nameLabel');
+                
+                if (typeValue === 0) {
+                    folderSettings.style.display = 'block';
+                    nameLabel.innerText = 'Nome da Pasta';
+                    this.autoChangeIcon('fa-folder');
+                } else if (typeValue === 1) {
+                    folderSettings.style.display = 'none';
+                    nameLabel.innerText = 'Nome do Arquivo (Ex: script.js)';
+                    this.autoChangeIcon('fa-file-code');
+                } else if (typeValue === 2) {
+                    folderSettings.style.display = 'none';
+                    nameLabel.innerText = 'Nome da Agenda / Cronograma';
+                    this.autoChangeIcon('fa-calendar-days');
+                } else if (typeValue === 4) {
+                    folderSettings.style.display = 'none';
+                    nameLabel.innerText = 'Nome do Deck (Flashcards)';
+                    this.autoChangeIcon('fa-layer-group');
+                } else if (typeValue === 5) {
+                    folderSettings.style.display = 'none';
+                    nameLabel.innerText = 'Nome da Lista de Controle';
+                    this.autoChangeIcon('fa-list-check');
+                }
             },
 
             showToast(message, type = 'success') {
@@ -326,375 +651,830 @@
                 setTimeout(() => { toast.classList.remove('translate-y-0', 'opacity-100'); toast.classList.add('translate-y-10', 'opacity-0'); }, 3000);
             },
 
-            async api(action, payload = {}) {
+            async copyCurrentDirectory() {
+                const currentId = this.getCurrentParentId();
+                if (currentId === null) return this.showToast("Cofre Raiz não pode ser selecionado desta forma.", "error");
+
+                const response = await this.api('user', 'copy_directory', { dir_id: currentId });
+                if (response && response.status === 'success') {
+                    this.state.rootPrefs.copied_directory_id = currentId; 
+                    this.updateTopButtons(); 
+                    this.showToast(response.message, 'success');
+                } else this.showToast(response ? response.message : 'Erro ao copiar', 'error');
+            },
+
+            async pasteDirectory() {
+                const targetParentId = this.getCurrentParentId(); 
+                const response = await this.api('directories', 'paste', { target_parent_id: targetParentId });
+                if (response && response.status === 'success') {
+                    this.showToast(response.message, 'success');
+                    await this.fetchDirectories(); 
+                } else this.showToast(response ? response.message : 'Erro ao colar', 'error');
+            },
+
+            async moveDirectory() {
+                const targetParentId = this.getCurrentParentId(); 
+                const response = await this.api('directories', 'move', { target_parent_id: targetParentId });
+                if (response && response.status === 'success') {
+                    this.state.rootPrefs.copied_directory_id = null; 
+                    this.updateTopButtons(); 
+                    this.showToast(response.message, 'success');
+                    await this.fetchDirectories(); 
+                } else this.showToast(response ? response.message : 'Erro ao mover', 'error');
+            },
+
+            async createPortal() {
+                const targetParentId = this.getCurrentParentId();
+                const response = await this.api('directories', 'create_portal', { target_parent_id: targetParentId });
+                if (response && response.status === 'success') {
+                    this.state.rootPrefs.copied_directory_id = null;
+                    this.updateTopButtons();
+                    this.showToast(response.message, 'success');
+                    await this.fetchDirectories();
+                } else {
+                    this.showToast(response ? response.message : 'Erro ao criar portal', 'error');
+                }
+            },
+
+            handleCoverUpload(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 600; const MAX_HEIGHT = 400;
+                        let width = img.width; let height = img.height;
+                        if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
+                        else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
+                        canvas.width = width; canvas.height = height;
+                        const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
+                        const base64 = canvas.toDataURL('image/jpeg', 0.6);
+                        document.getElementById('dirCoverBase64').value = base64;
+                        const preview = document.getElementById('coverPreview');
+                        preview.style.backgroundImage = `url('${base64}')`;
+                        preview.classList.remove('hidden');
+                        document.getElementById('btnRemoveCover').classList.remove('hidden');
+                    }
+                    img.src = event.target.result;
+                }
+                reader.readAsDataURL(file);
+            },
+
+            removeCover() {
+                document.getElementById('dirCoverFile').value = ''; document.getElementById('dirCoverBase64').value = '';
+                const preview = document.getElementById('coverPreview');
+                if (preview) { preview.classList.add('hidden'); preview.style.backgroundImage = 'none'; }
+                const btn = document.getElementById('btnRemoveCover'); if (btn) btn.classList.add('hidden');
+            },
+
+            renderIconPicker() {
+                const container = document.getElementById('icon-picker');
+                container.innerHTML = this.state.availableIcons.map(icon => `
+                    <label class="cursor-pointer">
+                        <input type="radio" name="dirIcon" value="${icon}" class="peer hidden icon-radio" ${icon === 'fa-folder' ? 'checked' : ''}>
+                        <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 flex items-center justify-center transition-all hover:bg-slate-700 hover:text-white h-10">
+                            <i class="fa-solid ${icon} text-lg"></i>
+                        </div>
+                    </label>
+                `).join('');
+            },
+
+            autoChangeIcon(iconClass) {
+                const radios = document.getElementsByName('dirIcon');
+                for(let i=0; i<radios.length; i++) { if(radios[i].value === iconClass) radios[i].checked = true; }
+            },
+
+            getCurrentParentId() { return this.state.path[this.state.path.length - 1].id; },
+            getCurrentView() { return this.state.path[this.state.path.length - 1].view; },
+
+            async api(endpoint, action, payload = {}) {
                 payload.action = action;
                 try {
-                    const res = await fetch(`/api/flashcards`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    const res = await fetch(`/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     if (res.status === 401) window.location.href = '/'; 
                     const data = await res.json();
                     if (data.status !== 'success') throw new Error(data.message);
                     return data;
-                } catch (err) { console.error(err); this.showToast(err.message || 'Erro de conexão.', 'error'); return null; }
+                } catch (err) { console.error('Erro:', err.message); return null; }
             },
 
-            async loadDeck() {
-                document.getElementById('loader').style.display = 'flex';
-                document.getElementById('emptyState').style.display = 'none';
-                document.getElementById('cardScene').style.display = 'none';
-                document.getElementById('controls').style.display = 'none';
+            async fetchUserPrefs() {
+                const response = await this.api('user', 'get_prefs');
+                if (response && response.data) {
+                    this.state.rootPrefs = {
+                        view: response.data.root_view || 'grid',
+                        new_item_position: response.data.root_new_item_position || 'end',
+                        copied_directory_id: response.data.copied_directory_id 
+                    };
+                    this.state.path[0].view = this.state.rootPrefs.view;
+                }
+            },
 
-                const res = await this.api('fetch', { deck_id: this.deckId });
-                document.getElementById('loader').style.display = 'none';
+            async fetchDirectories() {
+                this.setLoading(true);
+                this.renderBreadcrumbs();
+                this.updateTopButtons();
+                const response = await this.api('directories', 'fetch', { parent_id: this.getCurrentParentId() });
+                if (response) { 
+                    this.state.directories = response.data; 
+                    response.data.forEach(d => this.state.directoryCache.set(Number(d.id), d));
+                    this.render(); 
+                }
+                this.setLoading(false);
+            },
 
-                if (res) {
-                    document.getElementById('deckName').innerText = res.deck_name || 'Flashcards';
-                    this.cards = res.data || [];
-                    this.deckPercentage = res.deck_percentage || 0;
+            async enterDirectoryOrFile(id) {
+                if(this.state.reorderMode) return; 
+                const item = this.state.directoryCache.get(Number(id));
+                if(!item) return;
+
+                if (item.type === 1) {
+                    window.location.href = `/editor?id=${id}`;
+                } else if (item.type === 2) {
+                    window.location.href = `/schedule?id=${id}`;
+                } else if (item.type === 4) {
+                    window.location.href = `/flashcards?id=${id}`;
+                } else if (item.type === 5) {
+                    window.location.href = `/adjacency?id=${id}`;
+                } else if (item.type === 3) {
+                    if (!item.target_id) return this.showToast('Portal corrompido: Destino não encontrado.', 'error');
+                    this.setLoading(true);
                     
-                    if (this.cards.length === 0) {
-                        document.getElementById('emptyState').style.display = 'flex';
-                        document.getElementById('deckMasteryBadge').classList.add('hidden');
-                        document.getElementById('deckProgressBar').style.width = '0%';
-                    } else {
-                        if(this.currentIndex >= this.cards.length) this.currentIndex = 0;
-                        document.getElementById('cardScene').style.display = 'block';
-                        document.getElementById('controls').style.display = 'flex';
+                    const pathRes = await this.api('directories', 'get_path', { id: item.target_id });
+                    
+                    if(pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
+                        const targetDir = pathRes.data[pathRes.data.length - 1];
                         
-                        this.updateGlobalProgressUI();
-                        this.renderCurrentCard();
-                    }
-                }
-            },
+                        if (targetDir.type === 1) {
+                            window.location.href = `/editor?id=${targetDir.id}`;
+                            return;
+                        } else if (targetDir.type === 2) {
+                            window.location.href = `/schedule?id=${targetDir.id}`;
+                            return;
+                        } else if (targetDir.type === 4) {
+                            window.location.href = `/flashcards?id=${targetDir.id}`;
+                            return;
+                        }
 
-            escapeHTML(str) {
-                if (!str) return '';
-                return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
-            },
-
-            updateGlobalProgressUI() {
-                const badge = document.getElementById('deckMasteryBadge');
-                badge.classList.remove('hidden');
-                badge.classList.add('flex');
-                
-                document.getElementById('deckPercentage').innerText = `${this.deckPercentage}%`;
-                document.getElementById('deckProgressBar').style.width = `${this.deckPercentage}%`;
-            },
-
-            renderCurrentCard() {
-                if (this.cards.length === 0) return;
-                
-                const card = this.cards[this.currentIndex];
-                document.getElementById('cardFrontText').innerHTML = this.escapeHTML(card.front);
-                document.getElementById('cardBackText').innerHTML = this.escapeHTML(card.back);
-                
-                document.getElementById('cardCounter').innerText = `${this.currentIndex + 1} / ${this.cards.length}`;
-                
-                // Renderizar os pontinhos de maestria (score de 0 a 20, 10 bolinhas)
-                let dotsHtml = '';
-                for (let i = 0; i < 10; i++) {
-                    let fillClass = '';
-                    if (card.score >= (i + 1) * 2) {
-                        fillClass = 'filled'; // Preenchida inteira
-                    } else if (card.score === (i * 2) + 1) {
-                        fillClass = 'half-filled'; // Metade preenchida
-                    }
-                    dotsHtml += `<div class="score-dot ${fillClass}"></div>`;
-                }
-                document.getElementById('frontScoreDots').innerHTML = dotsHtml;
-                document.getElementById('backScoreDots').innerHTML = dotsHtml;
-
-                // Força voltar para a frente se estiver no verso
-                if (this.isFlipped) {
-                    this.isFlipped = false;
-                    document.getElementById('flashcard').classList.remove('is-flipped');
-                }
-
-                // Atualiza estado dos botões
-                document.getElementById('btnPrev').disabled = this.currentIndex === 0;
-                document.getElementById('btnNext').disabled = this.currentIndex === this.cards.length - 1;
-            },
-
-            flipCard() {
-                this.isFlipped = !this.isFlipped;
-                const cardEl = document.getElementById('flashcard');
-                if (this.isFlipped) {
-                    cardEl.classList.add('is-flipped');
-                } else {
-                    cardEl.classList.remove('is-flipped');
-                }
-            },
-
-            nextCard() {
-                if (this.cards.length > 0) {
-                    this.registerScore(this.cards[this.currentIndex]);
-                }
-
-                if (this.currentIndex < this.cards.length - 1) {
-                    this.currentIndex++;
-                    this.renderCurrentCard();
-                }
-            },
-
-            prevCard() {
-                if (this.currentIndex > 0) {
-                    this.currentIndex--;
-                    this.renderCurrentCard();
-                }
-            },
-
-            // Lógica Otimista para Pontuação (Garante UI Rápida)
-            registerScore(card) {
-                // Impede que o usuário fique voltando e avançando para farmar 20 pontos de uma vez.
-                // Requer recarregar a página para ganhar mais pontos no mesmo card.
-                if (card.score >= 20 || this.scoredThisSession.has(card.id)) return;
-                
-                this.scoredThisSession.add(card.id);
-                card.score++; // Atualiza UI Otimista
-                
-                // Recalcula progresso global Otimista
-                const maxPossible = this.cards.length * 20;
-                let currentTotal = this.cards.reduce((sum, c) => sum + c.score, 0);
-                this.deckPercentage = Math.round((currentTotal / maxPossible) * 100);
-                this.updateGlobalProgressUI();
-
-                // Envia para o servidor em background (não espera resposta para não travar UI)
-                this.api('update_score', { card_id: card.id }).catch(e => console.error("Score não salvo", e));
-            },
-
-            setupKeyboardListeners() {
-                document.addEventListener('keydown', (e) => {
-                    if (!document.getElementById('singleModal').classList.contains('hidden') || 
-                        !document.getElementById('bulkModal').classList.contains('hidden')) return;
-
-                    if (this.cards.length === 0) return;
-
-                    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'ArrowDown') {
-                        e.preventDefault();
-                        this.flipCard();
-                    } else if (e.code === 'ArrowRight') {
-                        this.nextCard();
-                    } else if (e.code === 'ArrowLeft') {
-                        this.prevCard();
-                    }
-                });
-            },
-
-            setupBulkListener() {
-                const textarea = document.getElementById('bulkData');
-                textarea.addEventListener('input', () => {
-                    const parsed = this.parseExcelData(textarea.value);
-                    const countEl = document.getElementById('bulkCount');
-                    const btnSave = document.getElementById('btnSaveBulk');
-                    
-                    countEl.innerText = `${parsed.length} cards detectados`;
-                    
-                    if (parsed.length > 0) {
-                        countEl.classList.remove('text-red-400');
-                        countEl.classList.add('text-emerald-400');
-                        btnSave.disabled = false;
-                    } else {
-                        countEl.classList.add('text-red-400');
-                        countEl.classList.remove('text-emerald-400');
-                        btnSave.disabled = true;
-                    }
-                });
-            },
-
-            parseExcelData(text) {
-                if (!text.trim()) return [];
-                const lines = text.split('\n');
-                const result = [];
-                
-                for (let i = 0; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if (!line) continue;
-                    
-                    const columns = line.split('\t');
-                    if (columns.length >= 2) {
-                        result.push({
-                            front: columns[0].trim(),
-                            back: columns[1].trim()
+                        this.state.path.push({ 
+                            id: targetDir.id, 
+                            name: item.name, 
+                            view: item.view, 
+                            type: 0 
                         });
+                        
+                        this.updateHistoryState(targetDir.id, item.id);
+                        
+                        if (this.state.reorderMode) this.toggleReorderMode();
+                        await this.fetchDirectories();
+                    } else {
+                        this.setLoading(false);
+                        this.showToast('Erro ao abrir portal. Destino não existe mais.', 'error');
+                    }
+                } else {
+                    this.state.path.push({ id: item.id, name: item.name, view: item.view, type: item.type });
+                    
+                    this.updateHistoryState(item.id);
+                    
+                    if (this.state.reorderMode) this.toggleReorderMode();
+                    await this.fetchDirectories();
+                }
+            },
+
+            async goUpTo(index) {
+                this.state.path = this.state.path.slice(0, index + 1);
+                const targetStep = this.state.path[this.state.path.length - 1];
+                
+                if (targetStep.id !== null) {
+                    if (targetStep.type === 1) {
+                        window.location.href = `/editor?id=${targetStep.id}`;
+                        return;
+                    } else if (targetStep.type === 2) {
+                        window.location.href = `/schedule?id=${targetStep.id}`;
+                        return;
+                    } else if (targetStep.type === 4) {
+                        window.location.href = `/flashcards?id=${targetStep.id}`;
+                        return;
                     }
                 }
-                return result;
+                
+                this.updateHistoryState(targetStep.id);
+
+                if (this.state.reorderMode) this.toggleReorderMode();
+                await this.fetchDirectories();
             },
 
-            openSingleModal() {
-                document.getElementById('singleFront').value = '';
-                document.getElementById('singleBack').value = '';
-                const modal = document.getElementById('singleModal');
-                const content = document.getElementById('singleModalContent');
-                modal.classList.remove('hidden'); modal.classList.add('flex');
-                setTimeout(() => { 
-                    modal.classList.remove('opacity-0'); 
-                    content.classList.remove('scale-95'); 
-                    document.getElementById('singleFront').focus();
-                }, 20);
+            renderBreadcrumbs() {
+                const container = document.getElementById('breadcrumbs');
+                container.innerHTML = this.state.path.map((step, index) => {
+                    const isLast = index === this.state.path.length - 1;
+                    const color = isLast ? 'text-white font-semibold' : 'text-slate-400 hover:text-gluon-primary transition-colors';
+                    const separator = isLast ? '' : ' <i class="fa-solid fa-chevron-right text-[10px] text-slate-600 mx-1"></i> ';
+                    return `<span class="inline" ${!isLast ? `onclick="app.goUpTo(${index})"` : ''}>
+                        <span class="${color} ${!isLast ? 'cursor-pointer hover:underline' : ''} transition-colors">
+                            ${index === 0 ? '<i class="fa-solid fa-vault mr-1"></i>' : ''}${this.escapeHTML(step.name)}
+                        </span>${separator}
+                    </span>`;
+                }).join('');
             },
 
-            openBulkModal() {
-                document.getElementById('bulkData').value = '';
-                document.getElementById('bulkCount').innerText = '0 cards detectados';
-                document.getElementById('btnSaveBulk').disabled = true;
-                const modal = document.getElementById('bulkModal');
-                const content = document.getElementById('bulkModalContent');
-                modal.classList.remove('hidden'); modal.classList.add('flex');
-                setTimeout(() => { 
-                    modal.classList.remove('opacity-0'); 
-                    content.classList.remove('scale-95'); 
-                    document.getElementById('bulkData').focus();
-                }, 20);
+            toggleMobileViewMenu() { document.getElementById('mobileViewMenu').classList.toggle('hidden'); },
+
+            async setViewMode(viewName) {
+                this.state.path[this.state.path.length - 1].view = viewName;
+                this.updateTopButtons();
+                this.render();
+                
+                history.replaceState({ path: JSON.parse(JSON.stringify(this.state.path)) }, '', window.location.href);
+
+                if (this.getCurrentParentId() === null) {
+                    this.state.rootPrefs.view = viewName;
+                    this.api('user', 'update_root_prefs', this.state.rootPrefs);
+                }
             },
 
-            closeModals() {
-                ['single', 'bulk'].forEach(prefix => {
-                    const modal = document.getElementById(`${prefix}Modal`);
-                    const content = document.getElementById(`${prefix}ModalContent`);
-                    if(!modal.classList.contains('hidden')) {
-                        modal.classList.add('opacity-0'); 
-                        content.classList.add('scale-95');
-                        setTimeout(() => { 
-                            modal.classList.add('hidden'); 
-                            modal.classList.remove('flex'); 
-                        }, 300);
+            toggleReorderMode() {
+                this.state.reorderMode = !this.state.reorderMode;
+                const btnDesk = document.getElementById('btn-reorder-desktop');
+                const btnMob = document.getElementById('btn-reorder-mobile');
+                const container = document.getElementById('viewContainer');
+                const wrapper = document.getElementById('sortable-wrapper');
+                const hint = document.getElementById('reorder-hint');
+
+                if(this.state.reorderMode) {
+                    btnDesk.classList.add('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20'); btnDesk.classList.remove('text-slate-400', 'hover:bg-slate-700');
+                    if(btnMob) { btnMob.classList.add('text-green-400', 'bg-slate-700/50'); btnMob.classList.remove('text-slate-300'); }
+                    container.classList.add('reorder-active'); if(wrapper) wrapper.classList.add('reorder-active'); hint.classList.remove('hidden');
+                } else {
+                    btnDesk.classList.remove('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20'); btnDesk.classList.add('text-slate-400', 'hover:bg-slate-700');
+                    if(btnMob) { btnMob.classList.remove('text-green-400', 'bg-slate-700/50'); btnMob.classList.add('text-slate-300'); }
+                    container.classList.remove('reorder-active'); if(wrapper) wrapper.classList.remove('reorder-active'); hint.classList.add('hidden');
+                }
+                this.initSortable();
+            },
+
+            initSortable() {
+                if (this.sortableInstances.length > 0) { this.sortableInstances.forEach(inst => inst.destroy()); this.sortableInstances = []; }
+                if (!this.state.reorderMode) return;
+                const wrapper = document.getElementById('sortable-wrapper');
+                const currentView = this.getCurrentView();
+
+                if (wrapper) {
+                    this.sortableInstances.push(new Sortable(wrapper, {
+                        animation: 250, delay: 150, delayOnTouchOnly: true, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', forceFallback: true, fallbackOnBody: true, scroll: true, scrollSensitivity: 80, scrollSpeed: 15,       
+                        direction: currentView === 'kanban' ? 'horizontal' : (currentView === 'list' ? 'vertical' : undefined),
+                        handle: currentView === 'kanban' ? '.kanban-col-handle' : undefined,
+                        onEnd: () => this.saveNewOrder()
+                    }));
+                }
+
+                if (currentView === 'kanban') {
+                    document.querySelectorAll('.kanban-scroll').forEach(col => {
+                        this.sortableInstances.push(new Sortable(col, {
+                            group: 'kanban-items', animation: 250, delay: 150, delayOnTouchOnly: true, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', forceFallback: true, fallbackOnBody: true, scroll: true, scrollSensitivity: 60, scrollSpeed: 15,
+                            onEnd: (evt) => {
+                                const toId = evt.to.getAttribute('data-parent-id');
+                                const fromId = evt.from.getAttribute('data-parent-id');
+                                this.saveInnerOrder(evt.to, toId);
+                                if (evt.to !== evt.from) this.saveInnerOrder(evt.from, fromId);
+                            }
+                        }));
+                    });
+                }
+            },
+
+            async saveNewOrder() {
+                const wrapper = document.getElementById('sortable-wrapper');
+                if (!wrapper) return;
+                const orderIds = Array.from(wrapper.children).map(item => item.getAttribute('data-id')).filter(id => id !== null);
+                this.state.directories = orderIds.map(id => this.state.directories.find(d => d.id == id)).filter(Boolean);
+                await this.api('directories', 'reorder', { order: orderIds });
+            },
+
+            async saveInnerOrder(columnEl, newParentId) {
+                if (!columnEl) return;
+                const orderIds = Array.from(columnEl.querySelectorAll('.kanban-item')).map(item => item.getAttribute('data-id')).filter(id => id !== null);
+                await this.api('directories', 'reorder', { order: orderIds, parent_id: newParentId ? parseInt(newParentId) : null });
+            },
+
+            updateTopButtons() {
+                const currentView = this.getCurrentView();
+                ['grid', 'list', 'kanban'].forEach(v => {
+                    const btn = document.getElementById(`btn-view-${v}`);
+                    if(btn) { btn.className = btn.className.replace(/text-slate-400|bg-slate-700|text-white/g, ''); btn.classList.add(v === currentView ? 'bg-slate-700' : 'text-slate-400'); if(v === currentView) btn.classList.add('text-white'); }
+                    const mBtn = document.getElementById(`btn-mobile-view-${v}`);
+                    if(mBtn) { mBtn.className = mBtn.className.replace(/text-slate-300|text-gluon-primary|bg-slate-700\/50/g, ''); mBtn.classList.add(v === currentView ? 'text-gluon-primary' : 'text-slate-300'); if(v === currentView) mBtn.classList.add('bg-slate-700/50'); }
+                });
+
+                const btnCopy = document.getElementById('btn-copy-dir');
+                if (btnCopy) {
+                    if (this.getCurrentParentId() === null) {
+                        btnCopy.classList.add('hidden'); btnCopy.classList.remove('flex');
+                    } else {
+                        btnCopy.classList.remove('hidden'); btnCopy.classList.add('flex');
+                    }
+                }
+
+                const btnPaste = document.getElementById('btn-paste-dir');
+                const btnMove = document.getElementById('btn-move-dir');
+                const btnPortal = document.getElementById('btn-create-portal');
+                
+                if (btnPaste && btnMove && btnPortal) {
+                    if (this.state.rootPrefs.copied_directory_id !== null && this.state.rootPrefs.copied_directory_id !== undefined) {
+                        btnPaste.classList.remove('hidden'); btnPaste.classList.add('flex');
+                        btnMove.classList.remove('hidden'); btnMove.classList.add('flex');
+                        btnPortal.classList.remove('hidden'); btnPortal.classList.add('flex');
+                    } else {
+                        btnPaste.classList.add('hidden'); btnPaste.classList.remove('flex');
+                        btnMove.classList.add('hidden'); btnMove.classList.remove('flex');
+                        btnPortal.classList.add('hidden'); btnPortal.classList.remove('flex');
+                    }
+                }
+            },
+
+            switchModalTab(tabName) {
+                const tabs = ['geral', 'apar', 'recor'];
+                tabs.forEach(t => {
+                    const tEl = document.getElementById(`tab-${t}`);
+                    const bEl = document.getElementById(`tab-btn-${t}`);
+                    if (tEl && bEl) {
+                        if (t === tabName) {
+                            tEl.classList.remove('hidden');
+                            bEl.classList.add('border-gluon-primary', 'text-white'); 
+                            bEl.classList.remove('border-transparent', 'text-slate-400');
+                        } else {
+                            tEl.classList.add('hidden');
+                            bEl.classList.add('border-transparent', 'text-slate-400'); 
+                            bEl.classList.remove('border-gluon-primary', 'text-white');
+                        }
                     }
                 });
             },
 
-            async translateCard() {
-                const frontEl = document.getElementById('singleFront');
-                const backEl = document.getElementById('singleBack');
-                const frontText = frontEl.value.trim();
-                const backText = backEl.value.trim();
+            toggleRecurrenceFields() {
+                const isChecked = document.getElementById('is_recurring').checked;
+                const fields = document.getElementById('recurrence_fields');
+                if (isChecked) fields.classList.remove('hidden');
+                else fields.classList.add('hidden');
+            },
 
-                if (frontText && backText) {
-                    this.showToast("Um dos campos deve estar vazio para poder traduzir para ele.", "error");
-                    return;
+            handleRecurrenceTypeChange() {
+                const type = document.getElementById('rec_type').value;
+                const intervalCont = document.getElementById('rec_interval_container');
+                const customCont = document.getElementById('rec_custom_container');
+
+                if (type === 'custom') {
+                    intervalCont.classList.add('hidden');
+                    customCont.classList.remove('hidden');
+                } else {
+                    intervalCont.classList.remove('hidden');
+                    customCont.classList.add('hidden');
+                }
+            },
+
+            openModal(id = '', name = '', targetParentId = null, currentViewMode = 'grid') {
+                if(this.state.reorderMode) return; 
+
+                this.switchModalTab('geral');
+                document.getElementById('dirId').value = id;
+                document.getElementById('dirParentId').value = targetParentId !== null ? targetParentId : '';
+                
+                let dirObj = null;
+                const isRootSettings = id === 'root';
+                const dirNameInput = document.getElementById('dirName');
+                const typeSelector = document.getElementById('typeSelectorContainer');
+                const folderSettings = document.getElementById('folderSettingsGroup');
+                const nameLabel = document.getElementById('nameLabel');
+                const iconPickerContainer = document.getElementById('iconPickerContainer');
+                const btnApar = document.getElementById('tab-btn-apar');
+                const btnRecor = document.getElementById('tab-btn-recor');
+
+                if (isRootSettings) {
+                    dirObj = { name: 'Meu Cofre (Raiz)', view: this.state.rootPrefs.view, new_item_position: this.state.rootPrefs.new_item_position, type: 0 };
+                    document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-vault text-gluon-primary"></i> <span>Configurar Raiz</span>';
+                    document.getElementById('dirNameContainer').classList.add('hidden');
+                    btnApar.classList.add('hidden');
+                    btnRecor.classList.add('hidden');
+                    typeSelector.classList.add('hidden');
+                    iconPickerContainer.style.display = 'block';
+                } else {
+                    btnApar.classList.remove('hidden');
+                    btnRecor.classList.remove('hidden');
+                    
+                    if (id) {
+                        dirObj = this.state.directoryCache.get(Number(id));
+                        
+                        let titleText = 'Pasta';
+                        if(dirObj.type === 1) titleText = 'Arquivo';
+                        if(dirObj.type === 2) titleText = 'Agenda';
+                        if(dirObj.type === 3) titleText = 'Portal';
+                        if(dirObj.type === 4) titleText = 'Flashcards';
+
+                        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-gear text-gluon-primary"></i> <span>Configurar ${titleText}</span>`;
+                        document.getElementById('dirNameContainer').classList.remove('hidden');
+                        typeSelector.classList.add('hidden');
+                        
+                        if(dirObj.type === 0) { folderSettings.style.display = 'block'; nameLabel.innerText = 'Nome da Pasta'; iconPickerContainer.style.display = 'block'; } 
+                        else if(dirObj.type === 1) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Arquivo'; iconPickerContainer.style.display = 'block'; } 
+                        else if(dirObj.type === 2) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome da Agenda'; iconPickerContainer.style.display = 'block'; }
+                        else if(dirObj.type === 3) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Portal'; iconPickerContainer.style.display = 'none'; btnRecor.classList.add('hidden'); }
+                        else if(dirObj.type === 4) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Deck'; iconPickerContainer.style.display = 'block'; }
+                    } else {
+                        document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus text-gluon-primary"></i> <span>Novo Item</span>';
+                        document.getElementById('dirNameContainer').classList.remove('hidden');
+                        typeSelector.classList.remove('hidden');
+                        iconPickerContainer.style.display = 'block';
+                        
+                        const typeRadios = document.getElementsByName('itemType');
+                        typeRadios[0].checked = true;
+                        this.handleTypeChange(0);
+                    }
                 }
 
-                if (!frontText && !backText) {
-                    this.showToast("Preencha um dos campos primeiro para ser traduzido.", "error");
-                    return;
+                dirNameInput.value = dirObj ? dirObj.name : name;
+
+                this.removeCover();
+                if (dirObj && dirObj.cover_url) {
+                    document.getElementById('dirCoverBase64').value = dirObj.cover_url;
+                    document.getElementById('coverPreview').style.backgroundImage = `url('${dirObj.cover_url}')`;
+                    document.getElementById('coverPreview').classList.remove('hidden');
+                    document.getElementById('btnRemoveCover').classList.remove('hidden');
                 }
 
-                const textToTranslate = frontText || backText;
-                const targetEl = frontText ? backEl : frontEl;
+                document.getElementById('dirColorFrom').value = (dirObj && dirObj.color_from) ? dirObj.color_from : '#3b82f6';
+                document.getElementById('dirColorTo').value = (dirObj && dirObj.color_to) ? dirObj.color_to : '#6366f1';
+                
+                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (isRootSettings ? 'fa-folder' : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : (dirObj?.type === 3 ? 'fa-door-open' : (dirObj?.type === 4 ? 'fa-layer-group' : 'fa-folder'))))); 
+                this.autoChangeIcon(iconToSelect);
 
-                const btn = document.getElementById('btnTranslate');
-                const originalHtml = btn.innerHTML;
-                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Traduzindo...';
+                const posToSelect = (dirObj && dirObj.new_item_position) ? dirObj.new_item_position : 'end';
+                const posRadios = document.getElementsByName('dirItemPosition');
+                for(let i=0; i<posRadios.length; i++) { posRadios[i].checked = (posRadios[i].value === posToSelect); }
+
+                // Preencher campos de recorrência
+                document.getElementById('is_recurring').checked = (dirObj && dirObj.is_recurring === 1);
+                document.getElementById('rec_type').value = (dirObj && dirObj.rec_type) ? dirObj.rec_type : 'daily';
+                document.getElementById('rec_interval').value = (dirObj && dirObj.rec_interval) ? dirObj.rec_interval : 1;
+                document.getElementById('rec_custom').value = (dirObj && dirObj.rec_custom) ? dirObj.rec_custom : '';
+                document.getElementById('rec_end').value = (dirObj && dirObj.rec_end) ? dirObj.rec_end.split(' ')[0] : '';
+                this.toggleRecurrenceFields();
+                this.handleRecurrenceTypeChange();
+
+                const btnDelete = document.getElementById('btnDeleteDir');
+                if(id && !isRootSettings) btnDelete.classList.remove('hidden'); else btnDelete.classList.add('hidden');
+
+                const viewToSelect = (dirObj && dirObj.view) ? dirObj.view : currentViewMode;
+                const viewRadios = document.getElementsByName('dirViewMode');
+                for(let i=0; i<viewRadios.length; i++) { viewRadios[i].checked = (viewRadios[i].value === viewToSelect); }
+                
+                const modal = document.getElementById('dirModal');
+                const content = document.getElementById('dirModalContent');
+                modal.classList.remove('hidden'); modal.classList.add('flex');
+                
+                setTimeout(() => { 
+                    modal.classList.remove('opacity-0'); 
+                    content.classList.remove('scale-95'); 
+                    
+                    dirNameInput.style.height = 'auto';
+                    if (dirNameInput.scrollHeight > 0) {
+                        dirNameInput.style.height = dirNameInput.scrollHeight + 'px';
+                    }
+
+                    if(!id && !isRootSettings) dirNameInput.focus(); 
+                }, 20);
+            },
+
+            closeModal() {
+                const modal = document.getElementById('dirModal');
+                const content = document.getElementById('dirModalContent');
+                
+                modal.classList.add('opacity-0'); 
+                content.classList.add('scale-95');
+                
+                setTimeout(() => { 
+                    modal.classList.add('hidden'); 
+                    modal.classList.remove('flex'); 
+                    document.getElementById('dirForm').reset(); 
+                    
+                    const btnSave = document.getElementById('btnSaveDir');
+                    if (btnSave) {
+                        btnSave.innerHTML = '<i class="fa-solid fa-check"></i> Salvar';
+                        btnSave.disabled = false;
+                    }
+                    
+                    const btnDelete = document.getElementById('btnDeleteDir');
+                    if (btnDelete) {
+                        btnDelete.innerHTML = '<i class="fa-solid fa-trash"></i> <span>Excluir</span>';
+                        btnDelete.disabled = false;
+                    }
+
+                }, 300);
+            },
+
+            async saveDirectory(e) {
+                if (e && e.preventDefault) e.preventDefault();
+                
+                const id = document.getElementById('dirId').value;
+                const isRootSettings = id === 'root';
+                
+                if (!isRootSettings && !document.getElementById('dirName').value.trim()) {
+                    return this.showToast("O nome do item é obrigatório.", "error");
+                }
+
+                let selectedView = 'grid';
+                const viewRadios = document.getElementsByName('dirViewMode');
+                for(let i=0; i<viewRadios.length; i++) { if(viewRadios[i].checked) selectedView = viewRadios[i].value; }
+
+                let selectedPos = 'end';
+                const posRadios = document.getElementsByName('dirItemPosition');
+                for(let i=0; i<posRadios.length; i++) { if(posRadios[i].checked) selectedPos = posRadios[i].value; }
+
+                let selectedType = 0;
+                const typeRadios = document.getElementsByName('itemType');
+                for(let i=0; i<typeRadios.length; i++) { if(typeRadios[i].checked) selectedType = parseInt(typeRadios[i].value); }
+
+                // Extrair valores de recorrência
+                const is_recurring = document.getElementById('is_recurring').checked ? 1 : 0;
+                const rec_type = document.getElementById('rec_type').value;
+                const rec_interval = parseInt(document.getElementById('rec_interval').value) || 1;
+                const rec_custom = document.getElementById('rec_custom').value;
+                const rec_end = document.getElementById('rec_end').value || null;
+
+                const btn = document.getElementById('btnSaveDir');
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
                 btn.disabled = true;
 
-                try {
-                    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "Authorization": "Bearer sk-proj-" // Necessita de API real em produção
-                        },
-                        body: JSON.stringify({
-                            model: "gpt-4o-mini", // Alterado para um modelo rápido existente
-                            messages: [
-                                {
-                                    role: "system",
-                                    content: "Você é um tradutor automático direto e focado. Se o texto de entrada estiver em português, traduza para inglês. Se estiver em inglês, traduza para português. Retorne EXCLUSIVAMENTE a tradução, sem aspas, notas ou pontuações adicionais irrelevantes."
-                                },
-                                {
-                                    role: "user",
-                                    content: textToTranslate
-                                }
-                            ],
-                            temperature: 0.3
-                        })
-                    });
+                let response;
 
-                    if (!response.ok) {
-                        const errData = await response.json();
-                        throw new Error(errData.error?.message || "Erro retornado pela API da OpenAI");
+                if (isRootSettings) {
+                    this.state.rootPrefs.view = selectedView;
+                    this.state.rootPrefs.new_item_position = selectedPos;
+                    response = await this.api('user', 'update_root_prefs', this.state.rootPrefs);
+                    if (this.state.path.length === 1) {
+                        this.state.path[0].view = selectedView;
+                        this.updateTopButtons();
                     }
+                } else {
+                    let selectedIcon = 'fa-folder';
+                    const iconRadios = document.getElementsByName('dirIcon');
+                    for(let i=0; i<iconRadios.length; i++) { if(iconRadios[i].checked) selectedIcon = iconRadios[i].value; }
 
-                    const data = await response.json();
-                    
-                    if (data.choices && data.choices.length > 0) {
-                        targetEl.value = data.choices[0].message.content.trim();
-                        this.showToast("Tradução concluída!", "success");
-                    } else {
-                        throw new Error("A API não retornou uma tradução válida.");
-                    }
+                    const payload = {
+                        id: id !== '' ? id : null,
+                        parent_id: document.getElementById('dirParentId').value !== '' ? document.getElementById('dirParentId').value : this.getCurrentParentId(),
+                        type: selectedType,
+                        name: document.getElementById('dirName').value.trim(),
+                        view: selectedView,
+                        new_item_position: selectedPos,
+                        cover_url: document.getElementById('dirCoverBase64').value,
+                        color_from: document.getElementById('dirColorFrom').value || '#3b82f6',
+                        color_to: document.getElementById('dirColorTo').value || '#6366f1',
+                        icon: selectedIcon,
+                        is_recurring: is_recurring,
+                        rec_type: rec_type,
+                        rec_interval: rec_interval,
+                        rec_custom: rec_custom,
+                        rec_end: rec_end
+                    };
 
-                } catch (error) {
-                    console.error("Erro no Translate:", error);
-                    this.showToast("Falha ao traduzir: " + error.message, "error");
-                } finally {
-                    btn.innerHTML = originalHtml;
+                    response = await this.api('directories', id !== '' ? 'update' : 'create', payload);
+                }
+
+                if (response) { 
+                    this.closeModal(); 
+                    await this.fetchDirectories(); 
+                } else {
+                    btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar'; 
                     btn.disabled = false;
                 }
             },
 
-            async saveSingleCard(e) {
-                e.preventDefault();
-                
-                const frontVal = document.getElementById('singleFront').value.trim();
-                const backVal = document.getElementById('singleBack').value.trim();
-                
-                if (!frontVal || !backVal) {
-                    this.showToast('Por favor, preencha tanto a Frente quanto o Verso do card.', 'error');
-                    return;
+            async deleteFromModal() {
+                const id = document.getElementById('dirId').value;
+                const name = document.getElementById('dirName').value;
+                if(!id || id === 'root') return;
+
+                if(confirm(`Atenção: "${name}" será apagado PERMANENTEMENTE.\nDeseja continuar?`)) {
+                    const btn = document.getElementById('btnDeleteDir'); 
+                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
+                    btn.disabled = true; 
+                    
+                    const response = await this.api('directories', 'delete', { id });
+                    
+                    if(response) { 
+                        this.closeModal(); 
+                        const pathIndex = this.state.path.findIndex(step => String(step.id) === String(id));
+                        if (pathIndex !== -1) { await this.goUpTo(pathIndex - 1); } 
+                        else { await this.fetchDirectories(); }
+                    } else {
+                        btn.innerHTML = '<i class="fa-solid fa-trash"></i> <span>Excluir</span>';
+                        btn.disabled = false;
+                    }
                 }
-                
-                const btn = document.getElementById('btnSaveSingle');
-                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
-                btn.disabled = true;
-
-                const payload = {
-                    deck_id: this.deckId,
-                    front: frontVal,
-                    back: backVal
-                };
-
-                const res = await this.api('add_single', payload);
-
-                if (res) {
-                    this.showToast(res.message, 'success');
-                    this.closeModals();
-                    await this.loadDeck();
-                }
-
-                btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar';
-                btn.disabled = false;
             },
 
-            async saveBulkCards(e) {
-                e.preventDefault();
-                const text = document.getElementById('bulkData').value;
-                const parsedCards = this.parseExcelData(text);
+            setLoading(show) {
+                this.state.isLoading = show;
+                document.getElementById('loader').classList.toggle('hidden', !show);
+                document.getElementById('viewContainer').classList.toggle('hidden', show);
+            },
+
+            getGradientStyle(from, to) { return `background: linear-gradient(135deg, ${from}, ${to});`; },
+            getTextGradientStyle(from, to) { return `background: -webkit-linear-gradient(135deg, ${from}, ${to}); -webkit-background-clip: text; -webkit-text-fill-color: transparent;`; },
+
+            async loadKanbanContents() {
+                const promises = this.state.directories.map(async (dir) => {
+                    const container = document.getElementById(`kanban-col-${dir.id}`);
+                    if (!container) return;
+                    
+                    if (dir.type === 1) {
+                         container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60"><i class="fa-solid fa-file-code text-4xl mb-3" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i><span class="text-sm font-medium">Arquivo de Código</span><span class="text-xs mt-1 text-center px-4">Clique no topo para abrir</span></div>`;
+                         return; 
+                    } else if (dir.type === 2) {
+                         container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60"><i class="fa-solid fa-calendar-days text-4xl mb-3" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i><span class="text-sm font-medium">Agenda</span><span class="text-xs mt-1 text-center px-4">Clique no topo para abrir</span></div>`;
+                         return; 
+                    } else if (dir.type === 4) {
+                         container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60"><i class="fa-solid fa-layer-group text-4xl mb-3" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i><span class="text-sm font-medium">Flashcards</span><span class="text-xs mt-1 text-center px-4">Clique no topo para abrir</span></div>`;
+                         return; 
+                    }
+
+                    const targetFetchId = dir.type === 3 ? dir.target_id : dir.id;
+                    
+                    if (!targetFetchId) {
+                        container.innerHTML = `<div class="kanban-empty text-center flex flex-col items-center justify-center text-slate-500 text-xs py-8 opacity-60 border-2 border-dashed border-red-900/50 rounded-lg text-red-400"><i class="fa-solid fa-link-slash text-2xl mb-2"></i> Portal Corrompido</div>`;
+                        return;
+                    }
+
+                    const res = await this.api('directories', 'fetch', { parent_id: targetFetchId });
+                    
+                    if (res && res.data && res.data.length > 0) {
+                        res.data.forEach(d => this.state.directoryCache.set(Number(d.id), d));
+
+                        container.innerHTML = res.data.map(sub => {
+                            let itemBorder = 'border-slate-600';
+                            if(sub.type === 1) itemBorder = 'border-indigo-500/50';
+                            if(sub.type === 2) itemBorder = 'border-emerald-500/50';
+                            if(sub.type === 3) itemBorder = 'border-fuchsia-500/50';
+                            if(sub.type === 4) itemBorder = 'border-amber-500/50';
+                            
+                            const repeatIcon = sub.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
+
+                            return `
+                            <div data-id="${sub.id}" class="kanban-item bg-slate-700 hover:bg-slate-600 border ${itemBorder} p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm mb-2 relative overflow-hidden min-h-0" onclick="app.enterDirectoryOrFile(${sub.id})">
+                                ${sub.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10" style="background-image: url('${sub.cover_url}')"></div>` : ''}
+                                <div class="flex items-center gap-2 truncate pr-2 relative z-10">
+                                    <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
+                                    <i class="fa-solid ${sub.icon} text-sm" style="${this.getTextGradientStyle(sub.color_from, sub.color_to)}"></i>
+                                    <span class="text-sm text-slate-200 truncate font-medium">${this.escapeHTML(sub.name)} ${repeatIcon}</span>
+                                </div>
+                                <button onclick="event.stopPropagation(); app.openModal(${sub.id})" class="relative z-10 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 sm:opacity-0 group-hover:opacity-100 transition-all border border-slate-600 cog-btn"><i class="fa-solid fa-cog text-xs"></i></button>
+                            </div>`;
+                        }).join('');
+                    } else {
+                        container.innerHTML = `<div class="kanban-empty text-center flex flex-col items-center justify-center text-slate-500 text-xs py-8 opacity-60 border-2 border-dashed border-slate-700 rounded-lg"><i class="fa-solid fa-box-open text-2xl mb-2"></i> Vazio</div>`;
+                    }
+                });
+                await Promise.all(promises);
                 
-                if (parsedCards.length === 0) return;
+                if(this.getCurrentView() === 'kanban') {
+                    this.customScroll.update();
+                }
+                
+                if (this.state.reorderMode) this.initSortable();
+            },
 
-                const btn = document.getElementById('btnSaveBulk');
-                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Importando...';
-                btn.disabled = true;
+            render() {
+                const container = document.getElementById('viewContainer');
+                const view = this.getCurrentView();
+                
+                if(view !== 'kanban') this.customScroll.destroy();
 
-                const payload = {
-                    deck_id: this.deckId,
-                    cards: parsedCards
-                };
-
-                const res = await this.api('add_bulk', payload);
-
-                if (res) {
-                    this.showToast(res.message, 'success');
-                    this.closeModals();
-                    await this.loadDeck();
+                if (this.state.directories.length === 0) {
+                    container.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-500 mt-20 px-4 text-center"><i class="fa-regular fa-folder-open text-5xl sm:text-6xl mb-4 opacity-50"></i><h2 class="text-lg sm:text-xl font-medium text-slate-400">Esta pasta está vazia</h2><p class="text-sm mt-2">Clique em "Novo Item" para começar.</p></div>`;
+                    return;
                 }
 
-                btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Importar Cards';
-                btn.disabled = false;
+                if (view === 'kanban') {
+                    container.className = "flex-1 flex flex-col overflow-hidden transition-all min-h-0 w-full";
+                } else {
+                    container.className = "flex-1 overflow-y-auto no-scrollbar pb-10 transition-all min-h-0";
+                }
+
+                let html = '';
+
+                if (view === 'grid') {
+                    html = `<div id="sortable-wrapper" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">`;
+                    this.state.directories.forEach(dir => {
+                        let borderClass = 'border-slate-700';
+                        if(dir.type === 1) borderClass = 'border-indigo-600/50';
+                        if(dir.type === 2) borderClass = 'border-emerald-600/50';
+                        if(dir.type === 3) borderClass = 'border-fuchsia-600/50';
+                        if(dir.type === 4) borderClass = 'border-amber-600/50';
+                        
+                        const repeatIcon = dir.is_recurring === 1 ? `<div class="absolute top-2 left-2 bg-slate-900/80 backdrop-blur rounded p-1.5 z-20 text-gluon-primary" title="Tarefa Recorrente"><i class="fa-solid fa-repeat"></i></div>` : '';
+
+                        html += `
+                        <div data-id="${dir.id}" class="dir-card draggable-item group bg-slate-800 border ${borderClass} rounded-xl flex flex-col items-center text-center cursor-pointer relative overflow-hidden min-h-[140px]" onclick="app.enterDirectoryOrFile(${dir.id})">
+                            ${dir.cover_url ? `<div class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110" style="background-image: url('${dir.cover_url}')"></div><div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/80 to-slate-900/40"></div>` : ''}
+                            
+                            <div class="absolute top-2 left-2 text-green-500 hidden grip-handle bg-slate-900/80 backdrop-blur rounded p-1 z-20"><i class="fa-solid fa-grip-vertical"></i></div>
+                            ${repeatIcon}
+                            <div class="absolute top-2 right-2 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn z-20">
+                                <button onclick="event.stopPropagation(); app.openModal(${dir.id})" class="text-slate-400 hover:text-white bg-slate-900/80 backdrop-blur hover:bg-slate-700 rounded p-1.5 shadow-lg"><i class="fa-solid fa-cog"></i></button>
+                            </div>
+                            
+                            <div class="relative z-10 flex flex-col items-center justify-center w-full h-full p-4 pt-6">
+                                <i class="fa-solid ${dir.icon} text-4xl sm:text-5xl mb-3 drop-shadow-md sm:group-hover:scale-110 transition-transform" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>
+                                <span class="text-xs sm:text-sm font-medium text-slate-200 w-full truncate px-1 drop-shadow-md">${this.escapeHTML(dir.name)}</span>
+                            </div>
+                        </div>`;
+                    });
+                    html += `</div>`;
+                } 
+                
+                else if (view === 'list') {
+                    html = `<div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto"><table class="w-full text-left text-sm min-w-[300px]"><thead class="bg-slate-900/50 text-slate-400"><tr><th class="px-4 py-3 font-medium w-10 text-center hidden grip-handle">#</th><th class="px-4 sm:px-6 py-3 font-medium w-12"></th><th class="px-4 py-3 font-medium">Nome</th><th class="px-4 sm:px-6 py-3 font-medium text-right">Ações</th></tr></thead><tbody id="sortable-wrapper" class="divide-y divide-slate-700/50">`;
+                    this.state.directories.forEach(dir => {
+                        let borderClass = 'border-l-transparent';
+                        if(dir.type === 1) borderClass = 'border-l-indigo-500';
+                        if(dir.type === 2) borderClass = 'border-l-emerald-500';
+                        if(dir.type === 3) borderClass = 'border-l-fuchsia-500';
+                        if(dir.type === 4) borderClass = 'border-l-amber-500';
+
+                        const repeatIcon = dir.is_recurring === 1 ? `<i class="fa-solid fa-repeat ml-2 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
+
+                        html += `
+                        <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/50 transition-colors group cursor-pointer border-l-2 ${borderClass} relative overflow-hidden" onclick="app.enterDirectoryOrFile(${dir.id})">
+                            <td class="px-2 py-3 text-center hidden grip-handle text-green-500 bg-slate-900/20"><i class="fa-solid fa-grip-vertical"></i></td>
+                            <td class="px-4 sm:px-6 py-3 sm:py-4 text-center">
+                                ${dir.cover_url ? `<div class="w-8 h-8 rounded bg-cover bg-center border border-slate-600 inline-block shadow-sm" style="background-image: url('${dir.cover_url}')"></div>` : `<i class="fa-solid ${dir.icon} text-xl" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>`}
+                            </td>
+                            <td class="px-4 py-3 sm:py-4 font-medium text-slate-200">${this.escapeHTML(dir.name)} ${repeatIcon}</td>
+                            <td class="px-4 sm:px-6 py-3 sm:py-4 text-right">
+                                <div class="sm:opacity-0 group-hover:opacity-100 transition-opacity flex justify-end gap-2 cog-btn">
+                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id})" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-600 border border-slate-600 rounded p-2 text-xs sm:text-sm shadow"><i class="fa-solid fa-cog"></i> <span class="hidden sm:inline">Editar</span></button>
+                                </div>
+                            </td>
+                        </tr>`;
+                    });
+                    html += `</tbody></table></div>`;
+                }
+
+                else if (view === 'kanban') {
+                    html = `<div id="sortable-wrapper" class="flex-1 flex gap-4 sm:gap-6 overflow-x-auto items-start snap-x w-full pb-12 relative">`;
+                    this.state.directories.forEach(dir => {
+                        let headerBorder = 'border-slate-700';
+                        if(dir.type === 1) headerBorder = 'border-indigo-700';
+                        if(dir.type === 2) headerBorder = 'border-emerald-700';
+                        if(dir.type === 3) headerBorder = 'border-fuchsia-700';
+                        if(dir.type === 4) headerBorder = 'border-amber-700';
+
+                        const dropTargetId = dir.type === 3 ? dir.target_id : dir.id;
+                        const repeatIcon = dir.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-sm ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
+
+                        html += `
+                        <div data-id="${dir.id}" class="draggable-item snap-start bg-slate-800 border ${headerBorder} rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg relative transition-colors overflow-hidden min-h-0">
+                            <div class="p-4 border-b border-slate-700 flex justify-between items-center rounded-t-xl group cursor-pointer hover:bg-slate-700/50 transition-colors kanban-col-handle relative overflow-hidden min-h-[60px]" onclick="app.enterDirectoryOrFile(${dir.id})">
+                                ${dir.cover_url ? `<div class="absolute inset-0 bg-cover bg-center" style="background-image: url('${dir.cover_url}')"></div><div class="absolute inset-0 bg-slate-900/80 backdrop-blur-[2px]"></div>` : `<div class="absolute inset-0 bg-slate-900/50"></div>`}
+                                
+                                <div class="flex items-center gap-2 font-semibold text-slate-100 truncate w-full relative z-10 drop-shadow-md">
+                                    <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
+                                    <i class="fa-solid ${dir.icon} text-lg" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>
+                                    <span class="truncate text-sm sm:text-base">${this.escapeHTML(dir.name)} ${repeatIcon}</span>
+                                </div>
+                                <div class="flex gap-1 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn relative z-10">
+                                    <button onclick="event.stopPropagation(); app.openModal(${dir.id})" class="text-slate-300 hover:text-white bg-slate-800/80 backdrop-blur hover:bg-slate-600 rounded p-1.5 shadow"><i class="fa-solid fa-cog text-xs"></i></button>
+                                </div>
+                            </div>
+                            
+                            <div class="p-3 flex-1 overflow-y-auto kanban-scroll" id="kanban-col-${dir.id}" data-parent-id="${dropTargetId}">
+                                <div class="flex justify-center py-6"><i class="fa-solid fa-circle-notch fa-spin text-slate-500 text-2xl"></i></div>
+                            </div>
+                            
+                            ${(dir.type === 0 || dir.type === 3) ? `
+                            <div class="p-3 border-t border-slate-700 bg-slate-900/30 rounded-b-xl z-10 relative">
+                                <button onclick="app.openModal('', '', ${dropTargetId}, 'grid')" class="text-slate-400 hover:text-white flex items-center justify-center gap-2 text-xs sm:text-sm transition-colors w-full py-2 hover:bg-slate-700 rounded-lg border border-slate-700/50 border-dashed">
+                                    <i class="fa-solid fa-plus"></i> Novo Item
+                                </button>
+                            </div>` : ''}
+                        </div>`;
+                    });
+                    html += `</div>`;
+                    
+                    setTimeout(() => {
+                        this.customScroll.init();
+                        this.loadKanbanContents();
+                    }, 0);
+                }
+
+                container.innerHTML = html;
+                if (this.state.reorderMode) { document.getElementById('sortable-wrapper').classList.add('reorder-active'); this.initSortable(); }
             }
         };
 
-        document.addEventListener('DOMContentLoaded', () => flashcardApp.init());
+        document.addEventListener('DOMContentLoaded', () => app.init());
     </script>
 </body>
 </html>
