@@ -1,193 +1,510 @@
 <!-- 
-  Arquivo: editor.html
-  Diretório: public_html/gluon/views/editor.html
+  Arquivo: flashcards.html
+  Diretório: public_html/gluon/views/flashcards.html
   
-  Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
-  Usa CodeMirror 5 via CDN para carregamento instantâneo.
+  Pilar: Rápido, Seguro, Bonito e Escalável.
+  Lógica Vanilla JS para animação 3D de cards e importação inteligente de Excel via Clipboard.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gluon - Editor de Código</title>
+    <title>Gluon - Flashcards</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- CodeMirror Estilos Core e Tema -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/dracula.min.css">
-    
     <script>
         tailwind.config = {
-            theme: { extend: { colors: { gluon: { dark: '#0f172a', primary: '#3b82f6', secondary: '#1e293b' } } } }
+            theme: { extend: { colors: { gluon: { dark: '#0f172a', primary: '#3b82f6', secondary: '#1e293b', accent: '#6366f1' } } } }
         }
     </script>
     <style>
-        /* Ajustes para o CodeMirror preencher a tela perfeitamente e respeitar o overflow */
-        .CodeMirror { 
-            position: absolute !important; 
-            top: 0; bottom: 0; left: 0; right: 0; 
-            height: 100% !important; 
-            width: 100% !important;
-            font-family: 'Fira Code', 'Consolas', monospace; 
-            font-size: 14px; 
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Perspectiva 3D para a cena do Card */
+        .scene {
+            perspective: 1000px;
+            width: 100%;
+            max-width: 600px;
+            height: 400px;
+            margin: 0 auto;
         }
-        .cm-s-dracula.CodeMirror { background-color: #0f172a !important; }
-        .CodeMirror-gutters { background-color: #1e293b !important; border-right: 1px solid #334155 !important; }
-        .CodeMirror-linenumber { color: #64748b !important; }
+
+        /* O Card em si, que será rotacionado */
+        .card-3d {
+            width: 100%;
+            height: 100%;
+            transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
+            transform-style: preserve-3d;
+            position: relative;
+            cursor: pointer;
+        }
+
+        /* Classe acionada pelo JS para virar o card */
+        .card-3d.is-flipped {
+            transform: rotateY(180deg);
+        }
+
+        /* Frentes e Versos (Escondendo as costas um do outro) */
+        .card-face {
+            position: absolute;
+            top: 0; /* Adicionado para travar na posição pai */
+            left: 0; /* Adicionado para travar na posição pai */
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            overflow-y: auto;
+        }
+
+        .card-front {
+            background: linear-gradient(145deg, #1e293b, #0f172a);
+            border: 1px solid #334155;
+            color: #f8fafc;
+        }
+
+        .card-back {
+            background: linear-gradient(145deg, #3b82f6, #1d4ed8);
+            border: 1px solid #60a5fa;
+            color: #ffffff;
+            transform: rotateY(180deg);
+        }
+
+        /* Formatação do texto dentro do card para manter legibilidade */
+        .card-text {
+            font-size: 1.5rem;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        
+        @media (max-width: 640px) {
+            .scene { height: 350px; }
+            .card-text { font-size: 1.25rem; }
+        }
     </style>
 </head>
-<body class="bg-gluon-dark text-slate-200 h-screen flex flex-col font-sans overflow-hidden">
+<body class="bg-gluon-dark text-slate-200 h-screen flex flex-col font-sans overflow-hidden selection:bg-gluon-primary selection:text-white">
 
-    <!-- Header do Editor -->
-    <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-14 flex items-center justify-between px-4">
+    <!-- Navbar -->
+    <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-16 flex items-center justify-between px-4 sm:px-6">
         <div class="flex items-center gap-4">
-            <button onclick="window.location.href='/dashboard'" class="text-slate-400 hover:text-white transition-colors" title="Voltar">
-                <i class="fa-solid fa-arrow-left text-lg"></i>
+            <button onclick="window.location.href='/dashboard'" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg border border-slate-700 shadow-sm" title="Voltar">
+                <i class="fa-solid fa-arrow-left"></i>
             </button>
-            <div class="h-6 w-px bg-slate-700"></div>
+            <div class="h-6 w-px bg-slate-700 hidden sm:block"></div>
             <div class="flex items-center gap-2">
-                <i class="fa-solid fa-file-code text-gluon-primary"></i>
-                <span id="fileName" class="font-medium text-sm text-slate-200 tracking-wide">Carregando...</span>
+                <i class="fa-solid fa-layer-group text-gluon-primary text-xl"></i>
+                <span id="deckName" class="font-bold text-lg text-white tracking-wide">Carregando Deck...</span>
             </div>
         </div>
         
-        <div class="flex items-center gap-3">
-            <div id="saveStatus" class="text-xs text-slate-500 hidden sm:block">Salvo na nuvem</div>
-            
-            <select id="langSelect" onchange="editorApp.changeLanguage()" class="bg-slate-800 border border-slate-600 text-slate-300 text-xs rounded px-2 py-1.5 outline-none focus:border-gluon-primary">
-                <option value="javascript">JavaScript</option>
-                <option value="htmlmixed">HTML</option>
-                <option value="css">CSS</option>
-                <option value="php">PHP</option>
-                <option value="python">Python</option>
-                <option value="sql">SQL</option>
-            </select>
-
-            <button onclick="editorApp.saveContent()" id="btnSave" class="bg-gluon-primary hover:bg-blue-600 text-white text-sm font-medium py-1.5 px-4 rounded shadow-lg transition-all flex items-center gap-2">
-                <i class="fa-solid fa-floppy-disk"></i> <span class="hidden sm:inline">Salvar</span>
+        <div class="flex items-center gap-2 sm:gap-3">
+            <button onclick="flashcardApp.openSingleModal()" class="text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 font-medium py-2 px-3 sm:px-4 rounded-lg shadow transition-all flex items-center gap-2 text-sm" title="Adicionar Card Unitário">
+                <i class="fa-solid fa-plus text-gluon-primary"></i> <span class="hidden sm:inline">Add Card</span>
+            </button>
+            <button onclick="flashcardApp.openBulkModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 px-3 sm:px-4 rounded-lg shadow-lg transition-all flex items-center gap-2 text-sm" title="Importar do Excel">
+                <i class="fa-solid fa-file-excel"></i> <span class="hidden sm:inline">Importar</span>
             </button>
         </div>
     </nav>
 
-    <!-- Container do CodeMirror (min-h-0 é crucial aqui para evitar que o flex-1 expanda além da tela) -->
-    <main class="flex-1 w-full relative min-h-0" id="editorContainer"></main>
+    <!-- Main Content -->
+    <main class="flex-1 w-full flex flex-col items-center justify-center p-4 relative">
+        
+        <!-- Indicador de Progresso -->
+        <div class="absolute top-6 left-0 right-0 text-center z-10">
+            <span id="cardCounter" class="bg-slate-800 text-slate-400 font-medium px-4 py-1.5 rounded-full text-sm border border-slate-700 shadow-sm">
+                0 / 0
+            </span>
+        </div>
 
-    <!-- Scripts do CodeMirror -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/xml/xml.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/css/css.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/htmlmixed/htmlmixed.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/php/php.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/python/python.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/sql/sql.min.js"></script>
+        <!-- Cena 3D e Card -->
+        <!-- Fix: removida a classe 'relative' das divs filhas para evitar que o tailwind anule o position: absolute do custom CSS (.card-face) -->
+        <div class="scene" id="cardScene" style="display: none;">
+            <div class="card-3d" id="flashcard" onclick="flashcardApp.flipCard()">
+                <div class="card-face card-front">
+                    <span class="absolute top-4 left-4 text-xs font-bold text-slate-500 tracking-wider uppercase">Frente</span>
+                    <div class="card-text" id="cardFrontText"></div>
+                    <i class="fa-solid fa-rotate absolute bottom-4 right-4 text-slate-600 opacity-50"></i>
+                </div>
+                <div class="card-face card-back">
+                    <span class="absolute top-4 left-4 text-xs font-bold text-blue-200 tracking-wider uppercase">Verso</span>
+                    <div class="card-text drop-shadow-md" id="cardBackText"></div>
+                    <i class="fa-solid fa-rotate absolute bottom-4 right-4 text-blue-300 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tela Vazia -->
+        <div id="emptyState" class="flex flex-col items-center justify-center text-center max-w-sm mt-10">
+            <i class="fa-solid fa-clone text-6xl text-slate-600 mb-4 opacity-50"></i>
+            <h2 class="text-xl font-bold text-slate-300 mb-2">Este deck está vazio</h2>
+            <p class="text-slate-500 text-sm mb-6">Adicione seu primeiro card manualmente ou importe uma lista do Excel para começar a estudar.</p>
+        </div>
+
+        <!-- Carregamento -->
+        <div id="loader" class="flex flex-col items-center justify-center">
+            <i class="fa-solid fa-circle-notch fa-spin text-4xl text-gluon-primary mb-3"></i>
+            <span class="text-slate-400">Descriptografando cards...</span>
+        </div>
+
+        <!-- Controles Inferiores -->
+        <div class="absolute bottom-10 left-0 right-0 flex justify-center items-center gap-6 px-4 z-10" id="controls" style="display: none;">
+            <button onclick="flashcardApp.prevCard()" id="btnPrev" class="w-14 h-14 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center text-xl shadow-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-arrow-left"></i>
+            </button>
+            <span class="text-xs text-slate-500 font-medium hidden sm:block">Use setas Direita/Esquerda ou Espaço</span>
+            <button onclick="flashcardApp.nextCard()" id="btnNext" class="w-14 h-14 rounded-full bg-gluon-primary hover:bg-blue-600 text-white flex items-center justify-center text-xl shadow-lg shadow-blue-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        </div>
+    </main>
+
+    <!-- Modal: Adicionar Card Unitário -->
+    <div id="singleModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
+        <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg p-0 transform scale-95 transition-transform duration-300 overflow-hidden" id="singleModalContent">
+            <div class="p-5 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-plus text-gluon-primary"></i> Adicionar Flashcard
+                </h3>
+                <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form onsubmit="flashcardApp.saveSingleCard(event)" class="p-6 space-y-5">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Frente (Pergunta / Termo)</label>
+                    <textarea id="singleFront" required rows="3" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors resize-none"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-blue-300 mb-2">Verso (Resposta / Definição)</label>
+                    <textarea id="singleBack" required rows="4" class="w-full bg-slate-900 border border-blue-500/50 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors resize-none"></textarea>
+                </div>
+                <div class="flex justify-end gap-3 pt-2 border-t border-slate-700 mt-6">
+                    <button type="button" onclick="flashcardApp.closeModals()" class="px-5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
+                    <button type="submit" id="btnSaveSingle" class="px-5 py-2.5 bg-gluon-primary hover:bg-blue-600 text-white rounded-lg shadow-lg font-medium transition-all flex items-center gap-2">
+                        <i class="fa-solid fa-check"></i> Salvar Card
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Importar em Massa (Excel) -->
+    <div id="bulkModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
+        <div class="bg-gluon-secondary border border-emerald-900/50 rounded-xl shadow-2xl w-full max-w-2xl p-0 transform scale-95 transition-transform duration-300 overflow-hidden" id="bulkModalContent">
+            <div class="p-5 border-b border-emerald-900/50 bg-emerald-900/20 flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-emerald-400 flex items-center gap-2">
+                    <i class="fa-solid fa-file-excel"></i> Importar do Excel / Tabela
+                </h3>
+                <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form onsubmit="flashcardApp.saveBulkCards(event)" class="p-6 flex flex-col h-[60vh] sm:h-[500px]">
+                <div class="mb-4 bg-slate-900/50 p-3 rounded-lg border border-slate-700 text-sm text-slate-300">
+                    <p class="font-medium text-white mb-1"><i class="fa-solid fa-circle-info text-gluon-primary mr-1"></i> Como usar:</p>
+                    <p>No Excel (ou Planilhas do Google), crie duas colunas. A primeira coluna será a <strong>Frente</strong> e a segunda o <strong>Verso</strong>. Copie as linhas e cole na caixa abaixo.</p>
+                </div>
+                
+                <div class="flex-1 flex flex-col relative">
+                    <textarea id="bulkData" required placeholder="Cole os dados do Excel aqui...&#10;&#10;Exemplo:&#10;Gato    Cat&#10;Cachorro    Dog" class="flex-1 w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors resize-none font-mono text-sm whitespace-pre"></textarea>
+                </div>
+
+                <div class="flex justify-between items-center pt-5 border-t border-slate-700 mt-5 shrink-0">
+                    <span id="bulkCount" class="text-sm text-emerald-400 font-medium">0 cards detectados</span>
+                    <div class="flex gap-3">
+                        <button type="button" onclick="flashcardApp.closeModals()" class="px-5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
+                        <button type="submit" id="btnSaveBulk" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow-lg font-medium transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> Importar Cards
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script>
-        const editorApp = {
-            cm: null,
-            fileId: null,
-            isDirty: false,
+        const flashcardApp = {
+            deckId: null,
+            cards: [],
+            currentIndex: 0,
+            isFlipped: false,
 
             async init() {
                 const urlParams = new URLSearchParams(window.location.search);
-                this.fileId = urlParams.get('id');
+                this.deckId = urlParams.get('id');
 
-                if (!this.fileId) {
-                    alert("ID do arquivo não fornecido.");
+                if (!this.deckId) {
                     window.location.href = '/dashboard';
                     return;
                 }
 
-                // Instancia o editor vazio
-                this.cm = CodeMirror(document.getElementById('editorContainer'), {
-                    value: "// Inicializando módulo criptográfico...",
-                    mode: "javascript",
-                    theme: "dracula",
-                    lineNumbers: true,
-                    indentUnit: 4,
-                    lineWrapping: true,
-                    autoCloseBrackets: true
-                });
+                this.setupKeyboardListeners();
+                this.setupBulkListener();
+                await this.loadDeck();
+            },
 
-                this.cm.on('change', () => {
-                    this.isDirty = true;
-                    document.getElementById('saveStatus').innerText = 'Não salvo *';
-                    document.getElementById('saveStatus').classList.add('text-amber-500');
-                    document.getElementById('saveStatus').classList.remove('text-slate-500');
-                });
-
-                // Atalho Ctrl+S para salvar
-                document.addEventListener('keydown', (e) => {
-                    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-                        e.preventDefault();
-                        this.saveContent();
-                    }
-                });
-
-                await this.loadContent();
+            showToast(message, type = 'success') {
+                let toast = document.getElementById('gluon-toast');
+                if (!toast) { toast = document.createElement('div'); toast.id = 'gluon-toast'; document.body.appendChild(toast); }
+                const icon = type === 'success' ? '<i class="fa-solid fa-circle-check"></i>' : '<i class="fa-solid fa-circle-exclamation"></i>';
+                const bgClass = type === 'success' ? 'bg-green-600' : 'bg-red-600';
+                toast.className = `fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-xl text-white text-sm font-medium flex items-center gap-3 z-50 transition-all duration-300 transform translate-y-10 opacity-0 ${bgClass}`;
+                toast.innerHTML = `${icon} <span>${message}</span>`;
+                setTimeout(() => { toast.classList.remove('translate-y-10', 'opacity-0'); toast.classList.add('translate-y-0', 'opacity-100'); }, 10);
+                setTimeout(() => { toast.classList.remove('translate-y-0', 'opacity-100'); toast.classList.add('translate-y-10', 'opacity-0'); }, 3000);
             },
 
             async api(action, payload = {}) {
                 payload.action = action;
                 try {
-                    const res = await fetch(`/api/editor`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    const res = await fetch(`/api/flashcards`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     if (res.status === 401) window.location.href = '/'; 
                     const data = await res.json();
                     if (data.status !== 'success') throw new Error(data.message);
                     return data;
-                } catch (err) { alert(err.message); return null; }
+                } catch (err) { console.error(err); this.showToast(err.message || 'Erro de conexão.', 'error'); return null; }
             },
 
-            async loadContent() {
-                const res = await this.api('get_content', { id: this.fileId });
-                if (res && res.data) {
-                    document.getElementById('fileName').innerText = res.data.name;
-                    document.getElementById('langSelect').value = res.data.language;
+            async loadDeck() {
+                document.getElementById('loader').style.display = 'flex';
+                document.getElementById('emptyState').style.display = 'none';
+                document.getElementById('cardScene').style.display = 'none';
+                document.getElementById('controls').style.display = 'none';
+
+                const res = await this.api('fetch', { deck_id: this.deckId });
+                document.getElementById('loader').style.display = 'none';
+
+                if (res) {
+                    document.getElementById('deckName').innerText = res.deck_name || 'Flashcards';
+                    this.cards = res.data || [];
                     
-                    this.cm.setOption("mode", res.data.language);
-                    this.cm.setValue(res.data.content || '');
-                    this.cm.clearHistory();
-                    
-                    this.isDirty = false;
-                    document.getElementById('saveStatus').innerText = 'Sincronizado';
+                    if (this.cards.length === 0) {
+                        document.getElementById('emptyState').style.display = 'flex';
+                    } else {
+                        // Reseta a visão para o primeiro card se carregar de novo
+                        if(this.currentIndex >= this.cards.length) this.currentIndex = 0;
+                        document.getElementById('cardScene').style.display = 'block';
+                        document.getElementById('controls').style.display = 'flex';
+                        this.renderCurrentCard();
+                    }
                 }
             },
 
-            async saveContent() {
-                const btn = document.getElementById('btnSave');
-                const originalHtml = btn.innerHTML;
-                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+            escapeHTML(str) {
+                if (!str) return '';
+                return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
+            },
+
+            renderCurrentCard() {
+                if (this.cards.length === 0) return;
+                
+                const card = this.cards[this.currentIndex];
+                document.getElementById('cardFrontText').innerHTML = this.escapeHTML(card.front);
+                document.getElementById('cardBackText').innerHTML = this.escapeHTML(card.back);
+                
+                document.getElementById('cardCounter').innerText = `${this.currentIndex + 1} / ${this.cards.length}`;
+                
+                // Força voltar para a frente se estiver no verso
+                if (this.isFlipped) {
+                    this.isFlipped = false;
+                    document.getElementById('flashcard').classList.remove('is-flipped');
+                }
+
+                // Atualiza estado dos botões
+                document.getElementById('btnPrev').disabled = this.currentIndex === 0;
+                document.getElementById('btnNext').disabled = this.currentIndex === this.cards.length - 1;
+            },
+
+            flipCard() {
+                this.isFlipped = !this.isFlipped;
+                const cardEl = document.getElementById('flashcard');
+                if (this.isFlipped) {
+                    cardEl.classList.add('is-flipped');
+                } else {
+                    cardEl.classList.remove('is-flipped');
+                }
+            },
+
+            nextCard() {
+                if (this.currentIndex < this.cards.length - 1) {
+                    this.currentIndex++;
+                    this.renderCurrentCard();
+                }
+            },
+
+            prevCard() {
+                if (this.currentIndex > 0) {
+                    this.currentIndex--;
+                    this.renderCurrentCard();
+                }
+            },
+
+            setupKeyboardListeners() {
+                document.addEventListener('keydown', (e) => {
+                    // Ignora atalhos se algum modal estiver aberto
+                    if (!document.getElementById('singleModal').classList.contains('hidden') || 
+                        !document.getElementById('bulkModal').classList.contains('hidden')) return;
+
+                    if (this.cards.length === 0) return;
+
+                    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'ArrowDown') {
+                        e.preventDefault();
+                        this.flipCard();
+                    } else if (e.code === 'ArrowRight') {
+                        this.nextCard();
+                    } else if (e.code === 'ArrowLeft') {
+                        this.prevCard();
+                    }
+                });
+            },
+
+            setupBulkListener() {
+                const textarea = document.getElementById('bulkData');
+                textarea.addEventListener('input', () => {
+                    const parsed = this.parseExcelData(textarea.value);
+                    const countEl = document.getElementById('bulkCount');
+                    const btnSave = document.getElementById('btnSaveBulk');
+                    
+                    countEl.innerText = `${parsed.length} cards detectados`;
+                    
+                    if (parsed.length > 0) {
+                        countEl.classList.remove('text-red-400');
+                        countEl.classList.add('text-emerald-400');
+                        btnSave.disabled = false;
+                    } else {
+                        countEl.classList.add('text-red-400');
+                        countEl.classList.remove('text-emerald-400');
+                        btnSave.disabled = true;
+                    }
+                });
+            },
+
+            // Interpretador ultra rápido de TSV (Tab-Separated Values) que o Excel gera ao colar
+            parseExcelData(text) {
+                if (!text.trim()) return [];
+                const lines = text.split('\n');
+                const result = [];
+                
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+                    
+                    const columns = line.split('\t');
+                    if (columns.length >= 2) {
+                        result.push({
+                            front: columns[0].trim(),
+                            back: columns[1].trim()
+                        });
+                    }
+                }
+                return result;
+            },
+
+            // --- Gerenciamento de Modais ---
+            openSingleModal() {
+                document.getElementById('singleFront').value = '';
+                document.getElementById('singleBack').value = '';
+                const modal = document.getElementById('singleModal');
+                const content = document.getElementById('singleModalContent');
+                modal.classList.remove('hidden'); modal.classList.add('flex');
+                setTimeout(() => { 
+                    modal.classList.remove('opacity-0'); 
+                    content.classList.remove('scale-95'); 
+                    document.getElementById('singleFront').focus();
+                }, 20);
+            },
+
+            openBulkModal() {
+                document.getElementById('bulkData').value = '';
+                document.getElementById('bulkCount').innerText = '0 cards detectados';
+                document.getElementById('btnSaveBulk').disabled = true;
+                const modal = document.getElementById('bulkModal');
+                const content = document.getElementById('bulkModalContent');
+                modal.classList.remove('hidden'); modal.classList.add('flex');
+                setTimeout(() => { 
+                    modal.classList.remove('opacity-0'); 
+                    content.classList.remove('scale-95'); 
+                    document.getElementById('bulkData').focus();
+                }, 20);
+            },
+
+            closeModals() {
+                ['single', 'bulk'].forEach(prefix => {
+                    const modal = document.getElementById(`${prefix}Modal`);
+                    const content = document.getElementById(`${prefix}ModalContent`);
+                    if(!modal.classList.contains('hidden')) {
+                        modal.classList.add('opacity-0'); 
+                        content.classList.add('scale-95');
+                        setTimeout(() => { 
+                            modal.classList.add('hidden'); 
+                            modal.classList.remove('flex'); 
+                        }, 300);
+                    }
+                });
+            },
+
+            async saveSingleCard(e) {
+                e.preventDefault();
+                const btn = document.getElementById('btnSaveSingle');
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
                 btn.disabled = true;
 
                 const payload = {
-                    id: this.fileId,
-                    content: this.cm.getValue(),
-                    language: document.getElementById('langSelect').value
+                    deck_id: this.deckId,
+                    front: document.getElementById('singleFront').value,
+                    back: document.getElementById('singleBack').value
                 };
 
-                const res = await this.api('save_content', payload);
-                
+                const res = await this.api('add_single', payload);
+
                 if (res) {
-                    this.isDirty = false;
-                    document.getElementById('saveStatus').innerText = 'Salvo na nuvem';
-                    document.getElementById('saveStatus').classList.remove('text-amber-500');
-                    document.getElementById('saveStatus').classList.add('text-slate-500');
+                    this.showToast(res.message, 'success');
+                    this.closeModals();
+                    await this.loadDeck();
                 }
 
-                btn.innerHTML = originalHtml;
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar Card';
                 btn.disabled = false;
             },
 
-            changeLanguage() {
-                const lang = document.getElementById('langSelect').value;
-                this.cm.setOption("mode", lang);
-                this.isDirty = true; // Força aviso de não salvo ao mudar a linguagem
+            async saveBulkCards(e) {
+                e.preventDefault();
+                const text = document.getElementById('bulkData').value;
+                const parsedCards = this.parseExcelData(text);
+                
+                if (parsedCards.length === 0) return;
+
+                const btn = document.getElementById('btnSaveBulk');
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Importando...';
+                btn.disabled = true;
+
+                const payload = {
+                    deck_id: this.deckId,
+                    cards: parsedCards
+                };
+
+                const res = await this.api('add_bulk', payload);
+
+                if (res) {
+                    this.showToast(res.message, 'success');
+                    this.closeModals();
+                    await this.loadDeck();
+                }
+
+                btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Importar Cards';
+                btn.disabled = false;
             }
         };
 
-        document.addEventListener('DOMContentLoaded', () => editorApp.init());
+        document.addEventListener('DOMContentLoaded', () => flashcardApp.init());
     </script>
 </body>
 </html>
