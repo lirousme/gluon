@@ -5,9 +5,8 @@
   Pilar: Rápido, Seguro, Bonito e Escalável.
   Atualizações:
   - Novo sistema de Repetição Espaçada (Pontos * 24h).
-  - Pontuação registrada automaticamente ao VIRAR o cartão.
-  - Cartões de um único lado registram a pontuação ao AVANÇAR.
-  - Modo 'Livro' com sincronização de página salva por usuário.
+  - Bloqueio persistente via localStorage contra pontuação dupla antes do vencimento.
+  - Atualização visual das "bolinhas" de progresso instantânea ao virar o cartão.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -395,7 +394,6 @@
                     if (this.cards.length === 0) {
                         this.showEmptyState();
                     } else {
-                        // Reseta indice se for aleatório ou estourou o limite do livro
                         if (this.deckMode === 'aleatorio' || this.currentIndex >= this.cards.length) {
                             this.currentIndex = 0;
                         }
@@ -435,14 +433,12 @@
                 badge.classList.add('flex');
                 
                 if (this.deckMode === 'livro') {
-                    // Progresso de Leitura Baseado no Índice
                     const progress = this.cards.length > 0 ? Math.round(((this.currentIndex + 1) / this.cards.length) * 100) : 0;
                     badge.className = 'flex items-center gap-1.5 bg-slate-800/80 border border-slate-600 px-2 py-1 rounded-md text-xs font-semibold text-emerald-400 shadow-inner';
                     badge.innerHTML = `<i class="fa-solid fa-book-open"></i> <span>Pág ${this.currentIndex + 1} (${progress}%)</span>`;
                     document.getElementById('deckProgressBar').className = "h-full bg-emerald-500 transition-all duration-700 ease-out";
                     document.getElementById('deckProgressBar').style.width = `${progress}%`;
                 } else {
-                    // Progresso de Maestria Baseado em SRS Points
                     badge.className = 'flex items-center gap-1.5 bg-slate-800/80 border border-slate-600 px-2 py-1 rounded-md text-xs font-semibold text-gluon-primary shadow-inner';
                     badge.innerHTML = `<i class="fa-solid fa-ranking-star"></i> <span id="deckPercentage">${this.deckPercentage}%</span>`;
                     document.getElementById('deckProgressBar').className = "h-full bg-blue-500 transition-all duration-700 ease-out";
@@ -462,7 +458,6 @@
                 
                 const cardEl = document.getElementById('flashcard');
                 
-                // Trata cartas que têm apenas um lado (Página de Livro)
                 if (!hasBack) {
                     document.getElementById('frontLabel').innerText = this.deckMode === 'livro' ? 'Página' : 'Card Único';
                     document.getElementById('flipIconFront').style.display = 'none';
@@ -473,7 +468,6 @@
                     cardEl.style.cursor = 'pointer';
                 }
 
-                // Renderizar os pontinhos de maestria SÓ NO MODO ALEATÓRIO
                 if (this.deckMode === 'aleatorio') {
                     let dotsHtml = '';
                     for (let i = 0; i < 10; i++) {
@@ -501,7 +495,6 @@
                 const card = this.cards[this.currentIndex];
                 const hasBack = card.back && card.back.trim() !== '';
 
-                // Se não tem verso, não tem o que virar.
                 if (!hasBack) return;
 
                 this.isFlipped = !this.isFlipped;
@@ -509,7 +502,6 @@
                 
                 if (this.isFlipped) {
                     cardEl.classList.add('is-flipped');
-                    // REGRA DE PONTUAÇÃO: Pontua ao virar o cartão (No modo aleatório)
                     if (this.deckMode === 'aleatorio') {
                         this.registerScore(card);
                     }
@@ -523,7 +515,6 @@
                 const card = this.cards[this.currentIndex];
                 const hasBack = card.back && card.back.trim() !== '';
 
-                // REGRA DE PONTUAÇÃO: Se for lado único e aleatório, pontua ao passar.
                 if (this.deckMode === 'aleatorio' && !hasBack) {
                     this.registerScore(card);
                 }
@@ -532,7 +523,6 @@
                     this.currentIndex++;
                     this.renderCurrentCard();
                     
-                    // No modo Livro, salva onde o usuário parou
                     if (this.deckMode === 'livro') {
                         this.saveBookProgress();
                     }
@@ -553,20 +543,48 @@
             registerScore(card) {
                 if (card.score >= 20 || this.scoredThisSession.has(card.id)) return;
                 
+                // Persistência local obrigatória: impede contar novo ponto antes do vencimento do cartão 
+                // caso o usuário navegue ou volte para o mesmo cartão após a página ter sido carregada.
+                const expireTime = localStorage.getItem(`gluon_card_expire_${card.id}`);
+                const now = new Date().getTime();
+                
+                if (expireTime && now < parseInt(expireTime)) {
+                    this.scoredThisSession.add(card.id);
+                    return; 
+                }
+                
                 this.scoredThisSession.add(card.id);
-                card.score++; // Atualiza UI Otimista
+                
+                const nextScore = Math.min(card.score + 1, 20);
+                const nextExpire = now + (nextScore * 24 * 60 * 60 * 1000);
+                localStorage.setItem(`gluon_card_expire_${card.id}`, nextExpire.toString());
+                
+                card.score = nextScore; // Atualiza UI Otimista
                 
                 const maxPossible = this.totalCardsInDeck * 20;
                 let currentTotal = this.cards.reduce((sum, c) => sum + c.score, 0);
                 this.deckPercentage = maxPossible > 0 ? Math.round((currentTotal / maxPossible) * 100) : 0;
                 this.updateGlobalProgressUI();
 
-                // Backend processa o aumento e agenda +24h
+                // Atualização instantânea dos pontinhos ao virar a carta.
+                if (this.deckMode === 'aleatorio') {
+                    let dotsHtml = '';
+                    for (let i = 0; i < 10; i++) {
+                        let fillClass = card.score >= (i + 1) * 2 ? 'filled' : (card.score === (i * 2) + 1 ? 'half-filled' : '');
+                        dotsHtml += `<div class="score-dot ${fillClass}"></div>`;
+                    }
+                    const frontDots = document.getElementById('frontScoreDots');
+                    const backDots = document.getElementById('backScoreDots');
+                    if (frontDots) frontDots.innerHTML = dotsHtml;
+                    if (backDots) backDots.innerHTML = dotsHtml;
+                }
+
+                // Backend processa o aumento e agenda a data limite.
                 this.api('update_score', { card_id: card.id }).catch(e => console.error("Score não salvo", e));
             },
 
             saveBookProgress() {
-                this.updateGlobalProgressUI(); // Atualiza a barra de % de leitura
+                this.updateGlobalProgressUI(); 
                 this.api('update_progress', { deck_id: this.deckId, index: this.currentIndex }).catch(e => console.error("Progresso não salvo", e));
             },
 
@@ -611,7 +629,7 @@
                     const line = lines[i].trim();
                     if (!line) continue;
                     const columns = line.split('\t');
-                    if (columns.length >= 1) { // Aceita 1 coluna agora!
+                    if (columns.length >= 1) { 
                         result.push({ front: columns[0].trim(), back: columns[1] ? columns[1].trim() : '' });
                     }
                 }
@@ -675,14 +693,13 @@
                 if (res) {
                     this.showToast(res.message, 'success');
                     this.closeModals();
-                    await this.loadDeck(); // Recarrega com as novas regras
+                    await this.loadDeck(); 
                 }
                 btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar';
                 btn.disabled = false;
             },
 
             async translateCard() {
-                // A Lógica de tradução OpenAI permanece a mesma
                 const frontEl = document.getElementById('singleFront');
                 const backEl = document.getElementById('singleBack');
                 const frontText = frontEl.value.trim();
