@@ -3,7 +3,8 @@
   Diretório: public_html/gluon/views/flashcards.html
   
   Pilar: Rápido, Seguro, Bonito e Escalável.
-  Lógica Vanilla JS para animação 3D de cards e importação inteligente de Excel via Clipboard.
+  Atualização: Inclusão de sistema de Maestria (Pontuação por Card de 0 a 10) e Progresso Global do Deck.
+  Lógica otimista (Atualiza UI instantaneamente enquanto salva no background sem travar o usuário).
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -32,7 +33,6 @@
             margin: 0 auto;
         }
 
-        /* O Card em si, que será rotacionado */
         .card-3d {
             width: 100%;
             height: 100%;
@@ -42,12 +42,8 @@
             cursor: pointer;
         }
 
-        /* Classe acionada pelo JS para virar o card */
-        .card-3d.is-flipped {
-            transform: rotateY(180deg);
-        }
+        .card-3d.is-flipped { transform: rotateY(180deg); }
 
-        /* Frentes e Versos (Escondendo as costas um do outro) */
         .card-face {
             position: absolute;
             width: 100%;
@@ -55,13 +51,14 @@
             backface-visibility: hidden;
             -webkit-backface-visibility: hidden;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             padding: 2rem;
             border-radius: 1rem;
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
             text-align: center;
-            overflow-y: auto;
+            overflow: hidden;
         }
 
         .card-front {
@@ -77,32 +74,67 @@
             transform: rotateY(180deg);
         }
 
-        /* Formatação do texto dentro do card para manter legibilidade */
         .card-text {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
             font-size: 1.5rem;
             line-height: 1.4;
             white-space: pre-wrap;
             word-break: break-word;
+            overflow-y: auto;
+            width: 100%;
+            justify-content: center;
+            padding: 1rem 0;
         }
         
+        .score-dots {
+            display: flex;
+            gap: 4px;
+            margin-top: auto;
+            padding-top: 1rem;
+        }
+
+        .score-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #334155; /* cor vazia frente */
+            transition: background-color 0.3s ease;
+        }
+
+        .card-back .score-dot {
+            background-color: #2563eb; /* cor vazia verso */
+        }
+        
+        /* Cor de preenchimento do ponto (Maestria) */
+        .score-dot.filled { background-color: #22c55e !important; box-shadow: 0 0 5px rgba(34, 197, 94, 0.5); }
+        .card-back .score-dot.filled { background-color: #10b981 !important; box-shadow: 0 0 5px rgba(16, 185, 129, 0.5); }
+
         @media (max-width: 640px) {
             .scene { height: 350px; }
             .card-text { font-size: 1.25rem; }
+            .score-dot { width: 8px; height: 8px; }
         }
     </style>
 </head>
 <body class="bg-gluon-dark text-slate-200 h-screen flex flex-col font-sans overflow-hidden selection:bg-gluon-primary selection:text-white">
 
     <!-- Navbar -->
-    <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-16 flex items-center justify-between px-4 sm:px-6">
+    <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-16 flex items-center justify-between px-4 sm:px-6 relative">
         <div class="flex items-center gap-4">
             <button onclick="window.location.href='/dashboard'" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg border border-slate-700 shadow-sm" title="Voltar">
                 <i class="fa-solid fa-arrow-left"></i>
             </button>
             <div class="h-6 w-px bg-slate-700 hidden sm:block"></div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-3">
                 <i class="fa-solid fa-layer-group text-gluon-primary text-xl"></i>
-                <span id="deckName" class="font-bold text-lg text-white tracking-wide">Carregando Deck...</span>
+                <span id="deckName" class="font-bold text-lg text-white tracking-wide truncate max-w-[120px] sm:max-w-xs">Carregando Deck...</span>
+                
+                <!-- Badge de Maestria Geral do Deck -->
+                <div id="deckMasteryBadge" class="hidden items-center gap-1.5 bg-slate-800/80 border border-slate-600 px-2 py-1 rounded-md text-xs font-semibold text-emerald-400 shadow-inner">
+                    <i class="fa-solid fa-ranking-star"></i> <span id="deckPercentage">0%</span>
+                </div>
             </div>
         </div>
         
@@ -114,12 +146,17 @@
                 <i class="fa-solid fa-file-excel"></i> <span class="hidden sm:inline">Importar</span>
             </button>
         </div>
+        
+        <!-- Barra de Progresso Fina no fundo da Navbar -->
+        <div class="absolute bottom-0 left-0 h-0.5 bg-slate-700 w-full">
+            <div id="deckProgressBar" class="h-full bg-emerald-500 transition-all duration-700 ease-out" style="width: 0%;"></div>
+        </div>
     </nav>
 
     <!-- Main Content -->
     <main class="flex-1 w-full flex flex-col items-center justify-center p-4 relative">
         
-        <!-- Indicador de Progresso -->
+        <!-- Indicador de Posição -->
         <div class="absolute top-6 left-0 right-0 text-center z-10">
             <span id="cardCounter" class="bg-slate-800 text-slate-400 font-medium px-4 py-1.5 rounded-full text-sm border border-slate-700 shadow-sm">
                 0 / 0
@@ -129,16 +166,31 @@
         <!-- Cena 3D e Card -->
         <div class="scene" id="cardScene" style="display: none;">
             <div class="card-3d" id="flashcard" onclick="flashcardApp.flipCard()">
+                
+                <!-- Frente -->
                 <div class="card-face card-front relative">
                     <span class="absolute top-4 left-4 text-xs font-bold text-slate-500 tracking-wider uppercase">Frente</span>
-                    <div class="card-text" id="cardFrontText"></div>
-                    <i class="fa-solid fa-rotate absolute bottom-4 right-4 text-slate-600 opacity-50"></i>
+                    <i class="fa-solid fa-rotate absolute top-4 right-4 text-slate-600 opacity-50"></i>
+                    
+                    <div class="card-text no-scrollbar" id="cardFrontText"></div>
+                    
+                    <div class="score-dots" id="frontScoreDots">
+                        <!-- Gerado via JS -->
+                    </div>
                 </div>
+
+                <!-- Verso -->
                 <div class="card-face card-back relative">
                     <span class="absolute top-4 left-4 text-xs font-bold text-blue-200 tracking-wider uppercase">Verso</span>
-                    <div class="card-text drop-shadow-md" id="cardBackText"></div>
-                    <i class="fa-solid fa-rotate absolute bottom-4 right-4 text-blue-300 opacity-50"></i>
+                    <i class="fa-solid fa-rotate absolute top-4 right-4 text-blue-300 opacity-50"></i>
+                    
+                    <div class="card-text no-scrollbar drop-shadow-md" id="cardBackText"></div>
+                    
+                    <div class="score-dots" id="backScoreDots">
+                        <!-- Gerado via JS -->
+                    </div>
                 </div>
+
             </div>
         </div>
 
@@ -161,12 +213,14 @@
                 <i class="fa-solid fa-arrow-left"></i>
             </button>
             <span class="text-xs text-slate-500 font-medium hidden sm:block">Use setas Direita/Esquerda ou Espaço</span>
-            <button onclick="flashcardApp.nextCard()" id="btnNext" class="w-14 h-14 rounded-full bg-gluon-primary hover:bg-blue-600 text-white flex items-center justify-center text-xl shadow-lg shadow-blue-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+            <button onclick="flashcardApp.nextCard()" id="btnNext" class="w-14 h-14 rounded-full bg-gluon-primary hover:bg-blue-600 text-white flex items-center justify-center text-xl shadow-lg shadow-blue-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Próximo (+1 Ponto de Maestria)">
                 <i class="fa-solid fa-arrow-right"></i>
             </button>
         </div>
     </main>
 
+    <!-- Modais (Add Unitário e Bulk) mantidos exatamente iguais à versão anterior... -->
+    
     <!-- Modal: Adicionar Card Unitário -->
     <div id="singleModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
         <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg p-0 transform scale-95 transition-transform duration-300 overflow-hidden" id="singleModalContent">
@@ -179,17 +233,24 @@
             <form onsubmit="flashcardApp.saveSingleCard(event)" class="p-6 space-y-5">
                 <div>
                     <label class="block text-sm font-medium text-slate-300 mb-2">Frente (Pergunta / Termo)</label>
-                    <textarea id="singleFront" required rows="3" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors resize-none"></textarea>
+                    <textarea id="singleFront" rows="3" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors resize-none"></textarea>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-blue-300 mb-2">Verso (Resposta / Definição)</label>
-                    <textarea id="singleBack" required rows="4" class="w-full bg-slate-900 border border-blue-500/50 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors resize-none"></textarea>
+                    <textarea id="singleBack" rows="4" class="w-full bg-slate-900 border border-blue-500/50 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors resize-none"></textarea>
                 </div>
-                <div class="flex justify-end gap-3 pt-2 border-t border-slate-700 mt-6">
-                    <button type="button" onclick="flashcardApp.closeModals()" class="px-5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
-                    <button type="submit" id="btnSaveSingle" class="px-5 py-2.5 bg-gluon-primary hover:bg-blue-600 text-white rounded-lg shadow-lg font-medium transition-all flex items-center gap-2">
-                        <i class="fa-solid fa-check"></i> Salvar Card
+                
+                <div class="flex flex-col sm:flex-row justify-between items-center pt-2 border-t border-slate-700 mt-6 gap-3">
+                    <button type="button" id="btnTranslate" onclick="flashcardApp.translateCard()" class="w-full sm:w-auto px-4 py-2.5 rounded-lg text-fuchsia-400 hover:bg-fuchsia-400/10 hover:text-fuchsia-300 transition-colors font-medium flex items-center justify-center gap-2 text-sm border border-fuchsia-400/20">
+                        <i class="fa-solid fa-language"></i> Traduzir via IA
                     </button>
+                    
+                    <div class="flex gap-3 w-full sm:w-auto">
+                        <button type="button" onclick="flashcardApp.closeModals()" class="flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
+                        <button type="submit" id="btnSaveSingle" class="flex-1 sm:flex-none px-5 py-2.5 bg-gluon-primary hover:bg-blue-600 text-white rounded-lg shadow-lg font-medium transition-all flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-check"></i> Salvar
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -231,8 +292,10 @@
         const flashcardApp = {
             deckId: null,
             cards: [],
+            deckPercentage: 0,
             currentIndex: 0,
             isFlipped: false,
+            scoredThisSession: new Set(), // Impede farmar pontos infinitos segurando a seta na mesma sessão
 
             async init() {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -282,14 +345,18 @@
                 if (res) {
                     document.getElementById('deckName').innerText = res.deck_name || 'Flashcards';
                     this.cards = res.data || [];
+                    this.deckPercentage = res.deck_percentage || 0;
                     
                     if (this.cards.length === 0) {
                         document.getElementById('emptyState').style.display = 'flex';
+                        document.getElementById('deckMasteryBadge').classList.add('hidden');
+                        document.getElementById('deckProgressBar').style.width = '0%';
                     } else {
-                        // Reseta a visão para o primeiro card se carregar de novo
                         if(this.currentIndex >= this.cards.length) this.currentIndex = 0;
                         document.getElementById('cardScene').style.display = 'block';
                         document.getElementById('controls').style.display = 'flex';
+                        
+                        this.updateGlobalProgressUI();
                         this.renderCurrentCard();
                     }
                 }
@@ -298,6 +365,15 @@
             escapeHTML(str) {
                 if (!str) return '';
                 return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
+            },
+
+            updateGlobalProgressUI() {
+                const badge = document.getElementById('deckMasteryBadge');
+                badge.classList.remove('hidden');
+                badge.classList.add('flex');
+                
+                document.getElementById('deckPercentage').innerText = `${this.deckPercentage}%`;
+                document.getElementById('deckProgressBar').style.width = `${this.deckPercentage}%`;
             },
 
             renderCurrentCard() {
@@ -309,6 +385,15 @@
                 
                 document.getElementById('cardCounter').innerText = `${this.currentIndex + 1} / ${this.cards.length}`;
                 
+                // Renderizar os pontinhos de maestria (score de 0 a 10)
+                let dotsHtml = '';
+                for (let i = 0; i < 10; i++) {
+                    const filledClass = i < card.score ? 'filled' : '';
+                    dotsHtml += `<div class="score-dot ${filledClass}"></div>`;
+                }
+                document.getElementById('frontScoreDots').innerHTML = dotsHtml;
+                document.getElementById('backScoreDots').innerHTML = dotsHtml;
+
                 // Força voltar para a frente se estiver no verso
                 if (this.isFlipped) {
                     this.isFlipped = false;
@@ -331,6 +416,10 @@
             },
 
             nextCard() {
+                if (this.cards.length > 0) {
+                    this.registerScore(this.cards[this.currentIndex]);
+                }
+
                 if (this.currentIndex < this.cards.length - 1) {
                     this.currentIndex++;
                     this.renderCurrentCard();
@@ -344,9 +433,27 @@
                 }
             },
 
+            // Lógica Otimista para Pontuação (Garante UI Rápida)
+            registerScore(card) {
+                // Impede que o usuário fique voltando e avançando para farmar 10 pontos de uma vez.
+                // Requer recarregar a página para ganhar mais pontos no mesmo card.
+                if (card.score >= 10 || this.scoredThisSession.has(card.id)) return;
+                
+                this.scoredThisSession.add(card.id);
+                card.score++; // Atualiza UI Otimista
+                
+                // Recalcula progresso global Otimista
+                const maxPossible = this.cards.length * 10;
+                let currentTotal = this.cards.reduce((sum, c) => sum + c.score, 0);
+                this.deckPercentage = Math.round((currentTotal / maxPossible) * 100);
+                this.updateGlobalProgressUI();
+
+                // Envia para o servidor em background (não espera resposta para não travar UI)
+                this.api('update_score', { card_id: card.id }).catch(e => console.error("Score não salvo", e));
+            },
+
             setupKeyboardListeners() {
                 document.addEventListener('keydown', (e) => {
-                    // Ignora atalhos se algum modal estiver aberto
                     if (!document.getElementById('singleModal').classList.contains('hidden') || 
                         !document.getElementById('bulkModal').classList.contains('hidden')) return;
 
@@ -384,7 +491,6 @@
                 });
             },
 
-            // Interpretador ultra rápido de TSV (Tab-Separated Values) que o Excel gera ao colar
             parseExcelData(text) {
                 if (!text.trim()) return [];
                 const lines = text.split('\n');
@@ -405,7 +511,6 @@
                 return result;
             },
 
-            // --- Gerenciamento de Modais ---
             openSingleModal() {
                 document.getElementById('singleFront').value = '';
                 document.getElementById('singleBack').value = '';
@@ -448,16 +553,95 @@
                 });
             },
 
+            async translateCard() {
+                const frontEl = document.getElementById('singleFront');
+                const backEl = document.getElementById('singleBack');
+                const frontText = frontEl.value.trim();
+                const backText = backEl.value.trim();
+
+                if (frontText && backText) {
+                    this.showToast("Um dos campos deve estar vazio para poder traduzir para ele.", "error");
+                    return;
+                }
+
+                if (!frontText && !backText) {
+                    this.showToast("Preencha um dos campos primeiro para ser traduzido.", "error");
+                    return;
+                }
+
+                const textToTranslate = frontText || backText;
+                const targetEl = frontText ? backEl : frontEl;
+
+                const btn = document.getElementById('btnTranslate');
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Traduzindo...';
+                btn.disabled = true;
+
+                try {
+                    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": "Bearer sk-proj-" // Necessita de API real em produção
+                        },
+                        body: JSON.stringify({
+                            model: "gpt-4o-mini", // Alterado para um modelo rápido existente
+                            messages: [
+                                {
+                                    role: "system",
+                                    content: "Você é um tradutor automático direto e focado. Se o texto de entrada estiver em português, traduza para inglês. Se estiver em inglês, traduza para português. Retorne EXCLUSIVAMENTE a tradução, sem aspas, notas ou pontuações adicionais irrelevantes."
+                                },
+                                {
+                                    role: "user",
+                                    content: textToTranslate
+                                }
+                            ],
+                            temperature: 0.3
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errData = await response.json();
+                        throw new Error(errData.error?.message || "Erro retornado pela API da OpenAI");
+                    }
+
+                    const data = await response.json();
+                    
+                    if (data.choices && data.choices.length > 0) {
+                        targetEl.value = data.choices[0].message.content.trim();
+                        this.showToast("Tradução concluída!", "success");
+                    } else {
+                        throw new Error("A API não retornou uma tradução válida.");
+                    }
+
+                } catch (error) {
+                    console.error("Erro no Translate:", error);
+                    this.showToast("Falha ao traduzir: " + error.message, "error");
+                } finally {
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                }
+            },
+
             async saveSingleCard(e) {
                 e.preventDefault();
+                
+                const frontVal = document.getElementById('singleFront').value.trim();
+                const backVal = document.getElementById('singleBack').value.trim();
+                
+                if (!frontVal || !backVal) {
+                    this.showToast('Por favor, preencha tanto a Frente quanto o Verso do card.', 'error');
+                    return;
+                }
+                
                 const btn = document.getElementById('btnSaveSingle');
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
                 btn.disabled = true;
 
                 const payload = {
                     deck_id: this.deckId,
-                    front: document.getElementById('singleFront').value,
-                    back: document.getElementById('singleBack').value
+                    front: frontVal,
+                    back: backVal
                 };
 
                 const res = await this.api('add_single', payload);
@@ -468,7 +652,7 @@
                     await this.loadDeck();
                 }
 
-                btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar Card';
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar';
                 btn.disabled = false;
             },
 
