@@ -118,14 +118,15 @@ elseif ($action === 'update_score') {
 
     if ($owner != $user_id) die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
 
-    // Repetição Espaçada: score * 24 horas. Se for a primeira vez (score=1), adiciona 24h. Se for 2, 48h, etc.
+    // Repetição Espaçada Segura: Impede update no banco se a data de revisão daquele cartão não tiver chegado,
+    // garantindo zero chance de fraudes via API.
     $stmt = $pdo->prepare("
         INSERT INTO flashcard_scores (user_id, flashcard_id, score, next_review_at) 
         VALUES (?, ?, 1, DATE_ADD(NOW(), INTERVAL 24 HOUR)) 
         ON DUPLICATE KEY UPDATE 
-            score = LEAST(score + 1, 20), 
-            next_review_at = DATE_ADD(NOW(), INTERVAL (LEAST(score + 1, 20) * 24) HOUR),
-            last_reviewed_at = CURRENT_TIMESTAMP
+            score = IF(next_review_at IS NULL OR next_review_at <= NOW(), LEAST(score + 1, 20), score), 
+            last_reviewed_at = IF(next_review_at IS NULL OR next_review_at <= NOW(), CURRENT_TIMESTAMP, last_reviewed_at),
+            next_review_at = IF(next_review_at IS NULL OR next_review_at <= NOW(), DATE_ADD(NOW(), INTERVAL (LEAST(score + 1, 20) * 24) HOUR), next_review_at)
     ");
     
     if ($stmt->execute([$user_id, $card_id])) {
@@ -167,7 +168,7 @@ elseif ($action === 'update_settings') {
 elseif ($action === 'add_single') {
     $deck_id = (int)($input['deck_id'] ?? 0);
     $front = trim($input['front'] ?? '');
-    $back = trim($input['back'] ?? ''); // Pode ser vazio agora
+    $back = trim($input['back'] ?? ''); 
 
     if ($deck_id === 0 || empty($front)) {
         die(json_encode(['status' => 'error', 'message' => 'Dados inválidos. A frente é obrigatória.']));
