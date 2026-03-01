@@ -1,6 +1,8 @@
 <!-- 
   Arquivo: adjacency.html
   Diretório: public_html/gluon/views/adjacency.html
+  Pilar: Fácil Manutenção e Escalabilidade.
+  Atualização: Lógica de Colapso (Árvore inicia fechada), alinhamento da UI melhorado e performance na re-renderização.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -10,13 +12,14 @@
     <title>Gluon - Lista de Controle</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Adicionado SortableJS para Drag and Drop -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script>tailwind.config = { theme: { extend: { colors: { gluon: { dark: '#0f172a', primary: '#3b82f6', secondary: '#1e293b' } } } } }</script>
     <style>
         .tree-line { position: relative; }
-        .tree-line::before { content: ''; position: absolute; left: 11px; top: 32px; bottom: -10px; width: 2px; background-color: #334155; }
+        /* O traço da árvore foi realinhado para bater exatamente no centro do botão de expandir (22px) */
+        .tree-line::before { content: ''; position: absolute; left: 22px; top: 32px; bottom: -10px; width: 2px; background-color: #334155; }
         .tree-line:last-child::before { display: none; }
+        
         .custom-checkbox { width: 1.25rem; height: 1.25rem; border-radius: 0.25rem; border: 2px solid #475569; appearance: none; cursor: pointer; position: relative; transition: all 0.2s; background: #1e293b; }
         .custom-checkbox:checked { background-color: #22c55e; border-color: #22c55e; }
         .custom-checkbox:checked::after { content: ''; position: absolute; left: 5px; top: 1px; width: 6px; height: 12px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); }
@@ -58,7 +61,6 @@
     </nav>
 
     <main class="flex-1 w-full max-w-5xl mx-auto p-4 sm:p-8">
-        <!-- Dica animada visível apenas no modo de reordenação -->
         <div id="reorder-hint" class="hidden mb-4 animate-pulse text-green-400 text-sm font-medium text-center bg-green-500/10 py-2 px-4 rounded-lg border border-green-500/20">
             <i class="fa-solid fa-hand-pointer mr-2"></i> Arraste os itens para reordenar ou aninhar uns dentro dos outros
         </div>
@@ -98,6 +100,7 @@
             items: [],
             reorderMode: false,
             sortableInstances: [],
+            expandedNodes: new Set(), // Estado persistente de quais nós estão abertos
 
             async init() {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -134,6 +137,16 @@
                 }
             },
 
+            toggleExpand(id, event) {
+                if (event) event.stopPropagation();
+                if (this.expandedNodes.has(id)) {
+                    this.expandedNodes.delete(id);
+                } else {
+                    this.expandedNodes.add(id);
+                }
+                this.render(); // Re-renderiza focando apenas na visibilidade e estados já computados
+            },
+
             toggleReorderMode() {
                 this.reorderMode = !this.reorderMode;
                 const btn = document.getElementById('btn-reorder');
@@ -152,21 +165,19 @@
                     hint.classList.add('hidden');
                 }
                 
-                this.render(); // Re-renderiza para aplicar zonas de drop vazias
+                this.render(); 
             },
 
             initSortable() {
-                // Destrói instâncias antigas
                 this.sortableInstances.forEach(inst => inst.destroy());
                 this.sortableInstances = [];
 
                 if (!this.reorderMode) return;
 
-                // Inicializa o Sortable para cada tag <ul> (lista)
                 const lists = document.querySelectorAll('.sortable-list');
                 lists.forEach(list => {
                     this.sortableInstances.push(new Sortable(list, {
-                        group: 'nested', // Permite arrastar entre níveis diferentes
+                        group: 'nested', 
                         animation: 150,
                         fallbackOnBody: true,
                         swapThreshold: 0.65,
@@ -182,7 +193,6 @@
                 const newOrder = [];
                 let orderCounter = 0;
 
-                // Função recursiva para ler a estrutura do DOM atualizada
                 const parseList = (ul, parentId) => {
                     const lis = ul.children;
                     for (let i = 0; i < lis.length; i++) {
@@ -190,8 +200,6 @@
                         const id = li.getAttribute('data-id');
                         if (id) {
                             newOrder.push({ id: id, parent_id: parentId, sort_order: orderCounter++ });
-                            
-                            // Procura a <ul> filha dentro dessa <li>
                             const nestedUl = li.querySelector(`:scope > ul[data-parent-id="${id}"]`);
                             if (nestedUl) {
                                 parseList(nestedUl, id);
@@ -203,7 +211,6 @@
                 const rootUl = document.querySelector('#treeContainer > ul.sortable-list');
                 if (rootUl) parseList(rootUl, null);
 
-                // Atualiza a matriz local preventivamente para evitar "pulos" de renderização
                 newOrder.forEach((item) => {
                     const localItem = this.items.find(i => i.id == item.id);
                     if (localItem) {
@@ -212,17 +219,14 @@
                     }
                 });
 
-                // Ordena a matriz local pelos novos índices
                 this.items.sort((a, b) => a.sort_order - b.sort_order);
 
-                // Envia para a API salvar
                 const response = await this.api('reorder', { items: newOrder });
                 if(response.status === 'success') {
-                    // Re-renderiza para re-inicializar o Sortable e fixar classes vazias
                     this.render(); 
                 } else {
                     this.showToast('Erro ao salvar a nova ordem', 'error');
-                    await this.loadData(); // Reverte em caso de erro
+                    await this.loadData();
                 }
             },
 
@@ -238,7 +242,6 @@
                     return;
                 }
                 
-                // Embrulha tudo em uma <ul> root para o Sortable funcionar na raiz
                 container.innerHTML = `<ul data-parent-id="" class="sortable-list space-y-3 min-h-[50px]">
                     ${this.buildTree(null)}
                 </ul>`;
@@ -249,36 +252,49 @@
 
             buildTree(parentId) {
                 const children = this.items.filter(i => i.parent_id == parentId);
-                
-                // Para permitir que o usuário arraste um item para dentro de um item vazio (sem filhos),
-                // nós precisamos renderizar a tag <ul> vazia. No modo normal ela fica invisível.
-                if (children.length === 0) {
-                    return `<ul data-parent-id="${parentId || ''}" class="sortable-list ${this.reorderMode ? 'empty-drop-zone' : ''}"></ul>`;
-                }
-                
                 let html = '';
+                
                 children.forEach(child => {
                     const isChecked = parseInt(child.is_completed) === 1 ? 'checked' : '';
                     const badge = child.division_type ? `<span class="bg-slate-700 text-[10px] sm:text-xs px-2 py-0.5 rounded text-blue-300 uppercase tracking-wider font-semibold border border-slate-600 shrink-0">${this.escapeHTML(child.division_type)}</span>` : '';
                     
+                    const hasChildren = this.items.some(i => i.parent_id == child.id);
+                    const isExpanded = this.expandedNodes.has(child.id);
+                    
+                    let chevronHtml = '';
+                    if (hasChildren) {
+                        chevronHtml = `<button type="button" onclick="adjApp.toggleExpand(${child.id}, event)" class="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 rounded-md transition-colors shrink-0">
+                            <i class="fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'} text-xs"></i>
+                        </button>`;
+                    } else {
+                        // Placeholder com tamanho exato para manter o alinhamento
+                        chevronHtml = `<div class="w-7 h-7 shrink-0"></div>`;
+                    }
+
+                    // Apenas renderiza a drop-zone vazia se não tiver filhos E estiver em modo reordenação
+                    const emptyDropClass = (!hasChildren && this.reorderMode) ? 'empty-drop-zone' : '';
+                    const ulVisibility = (isExpanded || emptyDropClass) ? '' : 'hidden';
+
                     html += `
                     <li data-id="${child.id}" class="${parentId ? 'tree-line' : ''}">
-                        <div class="node-item flex items-center gap-2 sm:gap-3 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 p-2 sm:p-2.5 rounded-lg transition-colors group relative z-10">
+                        <div class="node-item flex items-center gap-2 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 p-2 rounded-lg transition-colors group relative z-10">
                             
                             <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle px-1"></i>
+                            
+                            ${chevronHtml}
                             
                             <input type="checkbox" id="chk_${child.id}" class="custom-checkbox shrink-0" ${isChecked} onchange="adjApp.toggleNode(${child.id}, this.checked)">
                             
                             ${badge}
                             <span class="flex-1 font-medium text-slate-200 text-sm sm:text-base ${isChecked ? 'line-through opacity-50' : ''}">${this.escapeHTML(child.label)}</span>
                             
-                            <div class="action-buttons opacity-0 group-hover:opacity-100 flex gap-1 sm:gap-2 transition-opacity shrink-0">
-                                <button onclick="adjApp.openModal(${child.id})" class="text-slate-400 hover:text-white bg-slate-900 p-1.5 rounded" title="Adicionar Subdivisão"><i class="fa-solid fa-plus text-xs"></i></button>
-                                <button onclick="adjApp.deleteNode(${child.id})" class="text-red-400 hover:text-red-300 bg-slate-900 p-1.5 rounded"><i class="fa-solid fa-trash text-xs"></i></button>
+                            <div class="action-buttons opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity shrink-0">
+                                <button onclick="adjApp.openModal(${child.id})" class="text-slate-400 hover:text-white bg-slate-900 w-7 h-7 flex items-center justify-center rounded" title="Adicionar Subdivisão"><i class="fa-solid fa-plus text-xs"></i></button>
+                                <button onclick="adjApp.deleteNode(${child.id})" class="text-red-400 hover:text-red-300 bg-slate-900 w-7 h-7 flex items-center justify-center rounded" title="Excluir"><i class="fa-solid fa-trash text-xs"></i></button>
                             </div>
                         </div>
                         
-                        <ul data-parent-id="${child.id}" class="sortable-list pl-4 sm:pl-6 mt-2 space-y-2 min-h-[5px]">
+                        <ul data-parent-id="${child.id}" class="sortable-list pl-5 mt-2 space-y-2 min-h-[5px] ${ulVisibility} ${emptyDropClass}">
                             ${this.buildTree(child.id)}
                         </ul>
                     </li>`;
@@ -366,11 +382,18 @@
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
                 btn.disabled = true;
 
+                const parentId = document.getElementById('modalParentId').value;
+
                 await this.api('add', {
-                    parent_id: document.getElementById('modalParentId').value,
+                    parent_id: parentId,
                     label: document.getElementById('modalLabel').value,
                     division_type: document.getElementById('modalType').value
                 });
+                
+                // Se adicionamos dentro de um tópico, garantimos que ele abrirá automaticamente para vermos o novo item
+                if (parentId) {
+                    this.expandedNodes.add(parseInt(parentId));
+                }
                 
                 this.closeModal();
                 await this.loadData();
