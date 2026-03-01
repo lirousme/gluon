@@ -59,6 +59,7 @@ user_id INT UNSIGNED NOT NULL,
 parent_id INT UNSIGNED DEFAULT NULL, -- NULL significa que está na Raiz
 target_id INT UNSIGNED DEFAULT NULL, -- NOVO: ID do diretório alvo (Apenas para Portais)
 type TINYINT DEFAULT 0,              -- 0 = Pasta, 1 = Arquivo de Código, 2 = Agenda, 3 = Portal, 4 = Deck de Flashcards
+deck_mode VARCHAR(20) DEFAULT 'aleatorio';
 name_encrypted TEXT NOT NULL,        -- Nome do diretório criptografado
 default_view VARCHAR(10) DEFAULT 'grid',
 new_item_position VARCHAR(10) DEFAULT 'end',
@@ -120,7 +121,7 @@ TABELA: flashcards
 id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 directory_id INT UNSIGNED NOT NULL, -- FK referenciando directories (Deck)
 front_encrypted TEXT NOT NULL,      -- Frente do card criptografada
-back_encrypted TEXT NOT NULL,       -- Verso do card criptografado
+back_encrypted TEXT DEFAULT NULL,       -- Verso do card criptografado
 sort_order INT DEFAULT 0,           -- Para ordenar os cards no futuro, se necessário
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
@@ -135,6 +136,7 @@ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 user_id INT UNSIGNED NOT NULL,
 flashcard_id INT UNSIGNED NOT NULL,
 score TINYINT UNSIGNED DEFAULT 0 COMMENT 'Max 20',
+next_review_at DATETIME DEFAULT NULL,
 last_reviewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
 UNIQUE KEY unique_user_card (user_id, flashcard_id),
@@ -158,3 +160,19 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
 FOREIGN KEY (parent_id) REFERENCES adjacency_items(id) ON DELETE CASCADE
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+======================================================================
+
+TABELA flashcard_book_progress
+id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+user_id INT UNSIGNED NOT NULL,
+directory_id INT UNSIGNED NOT NULL,
+current_index INT UNSIGNED DEFAULT 0,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+UNIQUE KEY unique_user_deck (user_id, directory_id),
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+======================================================================
