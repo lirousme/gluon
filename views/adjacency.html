@@ -2,7 +2,7 @@
   Arquivo: adjacency.html
   Diretório: public_html/gluon/views/adjacency.html
   Pilar: Fácil Manutenção e Escalabilidade.
-  Atualização: Lógica de Colapso (Árvore inicia fechada), alinhamento da UI melhorado e performance na re-renderização.
+  Atualização: Inserção de persistência no estado de nós abertos/fechados via localStorage por lista.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -106,8 +106,37 @@
                 const urlParams = new URLSearchParams(window.location.search);
                 this.dirId = urlParams.get('id');
                 if (!this.dirId) window.location.href = '/dashboard';
+                
+                this.loadExpandedState();
                 await this.loadData();
             },
+
+            // --- Lógica de Persistência na Memória do Navegador ---
+            getStorageKey() {
+                return `gluon_adj_expanded_${this.dirId}`;
+            },
+
+            loadExpandedState() {
+                try {
+                    const saved = localStorage.getItem(this.getStorageKey());
+                    if (saved) {
+                        this.expandedNodes = new Set(JSON.parse(saved));
+                    }
+                } catch(e) {
+                    console.error("Erro ao carregar estado da árvore", e);
+                    this.expandedNodes = new Set();
+                }
+            },
+
+            saveExpandedState() {
+                try {
+                    // Sets não são serializáveis diretamente, convertemos para Array
+                    localStorage.setItem(this.getStorageKey(), JSON.stringify(Array.from(this.expandedNodes)));
+                } catch(e) {
+                    console.error("Erro ao salvar estado da árvore", e);
+                }
+            },
+            // --------------------------------------------------------
 
             showToast(message, type = 'success') {
                 let toast = document.getElementById('gluon-toast');
@@ -144,6 +173,7 @@
                 } else {
                     this.expandedNodes.add(id);
                 }
+                this.saveExpandedState();
                 this.render(); // Re-renderiza focando apenas na visibilidade e estados já computados
             },
 
@@ -393,6 +423,7 @@
                 // Se adicionamos dentro de um tópico, garantimos que ele abrirá automaticamente para vermos o novo item
                 if (parentId) {
                     this.expandedNodes.add(parseInt(parentId));
+                    this.saveExpandedState(); // Salva estado para persistir aberto após reload
                 }
                 
                 this.closeModal();
