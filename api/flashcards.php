@@ -4,8 +4,8 @@
 
 /**
  * MICRO-API DE FLASHCARDS
- * Pilar: Seguro, Rápido e Separação de Responsabilidades.
- * Gerencia a inserção, leitura e criptografia dos Flashcards.
+ * Pilar: Seguro, Rápido e Escalável.
+ * Gerencia CRUD, Criptografia e Motor de Pontuação/Gameficação.
  */
 
 require_once __DIR__ . '/../config/database.php';
@@ -36,24 +36,79 @@ if ($action === 'fetch') {
         die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
     }
 
-    $stmt = $pdo->prepare("SELECT id, front_encrypted, back_encrypted FROM flashcards WHERE directory_id = ? ORDER BY sort_order ASC, id ASC");
-    $stmt->execute([$deck_id]);
+    // Traz os cards junto com a pontuação específica DO USUÁRIO ATUAL (LEFT JOIN)
+    $stmt = $pdo->prepare("
+        SELECT f.id, f.front_encrypted, f.back_encrypted, COALESCE(fs.score, 0) as score 
+        FROM flashcards f
+        LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
+        WHERE f.directory_id = ? 
+        ORDER BY f.sort_order ASC, f.id ASC
+    ");
+    $stmt->execute([$user_id, $deck_id]);
     $cards = $stmt->fetchAll();
 
     $response = [];
+    $total_score = 0;
+    $max_possible_score = count($cards) * 10;
+
     foreach ($cards as $card) {
+        $score = (int)$card['score'];
+        $total_score += $score;
+        
         $response[] = [
             'id' => $card['id'],
             'front' => Security::decryptData($card['front_encrypted']),
-            'back' => Security::decryptData($card['back_encrypted'])
+            'back' => Security::decryptData($card['back_encrypted']),
+            'score' => $score
         ];
     }
+
+    // Calcula a porcentagem de maestria do Deck
+    $deck_percentage = $max_possible_score > 0 ? round(($total_score / $max_possible_score) * 100) : 0;
 
     echo json_encode([
         'status' => 'success', 
         'deck_name' => Security::decryptData($deck['name_encrypted']),
+        'deck_percentage' => $deck_percentage,
         'data' => $response
     ]);
+}
+
+elseif ($action === 'update_score') {
+    // Ação acionada em background quando o usuário clica em "Próximo"
+    $card_id = (int)($input['card_id'] ?? 0);
+    
+    if ($card_id === 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID do card inválido.']));
+    }
+
+    // Validação estrita de segurança: O card pertence a um deck do usuário logado?
+    $stmtCheck = $pdo->prepare("
+        SELECT d.user_id 
+        FROM flashcards f 
+        JOIN directories d ON f.directory_id = d.id 
+        WHERE f.id = ?
+    ");
+    $stmtCheck->execute([$card_id]);
+    $owner = $stmtCheck->fetchColumn();
+
+    if ($owner != $user_id) {
+        die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
+    }
+
+    // Usa UPSERT (ON DUPLICATE KEY UPDATE) para performance extrema e evitar condições de corrida
+    // A função LEAST(score + 1, 10) garante que nunca passe de 10.
+    $stmt = $pdo->prepare("
+        INSERT INTO flashcard_scores (user_id, flashcard_id, score) 
+        VALUES (?, ?, 1) 
+        ON DUPLICATE KEY UPDATE score = LEAST(score + 1, 10), last_reviewed_at = CURRENT_TIMESTAMP
+    ");
+    
+    if ($stmt->execute([$user_id, $card_id])) {
+        echo json_encode(['status' => 'success']);
+    } else {
+        echo json_encode(['status' => 'error']);
+    }
 }
 
 elseif ($action === 'add_single') {
