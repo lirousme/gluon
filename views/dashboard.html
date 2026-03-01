@@ -3,9 +3,7 @@
   Diretório: public_html/gluon/views/dashboard.html
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
-  Suporte completo a Pastas, Arquivos, Agendas, Portais (Atalhos), Drag&Drop, Recorrência.
-  *Atualizado: Integração completa com a History API (HTML5) para salvar os passos ("pegadas")
-   do usuário, permitindo o uso fluido dos botões Voltar/Avançar do navegador.
+  Suporte completo a Pastas, Arquivos, Agendas, Portais (Atalhos), Drag&Drop, Recorrência e Flashcards.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -151,7 +149,7 @@
         </div>
     </nav>
 
-    <!-- Main Workspace (A adição do min-h-0 previne o transbordamento do layout flex) -->
+    <!-- Main Workspace -->
     <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-0 flex flex-col overflow-hidden relative min-h-0">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 shrink-0">
             <div class="block text-sm text-slate-300 font-medium w-full flex-1 leading-relaxed break-words" id="breadcrumbs"></div>
@@ -203,7 +201,7 @@
                     
                     <div id="typeSelectorContainer" class="mb-5">
                         <label class="block text-sm font-medium text-slate-300 mb-2">Tipo de Item</label>
-                        <div class="grid grid-cols-3 gap-2">
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             <label class="cursor-pointer" onclick="app.handleTypeChange(0)">
                                 <input type="radio" name="itemType" value="0" class="peer hidden type-radio" checked>
                                 <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
@@ -220,6 +218,12 @@
                                 <input type="radio" name="itemType" value="2" class="peer hidden type-radio">
                                 <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
                                     <i class="fa-solid fa-calendar-days block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Agenda</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer" onclick="app.handleTypeChange(4)">
+                                <input type="radio" name="itemType" value="4" class="peer hidden type-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-layer-group block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Flashcards</span>
                                 </div>
                             </label>
                         </div>
@@ -365,7 +369,7 @@
                 isLoading: false,
                 reorderMode: false,
                 availableIcons: [
-                    'fa-folder', 'fa-folder-open', 'fa-file-code', 'fa-calendar-days', 'fa-door-open', 'fa-clock', 'fa-file-lines', 'fa-file-image', 'fa-file-pdf', 'fa-star', 'fa-heart', 'fa-image', 'fa-music', 'fa-video', 
+                    'fa-folder', 'fa-folder-open', 'fa-file-code', 'fa-calendar-days', 'fa-layer-group', 'fa-door-open', 'fa-clock', 'fa-file-lines', 'fa-file-image', 'fa-file-pdf', 'fa-star', 'fa-heart', 'fa-image', 'fa-music', 'fa-video', 
                     'fa-code', 'fa-terminal', 'fa-database', 'fa-server', 'fa-lock', 'fa-vault', 'fa-book', 'fa-briefcase', 'fa-globe', 'fa-list-check'
                 ]
             },
@@ -525,7 +529,6 @@
                 return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
             },
 
-            // --- Gerenciamento da History API ---
             updateHistoryState(id, portalId = null) {
                 let url = window.location.pathname;
                 if (portalId) {
@@ -555,16 +558,17 @@
                         } else if (targetDir.type === 2) {
                             window.location.href = `/schedule?id=${targetDir.id}`;
                             return;
+                        } else if (targetDir.type === 4) {
+                            window.location.href = `/flashcards?id=${targetDir.id}`;
+                            return;
                         }
 
                         this.state.path = [{ id: null, name: 'Meu Cofre', view: this.state.rootPrefs.view, type: 0 }, ...pathRes.data];
                     }
                 }
 
-                // Salva o estado inicial no histórico para garantir consistência
                 history.replaceState({ path: JSON.parse(JSON.stringify(this.state.path)) }, '', window.location.href);
 
-                // Escuta os eventos do botão Voltar / Avançar do Navegador
                 window.addEventListener('popstate', async (event) => {
                     if (event.state && event.state.path) {
                         this.state.path = event.state.path;
@@ -619,6 +623,10 @@
                     folderSettings.style.display = 'none';
                     nameLabel.innerText = 'Nome da Agenda / Cronograma';
                     this.autoChangeIcon('fa-calendar-days');
+                } else if (typeValue === 4) {
+                    folderSettings.style.display = 'none';
+                    nameLabel.innerText = 'Nome do Deck (Flashcards)';
+                    this.autoChangeIcon('fa-layer-group');
                 }
             },
 
@@ -776,6 +784,8 @@
                     window.location.href = `/editor?id=${id}`;
                 } else if (item.type === 2) {
                     window.location.href = `/schedule?id=${id}`;
+                } else if (item.type === 4) {
+                    window.location.href = `/flashcards?id=${id}`;
                 } else if (item.type === 3) {
                     if (!item.target_id) return this.showToast('Portal corrompido: Destino não encontrado.', 'error');
                     this.setLoading(true);
@@ -791,6 +801,9 @@
                         } else if (targetDir.type === 2) {
                             window.location.href = `/schedule?id=${targetDir.id}`;
                             return;
+                        } else if (targetDir.type === 4) {
+                            window.location.href = `/flashcards?id=${targetDir.id}`;
+                            return;
                         }
 
                         this.state.path.push({ 
@@ -800,7 +813,6 @@
                             type: 0 
                         });
                         
-                        // Guarda o rastro do portal no histórico para voltar perfeitamente
                         this.updateHistoryState(targetDir.id, item.id);
                         
                         if (this.state.reorderMode) this.toggleReorderMode();
@@ -812,7 +824,6 @@
                 } else {
                     this.state.path.push({ id: item.id, name: item.name, view: item.view, type: item.type });
                     
-                    // Empurra a nova navegação pro histórico nativo
                     this.updateHistoryState(item.id);
                     
                     if (this.state.reorderMode) this.toggleReorderMode();
@@ -831,10 +842,12 @@
                     } else if (targetStep.type === 2) {
                         window.location.href = `/schedule?id=${targetStep.id}`;
                         return;
+                    } else if (targetStep.type === 4) {
+                        window.location.href = `/flashcards?id=${targetStep.id}`;
+                        return;
                     }
                 }
                 
-                // Registra que voltamos para a pasta no histórico
                 this.updateHistoryState(targetStep.id);
 
                 if (this.state.reorderMode) this.toggleReorderMode();
@@ -862,7 +875,6 @@
                 this.updateTopButtons();
                 this.render();
                 
-                // Substitui (replace) o estado para manter a preferência de view se o usuário der F5 ou Voltar
                 history.replaceState({ path: JSON.parse(JSON.stringify(this.state.path)) }, '', window.location.href);
 
                 if (this.getCurrentParentId() === null) {
@@ -1046,6 +1058,7 @@
                         if(dirObj.type === 1) titleText = 'Arquivo';
                         if(dirObj.type === 2) titleText = 'Agenda';
                         if(dirObj.type === 3) titleText = 'Portal';
+                        if(dirObj.type === 4) titleText = 'Flashcards';
 
                         document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-gear text-gluon-primary"></i> <span>Configurar ${titleText}</span>`;
                         document.getElementById('dirNameContainer').classList.remove('hidden');
@@ -1055,6 +1068,7 @@
                         else if(dirObj.type === 1) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Arquivo'; iconPickerContainer.style.display = 'block'; } 
                         else if(dirObj.type === 2) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome da Agenda'; iconPickerContainer.style.display = 'block'; }
                         else if(dirObj.type === 3) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Portal'; iconPickerContainer.style.display = 'none'; btnRecor.classList.add('hidden'); }
+                        else if(dirObj.type === 4) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Deck'; iconPickerContainer.style.display = 'block'; }
                     } else {
                         document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus text-gluon-primary"></i> <span>Novo Item</span>';
                         document.getElementById('dirNameContainer').classList.remove('hidden');
@@ -1080,7 +1094,7 @@
                 document.getElementById('dirColorFrom').value = (dirObj && dirObj.color_from) ? dirObj.color_from : '#3b82f6';
                 document.getElementById('dirColorTo').value = (dirObj && dirObj.color_to) ? dirObj.color_to : '#6366f1';
                 
-                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (isRootSettings ? 'fa-folder' : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : (dirObj?.type === 3 ? 'fa-door-open' : 'fa-folder')))); 
+                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (isRootSettings ? 'fa-folder' : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : (dirObj?.type === 3 ? 'fa-door-open' : (dirObj?.type === 4 ? 'fa-layer-group' : 'fa-folder'))))); 
                 this.autoChangeIcon(iconToSelect);
 
                 const posToSelect = (dirObj && dirObj.new_item_position) ? dirObj.new_item_position : 'end';
@@ -1269,6 +1283,9 @@
                     } else if (dir.type === 2) {
                          container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60"><i class="fa-solid fa-calendar-days text-4xl mb-3" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i><span class="text-sm font-medium">Agenda</span><span class="text-xs mt-1 text-center px-4">Clique no topo para abrir</span></div>`;
                          return; 
+                    } else if (dir.type === 4) {
+                         container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60"><i class="fa-solid fa-layer-group text-4xl mb-3" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i><span class="text-sm font-medium">Flashcards</span><span class="text-xs mt-1 text-center px-4">Clique no topo para abrir</span></div>`;
+                         return; 
                     }
 
                     const targetFetchId = dir.type === 3 ? dir.target_id : dir.id;
@@ -1288,6 +1305,7 @@
                             if(sub.type === 1) itemBorder = 'border-indigo-500/50';
                             if(sub.type === 2) itemBorder = 'border-emerald-500/50';
                             if(sub.type === 3) itemBorder = 'border-fuchsia-500/50';
+                            if(sub.type === 4) itemBorder = 'border-amber-500/50';
                             
                             const repeatIcon = sub.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
 
@@ -1341,6 +1359,7 @@
                         if(dir.type === 1) borderClass = 'border-indigo-600/50';
                         if(dir.type === 2) borderClass = 'border-emerald-600/50';
                         if(dir.type === 3) borderClass = 'border-fuchsia-600/50';
+                        if(dir.type === 4) borderClass = 'border-amber-600/50';
                         
                         const repeatIcon = dir.is_recurring === 1 ? `<div class="absolute top-2 left-2 bg-slate-900/80 backdrop-blur rounded p-1.5 z-20 text-gluon-primary" title="Tarefa Recorrente"><i class="fa-solid fa-repeat"></i></div>` : '';
 
@@ -1370,6 +1389,7 @@
                         if(dir.type === 1) borderClass = 'border-l-indigo-500';
                         if(dir.type === 2) borderClass = 'border-l-emerald-500';
                         if(dir.type === 3) borderClass = 'border-l-fuchsia-500';
+                        if(dir.type === 4) borderClass = 'border-l-amber-500';
 
                         const repeatIcon = dir.is_recurring === 1 ? `<i class="fa-solid fa-repeat ml-2 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
 
@@ -1397,6 +1417,7 @@
                         if(dir.type === 1) headerBorder = 'border-indigo-700';
                         if(dir.type === 2) headerBorder = 'border-emerald-700';
                         if(dir.type === 3) headerBorder = 'border-fuchsia-700';
+                        if(dir.type === 4) headerBorder = 'border-amber-700';
 
                         const dropTargetId = dir.type === 3 ? dir.target_id : dir.id;
                         const repeatIcon = dir.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-sm ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
