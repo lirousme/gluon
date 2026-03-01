@@ -138,7 +138,7 @@
     <main class="flex-1 w-full flex overflow-hidden">
         
         <!-- Sidebar -->
-        <aside id="backlogSidebar" class="w-64 sm:w-80 bg-slate-900 border-r border-slate-700/50 flex flex-col shrink-0 z-30 shadow-xl relative transition-all duration-300 overflow-hidden">
+        <aside id="backlogSidebar" class="w-0 border-r-0 opacity-0 bg-slate-900 border-slate-700/50 flex flex-col shrink-0 z-30 shadow-xl relative transition-all duration-300 overflow-hidden">
             <div class="p-4 border-b border-slate-800 bg-slate-800/30 flex justify-between items-start min-w-[250px]">
                 <div class="overflow-hidden">
                     <h3 class="font-semibold text-slate-300 flex items-center gap-2 whitespace-nowrap"><i class="fa-solid fa-inbox text-slate-500"></i> Sem Data (Backlog)</h3>
@@ -157,7 +157,7 @@
                 
                 <div class="flex items-center gap-2 w-full sm:w-auto">
                     <!-- Botão Toggle da Sidebar (Fica visível no lugar do backlog quando ele é recolhido) -->
-                    <button onclick="scheduleApp.toggleSidebar()" id="btnToggleSidebarNav" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors bg-slate-900 border border-slate-700 shadow-sm shrink-0" title="Alternar Backlog">
+                    <button onclick="scheduleApp.toggleSidebar()" id="btnToggleSidebarNav" class="px-3 py-1.5 rounded-md text-gluon-primary bg-slate-800 hover:text-white hover:bg-slate-700 transition-colors border border-slate-700 shadow-sm shrink-0" title="Alternar Backlog">
                         <i class="fa-solid fa-inbox"></i>
                     </button>
                     
@@ -380,7 +380,7 @@
 
             state: {
                 view: 'timeline',
-                sidebarOpen: true,
+                sidebarOpen: false,
                 directoryCache: new Map(),
                 copied_directory_id: null,
                 pendingStartDate: null,
