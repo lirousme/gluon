@@ -72,8 +72,6 @@ end_date DATETIME DEFAULT NULL,      -- NOVO: Fim da tarefa/evento na agenda
 is_recurring TINYINT(1) DEFAULT 0,   -- NOVO: Flag para saber se tem regra de recorrência
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-deck_mode VARCHAR(20) DEFAULT 'random',
-current_card_index INT DEFAULT 0;
 
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 FOREIGN KEY (parent_id) REFERENCES directories(id) ON DELETE CASCADE,
