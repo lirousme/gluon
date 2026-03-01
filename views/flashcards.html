@@ -3,9 +3,8 @@
   Diretório: public_html/gluon/views/flashcards.html
   
   Pilar: Rápido, Seguro, Bonito e Escalável.
-  Atualização: Inclusão de sistema de Maestria (Pontuação por Card de 0 a 10) e Progresso Global do Deck.
-  Lógica otimista (Atualiza UI instantaneamente enquanto salva no background sem travar o usuário).
-  Correção (Bugfix): Alinhamento exato entre frente e verso no eixo Y do card 3D corrigido para mobile.
+  Atualização: Sistema de Maestria ampliado (Pontuação por Card de 0 a 20).
+  Inclusão de efeito visual de preenchimento de metade da bolinha para escalonamento visual contínuo.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -103,16 +102,20 @@
             height: 10px;
             border-radius: 50%;
             background-color: #334155; /* cor vazia frente */
-            transition: background-color 0.3s ease;
+            transition: all 0.3s ease;
         }
 
         .card-back .score-dot {
             background-color: #2563eb; /* cor vazia verso */
         }
         
-        /* Cor de preenchimento do ponto (Maestria) */
+        /* Cor de preenchimento do ponto total (Maestria) */
         .score-dot.filled { background-color: #22c55e !important; box-shadow: 0 0 5px rgba(34, 197, 94, 0.5); }
         .card-back .score-dot.filled { background-color: #10b981 !important; box-shadow: 0 0 5px rgba(16, 185, 129, 0.5); }
+
+        /* Cor de preenchimento de metade do ponto (Escalonamento para 20 pontos em 10 bolinhas) */
+        .score-dot.half-filled { background: linear-gradient(to right, #22c55e 50%, #334155 50%) !important; box-shadow: 0 0 3px rgba(34, 197, 94, 0.3); }
+        .card-back .score-dot.half-filled { background: linear-gradient(to right, #10b981 50%, #2563eb 50%) !important; box-shadow: 0 0 3px rgba(16, 185, 129, 0.3); }
 
         @media (max-width: 640px) {
             .scene { height: 350px; }
@@ -170,7 +173,7 @@
         <div class="scene" id="cardScene" style="display: none;">
             <div class="card-3d" id="flashcard" onclick="flashcardApp.flipCard()">
                 
-                <!-- Frente (Nota: classe relative removida para evitar quebra do absolute context) -->
+                <!-- Frente -->
                 <div class="card-face card-front">
                     <span class="absolute top-4 left-4 text-xs font-bold text-slate-500 tracking-wider uppercase">Frente</span>
                     <i class="fa-solid fa-rotate absolute top-4 right-4 text-slate-600 opacity-50"></i>
@@ -182,7 +185,7 @@
                     </div>
                 </div>
 
-                <!-- Verso (Nota: classe relative removida para evitar quebra do absolute context) -->
+                <!-- Verso -->
                 <div class="card-face card-back">
                     <span class="absolute top-4 left-4 text-xs font-bold text-blue-200 tracking-wider uppercase">Verso</span>
                     <i class="fa-solid fa-rotate absolute top-4 right-4 text-blue-300 opacity-50"></i>
@@ -386,11 +389,16 @@
                 
                 document.getElementById('cardCounter').innerText = `${this.currentIndex + 1} / ${this.cards.length}`;
                 
-                // Renderizar os pontinhos de maestria (score de 0 a 10)
+                // Renderizar os pontinhos de maestria (score de 0 a 20, 10 bolinhas)
                 let dotsHtml = '';
                 for (let i = 0; i < 10; i++) {
-                    const filledClass = i < card.score ? 'filled' : '';
-                    dotsHtml += `<div class="score-dot ${filledClass}"></div>`;
+                    let fillClass = '';
+                    if (card.score >= (i + 1) * 2) {
+                        fillClass = 'filled'; // Preenchida inteira
+                    } else if (card.score === (i * 2) + 1) {
+                        fillClass = 'half-filled'; // Metade preenchida
+                    }
+                    dotsHtml += `<div class="score-dot ${fillClass}"></div>`;
                 }
                 document.getElementById('frontScoreDots').innerHTML = dotsHtml;
                 document.getElementById('backScoreDots').innerHTML = dotsHtml;
@@ -436,15 +444,15 @@
 
             // Lógica Otimista para Pontuação (Garante UI Rápida)
             registerScore(card) {
-                // Impede que o usuário fique voltando e avançando para farmar 10 pontos de uma vez.
+                // Impede que o usuário fique voltando e avançando para farmar 20 pontos de uma vez.
                 // Requer recarregar a página para ganhar mais pontos no mesmo card.
-                if (card.score >= 10 || this.scoredThisSession.has(card.id)) return;
+                if (card.score >= 20 || this.scoredThisSession.has(card.id)) return;
                 
                 this.scoredThisSession.add(card.id);
                 card.score++; // Atualiza UI Otimista
                 
                 // Recalcula progresso global Otimista
-                const maxPossible = this.cards.length * 10;
+                const maxPossible = this.cards.length * 20;
                 let currentTotal = this.cards.reduce((sum, c) => sum + c.score, 0);
                 this.deckPercentage = Math.round((currentTotal / maxPossible) * 100);
                 this.updateGlobalProgressUI();
@@ -583,7 +591,7 @@
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
-                            "Authorization": "Bearer sk-proj-" // Necessita de API real em produção
+                            "Authorization": "Bearer sk-proj-i-" // Necessita de API real em produção
                         },
                         body: JSON.stringify({
                             model: "gpt-4o-mini", // Alterado para um modelo rápido existente
