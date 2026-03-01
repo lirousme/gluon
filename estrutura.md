@@ -125,3 +125,18 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
 INDEX idx_directory (directory_id)
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+======================================================================
+
+TABELA: flashcard_scores
+id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+user_id INT UNSIGNED NOT NULL,
+flashcard_id INT UNSIGNED NOT NULL,
+score TINYINT UNSIGNED DEFAULT 0 COMMENT 'Max 10',
+last_reviewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+UNIQUE KEY unique_user_card (user_id, flashcard_id),
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+FOREIGN KEY (flashcard_id) REFERENCES flashcards(id) ON DELETE CASCADE,
+INDEX idx_user_card (user_id, flashcard_id)
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
