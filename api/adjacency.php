@@ -47,8 +47,14 @@ elseif ($action === 'add') {
         die(json_encode(['status' => 'error']));
     }
 
-    $stmt = $pdo->prepare("INSERT INTO adjacency_items (directory_id, parent_id, label, division_type) VALUES (?, ?, ?, ?)");
-    $stmt->execute([$dir_id, $parent_id, $label, $division_type]);
+    // Calcula o sort_order para colocar no final
+    $stmtOrder = $pdo->prepare("SELECT MAX(sort_order) FROM adjacency_items WHERE directory_id = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))");
+    $stmtOrder->execute([$dir_id, $parent_id, $parent_id]);
+    $maxOrder = $stmtOrder->fetchColumn();
+    $newOrder = ($maxOrder !== null) ? (int)$maxOrder + 1 : 0;
+
+    $stmt = $pdo->prepare("INSERT INTO adjacency_items (directory_id, parent_id, label, division_type, sort_order) VALUES (?, ?, ?, ?, ?)");
+    $stmt->execute([$dir_id, $parent_id, $label, $division_type, $newOrder]);
     
     echo json_encode(['status' => 'success', 'id' => $pdo->lastInsertId()]);
 }
@@ -64,6 +70,35 @@ elseif ($action === 'toggle') {
     $stmt->execute([$is_completed, $item_id, $dir_id]);
     
     echo json_encode(['status' => 'success']);
+}
+
+elseif ($action === 'reorder') {
+    $dir_id = (int)($input['directory_id'] ?? 0);
+    $items = $input['items'] ?? [];
+
+    if (!verifyOwnership($pdo, $dir_id, $user_id) || empty($items)) {
+        die(json_encode(['status' => 'error']));
+    }
+
+    try {
+        $pdo->beginTransaction();
+        
+        $stmt = $pdo->prepare("UPDATE adjacency_items SET parent_id = ?, sort_order = ? WHERE id = ? AND directory_id = ?");
+        
+        foreach ($items as $item) {
+            $item_id = (int)$item['id'];
+            $parent_id = isset($item['parent_id']) && $item['parent_id'] !== '' && $item['parent_id'] !== null ? (int)$item['parent_id'] : null;
+            $sort_order = (int)$item['sort_order'];
+            
+            $stmt->execute([$parent_id, $sort_order, $item_id, $dir_id]);
+        }
+        
+        $pdo->commit();
+        echo json_encode(['status' => 'success']);
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        echo json_encode(['status' => 'error', 'message' => 'Erro interno ao reordenar.']);
+    }
 }
 
 elseif ($action === 'delete') {
