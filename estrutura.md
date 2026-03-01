@@ -15,6 +15,7 @@ public_html/gluon/
 │   └── schedule.php          # NOVO: Micro-API para arrastar/redimensionar eventos
 │   └── cron_recurrence.php   # NOVO: Motor autônomo de repetição de tarefas (via CRON)
 │   └── flashcards.php        # NOVO: Micro-API para CRUD de Flashcards
+│   └── adjacency.php        # NOVO: Micro-API para Lista adjacente
 │
 ├── views/                    # Front-end (Vanilla JS + Tailwind)
 │   ├── login.html
@@ -23,6 +24,7 @@ public_html/gluon/
 │   ├── editor.html           # Interface do editor de código
 │   ├── schedule.html         # NOVO: Interface da Linha do Tempo / Agenda
 │   ├── flashcards.html       # NOVO: Interface de estudo de Flashcards
+│   ├── adjacency.html       # NOVO: Lista adjacente
 │   └── errors/
 │
 └── assets/
@@ -139,4 +141,20 @@ UNIQUE KEY unique_user_card (user_id, flashcard_id),
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 FOREIGN KEY (flashcard_id) REFERENCES flashcards(id) ON DELETE CASCADE,
 INDEX idx_user_card (user_id, flashcard_id)
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+======================================================================
+
+TABELA: adjacency_items
+id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+directory_id INT UNSIGNED NOT NULL, -- Liga à tabela directories (O Guarda-chuva)
+parent_id INT UNSIGNED DEFAULT NULL, -- A Mágica: Liga a outro item desta mesma tabela
+label VARCHAR(255) NOT NULL, -- Ex: "Art 5º", "Banca Cebraspe"
+division_type VARCHAR(50) DEFAULT NULL, -- Ex: "artigo", "banca"
+is_completed TINYINT(1) DEFAULT 0,
+sort_order INT DEFAULT 0,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
+FOREIGN KEY (parent_id) REFERENCES adjacency_items(id) ON DELETE CASCADE
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
