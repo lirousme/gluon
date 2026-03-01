@@ -151,8 +151,8 @@
         </div>
     </nav>
 
-    <!-- Main Workspace -->
-    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-0 flex flex-col overflow-hidden relative">
+    <!-- Main Workspace (A adição do min-h-0 previne o transbordamento do layout flex) -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-0 flex flex-col overflow-hidden relative min-h-0">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 shrink-0">
             <div class="block text-sm text-slate-300 font-medium w-full flex-1 leading-relaxed break-words" id="breadcrumbs"></div>
             
@@ -1292,7 +1292,7 @@
                             const repeatIcon = sub.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
 
                             return `
-                            <div data-id="${sub.id}" class="kanban-item bg-slate-700 hover:bg-slate-600 border ${itemBorder} p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm mb-2 relative overflow-hidden" onclick="app.enterDirectoryOrFile(${sub.id})">
+                            <div data-id="${sub.id}" class="kanban-item bg-slate-700 hover:bg-slate-600 border ${itemBorder} p-2.5 rounded-lg cursor-pointer flex justify-between items-center group transition-colors shadow-sm mb-2 relative overflow-hidden min-h-0" onclick="app.enterDirectoryOrFile(${sub.id})">
                                 ${sub.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10" style="background-image: url('${sub.cover_url}')"></div>` : ''}
                                 <div class="flex items-center gap-2 truncate pr-2 relative z-10">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
@@ -1402,7 +1402,7 @@
                         const repeatIcon = dir.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-sm ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
 
                         html += `
-                        <div data-id="${dir.id}" class="draggable-item snap-start bg-slate-800 border ${headerBorder} rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg relative transition-colors overflow-hidden">
+                        <div data-id="${dir.id}" class="draggable-item snap-start bg-slate-800 border ${headerBorder} rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg relative transition-colors overflow-hidden min-h-0">
                             <div class="p-4 border-b border-slate-700 flex justify-between items-center rounded-t-xl group cursor-pointer hover:bg-slate-700/50 transition-colors kanban-col-handle relative overflow-hidden min-h-[60px]" onclick="app.enterDirectoryOrFile(${dir.id})">
                                 ${dir.cover_url ? `<div class="absolute inset-0 bg-cover bg-center" style="background-image: url('${dir.cover_url}')"></div><div class="absolute inset-0 bg-slate-900/80 backdrop-blur-[2px]"></div>` : `<div class="absolute inset-0 bg-slate-900/50"></div>`}
                                 
