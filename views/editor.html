@@ -24,8 +24,15 @@
         }
     </script>
     <style>
-        /* Ajustes para o CodeMirror preencher a tela */
-        .CodeMirror { height: 100% !important; font-family: 'Fira Code', 'Consolas', monospace; font-size: 14px; }
+        /* Ajustes para o CodeMirror preencher a tela perfeitamente e respeitar o overflow */
+        .CodeMirror { 
+            position: absolute !important; 
+            top: 0; bottom: 0; left: 0; right: 0; 
+            height: 100% !important; 
+            width: 100% !important;
+            font-family: 'Fira Code', 'Consolas', monospace; 
+            font-size: 14px; 
+        }
         .cm-s-dracula.CodeMirror { background-color: #0f172a !important; }
         .CodeMirror-gutters { background-color: #1e293b !important; border-right: 1px solid #334155 !important; }
         .CodeMirror-linenumber { color: #64748b !important; }
@@ -64,8 +71,8 @@
         </div>
     </nav>
 
-    <!-- Container do CodeMirror -->
-    <main class="flex-1 w-full relative" id="editorContainer"></main>
+    <!-- Container do CodeMirror (min-h-0 é crucial aqui para evitar que o flex-1 expanda além da tela) -->
+    <main class="flex-1 w-full relative min-h-0" id="editorContainer"></main>
 
     <!-- Scripts do CodeMirror -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
