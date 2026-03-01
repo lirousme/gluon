@@ -14,6 +14,7 @@ public_html/gluon/
 │   ├── editor.php            # Gerencia leitura e gravação de códigos
 │   └── schedule.php          # NOVO: Micro-API para arrastar/redimensionar eventos
 │   └── cron_recurrence.php   # NOVO: Motor autônomo de repetição de tarefas (via CRON)
+│   └── flashcards.php        # NOVO: Micro-API para CRUD de Flashcards
 │
 ├── views/                    # Front-end (Vanilla JS + Tailwind)
 │   ├── login.html
@@ -21,6 +22,7 @@ public_html/gluon/
 │   ├── settings.html
 │   ├── editor.html           # Interface do editor de código
 │   ├── schedule.html         # NOVO: Interface da Linha do Tempo / Agenda
+│   ├── flashcards.html       # NOVO: Interface de estudo de Flashcards
 │   └── errors/
 │
 └── assets/
@@ -54,7 +56,7 @@ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 user_id INT UNSIGNED NOT NULL,
 parent_id INT UNSIGNED DEFAULT NULL, -- NULL significa que está na Raiz
 target_id INT UNSIGNED DEFAULT NULL, -- NOVO: ID do diretório alvo (Apenas para Portais)
-type TINYINT DEFAULT 0,              -- NOVO: 0 = Pasta, 1 = Arquivo de Código
+type TINYINT DEFAULT 0,              -- 0 = Pasta, 1 = Arquivo de Código, 2 = Agenda, 3 = Portal, 4 = Deck de Flashcards
 name_encrypted TEXT NOT NULL,        -- Nome do diretório criptografado
 default_view VARCHAR(10) DEFAULT 'grid',
 new_item_position VARCHAR(10) DEFAULT 'end',
@@ -98,13 +100,27 @@ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================
 
-TABELA: files_code (NOVA TABELA SEPARADA PARA ESCALABILIDADE)
+TABELA: files_code
 id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 directory_id INT UNSIGNED NOT NULL, -- FK referenciando directories
 language VARCHAR(20) DEFAULT 'javascript',
 content_encrypted LONGTEXT,         -- Código fonte salvo com criptografia
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
+INDEX idx_directory (directory_id)
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+======================================================================
+
+TABELA: flashcards
+id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+directory_id INT UNSIGNED NOT NULL, -- FK referenciando directories (Deck)
+front_encrypted TEXT NOT NULL,      -- Frente do card criptografada
+back_encrypted TEXT NOT NULL,       -- Verso do card criptografado
+sort_order INT DEFAULT 0,           -- Para ordenar os cards no futuro, se necessário
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
 FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
 INDEX idx_directory (directory_id)
