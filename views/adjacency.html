@@ -1,0 +1,229 @@
+<!-- 
+  Arquivo: dashboard.html
+  Diretório: public_html/gluon/views/dashboard.html
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gluon - Lista de Controle</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>tailwind.config = { theme: { extend: { colors: { gluon: { dark: '#0f172a', primary: '#3b82f6', secondary: '#1e293b' } } } } }</script>
+    <style>
+        .tree-line { position: relative; }
+        .tree-line::before { content: ''; position: absolute; left: 11px; top: 32px; bottom: -10px; width: 2px; background-color: #334155; }
+        .tree-line:last-child::before { display: none; }
+        .custom-checkbox { width: 1.25rem; height: 1.25rem; border-radius: 0.25rem; border: 2px solid #475569; appearance: none; cursor: pointer; position: relative; transition: all 0.2s; background: #1e293b; }
+        .custom-checkbox:checked { background-color: #22c55e; border-color: #22c55e; }
+        .custom-checkbox:checked::after { content: ''; position: absolute; left: 5px; top: 1px; width: 6px; height: 12px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+        .custom-checkbox:indeterminate { background-color: #eab308; border-color: #eab308; }
+        .custom-checkbox:indeterminate::after { content: ''; position: absolute; left: 4px; top: 8px; width: 8px; height: 2px; background-color: white; }
+    </style>
+</head>
+<body class="bg-gluon-dark text-slate-200 min-h-screen flex flex-col font-sans selection:bg-gluon-primary selection:text-white">
+
+    <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-16 flex items-center justify-between px-4 sm:px-6">
+        <div class="flex items-center gap-4">
+            <button onclick="window.location.href='/dashboard'" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg border border-slate-700 shadow-sm"><i class="fa-solid fa-arrow-left"></i></button>
+            <div class="h-6 w-px bg-slate-700 hidden sm:block"></div>
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-list-check text-gluon-primary text-xl"></i>
+                <span id="listName" class="font-bold text-lg text-white">Carregando...</span>
+            </div>
+        </div>
+        <button onclick="adjApp.openModal(null)" class="bg-gluon-primary hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg shadow-lg flex items-center gap-2 text-sm">
+            <i class="fa-solid fa-plus"></i> Novo Item Raiz
+        </button>
+    </nav>
+
+    <main class="flex-1 w-full max-w-5xl mx-auto p-4 sm:p-8">
+        <div id="treeContainer" class="bg-gluon-secondary border border-slate-700/50 rounded-xl p-4 sm:p-6 shadow-xl min-h-[50vh]">
+            </div>
+    </main>
+
+    <div id="itemModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50">
+        <div class="bg-slate-800 border border-slate-600 rounded-xl shadow-2xl w-full max-w-md p-6">
+            <h3 class="text-lg font-bold text-white mb-4">Adicionar Novo Nó</h3>
+            <form onsubmit="adjApp.saveItem(event)">
+                <input type="hidden" id="modalParentId">
+                <div class="mb-4">
+                    <label class="block text-sm text-slate-300 mb-1">Rótulo / Nome</label>
+                    <input type="text" id="modalLabel" required placeholder="Ex: Art. 5º" class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white">
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm text-slate-300 mb-1">Tipo de Divisão (Opcional)</label>
+                    <input type="text" id="modalType" placeholder="Ex: artigo, capitulo, banca" class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white">
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="adjApp.closeModal()" class="px-4 py-2 bg-slate-700 rounded text-white">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-gluon-primary rounded text-white font-medium">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const adjApp = {
+            dirId: null,
+            items: [],
+
+            async init() {
+                const urlParams = new URLSearchParams(window.location.search);
+                this.dirId = urlParams.get('id');
+                if (!this.dirId) window.location.href = '/dashboard';
+                await this.loadData();
+            },
+
+            async api(action, payload = {}) {
+                payload.action = action;
+                payload.directory_id = this.dirId;
+                const res = await fetch(`/api/adjacency`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                return await res.json();
+            },
+
+            async loadData() {
+                const res = await this.api('fetch');
+                if (res.status === 'success') {
+                    document.getElementById('listName').innerText = res.name;
+                    this.items = res.data;
+                    this.render();
+                }
+            },
+
+            render() {
+                const container = document.getElementById('treeContainer');
+                if (this.items.length === 0) {
+                    container.innerHTML = `<div class="text-center text-slate-500 py-10"><i class="fa-solid fa-leaf text-4xl mb-3 opacity-50"></i><p>Lista vazia. Crie o primeiro item raiz.</p></div>`;
+                    return;
+                }
+                container.innerHTML = this.buildTree(null);
+                this.calculateIndeterminateStates();
+            },
+
+            buildTree(parentId) {
+                const children = this.items.filter(i => i.parent_id == parentId);
+                if (children.length === 0) return '';
+                
+                let html = `<ul class="${parentId ? 'pl-6 mt-2 space-y-2' : 'space-y-3'}">`;
+                children.forEach(child => {
+                    const hasChildren = this.items.some(i => i.parent_id == child.id);
+                    const isChecked = parseInt(child.is_completed) === 1 ? 'checked' : '';
+                    const badge = child.division_type ? `<span class="bg-slate-700 text-xs px-2 py-0.5 rounded text-blue-300 uppercase tracking-wider font-semibold border border-slate-600">${child.division_type}</span>` : '';
+                    
+                    html += `
+                    <li class="${parentId ? 'tree-line' : ''}">
+                        <div class="flex items-center gap-3 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 p-2.5 rounded-lg transition-colors group">
+                            <input type="checkbox" id="chk_${child.id}" class="custom-checkbox shrink-0" ${isChecked} onchange="adjApp.toggleNode(${child.id}, this.checked)">
+                            ${badge}
+                            <span class="flex-1 font-medium text-slate-200 ${isChecked ? 'line-through opacity-50' : ''}">${child.label}</span>
+                            
+                            <div class="opacity-0 group-hover:opacity-100 flex gap-2 transition-opacity">
+                                <button onclick="adjApp.openModal(${child.id})" class="text-slate-400 hover:text-white bg-slate-900 p-1.5 rounded" title="Adicionar Subdivisão"><i class="fa-solid fa-plus text-xs"></i></button>
+                                <button onclick="adjApp.deleteNode(${child.id})" class="text-red-400 hover:text-red-300 bg-slate-900 p-1.5 rounded"><i class="fa-solid fa-trash text-xs"></i></button>
+                            </div>
+                        </div>
+                        ${this.buildTree(child.id)}
+                    </li>`;
+                });
+                html += `</ul>`;
+                return html;
+            },
+
+            // Lógica para auto-checar filhos e deixar o pai "indeterminado"
+            async toggleNode(id, isChecked) {
+                const status = isChecked ? 1 : 0;
+                
+                // 1. Atualiza no array local o item e TODOS os seus filhos recursivamente
+                const updateChildren = (parentId) => {
+                    this.items.filter(i => i.parent_id == parentId).forEach(child => {
+                        child.is_completed = status;
+                        this.api('toggle', { item_id: child.id, is_completed: status }); // Salva filho no BD em background
+                        updateChildren(child.id);
+                    });
+                };
+                
+                const item = this.items.find(i => i.id == id);
+                if (item) item.is_completed = status;
+                
+                updateChildren(id);
+                await this.api('toggle', { item_id: id, is_completed: status }); // Salva o item principal no BD
+                
+                // 2. Atualiza pais de baixo para cima
+                this.updateParents(item.parent_id);
+                this.render();
+            },
+
+            updateParents(parentId) {
+                if (!parentId) return;
+                const siblings = this.items.filter(i => i.parent_id == parentId);
+                const parent = this.items.find(i => i.id == parentId);
+                
+                const allChecked = siblings.every(s => parseInt(s.is_completed) === 1);
+                
+                if (allChecked && parseInt(parent.is_completed) !== 1) {
+                    parent.is_completed = 1;
+                    this.api('toggle', { item_id: parent.id, is_completed: 1 });
+                } else if (!allChecked && parseInt(parent.is_completed) === 1) {
+                    parent.is_completed = 0;
+                    this.api('toggle', { item_id: parent.id, is_completed: 0 });
+                }
+                
+                this.updateParents(parent.parent_id); // Sobe na árvore
+            },
+
+            calculateIndeterminateStates() {
+                this.items.forEach(item => {
+                    const children = this.items.filter(i => i.parent_id == item.id);
+                    if (children.length > 0) {
+                        const checkedCount = children.filter(c => parseInt(c.is_completed) === 1).length;
+                        const el = document.getElementById(`chk_${item.id}`);
+                        if (el) {
+                            if (checkedCount > 0 && checkedCount < children.length) {
+                                el.indeterminate = true;
+                                el.checked = false;
+                            } else {
+                                el.indeterminate = false;
+                            }
+                        }
+                    }
+                });
+            },
+
+            openModal(parentId) {
+                document.getElementById('modalParentId').value = parentId || '';
+                document.getElementById('modalLabel').value = '';
+                document.getElementById('modalType').value = '';
+                document.getElementById('itemModal').classList.remove('hidden');
+                document.getElementById('itemModal').classList.add('flex');
+            },
+
+            closeModal() {
+                document.getElementById('itemModal').classList.add('hidden');
+                document.getElementById('itemModal').classList.remove('flex');
+            },
+
+            async saveItem(e) {
+                e.preventDefault();
+                await this.api('add', {
+                    parent_id: document.getElementById('modalParentId').value,
+                    label: document.getElementById('modalLabel').value,
+                    division_type: document.getElementById('modalType').value
+                });
+                this.closeModal();
+                this.loadData();
+            },
+
+            async deleteNode(id) {
+                if(confirm('Excluir este item e todas as suas subdivisões internamente?')) {
+                    await this.api('delete', { item_id: id });
+                    this.loadData();
+                }
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => adjApp.init());
+    </script>
+</body>
+</html>
