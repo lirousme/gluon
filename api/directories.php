@@ -585,23 +585,31 @@ elseif ($action === 'delete') {
             die(json_encode(['status' => 'error', 'message' => 'Data alvo para exclusão não foi informada.']));
         }
 
-        $target_date_only = (new DateTime($target_date_str))->format('Y-m-d');
-        
-        $stmt = $pdo->prepare("SELECT exceptions FROM directory_recurrences WHERE directory_id = ?");
+        $stmt = $pdo->prepare("SELECT exceptions, type FROM directory_recurrences WHERE directory_id = ?");
         $stmt->execute([$id]);
         $rec = $stmt->fetch();
         
         if ($rec !== false) {
             $exceptions = !empty($rec['exceptions']) ? json_decode($rec['exceptions'], true) : [];
             
-            if (!in_array($target_date_only, $exceptions)) {
-                $exceptions[] = $target_date_only;
+            // Regra especial: Se for repetição por hora, a exclusão é do bloco específico (Data + Hora)
+            // Se for diária/semanal, exclui o dia todo (Y-m-d).
+            if ($rec['type'] === 'hourly') {
+                $exception_value = (new DateTime($target_date_str))->format('Y-m-d H:i:s');
+                $msg_date = date('d/m/Y H:i', strtotime($exception_value));
+            } else {
+                $exception_value = (new DateTime($target_date_str))->format('Y-m-d');
+                $msg_date = date('d/m/Y', strtotime($exception_value));
+            }
+            
+            if (!in_array($exception_value, $exceptions)) {
+                $exceptions[] = $exception_value;
                 $pdo->prepare("UPDATE directory_recurrences SET exceptions = ? WHERE directory_id = ?")->execute([json_encode($exceptions), $id]);
             }
             
             echo json_encode([
                 'status' => 'success', 
-                'message' => "A ocorrência do dia " . date('d/m/Y', strtotime($target_date_only)) . " foi removida com sucesso."
+                'message' => "A ocorrência de " . $msg_date . " foi removida com sucesso."
             ]);
             exit;
         } else {
