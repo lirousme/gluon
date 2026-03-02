@@ -3,10 +3,9 @@
   Diretório: public_html/gluon/views/schedule.html
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
-  Suporta Múltiplas Visualizações: Linha do Tempo, Kanban Semanal, Lista e agora Recorrências com Projeção Visual!
-  *Atualizado: Ao clicar em um Portal, ele redireciona para o Dashboard via Soft Symlink mantendo o contexto.
-  *Atualizado: Suporte total a copiar, colar, transferir e criar portais direto da Agenda.
-  *Atualizado: Sistema de Toggle do Backlog com animação fluída e persistência de estado.
+  Suporta Múltiplas Visualizações: Linha do Tempo, Kanban Semanal, Lista e Recorrências.
+  *Atualizado: O frontend agora checa a "Lista de Exceções" antes de renderizar uma tarefa recorrente.
+  Se o dia estiver na lista, a tarefa fica oculta apenas naquele dia específico. Enterprise Edition!
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -102,7 +101,6 @@
         
         <div class="flex items-center gap-3">
             
-            <!-- Menu de Opções Geral (3 pontinhos) -->
             <div class="relative">
                 <button onclick="scheduleApp.toggleMobileViewMenu()" id="btn-mobile-menu-trigger" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors outline-none focus:ring-2 focus:ring-slate-700">
                     <i class="fa-solid fa-ellipsis-vertical px-1"></i>
@@ -156,7 +154,6 @@
             <div class="p-3 sm:p-4 border-b border-slate-700 bg-slate-800/80 backdrop-blur shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 z-20">
                 
                 <div class="flex items-center gap-2 w-full sm:w-auto">
-                    <!-- Botão Toggle da Sidebar (Fica visível no lugar do backlog quando ele é recolhido) -->
                     <button onclick="scheduleApp.toggleSidebar()" id="btnToggleSidebarNav" class="px-3 py-1.5 rounded-md text-gluon-primary bg-slate-800 hover:text-white hover:bg-slate-700 transition-colors border border-slate-700 shadow-sm shrink-0" title="Alternar Backlog">
                         <i class="fa-solid fa-inbox"></i>
                     </button>
@@ -197,6 +194,8 @@
                 <input type="hidden" id="dirId">
                 <input type="hidden" id="dirStartDate">
                 <input type="hidden" id="dirEndDate">
+                <!-- ARMAZENA O DIA EM QUE O USUÁRIO CLICOU (O contexto) -->
+                <input type="hidden" id="dirContextDate"> 
 
                 <div id="tab-geral" class="p-6 overflow-y-auto flex-1">
                     
@@ -353,6 +352,26 @@
         </div>
     </div>
 
+    <!-- Modal: Confirmar Exclusão de Recorrência -->
+    <div id="deleteRecurrenceModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-[60] opacity-0 transition-opacity duration-300 px-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-full max-w-sm p-6 transform scale-95 transition-transform duration-300">
+            <h3 class="text-lg font-bold text-white mb-2">Excluir Evento Recorrente</h3>
+            <p class="text-sm text-slate-400 mb-5">Este é um evento que se repete. Você deseja excluir/pular apenas esta ocorrência ou apagar todas as futuras definitivamente?</p>
+            
+            <div class="flex flex-col gap-3">
+                <button onclick="scheduleApp.confirmDelete('single')" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+                    <i class="fa-regular fa-calendar-xmark"></i> Pular/Excluir só neste dia
+                </button>
+                <button onclick="scheduleApp.confirmDelete('all')" class="w-full bg-red-600 hover:bg-red-500 text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg">
+                    <i class="fa-solid fa-trash-can"></i> Excluir TODAS as repetições
+                </button>
+                <button onclick="scheduleApp.closeDeleteRecurrenceModal()" class="w-full text-slate-400 hover:text-white py-2 mt-1 text-sm font-medium transition-colors">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="timelineContextMenu" class="hidden absolute bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-1.5 z-50 min-w-[170px] transition-opacity">
         <button onclick="scheduleApp.triggerModalFromMenu()" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
             <i class="fa-solid fa-plus text-gluon-primary text-center w-4"></i> <span class="font-medium">Criar Tarefa</span>
@@ -404,7 +423,6 @@
                 this.renderIconPicker();
                 this.setupFormListeners();
                 
-                // Restaura o estado da barra lateral (Backlog)
                 const savedSidebar = localStorage.getItem('gluon_agenda_sidebar');
                 if (savedSidebar === 'false') {
                     this.state.sidebarOpen = false;
@@ -424,7 +442,6 @@
                 await this.fetchAgendaInfo();
                 await this.loadData();
                 
-                // Event listener para fechar o menu mobile ao clicar fora
                 document.addEventListener('click', (event) => {
                     const menu = document.getElementById('mobileViewMenu');
                     const trigger = document.getElementById('btn-mobile-menu-trigger');
@@ -617,12 +634,28 @@
                 }
             },
 
+            // =========================================================================
+            // LÓGICA DE CHECAGEM DE DATA C/ EXCEÇÕES
+            // =========================================================================
             isTaskOnDate(item, targetDateStr) {
                 const baseDateStr = item.start_date ? item.start_date.split(' ')[0] : null;
                 if (!baseDateStr) return false;
+
+                // 1. Checa a Lista de Exceções primeiro!
+                if (item.rec_exceptions && item.rec_exceptions !== '[]') {
+                    try {
+                        const exceptions = typeof item.rec_exceptions === 'string' ? JSON.parse(item.rec_exceptions) : item.rec_exceptions;
+                        // Se essa data específica foi pulada/excluída antes, não exibe de forma alguma
+                        if (exceptions && exceptions.includes(targetDateStr)) return false;
+                    } catch(e) {}
+                }
+
+                // 2. Se for o dia exato da criação da tarefa, é true
                 if (baseDateStr === targetDateStr) return true;
+                
+                // 3. Checagem das Repetições Comuns
                 if (item.is_recurring !== 1) return false;
-                if (targetDateStr < baseDateStr) return false;
+                if (targetDateStr < baseDateStr) return false; 
                 if (item.rec_end && targetDateStr > item.rec_end.split(' ')[0]) return false;
 
                 const baseD = new Date(baseDateStr + 'T00:00:00');
@@ -970,7 +1003,8 @@
                                 </div>
                                 <div class="text-[10px] opacity-70 pointer-events-none z-10 relative font-medium">${sDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${eDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                                 
-                                <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="absolute top-1 right-1 text-white/70 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 z-20 bg-black/40 rounded shadow-md"><i class="fa-solid fa-cog text-xs"></i></button>
+                                <!-- Passando selectedDateStr como último argumento -->
+                                <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${selectedDateStr}')" class="absolute top-1 right-1 text-white/70 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 z-20 bg-black/40 rounded shadow-md"><i class="fa-solid fa-cog text-xs"></i></button>
 
                                 ${resizeHTML}
                             </div>
@@ -996,14 +1030,14 @@
                             const col = document.querySelector(`.sortable-day-col[data-date="${dateStr}"]`);
                             if (col) {
                                 const isProjection = item.start_date.split(' ')[0] !== dateStr;
-                                col.innerHTML += this.generateItemCard(item, viewType, isProjection);
+                                col.innerHTML += this.generateItemCard(item, viewType, isProjection, dateStr);
                             }
                         }
                     });
                 });
             },
 
-            generateItemCard(item, viewType, isProjection = false) {
+            generateItemCard(item, viewType, isProjection = false, dateStr = '') {
                 const fromColor = item.color_from || '#3b82f6';
                 const sDate = new Date(item.start_date.replace(' ', 'T'));
                 const eDate = new Date(item.end_date.replace(' ', 'T'));
@@ -1026,7 +1060,8 @@
                             </div>
                         </div>
                         <div class="text-[10px] text-slate-400 mt-1 z-10 relative font-medium"><i class="fa-regular fa-clock"></i> ${timeStr}</div>
-                        <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="absolute top-1.5 right-1.5 text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20 bg-slate-800/80 rounded border border-slate-600"><i class="fa-solid fa-cog text-xs"></i></button>
+                        
+                        <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${dateStr}')" class="absolute top-1.5 right-1.5 text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20 bg-slate-800/80 rounded border border-slate-600"><i class="fa-solid fa-cog text-xs"></i></button>
                     </div>`;
                 } else {
                     return `
@@ -1041,7 +1076,7 @@
                             <i class="fa-solid ${item.icon} text-lg shrink-0" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
                             <span class="font-semibold text-sm text-slate-200 truncate flex-1">${this.escapeHTML(item.name)} ${repeatIcon}</span>
                         </div>
-                        <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-2 z-20 shrink-0 bg-slate-800 rounded shadow"><i class="fa-solid fa-cog"></i></button>
+                        <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${dateStr}')" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-2 z-20 shrink-0 bg-slate-800 rounded shadow"><i class="fa-solid fa-cog"></i></button>
                     </div>`;
                 }
             },
@@ -1065,7 +1100,6 @@
                 } else if (item.type === 3) {
                     if (!item.target_id) return this.showToast('Portal corrompido: Destino não encontrado.', 'error');
                     
-                    // Busca o caminho do alvo para sabermos se o portal aponta para arquivo, agenda ou pasta
                     const pathRes = await this.api('directories', 'get_path', { id: item.target_id });
                     
                     if(pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
@@ -1079,7 +1113,6 @@
                             return;
                         }
 
-                        // Se é uma pasta/diretório normal, vai pro dashboard mandando a flag de Soft Symlink
                         window.location.href = `/dashboard?id=${id}&target_id=${item.target_id}&portal=1`;
                     } else {
                         this.showToast('Erro ao abrir portal. O destino pode não existir mais.', 'error');
@@ -1402,12 +1435,13 @@
                 const btn = document.getElementById('btnRemoveCover'); if (btn) btn.classList.add('hidden');
             },
 
-            openModal(id = '', name = '', startDate = null, endDate = null) {
+            openModal(id = '', name = '', startDate = null, endDate = null, contextDate = null) {
                 this.switchModalTab('geral');
                 document.getElementById('dirId').value = id;
                 
                 document.getElementById('dirStartDate').value = startDate || '';
                 document.getElementById('dirEndDate').value = endDate || '';
+                document.getElementById('dirContextDate').value = contextDate || '';
                 
                 let dirObj = null;
                 const dirNameInput = document.getElementById('dirName');
@@ -1515,6 +1549,7 @@
                     document.getElementById('dirForm').reset(); 
                     document.getElementById('dirStartDate').value = '';
                     document.getElementById('dirEndDate').value = '';
+                    document.getElementById('dirContextDate').value = '';
                     
                     const btnSave = document.getElementById('btnSaveDir');
                     if (btnSave) {
@@ -1597,25 +1632,65 @@
                 }
             },
 
-            async deleteFromModal() {
+            deleteFromModal() {
                 const id = document.getElementById('dirId').value;
-                const name = document.getElementById('dirName').value;
+                const isRecurring = document.getElementById('is_recurring').checked;
+                
                 if(!id) return;
 
-                if(confirm(`Atenção: "${name}" será apagado PERMANENTEMENTE.\nDeseja continuar?`)) {
-                    const btn = document.getElementById('btnDeleteDir'); 
-                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
-                    btn.disabled = true; 
-                    
-                    const response = await this.api('directories', 'delete', { id });
-                    
-                    if(response) { 
-                        this.closeModal(); 
-                        await this.loadData();
-                    } else {
-                        btn.innerHTML = '<i class="fa-solid fa-trash"></i> <span>Excluir</span>';
-                        btn.disabled = false;
+                if (isRecurring) {
+                    const modal = document.getElementById('deleteRecurrenceModal');
+                    modal.classList.remove('hidden');
+                    modal.classList.add('flex');
+                    setTimeout(() => {
+                        modal.classList.remove('opacity-0');
+                        modal.children[0].classList.remove('scale-95');
+                    }, 10);
+                } else {
+                    const name = document.getElementById('dirName').value;
+                    if(confirm(`Atenção: "${name}" será apagado PERMANENTEMENTE.\nDeseja continuar?`)) {
+                        this.executeDelete(id, 'all');
                     }
+                }
+            },
+
+            closeDeleteRecurrenceModal() {
+                const modal = document.getElementById('deleteRecurrenceModal');
+                modal.classList.add('opacity-0');
+                modal.children[0].classList.add('scale-95');
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                }, 300);
+            },
+
+            confirmDelete(scope) {
+                const id = document.getElementById('dirId').value;
+                this.closeDeleteRecurrenceModal();
+                this.executeDelete(id, scope);
+            },
+
+            async executeDelete(id, scope) {
+                const btn = document.getElementById('btnDeleteDir'); 
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
+                btn.disabled = true; 
+                
+                const targetDate = document.getElementById('dirContextDate').value;
+
+                const response = await this.api('directories', 'delete', { 
+                    id: id, 
+                    scope: scope,
+                    target_date: targetDate
+                });
+                
+                if(response) { 
+                    this.showToast(response.message, 'success');
+                    this.closeModal(); 
+                    await this.loadData();
+                } else {
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
                 }
             }
         };
