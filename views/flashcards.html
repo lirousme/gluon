@@ -4,9 +4,8 @@
   
   Pilar: Rápido, Seguro, Bonito e Escalável.
   Atualizações:
-  - SOLUÇÃO DEFINITIVA DO EIXO 3D: Implementação do CSS Grid Stacking.
-    Isso força matematicamente a frente e o verso a ocuparem as exatas
-    mesmas coordenadas geográficas, tornando impossível desencontrarem.
+  - SOLUÇÃO DEFINITIVA DO EIXO 3D: Implementação do CSS Grid Stacking para impedir desencontro.
+  - IMPORTAÇÃO INTELIGENTE: Visualização automática em Tabela ao colar dados do Excel/Planilha.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -26,15 +25,14 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* O segredo DEFINITIVO para o card NUNCA MAIS pular ou desalinhar na tela: 
-           Uso de CSS Grid para empilhamento geográfico perfeito. */
+        /* Perspectiva 3D ancorada rigidamente */
         .scene {
             perspective: 1000px;
             width: 100%;
             max-width: 600px;
-            height: 400px; /* Altura ancorada rigidamente */
+            height: 400px; 
             margin: 0 auto;
-            flex-shrink: 0; /* Impede que o contêiner flexível pai esmague a cena */
+            flex-shrink: 0; 
         }
 
         /* O elemento que gira usa display: grid para sobrepor os filhos de forma inflexível */
@@ -47,12 +45,9 @@
             transform-origin: center center;
         }
 
-        .card-3d.is-flipped { 
-            transform: rotateY(180deg); 
-        }
+        .card-3d.is-flipped { transform: rotateY(180deg); }
 
         .card-face {
-            /* A MÁGICA ACONTECE AQUI: grid-area 1/1/1/1 força ambos a ocuparem a exata mesma célula no grid */
             grid-area: 1 / 1 / 1 / 1;
             width: 100%;
             height: 100%;
@@ -73,17 +68,15 @@
             background: linear-gradient(145deg, #1e293b, #0f172a);
             border: 1px solid #334155;
             color: #f8fafc;
-            /* Zera o eixo explicitamente para ancorar hardware acceleration em celulares */
             transform: rotateY(0deg); 
             -webkit-transform: rotateY(0deg);
-            z-index: 2; /* Mantém a frente nativamente acima inicialmente */
+            z-index: 2; 
         }
 
         .card-back {
             background: linear-gradient(145deg, #3b82f6, #1d4ed8);
             border: 1px solid #60a5fa;
             color: #ffffff;
-            /* Gira o verso e o ancora na mesma geometria */
             transform: rotateY(180deg);
             -webkit-transform: rotateY(180deg);
             z-index: 1;
@@ -159,7 +152,7 @@
                 <i class="fa-solid fa-plus text-gluon-primary"></i> <span class="hidden sm:inline">Add</span>
             </button>
             <button onclick="flashcardApp.openBulkModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 px-3 sm:px-4 rounded-lg shadow-lg transition-all flex items-center gap-2 text-sm" title="Importar do Excel">
-                <i class="fa-solid fa-file-excel"></i> <span class="hidden sm:inline">Importar</span>
+                <i class="fa-solid fa-table"></i> <span class="hidden sm:inline">Importar Tabela</span>
             </button>
         </div>
         
@@ -195,7 +188,6 @@
                 <div class="card-face card-front relative">
                     <span id="frontLabel" class="absolute top-4 left-4 text-xs font-bold text-slate-500 tracking-wider uppercase">Frente</span>
                     
-                    <!-- Botões de Ação do Card -->
                     <div class="absolute top-4 right-4 z-30 flex items-center gap-3">
                         <button onclick="event.stopPropagation(); flashcardApp.editCurrentCard()" class="text-slate-400 hover:text-white transition-colors" title="Editar"><i class="fa-solid fa-pen"></i></button>
                         <button onclick="event.stopPropagation(); flashcardApp.deleteCurrentCard()" class="text-slate-500 hover:text-red-400 transition-colors" title="Excluir"><i class="fa-solid fa-trash"></i></button>
@@ -204,9 +196,7 @@
                     </div>
                     
                     <div class="absolute bottom-4 left-4 z-20" id="audioControlsFront"></div>
-                    
                     <div class="card-text no-scrollbar" id="cardFrontText"></div>
-                    
                     <div class="score-dots" id="frontScoreDots"></div>
                 </div>
 
@@ -214,7 +204,6 @@
                 <div class="card-face card-back relative">
                     <span class="absolute top-4 left-4 text-xs font-bold text-blue-200 tracking-wider uppercase">Verso</span>
                     
-                    <!-- Botões de Ação do Card -->
                     <div class="absolute top-4 right-4 z-30 flex items-center gap-3">
                         <button onclick="event.stopPropagation(); flashcardApp.editCurrentCard()" class="text-blue-300 hover:text-white transition-colors" title="Editar"><i class="fa-solid fa-pen"></i></button>
                         <button onclick="event.stopPropagation(); flashcardApp.deleteCurrentCard()" class="text-blue-400 hover:text-red-300 transition-colors" title="Excluir"><i class="fa-solid fa-trash"></i></button>
@@ -223,9 +212,7 @@
                     </div>
                     
                     <div class="absolute bottom-4 left-4 z-20" id="audioControlsBack"></div>
-                    
                     <div class="card-text no-scrollbar drop-shadow-md" id="cardBackText"></div>
-                    
                     <div class="score-dots" id="backScoreDots"></div>
                 </div>
 
@@ -236,7 +223,7 @@
         <div id="emptyState" class="flex flex-col items-center justify-center text-center max-w-sm mt-10" style="display: none;">
             <i id="emptyStateIcon" class="fa-solid fa-clone text-6xl text-slate-600 mb-4 opacity-50"></i>
             <h2 id="emptyStateTitle" class="text-xl font-bold text-slate-300 mb-2">Este deck está vazio</h2>
-            <p id="emptyStateDesc" class="text-slate-500 text-sm mb-6">Adicione seu primeiro card manualmente ou importe uma lista do Excel.</p>
+            <p id="emptyStateDesc" class="text-slate-500 text-sm mb-6">Adicione seu primeiro card manualmente ou importe do Excel.</p>
         </div>
 
         <!-- Carregamento -->
@@ -308,7 +295,6 @@
                 <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <form onsubmit="flashcardApp.saveSingleCard(event)" class="p-6 space-y-5">
-                
                 <input type="hidden" id="editCardId" value="">
 
                 <div>
@@ -336,31 +322,57 @@
         </div>
     </div>
 
-    <!-- Modal: Importar em Massa -->
-    <div id="bulkModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
-        <div class="bg-gluon-secondary border border-emerald-900/50 rounded-xl shadow-2xl w-full max-w-2xl p-0 transform scale-95 transition-transform duration-300 overflow-hidden" id="bulkModalContent">
-            <div class="p-5 border-b border-emerald-900/50 bg-emerald-900/20 flex justify-between items-center">
+    <!-- Modal: Importar em Massa com Tabela Interativa -->
+    <div id="bulkModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4 py-6">
+        <div class="bg-gluon-secondary border border-emerald-900/50 rounded-xl shadow-2xl w-full max-w-4xl p-0 transform scale-95 transition-transform duration-300 overflow-hidden flex flex-col max-h-full" id="bulkModalContent">
+            <div class="p-5 border-b border-emerald-900/50 bg-emerald-900/20 flex justify-between items-center shrink-0">
                 <h3 class="text-lg font-semibold text-emerald-400 flex items-center gap-2">
-                    <i class="fa-solid fa-file-excel"></i> Importar Lista
+                    <i class="fa-solid fa-table"></i> Importar Lista
                 </h3>
                 <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <form onsubmit="flashcardApp.saveBulkCards(event)" class="p-6 flex flex-col h-[60vh] sm:h-[500px]">
-                <div class="mb-4 bg-slate-900/50 p-3 rounded-lg border border-slate-700 text-sm text-slate-300">
+            
+            <form onsubmit="flashcardApp.saveBulkCards(event)" class="p-5 flex flex-col flex-1 overflow-hidden min-h-0">
+                
+                <div class="mb-4 bg-slate-900/50 p-3 rounded-lg border border-slate-700 text-sm text-slate-300 shrink-0">
                     <p class="font-medium text-white mb-1"><i class="fa-solid fa-circle-info text-gluon-primary mr-1"></i> Como usar:</p>
-                    <p>Cole os dados do Excel/Planilha. Coluna 1 = Frente, Coluna 2 (Opcional) = Verso.</p>
+                    <p>Dê um <strong>CTRL+C</strong> nas colunas do Excel/Planilha (Pergunta e Resposta) e dê <strong>CTRL+V</strong> na caixa abaixo. A tabela será gerada instantaneamente.</p>
                 </div>
                 
-                <div class="flex-1 flex flex-col relative">
-                    <textarea id="bulkData" required placeholder="Gato    Cat&#10;Cachorro    Dog" class="flex-1 w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors resize-none font-mono text-sm whitespace-pre"></textarea>
+                <div class="flex-1 flex flex-col relative gap-4 min-h-0">
+                    <!-- Área de Transferência Dinâmica -->
+                    <textarea id="bulkData" required placeholder="Cole os dados aqui (CTRL+V)..." class="shrink-0 w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-emerald-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors resize-none font-mono text-sm h-16 sm:h-20" onfocus="this.select()"></textarea>
+                    
+                    <!-- Container da Tabela Dinâmica -->
+                    <div id="bulkTableContainer" class="hidden flex-1 overflow-y-auto bg-slate-900/50 border border-slate-700 rounded-lg relative no-scrollbar">
+                        <table class="w-full text-left text-sm text-slate-300 border-collapse">
+                            <thead class="bg-slate-800 text-slate-400 sticky top-0 shadow-md z-10">
+                                <tr>
+                                    <th class="px-4 py-3 font-medium w-12 text-center border-b border-slate-700">#</th>
+                                    <th class="px-4 py-3 font-medium w-1/2 border-b border-l border-slate-700">Frente (Pergunta)</th>
+                                    <th class="px-4 py-3 font-medium w-1/2 border-b border-l border-slate-700">Verso (Resposta)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bulkTableBody" class="divide-y divide-slate-700/50">
+                                <!-- As linhas serão preenchidas via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Estado Vazio da Tabela -->
+                    <div id="bulkEmptyState" class="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-700 rounded-lg bg-slate-900/20 text-slate-500 min-h-[150px]">
+                        <i class="fa-solid fa-table-cells-large text-5xl mb-4 opacity-30"></i>
+                        <p class="font-medium">Nenhum dado na área de transferência</p>
+                        <p class="text-xs mt-1 opacity-70">Cole o texto na caixa acima para visualizar a estrutura da tabela.</p>
+                    </div>
                 </div>
 
                 <div class="flex justify-between items-center pt-5 border-t border-slate-700 mt-5 shrink-0">
-                    <span id="bulkCount" class="text-sm text-emerald-400 font-medium">0 cards detectados</span>
+                    <span id="bulkCount" class="text-sm text-emerald-400 font-medium bg-emerald-900/20 px-3 py-1.5 rounded-md border border-emerald-900/50 shadow-inner">0 cards</span>
                     <div class="flex gap-3">
-                        <button type="button" onclick="flashcardApp.closeModals()" class="px-5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
-                        <button type="submit" id="btnSaveBulk" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow-lg font-medium transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                            <i class="fa-solid fa-cloud-arrow-up"></i> Importar
+                        <button type="button" onclick="flashcardApp.closeModals()" class="px-4 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
+                        <button type="submit" id="btnSaveBulk" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow-lg font-medium transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> <span class="hidden sm:inline">Importar para o Deck</span><span class="sm:hidden">Importar</span>
                         </button>
                     </div>
                 </div>
@@ -379,7 +391,6 @@
             isFlipped: false,
             scoredThisSession: new Set(),
             
-            // Variáveis do Player de Áudio
             autoPlayEnabled: false,
             currentAudioElement: null,
 
@@ -392,7 +403,6 @@
                     return;
                 }
                 
-                // Restaura preferência de Auto-Play do navegador
                 const savedAutoPlay = localStorage.getItem('gluon_audio_autoplay');
                 if(savedAutoPlay === 'true') {
                     this.autoPlayEnabled = true;
@@ -466,7 +476,6 @@
                         this.updateGlobalProgressUI();
                         this.renderCurrentCard();
                         
-                        // Ao carregar o deck, se autoplay estiver ligado, toca a frente do primeiro card
                         if(this.autoPlayEnabled && this.cards[this.currentIndex].has_audio_front === 1) {
                             this.playCardAudio(this.cards[this.currentIndex].id, 'front');
                         }
@@ -526,7 +535,6 @@
                 
                 const cardEl = document.getElementById('flashcard');
                 
-                // === CONTROLES DE ÁUDIO (FRENTE) ===
                 const audioFront = document.getElementById('audioControlsFront');
                 if (card.has_audio_front === 1) {
                     audioFront.innerHTML = `
@@ -542,7 +550,6 @@
                     `;
                 }
 
-                // === CONTROLES DE ÁUDIO E UI (VERSO) ===
                 const audioBack = document.getElementById('audioControlsBack');
                 if (!hasBack) {
                     document.getElementById('frontLabel').innerText = this.deckMode === 'livro' ? 'Página' : 'Card Único';
@@ -594,7 +601,6 @@
             flipCard(e) {
                 if (this.cards.length === 0) return;
                 
-                // Impede o giro se clicou em um botão
                 if (e && e.target && e.target.closest('button')) return;
 
                 const card = this.cards[this.currentIndex];
@@ -656,8 +662,6 @@
                     }
                 }
             },
-
-            // --- FUNÇÕES DE EDIÇÃO E EXCLUSÃO DE CARDS UNITÁRIOS ---
             
             editCurrentCard() {
                 const card = this.cards[this.currentIndex];
@@ -689,12 +693,9 @@
                     
                     if (res) {
                         this.showToast(res.message, 'success');
-                        
-                        // Atualiza localmente para ser ultra rápido
                         this.cards.splice(this.currentIndex, 1);
                         this.totalCardsInDeck--;
                         
-                        // Se excluiu o último, volta um índice
                         if (this.currentIndex >= this.cards.length && this.currentIndex > 0) {
                             this.currentIndex--;
                         }
@@ -711,8 +712,6 @@
                     }
                 }
             },
-
-            // --- SISTEMA FISH AUDIO (TTS) ---
 
             toggleAutoPlay() {
                 this.autoPlayEnabled = document.getElementById('autoPlayToggle').checked;
@@ -774,8 +773,6 @@
                     btn.disabled = false;
                 }
             },
-
-            // --------------------------------
 
             registerScore(card) {
                 if (card.score >= 20 || this.scoredThisSession.has(card.id)) return;
@@ -840,16 +837,47 @@
             setupBulkListener() {
                 const textarea = document.getElementById('bulkData');
                 textarea.addEventListener('input', () => {
-                    const parsed = this.parseExcelData(textarea.value);
+                    const text = textarea.value;
+                    const parsed = this.parseExcelData(text);
                     const countEl = document.getElementById('bulkCount');
                     const btnSave = document.getElementById('btnSaveBulk');
-                    countEl.innerText = `${parsed.length} cards detectados`;
+                    const tableContainer = document.getElementById('bulkTableContainer');
+                    const emptyState = document.getElementById('bulkEmptyState');
+                    const tbody = document.getElementById('bulkTableBody');
+
+                    countEl.innerText = `${parsed.length} card${parsed.length === 1 ? '' : 's'}`;
+                    
                     if (parsed.length > 0) {
-                        countEl.classList.remove('text-red-400'); countEl.classList.add('text-emerald-400');
+                        countEl.classList.remove('text-slate-400', 'border-emerald-900/50', 'bg-emerald-900/20');
+                        countEl.classList.add('text-emerald-400', 'border-emerald-500/50', 'bg-emerald-500/20');
                         btnSave.disabled = false;
+                        
+                        // Renderização Rápida e Imersiva da Tabela
+                        tbody.innerHTML = parsed.map((card, index) => `
+                            <tr class="hover:bg-slate-800/50 transition-colors">
+                                <td class="px-4 py-2 text-center text-slate-500 font-medium">${index + 1}</td>
+                                <td class="px-4 py-2 border-l border-slate-700">
+                                    <div class="truncate w-full max-w-[120px] sm:max-w-[250px] md:max-w-[350px]" title="${this.escapeHTML(card.front)}">
+                                        ${this.escapeHTML(card.front)}
+                                    </div>
+                                </td>
+                                <td class="px-4 py-2 border-l border-slate-700">
+                                    <div class="truncate w-full max-w-[120px] sm:max-w-[250px] md:max-w-[350px]" title="${this.escapeHTML(card.back)}">
+                                        ${this.escapeHTML(card.back)}
+                                    </div>
+                                </td>
+                            </tr>
+                        `).join('');
+                        
+                        tableContainer.classList.remove('hidden');
+                        emptyState.classList.add('hidden');
                     } else {
-                        countEl.classList.add('text-red-400'); countEl.classList.remove('text-emerald-400');
+                        countEl.classList.add('text-slate-400', 'border-emerald-900/50', 'bg-emerald-900/20');
+                        countEl.classList.remove('text-emerald-400', 'border-emerald-500/50', 'bg-emerald-500/20');
                         btnSave.disabled = true;
+                        
+                        tableContainer.classList.add('hidden');
+                        emptyState.classList.remove('hidden');
                     }
                 });
             },
@@ -861,9 +889,13 @@
                 for (let i = 0; i < lines.length; i++) {
                     const line = lines[i].trim();
                     if (!line) continue;
+                    // A separação padrão ao colar do Excel é Tabulação (\t)
                     const columns = line.split('\t');
-                    if (columns.length >= 1) { 
-                        result.push({ front: columns[0].trim(), back: columns[1] ? columns[1].trim() : '' });
+                    if (columns.length >= 1 && columns[0].trim() !== '') { 
+                        result.push({ 
+                            front: columns[0].trim(), 
+                            back: columns[1] ? columns[1].trim() : '' 
+                        });
                     }
                 }
                 return result;
@@ -895,12 +927,21 @@
 
             openBulkModal() {
                 document.getElementById('bulkData').value = '';
-                document.getElementById('bulkCount').innerText = '0 cards detectados';
+                document.getElementById('bulkCount').innerText = '0 cards';
                 document.getElementById('btnSaveBulk').disabled = true;
+                
+                // Reseta a visualização da Tabela
+                document.getElementById('bulkTableContainer').classList.add('hidden');
+                document.getElementById('bulkEmptyState').classList.remove('hidden');
+
                 const modal = document.getElementById('bulkModal');
                 const content = document.getElementById('bulkModalContent');
                 modal.classList.remove('hidden'); modal.classList.add('flex');
-                setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); document.getElementById('bulkData').focus(); }, 20);
+                setTimeout(() => { 
+                    modal.classList.remove('opacity-0'); 
+                    content.classList.remove('scale-95'); 
+                    document.getElementById('bulkData').focus(); 
+                }, 20);
             },
 
             closeModals() {
@@ -988,7 +1029,6 @@
                 const btn = document.getElementById('btnSaveSingle');
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>'; btn.disabled = true;
 
-                // Define se é criação ou edição
                 const actionName = editId ? 'update_card' : 'add_single';
                 const payload = { deck_id: this.deckId, front: frontVal, back: backVal };
                 if (editId) payload.card_id = editId;
@@ -997,7 +1037,7 @@
                 if (res) {
                     this.showToast(res.message, 'success');
                     this.closeModals();
-                    await this.loadDeck(); // Recarrega para manter segurança e atualizações em dia
+                    await this.loadDeck();
                 }
                 btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar'; btn.disabled = false;
             },
@@ -1010,15 +1050,18 @@
                 if (parsedCards.length === 0) return;
 
                 const btn = document.getElementById('btnSaveBulk');
-                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>'; btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Importando...'; 
+                btn.disabled = true;
 
                 const res = await this.api('add_bulk', { deck_id: this.deckId, cards: parsedCards });
                 if (res) {
                     this.showToast(res.message, 'success');
                     this.closeModals();
                     await this.loadDeck();
+                } else {
+                    btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> <span class="hidden sm:inline">Importar para o Deck</span><span class="sm:hidden">Importar</span>'; 
+                    btn.disabled = false;
                 }
-                btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Importar'; btn.disabled = false;
             }
         };
 
