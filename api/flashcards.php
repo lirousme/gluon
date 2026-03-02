@@ -5,7 +5,7 @@
 /**
  * MICRO-API DE FLASHCARDS
  * Pilar: Seguro, Rápido e Escalável.
- * Gerencia CRUD, Criptografia, Repetição Espaçada e Modos de Deck.
+ * Gerencia CRUD, Criptografia, Repetição Espaçada, Modos de Deck e Geração de Áudio (TTS).
  */
 
 require_once __DIR__ . '/../config/database.php';
@@ -39,30 +39,24 @@ if ($action === 'fetch') {
     $deck_mode = $deck['deck_mode'] ?? 'aleatorio';
     $current_index = 0;
 
-    // Se for modo aleatório (Estudo de Repetição Espaçada)
     if ($deck_mode === 'aleatorio') {
-        // Traz cards novos (sem score) ou cards que já venceram a data de revisão
         $stmt = $pdo->prepare("
-            SELECT f.id, f.front_encrypted, f.back_encrypted, COALESCE(fs.score, 0) as score 
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score 
             FROM flashcards f
             LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
             WHERE f.directory_id = ? AND (fs.next_review_at IS NULL OR fs.next_review_at <= NOW())
             ORDER BY RAND()
         ");
         $stmt->execute([$user_id, $deck_id]);
-    } 
-    // Se for modo Livro (Leitura Sequencial)
-    else {
-        // Traz todos os cards na ordem correta
+    } else {
         $stmt = $pdo->prepare("
-            SELECT f.id, f.front_encrypted, f.back_encrypted, 0 as score 
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.has_audio_front, f.has_audio_back, 0 as score 
             FROM flashcards f
             WHERE f.directory_id = ? 
             ORDER BY f.sort_order ASC, f.id ASC
         ");
         $stmt->execute([$deck_id]);
 
-        // Busca o progresso atual do usuário neste livro
         $stmtProg = $pdo->prepare("SELECT current_index FROM flashcard_book_progress WHERE user_id = ? AND directory_id = ?");
         $stmtProg->execute([$user_id, $deck_id]);
         $current_index = (int)$stmtProg->fetchColumn() ?: 0;
@@ -70,7 +64,6 @@ if ($action === 'fetch') {
     
     $cards = $stmt->fetchAll();
 
-    // Calcula a maestria total do deck para mostrar no topo (apenas visual)
     $stmtTotal = $pdo->prepare("SELECT COUNT(id) FROM flashcards WHERE directory_id = ?");
     $stmtTotal->execute([$deck_id]);
     $total_cards_in_deck = (int)$stmtTotal->fetchColumn();
@@ -92,6 +85,8 @@ if ($action === 'fetch') {
             'id' => $card['id'],
             'front' => Security::decryptData($card['front_encrypted']),
             'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
+            'has_audio_front' => (int)$card['has_audio_front'],
+            'has_audio_back' => (int)$card['has_audio_back'],
             'score' => (int)$card['score']
         ];
     }
@@ -107,9 +102,78 @@ if ($action === 'fetch') {
     ]);
 }
 
+elseif ($action === 'generate_audio') {
+    $card_id = (int)($input['card_id'] ?? 0);
+    $side = $input['side'] ?? 'back'; // 'front' ou 'back'
+
+    if ($card_id === 0 || !in_array($side, ['front', 'back'])) {
+        die(json_encode(['status' => 'error', 'message' => 'Parâmetros inválidos.']));
+    }
+
+    // Verifica a propriedade do deck
+    $stmt = $pdo->prepare("SELECT f.front_encrypted, f.back_encrypted, d.user_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ?");
+    $stmt->execute([$card_id]);
+    $card = $stmt->fetch();
+
+    if (!$card || $card['user_id'] != $user_id) {
+        die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
+    }
+
+    $text_encrypted = $side === 'front' ? $card['front_encrypted'] : $card['back_encrypted'];
+    $clean_text = trim(strip_tags(Security::decryptData($text_encrypted)));
+
+    if (empty($clean_text)) {
+        die(json_encode(['status' => 'error', 'message' => 'O lado selecionado deste card não possui texto.']));
+    }
+
+    // Seleciona o ID da voz correspondente ao lado
+    $reference_id = $side === 'front' ? FISH_REFERENCE_ID_FRONT : FISH_REFERENCE_ID_BACK;
+
+    // Preparar a requisição para a API da Fish Audio
+    $ch = curl_init('https://api.fish.audio/v1/tts');
+    $payload = json_encode([
+        "text" => $clean_text,
+        "reference_id" => $reference_id,
+        "format" => "mp3"
+    ]);
+
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        "Authorization: Bearer " . FISH_API_KEY,
+        "Content-Type: application/json",
+        "model: s1"
+    ]);
+
+    $response = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpcode !== 200 || !$response) {
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao comunicar com a API de voz. O serviço pode estar indisponível.']));
+    }
+
+    // Verifica se a pasta assets/audio existe
+    $audio_dir = __DIR__ . '/../assets/audio/';
+    if (!is_dir($audio_dir)) {
+        mkdir($audio_dir, 0755, true);
+    }
+
+    // Salva o arquivo mp3 (ex: card_1_front.mp3 ou card_1_back.mp3)
+    $file_path = $audio_dir . 'card_' . $card_id . '_' . $side . '.mp3';
+    file_put_contents($file_path, $response);
+
+    // Atualiza a flag no banco de dados
+    $col = $side === 'front' ? 'has_audio_front' : 'has_audio_back';
+    $stmt = $pdo->prepare("UPDATE flashcards SET $col = 1 WHERE id = ?");
+    $stmt->execute([$card_id]);
+
+    echo json_encode(['status' => 'success', 'message' => 'Áudio gerado e salvo com sucesso!']);
+}
+
 elseif ($action === 'update_score') {
     $card_id = (int)($input['card_id'] ?? 0);
-    
     if ($card_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do card inválido.']));
 
     $stmtCheck = $pdo->prepare("SELECT d.user_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ?");
@@ -118,8 +182,6 @@ elseif ($action === 'update_score') {
 
     if ($owner != $user_id) die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
 
-    // Repetição Espaçada Segura: Impede update no banco se a data de revisão daquele cartão não tiver chegado,
-    // garantindo zero chance de fraudes via API.
     $stmt = $pdo->prepare("
         INSERT INTO flashcard_scores (user_id, flashcard_id, score, next_review_at) 
         VALUES (?, ?, 1, DATE_ADD(NOW(), INTERVAL 24 HOUR)) 
@@ -129,11 +191,8 @@ elseif ($action === 'update_score') {
             next_review_at = IF(next_review_at IS NULL OR next_review_at <= NOW(), DATE_ADD(NOW(), INTERVAL (LEAST(score + 1, 20) * 24) HOUR), next_review_at)
     ");
     
-    if ($stmt->execute([$user_id, $card_id])) {
-        echo json_encode(['status' => 'success']);
-    } else {
-        echo json_encode(['status' => 'error']);
-    }
+    if ($stmt->execute([$user_id, $card_id])) echo json_encode(['status' => 'success']);
+    else echo json_encode(['status' => 'error']);
 }
 
 elseif ($action === 'update_progress') {
@@ -153,16 +212,11 @@ elseif ($action === 'update_settings') {
     $deck_id = (int)($input['deck_id'] ?? 0);
     $mode = $input['deck_mode'] === 'livro' ? 'livro' : 'aleatorio';
 
-    if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) {
-        die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
-    }
+    if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
 
     $stmt = $pdo->prepare("UPDATE directories SET deck_mode = ? WHERE id = ?");
-    if ($stmt->execute([$mode, $deck_id])) {
-         echo json_encode(['status' => 'success', 'message' => 'Configurações atualizadas.']);
-    } else {
-         echo json_encode(['status' => 'error', 'message' => 'Erro ao salvar.']);
-    }
+    if ($stmt->execute([$mode, $deck_id])) echo json_encode(['status' => 'success', 'message' => 'Configurações atualizadas.']);
+    else echo json_encode(['status' => 'error', 'message' => 'Erro ao salvar.']);
 }
 
 elseif ($action === 'add_single') {
@@ -170,40 +224,27 @@ elseif ($action === 'add_single') {
     $front = trim($input['front'] ?? '');
     $back = trim($input['back'] ?? ''); 
 
-    if ($deck_id === 0 || empty($front)) {
-        die(json_encode(['status' => 'error', 'message' => 'Dados inválidos. A frente é obrigatória.']));
-    }
-
-    if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) {
-        die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
-    }
+    if ($deck_id === 0 || empty($front)) die(json_encode(['status' => 'error', 'message' => 'A frente é obrigatória.']));
+    if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
 
     $front_enc = Security::encryptData($front);
     $back_enc = !empty($back) ? Security::encryptData($back) : null;
 
-    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted) VALUES (?, ?, ?)");
-    if ($stmt->execute([$deck_id, $front_enc, $back_enc])) {
-        echo json_encode(['status' => 'success', 'message' => 'Card adicionado com segurança.']);
-    } else {
-        echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
-    }
+    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted, has_audio_front, has_audio_back) VALUES (?, ?, ?, 0, 0)");
+    if ($stmt->execute([$deck_id, $front_enc, $back_enc])) echo json_encode(['status' => 'success', 'message' => 'Card adicionado.']);
+    else echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
 }
 
 elseif ($action === 'add_bulk') {
     $deck_id = (int)($input['deck_id'] ?? 0);
     $cards = $input['cards'] ?? [];
 
-    if ($deck_id === 0 || !is_array($cards) || count($cards) === 0) {
-        die(json_encode(['status' => 'error', 'message' => 'Nenhum card válido enviado.']));
-    }
-
-    if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) {
-        die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
-    }
+    if ($deck_id === 0 || !is_array($cards) || count($cards) === 0) die(json_encode(['status' => 'error', 'message' => 'Dados inválidos.']));
+    if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
 
     try {
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted) VALUES (?, ?, ?)");
+        $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted, has_audio_front, has_audio_back) VALUES (?, ?, ?, 0, 0)");
         
         $count = 0;
         foreach ($cards as $card) {
@@ -219,15 +260,11 @@ elseif ($action === 'add_bulk') {
         }
         
         $pdo->commit();
-        echo json_encode(['status' => 'success', 'message' => "$count cards importados com segurança!"]);
+        echo json_encode(['status' => 'success', 'message' => "$count cards importados!"]);
         
     } catch (Exception $e) {
         $pdo->rollBack();
         echo json_encode(['status' => 'error', 'message' => 'Erro interno ao importar cards.']);
     }
-}
-
-else {
-    echo json_encode(['status' => 'error', 'message' => 'Ação inválida.']);
 }
 ?>
