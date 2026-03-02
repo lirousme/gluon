@@ -4,7 +4,7 @@
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
   Suporta Múltiplas Visualizações: Linha do Tempo, Kanban Semanal, Lista e Recorrências.
-  *Atualizado: Correção na projeção visual de repetições em múltiplas horas no mesmo dia.
+  *Atualizado: Correção na exclusão de blocos unitários em repetições do tipo Hourly (Hora em hora).
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -640,7 +640,7 @@
                 const baseDateStr = item.start_date ? item.start_date.split(' ')[0] : null;
                 if (!baseDateStr) return false;
 
-                // Verifica se foi excepcionalmente pulado hoje
+                // Verifica se foi excepcionalmente pulado (usando a data Y-m-d)
                 if (item.rec_exceptions && item.rec_exceptions !== '[]') {
                     try {
                         const exceptions = typeof item.rec_exceptions === 'string' ? JSON.parse(item.rec_exceptions) : item.rec_exceptions;
@@ -682,7 +682,7 @@
                 return false;
             },
 
-            // NOVA FUNÇÃO: Retorna ARRAY com todas as projeções de horários de uma tarefa num dia
+            // Retorna ARRAY com todas as projeções de horários de uma tarefa num dia
             getTaskInstancesOnDate(item, targetDateStr) {
                 if (!this.isTaskOnDate(item, targetDateStr)) return [];
 
@@ -693,6 +693,12 @@
                 const origStart = new Date(item.start_date.replace(' ', 'T'));
                 const origEnd = new Date(item.end_date.replace(' ', 'T'));
                 const durationMs = origEnd.getTime() - origStart.getTime();
+
+                // Extrair exceções para filtrar blocos de horários específicos (em Hourly)
+                let exceptions = [];
+                if (item.rec_exceptions && item.rec_exceptions !== '[]') {
+                    try { exceptions = typeof item.rec_exceptions === 'string' ? JSON.parse(item.rec_exceptions) : item.rec_exceptions; } catch(e) {}
+                }
 
                 // Tratar a repetição "De hora em hora" (Hourly) para gerar os múltiplos blocos no dia
                 if (item.is_recurring === 1 && item.rec_type === 'hourly') {
@@ -711,21 +717,31 @@
                         const curH = Math.floor(currentMins / 60);
                         const curM = currentMins % 60;
                         
-                        const instStart = new Date(`${targetDateStr}T${curH.toString().padStart(2,'0')}:${curM.toString().padStart(2,'0')}:00`);
-                        const instEnd = new Date(instStart.getTime() + durationMs);
-
-                        // Descobre se esta hora/minuto em específico é o bloco PAI verdadeiro ou uma projeção virtual
-                        const isProj = !(isBaseDate && curH === origStart.getHours() && curM === origStart.getMinutes());
+                        const instDateTimeStr = `${targetDateStr} ${curH.toString().padStart(2,'0')}:${curM.toString().padStart(2,'0')}:00`;
                         
-                        instances.push({ start: instStart, end: instEnd, isProjection: isProj, uid: `${item.id}-${curH}-${curM}` });
+                        // Ignora se este bloco específico de data+hora estiver nas exceções
+                        if (!exceptions.includes(targetDateStr) && !exceptions.includes(instDateTimeStr)) {
+                            const instStart = new Date(`${targetDateStr}T${curH.toString().padStart(2,'0')}:${curM.toString().padStart(2,'0')}:00`);
+                            const instEnd = new Date(instStart.getTime() + durationMs);
+
+                            // Descobre se esta hora/minuto em específico é o bloco PAI verdadeiro ou uma projeção virtual
+                            const isProj = !(isBaseDate && curH === origStart.getHours() && curM === origStart.getMinutes());
+                            
+                            instances.push({ start: instStart, end: instEnd, isProjection: isProj, uid: `${item.id}-${curH}-${curM}` });
+                        }
                         
                         currentMins += interval * 60; // Avança o relógio
                     }
                 } else {
                     // Tarefas normais (apenas UMA instância por dia, na mesma hora)
-                    const instStart = new Date(`${targetDateStr}T${origStart.toTimeString().substring(0,8)}`);
-                    const instEnd = new Date(instStart.getTime() + durationMs);
-                    instances.push({ start: instStart, end: instEnd, isProjection: !isBaseDate, uid: item.id });
+                    const instTimeStr = origStart.toTimeString().substring(0,8);
+                    const instDateTimeStr = `${targetDateStr} ${instTimeStr}`;
+                    
+                    if (!exceptions.includes(targetDateStr) && !exceptions.includes(instDateTimeStr)) {
+                        const instStart = new Date(`${targetDateStr}T${instTimeStr}`);
+                        const instEnd = new Date(instStart.getTime() + durationMs);
+                        instances.push({ start: instStart, end: instEnd, isProjection: !isBaseDate, uid: item.id });
+                    }
                 }
                 
                 return instances;
@@ -1039,6 +1055,9 @@
                         const projClass = inst.isProjection ? 'virtual-task opacity-80' : '';
                         const resizeHTML = inst.isProjection ? '' : `<div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>`;
 
+                        const instTimeStr = inst.start.getHours().toString().padStart(2,'0') + ':' + inst.start.getMinutes().toString().padStart(2,'0') + ':00';
+                        const contextDateStr = `${selectedDateStr} ${instTimeStr}`;
+
                         eventsLayer.innerHTML += `
                             <div id="evt-${inst.uid}" class="event-card group ${projClass}" data-id="${item.id}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                                 ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
@@ -1049,7 +1068,7 @@
                                 </div>
                                 <div class="text-[10px] opacity-70 pointer-events-none z-10 relative font-medium">${inst.start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${inst.end.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                                 
-                                <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${selectedDateStr}')" class="absolute top-1 right-1 text-white/70 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 z-20 bg-black/40 rounded shadow-md"><i class="fa-solid fa-cog text-xs"></i></button>
+                                <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="absolute top-1 right-1 text-white/70 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 z-20 bg-black/40 rounded shadow-md"><i class="fa-solid fa-cog text-xs"></i></button>
 
                                 ${resizeHTML}
                             </div>
@@ -1091,6 +1110,9 @@
                 const borderStyle = inst.isProjection ? '' : `border-left: 4px solid ${fromColor};`;
                 const handleHTML = inst.isProjection ? '' : `<i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>`;
 
+                const instTimeStr = inst.start.getHours().toString().padStart(2,'0') + ':' + inst.start.getMinutes().toString().padStart(2,'0') + ':00';
+                const contextDateStr = `${dateStr} ${instTimeStr}`;
+
                 if (viewType === 'kanban') {
                     return `
                     <div data-id="${item.id}" class="kanban-item bg-slate-700/80 border ${inst.isProjection ? 'border-slate-500' : 'border-slate-600'} p-2.5 rounded-lg shadow-sm hover:bg-slate-600 transition-colors flex flex-col group relative overflow-hidden mb-2 ${projectionClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
@@ -1104,7 +1126,7 @@
                         </div>
                         <div class="text-[10px] text-slate-400 mt-1 z-10 relative font-medium"><i class="fa-regular fa-clock"></i> ${timeStr}</div>
                         
-                        <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${dateStr}')" class="absolute top-1.5 right-1.5 text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20 bg-slate-800/80 rounded border border-slate-600"><i class="fa-solid fa-cog text-xs"></i></button>
+                        <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="absolute top-1.5 right-1.5 text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20 bg-slate-800/80 rounded border border-slate-600"><i class="fa-solid fa-cog text-xs"></i></button>
                     </div>`;
                 } else {
                     return `
@@ -1119,7 +1141,7 @@
                             <i class="fa-solid ${item.icon} text-lg shrink-0" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
                             <span class="font-semibold text-sm text-slate-200 truncate flex-1">${this.escapeHTML(item.name)} ${repeatIcon}</span>
                         </div>
-                        <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${dateStr}')" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-2 z-20 shrink-0 bg-slate-800 rounded shadow"><i class="fa-solid fa-cog"></i></button>
+                        <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-2 z-20 shrink-0 bg-slate-800 rounded shadow"><i class="fa-solid fa-cog"></i></button>
                     </div>`;
                 }
             },
