@@ -4,11 +4,9 @@
   
   Pilar: Rápido, Seguro, Bonito e Escalável.
   Atualizações:
-  - Correção do empilhamento 3D das faces removendo conflito de classe 'relative'.
-  - Centralização vertical estrita isolando pontuação (score-dots).
-  - Uso de h-[100dvh] no body para prevenir quebras com barra de navegação mobile.
-  - Integração Completa Fish Audio (TTS) com suporte a Frente e Verso independentes.
-  - Controle global de Auto-Play no cabeçalho.
+  - SOLUÇÃO DEFINITIVA DO EIXO 3D: Implementação do CSS Grid Stacking.
+    Isso força matematicamente a frente e o verso a ocuparem as exatas
+    mesmas coordenadas geográficas, tornando impossível desencontrarem.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -28,28 +26,34 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
+        /* O segredo DEFINITIVO para o card NUNCA MAIS pular ou desalinhar na tela: 
+           Uso de CSS Grid para empilhamento geográfico perfeito. */
         .scene {
             perspective: 1000px;
             width: 100%;
             max-width: 600px;
-            height: 400px;
+            height: 400px; /* Altura ancorada rigidamente */
             margin: 0 auto;
+            flex-shrink: 0; /* Impede que o contêiner flexível pai esmague a cena */
         }
 
+        /* O elemento que gira usa display: grid para sobrepor os filhos de forma inflexível */
         .card-3d {
             width: 100%;
             height: 100%;
+            display: grid;
             transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
             transform-style: preserve-3d;
-            position: relative;
+            transform-origin: center center;
         }
 
-        .card-3d.is-flipped { transform: rotateY(180deg); }
+        .card-3d.is-flipped { 
+            transform: rotateY(180deg); 
+        }
 
         .card-face {
-            position: absolute;
-            top: 0;
-            left: 0;
+            /* A MÁGICA ACONTECE AQUI: grid-area 1/1/1/1 força ambos a ocuparem a exata mesma célula no grid */
+            grid-area: 1 / 1 / 1 / 1;
             width: 100%;
             height: 100%;
             backface-visibility: hidden;
@@ -69,14 +73,20 @@
             background: linear-gradient(145deg, #1e293b, #0f172a);
             border: 1px solid #334155;
             color: #f8fafc;
-            transform: rotateY(0deg); /* Previne glitches no iOS Safari */
+            /* Zera o eixo explicitamente para ancorar hardware acceleration em celulares */
+            transform: rotateY(0deg); 
+            -webkit-transform: rotateY(0deg);
+            z-index: 2; /* Mantém a frente nativamente acima inicialmente */
         }
 
         .card-back {
             background: linear-gradient(145deg, #3b82f6, #1d4ed8);
             border: 1px solid #60a5fa;
             color: #ffffff;
+            /* Gira o verso e o ancora na mesma geometria */
             transform: rotateY(180deg);
+            -webkit-transform: rotateY(180deg);
+            z-index: 1;
         }
 
         .card-text {
@@ -94,13 +104,10 @@
         }
         
         .score-dots {
-            position: absolute;
-            bottom: 1.5rem;
-            left: 50%;
-            transform: translateX(-50%);
             display: flex;
             gap: 4px;
-            z-index: 10;
+            margin-top: auto;
+            padding-top: 1rem;
         }
 
         .score-dot {
@@ -126,7 +133,7 @@
         }
     </style>
 </head>
-<body class="bg-gluon-dark text-slate-200 h-[100dvh] flex flex-col font-sans overflow-hidden selection:bg-gluon-primary selection:text-white">
+<body class="bg-gluon-dark text-slate-200 h-screen flex flex-col font-sans overflow-hidden selection:bg-gluon-primary selection:text-white">
 
     <!-- Navbar -->
     <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-16 flex items-center justify-between px-4 sm:px-6 relative">
@@ -185,9 +192,16 @@
             <div class="card-3d cursor-pointer" id="flashcard" onclick="flashcardApp.flipCard(event)">
                 
                 <!-- Frente -->
-                <div class="card-face card-front">
+                <div class="card-face card-front relative">
                     <span id="frontLabel" class="absolute top-4 left-4 text-xs font-bold text-slate-500 tracking-wider uppercase">Frente</span>
-                    <i id="flipIconFront" class="fa-solid fa-rotate absolute top-4 right-4 text-slate-600 opacity-50"></i>
+                    
+                    <!-- Botões de Ação do Card -->
+                    <div class="absolute top-4 right-4 z-30 flex items-center gap-3">
+                        <button onclick="event.stopPropagation(); flashcardApp.editCurrentCard()" class="text-slate-400 hover:text-white transition-colors" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="event.stopPropagation(); flashcardApp.deleteCurrentCard()" class="text-slate-500 hover:text-red-400 transition-colors" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+                        <div class="w-px h-4 bg-slate-700 mx-1 hidden sm:block"></div>
+                        <i id="flipIconFront" class="fa-solid fa-rotate text-slate-600 opacity-50 hidden sm:block"></i>
+                    </div>
                     
                     <div class="absolute bottom-4 left-4 z-20" id="audioControlsFront"></div>
                     
@@ -197,9 +211,16 @@
                 </div>
 
                 <!-- Verso -->
-                <div class="card-face card-back">
+                <div class="card-face card-back relative">
                     <span class="absolute top-4 left-4 text-xs font-bold text-blue-200 tracking-wider uppercase">Verso</span>
-                    <i id="flipIconBack" class="fa-solid fa-rotate absolute top-4 right-4 text-blue-300 opacity-50"></i>
+                    
+                    <!-- Botões de Ação do Card -->
+                    <div class="absolute top-4 right-4 z-30 flex items-center gap-3">
+                        <button onclick="event.stopPropagation(); flashcardApp.editCurrentCard()" class="text-blue-300 hover:text-white transition-colors" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="event.stopPropagation(); flashcardApp.deleteCurrentCard()" class="text-blue-400 hover:text-red-300 transition-colors" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+                        <div class="w-px h-4 bg-blue-500/50 mx-1 hidden sm:block"></div>
+                        <i id="flipIconBack" class="fa-solid fa-rotate text-blue-300 opacity-50 hidden sm:block"></i>
+                    </div>
                     
                     <div class="absolute bottom-4 left-4 z-20" id="audioControlsBack"></div>
                     
@@ -277,16 +298,19 @@
         </div>
     </div>
 
-    <!-- Modal: Adicionar Card Unitário -->
+    <!-- Modal: Adicionar/Editar Card Unitário -->
     <div id="singleModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
         <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg p-0 transform scale-95 transition-transform duration-300 overflow-hidden" id="singleModalContent">
             <div class="p-5 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
                 <h3 class="text-lg font-semibold text-white flex items-center gap-2">
-                    <i class="fa-solid fa-plus text-gluon-primary"></i> Adicionar Flashcard
+                    <i class="fa-solid fa-plus text-gluon-primary"></i> <span id="modalTitleText">Adicionar Flashcard</span>
                 </h3>
                 <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <form onsubmit="flashcardApp.saveSingleCard(event)" class="p-6 space-y-5">
+                
+                <input type="hidden" id="editCardId" value="">
+
                 <div>
                     <label class="block text-sm font-medium text-slate-300 mb-2">Frente (Obrigatório)</label>
                     <textarea id="singleFront" rows="3" required class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors resize-none"></textarea>
@@ -518,7 +542,7 @@
                     `;
                 }
 
-                // === CONTROLES DE ÁUDIO (VERSO) ===
+                // === CONTROLES DE ÁUDIO E UI (VERSO) ===
                 const audioBack = document.getElementById('audioControlsBack');
                 if (!hasBack) {
                     document.getElementById('frontLabel').innerText = this.deckMode === 'livro' ? 'Página' : 'Card Único';
@@ -570,8 +594,8 @@
             flipCard(e) {
                 if (this.cards.length === 0) return;
                 
-                // Se o clique foi no botão de áudio, ignoramos o giro
-                if (e && e.target && (e.target.closest('#audioControlsBack') || e.target.closest('#audioControlsFront'))) return;
+                // Impede o giro se clicou em um botão
+                if (e && e.target && e.target.closest('button')) return;
 
                 const card = this.cards[this.currentIndex];
                 const hasBack = card.back && card.back.trim() !== '';
@@ -581,20 +605,18 @@
                 this.isFlipped = !this.isFlipped;
                 const cardEl = document.getElementById('flashcard');
                 
-                this.stopAudio(); // Parar o áudio anterior ao virar
+                this.stopAudio(); 
 
                 if (this.isFlipped) {
                     cardEl.classList.add('is-flipped');
                     if (this.deckMode === 'aleatorio') this.registerScore(card);
                     
-                    // Lógica de Áudio: Se ativado e existir áudio do VERSO, toca na hora.
                     if (this.autoPlayEnabled && card.has_audio_back === 1) {
                         this.playCardAudio(card.id, 'back');
                     }
                 } else {
                     cardEl.classList.remove('is-flipped');
                     
-                    // Lógica de Áudio: Ao voltar pra FRENTE, toca a voz da frente.
                     if (this.autoPlayEnabled && card.has_audio_front === 1) {
                         this.playCardAudio(card.id, 'front');
                     }
@@ -604,7 +626,7 @@
             nextCard() {
                 if (this.cards.length === 0) return;
                 
-                this.stopAudio(); // Interrompe o som atual imediatamente
+                this.stopAudio(); 
                 
                 const card = this.cards[this.currentIndex];
                 const hasBack = card.back && card.back.trim() !== '';
@@ -616,7 +638,6 @@
                     this.renderCurrentCard();
                     if (this.deckMode === 'livro') this.saveBookProgress();
                     
-                    // Lógica de Áudio: Toca a FRENTE da próxima carta
                     if(this.autoPlayEnabled && this.cards[this.currentIndex].has_audio_front === 1) {
                         this.playCardAudio(this.cards[this.currentIndex].id, 'front');
                     }
@@ -625,14 +646,68 @@
 
             prevCard() {
                 if (this.currentIndex > 0) {
-                    this.stopAudio(); // Interrompe o som atual imediatamente
+                    this.stopAudio(); 
                     this.currentIndex--;
                     this.renderCurrentCard();
                     if (this.deckMode === 'livro') this.saveBookProgress();
                     
-                    // Lógica de Áudio: Toca a FRENTE da carta anterior
                     if(this.autoPlayEnabled && this.cards[this.currentIndex].has_audio_front === 1) {
                         this.playCardAudio(this.cards[this.currentIndex].id, 'front');
+                    }
+                }
+            },
+
+            // --- FUNÇÕES DE EDIÇÃO E EXCLUSÃO DE CARDS UNITÁRIOS ---
+            
+            editCurrentCard() {
+                const card = this.cards[this.currentIndex];
+                if (!card) return;
+                
+                document.getElementById('editCardId').value = card.id;
+                document.getElementById('singleFront').value = card.front;
+                document.getElementById('singleBack').value = card.back;
+                document.getElementById('modalTitleText').innerText = 'Editar Flashcard';
+                
+                const modal = document.getElementById('singleModal');
+                const content = document.getElementById('singleModalContent');
+                modal.classList.remove('hidden'); modal.classList.add('flex');
+                
+                setTimeout(() => { 
+                    modal.classList.remove('opacity-0'); 
+                    content.classList.remove('scale-95'); 
+                    document.getElementById('singleFront').focus(); 
+                }, 20);
+            },
+
+            async deleteCurrentCard() {
+                const card = this.cards[this.currentIndex];
+                if (!card) return;
+
+                if (confirm('Atenção: Tem certeza que deseja excluir permanentemente este card?')) {
+                    this.stopAudio();
+                    const res = await this.api('delete_card', { card_id: card.id });
+                    
+                    if (res) {
+                        this.showToast(res.message, 'success');
+                        
+                        // Atualiza localmente para ser ultra rápido
+                        this.cards.splice(this.currentIndex, 1);
+                        this.totalCardsInDeck--;
+                        
+                        // Se excluiu o último, volta um índice
+                        if (this.currentIndex >= this.cards.length && this.currentIndex > 0) {
+                            this.currentIndex--;
+                        }
+
+                        if (this.cards.length === 0) {
+                            document.getElementById('cardScene').style.display = 'none';
+                            document.getElementById('controls').style.display = 'none';
+                            document.getElementById('topControlPanel').style.display = 'none';
+                            this.showEmptyState();
+                        } else {
+                            this.updateGlobalProgressUI();
+                            this.renderCurrentCard();
+                        }
                     }
                 }
             },
@@ -647,7 +722,6 @@
                 if (this.autoPlayEnabled) {
                     icon.classList.replace('text-slate-400', 'text-gluon-primary');
                     
-                    // Verifica qual lado está sendo exibido para tocar o áudio correspondente
                     const card = this.cards[this.currentIndex];
                     const targetSide = this.isFlipped ? 'back' : 'front';
                     
@@ -684,15 +758,13 @@
                 const res = await this.api('generate_audio', { card_id: cardId, side: side });
                 
                 if (res) {
-                    // Atualiza cache local
                     const cardIndex = this.cards.findIndex(c => c.id === cardId);
                     if (cardIndex !== -1) {
                         if (side === 'front') this.cards[cardIndex].has_audio_front = 1;
                         if (side === 'back') this.cards[cardIndex].has_audio_back = 1;
                         
-                        this.renderCurrentCard(); // Atualiza a UI para remover botão gerar e mostrar botão Ouvir
+                        this.renderCurrentCard(); 
                         
-                        // Toca imediatamente se o autoplay estiver on
                         if(this.autoPlayEnabled) {
                             this.playCardAudio(cardId, side);
                         }
@@ -810,8 +882,11 @@
             },
 
             openSingleModal() {
+                document.getElementById('editCardId').value = '';
                 document.getElementById('singleFront').value = '';
                 document.getElementById('singleBack').value = '';
+                document.getElementById('modalTitleText').innerText = 'Adicionar Flashcard';
+                
                 const modal = document.getElementById('singleModal');
                 const content = document.getElementById('singleModalContent');
                 modal.classList.remove('hidden'); modal.classList.add('flex');
@@ -832,7 +907,7 @@
                 ['settings', 'single', 'bulk'].forEach(prefix => {
                     const modal = document.getElementById(`${prefix}Modal`);
                     const content = document.getElementById(`${prefix}ModalContent`);
-                    if(!modal.classList.contains('hidden')) {
+                    if(modal && !modal.classList.contains('hidden')) {
                         modal.classList.add('opacity-0'); content.classList.add('scale-95');
                         setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
                     }
@@ -904,6 +979,7 @@
 
             async saveSingleCard(e) {
                 e.preventDefault();
+                const editId = document.getElementById('editCardId').value;
                 const frontVal = document.getElementById('singleFront').value.trim();
                 const backVal = document.getElementById('singleBack').value.trim();
                 
@@ -912,11 +988,16 @@
                 const btn = document.getElementById('btnSaveSingle');
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>'; btn.disabled = true;
 
-                const res = await this.api('add_single', { deck_id: this.deckId, front: frontVal, back: backVal });
+                // Define se é criação ou edição
+                const actionName = editId ? 'update_card' : 'add_single';
+                const payload = { deck_id: this.deckId, front: frontVal, back: backVal };
+                if (editId) payload.card_id = editId;
+
+                const res = await this.api(actionName, payload);
                 if (res) {
                     this.showToast(res.message, 'success');
                     this.closeModals();
-                    await this.loadDeck();
+                    await this.loadDeck(); // Recarrega para manter segurança e atualizações em dia
                 }
                 btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar'; btn.disabled = false;
             },
