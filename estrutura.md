@@ -92,7 +92,9 @@ type VARCHAR(20) NOT NULL COMMENT 'daily, weekly, monthly, yearly, custom',
 interval_value INT DEFAULT 1 COMMENT 'Ex: a cada 2 dias/semanas',
 days_of_week VARCHAR(50) DEFAULT NULL COMMENT 'Dias específicos da semana (0-6)',
 custom_dates JSON DEFAULT NULL COMMENT 'Lista de datas exatas em formato JSON',
-exceptions TEXT NULL;
+exceptions TEXT NULL COMMENT 'Dias que foram excluídos / pulados pelo usuário',
+time_start TIME NULL COMMENT 'Horário de início (limite) para a repetição por hora',
+time_end TIME NULL COMMENT 'Horário de término (limite) para a repetição por hora';
 end_date DATETIME DEFAULT NULL COMMENT 'Data limite para parar a repetição',
 next_run_date DATETIME NOT NULL COMMENT 'A próxima vez que a rotina deve clonar a tarefa',
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
