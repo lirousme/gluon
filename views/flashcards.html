@@ -4,6 +4,9 @@
   
   Pilar: Rápido, Seguro, Bonito e Escalável.
   Atualizações:
+  - Correção do empilhamento 3D das faces removendo conflito de classe 'relative'.
+  - Centralização vertical estrita isolando pontuação (score-dots).
+  - Uso de h-[100dvh] no body para prevenir quebras com barra de navegação mobile.
   - Integração Completa Fish Audio (TTS) com suporte a Frente e Verso independentes.
   - Controle global de Auto-Play no cabeçalho.
 -->
@@ -66,6 +69,7 @@
             background: linear-gradient(145deg, #1e293b, #0f172a);
             border: 1px solid #334155;
             color: #f8fafc;
+            transform: rotateY(0deg); /* Previne glitches no iOS Safari */
         }
 
         .card-back {
@@ -90,10 +94,13 @@
         }
         
         .score-dots {
+            position: absolute;
+            bottom: 1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
             display: flex;
             gap: 4px;
-            margin-top: auto;
-            padding-top: 1rem;
+            z-index: 10;
         }
 
         .score-dot {
@@ -119,7 +126,7 @@
         }
     </style>
 </head>
-<body class="bg-gluon-dark text-slate-200 h-screen flex flex-col font-sans overflow-hidden selection:bg-gluon-primary selection:text-white">
+<body class="bg-gluon-dark text-slate-200 h-[100dvh] flex flex-col font-sans overflow-hidden selection:bg-gluon-primary selection:text-white">
 
     <!-- Navbar -->
     <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-16 flex items-center justify-between px-4 sm:px-6 relative">
@@ -178,7 +185,7 @@
             <div class="card-3d cursor-pointer" id="flashcard" onclick="flashcardApp.flipCard(event)">
                 
                 <!-- Frente -->
-                <div class="card-face card-front relative">
+                <div class="card-face card-front">
                     <span id="frontLabel" class="absolute top-4 left-4 text-xs font-bold text-slate-500 tracking-wider uppercase">Frente</span>
                     <i id="flipIconFront" class="fa-solid fa-rotate absolute top-4 right-4 text-slate-600 opacity-50"></i>
                     
@@ -190,7 +197,7 @@
                 </div>
 
                 <!-- Verso -->
-                <div class="card-face card-back relative">
+                <div class="card-face card-back">
                     <span class="absolute top-4 left-4 text-xs font-bold text-blue-200 tracking-wider uppercase">Verso</span>
                     <i id="flipIconBack" class="fa-solid fa-rotate absolute top-4 right-4 text-blue-300 opacity-50"></i>
                     
