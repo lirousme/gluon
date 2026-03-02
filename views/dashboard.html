@@ -4,12 +4,13 @@
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
   Suporte completo a Pastas, Arquivos, Agendas, Portais (Atalhos), Drag&Drop, Recorrência e Flashcards.
+  Atualização: Uso de h-dvh no lugar de h-screen para suporte nativo ao Safari iOS (Barra de navegação).
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Gluon - Workspace</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -69,7 +70,7 @@
         input[type="color"]::-webkit-color-swatch { border: none; border-radius: 0.5rem; }
     </style>
 </head>
-<body class="bg-gluon-dark text-slate-200 h-screen overflow-hidden flex flex-col font-sans selection:bg-gluon-primary selection:text-white relative">
+<body class="bg-gluon-dark text-slate-200 h-dvh overflow-hidden flex flex-col font-sans selection:bg-gluon-primary selection:text-white relative pb-[env(safe-area-inset-bottom)]">
 
     <!-- Top Navigation -->
     <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 backdrop-blur-md bg-opacity-90">
@@ -168,17 +169,17 @@
         </div>
 
         <!-- Render Target -->
-        <div id="viewContainer" class="flex-1 transition-all min-h-0 relative"></div>
+        <div id="viewContainer" class="flex-1 transition-all min-h-0 relative pb-[env(safe-area-inset-bottom)]"></div>
     </main>
 
     <!-- BARRA DE ROLAGEM CUSTOMIZADA -->
-    <div id="gluon-custom-scrollbar" class="hidden md:hidden fixed bottom-0 left-0 right-0 h-10 bg-[#0f172a] border-t border-slate-800 z-[60] flex items-center px-1">
+    <div id="gluon-custom-scrollbar" class="hidden md:hidden fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 h-10 bg-[#0f172a] border-t border-slate-800 z-[60] flex items-center px-1">
         <div id="gluon-scroll-thumb" class="h-6 bg-gluon-primary rounded-full cursor-grab active:cursor-grabbing active:bg-blue-400 hover:bg-blue-400 transition-colors will-change-transform shadow-lg"></div>
     </div>
 
     <!-- Modal com Abas para Criação/Edição -->
     <div id="dirModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
-        <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-0 transform scale-95 transition-transform duration-300 overflow-hidden flex flex-col max-h-[90vh]" id="dirModalContent">
+        <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-0 transform scale-95 transition-transform duration-300 overflow-hidden flex flex-col max-h-[90dvh]" id="dirModalContent">
             
             <div class="p-5 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
                 <h3 class="text-xl font-semibold text-white flex items-center gap-2" id="modalTitle">
@@ -1357,9 +1358,9 @@
                 }
 
                 if (view === 'kanban') {
-                    container.className = "flex-1 flex flex-col overflow-hidden transition-all min-h-0 w-full";
+                    container.className = "flex-1 flex flex-col overflow-hidden transition-all min-h-0 w-full pb-[env(safe-area-inset-bottom)]";
                 } else {
-                    container.className = "flex-1 overflow-y-auto no-scrollbar pb-10 transition-all min-h-0";
+                    container.className = "flex-1 overflow-y-auto no-scrollbar pb-10 transition-all min-h-0 pb-[calc(2.5rem+env(safe-area-inset-bottom))]";
                 }
 
                 let html = '';
