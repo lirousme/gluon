@@ -4,9 +4,8 @@
   
   Pilar: Rápido, Seguro, Bonito e Escalável.
   Atualizações:
-  - Novo sistema de Repetição Espaçada (Pontos * 24h).
-  - Bloqueio persistente via localStorage contra pontuação dupla antes do vencimento.
-  - Atualização visual das "bolinhas" de progresso instantânea ao virar o cartão.
+  - Integração Completa Fish Audio (TTS) com suporte a Frente e Verso independentes.
+  - Controle global de Auto-Play no cabeçalho.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -134,7 +133,6 @@
                 <span id="deckName" class="font-bold text-lg text-white tracking-wide truncate max-w-[120px] sm:max-w-xs">Carregando...</span>
                 
                 <div id="deckMasteryBadge" class="hidden items-center gap-1.5 bg-slate-800/80 border border-slate-600 px-2 py-1 rounded-md text-xs font-semibold shadow-inner">
-                    <!-- Gerado via JS -->
                 </div>
             </div>
         </div>
@@ -160,20 +158,31 @@
     <!-- Main Content -->
     <main class="flex-1 w-full flex flex-col items-center justify-center p-4 relative">
         
-        <div class="absolute top-6 left-0 right-0 text-center z-10">
+        <!-- Painel Central Superior (Contador + Auto Play Toggle) -->
+        <div class="absolute top-6 left-0 right-0 flex justify-center items-center gap-4 z-10" id="topControlPanel" style="display: none;">
             <span id="cardCounter" class="bg-slate-800 text-slate-400 font-medium px-4 py-1.5 rounded-full text-sm border border-slate-700 shadow-sm">
                 0 / 0
             </span>
+            
+            <label class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700" title="Reproduzir áudio automaticamente">
+                <i class="fa-solid fa-volume-high text-slate-400 text-xs" id="autoPlayIcon"></i>
+                <div class="relative inline-block w-8 h-4 rounded-full bg-slate-600">
+                    <input type="checkbox" id="autoPlayToggle" class="peer hidden" onchange="flashcardApp.toggleAutoPlay()">
+                    <span class="absolute left-1 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4 peer-checked:bg-gluon-primary"></span>
+                </div>
+            </label>
         </div>
 
         <!-- Cena 3D e Card -->
         <div class="scene" id="cardScene" style="display: none;">
-            <div class="card-3d cursor-pointer" id="flashcard" onclick="flashcardApp.flipCard()">
+            <div class="card-3d cursor-pointer" id="flashcard" onclick="flashcardApp.flipCard(event)">
                 
                 <!-- Frente -->
-                <div class="card-face card-front">
+                <div class="card-face card-front relative">
                     <span id="frontLabel" class="absolute top-4 left-4 text-xs font-bold text-slate-500 tracking-wider uppercase">Frente</span>
                     <i id="flipIconFront" class="fa-solid fa-rotate absolute top-4 right-4 text-slate-600 opacity-50"></i>
+                    
+                    <div class="absolute bottom-4 left-4 z-20" id="audioControlsFront"></div>
                     
                     <div class="card-text no-scrollbar" id="cardFrontText"></div>
                     
@@ -181,9 +190,11 @@
                 </div>
 
                 <!-- Verso -->
-                <div class="card-face card-back">
+                <div class="card-face card-back relative">
                     <span class="absolute top-4 left-4 text-xs font-bold text-blue-200 tracking-wider uppercase">Verso</span>
                     <i id="flipIconBack" class="fa-solid fa-rotate absolute top-4 right-4 text-blue-300 opacity-50"></i>
+                    
+                    <div class="absolute bottom-4 left-4 z-20" id="audioControlsBack"></div>
                     
                     <div class="card-text no-scrollbar drop-shadow-md" id="cardBackText"></div>
                     
@@ -203,7 +214,7 @@
         <!-- Carregamento -->
         <div id="loader" class="flex flex-col items-center justify-center">
             <i class="fa-solid fa-circle-notch fa-spin text-4xl text-gluon-primary mb-3"></i>
-            <span class="text-slate-400">Descriptografando dados...</span>
+            <span class="text-slate-400" id="loadingText">Descriptografando dados...</span>
         </div>
 
         <!-- Controles Inferiores -->
@@ -230,7 +241,6 @@
             <form onsubmit="flashcardApp.saveSettings(event)" class="p-6 space-y-6">
                 <div>
                     <label class="block text-sm font-medium text-slate-300 mb-3">Modo de Estudo / Comportamento</label>
-                    
                     <div class="space-y-3">
                         <label class="flex items-start gap-3 cursor-pointer p-3 border border-slate-600 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors">
                             <input type="radio" name="deckMode" value="aleatorio" class="mt-1 text-gluon-primary bg-slate-900 border-slate-600 focus:ring-gluon-primary">
@@ -244,7 +254,7 @@
                             <input type="radio" name="deckMode" value="livro" class="mt-1 text-emerald-500 bg-slate-900 border-slate-600 focus:ring-emerald-500">
                             <div>
                                 <div class="font-medium text-white mb-0.5"><i class="fa-solid fa-book-open text-emerald-500 mr-1"></i> Livro (Sequencial)</div>
-                                <div class="text-xs text-slate-400">Exibe cartas na ordem exata de criação. Salva a página onde você parou para continuar depois. Sem repetição espaçada.</div>
+                                <div class="text-xs text-slate-400">Exibe cartas na ordem exata de criação. Salva a página onde você parou. Sem repetição espaçada.</div>
                             </div>
                         </label>
                     </div>
@@ -311,7 +321,7 @@
                 </div>
                 
                 <div class="flex-1 flex flex-col relative">
-                    <textarea id="bulkData" required placeholder="Gato    Cat&#10;Cachorro    Dog&#10;Página Única do Livro" class="flex-1 w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors resize-none font-mono text-sm whitespace-pre"></textarea>
+                    <textarea id="bulkData" required placeholder="Gato    Cat&#10;Cachorro    Dog" class="flex-1 w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors resize-none font-mono text-sm whitespace-pre"></textarea>
                 </div>
 
                 <div class="flex justify-between items-center pt-5 border-t border-slate-700 mt-5 shrink-0">
@@ -336,7 +346,11 @@
             cards: [],
             currentIndex: 0,
             isFlipped: false,
-            scoredThisSession: new Set(), 
+            scoredThisSession: new Set(),
+            
+            // Variáveis do Player de Áudio
+            autoPlayEnabled: false,
+            currentAudioElement: null,
 
             async init() {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -346,6 +360,14 @@
                     window.location.href = '/dashboard';
                     return;
                 }
+                
+                // Restaura preferência de Auto-Play do navegador
+                const savedAutoPlay = localStorage.getItem('gluon_audio_autoplay');
+                if(savedAutoPlay === 'true') {
+                    this.autoPlayEnabled = true;
+                    document.getElementById('autoPlayToggle').checked = true;
+                    document.getElementById('autoPlayIcon').classList.replace('text-slate-400', 'text-gluon-primary');
+                }
 
                 this.setupKeyboardListeners();
                 this.setupBulkListener();
@@ -354,7 +376,11 @@
 
             showToast(message, type = 'success') {
                 let toast = document.getElementById('gluon-toast');
-                if (!toast) { toast = document.createElement('div'); toast.id = 'gluon-toast'; document.body.appendChild(toast); }
+                if (!toast) {
+                    toast = document.createElement('div');
+                    toast.id = 'gluon-toast';
+                    document.body.appendChild(toast);
+                }
                 const icon = type === 'success' ? '<i class="fa-solid fa-circle-check"></i>' : '<i class="fa-solid fa-circle-exclamation"></i>';
                 const bgClass = type === 'success' ? 'bg-green-600' : 'bg-red-600';
                 toast.className = `fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-xl text-white text-sm font-medium flex items-center gap-3 z-50 transition-all duration-300 transform translate-y-10 opacity-0 ${bgClass}`;
@@ -371,7 +397,11 @@
                     const data = await res.json();
                     if (data.status !== 'success') throw new Error(data.message);
                     return data;
-                } catch (err) { console.error(err); this.showToast(err.message || 'Erro de conexão.', 'error'); return null; }
+                } catch (err) {
+                    console.error(err);
+                    this.showToast(err.message || 'Erro de conexão.', 'error');
+                    return null;
+                }
             },
 
             async loadDeck() {
@@ -379,6 +409,7 @@
                 document.getElementById('emptyState').style.display = 'none';
                 document.getElementById('cardScene').style.display = 'none';
                 document.getElementById('controls').style.display = 'none';
+                document.getElementById('topControlPanel').style.display = 'none';
 
                 const res = await this.api('fetch', { deck_id: this.deckId });
                 document.getElementById('loader').style.display = 'none';
@@ -399,9 +430,15 @@
                         }
                         document.getElementById('cardScene').style.display = 'block';
                         document.getElementById('controls').style.display = 'flex';
+                        document.getElementById('topControlPanel').style.display = 'flex';
                         
                         this.updateGlobalProgressUI();
                         this.renderCurrentCard();
+                        
+                        // Ao carregar o deck, se autoplay estiver ligado, toca a frente do primeiro card
+                        if(this.autoPlayEnabled && this.cards[this.currentIndex].has_audio_front === 1) {
+                            this.playCardAudio(this.cards[this.currentIndex].id, 'front');
+                        }
                     }
                 }
             },
@@ -414,11 +451,11 @@
                 if (this.deckMode === 'aleatorio' && this.totalCardsInDeck > 0) {
                     document.getElementById('emptyStateIcon').className = "fa-solid fa-mug-hot text-6xl text-emerald-600 mb-4 opacity-70";
                     document.getElementById('emptyStateTitle').innerText = "Você está em dia!";
-                    document.getElementById('emptyStateDesc').innerText = "Não há cartas vencidas para revisão no momento. Relaxe e volte amanhã!";
+                    document.getElementById('emptyStateDesc').innerText = "Não há cartas vencidas para revisão. Relaxe e volte amanhã!";
                 } else {
                     document.getElementById('emptyStateIcon').className = "fa-solid fa-clone text-6xl text-slate-600 mb-4 opacity-50";
                     document.getElementById('emptyStateTitle').innerText = "Este deck está vazio";
-                    document.getElementById('emptyStateDesc').innerText = "Adicione seu primeiro card manualmente ou importe uma lista do Excel.";
+                    document.getElementById('emptyStateDesc').innerText = "Adicione seu primeiro card manualmente ou importe do Excel.";
                 }
             },
 
@@ -458,14 +495,47 @@
                 
                 const cardEl = document.getElementById('flashcard');
                 
+                // === CONTROLES DE ÁUDIO (FRENTE) ===
+                const audioFront = document.getElementById('audioControlsFront');
+                if (card.has_audio_front === 1) {
+                    audioFront.innerHTML = `
+                        <button onclick="event.stopPropagation(); flashcardApp.playCardAudio(${card.id}, 'front')" class="text-xs bg-slate-800/80 hover:bg-slate-700 border border-slate-600 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-slate-300">
+                            <i class="fa-solid fa-play"></i> Frente
+                        </button>
+                    `;
+                } else {
+                    audioFront.innerHTML = `
+                        <button id="btnGenAudio_front_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'front')" class="text-xs bg-slate-800/50 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-slate-400">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Gerar Áudio
+                        </button>
+                    `;
+                }
+
+                // === CONTROLES DE ÁUDIO (VERSO) ===
+                const audioBack = document.getElementById('audioControlsBack');
                 if (!hasBack) {
                     document.getElementById('frontLabel').innerText = this.deckMode === 'livro' ? 'Página' : 'Card Único';
                     document.getElementById('flipIconFront').style.display = 'none';
                     cardEl.style.cursor = 'default';
+                    audioBack.innerHTML = '';
                 } else {
                     document.getElementById('frontLabel').innerText = 'Frente';
                     document.getElementById('flipIconFront').style.display = 'block';
                     cardEl.style.cursor = 'pointer';
+
+                    if (card.has_audio_back === 1) {
+                        audioBack.innerHTML = `
+                            <button onclick="event.stopPropagation(); flashcardApp.playCardAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-blue-200">
+                                <i class="fa-solid fa-play"></i> Ouvir Verso
+                            </button>
+                        `;
+                    } else {
+                        audioBack.innerHTML = `
+                            <button id="btnGenAudio_back_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'back')" class="text-xs bg-blue-900/50 hover:bg-blue-800 border border-blue-500/50 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-blue-300">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Gerar Áudio
+                            </button>
+                        `;
+                    }
                 }
 
                 if (this.deckMode === 'aleatorio') {
@@ -490,8 +560,12 @@
                 document.getElementById('btnNext').disabled = this.currentIndex === this.cards.length - 1;
             },
 
-            flipCard() {
+            flipCard(e) {
                 if (this.cards.length === 0) return;
+                
+                // Se o clique foi no botão de áudio, ignoramos o giro
+                if (e && e.target && (e.target.closest('#audioControlsBack') || e.target.closest('#audioControlsFront'))) return;
+
                 const card = this.cards[this.currentIndex];
                 const hasBack = card.back && card.back.trim() !== '';
 
@@ -500,51 +574,133 @@
                 this.isFlipped = !this.isFlipped;
                 const cardEl = document.getElementById('flashcard');
                 
+                this.stopAudio(); // Parar o áudio anterior ao virar
+
                 if (this.isFlipped) {
                     cardEl.classList.add('is-flipped');
-                    if (this.deckMode === 'aleatorio') {
-                        this.registerScore(card);
+                    if (this.deckMode === 'aleatorio') this.registerScore(card);
+                    
+                    // Lógica de Áudio: Se ativado e existir áudio do VERSO, toca na hora.
+                    if (this.autoPlayEnabled && card.has_audio_back === 1) {
+                        this.playCardAudio(card.id, 'back');
                     }
                 } else {
                     cardEl.classList.remove('is-flipped');
+                    
+                    // Lógica de Áudio: Ao voltar pra FRENTE, toca a voz da frente.
+                    if (this.autoPlayEnabled && card.has_audio_front === 1) {
+                        this.playCardAudio(card.id, 'front');
+                    }
                 }
             },
 
             nextCard() {
                 if (this.cards.length === 0) return;
+                
+                this.stopAudio(); // Interrompe o som atual imediatamente
+                
                 const card = this.cards[this.currentIndex];
                 const hasBack = card.back && card.back.trim() !== '';
 
-                if (this.deckMode === 'aleatorio' && !hasBack) {
-                    this.registerScore(card);
-                }
+                if (this.deckMode === 'aleatorio' && !hasBack) this.registerScore(card);
 
                 if (this.currentIndex < this.cards.length - 1) {
                     this.currentIndex++;
                     this.renderCurrentCard();
+                    if (this.deckMode === 'livro') this.saveBookProgress();
                     
-                    if (this.deckMode === 'livro') {
-                        this.saveBookProgress();
+                    // Lógica de Áudio: Toca a FRENTE da próxima carta
+                    if(this.autoPlayEnabled && this.cards[this.currentIndex].has_audio_front === 1) {
+                        this.playCardAudio(this.cards[this.currentIndex].id, 'front');
                     }
                 }
             },
 
             prevCard() {
                 if (this.currentIndex > 0) {
+                    this.stopAudio(); // Interrompe o som atual imediatamente
                     this.currentIndex--;
                     this.renderCurrentCard();
+                    if (this.deckMode === 'livro') this.saveBookProgress();
                     
-                    if (this.deckMode === 'livro') {
-                        this.saveBookProgress();
+                    // Lógica de Áudio: Toca a FRENTE da carta anterior
+                    if(this.autoPlayEnabled && this.cards[this.currentIndex].has_audio_front === 1) {
+                        this.playCardAudio(this.cards[this.currentIndex].id, 'front');
                     }
                 }
             },
 
+            // --- SISTEMA FISH AUDIO (TTS) ---
+
+            toggleAutoPlay() {
+                this.autoPlayEnabled = document.getElementById('autoPlayToggle').checked;
+                const icon = document.getElementById('autoPlayIcon');
+                localStorage.setItem('gluon_audio_autoplay', this.autoPlayEnabled);
+
+                if (this.autoPlayEnabled) {
+                    icon.classList.replace('text-slate-400', 'text-gluon-primary');
+                    
+                    // Verifica qual lado está sendo exibido para tocar o áudio correspondente
+                    const card = this.cards[this.currentIndex];
+                    const targetSide = this.isFlipped ? 'back' : 'front';
+                    
+                    if ((targetSide === 'back' && card.has_audio_back === 1) || (targetSide === 'front' && card.has_audio_front === 1)) {
+                        this.playCardAudio(card.id, targetSide);
+                    }
+                } else {
+                    icon.classList.replace('text-gluon-primary', 'text-slate-400');
+                    this.stopAudio();
+                }
+            },
+
+            playCardAudio(cardId, side) {
+                this.stopAudio();
+                this.currentAudioElement = new Audio(`/assets/audio/card_${cardId}_${side}.mp3`);
+                this.currentAudioElement.play().catch(e => console.error("Erro ao tocar áudio:", e));
+            },
+
+            stopAudio() {
+                if (this.currentAudioElement) {
+                    this.currentAudioElement.pause();
+                    this.currentAudioElement.currentTime = 0;
+                    this.currentAudioElement = null;
+                }
+            },
+
+            async generateAudio(cardId, side) {
+                const btn = document.getElementById(`btnGenAudio_${side}_${cardId}`);
+                if (!btn) return;
+                
+                btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Gerando...`;
+                btn.disabled = true;
+
+                const res = await this.api('generate_audio', { card_id: cardId, side: side });
+                
+                if (res) {
+                    // Atualiza cache local
+                    const cardIndex = this.cards.findIndex(c => c.id === cardId);
+                    if (cardIndex !== -1) {
+                        if (side === 'front') this.cards[cardIndex].has_audio_front = 1;
+                        if (side === 'back') this.cards[cardIndex].has_audio_back = 1;
+                        
+                        this.renderCurrentCard(); // Atualiza a UI para remover botão gerar e mostrar botão Ouvir
+                        
+                        // Toca imediatamente se o autoplay estiver on
+                        if(this.autoPlayEnabled) {
+                            this.playCardAudio(cardId, side);
+                        }
+                    }
+                } else {
+                    btn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Tentar Novamente`;
+                    btn.disabled = false;
+                }
+            },
+
+            // --------------------------------
+
             registerScore(card) {
                 if (card.score >= 20 || this.scoredThisSession.has(card.id)) return;
                 
-                // Persistência local obrigatória: impede contar novo ponto antes do vencimento do cartão 
-                // caso o usuário navegue ou volte para o mesmo cartão após a página ter sido carregada.
                 const expireTime = localStorage.getItem(`gluon_card_expire_${card.id}`);
                 const now = new Date().getTime();
                 
@@ -559,14 +715,13 @@
                 const nextExpire = now + (nextScore * 24 * 60 * 60 * 1000);
                 localStorage.setItem(`gluon_card_expire_${card.id}`, nextExpire.toString());
                 
-                card.score = nextScore; // Atualiza UI Otimista
+                card.score = nextScore;
                 
                 const maxPossible = this.totalCardsInDeck * 20;
                 let currentTotal = this.cards.reduce((sum, c) => sum + c.score, 0);
                 this.deckPercentage = maxPossible > 0 ? Math.round((currentTotal / maxPossible) * 100) : 0;
                 this.updateGlobalProgressUI();
 
-                // Atualização instantânea dos pontinhos ao virar a carta.
                 if (this.deckMode === 'aleatorio') {
                     let dotsHtml = '';
                     for (let i = 0; i < 10; i++) {
@@ -579,13 +734,12 @@
                     if (backDots) backDots.innerHTML = dotsHtml;
                 }
 
-                // Backend processa o aumento e agenda a data limite.
-                this.api('update_score', { card_id: card.id }).catch(e => console.error("Score não salvo", e));
+                this.api('update_score', { card_id: card.id }).catch(e => console.error(e));
             },
 
             saveBookProgress() {
                 this.updateGlobalProgressUI(); 
-                this.api('update_progress', { deck_id: this.deckId, index: this.currentIndex }).catch(e => console.error("Progresso não salvo", e));
+                this.api('update_progress', { deck_id: this.deckId, index: this.currentIndex }).catch(e => console.error(e));
             },
 
             setupKeyboardListeners() {
@@ -642,7 +796,6 @@
                 for(let i=0; i<radios.length; i++){
                     radios[i].checked = (radios[i].value === this.deckMode);
                 }
-                
                 const modal = document.getElementById('settingsModal');
                 const content = document.getElementById('settingsModalContent');
                 modal.classList.remove('hidden'); modal.classList.add('flex');
