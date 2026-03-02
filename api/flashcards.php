@@ -109,6 +109,43 @@ if ($action === 'fetch') {
     ]);
 }
 
+// ==== NOVO: Exportar todos os cards para Excel/CSV ====
+elseif ($action === 'get_all_cards') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
+
+    // Verifica posse do deck usando a sua função de segurança
+    $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
+    if (!$deck) {
+        die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+    }
+
+    // Busca ABSOLUTAMENTE TODOS os cards do deck (ignorando data de revisão e repetição espaçada)
+    $stmt = $pdo->prepare("
+        SELECT id, front_encrypted, back_encrypted 
+        FROM flashcards 
+        WHERE directory_id = ? 
+        ORDER BY sort_order ASC, id ASC
+    ");
+    $stmt->execute([$deck_id]);
+    
+    $cards = $stmt->fetchAll();
+    $response = [];
+    
+    foreach ($cards as $card) {
+        $response[] = [
+            'id' => $card['id'],
+            'front' => Security::decryptData($card['front_encrypted']),
+            'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : ''
+        ];
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'data' => $response
+    ]);
+}
+
 elseif ($action === 'generate_audio') {
     $card_id = (int)($input['card_id'] ?? 0);
     $side = $input['side'] ?? 'back'; // 'front' ou 'back'
