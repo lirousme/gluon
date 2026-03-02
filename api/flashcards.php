@@ -27,6 +27,13 @@ function verifyDeckOwnership($pdo, $deck_id, $user_id) {
     return $stmt->fetch();
 }
 
+// Função auxiliar para verificar a propriedade de um card unitário
+function verifyCardOwnership($pdo, $card_id, $user_id) {
+    $stmt = $pdo->prepare("SELECT f.id, f.directory_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND d.user_id = ?");
+    $stmt->execute([$card_id, $user_id]);
+    return $stmt->fetch();
+}
+
 if ($action === 'fetch') {
     $deck_id = (int)($input['deck_id'] ?? 0);
     if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
@@ -110,7 +117,6 @@ elseif ($action === 'generate_audio') {
         die(json_encode(['status' => 'error', 'message' => 'Parâmetros inválidos.']));
     }
 
-    // Verifica a propriedade do deck
     $stmt = $pdo->prepare("SELECT f.front_encrypted, f.back_encrypted, d.user_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ?");
     $stmt->execute([$card_id]);
     $card = $stmt->fetch();
@@ -126,10 +132,8 @@ elseif ($action === 'generate_audio') {
         die(json_encode(['status' => 'error', 'message' => 'O lado selecionado deste card não possui texto.']));
     }
 
-    // Seleciona o ID da voz correspondente ao lado
     $reference_id = $side === 'front' ? FISH_REFERENCE_ID_FRONT : FISH_REFERENCE_ID_BACK;
 
-    // Preparar a requisição para a API da Fish Audio
     $ch = curl_init('https://api.fish.audio/v1/tts');
     $payload = json_encode([
         "text" => $clean_text,
@@ -154,17 +158,14 @@ elseif ($action === 'generate_audio') {
         die(json_encode(['status' => 'error', 'message' => 'Erro ao comunicar com a API de voz. O serviço pode estar indisponível.']));
     }
 
-    // Verifica se a pasta assets/audio existe
     $audio_dir = __DIR__ . '/../assets/audio/';
     if (!is_dir($audio_dir)) {
         mkdir($audio_dir, 0755, true);
     }
 
-    // Salva o arquivo mp3 (ex: card_1_front.mp3 ou card_1_back.mp3)
     $file_path = $audio_dir . 'card_' . $card_id . '_' . $side . '.mp3';
     file_put_contents($file_path, $response);
 
-    // Atualiza a flag no banco de dados
     $col = $side === 'front' ? 'has_audio_front' : 'has_audio_back';
     $stmt = $pdo->prepare("UPDATE flashcards SET $col = 1 WHERE id = ?");
     $stmt->execute([$card_id]);
@@ -176,11 +177,9 @@ elseif ($action === 'update_score') {
     $card_id = (int)($input['card_id'] ?? 0);
     if ($card_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do card inválido.']));
 
-    $stmtCheck = $pdo->prepare("SELECT d.user_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ?");
-    $stmtCheck->execute([$card_id]);
-    $owner = $stmtCheck->fetchColumn();
-
-    if ($owner != $user_id) die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
+    if (!verifyCardOwnership($pdo, $card_id, $user_id)) {
+        die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
+    }
 
     $stmt = $pdo->prepare("
         INSERT INTO flashcard_scores (user_id, flashcard_id, score, next_review_at) 
@@ -233,6 +232,62 @@ elseif ($action === 'add_single') {
     $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted, has_audio_front, has_audio_back) VALUES (?, ?, ?, 0, 0)");
     if ($stmt->execute([$deck_id, $front_enc, $back_enc])) echo json_encode(['status' => 'success', 'message' => 'Card adicionado.']);
     else echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
+}
+
+// ==== NOVO: Editar Card Existente ====
+elseif ($action === 'update_card') {
+    $card_id = (int)($input['card_id'] ?? 0);
+    $front = trim($input['front'] ?? '');
+    $back = trim($input['back'] ?? '');
+
+    if ($card_id === 0 || empty($front)) {
+        die(json_encode(['status' => 'error', 'message' => 'Dados inválidos. A frente é obrigatória.']));
+    }
+
+    if (!verifyCardOwnership($pdo, $card_id, $user_id)) {
+        die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
+    }
+
+    $front_enc = Security::encryptData($front);
+    $back_enc = !empty($back) ? Security::encryptData($back) : null;
+
+    // Zera as flags de áudio porque o texto mudou e o áudio antigo não bate mais com a descrição
+    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, has_audio_front = 0, has_audio_back = 0 WHERE id = ?");
+    
+    if ($stmt->execute([$front_enc, $back_enc, $card_id])) {
+        echo json_encode(['status' => 'success', 'message' => 'Card atualizado. Áudios redefinidos.']);
+    } else {
+        echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar card.']);
+    }
+}
+
+// ==== NOVO: Deletar Card ====
+elseif ($action === 'delete_card') {
+    $card_id = (int)($input['card_id'] ?? 0);
+
+    if ($card_id === 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID do card inválido.']));
+    }
+
+    if (!verifyCardOwnership($pdo, $card_id, $user_id)) {
+        die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
+    }
+
+    $stmt = $pdo->prepare("DELETE FROM flashcards WHERE id = ?");
+    
+    if ($stmt->execute([$card_id])) {
+        // Remove arquivos de áudio associados ao card para economizar espaço
+        $audio_dir = __DIR__ . '/../assets/audio/';
+        $file_front = $audio_dir . 'card_' . $card_id . '_front.mp3';
+        $file_back = $audio_dir . 'card_' . $card_id . '_back.mp3';
+        
+        if (file_exists($file_front)) @unlink($file_front);
+        if (file_exists($file_back)) @unlink($file_back);
+
+        echo json_encode(['status' => 'success', 'message' => 'Card excluído com sucesso.']);
+    } else {
+        echo json_encode(['status' => 'error', 'message' => 'Erro interno ao excluir card.']);
+    }
 }
 
 elseif ($action === 'add_bulk') {
