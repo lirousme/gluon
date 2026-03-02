@@ -4,8 +4,7 @@
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
   Suporta Múltiplas Visualizações: Linha do Tempo, Kanban Semanal, Lista e Recorrências.
-  *Atualizado: O frontend agora checa a "Lista de Exceções" antes de renderizar uma tarefa recorrente.
-  Se o dia estiver na lista, a tarefa fica oculta apenas naquele dia específico. Enterprise Edition!
+  *Atualizado: Correção na projeção visual de repetições em múltiplas horas no mesmo dia.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -106,21 +105,16 @@
                     <i class="fa-solid fa-ellipsis-vertical px-1"></i>
                 </button>
                 <div id="mobileViewMenu" class="hidden absolute right-0 top-12 w-56 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 origin-top-right transition-all">
-                    
                     <div class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Ações da Agenda</div>
-                    
                     <button onclick="scheduleApp.copyCurrentDirectory(); scheduleApp.toggleMobileViewMenu()" id="btn-copy-dir" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
                         <i class="fa-regular fa-copy w-5 text-center text-lg"></i> <span class="font-medium">Copiar Agenda</span>
                     </button>
-
                     <button onclick="scheduleApp.pasteDirectory(); scheduleApp.toggleMobileViewMenu()" id="btn-paste-dir" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors hidden">
                         <i class="fa-solid fa-paste w-5 text-center text-lg"></i> <span class="font-medium">Colar Arquivos</span>
                     </button>
-                    
                     <button onclick="scheduleApp.moveDirectory(); scheduleApp.toggleMobileViewMenu()" id="btn-move-dir" class="w-full text-left px-4 py-2.5 text-sm text-amber-400 hover:bg-slate-700 hover:text-amber-300 flex items-center gap-3 transition-colors hidden">
                         <i class="fa-solid fa-truck-fast w-5 text-center text-lg"></i> <span class="font-medium">Mover para cá</span>
                     </button>
-
                     <button onclick="scheduleApp.createPortal(); scheduleApp.toggleMobileViewMenu()" id="btn-create-portal" class="w-full text-left px-4 py-2.5 text-sm text-fuchsia-400 hover:bg-slate-700 hover:text-fuchsia-300 flex items-center gap-3 transition-colors hidden">
                         <i class="fa-solid fa-door-open w-5 text-center text-lg"></i> <span class="font-medium">Criar Portal</span>
                     </button>
@@ -135,7 +129,6 @@
 
     <main class="flex-1 w-full flex overflow-hidden">
         
-        <!-- Sidebar -->
         <aside id="backlogSidebar" class="w-0 border-r-0 opacity-0 bg-slate-900 border-slate-700/50 flex flex-col shrink-0 z-30 shadow-xl relative transition-all duration-300 overflow-hidden">
             <div class="p-4 border-b border-slate-800 bg-slate-800/30 flex justify-between items-start min-w-[250px]">
                 <div class="overflow-hidden">
@@ -150,14 +143,11 @@
         </aside>
 
         <div class="flex-1 relative flex flex-col bg-gluon-dark overflow-hidden">
-            
             <div class="p-3 sm:p-4 border-b border-slate-700 bg-slate-800/80 backdrop-blur shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 z-20">
-                
                 <div class="flex items-center gap-2 w-full sm:w-auto">
                     <button onclick="scheduleApp.toggleSidebar()" id="btnToggleSidebarNav" class="px-3 py-1.5 rounded-md text-gluon-primary bg-slate-800 hover:text-white hover:bg-slate-700 transition-colors border border-slate-700 shadow-sm shrink-0" title="Alternar Backlog">
                         <i class="fa-solid fa-inbox"></i>
                     </button>
-                    
                     <div id="dateControlContainer" class="flex items-center gap-2 w-full sm:w-auto"></div>
                 </div>
                 
@@ -169,7 +159,6 @@
             </div>
 
             <div id="viewContainer" class="flex-1 overflow-hidden relative flex flex-col"></div>
-            
         </div>
     </main>
 
@@ -194,11 +183,9 @@
                 <input type="hidden" id="dirId">
                 <input type="hidden" id="dirStartDate">
                 <input type="hidden" id="dirEndDate">
-                <!-- ARMAZENA O DIA EM QUE O USUÁRIO CLICOU (O contexto) -->
                 <input type="hidden" id="dirContextDate"> 
 
                 <div id="tab-geral" class="p-6 overflow-y-auto flex-1">
-                    
                     <div id="typeSelectorContainer" class="mb-5">
                         <label class="block text-sm font-medium text-slate-300 mb-2">Tipo de Item</label>
                         <div class="grid grid-cols-3 gap-2">
@@ -310,6 +297,7 @@
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Frequência</label>
                             <select id="rec_type" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors" onchange="scheduleApp.handleRecurrenceTypeChange()">
+                                <option value="hourly">De hora em hora (Diário)</option>
                                 <option value="daily">Diariamente</option>
                                 <option value="weekly">Semanalmente</option>
                                 <option value="monthly">Mensalmente</option>
@@ -321,6 +309,20 @@
                         <div id="rec_interval_container">
                             <label class="block text-sm font-medium text-slate-300 mb-1">A cada (intervalo)</label>
                             <input type="number" id="rec_interval" min="1" value="1" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors">
+                        </div>
+
+                        <div id="rec_hourly_container" class="hidden">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-1">Janela: Início</label>
+                                    <input type="time" id="rec_time_start" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-1">Janela: Término</label>
+                                    <input type="time" id="rec_time_end" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors">
+                                </div>
+                            </div>
+                            <p class="text-[11px] text-slate-400 mt-2"><i class="fa-solid fa-circle-info"></i> A tarefa repetirá todos os dias, saltando a cada X horas, limitada estritamente dentro deste horário.</p>
                         </div>
                         
                         <div id="rec_custom_container" class="hidden">
@@ -634,26 +636,21 @@
                 }
             },
 
-            // =========================================================================
-            // LÓGICA DE CHECAGEM DE DATA C/ EXCEÇÕES
-            // =========================================================================
             isTaskOnDate(item, targetDateStr) {
                 const baseDateStr = item.start_date ? item.start_date.split(' ')[0] : null;
                 if (!baseDateStr) return false;
 
-                // 1. Checa a Lista de Exceções primeiro!
+                // Verifica se foi excepcionalmente pulado hoje
                 if (item.rec_exceptions && item.rec_exceptions !== '[]') {
                     try {
                         const exceptions = typeof item.rec_exceptions === 'string' ? JSON.parse(item.rec_exceptions) : item.rec_exceptions;
-                        // Se essa data específica foi pulada/excluída antes, não exibe de forma alguma
                         if (exceptions && exceptions.includes(targetDateStr)) return false;
                     } catch(e) {}
                 }
 
-                // 2. Se for o dia exato da criação da tarefa, é true
+                // Tarefa crua / Data base exata
                 if (baseDateStr === targetDateStr) return true;
                 
-                // 3. Checagem das Repetições Comuns
                 if (item.is_recurring !== 1) return false;
                 if (targetDateStr < baseDateStr) return false; 
                 if (item.rec_end && targetDateStr > item.rec_end.split(' ')[0]) return false;
@@ -664,7 +661,9 @@
                 const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
                 const interval = parseInt(item.rec_interval) || 1;
 
-                if (item.rec_type === 'daily') {
+                if (item.rec_type === 'hourly') {
+                    return true; // Se é de hora em hora, ele se repete TODOS os dias a partir da data base.
+                } else if (item.rec_type === 'daily') {
                     return diffDays % interval === 0;
                 } else if (item.rec_type === 'weekly') {
                     return diffDays % (interval * 7) === 0;
@@ -681,6 +680,55 @@
                     } catch(e) { return false; }
                 }
                 return false;
+            },
+
+            // NOVA FUNÇÃO: Retorna ARRAY com todas as projeções de horários de uma tarefa num dia
+            getTaskInstancesOnDate(item, targetDateStr) {
+                if (!this.isTaskOnDate(item, targetDateStr)) return [];
+
+                const instances = [];
+                const baseDateStr = item.start_date.split(' ')[0];
+                const isBaseDate = baseDateStr === targetDateStr;
+                
+                const origStart = new Date(item.start_date.replace(' ', 'T'));
+                const origEnd = new Date(item.end_date.replace(' ', 'T'));
+                const durationMs = origEnd.getTime() - origStart.getTime();
+
+                // Tratar a repetição "De hora em hora" (Hourly) para gerar os múltiplos blocos no dia
+                if (item.is_recurring === 1 && item.rec_type === 'hourly') {
+                    
+                    let tStart = item.rec_time_start ? item.rec_time_start.substring(0, 5) : origStart.toTimeString().substring(0, 5);
+                    let tEnd = item.rec_time_end ? item.rec_time_end.substring(0, 5) : '23:59';
+                    const interval = parseInt(item.rec_interval) || 1;
+                    
+                    const [sHour, sMin] = tStart.split(':').map(Number);
+                    const [eHour, eMin] = tEnd.split(':').map(Number);
+                    
+                    let currentMins = sHour * 60 + sMin;
+                    const endMinsLimit = eHour * 60 + eMin;
+
+                    while (currentMins <= endMinsLimit) {
+                        const curH = Math.floor(currentMins / 60);
+                        const curM = currentMins % 60;
+                        
+                        const instStart = new Date(`${targetDateStr}T${curH.toString().padStart(2,'0')}:${curM.toString().padStart(2,'0')}:00`);
+                        const instEnd = new Date(instStart.getTime() + durationMs);
+
+                        // Descobre se esta hora/minuto em específico é o bloco PAI verdadeiro ou uma projeção virtual
+                        const isProj = !(isBaseDate && curH === origStart.getHours() && curM === origStart.getMinutes());
+                        
+                        instances.push({ start: instStart, end: instEnd, isProjection: isProj, uid: `${item.id}-${curH}-${curM}` });
+                        
+                        currentMins += interval * 60; // Avança o relógio
+                    }
+                } else {
+                    // Tarefas normais (apenas UMA instância por dia, na mesma hora)
+                    const instStart = new Date(`${targetDateStr}T${origStart.toTimeString().substring(0,8)}`);
+                    const instEnd = new Date(instStart.getTime() + durationMs);
+                    instances.push({ start: instStart, end: instEnd, isProjection: !isBaseDate, uid: item.id });
+                }
+                
+                return instances;
             },
 
             handleTimelineClick(e) {
@@ -974,42 +1022,39 @@
                 eventsLayer.innerHTML = '';
                 
                 scheduledItems.forEach(item => {
-                    if (this.isTaskOnDate(item, selectedDateStr)) {
-                        const isProjection = item.start_date.split(' ')[0] !== selectedDateStr;
-                        const sDate = new Date(item.start_date.replace(' ', 'T'));
-                        const eDate = new Date(item.end_date.replace(' ', 'T'));
-                        
-                        const startMins = sDate.getHours() * 60 + sDate.getMinutes();
-                        const endMins = eDate.getHours() * 60 + eDate.getMinutes();
+                    const instances = this.getTaskInstancesOnDate(item, selectedDateStr);
+                    
+                    instances.forEach(inst => {
+                        const startMins = inst.start.getHours() * 60 + inst.start.getMinutes();
+                        const endMins = inst.end.getHours() * 60 + inst.end.getMinutes();
                         const duration = endMins - startMins;
                         
                         const fromColor = item.color_from || '#3b82f6';
                         const toColor = item.color_to || '#6366f1';
                         
-                        const borderStyle = isProjection ? 'border-style: dashed; border-width: 2px;' : `border-left: 4px solid ${fromColor};`;
+                        const borderStyle = inst.isProjection ? 'border-style: dashed; border-width: 2px;' : `border-left: 4px solid ${fromColor};`;
                         const bgStyle = `background: linear-gradient(135deg, ${fromColor}33, ${toColor}33); border-color: ${fromColor}80; color: #fff; ${borderStyle}`;
                         
                         const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 opacity-80" title="Tarefa Recorrente"></i>` : '';
-                        const projClass = isProjection ? 'virtual-task opacity-80' : '';
-                        const resizeHTML = isProjection ? '' : `<div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>`;
+                        const projClass = inst.isProjection ? 'virtual-task opacity-80' : '';
+                        const resizeHTML = inst.isProjection ? '' : `<div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>`;
 
                         eventsLayer.innerHTML += `
-                            <div id="evt-${item.id}${isProjection ? '-proj' : ''}" class="event-card group ${projClass}" data-id="${item.id}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                            <div id="evt-${inst.uid}" class="event-card group ${projClass}" data-id="${item.id}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                                 ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                                 <div class="flex justify-between items-start pointer-events-none z-10 relative">
                                     <div class="font-bold truncate text-sm flex items-center gap-1.5 w-full pr-6">
                                         <i class="fa-solid ${item.icon} text-xs"></i> <span class="truncate">${this.escapeHTML(item.name)} ${repeatIcon}</span>
                                     </div>
                                 </div>
-                                <div class="text-[10px] opacity-70 pointer-events-none z-10 relative font-medium">${sDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${eDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                <div class="text-[10px] opacity-70 pointer-events-none z-10 relative font-medium">${inst.start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${inst.end.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                                 
-                                <!-- Passando selectedDateStr como último argumento -->
                                 <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${selectedDateStr}')" class="absolute top-1 right-1 text-white/70 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 z-20 bg-black/40 rounded shadow-md"><i class="fa-solid fa-cog text-xs"></i></button>
 
                                 ${resizeHTML}
                             </div>
                         `;
-                    }
+                    });
                 });
 
                 document.querySelectorAll('.event-card').forEach(el => {
@@ -1026,31 +1071,29 @@
                 
                 scheduledItems.forEach(item => {
                     dates.forEach(dateStr => {
-                        if (this.isTaskOnDate(item, dateStr)) {
-                            const col = document.querySelector(`.sortable-day-col[data-date="${dateStr}"]`);
-                            if (col) {
-                                const isProjection = item.start_date.split(' ')[0] !== dateStr;
-                                col.innerHTML += this.generateItemCard(item, viewType, isProjection, dateStr);
-                            }
+                        const instances = this.getTaskInstancesOnDate(item, dateStr);
+                        const col = document.querySelector(`.sortable-day-col[data-date="${dateStr}"]`);
+                        if (col) {
+                            instances.forEach(inst => {
+                                col.innerHTML += this.generateItemCard(item, viewType, inst, dateStr);
+                            });
                         }
                     });
                 });
             },
 
-            generateItemCard(item, viewType, isProjection = false, dateStr = '') {
+            generateItemCard(item, viewType, inst, dateStr = '') {
                 const fromColor = item.color_from || '#3b82f6';
-                const sDate = new Date(item.start_date.replace(' ', 'T'));
-                const eDate = new Date(item.end_date.replace(' ', 'T'));
-                const timeStr = `${sDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${eDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+                const timeStr = `${inst.start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${inst.end.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
                 const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
 
-                const projectionClass = isProjection ? 'virtual-task' : 'cursor-grab';
-                const borderStyle = isProjection ? '' : `border-left: 4px solid ${fromColor};`;
-                const handleHTML = isProjection ? '' : `<i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>`;
+                const projectionClass = inst.isProjection ? 'virtual-task' : 'cursor-grab';
+                const borderStyle = inst.isProjection ? '' : `border-left: 4px solid ${fromColor};`;
+                const handleHTML = inst.isProjection ? '' : `<i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>`;
 
                 if (viewType === 'kanban') {
                     return `
-                    <div data-id="${item.id}" class="kanban-item bg-slate-700/80 border ${isProjection ? 'border-slate-500' : 'border-slate-600'} p-2.5 rounded-lg shadow-sm hover:bg-slate-600 transition-colors flex flex-col group relative overflow-hidden mb-2 ${projectionClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                    <div data-id="${item.id}" class="kanban-item bg-slate-700/80 border ${inst.isProjection ? 'border-slate-500' : 'border-slate-600'} p-2.5 rounded-lg shadow-sm hover:bg-slate-600 transition-colors flex flex-col group relative overflow-hidden mb-2 ${projectionClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                         ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                         <div class="flex justify-between items-start z-10 relative">
                             <div class="flex items-center gap-1.5 truncate w-full pr-5">
@@ -1065,7 +1108,7 @@
                     </div>`;
                 } else {
                     return `
-                    <div data-id="${item.id}" class="list-item bg-slate-700/50 hover:bg-slate-700 border ${isProjection ? 'border-slate-500' : 'border-slate-600/50'} p-3 rounded-lg shadow-sm transition-colors flex items-center justify-between group relative overflow-hidden ${projectionClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                    <div data-id="${item.id}" class="list-item bg-slate-700/50 hover:bg-slate-700 border ${inst.isProjection ? 'border-slate-500' : 'border-slate-600/50'} p-3 rounded-lg shadow-sm transition-colors flex items-center justify-between group relative overflow-hidden ${projectionClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                         ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                         <div class="flex items-center gap-3 z-10 relative overflow-hidden flex-1 pr-2">
                             ${handleHTML}
@@ -1191,7 +1234,10 @@
                 e.preventDefault(); e.stopPropagation();
                 this.isResizing = true;
                 this.wasDragged = false;
-                this.dragElement = document.getElementById(`evt-${id}`);
+                
+                // Usar a seleção genérica que pega o PARENTE real
+                this.dragElement = e.target.closest('.event-card');
+                
                 this.startY = e.clientY;
                 this.startHeight = parseInt(this.dragElement.style.height || 60);
                 this.dragElement.classList.add('resizing');
@@ -1373,13 +1419,20 @@
                 const type = document.getElementById('rec_type').value;
                 const intervalCont = document.getElementById('rec_interval_container');
                 const customCont = document.getElementById('rec_custom_container');
+                const hourlyCont = document.getElementById('rec_hourly_container');
 
                 if (type === 'custom') {
                     intervalCont.classList.add('hidden');
                     customCont.classList.remove('hidden');
+                    if (hourlyCont) hourlyCont.classList.add('hidden');
+                } else if (type === 'hourly') {
+                    intervalCont.classList.remove('hidden');
+                    customCont.classList.add('hidden');
+                    if (hourlyCont) hourlyCont.classList.remove('hidden');
                 } else {
                     intervalCont.classList.remove('hidden');
                     customCont.classList.add('hidden');
+                    if (hourlyCont) hourlyCont.classList.add('hidden');
                 }
             },
 
@@ -1509,6 +1562,10 @@
                 document.getElementById('rec_interval').value = (dirObj && dirObj.rec_interval) ? dirObj.rec_interval : 1;
                 document.getElementById('rec_custom').value = (dirObj && dirObj.rec_custom) ? dirObj.rec_custom : '';
                 document.getElementById('rec_end').value = (dirObj && dirObj.rec_end) ? dirObj.rec_end.split(' ')[0] : '';
+                
+                document.getElementById('rec_time_start').value = (dirObj && dirObj.rec_time_start) ? dirObj.rec_time_start.substring(0, 5) : '08:00';
+                document.getElementById('rec_time_end').value = (dirObj && dirObj.rec_time_end) ? dirObj.rec_time_end.substring(0, 5) : '18:00';
+
                 this.toggleRecurrenceFields();
                 this.handleRecurrenceTypeChange();
 
@@ -1596,6 +1653,8 @@
                 const rec_interval = parseInt(document.getElementById('rec_interval').value) || 1;
                 const rec_custom = document.getElementById('rec_custom').value;
                 const rec_end = document.getElementById('rec_end').value || null;
+                const rec_time_start = document.getElementById('rec_time_start').value || null;
+                const rec_time_end = document.getElementById('rec_time_end').value || null;
 
                 const btn = document.getElementById('btnSaveDir');
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
@@ -1618,7 +1677,9 @@
                     rec_type: rec_type,
                     rec_interval: rec_interval,
                     rec_custom: rec_custom,
-                    rec_end: rec_end
+                    rec_end: rec_end,
+                    rec_time_start: rec_time_start,
+                    rec_time_end: rec_time_end
                 };
 
                 const response = await this.api('directories', id !== '' ? 'update' : 'create', payload);
