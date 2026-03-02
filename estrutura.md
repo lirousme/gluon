@@ -122,6 +122,7 @@ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 directory_id INT UNSIGNED NOT NULL, -- FK referenciando directories (Deck)
 front_encrypted TEXT NOT NULL,      -- Frente do card criptografada
 back_encrypted TEXT DEFAULT NULL,       -- Verso do card criptografado
+has_audio TINYINT(1) DEFAULT 0,     -- NOVO: Flag para saber se o áudio do verso já foi gerado
 sort_order INT DEFAULT 0,           -- Para ordenar os cards no futuro, se necessário
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
