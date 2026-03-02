@@ -1,11 +1,6 @@
 <!-- 
   Arquivo: flashcards.html
   Diretório: public_html/gluon/views/flashcards.html
-  
-  Pilar: Rápido, Seguro, Bonito e Escalável.
-  Atualizações:
-  - SOLUÇÃO DEFINITIVA DO EIXO 3D: Implementação do CSS Grid Stacking para impedir desencontro.
-  - IMPORTAÇÃO INTELIGENTE: Visualização automática em Tabela ao colar dados do Excel/Planilha.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -25,7 +20,6 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* Perspectiva 3D ancorada rigidamente */
         .scene {
             perspective: 1000px;
             width: 100%;
@@ -35,7 +29,6 @@
             flex-shrink: 0; 
         }
 
-        /* O elemento que gira usa display: grid para sobrepor os filhos de forma inflexível */
         .card-3d {
             width: 100%;
             height: 100%;
@@ -165,7 +158,7 @@
     <!-- Main Content -->
     <main class="flex-1 w-full flex flex-col items-center justify-center p-4 relative">
         
-        <!-- Painel Central Superior (Contador + Auto Play Toggle) -->
+        <!-- Painel Central Superior (Contador + Auto Play Toggle + Export) -->
         <div class="absolute top-6 left-0 right-0 flex justify-center items-center gap-4 z-10" id="topControlPanel" style="display: none;">
             <span id="cardCounter" class="bg-slate-800 text-slate-400 font-medium px-4 py-1.5 rounded-full text-sm border border-slate-700 shadow-sm">
                 0 / 0
@@ -178,6 +171,10 @@
                     <span class="absolute left-1 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4 peer-checked:bg-gluon-primary"></span>
                 </div>
             </label>
+            
+            <button id="btnExportExcel" onclick="flashcardApp.exportToExcel()" class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700 text-emerald-500 hover:text-emerald-400" title="Baixar Todo o Deck (Excel / CSV)">
+                <i class="fa-solid fa-file-export text-sm"></i>
+            </button>
         </div>
 
         <!-- Cena 3D e Card -->
@@ -433,8 +430,15 @@
             async api(action, payload = {}) {
                 payload.action = action;
                 try {
+                    // CORREÇÃO: Removido o ".php" para não contornar o arquivo de rotas (index.php) / .htaccess
                     const res = await fetch(`/api/flashcards`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    if (res.status === 401) window.location.href = '/'; 
+                    
+                    // Se a requisição bater num 401 por tentar acessar arquivo direto, ele expulsa para o Login.
+                    if (res.status === 401) {
+                        window.location.href = '/'; 
+                        return null;
+                    }
+                    
                     const data = await res.json();
                     if (data.status !== 'success') throw new Error(data.message);
                     return data;
@@ -465,6 +469,8 @@
                     
                     if (this.cards.length === 0) {
                         this.showEmptyState();
+                        document.getElementById('topControlPanel').style.display = 'flex';
+                        document.getElementById('cardCounter').style.display = 'none';
                     } else {
                         if (this.deckMode === 'aleatorio' || this.currentIndex >= this.cards.length) {
                             this.currentIndex = 0;
@@ -472,6 +478,7 @@
                         document.getElementById('cardScene').style.display = 'block';
                         document.getElementById('controls').style.display = 'flex';
                         document.getElementById('topControlPanel').style.display = 'flex';
+                        document.getElementById('cardCounter').style.display = 'block';
                         
                         this.updateGlobalProgressUI();
                         this.renderCurrentCard();
@@ -491,7 +498,7 @@
                 if (this.deckMode === 'aleatorio' && this.totalCardsInDeck > 0) {
                     document.getElementById('emptyStateIcon').className = "fa-solid fa-mug-hot text-6xl text-emerald-600 mb-4 opacity-70";
                     document.getElementById('emptyStateTitle').innerText = "Você está em dia!";
-                    document.getElementById('emptyStateDesc').innerText = "Não há cartas vencidas para revisão. Relaxe e volte amanhã!";
+                    document.getElementById('emptyStateDesc').innerText = "Não há cartas vencidas para revisão hoje. Relaxe e volte amanhã!";
                 } else {
                     document.getElementById('emptyStateIcon').className = "fa-solid fa-clone text-6xl text-slate-600 mb-4 opacity-50";
                     document.getElementById('emptyStateTitle').innerText = "Este deck está vazio";
@@ -703,7 +710,7 @@
                         if (this.cards.length === 0) {
                             document.getElementById('cardScene').style.display = 'none';
                             document.getElementById('controls').style.display = 'none';
-                            document.getElementById('topControlPanel').style.display = 'none';
+                            document.getElementById('cardCounter').style.display = 'none';
                             this.showEmptyState();
                         } else {
                             this.updateGlobalProgressUI();
@@ -852,7 +859,6 @@
                         countEl.classList.add('text-emerald-400', 'border-emerald-500/50', 'bg-emerald-500/20');
                         btnSave.disabled = false;
                         
-                        // Renderização Rápida e Imersiva da Tabela
                         tbody.innerHTML = parsed.map((card, index) => `
                             <tr class="hover:bg-slate-800/50 transition-colors">
                                 <td class="px-4 py-2 text-center text-slate-500 font-medium">${index + 1}</td>
@@ -889,7 +895,6 @@
                 for (let i = 0; i < lines.length; i++) {
                     const line = lines[i].trim();
                     if (!line) continue;
-                    // A separação padrão ao colar do Excel é Tabulação (\t)
                     const columns = line.split('\t');
                     if (columns.length >= 1 && columns[0].trim() !== '') { 
                         result.push({ 
@@ -899,6 +904,57 @@
                     }
                 }
                 return result;
+            },
+
+            // --- Exportar TODO O DECK (Backend Call) ---
+            async exportToExcel() {
+                const btn = document.getElementById('btnExportExcel');
+                const originalContent = btn.innerHTML;
+                
+                try {
+                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-sm"></i>';
+                    btn.disabled = true;
+
+                    // Busca TODOS os cards do banco de dados (ignorando o filtro de Spaced Repetition)
+                    const res = await this.api('get_all_cards', { deck_id: this.deckId });
+                    
+                    if (!res || !res.data || res.data.length === 0) {
+                        this.showToast("Não há cards para exportar neste deck.", "error");
+                        return;
+                    }
+
+                    // UTF-8 BOM para garantir suporte a caracteres latinos (acentos, cedilhas) no Excel
+                    let csv = "\uFEFF";
+                    csv += "Frente,Verso\n";
+
+                    res.data.forEach(card => {
+                        let front = card.front ? card.front.replace(/"/g, '""') : '';
+                        let back = card.back ? card.back.replace(/"/g, '""') : '';
+                        csv += `"${front}","${back}"\n`;
+                    });
+
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    
+                    const deckName = document.getElementById('deckName').innerText;
+                    const safeName = deckName.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'deck';
+                    
+                    a.download = `gluon_${safeName}.csv`;
+                    
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    this.showToast("Exportação concluída com sucesso!", "success");
+                } catch (error) {
+                    this.showToast("Erro ao exportar: " + error.message, "error");
+                } finally {
+                    btn.innerHTML = originalContent;
+                    btn.disabled = false;
+                }
             },
 
             // --- Modais ---
@@ -930,7 +986,6 @@
                 document.getElementById('bulkCount').innerText = '0 cards';
                 document.getElementById('btnSaveBulk').disabled = true;
                 
-                // Reseta a visualização da Tabela
                 document.getElementById('bulkTableContainer').classList.add('hidden');
                 document.getElementById('bulkEmptyState').classList.remove('hidden');
 
