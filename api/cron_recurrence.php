@@ -7,6 +7,7 @@
  * Pilar: Escalabilidade e Rápido.
  * * Este ficheiro deve ser chamado via CRON Job do servidor (ex: a cada 5 minutos ou de hora a hora).
  * Ele varre as tarefas que atingiram a data de repetição, guarda um histórico e avança a tarefa original.
+ * ATUALIZADO: Suporte a repetição contínua por hora dentro de uma janela limite diária.
  */
 
 require_once __DIR__ . '/../config/database.php';
@@ -14,8 +15,6 @@ require_once __DIR__ . '/../config/database.php';
 // =========================================================================
 // 1. SEGURANÇA (Evitar execução pública acidental)
 // =========================================================================
-// Define aqui um token seguro. Ao configurar no CRON, chama o URL assim: 
-// https://teusite.com/api/cron_recurrence.php?token=MEU_TOKEN_SECRETO
 $secureToken = 'GLUON_CRON_SECURE_123'; 
 $isCli = php_sapi_name() === 'cli';
 $providedToken = $_GET['token'] ?? '';
@@ -32,13 +31,30 @@ $pdo = Database::getConnection();
 // =========================================================================
 
 /**
- * Calcula a próxima data de execução baseado no intervalo e tipo.
+ * Calcula a próxima data de execução baseado no intervalo, tipo e limites.
  */
-function calculateNextRunDateCron($type, $interval, $custom_dates, $base_date) {
+function calculateNextRunDateCron($type, $interval, $custom_dates, $base_date, $time_start = null, $time_end = null) {
     $date = $base_date ? new DateTime($base_date) : new DateTime();
     $interval = (int)$interval > 0 ? (int)$interval : 1;
 
-    if ($type === 'daily') {
+    if ($type === 'hourly') {
+        $date->modify("+$interval hour");
+
+        // Checa se ultrapassou a janela diária do usuário
+        if ($time_start && $time_end) {
+            $currentTimeStr = $date->format('H:i:s');
+            
+            // Joga para o dia seguinte de manhã se ultrapassou a noite
+            if ($currentTimeStr >= $time_end) {
+                $date->modify('+1 day');
+                $date->setTime((int)substr($time_start, 0, 2), (int)substr($time_start, 3, 2), 0);
+            } 
+            // Se de alguma forma caiu muito antes, puxa para frente (Apenas fallback)
+            elseif ($currentTimeStr < $time_start) {
+                $date->setTime((int)substr($time_start, 0, 2), (int)substr($time_start, 3, 2), 0);
+            }
+        }
+    } elseif ($type === 'daily') {
         $date->modify("+$interval day");
     } elseif ($type === 'weekly') {
         $date->modify("+$interval week");
@@ -63,7 +79,6 @@ function calculateNextRunDateCron($type, $interval, $custom_dates, $base_date) {
 
 /**
  * Duplica uma diretoria (e as suas subdiretorias) como um item de HISTÓRICO.
- * A cópia perde a flag "is_recurring" para não gerar loops infinitos.
  */
 function duplicateAsHistory($source_id, $target_parent_id, $pdo) {
     $stmt = $pdo->prepare("SELECT * FROM directories WHERE id = ?");
@@ -72,7 +87,6 @@ function duplicateAsHistory($source_id, $target_parent_id, $pdo) {
     
     if (!$sourceDir) return false;
 
-    // Forçamos o histórico a não ser recorrente
     $is_recurring = 0; 
     
     $stmtInsert = $pdo->prepare("INSERT INTO directories (user_id, parent_id, target_id, type, name_encrypted, default_view, new_item_position, sort_order, icon, icon_color_from, icon_color_to, cover_url_encrypted, start_date, end_date, is_recurring) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
@@ -97,7 +111,6 @@ function duplicateAsHistory($source_id, $target_parent_id, $pdo) {
     
     $newDirId = $pdo->lastInsertId();
 
-    // Clonar o código fonte (se for ficheiro)
     if ((int)$sourceDir['type'] === 1) {
         $stmtCode = $pdo->prepare("SELECT language, content_encrypted FROM files_code WHERE directory_id = ?");
         $stmtCode->execute([$source_id]);
@@ -108,7 +121,6 @@ function duplicateAsHistory($source_id, $target_parent_id, $pdo) {
         }
     }
 
-    // Clonar filhas recursivamente
     $stmtChildren = $pdo->prepare("SELECT id FROM directories WHERE parent_id = ?");
     $stmtChildren->execute([$source_id]);
     $children = $stmtChildren->fetchAll();
@@ -126,7 +138,6 @@ function duplicateAsHistory($source_id, $target_parent_id, $pdo) {
 
 echo "Iniciando processamento de recorrências...\n";
 
-// Busca as tarefas que precisam de ser executadas (Processa em lotes de 100 para evitar timeout)
 $stmt = $pdo->query("SELECT dr.*, d.parent_id, d.start_date as orig_start, d.end_date as orig_end 
                      FROM directory_recurrences dr 
                      JOIN directories d ON dr.directory_id = d.id 
@@ -142,23 +153,22 @@ foreach ($dueTasks as $task) {
 
         $origId = $task['directory_id'];
         $parentId = $task['parent_id'];
-        $new_start_str = $task['next_run_date']; // A próxima data passa a ser a data atual da tarefa
+        $new_start_str = $task['next_run_date']; 
         
         // 1. Criar um clone da tarefa na data antiga (Histórico)
         duplicateAsHistory($origId, $parentId, $pdo);
 
-        // 2. Calcular as novas datas (start/end) da tarefa original para avançá-la no calendário
+        // 2. Calcular as novas datas da tarefa original
         $new_end_str = null;
         if ($task['orig_start'] && $task['orig_end']) {
             $startObj = new DateTime($task['orig_start']);
             $endObj = new DateTime($task['orig_end']);
             
-            // Calcula a duração do evento
             $diff = $startObj->diff($endObj);
             
             $newStartObj = new DateTime($new_start_str);
             $newEndObj = clone $newStartObj;
-            $newEndObj->add($diff); // Aplica a mesma duração na nova data
+            $newEndObj->add($diff);
             $new_end_str = $newEndObj->format('Y-m-d H:i:s');
         }
 
@@ -166,18 +176,25 @@ foreach ($dueTasks as $task) {
         $updDir = $pdo->prepare("UPDATE directories SET start_date = ?, end_date = ? WHERE id = ?");
         $updDir->execute([$new_start_str, $new_end_str, $origId]);
 
-        // 4. Calcular qual será a "Próxima das Próximas" datas de execução
-        $next_run = calculateNextRunDateCron($task['type'], $task['interval_value'], $task['custom_dates'], $new_start_str);
+        // 4. Calcular qual será a próxima data
+        $next_run = calculateNextRunDateCron(
+            $task['type'], 
+            $task['interval_value'], 
+            $task['custom_dates'], 
+            $new_start_str,
+            $task['time_start'] ?? null,
+            $task['time_end'] ?? null
+        );
 
         // 5. Verificar se a recorrência chegou ao fim
         $stopRecurrence = false;
         if (!$next_run) {
-            $stopRecurrence = true; // Acabaram as datas customizadas
+            $stopRecurrence = true;
         } elseif ($task['end_date']) {
             $nextRunObj = new DateTime($next_run);
             $recEndObj = new DateTime($task['end_date']);
             if ($nextRunObj > $recEndObj) {
-                $stopRecurrence = true; // Passou da data limite de repetição
+                $stopRecurrence = true;
             }
         }
 
