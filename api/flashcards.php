@@ -34,6 +34,44 @@ function verifyCardOwnership($pdo, $card_id, $user_id) {
     return $stmt->fetch();
 }
 
+/**
+ * Função para ajustar a pronúncia do TTS (Text-to-Speech).
+ * Substitui siglas e palavras estrangeiras pela sua fonética correspondente em português.
+ * Pilar: Fácil Manutenção (Basta adicionar novas siglas no array $replacements).
+ */
+function adjustPronunciationForTTS($text) {
+    $replacements = [
+        // Biologia / Química
+        '/\bATP\b/i' => 'atêpê',
+        '/\bADP\b/i' => 'adêpê',
+        '/\bDNA\b/i' => 'dê-êni-á',
+        '/\bRNA\b/i' => 'érri-êni-á',
+        
+        // Geografia / Política
+        '/\bEUA\b/i' => 'Estados Unidos',
+        '/\bONU\b/i' => 'ônu',
+        '/\bPIB\b/i' => 'píbi',
+        '/\bFMI\b/i' => 'éfi-êmi-í',
+        '/\bSTF\b/i' => 'éssi-tê-éfi',
+        '/\bIBGE\b/i' => 'i-bê-gê-é',
+        
+        // Tecnologia / Inglês Comum
+        '/\bPDF\b/i' => 'pê-dê-éfi',
+        '/\bHTML\b/i' => 'agá-tê-êmi-élli',
+        '/\bSQL\b/i' => 'éssi-quê-élli',
+        '/\bAPI\b/i' => 'a-pê-í',
+        '/\bPHP\b/i' => 'pê-agá-pê',
+        '/\bWi-Fi\b/i' => 'uai-fai',
+        '/\bSoftware\b/i' => 'sóft-uér',
+        '/\bHardware\b/i' => 'rárd-uér',
+        '/\bDownload\b/i' => 'daun-lôud',
+        '/\bUpload\b/i' => 'ãpi-lôud'
+    ];
+
+    return preg_replace(array_keys($replacements), array_values($replacements), $text);
+}
+
+
 if ($action === 'fetch') {
     $deck_id = (int)($input['deck_id'] ?? 0);
     if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
@@ -109,7 +147,7 @@ if ($action === 'fetch') {
     ]);
 }
 
-// ==== NOVO: Exportar todos os cards para Excel/CSV ====
+// ==== Exportar todos os cards para Excel/CSV ====
 elseif ($action === 'get_all_cards') {
     $deck_id = (int)($input['deck_id'] ?? 0);
     if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
@@ -169,11 +207,16 @@ elseif ($action === 'generate_audio') {
         die(json_encode(['status' => 'error', 'message' => 'O lado selecionado deste card não possui texto.']));
     }
 
+    // --- AJUSTE DE PRONÚNCIA (TTS) ---
+    // Substitui siglas e palavras antes de enviar para a IA gerar o áudio
+    $text_to_speech = adjustPronunciationForTTS($clean_text);
+    // ---------------------------------
+
     $reference_id = $side === 'front' ? FISH_REFERENCE_ID_FRONT : FISH_REFERENCE_ID_BACK;
 
     $ch = curl_init('https://api.fish.audio/v1/tts');
     $payload = json_encode([
-        "text" => $clean_text,
+        "text" => $text_to_speech,
         "reference_id" => $reference_id,
         "format" => "mp3"
     ]);
@@ -271,7 +314,7 @@ elseif ($action === 'add_single') {
     else echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
 }
 
-// ==== NOVO: Editar Card Existente ====
+// ==== Editar Card Existente ====
 elseif ($action === 'update_card') {
     $card_id = (int)($input['card_id'] ?? 0);
     $front = trim($input['front'] ?? '');
@@ -298,7 +341,7 @@ elseif ($action === 'update_card') {
     }
 }
 
-// ==== NOVO: Deletar Card ====
+// ==== Deletar Card ====
 elseif ($action === 'delete_card') {
     $card_id = (int)($input['card_id'] ?? 0);
 
