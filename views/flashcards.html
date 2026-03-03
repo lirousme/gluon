@@ -430,10 +430,8 @@
             async api(action, payload = {}) {
                 payload.action = action;
                 try {
-                    // CORREÇÃO: Removido o ".php" para não contornar o arquivo de rotas (index.php) / .htaccess
                     const res = await fetch(`/api/flashcards`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     
-                    // Se a requisição bater num 401 por tentar acessar arquivo direto, ele expulsa para o Login.
                     if (res.status === 401) {
                         window.location.href = '/'; 
                         return null;
@@ -545,9 +543,14 @@
                 const audioFront = document.getElementById('audioControlsFront');
                 if (card.has_audio_front === 1) {
                     audioFront.innerHTML = `
-                        <button onclick="event.stopPropagation(); flashcardApp.playCardAudio(${card.id}, 'front')" class="text-xs bg-slate-800/80 hover:bg-slate-700 border border-slate-600 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-slate-300">
-                            <i class="fa-solid fa-play"></i> Frente
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <button onclick="event.stopPropagation(); flashcardApp.playCardAudio(${card.id}, 'front')" class="text-xs bg-slate-800/80 hover:bg-slate-700 border border-slate-600 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-slate-300">
+                                <i class="fa-solid fa-play"></i> Frente
+                            </button>
+                            <button id="btnGenAudio_front_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'front')" class="text-xs bg-slate-800/80 hover:bg-slate-700 border border-slate-600 w-7 h-7 flex items-center justify-center rounded-lg transition-colors text-slate-400" title="Gerar novo áudio">
+                                <i class="fa-solid fa-rotate-right"></i>
+                            </button>
+                        </div>
                     `;
                 } else {
                     audioFront.innerHTML = `
@@ -570,9 +573,14 @@
 
                     if (card.has_audio_back === 1) {
                         audioBack.innerHTML = `
-                            <button onclick="event.stopPropagation(); flashcardApp.playCardAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-blue-200">
-                                <i class="fa-solid fa-play"></i> Ouvir Verso
-                            </button>
+                            <div class="flex items-center gap-2">
+                                <button onclick="event.stopPropagation(); flashcardApp.playCardAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-blue-200">
+                                    <i class="fa-solid fa-play"></i> Ouvir Verso
+                                </button>
+                                <button id="btnGenAudio_back_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 w-7 h-7 flex items-center justify-center rounded-lg transition-colors text-blue-300" title="Gerar novo áudio">
+                                    <i class="fa-solid fa-rotate-right"></i>
+                                </button>
+                            </div>
                         `;
                     } else {
                         audioBack.innerHTML = `
@@ -742,7 +750,8 @@
 
             playCardAudio(cardId, side) {
                 this.stopAudio();
-                this.currentAudioElement = new Audio(`/assets/audio/card_${cardId}_${side}.mp3`);
+                const ts = new Date().getTime(); // Bypassa o cache do navegador para ouvir o novo audio regerado
+                this.currentAudioElement = new Audio(`/assets/audio/card_${cardId}_${side}.mp3?t=${ts}`);
                 this.currentAudioElement.play().catch(e => console.error("Erro ao tocar áudio:", e));
             },
 
@@ -758,7 +767,13 @@
                 const btn = document.getElementById(`btnGenAudio_${side}_${cardId}`);
                 if (!btn) return;
                 
-                btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Gerando...`;
+                const originalHtml = btn.innerHTML;
+                const isRegen = btn.classList.contains('w-7'); 
+                
+                btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i>`;
+                if (!isRegen) {
+                    btn.innerHTML += ` Gerando...`;
+                }
                 btn.disabled = true;
 
                 const res = await this.api('generate_audio', { card_id: cardId, side: side });
@@ -773,10 +788,12 @@
                         
                         if(this.autoPlayEnabled) {
                             this.playCardAudio(cardId, side);
+                        } else {
+                            this.showToast(res.message, 'success');
                         }
                     }
                 } else {
-                    btn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Tentar Novamente`;
+                    btn.innerHTML = originalHtml;
                     btn.disabled = false;
                 }
             },
@@ -915,7 +932,6 @@
                     btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-sm"></i>';
                     btn.disabled = true;
 
-                    // Busca TODOS os cards do banco de dados (ignorando o filtro de Spaced Repetition)
                     const res = await this.api('get_all_cards', { deck_id: this.deckId });
                     
                     if (!res || !res.data || res.data.length === 0) {
