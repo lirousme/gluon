@@ -6,6 +6,7 @@
  * MICRO-API DE FLASHCARDS
  * Pilar: Seguro, Rápido e Escalável.
  * Gerencia CRUD, Criptografia, Repetição Espaçada, Modos de Deck e Geração de Áudio (TTS).
+ * Atualização: Suporte para salvamento e deleção de imagens do Flashcard com criptografia.
  */
 
 require_once __DIR__ . '/../config/database.php';
@@ -19,6 +20,18 @@ $pdo = Database::getConnection();
 $user_id = $_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? '';
+
+// =========================================================================
+// FAIL-SAFE MIGRATION: Garante que as colunas de imagens existam sem stress
+// =========================================================================
+try {
+    $pdo->exec("ALTER TABLE flashcards ADD COLUMN image_front_encrypted LONGTEXT DEFAULT NULL AFTER back_encrypted");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE flashcards ADD COLUMN image_back_encrypted LONGTEXT DEFAULT NULL AFTER image_front_encrypted");
+} catch (PDOException $e) {}
+// =========================================================================
 
 // Função auxiliar para verificar se o usuário é dono do deck (Segurança IDOR)
 function verifyDeckOwnership($pdo, $deck_id, $user_id) {
@@ -86,7 +99,7 @@ if ($action === 'fetch') {
 
     if ($deck_mode === 'aleatorio') {
         $stmt = $pdo->prepare("
-            SELECT f.id, f.front_encrypted, f.back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score 
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score 
             FROM flashcards f
             LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
             WHERE f.directory_id = ? AND (fs.next_review_at IS NULL OR fs.next_review_at <= NOW())
@@ -95,7 +108,7 @@ if ($action === 'fetch') {
         $stmt->execute([$user_id, $deck_id]);
     } else {
         $stmt = $pdo->prepare("
-            SELECT f.id, f.front_encrypted, f.back_encrypted, f.has_audio_front, f.has_audio_back, 0 as score 
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, 0 as score 
             FROM flashcards f
             WHERE f.directory_id = ? 
             ORDER BY f.sort_order ASC, f.id ASC
@@ -128,8 +141,10 @@ if ($action === 'fetch') {
     foreach ($cards as $card) {
         $response[] = [
             'id' => $card['id'],
-            'front' => Security::decryptData($card['front_encrypted']),
+            'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
             'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
+            'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
+            'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
             'score' => (int)$card['score']
@@ -158,7 +173,7 @@ elseif ($action === 'get_all_cards') {
         die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
     }
 
-    // Busca ABSOLUTAMENTE TODOS os cards do deck (ignorando data de revisão e repetição espaçada)
+    // Busca ABSOLUTAMENTE TODOS os cards do deck
     $stmt = $pdo->prepare("
         SELECT id, front_encrypted, back_encrypted 
         FROM flashcards 
@@ -173,7 +188,7 @@ elseif ($action === 'get_all_cards') {
     foreach ($cards as $card) {
         $response[] = [
             'id' => $card['id'],
-            'front' => Security::decryptData($card['front_encrypted']),
+            'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
             'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : ''
         ];
     }
@@ -298,20 +313,33 @@ elseif ($action === 'update_settings') {
     else echo json_encode(['status' => 'error', 'message' => 'Erro ao salvar.']);
 }
 
+// ==== Adicionar Novo Card ====
 elseif ($action === 'add_single') {
     $deck_id = (int)($input['deck_id'] ?? 0);
     $front = trim($input['front'] ?? '');
-    $back = trim($input['back'] ?? ''); 
+    $back = trim($input['back'] ?? '');
+    $image_front = $input['image_front'] ?? null;
+    $image_back = $input['image_back'] ?? null; 
 
-    if ($deck_id === 0 || empty($front)) die(json_encode(['status' => 'error', 'message' => 'A frente é obrigatória.']));
-    if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
+    if ($deck_id === 0 || (empty($front) && empty($image_front))) {
+        die(json_encode(['status' => 'error', 'message' => 'A frente do card precisa ter texto ou imagem.']));
+    }
+    if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) {
+        die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
+    }
 
-    $front_enc = Security::encryptData($front);
+    $front_enc = !empty($front) ? Security::encryptData($front) : null;
     $back_enc = !empty($back) ? Security::encryptData($back) : null;
+    $img_front_enc = !empty($image_front) ? Security::encryptData($image_front) : null;
+    $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
 
-    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted, has_audio_front, has_audio_back) VALUES (?, ?, ?, 0, 0)");
-    if ($stmt->execute([$deck_id, $front_enc, $back_enc])) echo json_encode(['status' => 'success', 'message' => 'Card adicionado.']);
-    else echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
+    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, 0, 0)");
+    
+    if ($stmt->execute([$deck_id, $front_enc, $back_enc, $img_front_enc, $img_back_enc])) {
+        echo json_encode(['status' => 'success', 'message' => 'Card adicionado.']);
+    } else {
+        echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
+    }
 }
 
 // ==== Editar Card Existente ====
@@ -319,22 +347,26 @@ elseif ($action === 'update_card') {
     $card_id = (int)($input['card_id'] ?? 0);
     $front = trim($input['front'] ?? '');
     $back = trim($input['back'] ?? '');
+    $image_front = $input['image_front'] ?? null;
+    $image_back = $input['image_back'] ?? null;
 
-    if ($card_id === 0 || empty($front)) {
-        die(json_encode(['status' => 'error', 'message' => 'Dados inválidos. A frente é obrigatória.']));
+    if ($card_id === 0 || (empty($front) && empty($image_front))) {
+        die(json_encode(['status' => 'error', 'message' => 'Dados inválidos. A frente do card precisa ter texto ou imagem.']));
     }
 
     if (!verifyCardOwnership($pdo, $card_id, $user_id)) {
         die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
     }
 
-    $front_enc = Security::encryptData($front);
+    $front_enc = !empty($front) ? Security::encryptData($front) : null;
     $back_enc = !empty($back) ? Security::encryptData($back) : null;
+    $img_front_enc = !empty($image_front) ? Security::encryptData($image_front) : null;
+    $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
 
     // Zera as flags de áudio porque o texto mudou e o áudio antigo não bate mais com a descrição
-    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, has_audio_front = 0, has_audio_back = 0 WHERE id = ?");
+    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, has_audio_front = 0, has_audio_back = 0 WHERE id = ?");
     
-    if ($stmt->execute([$front_enc, $back_enc, $card_id])) {
+    if ($stmt->execute([$front_enc, $back_enc, $img_front_enc, $img_back_enc, $card_id])) {
         echo json_encode(['status' => 'success', 'message' => 'Card atualizado. Áudios redefinidos.']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar card.']);
