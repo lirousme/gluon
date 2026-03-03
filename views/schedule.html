@@ -4,7 +4,7 @@
   
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
   Suporta Múltiplas Visualizações: Linha do Tempo, Kanban Semanal, Lista e Recorrências.
-  *Atualizado: Opção de "Configuração" da própria Agenda através do menu de opções.
+  *Atualizado: Otimização Ultra-Fluida (Smooth) da Barra de Rolagem Customizada do Kanban.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -165,6 +165,11 @@
             <div id="viewContainer" class="flex-1 overflow-hidden relative flex flex-col"></div>
         </div>
     </main>
+
+    <!-- BARRA DE ROLAGEM CUSTOMIZADA -->
+    <div id="gluon-custom-scrollbar" class="hidden md:hidden fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 h-[46px] bg-slate-900/80 backdrop-blur-md border-t border-slate-800/80 z-[60] flex items-center px-2">
+        <div id="gluon-scroll-thumb" class="h-5 bg-slate-600 hover:bg-slate-500 active:bg-gluon-primary rounded-full cursor-grab active:cursor-grabbing transition-colors will-change-transform shadow-md" style="touch-action: none;"></div>
+    </div>
 
     <!-- Modal Completo de Configurações -->
     <div id="dirModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
@@ -414,6 +419,181 @@
                     'fa-folder', 'fa-folder-open', 'fa-check-circle', 'fa-file-code', 'fa-calendar-days', 'fa-door-open', 'fa-clock', 'fa-file-lines', 'fa-file-image', 'fa-file-pdf', 'fa-star', 'fa-heart', 'fa-image', 'fa-music', 'fa-video', 
                     'fa-code', 'fa-terminal', 'fa-database', 'fa-server', 'fa-lock', 'fa-vault', 'fa-book', 'fa-briefcase', 'fa-globe', 'fa-list-check'
                 ]
+            },
+
+            customScroll: {
+                active: false,
+                isDragging: false,
+                dragRAF: null,
+                syncRAF: null,
+                
+                init() {
+                    if(window.innerWidth < 768) return; 
+                    
+                    this.track = document.getElementById('gluon-custom-scrollbar');
+                    this.thumb = document.getElementById('gluon-scroll-thumb');
+                    this.wrapper = document.getElementById('kanban-wrapper');
+                    
+                    if(!this.track || !this.thumb || !this.wrapper) return;
+
+                    this.active = true;
+                    this.track.classList.remove('hidden', 'md:hidden');
+                    this.track.classList.add('md:flex');
+                    this.wrapper.classList.add('no-scrollbar');
+
+                    this.update = this.update.bind(this);
+                    this.sync = this.sync.bind(this);
+                    this.startDrag = this.startDrag.bind(this);
+                    this.onDrag = this.onDrag.bind(this);
+                    this.stopDrag = this.stopDrag.bind(this);
+                    this.trackClick = this.trackClick.bind(this);
+
+                    this.wrapper.addEventListener('scroll', this.sync, { passive: true });
+                    window.addEventListener('resize', this.update, { passive: true });
+                    
+                    // Adicionado suporte a toque e mouse para fluidez em qualquer dispositivo
+                    this.thumb.addEventListener('mousedown', this.startDrag);
+                    this.thumb.addEventListener('touchstart', this.startDrag, { passive: false });
+                    
+                    this.track.addEventListener('mousedown', this.trackClick);
+                    
+                    if(window.ResizeObserver) {
+                        this.resizeObserver = new ResizeObserver(this.update);
+                        this.resizeObserver.observe(this.wrapper);
+                    }
+
+                    setTimeout(this.update, 100);
+                },
+
+                destroy() {
+                    this.active = false;
+                    if(this.dragRAF) cancelAnimationFrame(this.dragRAF);
+                    if(this.syncRAF) cancelAnimationFrame(this.syncRAF);
+                    
+                    if(this.track) {
+                        this.track.classList.add('hidden', 'md:hidden');
+                        this.track.classList.remove('md:flex');
+                    }
+                    if(this.wrapper) {
+                        this.wrapper.removeEventListener('scroll', this.sync);
+                        this.wrapper.classList.remove('no-scrollbar');
+                    }
+                    if(this.resizeObserver && this.wrapper) this.resizeObserver.unobserve(this.wrapper);
+                    window.removeEventListener('resize', this.update);
+                    
+                    if(this.thumb) {
+                        this.thumb.removeEventListener('mousedown', this.startDrag);
+                        this.thumb.removeEventListener('touchstart', this.startDrag);
+                    }
+                    if(this.track) this.track.removeEventListener('mousedown', this.trackClick);
+                },
+
+                update() {
+                    if(!this.active || !this.wrapper) return;
+                    const { scrollWidth, clientWidth } = this.wrapper;
+                    
+                    if (scrollWidth <= clientWidth + 2) {
+                        this.track.style.display = 'none';
+                        return;
+                    }
+                    this.track.style.display = '';
+                    
+                    const trackW = this.track.clientWidth;
+                    const ratio = clientWidth / scrollWidth;
+                    
+                    // A largura real proporcional calculada corretamente em cima do trackW
+                    const thumbW = Math.max(60, trackW * ratio); 
+                    this.thumb.style.width = `${thumbW}px`;
+                    
+                    this.sync();
+                },
+
+                sync() {
+                    // Removido o bloqueio isDragging daqui para sincronia em tempo real
+                    if(!this.active || !this.wrapper) return;
+                    if(this.syncRAF) cancelAnimationFrame(this.syncRAF);
+                    
+                    this.syncRAF = requestAnimationFrame(() => {
+                        const { scrollWidth, clientWidth, scrollLeft } = this.wrapper;
+                        const trackW = this.track.clientWidth;
+                        const thumbW = parseFloat(this.thumb.style.width);
+                        
+                        const maxScroll = scrollWidth - clientWidth;
+                        if(maxScroll <= 0) return;
+
+                        const maxThumbLeft = trackW - thumbW;
+                        const scrollRatio = scrollLeft / maxScroll;
+                        
+                        this.thumb.style.transform = `translate3d(${scrollRatio * maxThumbLeft}px, 0, 0)`;
+                    });
+                },
+
+                startDrag(e) {
+                    if (e.type === 'mousedown' && e.button !== 0) return;
+                    e.preventDefault(); e.stopPropagation();
+                    this.isDragging = true;
+                    
+                    this.startX = e.type.includes('touch') ? e.touches[0].pageX : e.pageX;
+                    this.startScroll = this.wrapper.scrollLeft;
+                    document.body.style.userSelect = 'none';
+                    this.wrapper.style.scrollBehavior = 'auto'; // Impede o "smooth" nativo lutar contra o dedo
+                    
+                    document.addEventListener('mousemove', this.onDrag, { passive: false });
+                    document.addEventListener('mouseup', this.stopDrag);
+                    document.addEventListener('touchmove', this.onDrag, { passive: false });
+                    document.addEventListener('touchend', this.stopDrag);
+                },
+
+                onDrag(e) {
+                    if(!this.isDragging) return;
+                    e.preventDefault();
+                    this.currentX = e.type.includes('touch') ? e.touches[0].pageX : e.pageX; 
+                    
+                    if(this.dragRAF) return; 
+                    this.dragRAF = requestAnimationFrame(() => {
+                        const dx = this.currentX - this.startX;
+                        const trackW = this.track.clientWidth;
+                        const thumbW = parseFloat(this.thumb.style.width);
+                        const maxThumbLeft = trackW - thumbW;
+                        const maxScroll = this.wrapper.scrollWidth - this.wrapper.clientWidth;
+                        
+                        if (maxThumbLeft > 0) {
+                            const scrollDx = (dx / maxThumbLeft) * maxScroll;
+                            // Modificando SOMENTE o scroll da view, o navegador dispara `scroll`
+                            // chamando nosso `sync()` imediatamente, removendo o engasgo (jitter).
+                            this.wrapper.scrollLeft = this.startScroll + scrollDx;
+                        }
+                        
+                        this.dragRAF = null; 
+                    });
+                },
+
+                stopDrag() {
+                    this.isDragging = false;
+                    document.body.style.userSelect = '';
+                    this.wrapper.style.scrollBehavior = '';
+                    
+                    document.removeEventListener('mousemove', this.onDrag);
+                    document.removeEventListener('mouseup', this.stopDrag);
+                    document.removeEventListener('touchmove', this.onDrag);
+                    document.removeEventListener('touchend', this.stopDrag);
+                },
+
+                trackClick(e) {
+                    if(e.target === this.thumb || this.isDragging) return;
+                    const trackRect = this.track.getBoundingClientRect();
+                    const clickX = e.clientX - trackRect.left;
+                    const thumbW = parseFloat(this.thumb.style.width);
+                    const trackW = this.track.clientWidth;
+                    const maxThumbLeft = trackW - thumbW;
+                    const maxScroll = this.wrapper.scrollWidth - this.wrapper.clientWidth;
+                    
+                    let newThumbLeft = clickX - (thumbW / 2);
+                    newThumbLeft = Math.max(0, Math.min(maxThumbLeft, newThumbLeft));
+                    
+                    const newScroll = (newThumbLeft / maxThumbLeft) * maxScroll;
+                    this.wrapper.scrollTo({ left: newScroll, behavior: 'smooth' });
+                }
             },
 
             async init() {
@@ -917,15 +1097,17 @@
                 const dates = this.getDatesArray(startDate, 7);
                 const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
                 
-                let html = `<div class="flex-1 flex gap-4 overflow-x-auto p-4 snap-x relative h-full items-start">`;
+                // Removido snap-x e alterado o padding-bottom para criar espaço na barra inferior
+                let html = `<div id="kanban-wrapper" class="flex-1 flex gap-4 sm:gap-5 overflow-x-auto p-4 relative h-full items-start pb-20">`;
                 dates.forEach(d => {
                     const dStr = this.getLocalYYYYMMDD(d); 
                     const displayDate = `${dayNames[d.getDay()]}, ${('0'+d.getDate()).slice(-2)}/${('0'+(d.getMonth()+1)).slice(-2)}`;
                     const isToday = dStr === this.getLocalYYYYMMDD(new Date());
                     const headerClass = isToday ? 'text-gluon-primary font-bold' : 'text-slate-300 font-semibold';
                     
+                    // Removido snap-start para liberar as paradas e melhorar a fluidez visual
                     html += `
-                    <div class="snap-start bg-slate-800/80 border border-slate-700 rounded-xl w-[280px] shrink-0 flex flex-col max-h-full shadow-lg relative overflow-hidden">
+                    <div class="bg-slate-800/80 border border-slate-700 rounded-xl w-[280px] shrink-0 flex flex-col max-h-full shadow-lg relative overflow-hidden transition-transform">
                         <div class="p-3 border-b border-slate-700 text-center ${headerClass} bg-slate-900/50">${displayDate}</div>
                         <div class="p-2 flex-1 overflow-y-auto sortable-day-col no-scrollbar min-h-[100px]" data-date="${dStr}">
                             <!-- items -->
@@ -960,6 +1142,8 @@
             },
 
             render() {
+                if (this.state.view !== 'kanban') this.customScroll.destroy();
+
                 this.renderDateControls();
                 
                 const viewContainer = document.getElementById('viewContainer');
@@ -1016,6 +1200,7 @@
                 } else if (this.state.view === 'kanban') {
                     viewContainer.innerHTML = this.getKanbanHTML(selectedDate);
                     this.renderColumnsItems(scheduledItems, selectedDate, 'kanban');
+                    setTimeout(() => this.customScroll.init(), 0);
                 } else if (this.state.view === 'list') {
                     viewContainer.innerHTML = this.getListHTML(selectedDate);
                     this.renderColumnsItems(scheduledItems, selectedDate, 'list');
