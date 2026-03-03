@@ -59,7 +59,7 @@ else if ($action === 'update_view') {
 else if ($action === 'get_agenda_info') {
     // Busca informações básicas da pasta Agenda atual (Nome, Capa e View Preferida)
     $id = (int)($input['id'] ?? 0);
-    $stmt = $pdo->prepare("SELECT name_encrypted, icon, icon_color_from, icon_color_to, default_view FROM directories WHERE id = ? AND user_id = ? AND type = 2");
+    $stmt = $pdo->prepare("SELECT id, type, name_encrypted, icon, icon_color_from, icon_color_to, default_view, cover_url_encrypted FROM directories WHERE id = ? AND user_id = ? AND type = 2");
     $stmt->execute([$id, $user_id]);
     $agenda = $stmt->fetch();
 
@@ -67,11 +67,14 @@ else if ($action === 'get_agenda_info') {
         echo json_encode([
             'status' => 'success', 
             'data' => [
+                'id' => $agenda['id'],
+                'type' => (int)$agenda['type'],
                 'name' => Security::decryptData($agenda['name_encrypted']),
                 'icon' => $agenda['icon'],
                 'color_from' => $agenda['icon_color_from'],
                 'color_to' => $agenda['icon_color_to'],
-                'view' => $agenda['default_view'] ?? 'timeline'
+                'view' => $agenda['default_view'] ?? 'timeline',
+                'cover_url' => !empty($agenda['cover_url_encrypted']) ? Security::decryptData($agenda['cover_url_encrypted']) : ''
             ]
         ]);
     } else {
