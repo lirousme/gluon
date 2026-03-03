@@ -5,6 +5,7 @@
   Pilar: Fácil Manutenção, Bonito, Seguro e Rápido.
   Suporta Múltiplas Visualizações: Linha do Tempo, Kanban Semanal, Lista e Recorrências.
   *Atualizado: Correção na exclusão de blocos unitários em repetições do tipo Hourly (Hora em hora).
+  *Atualizado: Correção na ordenação cronológica global (Misturando tarefas repetidas e unitárias na ordem correta de tempo).
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -1036,43 +1037,51 @@
                 const eventsLayer = document.getElementById('eventsLayer');
                 eventsLayer.innerHTML = '';
                 
+                let allInstances = [];
                 scheduledItems.forEach(item => {
                     const instances = this.getTaskInstancesOnDate(item, selectedDateStr);
+                    instances.forEach(inst => allInstances.push({ item, inst }));
+                });
+
+                // Ordenar globalmente pelo tempo na Linha do Tempo 
+                allInstances.sort((a, b) => a.inst.start.getTime() - b.inst.start.getTime());
+
+                allInstances.forEach(entry => {
+                    const item = entry.item;
+                    const inst = entry.inst;
                     
-                    instances.forEach(inst => {
-                        const startMins = inst.start.getHours() * 60 + inst.start.getMinutes();
-                        const endMins = inst.end.getHours() * 60 + inst.end.getMinutes();
-                        const duration = endMins - startMins;
-                        
-                        const fromColor = item.color_from || '#3b82f6';
-                        const toColor = item.color_to || '#6366f1';
-                        
-                        const borderStyle = inst.isProjection ? 'border-style: dashed; border-width: 2px;' : `border-left: 4px solid ${fromColor};`;
-                        const bgStyle = `background: linear-gradient(135deg, ${fromColor}33, ${toColor}33); border-color: ${fromColor}80; color: #fff; ${borderStyle}`;
-                        
-                        const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 opacity-80" title="Tarefa Recorrente"></i>` : '';
-                        const projClass = inst.isProjection ? 'virtual-task opacity-80' : '';
-                        const resizeHTML = inst.isProjection ? '' : `<div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>`;
+                    const startMins = inst.start.getHours() * 60 + inst.start.getMinutes();
+                    const endMins = inst.end.getHours() * 60 + inst.end.getMinutes();
+                    const duration = endMins - startMins;
+                    
+                    const fromColor = item.color_from || '#3b82f6';
+                    const toColor = item.color_to || '#6366f1';
+                    
+                    const borderStyle = inst.isProjection ? 'border-style: dashed; border-width: 2px;' : `border-left: 4px solid ${fromColor};`;
+                    const bgStyle = `background: linear-gradient(135deg, ${fromColor}33, ${toColor}33); border-color: ${fromColor}80; color: #fff; ${borderStyle}`;
+                    
+                    const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 opacity-80" title="Tarefa Recorrente"></i>` : '';
+                    const projClass = inst.isProjection ? 'virtual-task opacity-80' : '';
+                    const resizeHTML = inst.isProjection ? '' : `<div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>`;
 
-                        const instTimeStr = inst.start.getHours().toString().padStart(2,'0') + ':' + inst.start.getMinutes().toString().padStart(2,'0') + ':00';
-                        const contextDateStr = `${selectedDateStr} ${instTimeStr}`;
+                    const instTimeStr = inst.start.getHours().toString().padStart(2,'0') + ':' + inst.start.getMinutes().toString().padStart(2,'0') + ':00';
+                    const contextDateStr = `${selectedDateStr} ${instTimeStr}`;
 
-                        eventsLayer.innerHTML += `
-                            <div id="evt-${inst.uid}" class="event-card group ${projClass}" data-id="${item.id}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
-                                ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
-                                <div class="flex justify-between items-start pointer-events-none z-10 relative">
-                                    <div class="font-bold truncate text-sm flex items-center gap-1.5 w-full pr-6">
-                                        <i class="fa-solid ${item.icon} text-xs"></i> <span class="truncate">${this.escapeHTML(item.name)} ${repeatIcon}</span>
-                                    </div>
+                    eventsLayer.innerHTML += `
+                        <div id="evt-${inst.uid}" class="event-card group ${projClass}" data-id="${item.id}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                            ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
+                            <div class="flex justify-between items-start pointer-events-none z-10 relative">
+                                <div class="font-bold truncate text-sm flex items-center gap-1.5 w-full pr-6">
+                                    <i class="fa-solid ${item.icon} text-xs"></i> <span class="truncate">${this.escapeHTML(item.name)} ${repeatIcon}</span>
                                 </div>
-                                <div class="text-[10px] opacity-70 pointer-events-none z-10 relative font-medium">${inst.start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${inst.end.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                                
-                                <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="absolute top-1 right-1 text-white/70 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 z-20 bg-black/40 rounded shadow-md"><i class="fa-solid fa-cog text-xs"></i></button>
-
-                                ${resizeHTML}
                             </div>
-                        `;
-                    });
+                            <div class="text-[10px] opacity-70 pointer-events-none z-10 relative font-medium">${inst.start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${inst.end.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                            
+                            <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="absolute top-1 right-1 text-white/70 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 z-20 bg-black/40 rounded shadow-md"><i class="fa-solid fa-cog text-xs"></i></button>
+
+                            ${resizeHTML}
+                        </div>
+                    `;
                 });
 
                 document.querySelectorAll('.event-card').forEach(el => {
@@ -1087,16 +1096,34 @@
             renderColumnsItems(scheduledItems, startDate, viewType) {
                 const dates = this.getDatesArray(startDate, 7).map(d => this.getLocalYYYYMMDD(d));
                 
-                scheduledItems.forEach(item => {
-                    dates.forEach(dateStr => {
-                        const instances = this.getTaskInstancesOnDate(item, dateStr);
-                        const col = document.querySelector(`.sortable-day-col[data-date="${dateStr}"]`);
-                        if (col) {
-                            instances.forEach(inst => {
-                                col.innerHTML += this.generateItemCard(item, viewType, inst, dateStr);
-                            });
-                        }
-                    });
+                dates.forEach(dateStr => {
+                    const col = document.querySelector(`.sortable-day-col[data-date="${dateStr}"]`);
+                    if (col) {
+                        let dailyInstances = [];
+                        
+                        // Captura todas as ocorrências de todas as tarefas para aquele dia em específico
+                        scheduledItems.forEach(item => {
+                            const instances = this.getTaskInstancesOnDate(item, dateStr);
+                            instances.forEach(inst => dailyInstances.push({ item, inst }));
+                        });
+
+                        // Ordenar globalmente pelo horário de início de cada instância no dia
+                        dailyInstances.sort((a, b) => {
+                            const timeA = a.inst.start.getTime();
+                            const timeB = b.inst.start.getTime();
+                            if (timeA === timeB) {
+                                return (a.item.name || '').localeCompare(b.item.name || '');
+                            }
+                            return timeA - timeB;
+                        });
+
+                        let html = '';
+                        dailyInstances.forEach(entry => {
+                            html += this.generateItemCard(entry.item, viewType, entry.inst, dateStr);
+                        });
+                        
+                        col.innerHTML += html;
+                    }
                 });
             },
 
