@@ -268,6 +268,53 @@ elseif ($action === 'generate_audio') {
     echo json_encode(['status' => 'success', 'message' => 'Áudio gerado e salvo com sucesso!']);
 }
 
+elseif ($action === 'translate_text') {
+    $text = trim($input['text'] ?? '');
+
+    if ($text === '') {
+        die(json_encode(['status' => 'error', 'message' => 'Texto inválido para tradução.']));
+    }
+
+    if (OPENAI_API_KEY === '') {
+        die(json_encode(['status' => 'error', 'message' => 'OPENAI_API_KEY não configurada no .env.']));
+    }
+
+    $payload = json_encode([
+        'model' => 'gpt-4o-mini',
+        'messages' => [
+            ['role' => 'system', 'content' => 'Você é um tradutor automático direto e focado. Retorne EXCLUSIVAMENTE a tradução.'],
+            ['role' => 'user', 'content' => $text]
+        ],
+        'temperature' => 0.3
+    ]);
+
+    $ch = curl_init('https://api.openai.com/v1/chat/completions');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . OPENAI_API_KEY
+    ]);
+
+    $response = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpcode !== 200 || !$response) {
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao traduzir com a OpenAI.']));
+    }
+
+    $decoded = json_decode($response, true);
+    $translation = trim($decoded['choices'][0]['message']['content'] ?? '');
+
+    if ($translation === '') {
+        die(json_encode(['status' => 'error', 'message' => 'A API não retornou tradução válida.']));
+    }
+
+    echo json_encode(['status' => 'success', 'translation' => $translation]);
+}
+
 elseif ($action === 'update_score') {
     $card_id = (int)($input['card_id'] ?? 0);
     if ($card_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do card inválido.']));

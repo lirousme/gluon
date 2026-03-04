@@ -1242,29 +1242,17 @@
                 btn.disabled = true;
 
                 try {
-                    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json", "Authorization": "Bearer sk-proj-i-" },
-                        body: JSON.stringify({
-                            model: "gpt-4o-mini",
-                            messages: [
-                                { role: "system", content: "Você é um tradutor automático direto e focado. Retorne EXCLUSIVAMENTE a tradução." },
-                                { role: "user", content: textToTranslate }
-                            ],
-                            temperature: 0.3
-                        })
-                    });
+                    const res = await this.api('translate_text', { text: textToTranslate });
+                    if (!res || !res.translation) throw new Error('A API não retornou uma tradução válida.');
 
-                    if (!response.ok) throw new Error("Erro retornado pela API da OpenAI");
-                    const data = await response.json();
-                    
-                    if (data.choices && data.choices.length > 0) {
-                        targetEl.value = data.choices[0].message.content.trim();
-                        this.showToast("Tradução concluída!", "success");
-                    } else throw new Error("A API não retornou uma tradução válida.");
-
-                } catch (error) { this.showToast("Falha ao traduzir: " + error.message, "error"); } 
-                finally { btn.innerHTML = originalHtml; btn.disabled = false; }
+                    targetEl.value = res.translation;
+                    this.showToast("Tradução concluída!", "success");
+                } catch (error) {
+                    this.showToast("Falha ao traduzir: " + error.message, "error");
+                } finally {
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                }
             },
 
             async saveSingleCard(e) {
