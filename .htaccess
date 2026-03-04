@@ -1,0 +1,18 @@
+# Arquivo: .htaccess
+# Diretório: public_html/gluon/.htaccess
+# Pilar: Segurança e Fácil Manutenção.
+# Força todas as requisições a passarem pelo index.php (Front Controller)
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Se o arquivo ou diretório existir fisicamente (como imagens, css), acessa direto
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    
+    # Redireciona tudo que não existe fisicamente para o index.php
+    RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+# Impede listagem de diretórios (Segurança)
+Options -Indexes
