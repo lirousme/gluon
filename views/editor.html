@@ -9,7 +9,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Gluon - Editor de Código</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -32,6 +32,15 @@
             width: 100% !important;
             font-family: 'Fira Code', 'Consolas', monospace; 
             font-size: 14px; 
+        }
+        /* Evita zoom automático no foco dos campos no Safari iOS */
+        .ios-no-focus-zoom select,
+        .ios-no-focus-zoom input,
+        .ios-no-focus-zoom textarea,
+        .ios-no-focus-zoom .CodeMirror,
+        .ios-no-focus-zoom .CodeMirror textarea,
+        .ios-no-focus-zoom .CodeMirror pre {
+            font-size: 16px !important;
         }
         .cm-s-dracula.CodeMirror { background-color: #0f172a !important; }
         .CodeMirror-gutters { background-color: #1e293b !important; border-right: 1px solid #334155 !important; }
@@ -186,6 +195,24 @@
                 this.isDirty = true; // Força aviso de não salvo ao mudar a linguagem
             }
         };
+
+        const isiOSDevice = /iP(hone|ad|od)/.test(navigator.userAgent)
+            || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const isWebKitEngine = /WebKit/.test(navigator.userAgent);
+        const isExcludedIOSBrowser = /CriOS|FxiOS|EdgiOS|OPiOS/.test(navigator.userAgent);
+        const isIosSafariLike = isiOSDevice && isWebKitEngine && !isExcludedIOSBrowser;
+
+        if (isIosSafariLike) {
+            document.documentElement.classList.add('ios-no-focus-zoom');
+
+            const viewportMeta = document.querySelector('meta[name="viewport"]');
+            if (viewportMeta) {
+                viewportMeta.setAttribute(
+                    'content',
+                    'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover'
+                );
+            }
+        }
 
         document.addEventListener('DOMContentLoaded', () => editorApp.init());
         
