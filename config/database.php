@@ -8,20 +8,80 @@
  * Usa PDO para prevenir SQL Injection e gerencia a chave mestre de criptografia.
  */
 
+function loadEnvFile($path) {
+    if (!is_readable($path)) {
+        return;
+    }
+
+    $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if ($lines === false) {
+        return;
+    }
+
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || startsWith($line, '#')) {
+            continue;
+        }
+
+        $parts = explode('=', $line, 2);
+        if (count($parts) !== 2) {
+            continue;
+        }
+
+        $name = trim($parts[0]);
+        $value = trim($parts[1]);
+
+        if ($name === '') {
+            continue;
+        }
+
+        if (
+            (startsWith($value, '"') && endsWith($value, '"')) ||
+            (startsWith($value, "'") && endsWith($value, "'"))
+        ) {
+            $value = substr($value, 1, -1);
+        }
+
+        $_ENV[$name] = $value;
+        putenv("{$name}={$value}");
+    }
+}
+
+function startsWith($haystack, $needle) {
+    return substr($haystack, 0, strlen($needle)) === $needle;
+}
+
+function endsWith($haystack, $needle) {
+    if ($needle === '') {
+        return true;
+    }
+    return substr($haystack, -strlen($needle)) === $needle;
+}
+
+function envValue($name, $default = '') {
+    $value = $_ENV[$name] ?? getenv($name);
+    return ($value === false || $value === null || $value === '') ? $default : $value;
+}
+
+loadEnvFile(__DIR__ . '/../.env');
+
 // 1. Configurações do Banco de Dados
-define('DB_HOST', '');
-define('DB_NAME', '');
-define('DB_USER', ''); 
-define('DB_PASS', '');
+define('DB_HOST', envValue('DB_HOST', 'localhost'));
+define('DB_NAME', envValue('DB_NAME', ''));
+define('DB_USER', envValue('DB_USER', ''));
+define('DB_PASS', envValue('DB_PASS', ''));
 
 // 2. Chave de Criptografia Mestre (Guarde isso com a vida, não perca nunca)
-define('ENCRYPTION_KEY', 'UmaChaveMuitoForteDe32Caracteres!');
+define('ENCRYPTION_KEY', envValue('ENCRYPTION_KEY', 'UmaChaveMuitoForteDe32Caracteres!'));
 
 // 3. API Keys de Serviços Externos (Fish Audio)
-define('FISH_API_KEY', '');
+define('FISH_API_KEY', envValue('FISH_API_KEY', ''));
 // IDs de Voz distintos para a Frente e para o Verso do Card
-define('FISH_REFERENCE_ID_FRONT', '78c1c2afbe86411f9c2cd213d25aa78a'); // Substitua pelo ID da voz da Frente
-define('FISH_REFERENCE_ID_BACK', '1e4abcd5c0294c7c82293612c6bf0351');   // Substitua pelo ID da voz do Verso
+define('FISH_REFERENCE_ID_FRONT', envValue('FISH_REFERENCE_ID_FRONT', '78c1c2afbe86411f9c2cd213d25aa78a')); // Substitua pelo ID da voz da Frente
+define('FISH_REFERENCE_ID_BACK', envValue('FISH_REFERENCE_ID_BACK', '1e4abcd5c0294c7c82293612c6bf0351'));   // Substitua pelo ID da voz do Verso
+define('CRON_SECURE_TOKEN', envValue('CRON_SECURE_TOKEN', ''));
+define('OPENAI_API_KEY', envValue('OPENAI_API_KEY', ''));
 
 class Database {
     private static $pdo = null;
