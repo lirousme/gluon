@@ -79,8 +79,6 @@ if (strpos($route, 'api/') === 0) {
     $api_file = BASE_PATH . '/' . $route . '.php';
 
     if (file_exists($api_file)) {
-        ini_set('display_errors', '0');
-        ini_set('display_startup_errors', '0');
         ob_start();
         require_once $api_file;
         $api_output = ob_get_clean();
