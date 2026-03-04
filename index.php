@@ -79,8 +79,6 @@ if (strpos($route, 'api/') === 0) {
     $api_file = BASE_PATH . '/' . $route . '.php';
 
     if (file_exists($api_file)) {
-        ini_set('display_errors', '0');
-        ini_set('display_startup_errors', '0');
         ob_start();
         require_once $api_file;
         $api_output = ob_get_clean();
@@ -96,24 +94,14 @@ if (strpos($route, 'api/') === 0) {
             exit;
         }
 
-        // Tentativa de recuperação: encontra qualquer objeto JSON válido no meio do output.
-        $len = strlen($api_output);
-        for ($i = 0; $i < $len; $i++) {
-            if ($api_output[$i] !== '{') {
-                continue;
-            }
-
-            for ($j = $len - 1; $j > $i; $j--) {
-                if ($api_output[$j] !== '}') {
-                    continue;
-                }
-
-                $candidate = substr($api_output, $i, $j - $i + 1);
-                json_decode($candidate, true);
-                if (json_last_error() === JSON_ERROR_NONE) {
-                    echo $candidate;
-                    exit;
-                }
+        $json_start = strpos($api_output, '{');
+        $json_end = strrpos($api_output, '}');
+        if ($json_start !== false && $json_end !== false && $json_end > $json_start) {
+            $candidate = substr($api_output, $json_start, $json_end - $json_start + 1);
+            json_decode($candidate, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                echo $candidate;
+                exit;
             }
         }
 
