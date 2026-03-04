@@ -149,14 +149,7 @@ elseif ($action === 'delete_account') {
         // Limpeza drástica da sessão e cookies do front controller
         session_unset();
         session_destroy();
-        $is_https = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
-        setcookie('gluon_remember', '', [
-            'expires' => time() - 3600,
-            'path' => '/',
-            'secure' => $is_https,
-            'httponly' => true,
-            'samesite' => 'Lax'
-        ]);
+        setcookie('gluon_remember', '', time() - 3600, "/", "", false, true);
         
         echo json_encode(['status' => 'success', 'message' => 'Conta e dados excluídos permanentemente.']);
     } else {
