@@ -149,7 +149,26 @@ elseif ($action === 'delete_account') {
         // Limpeza drástica da sessão e cookies do front controller
         session_unset();
         session_destroy();
-        setcookie('gluon_remember', '', time() - 3600, "/", "", false, true);
+        $is_https = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+        $cookie_domain = $_SERVER['HTTP_HOST'] ?? '';
+        if (strpos($cookie_domain, ':') !== false) {
+            $cookie_domain = explode(':', $cookie_domain, 2)[0];
+        }
+        if (filter_var($cookie_domain, FILTER_VALIDATE_IP) || $cookie_domain === 'localhost') {
+            $cookie_domain = '';
+        }
+
+        $expired_cookie_options = [
+            'expires' => time() - 3600,
+            'path' => '/',
+            'domain' => $cookie_domain,
+            'secure' => $is_https,
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ];
+
+        setcookie('gluon_remember', '', $expired_cookie_options);
+        setcookie(session_name(), '', $expired_cookie_options);
         
         echo json_encode(['status' => 'success', 'message' => 'Conta e dados excluídos permanentemente.']);
     } else {
