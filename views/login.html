@@ -183,6 +183,7 @@
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
                     body: JSON.stringify(payload)
                 });
                 
@@ -227,6 +228,7 @@
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
                     body: JSON.stringify(payload)
                 });
                 

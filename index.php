@@ -13,11 +13,48 @@
 session_start([
     'cookie_httponly' => true, // Previne roubo de sessão via XSS
     'cookie_secure' => isset($_SERVER['HTTPS']), // Apenas HTTPS se disponível
+    'cookie_samesite' => 'Lax',
     'use_strict_mode' => true
 ]);
 
 // Configurações básicas
 define('BASE_PATH', __DIR__);
+
+// Recupera sessão via "Manter conectado" mesmo após o iOS/Safari descartar a sessão em memória
+if (!isset($_SESSION['user_id']) && isset($_COOKIE['gluon_remember'])) {
+    require_once BASE_PATH . '/config/database.php';
+
+    $pdo = Database::getConnection();
+    $token_hash = hash('sha256', $_COOKIE['gluon_remember']);
+
+    $stmt = $pdo->prepare("SELECT id, username FROM users WHERE remember_token = ? LIMIT 1");
+    $stmt->execute([$token_hash]);
+    $user = $stmt->fetch();
+
+    if ($user) {
+        session_regenerate_id(true);
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['username'] = $user['username'];
+
+        $is_https = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+        $cookie_domain = $_SERVER['HTTP_HOST'] ?? '';
+        if (strpos($cookie_domain, ':') !== false) {
+            $cookie_domain = explode(':', $cookie_domain, 2)[0];
+        }
+        if (filter_var($cookie_domain, FILTER_VALIDATE_IP) || $cookie_domain === 'localhost') {
+            $cookie_domain = '';
+        }
+
+        setcookie(session_name(), session_id(), [
+            'expires' => time() + (86400 * 30),
+            'path' => '/',
+            'domain' => $cookie_domain,
+            'secure' => $is_https,
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
+    }
+}
 
 // Roteamento Simples e Ultra-rápido (Corrigido para rodar na raiz do domínio)
 $request_uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);

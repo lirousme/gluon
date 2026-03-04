@@ -11,6 +11,24 @@ require_once BASE_PATH . '/config/database.php';
 
 $pdo = Database::getConnection();
 $method = $_SERVER['REQUEST_METHOD'];
+$is_https = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+$cookie_samesite = 'Lax';
+$cookie_domain = $_SERVER['HTTP_HOST'] ?? '';
+if (strpos($cookie_domain, ':') !== false) {
+    $cookie_domain = explode(':', $cookie_domain, 2)[0];
+}
+if (filter_var($cookie_domain, FILTER_VALIDATE_IP) || $cookie_domain === 'localhost') {
+    $cookie_domain = '';
+}
+
+$remember_cookie_options = [
+    'expires' => time() + (86400 * 30),
+    'path' => '/',
+    'domain' => $cookie_domain,
+    'secure' => $is_https,
+    'httponly' => true,
+    'samesite' => $cookie_samesite
+];
 
 // Apenas aceita requisições POST para autenticação
 if ($method !== 'POST') {
@@ -60,6 +78,7 @@ elseif ($action === 'login') {
     $user = $stmt->fetch();
 
     if ($user && password_verify($password, $user['password_hash'])) {
+        session_regenerate_id(true);
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['username'] = $user['username'];
 
@@ -70,7 +89,11 @@ elseif ($action === 'login') {
             $stmt = $pdo->prepare("UPDATE users SET remember_token = ? WHERE id = ?");
             $stmt->execute([$token_hash, $user['id']]);
 
-            setcookie('gluon_remember', $token, time() + (86400 * 30), "/", "", false, true);
+            setcookie('gluon_remember', $token, $remember_cookie_options);
+
+            $session_cookie_options = $remember_cookie_options;
+            $session_cookie_options['expires'] = time() + (86400 * 30);
+            setcookie(session_name(), session_id(), $session_cookie_options);
         }
 
         echo json_encode(['status' => 'success', 'message' => 'Login realizado com sucesso.', 'redirect' => '/dashboard']);
@@ -91,7 +114,10 @@ elseif ($action === 'logout') {
     session_destroy();
     
     // Deleta o cookie do navegador definindo data de expiração no passado
-    setcookie('gluon_remember', '', time() - 3600, "/", "", false, true);
+    $expired_cookie_options = $remember_cookie_options;
+    $expired_cookie_options['expires'] = time() - 3600;
+    setcookie('gluon_remember', '', $expired_cookie_options);
+    setcookie(session_name(), '', $expired_cookie_options);
     
     echo json_encode(['status' => 'success', 'message' => 'Deslogado com sucesso.']);
 }
