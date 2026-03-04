@@ -37,6 +37,9 @@
         .ios-no-focus-zoom select,
         .ios-no-focus-zoom input,
         .ios-no-focus-zoom textarea,
+        .ios-no-focus-zoom .CodeMirror,
+        .ios-no-focus-zoom .CodeMirror textarea,
+        .ios-no-focus-zoom .CodeMirror pre {
         .ios-no-focus-zoom .CodeMirror textarea {
             font-size: 16px !important;
         }
@@ -200,6 +203,22 @@
 
         if (isIosSafari) {
             document.documentElement.classList.add('ios-no-focus-zoom');
+
+            const viewportMeta = document.querySelector('meta[name="viewport"]');
+            const baseViewport = 'width=device-width, initial-scale=1.0, viewport-fit=cover';
+            const focusViewport = `${baseViewport}, maximum-scale=1`;
+
+            document.addEventListener('focusin', (event) => {
+                if (!viewportMeta) return;
+                if (event.target.closest('.CodeMirror') || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) {
+                    viewportMeta.setAttribute('content', focusViewport);
+                }
+            });
+
+            document.addEventListener('focusout', () => {
+                if (!viewportMeta) return;
+                viewportMeta.setAttribute('content', baseViewport);
+            });
         }
 
         document.addEventListener('DOMContentLoaded', () => editorApp.init());
