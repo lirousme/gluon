@@ -58,11 +58,15 @@ if ($route === '') {
 
 // Segurança: Impede manipulação de caminhos na inclusão das views
 $route = str_replace(['../', '..\\'], '', $route);
-$view_file = BASE_PATH . '/views/' . $route . '.html';
+$view_php_file = BASE_PATH . '/views/' . $route . '.php';
+$view_html_file = BASE_PATH . '/views/' . $route . '.html';
 
-if (file_exists($view_file)) {
-    // Retorna a view HTML ultra-rápida (direto pro output buffer)
-    readfile($view_file);
+if (file_exists($view_php_file)) {
+    // Prioriza views em PHP para permitir composição em partes menores
+    require $view_php_file;
+} elseif (file_exists($view_html_file)) {
+    // Mantém suporte às views HTML estáticas
+    readfile($view_html_file);
 } else {
     // Arquivo não encontrado
     http_response_code(404);
