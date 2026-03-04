@@ -1,0 +1,225 @@
+<!-- 
+  Arquivo: buscar.html
+  Diretório: public_html/gluon/views/buscar.html
+  
+  Pilar: Bonito, Rápido e Fácil Manutenção.
+  Layout com busca em tempo real e debounce implementado via Vanilla JS puro
+  para poupar processamento do Backend e dar a sensação de fluidez máxima (estilo Instagram).
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+        <script src="/assets/zoom-lock.js" defer></script>
+    <title>Gluon - Buscar Usuários</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        gluon: { dark: '#0f172a', primary: '#3b82f6', secondary: '#1e293b' }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gluon-dark text-slate-200 h-[100dvh] flex flex-col font-sans overflow-hidden selection:bg-gluon-primary selection:text-white pb-[env(safe-area-inset-bottom)]">
+    
+    <!-- Top Navigation de Busca -->
+    <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-16 flex items-center px-4 sm:px-6 gap-3 sm:gap-4 shadow-sm">
+        <button onclick="window.history.back() || (window.location.href='/dashboard')" class="text-slate-400 hover:text-white transition-colors bg-slate-800 hover:bg-slate-700 p-2 sm:p-2.5 rounded-xl border border-slate-600 shadow-sm shrink-0" title="Voltar">
+            <i class="fa-solid fa-arrow-left"></i>
+        </button>
+        
+        <div class="flex-1 relative max-w-2xl">
+            <i class="fa-solid fa-magnifying-glass absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 text-slate-500"></i>
+            <input type="text" id="searchInput" placeholder="Pesquisar usuários na rede..." class="w-full bg-slate-900 border border-slate-600 rounded-xl py-2.5 sm:py-3 pl-10 sm:pl-12 pr-4 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-all shadow-inner placeholder-slate-500" autocomplete="off" autofocus>
+        </div>
+    </nav>
+
+    <!-- Resultados -->
+    <main class="flex-1 overflow-y-auto p-4 sm:p-6 w-full max-w-2xl mx-auto flex flex-col">
+        
+        <div id="loader" class="hidden flex-col items-center justify-center py-10 text-slate-500">
+            <i class="fa-solid fa-circle-notch fa-spin text-3xl text-gluon-primary mb-3"></i>
+            <span class="text-sm font-medium">Buscando na rede...</span>
+        </div>
+
+        <div id="resultsContainer" class="flex-1 space-y-3">
+            <!-- Estado Inicial -->
+            <div class="flex flex-col items-center justify-center text-center text-slate-500 h-full pb-20">
+                <div class="w-20 h-20 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center mb-4 shadow-inner">
+                    <i class="fa-solid fa-users text-3xl opacity-50"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-slate-300 mb-1">Encontre Pessoas</h3>
+                <p class="text-sm max-w-xs">Comece a digitar o username para encontrar outros usuários instantaneamente.</p>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const searchApp = {
+            input: document.getElementById('searchInput'),
+            container: document.getElementById('resultsContainer'),
+            loader: document.getElementById('loader'),
+            debounceTimer: null,
+
+            init() {
+                // Focus the input visually and pragmatically 
+                setTimeout(() => this.input.focus(), 100);
+
+                // Setup listener on input with Debounce (espera 300ms antes de disparar API para poupar recursos)
+                this.input.addEventListener('input', (e) => {
+                    clearTimeout(this.debounceTimer);
+                    const query = e.target.value.trim();
+
+                    if (query.length === 0) {
+                        this.showInitialState();
+                        return;
+                    }
+
+                    // Se começou a digitar, prepara para carregar
+                    this.debounceTimer = setTimeout(() => {
+                        this.performSearch(query);
+                    }, 350); 
+                });
+            },
+
+            async performSearch(query) {
+                this.container.classList.add('hidden');
+                this.loader.classList.remove('hidden');
+                this.loader.classList.add('flex');
+
+                try {
+                    const res = await fetch(`/api/search`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'search_users', query: query })
+                    });
+                    
+                    if (res.status === 401) {
+                        window.location.href = '/'; 
+                        return;
+                    }
+                    
+                    const data = await res.json();
+                    
+                    if (data.status === 'success') {
+                        this.renderResults(data.data, query);
+                    } else {
+                        throw new Error(data.message);
+                    }
+                } catch (error) {
+                    console.error("Erro na busca:", error);
+                    this.showErrorState();
+                } finally {
+                    this.loader.classList.remove('flex');
+                    this.loader.classList.add('hidden');
+                    this.container.classList.remove('hidden');
+                }
+            },
+
+            renderResults(users, query) {
+                if (users.length === 0) {
+                    this.container.innerHTML = `
+                        <div class="flex flex-col items-center justify-center text-center text-slate-500 py-10">
+                            <i class="fa-solid fa-ghost text-4xl mb-3 opacity-30"></i>
+                            <h3 class="text-base font-semibold text-slate-400">Ninguém encontrado</h3>
+                            <p class="text-sm mt-1">Não achamos ninguém com "${this.escapeHTML(query)}".</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                this.container.innerHTML = users.map(user => {
+                    // Pega a primeira letra pro avatar e converte pra maiusculo
+                    const initial = user.username.charAt(0).toUpperCase();
+                    // Cria uma cor baseada no nome para o degradê ficar sempre o mesmo pra mesma pessoa
+                    const colorIndex = user.username.charCodeAt(0) % 5;
+                    const gradients = [
+                        'from-blue-500 to-indigo-500',
+                        'from-emerald-500 to-teal-500',
+                        'from-fuchsia-500 to-pink-500',
+                        'from-amber-500 to-orange-500',
+                        'from-violet-500 to-purple-500'
+                    ];
+                    const selectedGradient = gradients[colorIndex];
+
+                    return `
+                    <div class="flex items-center gap-4 p-3 sm:p-4 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 rounded-2xl cursor-pointer transition-colors shadow-sm group" onclick="searchApp.openProfile(${user.id})">
+                        <div class="w-12 h-12 rounded-full bg-gradient-to-tr ${selectedGradient} flex items-center justify-center text-white font-bold text-lg shadow-inner shrink-0 group-hover:scale-105 transition-transform">
+                            ${initial}
+                        </div>
+                        <div class="flex-1 overflow-hidden">
+                            <h4 class="text-slate-200 font-semibold truncate text-base leading-tight">${this.escapeHTML(user.username)}</h4>
+                            <p class="text-xs text-slate-500 truncate mt-0.5">@${this.escapeHTML(user.username).toLowerCase()}</p>
+                        </div>
+                        <button class="text-slate-500 group-hover:text-gluon-primary bg-slate-900 group-hover:bg-slate-800 w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0">
+                            <i class="fa-solid fa-chevron-right text-xs"></i>
+                        </button>
+                    </div>
+                    `;
+                }).join('');
+            },
+
+            showInitialState() {
+                this.container.innerHTML = `
+                    <div class="flex flex-col items-center justify-center text-center text-slate-500 h-full pb-20">
+                        <div class="w-20 h-20 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center mb-4 shadow-inner">
+                            <i class="fa-solid fa-users text-3xl opacity-50"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-slate-300 mb-1">Encontre Pessoas</h3>
+                        <p class="text-sm max-w-xs">Comece a digitar o username para encontrar outros usuários instantaneamente.</p>
+                    </div>
+                `;
+            },
+
+            showErrorState() {
+                this.container.innerHTML = `
+                    <div class="flex flex-col items-center justify-center text-center text-red-500/70 py-10">
+                        <i class="fa-solid fa-triangle-exclamation text-4xl mb-3 opacity-50"></i>
+                        <p class="text-sm font-medium">Ocorreu um erro de conexão.</p>
+                    </div>
+                `;
+            },
+
+            escapeHTML(str) {
+                if (!str) return '';
+                return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
+            },
+
+            openProfile(userId) {
+                // Aqui você pode criar a lógica futura para abrir o perfil da pessoa (Ex: redirecionar para /perfil?id=...)
+                // alert(`Lógica para abrir o perfil de ID: ${userId} será acionada aqui no futuro.`);
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => searchApp.init());
+
+////////////////////////////////////////
+//FORÇA A PROIBIÇÃO DE ZOOM PARA IPHONE
+// Impede o zoom de pinça (multi-touch)
+document.addEventListener('touchstart', function (event) {
+  if (event.touches.length > 1) {
+    event.preventDefault();
+  }
+}, { passive: false });
+
+// Impede o zoom de clique duplo (apenas no root do document, não nos botões)
+let lastTouchEndGlobal = 0;
+document.addEventListener('touchend', function (event) {
+  const now = (new Date()).getTime();
+  if (now - lastTouchEndGlobal <= 300 && !event.target.closest('button') && !event.target.closest('input')) {
+    event.preventDefault();
+  }
+  lastTouchEndGlobal = now;
+}, false);
+////////////////////////////////////////
+    </script>
+</body>
+</html>
