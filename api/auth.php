@@ -11,6 +11,7 @@ require_once BASE_PATH . '/config/database.php';
 
 $pdo = Database::getConnection();
 $method = $_SERVER['REQUEST_METHOD'];
+$is_https = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
 
 // Apenas aceita requisições POST para autenticação
 if ($method !== 'POST') {
@@ -70,7 +71,13 @@ elseif ($action === 'login') {
             $stmt = $pdo->prepare("UPDATE users SET remember_token = ? WHERE id = ?");
             $stmt->execute([$token_hash, $user['id']]);
 
-            setcookie('gluon_remember', $token, time() + (86400 * 30), "/", "", false, true);
+            setcookie('gluon_remember', $token, [
+                'expires' => time() + (86400 * 30),
+                'path' => '/',
+                'secure' => $is_https,
+                'httponly' => true,
+                'samesite' => 'Lax'
+            ]);
         }
 
         echo json_encode(['status' => 'success', 'message' => 'Login realizado com sucesso.', 'redirect' => '/dashboard']);
@@ -91,7 +98,13 @@ elseif ($action === 'logout') {
     session_destroy();
     
     // Deleta o cookie do navegador definindo data de expiração no passado
-    setcookie('gluon_remember', '', time() - 3600, "/", "", false, true);
+    setcookie('gluon_remember', '', [
+        'expires' => time() - 3600,
+        'path' => '/',
+        'secure' => $is_https,
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
     
     echo json_encode(['status' => 'success', 'message' => 'Deslogado com sucesso.']);
 }
