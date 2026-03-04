@@ -72,20 +72,53 @@ $route = trim($route, '/');
 // Se a rota começar com 'api', redireciona para a pasta /api/
 if (strpos($route, 'api/') === 0) {
     header('Content-Type: application/json');
-    
+
     // Segurança: Impede ataques de Directory Traversal (ex: api/../../etc/passwd)
     $route = str_replace(['../', '..\\'], '', $route);
-    
+
     $api_file = BASE_PATH . '/' . $route . '.php';
-    
+
     if (file_exists($api_file)) {
+        ini_set('display_errors', '0');
+        ini_set('display_startup_errors', '0');
+        ob_start();
         require_once $api_file;
+        $api_output = ob_get_clean();
+
+        $api_output = ltrim((string)$api_output);
+        if ($api_output === '') {
+            exit;
+        }
+
+        json_decode($api_output, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            echo $api_output;
+            exit;
+        }
+
+        $json_start = strpos($api_output, '{');
+        $json_end = strrpos($api_output, '}');
+        if ($json_start !== false && $json_end !== false && $json_end > $json_start) {
+            $candidate = substr($api_output, $json_start, $json_end - $json_start + 1);
+            json_decode($candidate, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                echo $candidate;
+                exit;
+            }
+        }
+
+        http_response_code(500);
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Resposta inválida da API. Verifique conflitos de merge/saída inesperada em arquivos PHP.'
+        ]);
     } else {
         http_response_code(404);
         echo json_encode(['status' => 'error', 'message' => 'API endpoint not found.']);
     }
     exit;
 }
+
 
 // Roteamento de Views (Front-end)
 // Se a rota for vazia, joga para o login por padrão (ou dashboard se logado)

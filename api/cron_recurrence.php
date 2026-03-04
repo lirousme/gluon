@@ -15,7 +15,7 @@ require_once __DIR__ . '/../config/database.php';
 // =========================================================================
 // 1. SEGURANÇA (Evitar execução pública acidental)
 // =========================================================================
-$secureToken = 'GLUON_CRON_SECURE_123'; 
+$secureToken = CRON_SECURE_TOKEN;
 $isCli = php_sapi_name() === 'cli';
 $providedToken = $_GET['token'] ?? '';
 
