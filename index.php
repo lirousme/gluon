@@ -13,11 +13,29 @@
 session_start([
     'cookie_httponly' => true, // Previne roubo de sessão via XSS
     'cookie_secure' => isset($_SERVER['HTTPS']), // Apenas HTTPS se disponível
+    'cookie_samesite' => 'Lax',
     'use_strict_mode' => true
 ]);
 
 // Configurações básicas
 define('BASE_PATH', __DIR__);
+
+// Recupera sessão via "Manter conectado" mesmo após o iOS/Safari descartar a sessão em memória
+if (!isset($_SESSION['user_id']) && isset($_COOKIE['gluon_remember'])) {
+    require_once BASE_PATH . '/config/database.php';
+
+    $pdo = Database::getConnection();
+    $token_hash = hash('sha256', $_COOKIE['gluon_remember']);
+
+    $stmt = $pdo->prepare("SELECT id, username FROM users WHERE remember_token = ? LIMIT 1");
+    $stmt->execute([$token_hash]);
+    $user = $stmt->fetch();
+
+    if ($user) {
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['username'] = $user['username'];
+    }
+}
 
 // Roteamento Simples e Ultra-rápido (Corrigido para rodar na raiz do domínio)
 $request_uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
