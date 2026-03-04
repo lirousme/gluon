@@ -110,7 +110,6 @@ class Security {
     }
 }
 ?>
-=======
 
 class Database {
     private static $pdo = null;
