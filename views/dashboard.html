@@ -839,6 +839,11 @@
 
             getCurrentParentId() { return this.state.path[this.state.path.length - 1].id; },
             getCurrentView() { return this.state.path[this.state.path.length - 1].view; },
+            getCurrentDirectoryType() { return this.state.path[this.state.path.length - 1].type; },
+
+            isRecurrenceContext() {
+                return this.getCurrentDirectoryType() === 2;
+            },
 
             isVisitingProfile() { return this.state.profileUserId !== null && this.state.profileUserId !== this.state.sessionUserId; },
 
@@ -1284,6 +1289,8 @@
                 const publicToggleContainer = document.getElementById('publicToggleContainer');
                 const btnApar = document.getElementById('tab-btn-apar');
                 const btnRecor = document.getElementById('tab-btn-recor');
+                const tabRecor = document.getElementById('tab-recor');
+                const recurrenceEnabled = this.isRecurrenceContext();
 
                 if (isRootSettings) {
                     dirObj = { name: 'Meu Cofre (Raiz)', view: this.state.rootPrefs.view, new_item_position: this.state.rootPrefs.new_item_position, type: 0 };
@@ -1291,12 +1298,18 @@
                     document.getElementById('dirNameContainer').classList.add('hidden');
                     btnApar.classList.add('hidden');
                     btnRecor.classList.add('hidden');
+                    tabRecor.classList.add('hidden');
                     typeSelector.classList.add('hidden');
                     iconPickerContainer.style.display = 'block';
                     publicToggleContainer.classList.add('hidden');
                 } else {
                     btnApar.classList.remove('hidden');
-                    btnRecor.classList.remove('hidden');
+                    if (recurrenceEnabled) {
+                        btnRecor.classList.remove('hidden');
+                    } else {
+                        btnRecor.classList.add('hidden');
+                        tabRecor.classList.add('hidden');
+                    }
                     publicToggleContainer.classList.remove('hidden');
                     
                     if (id) {
@@ -1315,7 +1328,7 @@
                         if(dirObj.type === 0) { folderSettings.style.display = 'block'; nameLabel.innerText = 'Nome da Pasta'; iconPickerContainer.style.display = 'block'; } 
                         else if(dirObj.type === 1) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Arquivo'; iconPickerContainer.style.display = 'block'; } 
                         else if(dirObj.type === 2) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome da Agenda'; iconPickerContainer.style.display = 'block'; }
-                        else if(dirObj.type === 3) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Portal'; iconPickerContainer.style.display = 'none'; btnRecor.classList.add('hidden'); publicToggleContainer.classList.add('hidden'); }
+                        else if(dirObj.type === 3) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Portal'; iconPickerContainer.style.display = 'none'; btnRecor.classList.add('hidden'); tabRecor.classList.add('hidden'); publicToggleContainer.classList.add('hidden'); }
                         else if(dirObj.type === 4) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Deck'; iconPickerContainer.style.display = 'block'; }
                     } else {
                         document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus text-gluon-primary"></i> <span>Novo Item</span>';
@@ -1353,7 +1366,7 @@
                 for(let i=0; i<posRadios.length; i++) { posRadios[i].checked = (posRadios[i].value === posToSelect); }
 
                 // Preencher campos de recorrência
-                document.getElementById('is_recurring').checked = (dirObj && dirObj.is_recurring === 1);
+                document.getElementById('is_recurring').checked = recurrenceEnabled && (dirObj && dirObj.is_recurring === 1);
                 document.getElementById('rec_type').value = (dirObj && dirObj.rec_type) ? dirObj.rec_type : 'daily';
                 document.getElementById('rec_interval').value = (dirObj && dirObj.rec_interval) ? dirObj.rec_interval : 1;
                 document.getElementById('rec_custom').value = (dirObj && dirObj.rec_custom) ? dirObj.rec_custom : '';
@@ -1435,11 +1448,23 @@
                 for(let i=0; i<typeRadios.length; i++) { if(typeRadios[i].checked) selectedType = parseInt(typeRadios[i].value); }
 
                 // Extrair valores de recorrência
-                const is_recurring = document.getElementById('is_recurring').checked ? 1 : 0;
-                const rec_type = document.getElementById('rec_type').value;
-                const rec_interval = parseInt(document.getElementById('rec_interval').value) || 1;
-                const rec_custom = document.getElementById('rec_custom').value;
-                const rec_end = document.getElementById('rec_end').value || null;
+                const recurrenceEnabled = this.isRecurrenceContext();
+                let is_recurring = recurrenceEnabled && document.getElementById('is_recurring').checked ? 1 : 0;
+                let rec_type = document.getElementById('rec_type').value;
+                let rec_interval = parseInt(document.getElementById('rec_interval').value) || 1;
+                let rec_custom = document.getElementById('rec_custom').value;
+                let rec_end = document.getElementById('rec_end').value || null;
+
+                if (!recurrenceEnabled && id) {
+                    const existingDir = this.state.directoryCache.get(Number(id));
+                    if (existingDir) {
+                        is_recurring = Number(existingDir.is_recurring) === 1 ? 1 : 0;
+                        rec_type = existingDir.rec_type || 'daily';
+                        rec_interval = parseInt(existingDir.rec_interval) || 1;
+                        rec_custom = existingDir.rec_custom || '';
+                        rec_end = existingDir.rec_end || null;
+                    }
+                }
 
                 const btn = document.getElementById('btnSaveDir');
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
