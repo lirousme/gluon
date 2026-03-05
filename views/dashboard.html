@@ -160,13 +160,13 @@
 
     <!-- Main Workspace -->
     <main class="flex-1 max-w-none w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-0 flex flex-col overflow-hidden relative min-h-0">
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 shrink-0">
-            <div class="block text-sm text-slate-300 font-medium w-full flex-1 leading-relaxed break-words" id="breadcrumbs"></div>
+        <div class="flex flex-col mb-6 gap-3 shrink-0">
+            <div class="block text-sm text-slate-300 font-medium w-full leading-relaxed break-words" id="breadcrumbs"></div>
             
-            <div id="reorder-hint" class="hidden animate-pulse text-green-400 text-sm font-medium flex-1 text-center bg-green-500/10 py-2 px-4 rounded-lg border border-green-500/20">
+            <div id="reorder-hint" class="hidden animate-pulse text-green-400 text-sm font-medium w-full text-center bg-green-500/10 py-2 px-4 rounded-lg border border-green-500/20">
                 <i class="fa-solid fa-hand-pointer mr-2"></i> Arraste os itens para reordenar
             </div>
-            <button id="primaryActionBtn" onclick="app.handlePrimaryAction()" class="w-full sm:w-auto shrink-0 bg-gluon-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 font-medium">
+            <button id="primaryActionBtn" onclick="app.handlePrimaryAction()" class="w-full sm:w-auto bg-gluon-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 font-medium">
                 <i class="fa-solid fa-plus"></i> Novo Item
             </button>
         </div>
@@ -1061,8 +1061,8 @@
                         primaryBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Novo Item';
                     } else if (this.getCurrentParentId() === null) {
                         const following = this.state.isFollowingProfile;
-                        primaryBtn.className = `w-full sm:w-auto shrink-0 px-4 py-2 rounded-lg transition-all flex items-center justify-center gap-2 font-medium ${following ? 'bg-slate-600 text-slate-200' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'}`;
-                        primaryBtn.innerHTML = `<i class="fa-solid ${following ? 'fa-user-check' : 'fa-user-plus'}"></i> ${following ? 'Seguindo' : 'Seguir'}`;
+                        primaryBtn.className = `w-full sm:w-auto px-4 py-2 rounded-lg transition-all flex items-center justify-center font-medium ${following ? 'bg-slate-600 text-slate-200' : 'bg-gluon-primary hover:bg-blue-600 text-white shadow-lg shadow-blue-500/20'}`;
+                        primaryBtn.innerHTML = following ? 'Seguindo' : 'Seguir';
                     } else {
                         const saved = this.state.isCurrentDirectorySaved;
                         primaryBtn.className = `w-full sm:w-auto shrink-0 px-4 py-2 rounded-lg transition-all flex items-center justify-center gap-2 font-medium ${saved ? 'bg-slate-600 text-slate-200' : 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-500/20'}`;
