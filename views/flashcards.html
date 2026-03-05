@@ -575,6 +575,27 @@
                 return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
             },
 
+
+            getDeckScoreColor(percentage = 0) {
+                const p = Math.max(0, Math.min(100, Number(percentage) || 0));
+                const stops = [
+                    [239, 68, 68],
+                    [249, 115, 22],
+                    [250, 204, 21],
+                    [34, 197, 94]
+                ];
+                const segment = 100 / (stops.length - 1);
+                const idx = Math.min(stops.length - 2, Math.floor(p / segment));
+                const localStart = idx * segment;
+                const t = segment === 0 ? 0 : (p - localStart) / segment;
+                const [r1, g1, b1] = stops[idx];
+                const [r2, g2, b2] = stops[idx + 1];
+                const r = Math.round(r1 + (r2 - r1) * t);
+                const g = Math.round(g1 + (g2 - g1) * t);
+                const b = Math.round(b1 + (b2 - b1) * t);
+                return `rgb(${r}, ${g}, ${b})`;
+            },
+
             updateGlobalProgressUI() {
                 const badge = document.getElementById('deckMasteryBadge');
                 badge.classList.remove('hidden');
@@ -584,13 +605,18 @@
                     const progress = this.cards.length > 0 ? Math.round(((this.currentIndex + 1) / this.cards.length) * 100) : 0;
                     badge.className = 'flex items-center gap-1.5 bg-slate-800/80 border border-slate-600 px-2 py-1 rounded-md text-xs font-semibold text-emerald-400 shadow-inner';
                     badge.innerHTML = `<i class="fa-solid fa-book-open"></i> <span>Pág ${this.currentIndex + 1} (${progress}%)</span>`;
-                    document.getElementById('deckProgressBar').className = "h-full bg-emerald-500 transition-all duration-700 ease-out";
-                    document.getElementById('deckProgressBar').style.width = `${progress}%`;
+                    const progressBar = document.getElementById('deckProgressBar');
+                    progressBar.className = "h-full bg-emerald-500 transition-all duration-700 ease-out";
+                    progressBar.style.backgroundColor = '';
+                    progressBar.style.width = `${progress}%`;
                 } else {
-                    badge.className = 'flex items-center gap-1.5 bg-slate-800/80 border border-slate-600 px-2 py-1 rounded-md text-xs font-semibold text-gluon-primary shadow-inner';
-                    badge.innerHTML = `<i class="fa-solid fa-ranking-star"></i> <span id="deckPercentage">${this.deckPercentage}%</span>`;
-                    document.getElementById('deckProgressBar').className = "h-full bg-blue-500 transition-all duration-700 ease-out";
-                    document.getElementById('deckProgressBar').style.width = `${this.deckPercentage}%`;
+                    const scoreColor = this.getDeckScoreColor(this.deckPercentage);
+                    badge.className = 'flex items-center gap-1.5 bg-slate-800/80 border border-slate-600 px-2 py-1 rounded-md text-xs font-semibold shadow-inner';
+                    badge.innerHTML = `<i class="fa-solid fa-ranking-star" style="color:${scoreColor}"></i> <span id="deckPercentage" style="color:${scoreColor}">${this.deckPercentage}%</span>`;
+                    const progressBar = document.getElementById('deckProgressBar');
+                    progressBar.className = "h-full transition-all duration-700 ease-out";
+                    progressBar.style.backgroundColor = scoreColor;
+                    progressBar.style.width = `${this.deckPercentage}%`;
                 }
             },
 
