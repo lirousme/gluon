@@ -218,12 +218,23 @@ elseif ($action === 'toggle_follow') {
 }
 
 elseif ($action === 'get_following') {
+    $target_user_id = isset($input['target_user_id']) ? (int)$input['target_user_id'] : (int)$user_id;
+    if ($target_user_id <= 0) {
+        die(json_encode(['status' => 'error', 'message' => 'Usuário alvo inválido.']));
+    }
+
+    $stmtTarget = $pdo->prepare("SELECT id FROM users WHERE id = ?");
+    $stmtTarget->execute([$target_user_id]);
+    if (!$stmtTarget->fetch()) {
+        die(json_encode(['status' => 'error', 'message' => 'Usuário não encontrado.']));
+    }
+
     $stmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'profile_image_url'");
     $hasProfileImage = (bool)$stmt->fetch();
     $profileSelect = $hasProfileImage ? ', u.profile_image_url' : ", '' AS profile_image_url";
 
     $stmtFollowing = $pdo->prepare("\n        SELECT u.id, u.username{$profileSelect}\n        FROM user_follows uf\n        INNER JOIN users u ON u.id = uf.followed_id\n        WHERE uf.follower_id = ?\n        ORDER BY uf.created_at DESC, u.username ASC\n    ");
-    $stmtFollowing->execute([$user_id]);
+    $stmtFollowing->execute([$target_user_id]);
 
     echo json_encode(['status' => 'success', 'data' => $stmtFollowing->fetchAll()]);
 }

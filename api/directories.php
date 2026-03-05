@@ -292,6 +292,11 @@ if ($action === 'fetch') {
         $stmtSavedRoot->execute([$user_id, $user_id, $user_id, $user_id]);
         $directories = array_merge($directories, $stmtSavedRoot->fetchAll());
     }
+    elseif ($parent_id === null && !$is_owner_context) {
+        $stmtSavedRootTarget = $pdo->prepare("\n            SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,\n                   d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to,\n                   d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, d.is_public,\n                   COALESCE(deck_stats.total_cards, 0) as deck_total_cards,\n                   COALESCE(deck_stats.total_score, 0) as deck_total_score,\n                   COALESCE(book_progress.current_index, 0) as book_current_index,\n                   COALESCE(book_progress.completed_reads, 0) as book_completed_reads,\n                   dr.type as rec_type, dr.interval_value as rec_interval, dr.days_of_week as rec_days,\n                   dr.custom_dates as rec_custom, dr.exceptions as rec_exceptions, dr.time_start as rec_time_start, dr.time_end as rec_time_end, dr.end_date as rec_end,\n                   d.user_id as owner_user_id\n            FROM saved_directories sd\n            INNER JOIN directories d ON d.id = sd.directory_id\n            LEFT JOIN directory_recurrences dr ON d.id = dr.directory_id\n            LEFT JOIN (\n                SELECT f.directory_id,\n                       COUNT(f.id) as total_cards,\n                       COALESCE(SUM(fs.score), 0) as total_score\n                FROM flashcards f\n                LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?\n                GROUP BY f.directory_id\n            ) deck_stats ON deck_stats.directory_id = d.id\n            LEFT JOIN flashcard_book_progress book_progress ON book_progress.directory_id = d.id AND book_progress.user_id = ?\n            WHERE sd.user_id = ? AND d.user_id != ? AND d.is_public = 1 AND d.parent_id IS NULL\n        ");
+        $stmtSavedRootTarget->execute([$user_id, $user_id, $effective_target_user_id, $effective_target_user_id]);
+        $directories = array_merge($directories, $stmtSavedRootTarget->fetchAll());
+    }
     $response = [];
     
     foreach ($directories as $dir) {

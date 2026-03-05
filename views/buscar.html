@@ -69,15 +69,19 @@
             loader: document.getElementById('loader'),
             debounceTimer: null,
             mode: 'search',
+            followingTargetUserId: null,
 
             init() {
                 const params = new URLSearchParams(window.location.search);
                 this.mode = params.get('following') === '1' ? 'following' : 'search';
+                this.followingTargetUserId = Number(params.get('target_user_id') || 0) || null;
 
                 if (this.mode === 'following') {
                     this.input.value = '';
                     this.input.disabled = true;
-                    this.input.placeholder = 'Lista de usuários que você segue';
+                    this.input.placeholder = this.followingTargetUserId
+                        ? 'Lista de usuários que esta pessoa segue'
+                        : 'Lista de usuários que você segue';
                     this.fetchFollowing();
                 } else {
                     setTimeout(() => this.input.focus(), 100);
@@ -111,7 +115,10 @@
                     const res = await fetch(`/api/user`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'get_following' })
+                        body: JSON.stringify({
+                            action: 'get_following',
+                            target_user_id: this.followingTargetUserId || undefined
+                        })
                     });
 
                     if (res.status === 401) {
@@ -252,7 +259,7 @@
             },
 
             openProfile(userId) {
-                window.location.href = `/dashboard?user=${encodeURIComponent(userId)}`;
+                window.location.href = `/perfil?user=${encodeURIComponent(userId)}`;
             }
         };
 
