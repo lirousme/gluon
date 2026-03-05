@@ -595,8 +595,10 @@
             normalizeApiBoolean(value) {
                 if (typeof value === 'string') {
                     const normalized = value.trim().toLowerCase();
-                    return normalized === '1' || normalized === 'true';
+                    return ['1', 'true', 't', 'yes', 'y', 'on'].includes(normalized);
                 }
+
+                if (typeof value === 'number') return value !== 0;
 
                 return value === true || value === 1;
             },
