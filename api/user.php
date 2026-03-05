@@ -46,6 +46,10 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (PDOException $e) {}
 
+try { $pdo->exec("ALTER TABLE users ADD COLUMN full_name VARCHAR(120) NULL AFTER username"); } catch (PDOException $e) {}
+try { $pdo->exec("ALTER TABLE users ADD COLUMN bio VARCHAR(255) NULL AFTER full_name"); } catch (PDOException $e) {}
+try { $pdo->exec("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(255) NULL AFTER bio"); } catch (PDOException $e) {}
+
 if ($action === 'get_session') {
     echo json_encode(['status' => 'success', 'data' => [
         'id' => $user_id,
@@ -110,7 +114,7 @@ elseif ($action === 'get_public_profile') {
         die(json_encode(['status' => 'error', 'message' => 'Usuário alvo inválido.']));
     }
 
-    $stmt = $pdo->prepare("SELECT id, username FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, username, full_name, bio, avatar_url FROM users WHERE id = ?");
     $stmt->execute([$target_user_id]);
     $target = $stmt->fetch();
     if (!$target) {
@@ -124,9 +128,22 @@ elseif ($action === 'get_public_profile') {
         $is_following = $stmtFollow->fetchColumn() ? 1 : 0;
     }
 
+    $stmtFollowers = $pdo->prepare("SELECT COUNT(*) FROM user_follows WHERE followed_id = ?");
+    $stmtFollowers->execute([$target_user_id]);
+    $followers_count = (int)$stmtFollowers->fetchColumn();
+
+    $stmtFollowing = $pdo->prepare("SELECT COUNT(*) FROM user_follows WHERE follower_id = ?");
+    $stmtFollowing->execute([$target_user_id]);
+    $following_count = (int)$stmtFollowing->fetchColumn();
+
     echo json_encode(['status' => 'success', 'data' => [
         'id' => (int)$target['id'],
         'username' => $target['username'],
+        'full_name' => $target['full_name'] ?? '',
+        'bio' => $target['bio'] ?? '',
+        'avatar_url' => $target['avatar_url'] ?? '',
+        'followers_count' => $followers_count,
+        'following_count' => $following_count,
         'is_following' => (int)$is_following
     ]]);
 }
