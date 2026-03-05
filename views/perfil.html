@@ -593,7 +593,12 @@
             },
 
             normalizeApiBoolean(value) {
-                return value === true || value === 1 || value === '1';
+                if (typeof value === 'string') {
+                    const normalized = value.trim().toLowerCase();
+                    return normalized === '1' || normalized === 'true';
+                }
+
+                return value === true || value === 1;
             },
 
             getCurrentRoute() {
