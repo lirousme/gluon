@@ -215,28 +215,42 @@ if ($action === 'fetch') {
     $query = "
         SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, 
                d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to, 
-               d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, 
+               d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring,
+               COALESCE(deck_stats.total_cards, 0) as deck_total_cards,
+               COALESCE(deck_stats.total_score, 0) as deck_total_score,
                dr.type as rec_type, dr.interval_value as rec_interval, dr.days_of_week as rec_days, 
                dr.custom_dates as rec_custom, dr.exceptions as rec_exceptions, dr.time_start as rec_time_start, dr.time_end as rec_time_end, dr.end_date as rec_end 
         FROM directories d 
-        LEFT JOIN directory_recurrences dr ON d.id = dr.directory_id 
+        LEFT JOIN directory_recurrences dr ON d.id = dr.directory_id
+        LEFT JOIN (
+            SELECT f.directory_id,
+                   COUNT(f.id) as total_cards,
+                   COALESCE(SUM(fs.score), 0) as total_score
+            FROM flashcards f
+            LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
+            GROUP BY f.directory_id
+        ) deck_stats ON deck_stats.directory_id = d.id
         WHERE d.user_id = ? 
     ";
     
     if ($parent_id === null) {
         $query .= " AND d.parent_id IS NULL";
         $stmt = $pdo->prepare($query);
-        $stmt->execute([$user_id]);
+        $stmt->execute([$user_id, $user_id]);
     } else {
         $query .= " AND d.parent_id = ?";
         $stmt = $pdo->prepare($query);
-        $stmt->execute([$user_id, $parent_id]);
+        $stmt->execute([$user_id, $user_id, $parent_id]);
     }
     
     $directories = $stmt->fetchAll();
     $response = [];
     
     foreach ($directories as $dir) {
+        $deckTotalCards = (int)($dir['deck_total_cards'] ?? 0);
+        $deckTotalScore = (int)($dir['deck_total_score'] ?? 0);
+        $deckPercentage = $deckTotalCards > 0 ? (int)round(($deckTotalScore / ($deckTotalCards * 20)) * 100) : 0;
+
         $response[] = [
             'id' => $dir['id'],
             'type' => (int)($dir['type'] ?? 0),
@@ -250,6 +264,7 @@ if ($action === 'fetch') {
             'color_from' => $dir['icon_color_from'] ?? '#3b82f6',
             'color_to' => $dir['icon_color_to'] ?? '#6366f1',
             'cover_url' => !empty($dir['cover_url_encrypted']) ? Security::decryptData($dir['cover_url_encrypted']) : '',
+            'deck_percentage' => $deckPercentage,
             'start_date' => $dir['start_date'],
             'end_date' => $dir['end_date'],
             'is_recurring' => (int)($dir['is_recurring'] ?? 0),
