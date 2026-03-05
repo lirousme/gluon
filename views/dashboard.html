@@ -862,14 +862,20 @@
 
             renderBreadcrumbs() {
                 const container = document.getElementById('breadcrumbs');
-                container.innerHTML = this.state.path.map((step, index) => {
-                    const isLast = index === this.state.path.length - 1;
+                const visiblePath = this.state.path
+                    .map((step, originalIndex) => ({ ...step, originalIndex }))
+                    .filter(step => !(step.originalIndex === 1 && String(step.name).trim().toLowerCase() === 'dashboard'));
+
+                container.innerHTML = visiblePath.map((step, visibleIndex) => {
+                    const isLast = visibleIndex === visiblePath.length - 1;
                     const color = isLast ? 'text-white font-semibold' : 'text-slate-400 hover:text-gluon-primary transition-colors';
                     const separator = isLast ? '' : ' <i class="fa-solid fa-chevron-right text-[10px] text-slate-600 mx-1"></i> ';
-                    return `<span class="inline" ${!isLast ? `onclick="app.goUpTo(${index})"` : ''}>
-                        <span class="${color} ${!isLast ? 'cursor-pointer hover:underline' : ''} transition-colors">
-                            ${index === 0 ? '<i class="fa-solid fa-vault mr-1"></i>' : ''}${this.escapeHTML(step.name)}
-                        </span>${separator}
+                    const label = step.originalIndex === 0
+                        ? '<i class="fa-solid fa-house"></i>'
+                        : this.escapeHTML(step.name);
+
+                    return `<span class="inline" ${!isLast ? `onclick="app.goUpTo(${step.originalIndex})"` : ''}>
+                        <span class="${color} ${!isLast ? 'cursor-pointer hover:underline' : ''} transition-colors">${label}</span>${separator}
                     </span>`;
                 }).join('');
             },
