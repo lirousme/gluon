@@ -76,6 +76,7 @@ cover_url_encrypted TEXT DEFAULT NULL,     -- URL da imagem de capa (Criptografa
 start_date DATETIME DEFAULT NULL,    -- NOVO: Início da tarefa/evento na agenda
 end_date DATETIME DEFAULT NULL,      -- NOVO: Fim da tarefa/evento na agenda
 is_recurring TINYINT(1) DEFAULT 0,   -- NOVO: Flag para saber se tem regra de recorrência
+is_public TINYINT(1) DEFAULT 0,      -- NOVO: 1 = diretório visível em perfil público
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
@@ -173,6 +174,33 @@ FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
 FOREIGN KEY (parent_id) REFERENCES adjacency_items(id) ON DELETE CASCADE
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
+
+======================================================================
+
+TABELA: user_follows
+follower_id INT UNSIGNED NOT NULL,
+followed_id INT UNSIGNED NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+PRIMARY KEY (follower_id, followed_id),
+FOREIGN KEY (follower_id) REFERENCES users(id) ON DELETE CASCADE,
+FOREIGN KEY (followed_id) REFERENCES users(id) ON DELETE CASCADE,
+INDEX idx_followed (followed_id)
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+======================================================================
+
+TABELA: saved_directories
+user_id INT UNSIGNED NOT NULL,
+directory_id INT UNSIGNED NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+PRIMARY KEY (user_id, directory_id),
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
+INDEX idx_saved_directory (directory_id)
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================
 

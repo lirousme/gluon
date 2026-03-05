@@ -5,7 +5,7 @@
 /**
  * API DE USUÁRIO
  * Pilar: Seguro e Fácil Manutenção.
- * Gerencia configurações da conta, perfil, dados e deleção de segurança.
+ * Gerencia configurações da conta, perfil, dados, relacionamentos e deleção de segurança.
  */
 
 require_once BASE_PATH . '/config/database.php';
@@ -16,22 +16,46 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $pdo = Database::getConnection();
-$user_id = $_SESSION['user_id'];
-$method = $_SERVER['REQUEST_METHOD'];
+$user_id = (int)$_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? '';
 
+// Migrações fail-safe para recursos sociais
+try { $pdo->exec("ALTER TABLE directories ADD COLUMN is_public TINYINT(1) NOT NULL DEFAULT 0 AFTER is_recurring"); } catch (PDOException $e) {}
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS user_follows (
+        follower_id INT UNSIGNED NOT NULL,
+        followed_id INT UNSIGNED NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (follower_id, followed_id),
+        CONSTRAINT fk_follows_follower FOREIGN KEY (follower_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_follows_followed FOREIGN KEY (followed_id) REFERENCES users(id) ON DELETE CASCADE,
+        INDEX idx_followed (followed_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS saved_directories (
+        user_id INT UNSIGNED NOT NULL,
+        directory_id INT UNSIGNED NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, directory_id),
+        CONSTRAINT fk_saved_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_saved_directory FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
+        INDEX idx_saved_directory (directory_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
+
 if ($action === 'get_session') {
     echo json_encode(['status' => 'success', 'data' => [
-        'id' => (int)$user_id,
-        'is_admin' => ((int)$user_id === 1)
+        'id' => $user_id,
+        'is_admin' => ($user_id === 1)
     ]]);
 }
 
 // === PREFERÊNCIAS DO DASHBOARD ===
 
 else if ($action === 'get_prefs') {
-
     $stmt = $pdo->prepare("SELECT root_view, root_new_item_position, copied_directory_id FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $user = $stmt->fetch();
@@ -45,7 +69,7 @@ else if ($action === 'get_prefs') {
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Usuário não encontrado.']);
     }
-} 
+}
 
 elseif ($action === 'update_root_prefs') {
     $view = in_array($input['view'] ?? '', ['grid', 'list', 'kanban']) ? $input['view'] : 'grid';
@@ -78,13 +102,110 @@ elseif ($action === 'copy_directory') {
     }
 }
 
+// === PERFIL PÚBLICO / SOCIAL ===
+
+elseif ($action === 'get_public_profile') {
+    $target_user_id = (int)($input['target_user_id'] ?? 0);
+    if ($target_user_id <= 0) {
+        die(json_encode(['status' => 'error', 'message' => 'Usuário alvo inválido.']));
+    }
+
+    $stmt = $pdo->prepare("SELECT id, username FROM users WHERE id = ?");
+    $stmt->execute([$target_user_id]);
+    $target = $stmt->fetch();
+    if (!$target) {
+        die(json_encode(['status' => 'error', 'message' => 'Usuário não encontrado.']));
+    }
+
+    $is_following = 0;
+    if ($target_user_id !== $user_id) {
+        $stmtFollow = $pdo->prepare("SELECT 1 FROM user_follows WHERE follower_id = ? AND followed_id = ?");
+        $stmtFollow->execute([$user_id, $target_user_id]);
+        $is_following = $stmtFollow->fetchColumn() ? 1 : 0;
+    }
+
+    echo json_encode(['status' => 'success', 'data' => [
+        'id' => (int)$target['id'],
+        'username' => $target['username'],
+        'is_following' => (int)$is_following
+    ]]);
+}
+
+elseif ($action === 'toggle_follow') {
+    $target_user_id = (int)($input['target_user_id'] ?? 0);
+    if ($target_user_id <= 0 || $target_user_id === $user_id) {
+        die(json_encode(['status' => 'error', 'message' => 'Não é possível seguir este usuário.']));
+    }
+
+    $stmtUser = $pdo->prepare("SELECT id FROM users WHERE id = ?");
+    $stmtUser->execute([$target_user_id]);
+    if (!$stmtUser->fetch()) {
+        die(json_encode(['status' => 'error', 'message' => 'Usuário não encontrado.']));
+    }
+
+    $stmtCheck = $pdo->prepare("SELECT 1 FROM user_follows WHERE follower_id = ? AND followed_id = ?");
+    $stmtCheck->execute([$user_id, $target_user_id]);
+
+    if ($stmtCheck->fetchColumn()) {
+        $pdo->prepare("DELETE FROM user_follows WHERE follower_id = ? AND followed_id = ?")->execute([$user_id, $target_user_id]);
+        echo json_encode(['status' => 'success', 'data' => ['is_following' => 0], 'message' => 'Você deixou de seguir este usuário.']);
+    } else {
+        $pdo->prepare("INSERT INTO user_follows (follower_id, followed_id) VALUES (?, ?)")->execute([$user_id, $target_user_id]);
+        echo json_encode(['status' => 'success', 'data' => ['is_following' => 1], 'message' => 'Agora você está seguindo este usuário.']);
+    }
+}
+
+elseif ($action === 'get_saved_status') {
+    $directory_id = (int)($input['directory_id'] ?? 0);
+    if ($directory_id <= 0) {
+        die(json_encode(['status' => 'error', 'message' => 'Diretório inválido.']));
+    }
+
+    $stmtDir = $pdo->prepare("SELECT user_id, is_public FROM directories WHERE id = ?");
+    $stmtDir->execute([$directory_id]);
+    $dir = $stmtDir->fetch();
+    if (!$dir || (int)$dir['is_public'] !== 1) {
+        die(json_encode(['status' => 'error', 'message' => 'Diretório não disponível para salvar.']));
+    }
+
+    $stmtSaved = $pdo->prepare("SELECT 1 FROM saved_directories WHERE user_id = ? AND directory_id = ?");
+    $stmtSaved->execute([$user_id, $directory_id]);
+    echo json_encode(['status' => 'success', 'data' => ['is_saved' => $stmtSaved->fetchColumn() ? 1 : 0]]);
+}
+
+elseif ($action === 'toggle_save') {
+    $directory_id = (int)($input['directory_id'] ?? 0);
+    if ($directory_id <= 0) {
+        die(json_encode(['status' => 'error', 'message' => 'Diretório inválido.']));
+    }
+
+    $stmtDir = $pdo->prepare("SELECT user_id, is_public FROM directories WHERE id = ?");
+    $stmtDir->execute([$directory_id]);
+    $dir = $stmtDir->fetch();
+
+    if (!$dir || (int)$dir['is_public'] !== 1 || (int)$dir['user_id'] === $user_id) {
+        die(json_encode(['status' => 'error', 'message' => 'Você só pode salvar diretórios públicos de outros usuários.']));
+    }
+
+    $stmtCheck = $pdo->prepare("SELECT 1 FROM saved_directories WHERE user_id = ? AND directory_id = ?");
+    $stmtCheck->execute([$user_id, $directory_id]);
+
+    if ($stmtCheck->fetchColumn()) {
+        $pdo->prepare("DELETE FROM saved_directories WHERE user_id = ? AND directory_id = ?")->execute([$user_id, $directory_id]);
+        echo json_encode(['status' => 'success', 'data' => ['is_saved' => 0], 'message' => 'Diretório removido dos salvos.']);
+    } else {
+        $pdo->prepare("INSERT INTO saved_directories (user_id, directory_id) VALUES (?, ?)")->execute([$user_id, $directory_id]);
+        echo json_encode(['status' => 'success', 'data' => ['is_saved' => 1], 'message' => 'Diretório salvo com sucesso.']);
+    }
+}
+
 // === GERENCIAMENTO DE PERFIL E CONTA ===
 
 elseif ($action === 'get_profile') {
     $stmt = $pdo->prepare("SELECT username, email FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $user = $stmt->fetch();
-    
+
     if ($user) {
         echo json_encode(['status' => 'success', 'data' => $user]);
     } else {
@@ -102,7 +223,6 @@ elseif ($action === 'update_profile') {
         die(json_encode(['status' => 'error', 'message' => 'Campos de username, e-mail e senha atual são obrigatórios.']));
     }
 
-    // Validação estrita de segurança da senha atual
     $stmt = $pdo->prepare("SELECT password_hash FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $user = $stmt->fetch();
@@ -111,14 +231,12 @@ elseif ($action === 'update_profile') {
         die(json_encode(['status' => 'error', 'message' => 'A senha atual está incorreta.']));
     }
 
-    // Validação de unicidade no banco (Não deixa pegar o email ou username de outra pessoa)
     $stmt = $pdo->prepare("SELECT id FROM users WHERE (username = ? OR email = ?) AND id != ?");
     $stmt->execute([$username, $email, $user_id]);
     if ($stmt->fetch()) {
         die(json_encode(['status' => 'error', 'message' => 'Username ou E-mail já está em uso por outra pessoa.']));
     }
 
-    // Executa o Update
     if (!empty($new_password)) {
         $hash = password_hash($new_password, PASSWORD_ARGON2ID);
         $stmt = $pdo->prepare("UPDATE users SET username = ?, email = ?, password_hash = ? WHERE id = ?");
@@ -128,9 +246,7 @@ elseif ($action === 'update_profile') {
         $stmt->execute([$username, $email, $user_id]);
     }
 
-    // Atualiza a sessão
     $_SESSION['username'] = $username;
-    
     echo json_encode(['status' => 'success', 'message' => 'Perfil atualizado com sucesso!']);
 }
 
@@ -149,16 +265,13 @@ elseif ($action === 'delete_account') {
         die(json_encode(['status' => 'error', 'message' => 'Senha incorreta. Ação de segurança cancelada.']));
     }
 
-    // Deleta o usuário da base de dados. 
-    // Devido ao "ON DELETE CASCADE" configurado no MySQL, TODOS os diretórios são automaticamente excluídos de forma limpa.
     $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
-    
+
     if ($stmt->execute([$user_id])) {
-        // Limpeza drástica da sessão e cookies do front controller
         session_unset();
         session_destroy();
         setcookie('gluon_remember', '', time() - 3600, "/", "", false, true);
-        
+
         echo json_encode(['status' => 'success', 'message' => 'Conta e dados excluídos permanentemente.']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro interno ao excluir a conta.']);
