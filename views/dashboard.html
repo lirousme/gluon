@@ -161,6 +161,29 @@
     <!-- Main Workspace -->
     <main class="flex-1 max-w-none w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-0 flex flex-col overflow-hidden relative min-h-0">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 shrink-0">
+            <section id="instagramProfileHeader" class="hidden w-full max-w-md mx-auto bg-gluon-secondary border border-slate-700/70 rounded-2xl p-4 sm:p-5 shadow-xl">
+                <div class="flex gap-4 items-start">
+                    <div id="instagramProfileAvatar" class="w-20 h-20 rounded-full overflow-hidden border border-slate-600 bg-slate-800 shrink-0 flex items-center justify-center">
+                        <i class="fa-solid fa-user text-2xl text-slate-500"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-center mb-3">
+                            <div>
+                                <p id="instagramFollowingCount" class="text-base font-semibold text-white">0</p>
+                                <p class="text-[11px] uppercase tracking-wide text-slate-400">Seguindo</p>
+                            </div>
+                            <div>
+                                <p id="instagramFollowersCount" class="text-base font-semibold text-white">0</p>
+                                <p class="text-[11px] uppercase tracking-wide text-slate-400">Seguidores</p>
+                            </div>
+                        </div>
+                        <p id="instagramProfileName" class="text-sm font-semibold text-white truncate"></p>
+                        <p id="instagramProfileUsername" class="text-xs text-slate-400 truncate"></p>
+                        <p id="instagramProfileBio" class="text-xs text-slate-300 mt-2 leading-relaxed whitespace-pre-line"></p>
+                    </div>
+                </div>
+            </section>
+
             <div class="block text-sm text-slate-300 font-medium w-full flex-1 leading-relaxed break-words" id="breadcrumbs"></div>
             
             <div id="reorder-hint" class="hidden animate-pulse text-green-400 text-sm font-medium flex-1 text-center bg-green-500/10 py-2 px-4 rounded-lg border border-green-500/20">
@@ -390,6 +413,11 @@
                 sessionUserId: null,
                 profileUserId: null,
                 profileUsername: '',
+                profileFullName: '',
+                profileBio: '',
+                profileAvatarUrl: '',
+                profileFollowersCount: 0,
+                profileFollowingCount: 0,
                 isFollowingProfile: false,
                 isCurrentDirectorySaved: false,
                 isLoading: false,
@@ -607,6 +635,11 @@
                     if (profileRes && profileRes.data) {
                         this.state.profileUserId = profileRes.data.id;
                         this.state.profileUsername = profileRes.data.username;
+                        this.state.profileFullName = profileRes.data.full_name || profileRes.data.username;
+                        this.state.profileBio = profileRes.data.bio || '';
+                        this.state.profileAvatarUrl = profileRes.data.avatar_url || '';
+                        this.state.profileFollowersCount = Number(profileRes.data.followers_count || 0);
+                        this.state.profileFollowingCount = Number(profileRes.data.following_count || 0);
                         this.state.isFollowingProfile = profileRes.data.is_following === 1;
                     }
                 }
@@ -639,6 +672,7 @@
                 });
 
                 this.updateTopButtons();
+                this.renderProfileHeader();
                 await this.fetchDirectories();
                 this.setupEventListeners();
             },
@@ -810,6 +844,35 @@
                     : 'Meu Cofre';
             },
 
+            renderProfileHeader() {
+                const header = document.getElementById('instagramProfileHeader');
+                if (!header) return;
+
+                if (!this.isVisitingProfile()) {
+                    header.classList.add('hidden');
+                    return;
+                }
+
+                const profileName = this.state.profileFullName || this.state.profileUsername;
+                const bio = this.state.profileBio || 'Sem bio disponível.';
+                const avatarUrl = this.state.profileAvatarUrl;
+
+                document.getElementById('instagramFollowingCount').textContent = this.state.profileFollowingCount;
+                document.getElementById('instagramFollowersCount').textContent = this.state.profileFollowersCount;
+                document.getElementById('instagramProfileName').textContent = profileName;
+                document.getElementById('instagramProfileUsername').textContent = `@${this.state.profileUsername}`;
+                document.getElementById('instagramProfileBio').textContent = bio;
+
+                const avatarEl = document.getElementById('instagramProfileAvatar');
+                if (avatarUrl) {
+                    avatarEl.innerHTML = `<img src="${this.escapeHTML(avatarUrl)}" alt="Foto de perfil de @${this.escapeHTML(this.state.profileUsername)}" class="w-full h-full object-cover">`;
+                } else {
+                    avatarEl.innerHTML = '<i class="fa-solid fa-user text-2xl text-slate-500"></i>';
+                }
+
+                header.classList.remove('hidden');
+            },
+
             async fetchSavedStatusForCurrentDirectory() {
                 this.state.isCurrentDirectorySaved = false;
                 if (!this.isVisitingProfile()) return;
@@ -830,8 +893,12 @@
                 if (this.getCurrentParentId() === null) {
                     const response = await this.api('user', 'toggle_follow', { target_user_id: this.state.profileUserId });
                     if (response && response.data) {
-                        this.state.isFollowingProfile = response.data.is_following === 1;
+                        const nowFollowing = response.data.is_following === 1;
+                        if (nowFollowing && !this.state.isFollowingProfile) this.state.profileFollowersCount += 1;
+                        if (!nowFollowing && this.state.isFollowingProfile && this.state.profileFollowersCount > 0) this.state.profileFollowersCount -= 1;
+                        this.state.isFollowingProfile = nowFollowing;
                         this.updateTopButtons();
+                        this.renderProfileHeader();
                         this.showToast(response.message || 'Status atualizado.', 'success');
                     }
                     return;
