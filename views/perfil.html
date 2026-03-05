@@ -171,7 +171,7 @@
                         <i class="fa-solid fa-user text-3xl text-slate-500"></i>
                     </div>
                     <div class="flex-1 min-w-0">
-                        <div class="grid grid-cols-3 gap-3 text-center mb-3">
+                        <div class="grid grid-cols-3 gap-3 text-center">
                             <div>
                                 <div id="profileFollowingCount" class="text-base font-semibold text-white leading-none">0</div>
                                 <div class="text-xs text-slate-400 mt-1">seguindo</div>
@@ -185,7 +185,6 @@
                                 <div class="text-xs text-slate-400 mt-1">diretórios</div>
                             </div>
                         </div>
-                        <button id="profileFollowBtn" onclick="app.toggleFollowFromProfileCard()" class="w-full px-4 py-2 rounded-lg transition-all font-medium bg-gluon-primary hover:bg-blue-600 text-white">Seguir</button>
                     </div>
                 </div>
 
@@ -194,6 +193,8 @@
                     <div id="profileUsername" class="text-sm text-slate-400 truncate">@username</div>
                     <div id="profileBio" class="text-sm text-slate-300 leading-relaxed break-words"></div>
                 </div>
+
+                <button id="profileFollowBtn" onclick="app.toggleFollowFromProfileCard()" class="w-full mt-3 px-4 py-2 rounded-lg transition-all font-medium bg-gluon-primary hover:bg-blue-600 text-white">Seguir</button>
             </section>
 
             <div class="block text-sm text-slate-300 font-medium w-full leading-relaxed break-words" id="breadcrumbs"></div>
@@ -635,11 +636,14 @@
                 }
 
                 const urlParams = new URLSearchParams(window.location.search);
-                const startId = urlParams.get('id');
-                const profileUser = Number(urlParams.get('user') || 0);
+                const startId = (urlParams.get('id') || '').trim();
+                const rawProfileUser = (urlParams.get('user') || '').trim();
+                const parsedProfileUser = Number(rawProfileUser);
 
-                if (profileUser > 0) {
-                    this.state.profileUserId = profileUser;
+                if (Number.isInteger(parsedProfileUser) && parsedProfileUser > 0) {
+                    this.state.profileUserId = parsedProfileUser;
+                } else {
+                    this.state.profileUserId = null;
                 }
 
                 if (this.state.profileUserId) {
@@ -649,6 +653,13 @@
                         this.state.profileUsername = profileRes.data.username;
                         this.state.profileData = profileRes.data;
                         this.state.isFollowingProfile = profileRes.data.is_following === 1;
+                    }
+                }
+
+                if (!this.state.profileData && this.state.sessionUserId) {
+                    const ownProfileRes = await this.api('user', 'get_public_profile', { target_user_id: this.state.sessionUserId });
+                    if (ownProfileRes && ownProfileRes.data) {
+                        this.state.profileData = ownProfileRes.data;
                     }
                 }
 
@@ -879,18 +890,13 @@
                 const card = document.getElementById('profilePresentation');
                 if (!card) return;
 
-                if (!this.isVisitingProfile() || !this.state.profileData) {
-                    card.classList.add('hidden');
-                    return;
-                }
-
-                card.classList.remove('hidden');
-
-                const data = this.state.profileData;
+                const data = this.state.profileData || {};
                 const displayName = (data.display_name || data.username || 'Usuário').trim();
                 const username = data.username || 'usuario';
                 const bio = (data.bio || '').trim();
                 const avatar = (data.profile_image_url || '').trim();
+
+                card.classList.remove('hidden');
 
                 document.getElementById('profileDisplayName').textContent = displayName;
                 document.getElementById('profileUsername').textContent = `@${username}`;
@@ -908,6 +914,12 @@
 
                 const followBtn = document.getElementById('profileFollowBtn');
                 if (followBtn) {
+                    if (!this.isVisitingProfile()) {
+                        followBtn.classList.add('hidden');
+                        return;
+                    }
+
+                    followBtn.classList.remove('hidden');
                     const following = this.state.isFollowingProfile;
                     followBtn.className = `w-full px-4 py-2 rounded-lg transition-all font-medium ${following ? 'bg-slate-600 text-slate-200' : 'bg-gluon-primary hover:bg-blue-600 text-white'}`;
                     followBtn.textContent = following ? 'Seguindo' : 'Seguir';
