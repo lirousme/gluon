@@ -68,10 +68,21 @@
             container: document.getElementById('resultsContainer'),
             loader: document.getElementById('loader'),
             debounceTimer: null,
+            mode: 'search',
 
             init() {
-                // Focus the input visually and pragmatically 
-                setTimeout(() => this.input.focus(), 100);
+                const params = new URLSearchParams(window.location.search);
+                this.mode = params.get('mode') === 'following' ? 'following' : 'search';
+
+                if (this.mode === 'following') {
+                    this.input.placeholder = 'Filtrar pessoas que você segue...';
+                    this.input.removeAttribute('autofocus');
+                    this.loadFollowing();
+                }
+
+                if (this.mode !== 'following') {
+                    setTimeout(() => this.input.focus(), 100);
+                }
 
                 // Setup listener on input with Debounce (espera 300ms antes de disparar API para poupar recursos)
                 this.input.addEventListener('input', (e) => {
@@ -79,15 +90,69 @@
                     const query = e.target.value.trim();
 
                     if (query.length === 0) {
-                        this.showInitialState();
+                        if (this.mode === 'following') {
+                            this.loadFollowing();
+                        } else {
+                            this.showInitialState();
+                        }
                         return;
                     }
 
-                    // Se começou a digitar, prepara para carregar
                     this.debounceTimer = setTimeout(() => {
-                        this.performSearch(query);
-                    }, 350); 
+                        if (this.mode === 'following') {
+                            this.loadFollowing(query);
+                        } else {
+                            this.performSearch(query);
+                        }
+                    }, 350);
                 });
+            },
+
+            async loadFollowing(filter = '') {
+                this.container.classList.add('hidden');
+                this.loader.classList.remove('hidden');
+                this.loader.classList.add('flex');
+
+                try {
+                    const res = await fetch(`/api/user`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'get_following_list' })
+                    });
+
+                    if (res.status === 401) {
+                        window.location.href = '/';
+                        return;
+                    }
+
+                    const data = await res.json();
+                    if (data.status !== 'success') throw new Error(data.message);
+
+                    const filtered = (data.data || []).filter(user => user.username.toLowerCase().includes(filter.toLowerCase()));
+                    this.renderFollowingResults(filtered, filter);
+                } catch (error) {
+                    console.error("Erro ao carregar seguidos:", error);
+                    this.showErrorState();
+                } finally {
+                    this.loader.classList.remove('flex');
+                    this.loader.classList.add('hidden');
+                    this.container.classList.remove('hidden');
+                }
+            },
+
+            renderFollowingResults(users, filter = '') {
+                if (users.length === 0) {
+                    this.container.innerHTML = `
+                        <div class="flex flex-col items-center justify-center text-center text-slate-500 py-10">
+                            <i class="fa-solid fa-user-group text-4xl mb-3 opacity-30"></i>
+                            <h3 class="text-base font-semibold text-slate-400">Nenhum seguido encontrado</h3>
+                            <p class="text-sm mt-1">${filter ? `Não há resultado para "${this.escapeHTML(filter)}".` : 'Você ainda não segue ninguém.'}</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                this.renderResults(users, filter || 'seguindo');
             },
 
             async performSearch(query) {
@@ -168,6 +233,11 @@
             },
 
             showInitialState() {
+                if (this.mode === 'following') {
+                    this.loadFollowing();
+                    return;
+                }
+
                 this.container.innerHTML = `
                     <div class="flex flex-col items-center justify-center text-center text-slate-500 h-full pb-20">
                         <div class="w-20 h-20 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center mb-4 shadow-inner">

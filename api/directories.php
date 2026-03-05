@@ -218,8 +218,20 @@ if ($action === 'fetch') {
     $target_user_id = isset($input['target_user_id']) ? (int)$input['target_user_id'] : $user_id;
     $is_owner_context = ($target_user_id === (int)$user_id);
 
+    $context_user_id = $target_user_id;
+    if ($is_owner_context && $parent_id !== null) {
+        $stmtParentOwner = $pdo->prepare("SELECT user_id FROM directories WHERE id = ?");
+        $stmtParentOwner->execute([$parent_id]);
+        $parentOwnerId = $stmtParentOwner->fetchColumn();
+        if ($parentOwnerId) {
+            $context_user_id = (int)$parentOwnerId;
+        }
+    }
+
+    $context_is_owner = ($context_user_id === (int)$user_id);
+
     $query = "
-        SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,
+        SELECT d.id, d.user_id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,
                d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to, 
                d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, d.is_public,
                COALESCE(deck_stats.total_cards, 0) as deck_total_cards,
@@ -241,21 +253,72 @@ if ($action === 'fetch') {
         LEFT JOIN flashcard_book_progress book_progress ON book_progress.directory_id = d.id AND book_progress.user_id = ?
         WHERE d.user_id = ? 
     ";
-    
-    if (!$is_owner_context) {
+
+    if (!$context_is_owner) {
         $query .= " AND d.is_public = 1";
     }
 
     if ($parent_id === null) {
-        $query .= " AND d.parent_id IS NULL";
-        $stmt = $pdo->prepare($query);
-        $stmt->execute([$user_id, $user_id, $target_user_id]);
+        if ($is_owner_context) {
+            $query .= " AND d.parent_id IS NULL";
+            $stmt = $pdo->prepare($query);
+            $stmt->execute([$user_id, $user_id, $target_user_id]);
+            $directories = $stmt->fetchAll();
+
+            $savedQuery = "
+                SELECT d.id, d.user_id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,
+                       d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to,
+                       d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, d.is_public,
+                       COALESCE(deck_stats.total_cards, 0) as deck_total_cards,
+                       COALESCE(deck_stats.total_score, 0) as deck_total_score,
+                       COALESCE(book_progress.current_index, 0) as book_current_index,
+                       COALESCE(book_progress.completed_reads, 0) as book_completed_reads,
+                       dr.type as rec_type, dr.interval_value as rec_interval, dr.days_of_week as rec_days,
+                       dr.custom_dates as rec_custom, dr.exceptions as rec_exceptions, dr.time_start as rec_time_start, dr.time_end as rec_time_end, dr.end_date as rec_end
+                FROM saved_directories sd
+                INNER JOIN directories d ON d.id = sd.directory_id
+                LEFT JOIN directory_recurrences dr ON d.id = dr.directory_id
+                LEFT JOIN (
+                    SELECT f.directory_id,
+                           COUNT(f.id) as total_cards,
+                           COALESCE(SUM(fs.score), 0) as total_score
+                    FROM flashcards f
+                    LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
+                    GROUP BY f.directory_id
+                ) deck_stats ON deck_stats.directory_id = d.id
+                LEFT JOIN flashcard_book_progress book_progress ON book_progress.directory_id = d.id AND book_progress.user_id = ?
+                WHERE sd.user_id = ? AND d.parent_id IS NULL AND d.user_id <> ? AND d.is_public = 1
+            ";
+
+            $stmtSaved = $pdo->prepare($savedQuery);
+            $stmtSaved->execute([$user_id, $user_id, $user_id, $user_id]);
+            $savedDirectories = $stmtSaved->fetchAll();
+
+            foreach ($savedDirectories as &$savedDir) {
+                $savedDir['is_saved'] = 1;
+                $savedDir['source_user_id'] = (int)$savedDir['user_id'];
+            }
+            unset($savedDir);
+
+            foreach ($directories as &$ownDir) {
+                $ownDir['is_saved'] = 0;
+                $ownDir['source_user_id'] = (int)$ownDir['user_id'];
+            }
+            unset($ownDir);
+
+            $directories = array_merge($directories, $savedDirectories);
+        } else {
+            $query .= " AND d.parent_id IS NULL";
+            $stmt = $pdo->prepare($query);
+            $stmt->execute([$user_id, $user_id, $context_user_id]);
+            $directories = $stmt->fetchAll();
+        }
     } else {
-        if (!$is_owner_context) {
+        if (!$context_is_owner) {
             $stmtParent = $pdo->prepare("SELECT user_id, is_public FROM directories WHERE id = ?");
             $stmtParent->execute([$parent_id]);
             $parent = $stmtParent->fetch();
-            if (!$parent || (int)$parent['user_id'] !== $target_user_id || (int)$parent['is_public'] !== 1) {
+            if (!$parent || (int)$parent['user_id'] !== $context_user_id || (int)$parent['is_public'] !== 1) {
                 echo json_encode(['status' => 'success', 'data' => []]);
                 exit;
             }
@@ -263,10 +326,25 @@ if ($action === 'fetch') {
 
         $query .= " AND d.parent_id = ?";
         $stmt = $pdo->prepare($query);
-        $stmt->execute([$user_id, $user_id, $target_user_id, $parent_id]);
+        $stmt->execute([$user_id, $user_id, $context_user_id, $parent_id]);
+        $directories = $stmt->fetchAll();
+
+        $savedIds = [];
+        if ($is_owner_context && !$context_is_owner && !empty($directories)) {
+            $dirIds = array_map(function($d) { return (int)$d['id']; }, $directories);
+            $inPlaceholders = implode(',', array_fill(0, count($dirIds), '?'));
+            $savedStmt = $pdo->prepare("SELECT directory_id FROM saved_directories WHERE user_id = ? AND directory_id IN ($inPlaceholders)");
+            $savedStmt->execute(array_merge([$user_id], $dirIds));
+            $savedIds = array_map('intval', $savedStmt->fetchAll(PDO::FETCH_COLUMN));
+        }
+
+        foreach ($directories as &$childDir) {
+            $childDir['is_saved'] = in_array((int)$childDir['id'], $savedIds, true) ? 1 : 0;
+            $childDir['source_user_id'] = (int)$childDir['user_id'];
+        }
+        unset($childDir);
     }
-    
-    $directories = $stmt->fetchAll();
+
     $response = [];
     
     foreach ($directories as $dir) {
@@ -299,6 +377,9 @@ if ($action === 'fetch') {
             'end_date' => $dir['end_date'],
             'is_recurring' => (int)($dir['is_recurring'] ?? 0),
             'is_public' => (int)($dir['is_public'] ?? 0),
+            'source_user_id' => (int)($dir['source_user_id'] ?? $dir['user_id']),
+            'is_saved' => (int)($dir['is_saved'] ?? 0),
+            'can_edit' => ((int)($dir['source_user_id'] ?? $dir['user_id']) === (int)$user_id) ? 1 : 0,
             'rec_type' => $dir['rec_type'] ?? 'daily',
             'rec_interval' => (int)($dir['rec_interval'] ?? 1),
             'rec_days' => $dir['rec_days'] ?? '',
