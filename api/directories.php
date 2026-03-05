@@ -43,6 +43,10 @@ try {
     $pdo->exec("ALTER TABLE directory_recurrences ADD COLUMN time_start TIME NULL AFTER exceptions, ADD COLUMN time_end TIME NULL AFTER time_start");
 } catch (PDOException $e) {}
 
+try {
+    $pdo->exec("ALTER TABLE directories ADD COLUMN is_public TINYINT(1) NOT NULL DEFAULT 0 AFTER is_recurring");
+} catch (PDOException $e) {}
+
 
 // =========================================================================
 // FUNÇÃO HELPER: CALCULAR A PRÓXIMA DATA DE RECORRÊNCIA
@@ -211,11 +215,13 @@ function duplicateDirectoryTree($source_id, $target_parent_id, $user_id, $pdo, $
 
 if ($action === 'fetch') {
     $parent_id = isset($input['parent_id']) && $input['parent_id'] !== null ? (int)$input['parent_id'] : null;
+    $target_user_id = isset($input['target_user_id']) ? (int)$input['target_user_id'] : $user_id;
+    $is_owner_context = ($target_user_id === (int)$user_id);
 
     $query = "
         SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,
                d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to, 
-               d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring,
+               d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, d.is_public,
                COALESCE(deck_stats.total_cards, 0) as deck_total_cards,
                COALESCE(deck_stats.total_score, 0) as deck_total_score,
                COALESCE(book_progress.current_index, 0) as book_current_index,
@@ -236,14 +242,28 @@ if ($action === 'fetch') {
         WHERE d.user_id = ? 
     ";
     
+    if (!$is_owner_context) {
+        $query .= " AND d.is_public = 1";
+    }
+
     if ($parent_id === null) {
         $query .= " AND d.parent_id IS NULL";
         $stmt = $pdo->prepare($query);
-        $stmt->execute([$user_id, $user_id, $user_id]);
+        $stmt->execute([$user_id, $user_id, $target_user_id]);
     } else {
+        if (!$is_owner_context) {
+            $stmtParent = $pdo->prepare("SELECT user_id, is_public FROM directories WHERE id = ?");
+            $stmtParent->execute([$parent_id]);
+            $parent = $stmtParent->fetch();
+            if (!$parent || (int)$parent['user_id'] !== $target_user_id || (int)$parent['is_public'] !== 1) {
+                echo json_encode(['status' => 'success', 'data' => []]);
+                exit;
+            }
+        }
+
         $query .= " AND d.parent_id = ?";
         $stmt = $pdo->prepare($query);
-        $stmt->execute([$user_id, $user_id, $user_id, $parent_id]);
+        $stmt->execute([$user_id, $user_id, $target_user_id, $parent_id]);
     }
     
     $directories = $stmt->fetchAll();
@@ -278,6 +298,7 @@ if ($action === 'fetch') {
             'start_date' => $dir['start_date'],
             'end_date' => $dir['end_date'],
             'is_recurring' => (int)($dir['is_recurring'] ?? 0),
+            'is_public' => (int)($dir['is_public'] ?? 0),
             'rec_type' => $dir['rec_type'] ?? 'daily',
             'rec_interval' => (int)($dir['rec_interval'] ?? 1),
             'rec_days' => $dir['rec_days'] ?? '',
@@ -301,15 +322,21 @@ if ($action === 'fetch') {
 
 elseif ($action === 'get_path') {
     $dir_id = isset($input['id']) && $input['id'] !== null ? (int)$input['id'] : null;
+    $target_user_id = isset($input['target_user_id']) ? (int)$input['target_user_id'] : $user_id;
+    $is_owner_context = ($target_user_id === (int)$user_id);
     $path = [];
     $curr = $dir_id;
     
     while ($curr !== null) {
-        $stmt = $pdo->prepare("SELECT id, type, name_encrypted, default_view, parent_id FROM directories WHERE id = ? AND user_id = ?");
-        $stmt->execute([$curr, $user_id]);
+        $stmt = $pdo->prepare("SELECT id, type, name_encrypted, default_view, parent_id, is_public FROM directories WHERE id = ? AND user_id = ?");
+        $stmt->execute([$curr, $target_user_id]);
         $dir = $stmt->fetch();
         
         if ($dir) {
+            if (!$is_owner_context && (int)$dir['is_public'] !== 1) {
+                $path = [];
+                break;
+            }
             array_unshift($path, [
                 'id' => $dir['id'],
                 'type' => (int)$dir['type'],
@@ -346,6 +373,7 @@ elseif ($action === 'create') {
     $end_date = !empty($input['end_date']) ? $input['end_date'] : null;
 
     $is_recurring = isset($input['is_recurring']) ? (int)$input['is_recurring'] : 0;
+    $is_public = isset($input['is_public']) ? (int)$input['is_public'] : 0;
     $rec_type = $input['rec_type'] ?? 'daily';
     $rec_interval = (int)($input['rec_interval'] ?? 1);
     $rec_days = !empty($input['rec_days']) ? $input['rec_days'] : null;
@@ -390,14 +418,14 @@ elseif ($action === 'create') {
             INSERT INTO directories (
                 user_id, parent_id, type, name_encrypted, default_view, 
                 new_item_position, sort_order, icon, icon_color_from, 
-                icon_color_to, cover_url_encrypted, start_date, end_date, is_recurring
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                icon_color_to, cover_url_encrypted, start_date, end_date, is_recurring, is_public
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         
         $stmt->execute([
             $user_id, $parent_id, $type, $name_encrypted, $view, 
             $new_item_position, $newOrder, $icon, $color_from, $color_to, 
-            $cover_url_encrypted, $start_date, $end_date, $is_recurring
+            $cover_url_encrypted, $start_date, $end_date, $is_recurring, $is_public
         ]);
         
         $new_dir_id = $pdo->lastInsertId();
@@ -478,6 +506,7 @@ elseif ($action === 'update') {
     $cover_url = trim($input['cover_url'] ?? '');
 
     $is_recurring = isset($input['is_recurring']) ? (int)$input['is_recurring'] : 0;
+    $is_public = isset($input['is_public']) ? (int)$input['is_public'] : 0;
     $rec_type = $input['rec_type'] ?? 'daily';
     $rec_interval = (int)($input['rec_interval'] ?? 1);
     $rec_days = !empty($input['rec_days']) ? $input['rec_days'] : null;
@@ -510,19 +539,19 @@ elseif ($action === 'update') {
                 UPDATE directories SET 
                     name_encrypted = ?, default_view = ?, new_item_position = ?, 
                     icon = ?, icon_color_from = ?, icon_color_to = ?, cover_url_encrypted = ?, 
-                    start_date = ?, end_date = ?, is_recurring = ? 
+                    start_date = ?, end_date = ?, is_recurring = ?, is_public = ? 
                 WHERE id = ? AND user_id = ?
             ");
-            $stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $start_date, $end_date, $is_recurring, $id, $user_id]);
+            $stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $start_date, $end_date, $is_recurring, $is_public, $id, $user_id]);
         } else {
             $stmt = $pdo->prepare("
                 UPDATE directories SET 
                     name_encrypted = ?, default_view = ?, new_item_position = ?, 
                     icon = ?, icon_color_from = ?, icon_color_to = ?, cover_url_encrypted = ?, 
-                    is_recurring = ? 
+                    is_recurring = ?, is_public = ? 
                 WHERE id = ? AND user_id = ?
             ");
-            $stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $is_recurring, $id, $user_id]);
+            $stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $is_recurring, $is_public, $id, $user_id]);
         }
 
         // Se ativado, processa a recorrência salvando os dados

@@ -194,8 +194,7 @@
             },
 
             openProfile(userId) {
-                // Aqui você pode criar a lógica futura para abrir o perfil da pessoa (Ex: redirecionar para /perfil?id=...)
-                // alert(`Lógica para abrir o perfil de ID: ${userId} será acionada aqui no futuro.`);
+                window.location.href = `/dashboard?user=${encodeURIComponent(userId)}`;
             }
         };
 
