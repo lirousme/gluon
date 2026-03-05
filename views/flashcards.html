@@ -685,7 +685,7 @@
                     audioFront.innerHTML = `
                         <div class="flex items-center gap-2">
                             <button onclick="event.stopPropagation(); flashcardApp.playCardAudio(${card.id}, 'front')" class="text-xs bg-slate-800/80 hover:bg-slate-700 border border-slate-600 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-slate-300">
-                                <i class="fa-solid fa-play"></i> Frente
+                                <i class="fa-solid fa-play"></i> Ouvir
                             </button>
                             <button id="btnGenAudio_front_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'front')" class="text-xs bg-slate-800/80 hover:bg-slate-700 border border-slate-600 w-7 h-7 flex items-center justify-center rounded-lg transition-colors text-slate-400" title="Gerar novo áudio">
                                 <i class="fa-solid fa-rotate-right"></i>
@@ -717,7 +717,7 @@
                         audioBack.innerHTML = `
                             <div class="flex items-center gap-2">
                                 <button onclick="event.stopPropagation(); flashcardApp.playCardAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-blue-200">
-                                    <i class="fa-solid fa-play"></i> Ouvir Verso
+                                    <i class="fa-solid fa-play"></i> Ouvir
                                 </button>
                                 <button id="btnGenAudio_back_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 w-7 h-7 flex items-center justify-center rounded-lg transition-colors text-blue-300" title="Gerar novo áudio">
                                     <i class="fa-solid fa-rotate-right"></i>
