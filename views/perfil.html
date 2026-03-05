@@ -1017,13 +1017,13 @@
             async fetchDirectories() {
                 this.setLoading(true);
                 this.renderBreadcrumbs();
-                this.updateTopButtons();
                 const response = await this.api('directories', 'fetch', { parent_id: this.getCurrentParentId(), target_user_id: this.state.profileUserId || undefined });
-                if (response) { 
-                    this.state.directories = response.data; 
+                if (response) {
+                    this.state.directories = response.data;
                     response.data.forEach(d => this.state.directoryCache.set(Number(d.id), d));
                     await this.fetchSavedStatusForCurrentDirectory();
-                    this.render(); 
+                    this.updateTopButtons();
+                    this.render();
                 }
                 this.setLoading(false);
             },
