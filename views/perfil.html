@@ -636,10 +636,14 @@
 
                 const urlParams = new URLSearchParams(window.location.search);
                 const startId = urlParams.get('id');
-                const profileUser = urlParams.get('user');
+                const profileUser = Number(urlParams.get('user') || 0);
 
-                if (profileUser) {
-                    const profileRes = await this.api('user', 'get_public_profile', { target_user_id: Number(profileUser) });
+                if (profileUser > 0) {
+                    this.state.profileUserId = profileUser;
+                }
+
+                if (this.state.profileUserId) {
+                    const profileRes = await this.api('user', 'get_public_profile', { target_user_id: this.state.profileUserId });
                     if (profileRes && profileRes.data) {
                         this.state.profileUserId = profileRes.data.id;
                         this.state.profileUsername = profileRes.data.username;
@@ -840,7 +844,10 @@
             getCurrentParentId() { return this.state.path[this.state.path.length - 1].id; },
             getCurrentView() { return this.state.path[this.state.path.length - 1].view; },
 
-            isVisitingProfile() { return this.state.profileUserId !== null && this.state.profileUserId !== this.state.sessionUserId; },
+            isVisitingProfile() {
+                if (this.state.profileUserId === null) return false;
+                return Number(this.state.profileUserId) !== Number(this.state.sessionUserId);
+            },
 
             isCurrentDirectoryReadOnly() {
                 const currentId = this.getCurrentParentId();
