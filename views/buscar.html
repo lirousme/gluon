@@ -68,13 +68,24 @@
             container: document.getElementById('resultsContainer'),
             loader: document.getElementById('loader'),
             debounceTimer: null,
+            mode: 'search',
 
             init() {
-                // Focus the input visually and pragmatically 
-                setTimeout(() => this.input.focus(), 100);
+                const params = new URLSearchParams(window.location.search);
+                this.mode = params.get('following') === '1' ? 'following' : 'search';
+
+                if (this.mode === 'following') {
+                    this.input.value = '';
+                    this.input.disabled = true;
+                    this.input.placeholder = 'Lista de usuários que você segue';
+                    this.fetchFollowing();
+                } else {
+                    setTimeout(() => this.input.focus(), 100);
+                }
 
                 // Setup listener on input with Debounce (espera 300ms antes de disparar API para poupar recursos)
                 this.input.addEventListener('input', (e) => {
+                    if (this.mode !== 'search') return;
                     clearTimeout(this.debounceTimer);
                     const query = e.target.value.trim();
 
@@ -88,6 +99,53 @@
                         this.performSearch(query);
                     }, 350); 
                 });
+            },
+
+
+            async fetchFollowing() {
+                this.container.classList.add('hidden');
+                this.loader.classList.remove('hidden');
+                this.loader.classList.add('flex');
+
+                try {
+                    const res = await fetch(`/api/user`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'get_following' })
+                    });
+
+                    if (res.status === 401) {
+                        window.location.href = '/';
+                        return;
+                    }
+
+                    const data = await res.json();
+                    if (data.status === 'success') this.renderFollowing(data.data || []);
+                    else throw new Error(data.message);
+                } catch (error) {
+                    console.error('Erro ao buscar seguindo:', error);
+                    this.showErrorState();
+                } finally {
+                    this.loader.classList.remove('flex');
+                    this.loader.classList.add('hidden');
+                    this.container.classList.remove('hidden');
+                }
+            },
+
+            renderFollowing(users) {
+                if (!users.length) {
+                    this.container.innerHTML = `
+                        <div class="flex flex-col items-center justify-center text-center text-slate-500 h-full pb-20">
+                            <div class="w-20 h-20 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center mb-4 shadow-inner">
+                                <i class="fa-solid fa-user-plus text-3xl opacity-50"></i>
+                            </div>
+                            <h3 class="text-lg font-semibold text-slate-300 mb-1">Você ainda não segue ninguém</h3>
+                            <p class="text-sm max-w-xs">Use a busca para encontrar perfis e começar a seguir.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                this.renderResults(users, '');
             },
 
             async performSearch(query) {

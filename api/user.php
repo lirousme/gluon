@@ -217,6 +217,17 @@ elseif ($action === 'toggle_follow') {
     }
 }
 
+elseif ($action === 'get_following') {
+    $stmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'profile_image_url'");
+    $hasProfileImage = (bool)$stmt->fetch();
+    $profileSelect = $hasProfileImage ? ', u.profile_image_url' : ", '' AS profile_image_url";
+
+    $stmtFollowing = $pdo->prepare("\n        SELECT u.id, u.username{$profileSelect}\n        FROM user_follows uf\n        INNER JOIN users u ON u.id = uf.followed_id\n        WHERE uf.follower_id = ?\n        ORDER BY uf.created_at DESC, u.username ASC\n    ");
+    $stmtFollowing->execute([$user_id]);
+
+    echo json_encode(['status' => 'success', 'data' => $stmtFollowing->fetchAll()]);
+}
+
 elseif ($action === 'get_saved_status') {
     $directory_id = (int)($input['directory_id'] ?? 0);
     if ($directory_id <= 0) {

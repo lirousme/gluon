@@ -216,7 +216,26 @@ function duplicateDirectoryTree($source_id, $target_parent_id, $user_id, $pdo, $
 if ($action === 'fetch') {
     $parent_id = isset($input['parent_id']) && $input['parent_id'] !== null ? (int)$input['parent_id'] : null;
     $target_user_id = isset($input['target_user_id']) ? (int)$input['target_user_id'] : $user_id;
-    $is_owner_context = ($target_user_id === (int)$user_id);
+    $effective_target_user_id = $target_user_id;
+    $is_owner_context = ($effective_target_user_id === (int)$user_id);
+
+    if ($parent_id !== null && $is_owner_context) {
+        $stmtParentOwner = $pdo->prepare("SELECT user_id, is_public FROM directories WHERE id = ?");
+        $stmtParentOwner->execute([$parent_id]);
+        $parentOwner = $stmtParentOwner->fetch();
+
+        if ($parentOwner && (int)$parentOwner['user_id'] !== $user_id) {
+            $stmtSavedParent = $pdo->prepare("SELECT 1 FROM saved_directories WHERE user_id = ? AND directory_id = ?");
+            $stmtSavedParent->execute([$user_id, $parent_id]);
+            if (!$stmtSavedParent->fetchColumn() || (int)$parentOwner['is_public'] !== 1) {
+                echo json_encode(['status' => 'success', 'data' => []]);
+                exit;
+            }
+
+            $effective_target_user_id = (int)$parentOwner['user_id'];
+            $is_owner_context = false;
+        }
+    }
 
     $query = "
         SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,
@@ -249,13 +268,13 @@ if ($action === 'fetch') {
     if ($parent_id === null) {
         $query .= " AND d.parent_id IS NULL";
         $stmt = $pdo->prepare($query);
-        $stmt->execute([$user_id, $user_id, $target_user_id]);
+        $stmt->execute([$user_id, $user_id, $effective_target_user_id]);
     } else {
         if (!$is_owner_context) {
             $stmtParent = $pdo->prepare("SELECT user_id, is_public FROM directories WHERE id = ?");
             $stmtParent->execute([$parent_id]);
             $parent = $stmtParent->fetch();
-            if (!$parent || (int)$parent['user_id'] !== $target_user_id || (int)$parent['is_public'] !== 1) {
+            if (!$parent || (int)$parent['user_id'] !== $effective_target_user_id || (int)$parent['is_public'] !== 1) {
                 echo json_encode(['status' => 'success', 'data' => []]);
                 exit;
             }
@@ -263,10 +282,16 @@ if ($action === 'fetch') {
 
         $query .= " AND d.parent_id = ?";
         $stmt = $pdo->prepare($query);
-        $stmt->execute([$user_id, $user_id, $target_user_id, $parent_id]);
+        $stmt->execute([$user_id, $user_id, $effective_target_user_id, $parent_id]);
     }
-    
+
     $directories = $stmt->fetchAll();
+
+    if ($parent_id === null && $is_owner_context) {
+        $stmtSavedRoot = $pdo->prepare("\n            SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,\n                   d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to,\n                   d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, d.is_public,\n                   COALESCE(deck_stats.total_cards, 0) as deck_total_cards,\n                   COALESCE(deck_stats.total_score, 0) as deck_total_score,\n                   COALESCE(book_progress.current_index, 0) as book_current_index,\n                   COALESCE(book_progress.completed_reads, 0) as book_completed_reads,\n                   dr.type as rec_type, dr.interval_value as rec_interval, dr.days_of_week as rec_days,\n                   dr.custom_dates as rec_custom, dr.exceptions as rec_exceptions, dr.time_start as rec_time_start, dr.time_end as rec_time_end, dr.end_date as rec_end,\n                   d.user_id as owner_user_id\n            FROM saved_directories sd\n            INNER JOIN directories d ON d.id = sd.directory_id\n            LEFT JOIN directory_recurrences dr ON d.id = dr.directory_id\n            LEFT JOIN (\n                SELECT f.directory_id,\n                       COUNT(f.id) as total_cards,\n                       COALESCE(SUM(fs.score), 0) as total_score\n                FROM flashcards f\n                LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?\n                GROUP BY f.directory_id\n            ) deck_stats ON deck_stats.directory_id = d.id\n            LEFT JOIN flashcard_book_progress book_progress ON book_progress.directory_id = d.id AND book_progress.user_id = ?\n            WHERE sd.user_id = ? AND d.user_id != ? AND d.is_public = 1 AND d.parent_id IS NULL\n        ");
+        $stmtSavedRoot->execute([$user_id, $user_id, $user_id, $user_id]);
+        $directories = array_merge($directories, $stmtSavedRoot->fetchAll());
+    }
     $response = [];
     
     foreach ($directories as $dir) {
@@ -306,7 +331,9 @@ if ($action === 'fetch') {
             'rec_exceptions' => $dir['rec_exceptions'] ?? '[]',
             'rec_time_start' => $dir['rec_time_start'] ?? null,
             'rec_time_end' => $dir['rec_time_end'] ?? null,
-            'rec_end' => $dir['rec_end'] ?? ''
+            'rec_end' => $dir['rec_end'] ?? '',
+            'owner_user_id' => isset($dir['owner_user_id']) ? (int)$dir['owner_user_id'] : (int)$effective_target_user_id,
+            'is_read_only' => (isset($dir['owner_user_id']) ? (int)$dir['owner_user_id'] : (int)$effective_target_user_id) !== (int)$user_id ? 1 : 0
         ];
     }
 
@@ -324,6 +351,20 @@ elseif ($action === 'get_path') {
     $dir_id = isset($input['id']) && $input['id'] !== null ? (int)$input['id'] : null;
     $target_user_id = isset($input['target_user_id']) ? (int)$input['target_user_id'] : $user_id;
     $is_owner_context = ($target_user_id === (int)$user_id);
+
+    if ($dir_id !== null && $is_owner_context) {
+        $stmtDirOwner = $pdo->prepare("SELECT user_id, is_public FROM directories WHERE id = ?");
+        $stmtDirOwner->execute([$dir_id]);
+        $dirOwner = $stmtDirOwner->fetch();
+        if ($dirOwner && (int)$dirOwner['user_id'] !== $user_id) {
+            $stmtSaved = $pdo->prepare("SELECT 1 FROM saved_directories WHERE user_id = ? AND directory_id = ?");
+            $stmtSaved->execute([$user_id, $dir_id]);
+            if ($stmtSaved->fetchColumn() && (int)$dirOwner['is_public'] === 1) {
+                $target_user_id = (int)$dirOwner['user_id'];
+                $is_owner_context = false;
+            }
+        }
+    }
     $path = [];
     $curr = $dir_id;
     
