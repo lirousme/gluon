@@ -133,7 +133,6 @@
             <div class="h-6 w-px bg-slate-700 hidden sm:block"></div>
             <div class="flex items-center gap-3">
                 <i class="fa-solid fa-layer-group text-gluon-primary text-xl"></i>
-                <span id="deckName" class="font-bold text-lg text-white tracking-wide truncate max-w-[120px] sm:max-w-xs">Carregando...</span>
                 
                 <div id="deckMasteryBadge" class="hidden items-center gap-1.5 bg-slate-800/80 border border-slate-600 px-2 py-1 rounded-md text-xs font-semibold shadow-inner">
                 </div>
@@ -162,7 +161,9 @@
     <main class="flex-1 w-full flex flex-col items-center justify-center p-4 relative">
         
         <!-- Painel Central Superior (Contador + Auto Play Toggle + Export) -->
-        <div class="absolute top-6 left-0 right-0 flex justify-center items-center gap-4 z-10" id="topControlPanel" style="display: none;">
+        <span id="deckName" class="absolute top-3 left-4 right-4 text-center text-[11px] sm:text-xs font-normal text-slate-400 tracking-wide truncate z-10">Carregando...</span>
+
+        <div class="absolute top-8 left-0 right-0 flex justify-center items-center gap-4 z-10" id="topControlPanel" style="display: none;">
             <span id="cardCounter" class="bg-slate-800 text-slate-400 font-medium px-4 py-1.5 rounded-full text-sm border border-slate-700 shadow-sm">
                 0 / 0
             </span>
