@@ -714,7 +714,12 @@
                     // Removido snap-start para liberar as paradas e melhorar a fluidez visual
                     html += `
                     <div class="bg-slate-800/80 border border-slate-700 rounded-xl w-[280px] shrink-0 flex flex-col max-h-full shadow-lg relative overflow-hidden transition-transform">
-                        <div class="p-3 border-b border-slate-700 text-center ${headerClass} bg-slate-900/50">${displayDate}</div>
+                        <div class="p-3 border-b border-slate-700 text-center ${headerClass} bg-slate-900/50 flex items-center justify-between gap-2">
+                            <span class="truncate">${displayDate}</span>
+                            <button type="button" onclick="event.stopPropagation(); scheduleApp.openKanbanQuickAdd('${dStr}')" class="shrink-0 w-7 h-7 rounded-lg border border-slate-600 bg-slate-800/80 text-slate-300 hover:text-white hover:border-gluon-primary hover:bg-slate-700 transition-colors" title="Adicionar tarefa/diretório neste dia">
+                                <i class="fa-solid fa-plus text-xs"></i>
+                            </button>
+                        </div>
                         <div class="p-2 flex-1 overflow-y-auto sortable-day-col no-scrollbar min-h-[100px]" data-date="${dStr}">
                             <!-- items -->
                         </div>
@@ -722,6 +727,31 @@
                 });
                 html += `</div>`;
                 return html;
+            },
+
+            openKanbanQuickAdd(dateStr) {
+                let hour = 9;
+                let minute = 0;
+                const todayStr = this.getLocalYYYYMMDD(new Date());
+
+                if (dateStr === todayStr) {
+                    const now = new Date();
+                    const minutesRounded = Math.ceil(now.getMinutes() / 30) * 30;
+                    hour = now.getHours();
+                    minute = minutesRounded;
+
+                    if (minute >= 60) {
+                        hour += 1;
+                        minute = 0;
+                    }
+                }
+
+                const startObj = new Date(`${dateStr}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`);
+                const endObj = new Date(startObj.getTime() + 60 * 60000);
+
+                this.state.pendingStartDate = this.toMySQLFormat(startObj);
+                this.state.pendingEndDate = this.toMySQLFormat(endObj);
+                this.openModal(null, '', this.state.pendingStartDate, this.state.pendingEndDate, dateStr);
             },
 
             getListHTML(startDate) {
