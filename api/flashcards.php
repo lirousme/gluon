@@ -39,6 +39,20 @@ try {
 try {
     $pdo->exec("ALTER TABLE directories ADD COLUMN deck_back_language VARCHAR(10) NOT NULL DEFAULT 'en-GB' AFTER deck_front_language");
 } catch (PDOException $e) {}
+
+
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS pronuncias (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        language VARCHAR(10) NOT NULL,
+        source_text VARCHAR(255) NOT NULL,
+        target_text VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_language_source (language, source_text),
+        INDEX idx_language (language)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
 // =========================================================================
 
 // Função auxiliar para verificar se o usuário é dono do deck (Segurança IDOR)
@@ -83,36 +97,32 @@ function getLanguageLabel($language) {
     return $map[$language] ?? $language;
 }
 
-function adjustPronunciationForTTS($text) {
-    $replacements = [
-        // Biologia / Química
-        '/\bATP\b/i' => 'atêpê',
-        '/\bADP\b/i' => 'adêpê',
-        '/\bDNA\b/i' => 'dê-êni-á',
-        '/\bRNA\b/i' => 'érri-êni-á',
-        
-        // Geografia / Política
-        '/\bEUA\b/i' => 'Estados Unidos',
-        '/\bONU\b/i' => 'ônu',
-        '/\bPIB\b/i' => 'píbi',
-        '/\bFMI\b/i' => 'éfi-êmi-í',
-        '/\bSTF\b/i' => 'éssi-tê-éfi',
-        '/\bIBGE\b/i' => 'i-bê-gê-é',
-        
-        // Tecnologia / Inglês Comum
-        '/\bPDF\b/i' => 'pê-dê-éfi',
-        '/\bHTML\b/i' => 'agá-tê-êmi-élli',
-        '/\bSQL\b/i' => 'éssi-quê-élli',
-        '/\bAPI\b/i' => 'a-pê-í',
-        '/\bPHP\b/i' => 'pê-agá-pê',
-        '/\bWi-Fi\b/i' => 'uai-fai',
-        '/\bSoftware\b/i' => 'sóft-uér',
-        '/\bHardware\b/i' => 'rárd-uér',
-        '/\bDownload\b/i' => 'daun-lôud',
-        '/\bUpload\b/i' => 'ãpi-lôud'
-    ];
+function adjustPronunciationForTTS($pdo, $text, $language) {
+    $allowed = ['pt-BR', 'en-US', 'en-GB'];
+    if (!in_array($language, $allowed, true)) {
+        return $text;
+    }
 
-    return preg_replace(array_keys($replacements), array_values($replacements), $text);
+    $stmt = $pdo->prepare("SELECT source_text, target_text FROM pronuncias WHERE language = ? ORDER BY CHAR_LENGTH(source_text) DESC");
+    $stmt->execute([$language]);
+    $replacements = $stmt->fetchAll();
+
+    if (!$replacements) {
+        return $text;
+    }
+
+    foreach ($replacements as $item) {
+        $source = trim((string)$item['source_text']);
+        $target = (string)$item['target_text'];
+        if ($source === '') {
+            continue;
+        }
+
+        $pattern = '/\\b' . preg_quote($source, '/') . '\\b/iu';
+        $text = preg_replace($pattern, $target, $text);
+    }
+
+    return $text;
 }
 
 
@@ -260,7 +270,7 @@ elseif ($action === 'generate_audio') {
     $side_language = $side === 'front' ? $front_language : $back_language;
 
     // Ajuste de pronúncia atualmente otimizado para PT-BR
-    $text_to_speech = $side_language === 'pt-BR' ? adjustPronunciationForTTS($clean_text) : $clean_text;
+    $text_to_speech = adjustPronunciationForTTS($pdo, $clean_text, $side_language);
     $reference_id = getFishReferenceIdByLanguage($side_language);
 
     $ch = curl_init('https://api.fish.audio/v1/tts');

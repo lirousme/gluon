@@ -16,10 +16,13 @@ public_html/gluon/
 │   └── cron_recurrence.php   # NOVO: Motor autônomo de repetição de tarefas (via CRON)
 │   └── flashcards.php        # NOVO: Micro-API para CRUD de Flashcards
 │   └── adjacency.php        # NOVO: Micro-API para Lista adjacente
+│   └── pronuncias.php       # NOVO: CRUD administrativo para ajustes de pronúncia TTS
 │
 ├── views/                    # Front-end (Vanilla JS + Tailwind)
 │   ├── login.html
-│   ├── dashboard.html        # ATUALIZADO: Suporte a Agenda
+│   ├── dashboard.html        # ATUALIZADO: Botão ADM no cabeçalho (apenas usuário 1)
+│   ├── adm.php               # NOVO: Painel administrativo (restrito ao usuário 1)
+│   ├── configuracao-tts.php  # NOVO: CRUD mobile para tabela pronuncias
 │   ├── settings.html
 │   ├── editor.html           # Interface do editor de código
 │   ├── schedule.html         # NOVO: Interface da Linha do Tempo / Agenda
@@ -168,6 +171,21 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
 FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
 FOREIGN KEY (parent_id) REFERENCES adjacency_items(id) ON DELETE CASCADE
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+======================================================================
+
+TABELA: pronuncias
+id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+language VARCHAR(10) NOT NULL COMMENT 'pt-BR | en-US | en-GB',
+source_text VARCHAR(255) NOT NULL COMMENT 'Texto original encontrado',
+target_text VARCHAR(255) NOT NULL COMMENT 'Texto substituto para melhor pronúncia no TTS',
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+UNIQUE KEY uniq_language_source (language, source_text),
+INDEX idx_language (language)
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================

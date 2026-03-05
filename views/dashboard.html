@@ -145,6 +145,11 @@
                 
                 <div class="h-6 w-px bg-slate-700"></div>
                 
+                <button onclick="window.location.href='/adm'" id="btn-admin-header" class="hidden text-sm text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-2" title="Painel administrativo">
+                    <i class="fa-solid fa-user-shield text-xl"></i>
+                    <span class="hidden sm:inline font-medium">ADM</span>
+                </button>
+
                 <button onclick="window.location.href='/settings'" class="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2" title="Meu Perfil">
                     <i class="fa-solid fa-circle-user text-xl"></i> 
                     <span class="hidden sm:inline font-medium">Perfil</span>
@@ -1475,6 +1480,22 @@
         };
 
         document.addEventListener('DOMContentLoaded', () => app.init());
+
+
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const response = await fetch('/api/user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'get_session' })
+    });
+    const data = await response.json();
+    if (data.status === 'success' && data.data && data.data.id === 1) {
+      const adminBtn = document.getElementById('btn-admin-header');
+      if (adminBtn) adminBtn.classList.remove('hidden');
+    }
+  } catch (e) {}
+});
         
 ////////////////////////////////////////
 //FORÇA A PROIBIÇÃO DE ZOOM PARA IPHONE
