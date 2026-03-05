@@ -939,7 +939,6 @@
                 this.setLoading(true);
                 this.renderBreadcrumbs();
                 this.updateTopButtons();
-                this.renderProfileHeader();
                 const response = await this.api('directories', 'fetch', { parent_id: this.getCurrentParentId(), target_user_id: this.state.profileUserId || undefined });
                 if (response) { 
                     this.state.directories = response.data; 
