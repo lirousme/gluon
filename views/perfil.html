@@ -667,7 +667,7 @@
                     }
                 }
 
-                if (!this.state.profileData && this.state.sessionUserId) {
+                if (!this.state.profileData && !this.state.profileUserId && this.state.sessionUserId) {
                     const ownProfileRes = await this.api('user', 'get_public_profile', { target_user_id: this.state.sessionUserId });
                     if (ownProfileRes && ownProfileRes.data) {
                         this.state.profileData = ownProfileRes.data;
@@ -925,7 +925,7 @@
 
                 const followBtn = document.getElementById('profileFollowBtn');
                 if (followBtn) {
-                    if (!this.isVisitingProfile()) {
+                    if (!this.isVisitingProfile() || !this.state.profileData) {
                         followBtn.classList.add('hidden');
                         return;
                     }
