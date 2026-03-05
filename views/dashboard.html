@@ -161,6 +161,37 @@
     <!-- Main Workspace -->
     <main class="flex-1 max-w-none w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-0 flex flex-col overflow-hidden relative min-h-0">
         <div class="flex flex-col mb-6 gap-3 shrink-0">
+            <section id="profilePresentation" class="hidden w-full rounded-2xl border border-slate-700/70 bg-gluon-secondary/90 p-4 sm:p-5">
+                <div class="flex items-start gap-4">
+                    <div id="profileAvatar" class="w-20 h-20 rounded-full border border-slate-600 bg-slate-800 flex items-center justify-center shrink-0 overflow-hidden">
+                        <i class="fa-solid fa-user text-3xl text-slate-500"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="grid grid-cols-3 gap-3 text-center mb-3">
+                            <div>
+                                <div id="profileFollowingCount" class="text-base font-semibold text-white leading-none">0</div>
+                                <div class="text-xs text-slate-400 mt-1">seguindo</div>
+                            </div>
+                            <div>
+                                <div id="profileFollowersCount" class="text-base font-semibold text-white leading-none">0</div>
+                                <div class="text-xs text-slate-400 mt-1">seguidores</div>
+                            </div>
+                            <div>
+                                <div id="profileDirectoriesCount" class="text-base font-semibold text-white leading-none">0</div>
+                                <div class="text-xs text-slate-400 mt-1">diretórios</div>
+                            </div>
+                        </div>
+                        <button id="profileFollowBtn" onclick="app.toggleFollowFromProfileCard()" class="w-full px-4 py-2 rounded-lg transition-all font-medium bg-gluon-primary hover:bg-blue-600 text-white">Seguir</button>
+                    </div>
+                </div>
+
+                <div class="mt-4 space-y-1">
+                    <div id="profileDisplayName" class="text-sm font-semibold text-white truncate">Usuário</div>
+                    <div id="profileUsername" class="text-sm text-slate-400 truncate">@username</div>
+                    <div id="profileBio" class="text-sm text-slate-300 leading-relaxed break-words"></div>
+                </div>
+            </section>
+
             <div class="block text-sm text-slate-300 font-medium w-full leading-relaxed break-words" id="breadcrumbs"></div>
             
             <div id="reorder-hint" class="hidden animate-pulse text-green-400 text-sm font-medium w-full text-center bg-green-500/10 py-2 px-4 rounded-lg border border-green-500/20">
@@ -390,6 +421,7 @@
                 sessionUserId: null,
                 profileUserId: null,
                 profileUsername: '',
+                profileData: null,
                 isFollowingProfile: false,
                 isCurrentDirectorySaved: false,
                 isLoading: false,
@@ -607,6 +639,7 @@
                     if (profileRes && profileRes.data) {
                         this.state.profileUserId = profileRes.data.id;
                         this.state.profileUsername = profileRes.data.username;
+                        this.state.profileData = profileRes.data;
                         this.state.isFollowingProfile = profileRes.data.is_following === 1;
                     }
                 }
@@ -639,6 +672,7 @@
                 });
 
                 this.updateTopButtons();
+                this.renderProfilePresentation();
                 await this.fetchDirectories();
                 this.setupEventListeners();
             },
@@ -810,6 +844,67 @@
                     : 'Meu Cofre';
             },
 
+            renderProfilePresentation() {
+                const card = document.getElementById('profilePresentation');
+                if (!card) return;
+
+                if (!this.isVisitingProfile() || !this.state.profileData) {
+                    card.classList.add('hidden');
+                    return;
+                }
+
+                card.classList.remove('hidden');
+
+                const data = this.state.profileData;
+                const displayName = (data.display_name || data.username || 'Usuário').trim();
+                const username = data.username || 'usuario';
+                const bio = (data.bio || '').trim();
+                const avatar = (data.profile_image_url || '').trim();
+
+                document.getElementById('profileDisplayName').textContent = displayName;
+                document.getElementById('profileUsername').textContent = `@${username}`;
+                document.getElementById('profileBio').textContent = bio || 'Sem bio.';
+                document.getElementById('profileFollowingCount').textContent = String(data.following_count ?? 0);
+                document.getElementById('profileFollowersCount').textContent = String(data.followers_count ?? 0);
+                document.getElementById('profileDirectoriesCount').textContent = String(data.public_directories_count ?? 0);
+
+                const avatarEl = document.getElementById('profileAvatar');
+                if (avatarEl) {
+                    avatarEl.innerHTML = avatar
+                        ? `<img src="${this.escapeHTML(avatar)}" alt="Foto de perfil" class="w-full h-full object-cover">`
+                        : '<i class="fa-solid fa-user text-3xl text-slate-500"></i>';
+                }
+
+                const followBtn = document.getElementById('profileFollowBtn');
+                if (followBtn) {
+                    const following = this.state.isFollowingProfile;
+                    followBtn.className = `w-full px-4 py-2 rounded-lg transition-all font-medium ${following ? 'bg-slate-600 text-slate-200' : 'bg-gluon-primary hover:bg-blue-600 text-white'}`;
+                    followBtn.textContent = following ? 'Seguindo' : 'Seguir';
+                }
+            },
+
+            async refreshProfileData() {
+                if (!this.state.profileUserId) return;
+                const profileRes = await this.api('user', 'get_public_profile', { target_user_id: this.state.profileUserId });
+                if (profileRes && profileRes.data) {
+                    this.state.profileData = profileRes.data;
+                    this.state.profileUsername = profileRes.data.username;
+                    this.state.isFollowingProfile = profileRes.data.is_following === 1;
+                }
+            },
+
+            async toggleFollowFromProfileCard() {
+                if (!this.isVisitingProfile()) return;
+                const response = await this.api('user', 'toggle_follow', { target_user_id: this.state.profileUserId });
+                if (response && response.data) {
+                    this.state.isFollowingProfile = response.data.is_following === 1;
+                    await this.refreshProfileData();
+                    this.updateTopButtons();
+                    this.renderProfilePresentation();
+                    this.showToast(response.message || 'Status atualizado.', 'success');
+                }
+            },
+
             async fetchSavedStatusForCurrentDirectory() {
                 this.state.isCurrentDirectorySaved = false;
                 if (!this.isVisitingProfile()) return;
@@ -828,12 +923,7 @@
                 }
 
                 if (this.getCurrentParentId() === null) {
-                    const response = await this.api('user', 'toggle_follow', { target_user_id: this.state.profileUserId });
-                    if (response && response.data) {
-                        this.state.isFollowingProfile = response.data.is_following === 1;
-                        this.updateTopButtons();
-                        this.showToast(response.message || 'Status atualizado.', 'success');
-                    }
+                    await this.toggleFollowFromProfileCard();
                     return;
                 }
 
@@ -1057,18 +1147,20 @@
                 const primaryBtn = document.getElementById('primaryActionBtn');
                 if (primaryBtn) {
                     if (!isVisitor) {
+                        primaryBtn.classList.remove('hidden');
                         primaryBtn.className = 'w-full sm:w-auto shrink-0 bg-gluon-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 font-medium';
                         primaryBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Novo Item';
                     } else if (this.getCurrentParentId() === null) {
-                        const following = this.state.isFollowingProfile;
-                        primaryBtn.className = `w-full sm:w-auto px-4 py-2 rounded-lg transition-all flex items-center justify-center font-medium ${following ? 'bg-slate-600 text-slate-200' : 'bg-gluon-primary hover:bg-blue-600 text-white shadow-lg shadow-blue-500/20'}`;
-                        primaryBtn.innerHTML = following ? 'Seguindo' : 'Seguir';
+                        primaryBtn.classList.add('hidden');
                     } else {
+                        primaryBtn.classList.remove('hidden');
                         const saved = this.state.isCurrentDirectorySaved;
                         primaryBtn.className = `w-full sm:w-auto shrink-0 px-4 py-2 rounded-lg transition-all flex items-center justify-center gap-2 font-medium ${saved ? 'bg-slate-600 text-slate-200' : 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-500/20'}`;
                         primaryBtn.innerHTML = `<i class="fa-solid fa-bookmark"></i> ${saved ? 'Salvo' : 'Salvar'}`;
                     }
                 }
+
+                this.renderProfilePresentation();
 
                 const hideForVisitor = ['btn-copy-dir', 'btn-paste-dir', 'btn-move-dir', 'btn-create-portal', 'btn-reorder-desktop', 'btn-reorder-mobile', 'btn-profile-settings'];
                 hideForVisitor.forEach(id => {

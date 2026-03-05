@@ -110,7 +110,51 @@ elseif ($action === 'get_public_profile') {
         die(json_encode(['status' => 'error', 'message' => 'Usuário alvo inválido.']));
     }
 
-    $stmt = $pdo->prepare("SELECT id, username FROM users WHERE id = ?");
+    $hasDisplayName = false;
+    $hasBio = false;
+    $hasProfileImage = false;
+    $possibleDisplayNameColumns = ['name', 'display_name', 'full_name'];
+    $possibleBioColumns = ['bio', 'biography'];
+    $possibleImageColumns = ['profile_image_url', 'avatar_url', 'photo_url'];
+
+    $columnStmt = $pdo->prepare("SHOW COLUMNS FROM users LIKE ?");
+
+    $displayNameColumn = null;
+    foreach ($possibleDisplayNameColumns as $column) {
+        $columnStmt->execute([$column]);
+        if ($columnStmt->fetch()) {
+            $hasDisplayName = true;
+            $displayNameColumn = $column;
+            break;
+        }
+    }
+
+    $bioColumn = null;
+    foreach ($possibleBioColumns as $column) {
+        $columnStmt->execute([$column]);
+        if ($columnStmt->fetch()) {
+            $hasBio = true;
+            $bioColumn = $column;
+            break;
+        }
+    }
+
+    $profileImageColumn = null;
+    foreach ($possibleImageColumns as $column) {
+        $columnStmt->execute([$column]);
+        if ($columnStmt->fetch()) {
+            $hasProfileImage = true;
+            $profileImageColumn = $column;
+            break;
+        }
+    }
+
+    $selectParts = ['id', 'username'];
+    if ($hasDisplayName && $displayNameColumn) $selectParts[] = "$displayNameColumn AS display_name";
+    if ($hasBio && $bioColumn) $selectParts[] = "$bioColumn AS bio";
+    if ($hasProfileImage && $profileImageColumn) $selectParts[] = "$profileImageColumn AS profile_image_url";
+
+    $stmt = $pdo->prepare("SELECT " . implode(', ', $selectParts) . " FROM users WHERE id = ?");
     $stmt->execute([$target_user_id]);
     $target = $stmt->fetch();
     if (!$target) {
@@ -124,9 +168,27 @@ elseif ($action === 'get_public_profile') {
         $is_following = $stmtFollow->fetchColumn() ? 1 : 0;
     }
 
+    $stmtFollowers = $pdo->prepare("SELECT COUNT(*) FROM user_follows WHERE followed_id = ?");
+    $stmtFollowers->execute([$target_user_id]);
+    $followersCount = (int)$stmtFollowers->fetchColumn();
+
+    $stmtFollowing = $pdo->prepare("SELECT COUNT(*) FROM user_follows WHERE follower_id = ?");
+    $stmtFollowing->execute([$target_user_id]);
+    $followingCount = (int)$stmtFollowing->fetchColumn();
+
+    $stmtPublicDirectories = $pdo->prepare("SELECT COUNT(*) FROM directories WHERE user_id = ? AND is_public = 1");
+    $stmtPublicDirectories->execute([$target_user_id]);
+    $publicDirectoriesCount = (int)$stmtPublicDirectories->fetchColumn();
+
     echo json_encode(['status' => 'success', 'data' => [
         'id' => (int)$target['id'],
         'username' => $target['username'],
+        'display_name' => $target['display_name'] ?? $target['username'],
+        'bio' => $target['bio'] ?? '',
+        'profile_image_url' => $target['profile_image_url'] ?? '',
+        'followers_count' => $followersCount,
+        'following_count' => $followingCount,
+        'public_directories_count' => $publicDirectoriesCount,
         'is_following' => (int)$is_following
     ]]);
 }
