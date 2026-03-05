@@ -1307,14 +1307,30 @@
                 const b = Math.round(b1 + (b2 - b1) * t);
                 return `rgb(${r}, ${g}, ${b})`;
             },
-            getDeckScoreMarkup(dir, sizeClass = 'text-sm') {
-                const percentage = Math.max(0, Math.min(100, Number(dir.deck_percentage) || 0));
+            getDeckDisplayData(dir) {
+                const isDeck = dir.type === 4;
+                const isBookDeck = isDeck && dir.deck_mode === 'livro';
+                const percentageValue = isBookDeck ? Number(dir.book_percentage) : Number(dir.deck_percentage);
+                const percentage = Math.max(0, Math.min(100, percentageValue || 0));
                 const color = this.getDeckScoreColor(percentage);
-                const iconClass = dir.type === 4 ? 'fa-ranking-star' : dir.icon;
-                const percentHtml = dir.type === 4 ? `<span class="${sizeClass} font-semibold" style="color:${color}">${percentage}%</span>` : '';
                 return {
-                    iconHtml: `<i class="fa-solid ${iconClass}" style="${dir.type === 4 ? `color:${color}` : this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>`,
-                    percentHtml
+                    isDeck,
+                    isBookDeck,
+                    percentage,
+                    color,
+                    rank: Math.max(0, Number(dir.book_rank) || 0),
+                    iconClass: isDeck ? (isBookDeck ? 'fa-book-open' : 'fa-ranking-star') : dir.icon,
+                    title: isBookDeck ? 'Livro' : 'Flashcards'
+                };
+            },
+
+            getDeckScoreMarkup(dir, sizeClass = 'text-sm') {
+                const deckData = this.getDeckDisplayData(dir);
+                const percentHtml = deckData.isDeck ? `<span class="${sizeClass} font-semibold" style="color:${deckData.color}">${deckData.percentage}%</span>` : '';
+                return {
+                    iconHtml: `<i class="fa-solid ${deckData.iconClass}" style="${deckData.isDeck ? `color:${deckData.color}` : this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>`,
+                    percentHtml,
+                    ...deckData
                 };
             },
 
@@ -1330,9 +1346,9 @@
                          container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60"><i class="fa-solid fa-calendar-days text-4xl mb-3" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i><span class="text-sm font-medium">Agenda</span><span class="text-xs mt-1 text-center px-4">Clique no topo para abrir</span></div>`;
                          return; 
                     } else if (dir.type === 4) {
-                         const deckColor = this.getDeckScoreColor(dir.deck_percentage);
-                         const deckPct = Math.max(0, Math.min(100, Number(dir.deck_percentage) || 0));
-                         container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60"><i class="fa-solid fa-ranking-star text-4xl mb-3" style="color:${deckColor}"></i><span class="text-sm font-medium">Flashcards · <span style="color:${deckColor}">${deckPct}%</span></span><span class="text-xs mt-1 text-center px-4">Clique no topo para abrir</span></div>`;
+                         const deckData = this.getDeckDisplayData(dir);
+                         const rankHtml = deckData.isBookDeck ? `<span class="text-xs mt-1">Rank: <span style="color:${deckData.color}">${deckData.rank}</span></span>` : '';
+                         container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60"><i class="fa-solid ${deckData.iconClass} text-4xl mb-3" style="color:${deckData.color}"></i><span class="text-sm font-medium">${deckData.title} · <span style="color:${deckData.color}">${deckData.percentage}%</span></span>${rankHtml}<span class="text-xs mt-1 text-center px-4">Clique no topo para abrir</span></div>`;
                          return; 
                     }
 
@@ -1364,7 +1380,7 @@
                                 <div class="flex items-center gap-2 truncate pr-2 relative z-10">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
                                     ${subScore.iconHtml.replace('></i>', ' text-sm></i>')}
-                                    <span class="text-sm text-slate-200 truncate font-medium">${this.escapeHTML(sub.name)} ${sub.type === 4 ? subScore.percentHtml : ''} ${repeatIcon}</span>
+                                    <span class="text-sm text-slate-200 truncate font-medium">${this.escapeHTML(sub.name)} ${sub.type === 4 ? `${subScore.percentHtml}${subScore.isBookDeck ? `<span class="text-[10px] text-slate-400 ml-1">R:${subScore.rank}</span>` : ''}` : ''} ${repeatIcon}</span>
                                 </div>
                                 <button onclick="event.stopPropagation(); app.openModal(${sub.id})" class="relative z-10 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 sm:opacity-0 group-hover:opacity-100 transition-all border border-slate-600 cog-btn"><i class="fa-solid fa-cog text-xs"></i></button>
                             </div>`;
@@ -1426,7 +1442,7 @@
                             <div class="relative z-10 flex flex-col items-center justify-center w-full h-full p-4 pt-6">
                                 ${dirScore.iconHtml.replace('></i>', ' text-4xl sm:text-5xl mb-3 drop-shadow-md sm:group-hover:scale-110 transition-transform></i>')}
                                 <span class="text-xs sm:text-sm font-medium text-slate-200 w-full truncate px-1 drop-shadow-md">${this.escapeHTML(dir.name)}</span>
-                                ${dir.type === 4 ? `<span class="text-xs font-semibold mt-1" style="color:${this.getDeckScoreColor(dir.deck_percentage)}">${Math.max(0, Math.min(100, Number(dir.deck_percentage) || 0))}%</span>` : ''}
+                                ${dir.type === 4 ? `${dirScore.percentHtml}${dirScore.isBookDeck ? `<span class=\"text-[11px] mt-1 text-slate-300\">Rank: <span style=\"color:${dirScore.color}\">${dirScore.rank}</span></span>` : ''}` : ''}
                             </div>
                         </div>`;
                     });
@@ -1449,7 +1465,7 @@
                         <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/50 transition-colors group cursor-pointer border-l-2 ${borderClass} relative overflow-hidden" onclick="app.enterDirectoryOrFile(${dir.id})">
                             <td class="px-2 py-3 text-center hidden grip-handle text-green-500 bg-slate-900/20"><i class="fa-solid fa-grip-vertical"></i></td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-center">
-                                ${dir.cover_url ? `<div class="w-8 h-8 rounded bg-cover bg-center border border-slate-600 inline-block shadow-sm" style="background-image: url('${dir.cover_url}')"></div>` : `<div class="flex items-center justify-center gap-1">${dirScore.iconHtml.replace('></i>', ' text-xl></i>')}${dir.type === 4 ? `<span class="text-[11px] font-semibold" style="color:${this.getDeckScoreColor(dir.deck_percentage)}">${Math.max(0, Math.min(100, Number(dir.deck_percentage) || 0))}%</span>` : ''}</div>`}
+                                ${dir.cover_url ? `<div class="w-8 h-8 rounded bg-cover bg-center border border-slate-600 inline-block shadow-sm" style="background-image: url('${dir.cover_url}')"></div>` : `<div class="flex flex-col items-center justify-center leading-tight">${dirScore.iconHtml.replace('></i>', ' text-xl></i>')}${dir.type === 4 ? `<span class=\"text-[11px] font-semibold\" style=\"color:${dirScore.color}\">${dirScore.percentage}%</span>${dirScore.isBookDeck ? `<span class=\"text-[10px] text-slate-400\">R:${dirScore.rank}</span>` : ''}` : ''}</div>`}
                             </td>
                             <td class="px-4 py-3 sm:py-4 font-medium text-slate-200">${this.escapeHTML(dir.name)} ${repeatIcon}</td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-right">
@@ -1483,7 +1499,7 @@
                                 <div class="flex items-center gap-2 font-semibold text-slate-100 truncate w-full relative z-10 drop-shadow-md">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
                                     ${dirScore.iconHtml.replace('></i>', ' text-lg></i>')}
-                                    <span class="truncate text-sm sm:text-base">${this.escapeHTML(dir.name)} ${dir.type === 4 ? dirScore.percentHtml : ''} ${repeatIcon}</span>
+                                    <span class="truncate text-sm sm:text-base">${this.escapeHTML(dir.name)} ${dir.type === 4 ? `${dirScore.percentHtml}${dirScore.isBookDeck ? `<span class=\"text-[11px] ml-1 text-slate-300\">Rank: <span style=\"color:${dirScore.color}\">${dirScore.rank}</span></span>` : ''}` : ''} ${repeatIcon}</span>
                                 </div>
                                 <div class="flex gap-1 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn relative z-10">
                                     <button onclick="event.stopPropagation(); app.openModal(${dir.id})" class="text-slate-300 hover:text-white bg-slate-800/80 backdrop-blur hover:bg-slate-600 rounded p-1.5 shadow"><i class="fa-solid fa-cog text-xs"></i></button>
