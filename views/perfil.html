@@ -592,6 +592,10 @@
                 return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
             },
 
+            normalizeApiBoolean(value) {
+                return value === true || value === 1 || value === '1';
+            },
+
             getCurrentRoute() {
                 return `${window.location.pathname}${window.location.search}`;
             },
@@ -652,7 +656,7 @@
                         this.state.profileUserId = profileRes.data.id;
                         this.state.profileUsername = profileRes.data.username;
                         this.state.profileData = profileRes.data;
-                        this.state.isFollowingProfile = profileRes.data.is_following === 1;
+                        this.state.isFollowingProfile = this.normalizeApiBoolean(profileRes.data.is_following);
                     }
                 }
 
@@ -932,7 +936,7 @@
                 if (profileRes && profileRes.data) {
                     this.state.profileData = profileRes.data;
                     this.state.profileUsername = profileRes.data.username;
-                    this.state.isFollowingProfile = profileRes.data.is_following === 1;
+                    this.state.isFollowingProfile = this.normalizeApiBoolean(profileRes.data.is_following);
                 }
             },
 
@@ -940,7 +944,7 @@
                 if (!this.isVisitingProfile()) return;
                 const response = await this.api('user', 'toggle_follow', { target_user_id: this.state.profileUserId });
                 if (response && response.data) {
-                    this.state.isFollowingProfile = response.data.is_following === 1;
+                    this.state.isFollowingProfile = this.normalizeApiBoolean(response.data.is_following);
                     await this.refreshProfileData();
                     this.updateTopButtons();
                     this.renderProfilePresentation();
@@ -957,7 +961,7 @@
                 if (!shouldCheckSave) return;
                 const response = await this.api('user', 'get_saved_status', { directory_id: currentId });
                 if (response && response.data) {
-                    this.state.isCurrentDirectorySaved = response.data.is_saved === 1;
+                    this.state.isCurrentDirectorySaved = this.normalizeApiBoolean(response.data.is_saved);
                 }
             },
 
@@ -974,7 +978,7 @@
 
                 const response = await this.api('user', 'toggle_save', { directory_id: this.getCurrentParentId() });
                 if (response && response.data) {
-                    this.state.isCurrentDirectorySaved = response.data.is_saved === 1;
+                    this.state.isCurrentDirectorySaved = this.normalizeApiBoolean(response.data.is_saved);
                     this.updateTopButtons();
                     this.showToast(response.message || 'Status atualizado.', 'success');
                 }
