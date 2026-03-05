@@ -213,11 +213,13 @@ if ($action === 'fetch') {
     $parent_id = isset($input['parent_id']) && $input['parent_id'] !== null ? (int)$input['parent_id'] : null;
 
     $query = "
-        SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, 
+        SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,
                d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to, 
                d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring,
                COALESCE(deck_stats.total_cards, 0) as deck_total_cards,
                COALESCE(deck_stats.total_score, 0) as deck_total_score,
+               COALESCE(book_progress.current_index, 0) as book_current_index,
+               COALESCE(book_progress.completed_reads, 0) as book_completed_reads,
                dr.type as rec_type, dr.interval_value as rec_interval, dr.days_of_week as rec_days, 
                dr.custom_dates as rec_custom, dr.exceptions as rec_exceptions, dr.time_start as rec_time_start, dr.time_end as rec_time_end, dr.end_date as rec_end 
         FROM directories d 
@@ -230,17 +232,18 @@ if ($action === 'fetch') {
             LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
             GROUP BY f.directory_id
         ) deck_stats ON deck_stats.directory_id = d.id
+        LEFT JOIN flashcard_book_progress book_progress ON book_progress.directory_id = d.id AND book_progress.user_id = ?
         WHERE d.user_id = ? 
     ";
     
     if ($parent_id === null) {
         $query .= " AND d.parent_id IS NULL";
         $stmt = $pdo->prepare($query);
-        $stmt->execute([$user_id, $user_id]);
+        $stmt->execute([$user_id, $user_id, $user_id]);
     } else {
         $query .= " AND d.parent_id = ?";
         $stmt = $pdo->prepare($query);
-        $stmt->execute([$user_id, $user_id, $parent_id]);
+        $stmt->execute([$user_id, $user_id, $user_id, $parent_id]);
     }
     
     $directories = $stmt->fetchAll();
@@ -250,6 +253,10 @@ if ($action === 'fetch') {
         $deckTotalCards = (int)($dir['deck_total_cards'] ?? 0);
         $deckTotalScore = (int)($dir['deck_total_score'] ?? 0);
         $deckPercentage = $deckTotalCards > 0 ? (int)round(($deckTotalScore / ($deckTotalCards * 20)) * 100) : 0;
+        $isBookDeck = (($dir['deck_mode'] ?? 'aleatorio') === 'livro');
+        $bookCurrentIndex = (int)($dir['book_current_index'] ?? 0);
+        $bookCompletedReads = (int)($dir['book_completed_reads'] ?? 0);
+        $bookPercentage = $deckTotalCards > 0 ? (int)round((min($bookCurrentIndex, $deckTotalCards) / $deckTotalCards) * 100) : 0;
 
         $response[] = [
             'id' => $dir['id'],
@@ -264,7 +271,10 @@ if ($action === 'fetch') {
             'color_from' => $dir['icon_color_from'] ?? '#3b82f6',
             'color_to' => $dir['icon_color_to'] ?? '#6366f1',
             'cover_url' => !empty($dir['cover_url_encrypted']) ? Security::decryptData($dir['cover_url_encrypted']) : '',
+            'deck_mode' => $dir['deck_mode'] ?? 'aleatorio',
             'deck_percentage' => $deckPercentage,
+            'book_percentage' => $isBookDeck ? $bookPercentage : 0,
+            'book_rank' => $isBookDeck ? $bookCompletedReads : 0,
             'start_date' => $dir['start_date'],
             'end_date' => $dir['end_date'],
             'is_recurring' => (int)($dir['is_recurring'] ?? 0),
