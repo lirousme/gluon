@@ -127,7 +127,7 @@
     <!-- Navbar -->
     <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-16 flex items-center justify-between px-4 sm:px-6 relative">
         <div class="flex items-center gap-4">
-            <button onclick="window.location.href='/dashboard'" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg border border-slate-700 shadow-sm" title="Voltar">
+            <button onclick="goBackToMarkedRoute()" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg border border-slate-700 shadow-sm" title="Voltar">
                 <i class="fa-solid fa-arrow-left"></i>
             </button>
             <div class="h-6 w-px bg-slate-700 hidden sm:block"></div>
@@ -407,6 +407,20 @@
     </div>
 
     <script>
+        function getMarkedBackRoute() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const from = urlParams.get('from');
+            return from ? decodeURIComponent(from) : '/dashboard';
+        }
+
+        function goBackToMarkedRoute() {
+            if (window.history.length > 1) {
+                window.history.back();
+                return;
+            }
+            window.location.href = getMarkedBackRoute();
+        }
+
         const flashcardApp = {
             deckId: null,
             deckMode: 'aleatorio',
@@ -425,7 +439,7 @@
                 this.deckId = urlParams.get('id');
 
                 if (!this.deckId) {
-                    window.location.href = '/dashboard';
+                    window.location.href = getMarkedBackRoute();
                     return;
                 }
                 
