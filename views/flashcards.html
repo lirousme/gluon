@@ -174,6 +174,10 @@
                     <span class="absolute left-1 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4 peer-checked:bg-gluon-primary"></span>
                 </div>
             </label>
+
+            <button id="btnResetBookScore" onclick="flashcardApp.openResetBookScoreModal()" class="hidden flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700 text-amber-400 hover:text-amber-300" title="Zerar pontuação do livro">
+                <i class="fa-solid fa-rotate-left text-sm"></i>
+            </button>
             
             <button id="btnExportExcel" onclick="flashcardApp.exportToExcel()" class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700 text-emerald-500 hover:text-emerald-400" title="Baixar Todo o Deck (Excel / CSV)">
                 <i class="fa-solid fa-file-export text-sm"></i>
@@ -425,6 +429,25 @@
         <img id="imageModalSrc" src="" class="w-auto h-auto max-w-[95vw] max-h-[95vh] sm:max-w-full sm:max-h-full object-contain rounded-lg shadow-2xl transform scale-95 transition-transform duration-300" onclick="event.stopPropagation()">
     </div>
 
+    <!-- Modal: Zerar Pontuação do Livro -->
+    <div id="resetBookScoreModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
+        <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-0 transform scale-95 transition-transform duration-300 overflow-hidden" id="resetBookScoreModalContent">
+            <div class="p-5 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-rotate-left text-amber-400"></i> Zerar pontuação
+                </h3>
+                <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-6 space-y-5">
+                <p class="text-slate-300 text-sm leading-relaxed">Deseja realmente zerar sua pontuação de leitura completa neste deck de livro?</p>
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="flashcardApp.closeModals()" class="px-5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
+                    <button type="button" id="btnConfirmResetBookScore" onclick="flashcardApp.resetBookScore()" class="px-5 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold transition-colors">Zerar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         function getMarkedBackRoute() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -447,6 +470,8 @@
             backLanguage: 'en-GB',
             deckPercentage: 0,
             totalCardsInDeck: 0,
+            bookCompletedReads: 0,
+            bookCompletedReadsMax: 3,
             cards: [],
             currentIndex: 0,
             isFlipped: false,
@@ -529,7 +554,15 @@
                     this.cards = res.data || [];
                     this.deckPercentage = res.deck_percentage || 0;
                     this.totalCardsInDeck = res.total_cards || 0;
+                    this.bookCompletedReads = Math.max(0, Math.min(res.book_completed_reads || 0, 3));
+                    this.bookCompletedReadsMax = res.book_completed_reads_max || 3;
                     this.currentIndex = res.current_index || 0;
+
+                    const resetBtn = document.getElementById('btnResetBookScore');
+                    if (resetBtn) {
+                        resetBtn.classList.toggle('hidden', this.deckMode !== 'livro');
+                        resetBtn.classList.toggle('flex', this.deckMode === 'livro');
+                    }
                     
                     if (this.cards.length === 0) {
                         this.showEmptyState();
@@ -603,12 +636,13 @@
                 
                 if (this.deckMode === 'livro') {
                     const progress = this.cards.length > 0 ? Math.round(((this.currentIndex + 1) / this.cards.length) * 100) : 0;
+                    const scoreColor = this.getDeckScoreColor(this.deckPercentage);
                     badge.className = 'flex items-center gap-1.5 bg-slate-800/80 border border-slate-600 px-2 py-1 rounded-md text-xs font-semibold text-emerald-400 shadow-inner';
-                    badge.innerHTML = `<i class="fa-solid fa-book-open"></i> <span>Pág ${this.currentIndex + 1} (${progress}%)</span>`;
+                    badge.innerHTML = `<i class="fa-solid fa-book-open"></i> <span>Pág ${this.currentIndex + 1} (${progress}%) • Rank ${this.bookCompletedReads}/${this.bookCompletedReadsMax}</span>`;
                     const progressBar = document.getElementById('deckProgressBar');
-                    progressBar.className = "h-full bg-emerald-500 transition-all duration-700 ease-out";
-                    progressBar.style.backgroundColor = '';
-                    progressBar.style.width = `${progress}%`;
+                    progressBar.className = "h-full transition-all duration-700 ease-out";
+                    progressBar.style.backgroundColor = scoreColor;
+                    progressBar.style.width = `${this.deckPercentage}%`;
                 } else {
                     const scoreColor = this.getDeckScoreColor(this.deckPercentage);
                     badge.className = 'flex items-center gap-1.5 bg-slate-800/80 border border-slate-600 px-2 py-1 rounded-md text-xs font-semibold shadow-inner';
@@ -766,6 +800,14 @@
 
                 if (this.currentIndex < this.cards.length - 1) {
                     this.currentIndex++;
+                    const reachedBookEnd = this.deckMode === 'livro' && this.currentIndex === this.cards.length - 1;
+
+                    if (reachedBookEnd && this.bookCompletedReads < this.bookCompletedReadsMax) {
+                        this.bookCompletedReads = Math.min(this.bookCompletedReads + 1, this.bookCompletedReadsMax);
+                        this.deckPercentage = Math.round((this.bookCompletedReads / this.bookCompletedReadsMax) * 100);
+                        this.api('increment_book_score', { deck_id: this.deckId }).catch(e => console.error(e));
+                    }
+
                     this.renderCurrentCard();
                     if (this.deckMode === 'livro') this.saveBookProgress();
                     
@@ -1261,7 +1303,7 @@
             },
 
             closeModals() {
-                ['settings', 'single', 'bulk'].forEach(prefix => {
+                ['settings', 'single', 'bulk', 'resetBookScore'].forEach(prefix => {
                     const modal = document.getElementById(`${prefix}Modal`);
                     const content = document.getElementById(`${prefix}ModalContent`);
                     if(modal && !modal.classList.contains('hidden')) {
@@ -1269,6 +1311,34 @@
                         setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
                     }
                 });
+            },
+
+            openResetBookScoreModal() {
+                if (this.deckMode !== 'livro') return;
+                const modal = document.getElementById('resetBookScoreModal');
+                const content = document.getElementById('resetBookScoreModalContent');
+                modal.classList.remove('hidden'); modal.classList.add('flex');
+                setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); }, 20);
+            },
+
+            async resetBookScore() {
+                if (this.deckMode !== 'livro') return;
+                const btn = document.getElementById('btnConfirmResetBookScore');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+                btn.disabled = true;
+
+                const res = await this.api('reset_book_score', { deck_id: this.deckId });
+                if (res) {
+                    this.bookCompletedReads = 0;
+                    this.deckPercentage = 0;
+                    this.updateGlobalProgressUI();
+                    this.showToast(res.message || 'Pontuação zerada com sucesso!', 'success');
+                    this.closeModals();
+                }
+
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             },
 
             async saveSettings(e) {

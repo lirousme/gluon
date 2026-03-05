@@ -195,6 +195,7 @@ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 user_id INT UNSIGNED NOT NULL,
 directory_id INT UNSIGNED NOT NULL,
 current_index INT UNSIGNED DEFAULT 0,
+completed_reads TINYINT UNSIGNED DEFAULT 0 COMMENT 'Leituras completas do deck livro (max 3)',
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
 UNIQUE KEY unique_user_deck (user_id, directory_id),

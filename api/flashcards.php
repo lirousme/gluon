@@ -40,6 +40,10 @@ try {
     $pdo->exec("ALTER TABLE directories ADD COLUMN deck_back_language VARCHAR(10) NOT NULL DEFAULT 'en-GB' AFTER deck_front_language");
 } catch (PDOException $e) {}
 
+try {
+    $pdo->exec("ALTER TABLE flashcard_book_progress ADD COLUMN completed_reads TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER current_index");
+} catch (PDOException $e) {}
+
 
 try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS pronuncias (
@@ -137,6 +141,7 @@ if ($action === 'fetch') {
 
     $deck_mode = $deck['deck_mode'] ?? 'aleatorio';
     $current_index = 0;
+    $book_completed_reads = 0;
 
     if ($deck_mode === 'aleatorio') {
         $stmt = $pdo->prepare("
@@ -156,9 +161,13 @@ if ($action === 'fetch') {
         ");
         $stmt->execute([$deck_id]);
 
-        $stmtProg = $pdo->prepare("SELECT current_index FROM flashcard_book_progress WHERE user_id = ? AND directory_id = ?");
+        $stmtProg = $pdo->prepare("SELECT current_index, completed_reads FROM flashcard_book_progress WHERE user_id = ? AND directory_id = ?");
         $stmtProg->execute([$user_id, $deck_id]);
-        $current_index = (int)$stmtProg->fetchColumn() ?: 0;
+        $progressData = $stmtProg->fetch();
+        if ($progressData) {
+            $current_index = (int)($progressData['current_index'] ?? 0);
+            $book_completed_reads = min(3, (int)($progressData['completed_reads'] ?? 0));
+        }
     }
     
     $cards = $stmt->fetchAll();
@@ -167,16 +176,20 @@ if ($action === 'fetch') {
     $stmtTotal->execute([$deck_id]);
     $total_cards_in_deck = (int)$stmtTotal->fetchColumn();
 
-    $stmtScore = $pdo->prepare("
-        SELECT SUM(score) FROM flashcard_scores fs 
-        JOIN flashcards f ON fs.flashcard_id = f.id 
-        WHERE f.directory_id = ? AND fs.user_id = ?
-    ");
-    $stmtScore->execute([$deck_id, $user_id]);
-    $total_score_deck = (int)$stmtScore->fetchColumn();
-    
-    $max_possible_score = $total_cards_in_deck * 20;
-    $deck_percentage = $max_possible_score > 0 ? round(($total_score_deck / $max_possible_score) * 100) : 0;
+    if ($deck_mode === 'livro') {
+        $deck_percentage = (int)round(($book_completed_reads / 3) * 100);
+    } else {
+        $stmtScore = $pdo->prepare("
+            SELECT SUM(score) FROM flashcard_scores fs 
+            JOIN flashcards f ON fs.flashcard_id = f.id 
+            WHERE f.directory_id = ? AND fs.user_id = ?
+        ");
+        $stmtScore->execute([$deck_id, $user_id]);
+        $total_score_deck = (int)$stmtScore->fetchColumn();
+
+        $max_possible_score = $total_cards_in_deck * 20;
+        $deck_percentage = $max_possible_score > 0 ? round(($total_score_deck / $max_possible_score) * 100) : 0;
+    }
 
     $response = [];
     foreach ($cards as $card) {
@@ -199,6 +212,8 @@ if ($action === 'fetch') {
         'deck_front_language' => normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR'),
         'deck_back_language' => normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB'),
         'deck_percentage' => $deck_percentage,
+        'book_completed_reads' => $book_completed_reads,
+        'book_completed_reads_max' => 3,
         'total_cards' => $total_cards_in_deck,
         'current_index' => $current_index,
         'data' => $response
@@ -405,6 +420,42 @@ elseif ($action === 'update_progress') {
     ");
     $stmt->execute([$user_id, $deck_id, $index, $index]);
     echo json_encode(['status' => 'success']);
+}
+
+elseif ($action === 'increment_book_score') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
+
+    $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
+    if (!$deck || ($deck['deck_mode'] ?? 'aleatorio') !== 'livro') {
+        die(json_encode(['status' => 'error', 'message' => 'Pontuação disponível apenas para decks no modo livro.']));
+    }
+
+    $stmt = $pdo->prepare("
+        INSERT INTO flashcard_book_progress (user_id, directory_id, current_index, completed_reads) 
+        VALUES (?, ?, 0, 1) 
+        ON DUPLICATE KEY UPDATE completed_reads = LEAST(completed_reads + 1, 3)
+    ");
+    $stmt->execute([$user_id, $deck_id]);
+    echo json_encode(['status' => 'success']);
+}
+
+elseif ($action === 'reset_book_score') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
+
+    $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
+    if (!$deck || ($deck['deck_mode'] ?? 'aleatorio') !== 'livro') {
+        die(json_encode(['status' => 'error', 'message' => 'Reset disponível apenas para decks no modo livro.']));
+    }
+
+    $stmt = $pdo->prepare("
+        INSERT INTO flashcard_book_progress (user_id, directory_id, current_index, completed_reads) 
+        VALUES (?, ?, 0, 0) 
+        ON DUPLICATE KEY UPDATE completed_reads = 0
+    ");
+    $stmt->execute([$user_id, $deck_id]);
+    echo json_encode(['status' => 'success', 'message' => 'Pontuação do livro zerada.']);
 }
 
 elseif ($action === 'update_settings') {
