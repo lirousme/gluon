@@ -1616,10 +1616,39 @@
                     }, 10);
                 } else {
                     const name = document.getElementById('dirName').value;
-                    if(confirm(`Atenção: "${name}" será apagado PERMANENTEMENTE.\nDeseja continuar?`)) {
-                        this.executeDelete(id, 'all');
-                    }
+                    this.openDeleteConfirmModal(name);
                 }
+            },
+
+            openDeleteConfirmModal(name) {
+                const message = document.getElementById('deleteConfirmMessage');
+                if (message) {
+                    message.textContent = `Atenção: "${name}" será apagado permanentemente. Deseja continuar?`;
+                }
+
+                const modal = document.getElementById('deleteConfirmModal');
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => {
+                    modal.classList.remove('opacity-0');
+                    modal.children[0].classList.remove('scale-95');
+                }, 10);
+            },
+
+            closeDeleteConfirmModal() {
+                const modal = document.getElementById('deleteConfirmModal');
+                modal.classList.add('opacity-0');
+                modal.children[0].classList.add('scale-95');
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                }, 300);
+            },
+
+            confirmSimpleDelete() {
+                const id = document.getElementById('dirId').value;
+                this.closeDeleteConfirmModal();
+                this.executeDelete(id, 'all');
             },
 
             closeDeleteRecurrenceModal() {
