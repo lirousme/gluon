@@ -31,11 +31,19 @@ try {
 try {
     $pdo->exec("ALTER TABLE flashcards ADD COLUMN image_back_encrypted LONGTEXT DEFAULT NULL AFTER image_front_encrypted");
 } catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE directories ADD COLUMN deck_front_language VARCHAR(10) NOT NULL DEFAULT 'pt-BR' AFTER deck_mode");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE directories ADD COLUMN deck_back_language VARCHAR(10) NOT NULL DEFAULT 'en-GB' AFTER deck_front_language");
+} catch (PDOException $e) {}
 // =========================================================================
 
 // Função auxiliar para verificar se o usuário é dono do deck (Segurança IDOR)
 function verifyDeckOwnership($pdo, $deck_id, $user_id) {
-    $stmt = $pdo->prepare("SELECT id, name_encrypted, deck_mode FROM directories WHERE id = ? AND user_id = ? AND type = 4");
+    $stmt = $pdo->prepare("SELECT id, name_encrypted, deck_mode, deck_front_language, deck_back_language FROM directories WHERE id = ? AND user_id = ? AND type = 4");
     $stmt->execute([$deck_id, $user_id]);
     return $stmt->fetch();
 }
@@ -52,6 +60,29 @@ function verifyCardOwnership($pdo, $card_id, $user_id) {
  * Substitui siglas e palavras estrangeiras pela sua fonética correspondente em português.
  * Pilar: Fácil Manutenção (Basta adicionar novas siglas no array $replacements).
  */
+function normalizeDeckLanguage($value, $default = 'pt-BR') {
+    $allowed = ['pt-BR', 'en-US', 'en-GB'];
+    return in_array($value, $allowed, true) ? $value : $default;
+}
+
+function getFishReferenceIdByLanguage($language) {
+    switch ($language) {
+        case 'pt-BR': return FISH_REFERENCE_ID_PT_BR;
+        case 'en-US': return FISH_REFERENCE_ID_EN_US;
+        case 'en-GB': return FISH_REFERENCE_ID_EN_GB;
+        default: return FISH_REFERENCE_ID_BACK;
+    }
+}
+
+function getLanguageLabel($language) {
+    $map = [
+        'pt-BR' => 'Português Brasileiro',
+        'en-US' => 'Inglês Americano',
+        'en-GB' => 'Inglês Britânico'
+    ];
+    return $map[$language] ?? $language;
+}
+
 function adjustPronunciationForTTS($text) {
     $replacements = [
         // Biologia / Química
@@ -155,6 +186,8 @@ if ($action === 'fetch') {
         'status' => 'success', 
         'deck_name' => Security::decryptData($deck['name_encrypted']),
         'deck_mode' => $deck_mode,
+        'deck_front_language' => normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR'),
+        'deck_back_language' => normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB'),
         'deck_percentage' => $deck_percentage,
         'total_cards' => $total_cards_in_deck,
         'current_index' => $current_index,
@@ -207,7 +240,7 @@ elseif ($action === 'generate_audio') {
         die(json_encode(['status' => 'error', 'message' => 'Parâmetros inválidos.']));
     }
 
-    $stmt = $pdo->prepare("SELECT f.front_encrypted, f.back_encrypted, d.user_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ?");
+    $stmt = $pdo->prepare("SELECT f.front_encrypted, f.back_encrypted, d.user_id, d.deck_front_language, d.deck_back_language FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ?");
     $stmt->execute([$card_id]);
     $card = $stmt->fetch();
 
@@ -222,12 +255,13 @@ elseif ($action === 'generate_audio') {
         die(json_encode(['status' => 'error', 'message' => 'O lado selecionado deste card não possui texto.']));
     }
 
-    // --- AJUSTE DE PRONÚNCIA (TTS) ---
-    // Substitui siglas e palavras antes de enviar para a IA gerar o áudio
-    $text_to_speech = adjustPronunciationForTTS($clean_text);
-    // ---------------------------------
+    $front_language = normalizeDeckLanguage($card['deck_front_language'] ?? 'pt-BR', 'pt-BR');
+    $back_language = normalizeDeckLanguage($card['deck_back_language'] ?? 'en-GB', 'en-GB');
+    $side_language = $side === 'front' ? $front_language : $back_language;
 
-    $reference_id = $side === 'front' ? FISH_REFERENCE_ID_FRONT : FISH_REFERENCE_ID_BACK;
+    // Ajuste de pronúncia atualmente otimizado para PT-BR
+    $text_to_speech = $side_language === 'pt-BR' ? adjustPronunciationForTTS($clean_text) : $clean_text;
+    $reference_id = getFishReferenceIdByLanguage($side_language);
 
     $ch = curl_init('https://api.fish.audio/v1/tts');
     $payload = json_encode([
@@ -270,19 +304,32 @@ elseif ($action === 'generate_audio') {
 
 elseif ($action === 'translate_text') {
     $text = trim($input['text'] ?? '');
+    $source_language = normalizeDeckLanguage($input['source_language'] ?? 'pt-BR', 'pt-BR');
+    $target_language = normalizeDeckLanguage($input['target_language'] ?? 'en-GB', 'en-GB');
 
     if ($text === '') {
         die(json_encode(['status' => 'error', 'message' => 'Texto inválido para tradução.']));
+    }
+
+    if ($source_language === $target_language) {
+        echo json_encode(['status' => 'success', 'translation' => $text]);
+        exit;
     }
 
     if (OPENAI_API_KEY === '') {
         die(json_encode(['status' => 'error', 'message' => 'OPENAI_API_KEY não configurada no .env.']));
     }
 
+    $systemPrompt = sprintf(
+        'Você é um tradutor automático direto e focado. Traduza de %s para %s e retorne EXCLUSIVAMENTE a tradução.',
+        getLanguageLabel($source_language),
+        getLanguageLabel($target_language)
+    );
+
     $payload = json_encode([
         'model' => 'gpt-4o-mini',
         'messages' => [
-            ['role' => 'system', 'content' => 'Você é um tradutor automático direto e focado. Retorne EXCLUSIVAMENTE a tradução.'],
+            ['role' => 'system', 'content' => $systemPrompt],
             ['role' => 'user', 'content' => $text]
         ],
         'temperature' => 0.3
@@ -314,6 +361,7 @@ elseif ($action === 'translate_text') {
 
     echo json_encode(['status' => 'success', 'translation' => $translation]);
 }
+
 
 elseif ($action === 'update_score') {
     $card_id = (int)($input['card_id'] ?? 0);
@@ -352,11 +400,13 @@ elseif ($action === 'update_progress') {
 elseif ($action === 'update_settings') {
     $deck_id = (int)($input['deck_id'] ?? 0);
     $mode = $input['deck_mode'] === 'livro' ? 'livro' : 'aleatorio';
+    $front_language = normalizeDeckLanguage($input['deck_front_language'] ?? 'pt-BR', 'pt-BR');
+    $back_language = normalizeDeckLanguage($input['deck_back_language'] ?? 'en-GB', 'en-GB');
 
     if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
 
-    $stmt = $pdo->prepare("UPDATE directories SET deck_mode = ? WHERE id = ?");
-    if ($stmt->execute([$mode, $deck_id])) echo json_encode(['status' => 'success', 'message' => 'Configurações atualizadas.']);
+    $stmt = $pdo->prepare("UPDATE directories SET deck_mode = ?, deck_front_language = ?, deck_back_language = ? WHERE id = ?");
+    if ($stmt->execute([$mode, $front_language, $back_language, $deck_id])) echo json_encode(['status' => 'success', 'message' => 'Configurações atualizadas.']);
     else echo json_encode(['status' => 'error', 'message' => 'Erro ao salvar.']);
 }
 

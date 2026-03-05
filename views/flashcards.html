@@ -274,6 +274,25 @@
                         </label>
                     </div>
                 </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="deckFrontLanguage" class="block text-sm font-medium text-slate-300 mb-2">Idioma da Frente</label>
+                        <select id="deckFrontLanguage" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-gluon-primary">
+                            <option value="pt-BR">Português Brasileiro</option>
+                            <option value="en-US">Inglês Americano</option>
+                            <option value="en-GB">Inglês Britânico</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="deckBackLanguage" class="block text-sm font-medium text-slate-300 mb-2">Idioma do Verso</label>
+                        <select id="deckBackLanguage" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-gluon-primary">
+                            <option value="pt-BR">Português Brasileiro</option>
+                            <option value="en-US">Inglês Americano</option>
+                            <option value="en-GB">Inglês Britânico</option>
+                        </select>
+                    </div>
+                </div>
                 
                 <div class="flex justify-end pt-4 border-t border-slate-700 gap-3">
                     <button type="button" onclick="flashcardApp.closeModals()" class="px-5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
@@ -424,6 +443,8 @@
         const flashcardApp = {
             deckId: null,
             deckMode: 'aleatorio',
+            frontLanguage: 'pt-BR',
+            backLanguage: 'en-GB',
             deckPercentage: 0,
             totalCardsInDeck: 0,
             cards: [],
@@ -503,6 +524,8 @@
                 if (res) {
                     document.getElementById('deckName').innerText = res.deck_name || 'Flashcards';
                     this.deckMode = res.deck_mode || 'aleatorio';
+                    this.frontLanguage = res.deck_front_language || 'pt-BR';
+                    this.backLanguage = res.deck_back_language || 'en-GB';
                     this.cards = res.data || [];
                     this.deckPercentage = res.deck_percentage || 0;
                     this.totalCardsInDeck = res.total_cards || 0;
@@ -1168,6 +1191,8 @@
                 for(let i=0; i<radios.length; i++){
                     radios[i].checked = (radios[i].value === this.deckMode);
                 }
+                document.getElementById('deckFrontLanguage').value = this.frontLanguage;
+                document.getElementById('deckBackLanguage').value = this.backLanguage;
                 const modal = document.getElementById('settingsModal');
                 const content = document.getElementById('settingsModalContent');
                 modal.classList.remove('hidden'); modal.classList.add('flex');
@@ -1224,11 +1249,19 @@
                 let selectedMode = 'aleatorio';
                 for(let i=0; i<radios.length; i++){ if(radios[i].checked) selectedMode = radios[i].value; }
 
+                const frontLanguage = document.getElementById('deckFrontLanguage').value;
+                const backLanguage = document.getElementById('deckBackLanguage').value;
+
                 const btn = document.getElementById('btnSaveSettings');
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
                 btn.disabled = true;
 
-                const res = await this.api('update_settings', { deck_id: this.deckId, deck_mode: selectedMode });
+                const res = await this.api('update_settings', {
+                    deck_id: this.deckId,
+                    deck_mode: selectedMode,
+                    deck_front_language: frontLanguage,
+                    deck_back_language: backLanguage
+                });
                 if (res) {
                     this.showToast(res.message, 'success');
                     this.closeModals();
@@ -1249,6 +1282,8 @@
 
                 const textToTranslate = frontText || backText;
                 const targetEl = frontText ? backEl : frontEl;
+                const sourceLanguage = frontText ? this.frontLanguage : this.backLanguage;
+                const targetLanguage = frontText ? this.backLanguage : this.frontLanguage;
 
                 const btn = document.getElementById('btnTranslate');
                 const originalHtml = btn.innerHTML;
@@ -1256,7 +1291,7 @@
                 btn.disabled = true;
 
                 try {
-                    const res = await this.api('translate_text', { text: textToTranslate });
+                    const res = await this.api('translate_text', { text: textToTranslate, source_language: sourceLanguage, target_language: targetLanguage });
                     if (!res || !res.translation) throw new Error('A API não retornou uma tradução válida.');
 
                     targetEl.value = res.translation;

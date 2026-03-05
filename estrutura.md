@@ -60,6 +60,8 @@ parent_id INT UNSIGNED DEFAULT NULL, -- NULL significa que está na Raiz
 target_id INT UNSIGNED DEFAULT NULL, -- NOVO: ID do diretório alvo (Apenas para Portais)
 type TINYINT DEFAULT 0,              -- 0 = Pasta, 1 = Arquivo de Código, 2 = Agenda, 3 = Portal, 4 = Deck de Flashcards
 deck_mode VARCHAR(20) DEFAULT 'aleatorio';
+deck_front_language VARCHAR(10) NOT NULL DEFAULT 'pt-BR', -- Idioma da frente do card (pt-BR | en-US | en-GB)
+deck_back_language VARCHAR(10) NOT NULL DEFAULT 'en-GB', -- Idioma do verso do card (pt-BR | en-US | en-GB)
 name_encrypted TEXT NOT NULL,        -- Nome do diretório criptografado
 default_view VARCHAR(10) DEFAULT 'grid',
 new_item_position VARCHAR(10) DEFAULT 'end',
@@ -183,3 +185,13 @@ FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================
+
+======================================================================
+
+NOVAS VARIÁVEIS DE AMBIENTE (.env) PARA VOZES TTS POR IDIOMA
+FISH_REFERENCE_ID_PT_BR=...
+FISH_REFERENCE_ID_EN_US=...
+FISH_REFERENCE_ID_EN_GB=...
+
+(Compatibilidade: se não definidas, o sistema usa os IDs antigos FRONT/BACK.)
+
