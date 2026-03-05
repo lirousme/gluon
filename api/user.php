@@ -199,6 +199,28 @@ elseif ($action === 'toggle_save') {
     }
 }
 
+
+elseif ($action === 'get_following_list') {
+    $stmt = $pdo->prepare("
+        SELECT u.id, u.username
+        FROM user_follows uf
+        INNER JOIN users u ON u.id = uf.followed_id
+        WHERE uf.follower_id = ?
+        ORDER BY u.username ASC
+    ");
+    $stmt->execute([$user_id]);
+
+    $rows = $stmt->fetchAll();
+    $data = array_map(function($row) {
+        return [
+            'id' => (int)$row['id'],
+            'username' => $row['username']
+        ];
+    }, $rows);
+
+    echo json_encode(['status' => 'success', 'data' => $data]);
+}
+
 // === GERENCIAMENTO DE PERFIL E CONTA ===
 
 elseif ($action === 'get_profile') {
