@@ -150,6 +150,10 @@
                     <span class="hidden sm:inline font-medium">ADM</span>
                 </button>
 
+                <button onclick="app.openFollowingList()" id="btn-following-header" class="text-sm text-slate-300 hover:text-white transition-colors flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800/70 hover:bg-slate-700" title="Usuários que você segue">
+                    <span class="font-medium">Seguindo</span>
+                </button>
+
                 <button onclick="window.location.href='/settings'" id="btn-profile-settings" class="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2" title="Meu Perfil">
                     <i class="fa-solid fa-circle-user text-xl"></i> 
                     <span class="hidden sm:inline font-medium">Perfil</span>
@@ -838,6 +842,22 @@
 
             isVisitingProfile() { return this.state.profileUserId !== null && this.state.profileUserId !== this.state.sessionUserId; },
 
+            isCurrentDirectoryReadOnly() {
+                const currentId = this.getCurrentParentId();
+                if (currentId === null) return false;
+                const dir = this.state.directoryCache.get(Number(currentId));
+                return !!(dir && Number(dir.is_read_only) === 1);
+            },
+
+            canEditDirectory(dir) {
+                if (this.isVisitingProfile()) return false;
+                return !(dir && Number(dir.is_read_only) === 1);
+            },
+
+            openFollowingList() {
+                window.location.href = '/buscar?following=1';
+            },
+
             getProfileRootName() {
                 return this.isVisitingProfile() && this.state.profileUsername
                     ? `Perfil de ${this.state.profileUsername}`
@@ -907,9 +927,11 @@
 
             async fetchSavedStatusForCurrentDirectory() {
                 this.state.isCurrentDirectorySaved = false;
-                if (!this.isVisitingProfile()) return;
                 const currentId = this.getCurrentParentId();
                 if (currentId === null) return;
+                const dir = this.state.directoryCache.get(Number(currentId));
+                const shouldCheckSave = this.isVisitingProfile() || (dir && Number(dir.is_read_only) === 1);
+                if (!shouldCheckSave) return;
                 const response = await this.api('user', 'get_saved_status', { directory_id: currentId });
                 if (response && response.data) {
                     this.state.isCurrentDirectorySaved = response.data.is_saved === 1;
@@ -917,7 +939,7 @@
             },
 
             async handlePrimaryAction() {
-                if (!this.isVisitingProfile()) {
+                if (!this.isVisitingProfile() && !this.isCurrentDirectoryReadOnly()) {
                     this.openModal();
                     return;
                 }
@@ -1146,7 +1168,8 @@
 
                 const primaryBtn = document.getElementById('primaryActionBtn');
                 if (primaryBtn) {
-                    if (!isVisitor) {
+                    const isReadOnlyDir = this.isCurrentDirectoryReadOnly();
+                    if (!isVisitor && !isReadOnlyDir) {
                         primaryBtn.classList.remove('hidden');
                         primaryBtn.className = 'w-full sm:w-auto shrink-0 bg-gluon-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 font-medium';
                         primaryBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Novo Item';
@@ -1162,12 +1185,12 @@
 
                 this.renderProfilePresentation();
 
-                const hideForVisitor = ['btn-copy-dir', 'btn-paste-dir', 'btn-move-dir', 'btn-create-portal', 'btn-reorder-desktop', 'btn-reorder-mobile', 'btn-profile-settings'];
+                const hideForVisitor = ['btn-copy-dir', 'btn-paste-dir', 'btn-move-dir', 'btn-create-portal', 'btn-reorder-desktop', 'btn-reorder-mobile', 'btn-profile-settings', 'btn-following-header'];
                 hideForVisitor.forEach(id => {
                     const el = document.getElementById(id);
                     if (!el) return;
                     if (isVisitor) { el.classList.add('hidden'); el.classList.remove('flex'); }
-                    else if (id === 'btn-profile-settings') { el.classList.remove('hidden'); }
+                    else if (id === 'btn-profile-settings' || id === 'btn-following-header') { el.classList.remove('hidden'); }
                 });
 
                 if (isVisitor) return;
@@ -1239,7 +1262,9 @@
             },
 
             openModal(id = '', name = '', targetParentId = null, currentViewMode = 'grid') {
-                if(this.state.reorderMode || this.isVisitingProfile()) return; 
+                if(this.state.reorderMode || this.isVisitingProfile()) return;
+                if (id && !this.canEditDirectory(this.state.directoryCache.get(Number(id)))) return;
+                if (!id && this.isCurrentDirectoryReadOnly()) return; 
 
                 this.switchModalTab('geral');
                 document.getElementById('dirId').value = id;
@@ -1541,8 +1566,8 @@
             },
 
             async loadKanbanContents() {
-                const canEdit = !this.isVisitingProfile();
                 const promises = this.state.directories.map(async (dir) => {
+                    const canEdit = this.canEditDirectory(dir);
                     const container = document.getElementById(`kanban-col-${dir.id}`);
                     if (!container) return;
                     
@@ -1608,8 +1633,6 @@
             render() {
                 const container = document.getElementById('viewContainer');
                 const view = this.getCurrentView();
-                const canEdit = !this.isVisitingProfile();
-                
                 if(view !== 'kanban') this.customScroll.destroy();
 
                 if (this.state.directories.length === 0) {
@@ -1636,6 +1659,7 @@
                         
                         const repeatIcon = dir.is_recurring === 1 ? `<div class="absolute top-2 left-2 bg-slate-900/80 backdrop-blur rounded p-1.5 z-20 text-gluon-primary" title="Tarefa Recorrente"><i class="fa-solid fa-repeat"></i></div>` : '';
                         const dirScore = this.getDeckScoreMarkup(dir, 'text-xs sm:text-sm');
+                        const canEdit = this.canEditDirectory(dir);
 
                         html += `
                         <div data-id="${dir.id}" class="dir-card draggable-item group bg-slate-800 border ${borderClass} rounded-xl flex flex-col items-center text-center cursor-pointer relative overflow-hidden min-h-[140px]" onclick="app.enterDirectoryOrFile(${dir.id})">
@@ -1668,6 +1692,7 @@
 
                         const repeatIcon = dir.is_recurring === 1 ? `<i class="fa-solid fa-repeat ml-2 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
                         const dirScore = this.getDeckScoreMarkup(dir, 'text-xs sm:text-sm');
+                        const canEdit = this.canEditDirectory(dir);
 
                         html += `
                         <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/50 transition-colors group cursor-pointer border-l-2 ${borderClass} relative overflow-hidden" onclick="app.enterDirectoryOrFile(${dir.id})">
@@ -1698,6 +1723,7 @@
                         const dropTargetId = dir.type === 3 ? dir.target_id : dir.id;
                         const repeatIcon = dir.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-sm ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
                         const dirScore = this.getDeckScoreMarkup(dir, 'text-xs');
+                        const canEdit = this.canEditDirectory(dir);
 
                         html += `
                         <div data-id="${dir.id}" class="draggable-item snap-start bg-slate-800 border ${headerBorder} rounded-xl w-[280px] sm:w-80 shrink-0 flex flex-col max-h-full shadow-lg relative transition-colors overflow-hidden min-h-0">
