@@ -202,13 +202,40 @@
                 }
             },
 
+            getMarkedBackRoute() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const from = urlParams.get('from');
+                return from ? decodeURIComponent(from) : '/dashboard';
+            },
+
+            buildViewUrl(view, id) {
+                const from = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
+                return `/${view}?id=${id}&from=${from}`;
+            },
+
+            navigateToItemView(type, id) {
+                const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency' };
+                const targetView = viewByType[type];
+                if (!targetView) return false;
+                window.location.href = this.buildViewUrl(targetView, id);
+                return true;
+            },
+
+            goBack() {
+                if (window.history.length > 1) {
+                    window.history.back();
+                    return;
+                }
+                window.location.href = this.getMarkedBackRoute();
+            },
+
             async init() {
                 this.currentDateObj = new Date(); 
                 const urlParams = new URLSearchParams(window.location.search);
                 this.agendaId = urlParams.get('id');
 
                 if (!this.agendaId) {
-                    window.location.href = '/dashboard';
+                    window.location.href = this.getMarkedBackRoute();
                     return;
                 }
                 
@@ -1017,10 +1044,8 @@
                 const item = this.state.directoryCache.get(Number(id));
                 if(!item) return;
 
-                if (item.type === 1) {
-                    window.location.href = `/editor?id=${id}`;
-                } else if (item.type === 2) {
-                    window.location.href = `/schedule?id=${id}`;
+                if (this.navigateToItemView(item.type, id)) {
+                    return;
                 } else if (item.type === 3) {
                     if (!item.target_id) return this.showToast('Portal corrompido: Destino não encontrado.', 'error');
                     
@@ -1029,11 +1054,7 @@
                     if(pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
                         const targetDir = pathRes.data[pathRes.data.length - 1];
                         
-                        if (targetDir.type === 1) {
-                            window.location.href = `/editor?id=${targetDir.id}`;
-                            return;
-                        } else if (targetDir.type === 2) {
-                            window.location.href = `/schedule?id=${targetDir.id}`;
+                        if (this.navigateToItemView(targetDir.type, targetDir.id)) {
                             return;
                         }
 
@@ -1636,7 +1657,7 @@
                     this.closeModal(); 
                     
                     if (String(id) === String(this.agendaId)) {
-                        window.location.href = '/dashboard';
+                        window.location.href = this.getMarkedBackRoute();
                         return;
                     }
 

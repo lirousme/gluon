@@ -44,7 +44,7 @@
     <!-- Header do Editor -->
     <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-14 flex items-center justify-between px-4">
         <div class="flex items-center gap-4">
-            <button onclick="window.location.href='/dashboard'" class="text-slate-400 hover:text-white transition-colors" title="Voltar">
+            <button onclick="goBackToMarkedRoute()" class="text-slate-400 hover:text-white transition-colors" title="Voltar">
                 <i class="fa-solid fa-arrow-left text-lg"></i>
             </button>
             <div class="h-6 w-px bg-slate-700"></div>
@@ -85,7 +85,22 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/python/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/sql/sql.min.js"></script>
 
+
     <script>
+        function getMarkedBackRoute() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const from = urlParams.get('from');
+            return from ? decodeURIComponent(from) : '/dashboard';
+        }
+
+        function goBackToMarkedRoute() {
+            if (window.history.length > 1) {
+                window.history.back();
+                return;
+            }
+            window.location.href = getMarkedBackRoute();
+        }
+
         const editorApp = {
             cm: null,
             fileId: null,
@@ -97,7 +112,7 @@
 
                 if (!this.fileId) {
                     alert("ID do arquivo não fornecido.");
-                    window.location.href = '/dashboard';
+                    window.location.href = getMarkedBackRoute();
                     return;
                 }
 

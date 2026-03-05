@@ -539,6 +539,23 @@
                 return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
             },
 
+            getCurrentRoute() {
+                return `${window.location.pathname}${window.location.search}`;
+            },
+
+            buildViewUrl(view, id) {
+                const from = encodeURIComponent(this.getCurrentRoute());
+                return `/${view}?id=${id}&from=${from}`;
+            },
+
+            navigateToItemView(type, id) {
+                const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency' };
+                const targetView = viewByType[type];
+                if (!targetView) return false;
+                window.location.href = this.buildViewUrl(targetView, id);
+                return true;
+            },
+
             updateHistoryState(id, portalId = null) {
                 let url = window.location.pathname;
                 if (portalId) {
@@ -562,14 +579,7 @@
                     if (pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
                         const targetDir = pathRes.data[pathRes.data.length - 1];
                         
-                        if (targetDir.type === 1) {
-                            window.location.href = `/editor?id=${targetDir.id}`;
-                            return;
-                        } else if (targetDir.type === 2) {
-                            window.location.href = `/schedule?id=${targetDir.id}`;
-                            return;
-                        } else if (targetDir.type === 4) {
-                            window.location.href = `/flashcards?id=${targetDir.id}`;
+                        if (this.navigateToItemView(targetDir.type, targetDir.id)) {
                             return;
                         }
 
@@ -794,14 +804,8 @@
                 const item = this.state.directoryCache.get(Number(id));
                 if(!item) return;
 
-                if (item.type === 1) {
-                    window.location.href = `/editor?id=${id}`;
-                } else if (item.type === 2) {
-                    window.location.href = `/schedule?id=${id}`;
-                } else if (item.type === 4) {
-                    window.location.href = `/flashcards?id=${id}`;
-                } else if (item.type === 5) {
-                    window.location.href = `/adjacency?id=${id}`;
+                if (this.navigateToItemView(item.type, id)) {
+                    return;
                 } else if (item.type === 3) {
                     if (!item.target_id) return this.showToast('Portal corrompido: Destino não encontrado.', 'error');
                     this.setLoading(true);
@@ -811,14 +815,7 @@
                     if(pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
                         const targetDir = pathRes.data[pathRes.data.length - 1];
                         
-                        if (targetDir.type === 1) {
-                            window.location.href = `/editor?id=${targetDir.id}`;
-                            return;
-                        } else if (targetDir.type === 2) {
-                            window.location.href = `/schedule?id=${targetDir.id}`;
-                            return;
-                        } else if (targetDir.type === 4) {
-                            window.location.href = `/flashcards?id=${targetDir.id}`;
+                        if (this.navigateToItemView(targetDir.type, targetDir.id)) {
                             return;
                         }
 
@@ -852,14 +849,7 @@
                 const targetStep = this.state.path[this.state.path.length - 1];
                 
                 if (targetStep.id !== null) {
-                    if (targetStep.type === 1) {
-                        window.location.href = `/editor?id=${targetStep.id}`;
-                        return;
-                    } else if (targetStep.type === 2) {
-                        window.location.href = `/schedule?id=${targetStep.id}`;
-                        return;
-                    } else if (targetStep.type === 4) {
-                        window.location.href = `/flashcards?id=${targetStep.id}`;
+                    if (this.navigateToItemView(targetStep.type, targetStep.id)) {
                         return;
                     }
                 }

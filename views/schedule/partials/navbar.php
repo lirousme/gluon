@@ -1,6 +1,6 @@
     <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-16 flex items-center justify-between px-4 sm:px-6">
         <div class="flex items-center gap-4">
-            <button onclick="window.location.href='/dashboard'" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg border border-slate-700" title="Voltar">
+            <button onclick="scheduleApp.goBack()" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg border border-slate-700" title="Voltar">
                 <i class="fa-solid fa-arrow-left"></i>
             </button>
             <div class="h-6 w-px bg-slate-700 hidden sm:block"></div>
