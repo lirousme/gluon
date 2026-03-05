@@ -117,36 +117,41 @@ elseif ($action === 'get_public_profile') {
     $possibleBioColumns = ['bio', 'biography'];
     $possibleImageColumns = ['profile_image_url', 'avatar_url', 'photo_url'];
 
-    $columnStmt = $pdo->prepare("SHOW COLUMNS FROM users LIKE ?");
-
     $displayNameColumn = null;
-    foreach ($possibleDisplayNameColumns as $column) {
-        $columnStmt->execute([$column]);
-        if ($columnStmt->fetch()) {
-            $hasDisplayName = true;
-            $displayNameColumn = $column;
-            break;
-        }
-    }
-
     $bioColumn = null;
-    foreach ($possibleBioColumns as $column) {
-        $columnStmt->execute([$column]);
-        if ($columnStmt->fetch()) {
-            $hasBio = true;
-            $bioColumn = $column;
-            break;
-        }
-    }
-
     $profileImageColumn = null;
-    foreach ($possibleImageColumns as $column) {
-        $columnStmt->execute([$column]);
-        if ($columnStmt->fetch()) {
-            $hasProfileImage = true;
-            $profileImageColumn = $column;
-            break;
+
+    try {
+        $columnStmt = $pdo->prepare("SHOW COLUMNS FROM users LIKE ?");
+
+        foreach ($possibleDisplayNameColumns as $column) {
+            $columnStmt->execute([$column]);
+            if ($columnStmt->fetch()) {
+                $hasDisplayName = true;
+                $displayNameColumn = $column;
+                break;
+            }
         }
+
+        foreach ($possibleBioColumns as $column) {
+            $columnStmt->execute([$column]);
+            if ($columnStmt->fetch()) {
+                $hasBio = true;
+                $bioColumn = $column;
+                break;
+            }
+        }
+
+        foreach ($possibleImageColumns as $column) {
+            $columnStmt->execute([$column]);
+            if ($columnStmt->fetch()) {
+                $hasProfileImage = true;
+                $profileImageColumn = $column;
+                break;
+            }
+        }
+    } catch (PDOException $e) {
+        // Segue com campos básicos caso o banco não permita metadados (ex.: SHOW COLUMNS).
     }
 
     $selectParts = ['id', 'username'];

@@ -595,8 +595,10 @@
             normalizeApiBoolean(value) {
                 if (typeof value === 'string') {
                     const normalized = value.trim().toLowerCase();
-                    return normalized === '1' || normalized === 'true';
+                    return ['1', 'true', 't', 'yes', 'y', 'on'].includes(normalized);
                 }
+
+                if (typeof value === 'number') return value !== 0;
 
                 return value === true || value === 1;
             },
@@ -665,7 +667,7 @@
                     }
                 }
 
-                if (!this.state.profileData && this.state.sessionUserId) {
+                if (!this.state.profileData && !this.state.profileUserId && this.state.sessionUserId) {
                     const ownProfileRes = await this.api('user', 'get_public_profile', { target_user_id: this.state.sessionUserId });
                     if (ownProfileRes && ownProfileRes.data) {
                         this.state.profileData = ownProfileRes.data;
@@ -923,7 +925,7 @@
 
                 const followBtn = document.getElementById('profileFollowBtn');
                 if (followBtn) {
-                    if (!this.isVisitingProfile()) {
+                    if (!this.isVisitingProfile() || !this.state.profileData) {
                         followBtn.classList.add('hidden');
                         return;
                     }
@@ -1015,13 +1017,13 @@
             async fetchDirectories() {
                 this.setLoading(true);
                 this.renderBreadcrumbs();
-                this.updateTopButtons();
                 const response = await this.api('directories', 'fetch', { parent_id: this.getCurrentParentId(), target_user_id: this.state.profileUserId || undefined });
-                if (response) { 
-                    this.state.directories = response.data; 
+                if (response) {
+                    this.state.directories = response.data;
                     response.data.forEach(d => this.state.directoryCache.set(Number(d.id), d));
                     await this.fetchSavedStatusForCurrentDirectory();
-                    this.render(); 
+                    this.updateTopButtons();
+                    this.render();
                 }
                 this.setLoading(false);
             },
