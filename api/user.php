@@ -21,9 +21,17 @@ $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? '';
 
+if ($action === 'get_session') {
+    echo json_encode(['status' => 'success', 'data' => [
+        'id' => (int)$user_id,
+        'is_admin' => ((int)$user_id === 1)
+    ]]);
+}
+
 // === PREFERÊNCIAS DO DASHBOARD ===
 
-if ($action === 'get_prefs') {
+else if ($action === 'get_prefs') {
+
     $stmt = $pdo->prepare("SELECT root_view, root_new_item_position, copied_directory_id FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $user = $stmt->fetch();
