@@ -415,6 +415,21 @@
         </div>
     </div>
 
+    <div id="deleteConfirmModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-[60] opacity-0 transition-opacity duration-300 px-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-full max-w-sm p-6 transform scale-95 transition-transform duration-300">
+            <h3 class="text-lg font-bold text-white mb-2">Confirmar Exclusão</h3>
+            <p id="deleteConfirmMessage" class="text-sm text-slate-400 mb-5">Tem certeza que deseja excluir este item permanentemente?</p>
+            <div class="flex flex-col gap-3">
+                <button onclick="app.confirmSimpleDelete()" class="w-full bg-red-600 hover:bg-red-500 text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg">
+                    <i class="fa-solid fa-trash-can"></i> Excluir permanentemente
+                </button>
+                <button onclick="app.closeDeleteConfirmModal()" class="w-full text-slate-400 hover:text-white py-2 text-sm font-medium transition-colors">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const app = {
             state: {
@@ -1521,22 +1536,54 @@
                 const name = document.getElementById('dirName').value;
                 if(!id || id === 'root') return;
 
-                if(confirm(`Atenção: "${name}" será apagado PERMANENTEMENTE.\nDeseja continuar?`)) {
-                    const btn = document.getElementById('btnDeleteDir'); 
-                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
-                    btn.disabled = true; 
-                    
-                    const response = await this.api('directories', 'delete', { id });
-                    
-                    if(response) { 
-                        this.closeModal(); 
-                        const pathIndex = this.state.path.findIndex(step => String(step.id) === String(id));
-                        if (pathIndex !== -1) { await this.goUpTo(pathIndex - 1); } 
-                        else { await this.fetchDirectories(); }
-                    } else {
-                        btn.innerHTML = '<i class="fa-solid fa-trash"></i> <span>Excluir</span>';
-                        btn.disabled = false;
-                    }
+                this.openDeleteConfirmModal(name);
+            },
+
+            openDeleteConfirmModal(name) {
+                const message = document.getElementById('deleteConfirmMessage');
+                if (message) {
+                    message.textContent = `Atenção: "${name}" será apagado permanentemente. Deseja continuar?`;
+                }
+
+                const modal = document.getElementById('deleteConfirmModal');
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => {
+                    modal.classList.remove('opacity-0');
+                    modal.children[0].classList.remove('scale-95');
+                }, 10);
+            },
+
+            closeDeleteConfirmModal() {
+                const modal = document.getElementById('deleteConfirmModal');
+                modal.classList.add('opacity-0');
+                modal.children[0].classList.add('scale-95');
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                }, 300);
+            },
+
+            async confirmSimpleDelete() {
+                const id = document.getElementById('dirId').value;
+                if(!id || id === 'root') return;
+
+                this.closeDeleteConfirmModal();
+
+                const btn = document.getElementById('btnDeleteDir'); 
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
+                btn.disabled = true; 
+                
+                const response = await this.api('directories', 'delete', { id });
+                
+                if(response) { 
+                    this.closeModal(); 
+                    const pathIndex = this.state.path.findIndex(step => String(step.id) === String(id));
+                    if (pathIndex !== -1) { await this.goUpTo(pathIndex - 1); } 
+                    else { await this.fetchDirectories(); }
+                } else {
+                    btn.innerHTML = '<i class="fa-solid fa-trash"></i> <span>Excluir</span>';
+                    btn.disabled = false;
                 }
             },
 

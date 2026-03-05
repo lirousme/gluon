@@ -251,6 +251,23 @@
         </div>
     </div>
 
+    <!-- Modal: Confirmar Exclusão -->
+    <div id="deleteConfirmModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-[60] opacity-0 transition-opacity duration-300 px-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-full max-w-sm p-6 transform scale-95 transition-transform duration-300">
+            <h3 class="text-lg font-bold text-white mb-2">Confirmar Exclusão</h3>
+            <p id="deleteConfirmMessage" class="text-sm text-slate-400 mb-5">Tem certeza que deseja excluir este item permanentemente?</p>
+
+            <div class="flex flex-col gap-3">
+                <button onclick="scheduleApp.confirmSimpleDelete()" class="w-full bg-red-600 hover:bg-red-500 text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg">
+                    <i class="fa-solid fa-trash-can"></i> Excluir permanentemente
+                </button>
+                <button onclick="scheduleApp.closeDeleteConfirmModal()" class="w-full text-slate-400 hover:text-white py-2 text-sm font-medium transition-colors">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="timelineContextMenu" class="hidden absolute bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-1.5 z-50 min-w-[170px] transition-opacity">
         <button onclick="scheduleApp.triggerModalFromMenu()" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
             <i class="fa-solid fa-plus text-gluon-primary text-center w-4"></i> <span class="font-medium">Criar Tarefa</span>
@@ -259,4 +276,3 @@
             <i class="fa-solid fa-door-open text-center w-4"></i> <span class="font-medium">Criar Portal</span>
         </button>
     </div>
-
