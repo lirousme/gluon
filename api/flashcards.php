@@ -618,12 +618,11 @@ elseif ($action === 'generate_cards_preview') {
     $backSchema = $requiresBack ? ['type' => 'string', 'minLength' => 1] : ['type' => 'string'];
 
     $payloadBase = [
-        'model' => 'gpt-4o-mini',
+        'model' => 'gpt-5-nano',
         'messages' => [
             ['role' => 'system', 'content' => $systemPrompt],
             ['role' => 'user', 'content' => $userPrompt]
         ],
-        'temperature' => 0.7,
         'response_format' => [
             'type' => 'json_schema',
             'json_schema' => [
