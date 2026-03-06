@@ -619,6 +619,7 @@ elseif ($action === 'generate_cards_preview') {
     $userPrompt = $basePrompt
         . "\n\nCARDS JÁ EXISTENTES NESTE DECK:\n" . $historyText
         . "\n\nREGRAS DE NOTAÇÃO:\n" . $mathPrompt
+        . "\n\nREGRAS DE LIMPEZA DE SAÍDA:\nNunca inclua menus, botões, placeholders, atalhos de teclado, instruções de editor matemático, termos de interface (como Álgebra/Trigonometria/Cálculo/AC/placeholder) ou listas de símbolos soltas. Retorne apenas conteúdo pedagógico dos cards."
         . "\n\nGere 15 novos cards sem repetição de conteúdo com o histórico.";
 
     $requiresBack = in_array($deck_structure, ['perguntas', 'traducoes'], true);
