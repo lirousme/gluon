@@ -602,7 +602,7 @@ elseif ($action === 'generate_cards_preview') {
     if ($deck_structure === 'fatos') {
         $basePrompt = 'Me dê informações sobre o assunto "' . $deck_name . '", em uma tabela de uma única coluna, onde cada linha é uma informação. As informações devem ser de fácil compreensão. As informações devem ser simples e de preferência curtas. Nenhuma informação pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. A ideia é conseguir vencer o paradoxo de Mênon, conseguir saber tudo sobre esse assunto, do conhecimento zero ao avançado.';
     } elseif ($deck_structure === 'perguntas') {
-        $basePrompt = 'Me dê perguntas sobre o assunto "' . $deck_name . '", em uma tabela de duas colunas, onde cada linha é uma pergunta, a primeira coluna é a pergunta, e a segunda é a resposta. As perguntas e respostas devem ser de fácil compreensão. As perguntas devem ser simples e de preferência curtas. Nenhuma pergunta pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. A ideia é conseguir vencer o paradoxo de Mênon, conseguir saber tudo sobre esse assunto, do conhecimento zero ao avançado.';
+        $basePrompt = 'Me dê perguntas que propiciem um conhecimento linear sobre o assunto "' . $deck_name . '", em uma tabela de duas colunas, onde cada linha é uma pergunta, a primeira coluna é a pergunta, e a segunda é a resposta. As perguntas e respostas devem ser de fácil compreensão. As perguntas devem ser simples e de preferência curtas. Nenhuma pergunta pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. A ideia é conseguir vencer o paradoxo de Mênon, conseguir saber tudo sobre esse assunto, do conhecimento zero ao avançado.';
     } else {
         $basePrompt = 'Me dê frases em inglês com o termo "' . $deck_name . '", em uma tabela de duas colunas, onde cada linha é uma frase, a primeira coluna é a frase em português brasileiro, e a segunda é a frase em inglês. As frases devem ser de fácil compreensão. Nenhuma frase pode ser igual as frases anteriores que já fiz. Faça variações em múltiplos tempos verbais, variações com todos os pronomes, variações de número e grau. Frases positivas, negativas, interrogativas, voz passiva, voz ativa, voz reflexiva, voz recíproca, com diferentes estruturas sintáticas. O objetivo é que o aluno ao estudar as frases consiga se familiarizar com esse termo em diferentes contextos. Por favor não coloque numeração nas frases para eu não precisa remover elas manualmente depois.';
     }
@@ -611,7 +611,7 @@ elseif ($action === 'generate_cards_preview') {
 
     $systemPrompt = 'Você gera linhas de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estrutura fatos, deixe back vazio.';
     $userPrompt = $basePrompt
-        . "\n\nCARDS JÁ EXISTENTES NESTE DECK (NÃO REPETIR IDEIA):\n" . $historyText
+        . "\n\nCARDS JÁ EXISTENTES NESTE DECK:\n" . $historyText
         . "\n\nGere 15 novos cards sem repetição de conteúdo com o histórico.";
 
     $requiresBack = in_array($deck_structure, ['perguntas', 'traducoes'], true);
