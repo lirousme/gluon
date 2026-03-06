@@ -614,89 +614,34 @@ elseif ($action === 'generate_cards_preview') {
         . "\n\nCARDS JÁ EXISTENTES NESTE DECK (NÃO REPETIR IDEIA):\n" . $historyText
         . "\n\nGere 15 novos cards sem repetição de conteúdo com o histórico.";
 
-    $payload = [
+    $payload = json_encode([
         'model' => 'gpt-4o-mini',
         'messages' => [
             ['role' => 'system', 'content' => $systemPrompt],
             ['role' => 'user', 'content' => $userPrompt]
         ],
-        'temperature' => 0.7,
-        'response_format' => [
-            'type' => 'json_schema',
-            'json_schema' => [
-                'name' => 'deck_cards_response',
-                'strict' => true,
-                'schema' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'cards' => [
-                            'type' => 'array',
-                            'items' => [
-                                'type' => 'object',
-                                'properties' => [
-                                    'front' => ['type' => 'string'],
-                                    'back' => ['type' => 'string']
-                                ],
-                                'required' => ['front', 'back'],
-                                'additionalProperties' => false
-                            ]
-                        ]
-                    ],
-                    'required' => ['cards'],
-                    'additionalProperties' => false
-                ]
-            ]
-        ]
-    ];
+        'temperature' => 0.7
+    ]);
 
-    $sendOpenAI = function(array $requestPayload) {
-        $ch = curl_init('https://api.openai.com/v1/chat/completions');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($requestPayload));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . OPENAI_API_KEY
-        ]);
+    $ch = curl_init('https://api.openai.com/v1/chat/completions');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . OPENAI_API_KEY
+    ]);
 
-        $response = curl_exec($ch);
-        $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        return [$httpcode, $response];
-    };
-
-    [$httpcode, $response] = $sendOpenAI($payload);
+    $response = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
 
     if ($httpcode !== 200 || !$response) {
-        $fallbackPayload = $payload;
-        unset($fallbackPayload['response_format']);
-
-        [$fallbackHttp, $fallbackResponse] = $sendOpenAI($fallbackPayload);
-        if ($fallbackHttp !== 200 || !$fallbackResponse) {
-            $errMsg = 'Erro ao gerar cards com a OpenAI.';
-            $errDecoded = json_decode((string)$fallbackResponse, true);
-            if (!is_array($errDecoded)) {
-                $errDecoded = json_decode((string)$response, true);
-            }
-            $apiErr = trim((string)($errDecoded['error']['message'] ?? ''));
-            if ($apiErr !== '') {
-                $errMsg .= ' ' . $apiErr;
-            }
-            die(json_encode(['status' => 'error', 'message' => $errMsg]));
-        }
-
-        $httpcode = $fallbackHttp;
-        $response = $fallbackResponse;
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao gerar cards com a OpenAI.']));
     }
 
     $decoded = json_decode($response, true);
-    $raw = trim((string)($decoded['choices'][0]['message']['content'] ?? ''));
-
-    if (preg_match('/^```(?:json)?\s*(.*?)\s*```$/is', $raw, $m)) {
-        $raw = trim($m[1]);
-    }
-
+    $raw = trim($decoded['choices'][0]['message']['content'] ?? '');
     $json = json_decode($raw, true);
 
     if (!is_array($json) || !isset($json['cards']) || !is_array($json['cards'])) {
