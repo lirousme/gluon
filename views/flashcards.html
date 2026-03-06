@@ -179,8 +179,8 @@
                 <i class="fa-solid fa-rotate-left text-sm"></i>
             </button>
             
-            <button id="btnExportExcel" onclick="flashcardApp.exportToExcel()" class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700 text-emerald-500 hover:text-emerald-400" title="Baixar Todo o Deck (Excel / CSV)">
-                <i class="fa-solid fa-file-export text-sm"></i>
+            <button id="btnGoToGenerateCards" onclick="flashcardApp.goToGenerateCardsView()" class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700 text-emerald-500 hover:text-emerald-400" title="Ir para gerar cards">
+                <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
             </button>
         </div>
 
@@ -1174,54 +1174,9 @@
                 return result;
             },
 
-            // --- Exportar TODO O DECK (Backend Call) ---
-            async exportToExcel() {
-                const btn = document.getElementById('btnExportExcel');
-                const originalContent = btn.innerHTML;
-                
-                try {
-                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-sm"></i>';
-                    btn.disabled = true;
-
-                    const res = await this.api('get_all_cards', { deck_id: this.deckId });
-                    
-                    if (!res || !res.data || res.data.length === 0) {
-                        this.showToast("Não há cards para exportar neste deck.", "error");
-                        return;
-                    }
-
-                    // UTF-8 BOM para garantir suporte a caracteres latinos (acentos, cedilhas) no Excel
-                    let csv = "\uFEFF";
-                    csv += "Frente,Verso\n";
-
-                    res.data.forEach(card => {
-                        let front = card.front ? card.front.replace(/"/g, '""') : '';
-                        let back = card.back ? card.back.replace(/"/g, '""') : '';
-                        csv += `"${front}","${back}"\n`;
-                    });
-
-                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    
-                    const deckName = document.getElementById('deckName').innerText;
-                    const safeName = deckName.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'deck';
-                    
-                    a.download = `gluon_${safeName}.csv`;
-                    
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                    
-                    this.showToast("Exportação concluída com sucesso!", "success");
-                } catch (error) {
-                    this.showToast("Erro ao exportar: " + error.message, "error");
-                } finally {
-                    btn.innerHTML = originalContent;
-                    btn.disabled = false;
-                }
+            goToGenerateCardsView() {
+                const from = encodeURIComponent(window.location.pathname + window.location.search);
+                window.location.href = `/gerar_cards?id=${encodeURIComponent(this.deckId)}&from=${from}`;
             },
 
             // --- Funções de Imagem (Lightbox) ---
