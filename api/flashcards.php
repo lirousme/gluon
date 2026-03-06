@@ -615,10 +615,10 @@ elseif ($action === 'generate_cards_preview') {
     $historyText = count($history_lines) > 0 ? implode("\n", $history_lines) : '(deck sem cards anteriores)';
 
     $mathPrompt = $allow_math_notation
-        ? 'Quando o tema envolver matemática/física, use notação matemática sem simplificar (ex.: expoentes como x², raiz √, frações, integrais, somatórios e letras gregas). Se necessário, você pode usar LaTeX inline no formato \\( ... \\) para preservar a fórmula.'
+        ? 'Quando o tema envolver matemática/física, preserve a notação correta e didática. Regras obrigatórias: (1) não use ^ para potência quando houver equivalente tipográfico; prefira Unicode, ex.: m², s⁻², 10³; (2) para vetores, frações, derivadas, integrais, somatórios e operadores com formatação especial, use LaTeX inline no formato \\( ... \\); (3) não simplifique fórmulas perdendo símbolos. Exemplos esperados: "1 J = 1 kg·m²·s⁻²", "\\(\\vec{F}=m\\vec{a}\\)", "\\(i\\hbar\\frac{\\partial \\psi}{\\partial t}=\\hat{H}\\psi\\)".'
         : 'Evite notação matemática avançada e prefira linguagem textual simples.';
 
-    $systemPrompt = 'Você gera linhas de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estrutura fatos, deixe back vazio. Preserve exatamente caracteres Unicode e símbolos matemáticos sem remover ou trocar.';
+    $systemPrompt = 'Você gera linhas de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estrutura fatos, deixe back vazio. Preserve exatamente caracteres Unicode e símbolos matemáticos sem remover ou trocar. Se usar notação matemática especial, mantenha-a em Unicode e/ou LaTeX inline com delimitadores \\( ... \\), sem converter para texto simplificado.';
     $userPrompt = $basePrompt
         . "\n\nCARDS JÁ EXISTENTES NESTE DECK:\n" . $historyText
         . "\n\nREGRAS DE NOTAÇÃO:\n" . $mathPrompt

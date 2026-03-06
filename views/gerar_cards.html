@@ -12,6 +12,7 @@
     <title>Gluon - Gerar Cards</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer></script>
 </head>
 <body class="bg-slate-950 text-slate-200 min-h-[100dvh] flex flex-col font-sans pb-[env(safe-area-inset-bottom)]">
     <nav class="bg-slate-900 border-b border-slate-700/50 h-16 flex items-center justify-between px-4 sm:px-6">
@@ -110,6 +111,14 @@
                 return (str || '').replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
             },
 
+            renderMathInElement(element, value) {
+                if (!element) return;
+                element.textContent = value || '';
+                if (window.MathJax?.typesetPromise) {
+                    window.MathJax.typesetPromise([element]).catch(() => {});
+                }
+            },
+
             async api(action, payload = {}) {
                 payload.action = action;
                 try {
@@ -147,10 +156,12 @@
                         <td class="py-2 pr-0 md:pr-2 block md:table-cell">
                             <div class="text-xs text-slate-400 mb-1 md:hidden">Frente</div>
                             <textarea data-field="front" data-index="${idx}" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 min-h-[72px]">${this.escapeHTML(card.front)}</textarea>
+                            <div data-preview-field="front" data-preview-index="${idx}" class="mt-2 text-xs text-slate-300 bg-slate-950/70 border border-slate-700 rounded-md p-2 whitespace-pre-wrap"></div>
                         </td>
                         <td class="py-2 pr-0 md:pr-2 block md:table-cell">
                             <div class="text-xs text-slate-400 mb-1 md:hidden">Verso</div>
                             <textarea data-field="back" data-index="${idx}" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 min-h-[72px]">${this.escapeHTML(card.back || '')}</textarea>
+                            <div data-preview-field="back" data-preview-index="${idx}" class="mt-2 text-xs text-slate-300 bg-slate-950/70 border border-slate-700 rounded-md p-2 whitespace-pre-wrap"></div>
                         </td>
                         <td class="py-2 block md:table-cell">
                             <div class="text-xs text-slate-400 mb-1 md:hidden">Ações</div>
@@ -161,6 +172,10 @@
                         </td>
                     `;
                     tbody.appendChild(tr);
+                    const frontPreview = tr.querySelector(`[data-preview-field="front"][data-preview-index="${idx}"]`);
+                    const backPreview = tr.querySelector(`[data-preview-field="back"][data-preview-index="${idx}"]`);
+                    this.renderMathInElement(frontPreview, card.front || '');
+                    this.renderMathInElement(backPreview, card.back || '');
                 });
             },
 
@@ -169,6 +184,10 @@
                 const backEl = document.querySelector(`textarea[data-field="back"][data-index="${index}"]`);
                 this.generatedCards[index].front = frontEl.value.trim();
                 this.generatedCards[index].back = backEl.value.trim();
+                const frontPreview = document.querySelector(`[data-preview-field="front"][data-preview-index="${index}"]`);
+                const backPreview = document.querySelector(`[data-preview-field="back"][data-preview-index="${index}"]`);
+                this.renderMathInElement(frontPreview, this.generatedCards[index].front);
+                this.renderMathInElement(backPreview, this.generatedCards[index].back);
                 this.showToast('Item atualizado!', 'success');
             },
 
