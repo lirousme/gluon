@@ -13,6 +13,7 @@
     <title>Gluon - Flashcards</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer></script>
     
     <script>
         tailwind.config = {
@@ -555,6 +556,12 @@
                 setTimeout(() => { toast.classList.remove('translate-y-0', 'opacity-100'); toast.classList.add('translate-y-10', 'opacity-0'); }, 3000);
             },
 
+            renderMathInElement(element) {
+                if (!element || !window.MathJax?.typesetPromise) return;
+                window.MathJax.typesetClear([element]);
+                window.MathJax.typesetPromise([element]).catch(() => {});
+            },
+
             async api(action, payload = {}) {
                 payload.action = action;
                 try {
@@ -707,6 +714,7 @@
                         ${card.front ? `<div class="text-center w-full">${this.escapeHTML(card.front)}</div>` : ''}
                     </div>
                 `;
+                this.renderMathInElement(document.getElementById('cardFrontText'));
 
                 const backImageHtml = card.image_back ? `<img src="${card.image_back}" onclick="event.stopPropagation(); flashcardApp.openImageModal('${card.image_back}')" class="max-h-40 max-w-full object-contain cursor-zoom-in ${card.back ? 'mb-4' : ''} rounded-lg shadow-md border border-blue-500/50 hover:opacity-90 transition-opacity" title="Clique para ampliar">` : '';
                 document.getElementById('cardBackText').innerHTML = `
@@ -715,6 +723,7 @@
                         ${card.back ? `<div class="text-center w-full">${this.escapeHTML(card.back)}</div>` : ''}
                     </div>
                 `;
+                this.renderMathInElement(document.getElementById('cardBackText'));
                 
                 document.getElementById('cardCounter').innerText = `${this.currentIndex + 1} / ${this.cards.length}`;
                 

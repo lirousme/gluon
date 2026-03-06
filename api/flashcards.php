@@ -578,7 +578,6 @@ elseif ($action === 'delete_card') {
 
 elseif ($action === 'generate_cards_preview') {
     $deck_id = (int)($input['deck_id'] ?? 0);
-    $allow_math_notation = (bool)($input['allow_math_notation'] ?? true);
     if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
 
     $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
@@ -614,11 +613,9 @@ elseif ($action === 'generate_cards_preview') {
 
     $historyText = count($history_lines) > 0 ? implode("\n", $history_lines) : '(deck sem cards anteriores)';
 
-    $mathPrompt = $allow_math_notation
-        ? 'Quando o tema envolver matemática/física, preserve a notação correta e didática. Regras obrigatórias: (1) toda expressão matemática deve vir em LaTeX inline com delimitadores \\( ... \\); (2) use expoentes/subscritos em LaTeX, nunca com texto cru: x^{2}, s^{-2}, E_{k}; (3) use frações reais com \\frac{...}{...}, nunca "1/2" em texto; (4) vetores devem usar seta com \\vec{...}; (5) não simplifique fórmulas perdendo símbolos. Exemplos esperados: "\\(1\,J = 1\,kg\\cdot m^{2}\\cdot s^{-2}\\)"; "\\(\\vec{F}=m\\vec{a}\\)"; "\\(i\\hbar\\frac{\\partial \\psi}{\\partial t}=\\hat{H}\\psi\\)"; "\\(E_{k}=\\frac{1}{2}mv^{2}\\)".'
-        : 'Evite notação matemática avançada e prefira linguagem textual simples.';
+    $mathPrompt = 'Use notação matemática e símbolos especiais somente quando forem realmente necessários ao tema do card. Não force fórmulas em conteúdos que não exigem matemática. Quando houver matemática/física, preserve a notação correta e didática: (1) não use ^ para potência quando houver equivalente tipográfico; prefira Unicode, ex.: m², s⁻², 10³; (2) para vetores, frações, derivadas, integrais, somatórios e operadores com formatação especial, use LaTeX inline no formato \( ... \); (3) não simplifique fórmulas perdendo símbolos.';
 
-    $systemPrompt = 'Você gera linhas de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estrutura fatos, deixe back vazio. Preserve exatamente caracteres Unicode e símbolos matemáticos sem remover ou trocar. Quando houver conteúdo matemático/físico, use SEMPRE LaTeX inline com delimitadores \\( ... \\), incluindo expoentes, subscritos, vetores e frações, sem converter para texto simplificado.';
+    $systemPrompt = 'Você gera linhas de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estrutura fatos, deixe back vazio. Preserve exatamente caracteres Unicode. Só inclua notação matemática (Unicode/LaTeX inline com delimitadores \\( ... \\)) quando ela for necessária para explicar corretamente o conteúdo; caso contrário, responda em linguagem natural sem fórmulas desnecessárias.';
     $userPrompt = $basePrompt
         . "\n\nCARDS JÁ EXISTENTES NESTE DECK:\n" . $historyText
         . "\n\nREGRAS DE NOTAÇÃO:\n" . $mathPrompt
