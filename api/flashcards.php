@@ -604,7 +604,7 @@ elseif ($action === 'generate_cards_preview') {
     } elseif ($deck_structure === 'perguntas') {
         $basePrompt = 'Me dê perguntas sobre o assunto "' . $deck_name . '", em uma tabela de duas colunas, onde cada linha é uma pergunta, a primeira coluna é a pergunta, e a segunda é a resposta. As perguntas e respostas devem ser de fácil compreensão. As perguntas devem ser simples e de preferência curtas. Nenhuma pergunta pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. A ideia é conseguir vencer o paradoxo de Mênon, conseguir saber tudo sobre esse assunto, do conhecimento zero ao avançado.';
     } else {
-        $basePrompt = 'Me dê frases em inglês com o termo que eu te enviar, em uma tabela de duas colunas, onde cada linha é uma frase, a primeira coluna é a frase em português brasileiro, e a segunda é a frase em inglês. As frases devem ser de fácil compreensão. Nenhuma frase pode ser igual as frases anteriores que já fiz. Faça variações em múltiplos tempos verbais, variações com todos os pronomes, variações de número e grau. Frases positivas, negativas, interrogativas, voz passiva, voz ativa, voz reflexiva, voz recíproca, com diferentes estruturas sintáticas. O objetivo é que o aluno ao estudar as frases consiga se familiarizar com esse termo em diferentes contextos. Por favor não coloque numeração nas frases para eu não precisa remover elas manualmente depois.';
+        $basePrompt = 'Me dê frases em inglês com o termo "' . $deck_name . '", em uma tabela de duas colunas, onde cada linha é uma frase, a primeira coluna é a frase em português brasileiro, e a segunda é a frase em inglês. As frases devem ser de fácil compreensão. Nenhuma frase pode ser igual as frases anteriores que já fiz. Faça variações em múltiplos tempos verbais, variações com todos os pronomes, variações de número e grau. Frases positivas, negativas, interrogativas, voz passiva, voz ativa, voz reflexiva, voz recíproca, com diferentes estruturas sintáticas. O objetivo é que o aluno ao estudar as frases consiga se familiarizar com esse termo em diferentes contextos. Por favor não coloque numeração nas frases para eu não precisa remover elas manualmente depois.';
     }
 
     $historyText = count($history_lines) > 0 ? implode("\n", $history_lines) : '(deck sem cards anteriores)';
@@ -620,7 +620,32 @@ elseif ($action === 'generate_cards_preview') {
             ['role' => 'system', 'content' => $systemPrompt],
             ['role' => 'user', 'content' => $userPrompt]
         ],
-        'temperature' => 0.7
+        'temperature' => 0.7,
+        'response_format' => [
+            'type' => 'json_schema',
+            'json_schema' => [
+                'name' => 'cards_preview_response',
+                'schema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'cards' => [
+                            'type' => 'array',
+                            'items' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'front' => ['type' => 'string'],
+                                    'back' => ['type' => 'string']
+                                ],
+                                'required' => ['front', 'back'],
+                                'additionalProperties' => false
+                            ]
+                        ]
+                    ],
+                    'required' => ['cards'],
+                    'additionalProperties' => false
+                ]
+            ]
+        ]
     ]);
 
     $ch = curl_init('https://api.openai.com/v1/chat/completions');
@@ -633,15 +658,35 @@ elseif ($action === 'generate_cards_preview') {
     ]);
 
     $response = curl_exec($ch);
+    $curlError = curl_error($ch);
     $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
     if ($httpcode !== 200 || !$response) {
-        die(json_encode(['status' => 'error', 'message' => 'Erro ao gerar cards com a OpenAI.']));
+        $apiError = '';
+        if (!empty($response)) {
+            $errorDecoded = json_decode($response, true);
+            $apiError = trim((string)($errorDecoded['error']['message'] ?? ''));
+        }
+
+        $details = trim($apiError !== '' ? $apiError : $curlError);
+        $message = 'Erro ao gerar cards com a OpenAI.';
+        if ($details !== '') {
+            $message .= ' Detalhes: ' . $details;
+        }
+
+        die(json_encode(['status' => 'error', 'message' => $message]));
     }
 
     $decoded = json_decode($response, true);
-    $raw = trim($decoded['choices'][0]['message']['content'] ?? '');
+    $raw = trim((string)($decoded['choices'][0]['message']['content'] ?? ''));
+
+    if ($raw !== '' && str_starts_with($raw, '```')) {
+        $raw = preg_replace('/^```(?:json)?\s*/i', '', $raw);
+        $raw = preg_replace('/\s*```$/', '', $raw);
+        $raw = trim((string)$raw);
+    }
+
     $json = json_decode($raw, true);
 
     if (!is_array($json) || !isset($json['cards']) || !is_array($json['cards'])) {

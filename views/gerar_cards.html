@@ -45,7 +45,7 @@
             <div class="rounded-xl border border-slate-700 bg-slate-900/70 p-4 sm:p-6">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
-                        <thead>
+                        <thead class="hidden md:table-header-group">
                             <tr class="text-left text-slate-400 border-b border-slate-700">
                                 <th class="py-2 pr-2">Frente</th>
                                 <th class="py-2 pr-2">Verso</th>
@@ -135,15 +135,18 @@
 
                 this.generatedCards.forEach((card, idx) => {
                     const tr = document.createElement('tr');
-                    tr.className = 'border-b border-slate-800 align-top';
+                    tr.className = 'border-b border-slate-800 align-top block md:table-row';
                     tr.innerHTML = `
-                        <td class="py-2 pr-2">
+                        <td class="py-2 pr-0 md:pr-2 block md:table-cell">
+                            <div class="text-xs text-slate-400 mb-1 md:hidden">Frente</div>
                             <textarea data-field="front" data-index="${idx}" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 min-h-[72px]">${this.escapeHTML(card.front)}</textarea>
                         </td>
-                        <td class="py-2 pr-2">
+                        <td class="py-2 pr-0 md:pr-2 block md:table-cell">
+                            <div class="text-xs text-slate-400 mb-1 md:hidden">Verso</div>
                             <textarea data-field="back" data-index="${idx}" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 min-h-[72px]">${this.escapeHTML(card.back || '')}</textarea>
                         </td>
-                        <td class="py-2">
+                        <td class="py-2 block md:table-cell">
+                            <div class="text-xs text-slate-400 mb-1 md:hidden">Ações</div>
                             <div class="flex gap-2">
                                 <button class="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600" onclick="generateCardsApp.saveRow(${idx})"><i class="fa-solid fa-pen"></i></button>
                                 <button class="px-2 py-1 rounded bg-red-700 hover:bg-red-600" onclick="generateCardsApp.deleteRow(${idx})"><i class="fa-solid fa-trash"></i></button>
@@ -152,10 +155,6 @@
                     `;
                     tbody.appendChild(tr);
                 });
-
-                if (window.innerWidth < 768) {
-                    [...tbody.querySelectorAll('tr')].forEach(tr => tr.classList.add('grid', 'grid-cols-1'));
-                }
             },
 
             saveRow(index) {
