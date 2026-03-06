@@ -41,6 +41,10 @@ try {
 } catch (PDOException $e) {}
 
 try {
+    $pdo->exec("ALTER TABLE directories ADD COLUMN deck_structure VARCHAR(20) NOT NULL DEFAULT 'fatos' AFTER deck_back_language");
+} catch (PDOException $e) {}
+
+try {
     $pdo->exec("ALTER TABLE flashcard_book_progress ADD COLUMN completed_reads TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER current_index");
 } catch (PDOException $e) {}
 
@@ -61,7 +65,7 @@ try {
 
 // Função auxiliar para verificar se o usuário é dono do deck (Segurança IDOR)
 function verifyDeckOwnership($pdo, $deck_id, $user_id) {
-    $stmt = $pdo->prepare("SELECT id, name_encrypted, deck_mode, deck_front_language, deck_back_language FROM directories WHERE id = ? AND user_id = ? AND type = 4");
+    $stmt = $pdo->prepare("SELECT id, name_encrypted, deck_mode, deck_front_language, deck_back_language, deck_structure FROM directories WHERE id = ? AND user_id = ? AND type = 4");
     $stmt->execute([$deck_id, $user_id]);
     return $stmt->fetch();
 }
@@ -81,6 +85,33 @@ function verifyCardOwnership($pdo, $card_id, $user_id) {
 function normalizeDeckLanguage($value, $default = 'pt-BR') {
     $allowed = ['pt-BR', 'en-US', 'en-GB'];
     return in_array($value, $allowed, true) ? $value : $default;
+}
+
+function normalizeDeckStructure($value, $default = 'fatos') {
+    $allowed = ['fatos', 'perguntas', 'traducoes'];
+    return in_array($value, $allowed, true) ? $value : $default;
+}
+
+function ensureUtf8($value) {
+    $value = (string)$value;
+    if (function_exists('mb_check_encoding') && mb_check_encoding($value, 'UTF-8')) {
+        return $value;
+    }
+    if (function_exists('iconv')) {
+        $converted = @iconv('UTF-8', 'UTF-8//IGNORE', $value);
+        if ($converted !== false) {
+            return $converted;
+        }
+    }
+    return preg_replace('/[^\x09\x0A\x0D\x20-\x7E\xC2-\xF4][\x80-\xBF]*/', '', $value);
+}
+
+function safeSubstr($value, $length = 400) {
+    $value = (string)$value;
+    if (function_exists('mb_substr')) {
+        return mb_substr($value, 0, (int)$length);
+    }
+    return substr($value, 0, (int)$length);
 }
 
 function getFishReferenceIdByLanguage($language) {
@@ -211,6 +242,7 @@ if ($action === 'fetch') {
         'deck_mode' => $deck_mode,
         'deck_front_language' => normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR'),
         'deck_back_language' => normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB'),
+        'deck_structure' => normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos'),
         'deck_percentage' => $deck_percentage,
         'book_completed_reads' => $book_completed_reads,
         'book_completed_reads_max' => 3,
@@ -463,11 +495,12 @@ elseif ($action === 'update_settings') {
     $mode = $input['deck_mode'] === 'livro' ? 'livro' : 'aleatorio';
     $front_language = normalizeDeckLanguage($input['deck_front_language'] ?? 'pt-BR', 'pt-BR');
     $back_language = normalizeDeckLanguage($input['deck_back_language'] ?? 'en-GB', 'en-GB');
+    $deck_structure = normalizeDeckStructure($input['deck_structure'] ?? 'fatos', 'fatos');
 
     if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
 
-    $stmt = $pdo->prepare("UPDATE directories SET deck_mode = ?, deck_front_language = ?, deck_back_language = ? WHERE id = ?");
-    if ($stmt->execute([$mode, $front_language, $back_language, $deck_id])) echo json_encode(['status' => 'success', 'message' => 'Configurações atualizadas.']);
+    $stmt = $pdo->prepare("UPDATE directories SET deck_mode = ?, deck_front_language = ?, deck_back_language = ?, deck_structure = ? WHERE id = ?");
+    if ($stmt->execute([$mode, $front_language, $back_language, $deck_structure, $deck_id])) echo json_encode(['status' => 'success', 'message' => 'Configurações atualizadas.']);
     else echo json_encode(['status' => 'error', 'message' => 'Erro ao salvar.']);
 }
 
@@ -557,6 +590,214 @@ elseif ($action === 'delete_card') {
         echo json_encode(['status' => 'success', 'message' => 'Card excluído com sucesso.']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro interno ao excluir card.']);
+    }
+}
+
+
+elseif ($action === 'generate_cards_preview') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
+
+    $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
+    if (!$deck) die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+
+    if (OPENAI_API_KEY === '') {
+        die(json_encode(['status' => 'error', 'message' => 'OPENAI_API_KEY não configurada no .env.']));
+    }
+
+    $deck_name = ensureUtf8(Security::decryptData($deck['name_encrypted']));
+    $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
+
+    $stmt = $pdo->prepare("SELECT front_encrypted, back_encrypted FROM flashcards WHERE directory_id = ? ORDER BY sort_order ASC, id ASC");
+    $stmt->execute([$deck_id]);
+    $existing_cards = $stmt->fetchAll();
+
+    $history_lines = [];
+    foreach ($existing_cards as $c) {
+        $front = trim(!empty($c['front_encrypted']) ? Security::decryptData($c['front_encrypted']) : '');
+        $back = trim(!empty($c['back_encrypted']) ? Security::decryptData($c['back_encrypted']) : '');
+        if ($front === '' && $back === '') continue;
+
+        $front = safeSubstr(ensureUtf8($front), 400);
+        $back = safeSubstr(ensureUtf8($back), 400);
+        $history_lines[] = "Frente: {$front} | Verso: {$back}";
+    }
+
+    if (count($history_lines) > 200) {
+        $history_lines = array_slice($history_lines, -200);
+    }
+
+    $basePrompt = '';
+    if ($deck_structure === 'fatos') {
+        $basePrompt = 'Me dê informações sobre o assunto "' . $deck_name . '", em uma tabela de uma única coluna, onde cada linha é uma informação. As informações devem ser de fácil compreensão. As informações devem ser simples e de preferência curtas. Nenhuma informação pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. A ideia é conseguir vencer o paradoxo de Mênon, conseguir saber tudo sobre esse assunto, do conhecimento zero ao avançado.';
+    } elseif ($deck_structure === 'perguntas') {
+        $basePrompt = 'Me dê perguntas sobre o assunto "' . $deck_name . '", em uma tabela de duas colunas, onde cada linha é uma pergunta, a primeira coluna é a pergunta, e a segunda é a resposta. As perguntas e respostas devem ser de fácil compreensão. As perguntas devem ser simples e de preferência curtas. Nenhuma pergunta pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. A ideia é conseguir vencer o paradoxo de Mênon, conseguir saber tudo sobre esse assunto, do conhecimento zero ao avançado.';
+    } else {
+        $basePrompt = 'Me dê frases em inglês com o termo que eu te enviar, em uma tabela de duas colunas, onde cada linha é uma frase, a primeira coluna é a frase em português brasileiro, e a segunda é a frase em inglês. As frases devem ser de fácil compreensão. Nenhuma frase pode ser igual as frases anteriores que já fiz. Faça variações em múltiplos tempos verbais, variações com todos os pronomes, variações de número e grau. Frases positivas, negativas, interrogativas, voz passiva, voz ativa, voz reflexiva, voz recíproca, com diferentes estruturas sintáticas. O objetivo é que o aluno ao estudar as frases consiga se familiarizar com esse termo em diferentes contextos. Por favor não coloque numeração nas frases para eu não precisa remover elas manualmente depois.';
+    }
+
+    $historyText = count($history_lines) > 0 ? ensureUtf8(implode("\n", $history_lines)) : '(deck sem cards anteriores)';
+
+    $systemPrompt = 'Você gera linhas de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Para estrutura fatos, deixe back vazio.';
+    $userPrompt = $basePrompt
+        . "\n\nCARDS JÁ EXISTENTES NESTE DECK (NÃO REPETIR IDEIA):\n" . $historyText
+        . "\n\nGere 15 novos cards sem repetição de conteúdo com o histórico.";
+
+    $payload = [
+        'model' => 'gpt-4o-mini',
+        'messages' => [
+            ['role' => 'system', 'content' => $systemPrompt],
+            ['role' => 'user', 'content' => $userPrompt]
+        ],
+        'temperature' => 0.7,
+        'response_format' => [
+            'type' => 'json_schema',
+            'json_schema' => [
+                'name' => 'deck_cards_response',
+                'strict' => true,
+                'schema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'cards' => [
+                            'type' => 'array',
+                            'items' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'front' => ['type' => 'string'],
+                                    'back' => ['type' => 'string']
+                                ],
+                                'required' => ['front', 'back'],
+                                'additionalProperties' => false
+                            ]
+                        ]
+                    ],
+                    'required' => ['cards'],
+                    'additionalProperties' => false
+                ]
+            ]
+        ]
+    ];
+
+    $sendOpenAI = function(array $requestPayload) {
+        $encodedPayload = json_encode($requestPayload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($encodedPayload === false) {
+            return [0, false, 'Falha ao montar payload JSON para OpenAI: ' . json_last_error_msg()];
+        }
+
+        $ch = curl_init('https://api.openai.com/v1/chat/completions');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $encodedPayload);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . OPENAI_API_KEY
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+
+        $response = curl_exec($ch);
+        $curlError = curl_error($ch);
+        $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return [$httpcode, $response, $curlError];
+    };
+
+    [$httpcode, $response, $curlError] = $sendOpenAI($payload);
+
+    if ($httpcode !== 200 || !$response) {
+        $fallbackPayload = $payload;
+        unset($fallbackPayload['response_format']);
+
+        [$fallbackHttp, $fallbackResponse, $fallbackCurlError] = $sendOpenAI($fallbackPayload);
+        if ($fallbackHttp !== 200 || !$fallbackResponse) {
+            $errMsg = 'Erro ao gerar cards com a OpenAI.';
+            $errDecoded = json_decode((string)$fallbackResponse, true);
+            if (!is_array($errDecoded)) {
+                $errDecoded = json_decode((string)$response, true);
+            }
+            $apiErr = trim((string)($errDecoded['error']['message'] ?? ''));
+            if ($apiErr !== '') {
+                $errMsg .= ' ' . $apiErr;
+            }
+
+            $curlErrPrimary = trim((string)$curlError);
+            $curlErrFallback = trim((string)$fallbackCurlError);
+            if ($curlErrPrimary !== '') {
+                $errMsg .= ' cURL-primary: ' . $curlErrPrimary . '.';
+            }
+            if ($curlErrFallback !== '') {
+                $errMsg .= ' cURL-fallback: ' . $curlErrFallback . '.';
+            }
+
+            $errMsg .= ' HTTP-primary: ' . (int)$httpcode . '; HTTP-fallback: ' . (int)$fallbackHttp . '.';
+
+            $rawPrimary = trim((string)$response);
+            $rawFallback = trim((string)$fallbackResponse);
+            if ($rawPrimary !== '') {
+                $rawPrimary = preg_replace('/\s+/', ' ', $rawPrimary);
+                $errMsg .= ' Body-primary: ' . safeSubstr($rawPrimary, 220) . '.';
+            }
+            if ($rawFallback !== '') {
+                $rawFallback = preg_replace('/\s+/', ' ', $rawFallback);
+                $errMsg .= ' Body-fallback: ' . safeSubstr($rawFallback, 220) . '.';
+            }
+
+            error_log('[generate_cards_preview] ' . $errMsg);
+            die(json_encode(['status' => 'error', 'message' => $errMsg]));
+        }
+
+        $httpcode = $fallbackHttp;
+        $response = $fallbackResponse;
+    }
+
+    $decoded = json_decode($response, true);
+    $raw = trim((string)($decoded['choices'][0]['message']['content'] ?? ''));
+
+    if (preg_match('/^```(?:json)?\s*(.*?)\s*```$/is', $raw, $m)) {
+        $raw = trim($m[1]);
+    }
+
+    $json = json_decode($raw, true);
+
+    if (!is_array($json) || !isset($json['cards']) || !is_array($json['cards'])) {
+        die(json_encode(['status' => 'error', 'message' => 'A API retornou conteúdo em formato inválido.']));
+    }
+
+    $cards = [];
+    foreach ($json['cards'] as $card) {
+        $front = trim((string)($card['front'] ?? ''));
+        $back = trim((string)($card['back'] ?? ''));
+        if ($front === '') continue;
+        if ($deck_structure === 'fatos') $back = '';
+        $cards[] = ['front' => $front, 'back' => $back];
+    }
+
+    echo json_encode(['status' => 'success', 'cards' => $cards]);
+}
+
+elseif ($action === 'create_generated_cards') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    $cards = $input['cards'] ?? [];
+
+    if ($deck_id === 0 || !is_array($cards) || count($cards) === 0) die(json_encode(['status' => 'error', 'message' => 'Dados inválidos.']));
+    if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
+
+    try {
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted, has_audio_front, has_audio_back) VALUES (?, ?, ?, 0, 0)");
+        $count = 0;
+        foreach ($cards as $card) {
+            $front = trim((string)($card['front'] ?? ''));
+            $back = trim((string)($card['back'] ?? ''));
+            if ($front === '') continue;
+            $stmt->execute([$deck_id, Security::encryptData($front), $back !== '' ? Security::encryptData($back) : null]);
+            $count++;
+        }
+        $pdo->commit();
+        echo json_encode(['status' => 'success', 'message' => "$count cards criados com sucesso!"]);
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        echo json_encode(['status' => 'error', 'message' => 'Erro interno ao criar cards.']);
     }
 }
 
