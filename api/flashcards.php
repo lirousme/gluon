@@ -578,6 +578,7 @@ elseif ($action === 'delete_card') {
 
 elseif ($action === 'generate_cards_preview') {
     $deck_id = (int)($input['deck_id'] ?? 0);
+    $allow_math_notation = (bool)($input['allow_math_notation'] ?? true);
     if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
 
     $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
@@ -613,9 +614,14 @@ elseif ($action === 'generate_cards_preview') {
 
     $historyText = count($history_lines) > 0 ? implode("\n", $history_lines) : '(deck sem cards anteriores)';
 
-    $systemPrompt = 'Você gera linhas de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estrutura fatos, deixe back vazio.';
+    $mathPrompt = $allow_math_notation
+        ? 'Quando o tema envolver matemática/física, use notação matemática sem simplificar (ex.: expoentes como x², raiz √, frações, integrais, somatórios e letras gregas). Se necessário, você pode usar LaTeX inline no formato \\( ... \\) para preservar a fórmula.'
+        : 'Evite notação matemática avançada e prefira linguagem textual simples.';
+
+    $systemPrompt = 'Você gera linhas de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estrutura fatos, deixe back vazio. Preserve exatamente caracteres Unicode e símbolos matemáticos sem remover ou trocar.';
     $userPrompt = $basePrompt
         . "\n\nCARDS JÁ EXISTENTES NESTE DECK:\n" . $historyText
+        . "\n\nREGRAS DE NOTAÇÃO:\n" . $mathPrompt
         . "\n\nGere 15 novos cards sem repetição de conteúdo com o histórico.";
 
     $requiresBack = in_array($deck_structure, ['perguntas', 'traducoes'], true);
