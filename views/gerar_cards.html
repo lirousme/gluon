@@ -38,10 +38,7 @@
                     <div>
                         <p class="text-sm text-slate-300">Estrutura do deck: <span id="deckStructureLabel" class="font-semibold text-white">-</span></p>
                         <p class="text-xs text-slate-500">Clique em Gerar para montar sugestões e depois editar/excluir antes de criar os cards.</p>
-                        <label class="mt-2 inline-flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
-                            <input id="allowMathNotation" type="checkbox" class="rounded border-slate-600 bg-slate-800" checked>
-                            Permitir notação matemática e símbolos especiais (ex.: x², √, ∫, Σ, π, Δ, \(E=mc^2\))
-                        </label>
+                        <p class="mt-2 text-xs text-slate-400">A notação matemática e símbolos especiais são aceitos por padrão quando fizer sentido para o conteúdo.</p>
                     </div>
                     <button id="btnGenerate" onclick="generateCardsApp.generate()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium flex items-center justify-center gap-2"><i class="fa-solid fa-wand-magic-sparkles"></i> Gerar</button>
                 </div>
@@ -199,10 +196,9 @@
             async generate() {
                 const btn = document.getElementById('btnGenerate');
                 const old = btn.innerHTML;
-                const allowMathNotation = document.getElementById('allowMathNotation')?.checked !== false;
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Gerando...';
-                const res = await this.api('generate_cards_preview', { deck_id: this.deckId, allow_math_notation: allowMathNotation });
+                const res = await this.api('generate_cards_preview', { deck_id: this.deckId });
                 btn.disabled = false;
                 btn.innerHTML = old;
                 if (!res) return;
