@@ -12,6 +12,18 @@
     <title>Gluon - Gerar Cards</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+            }
+        };
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer></script>
 </head>
 <body class="bg-slate-950 text-slate-200 min-h-[100dvh] flex flex-col font-sans pb-[env(safe-area-inset-bottom)]">
@@ -40,7 +52,7 @@
                         <p class="text-xs text-slate-500">Clique em Gerar para montar sugestões e depois editar/excluir antes de criar os cards.</p>
                         <label class="mt-2 inline-flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
                             <input id="allowMathNotation" type="checkbox" class="rounded border-slate-600 bg-slate-800" checked>
-                            Permitir notação matemática e símbolos especiais (ex.: x², √, ∫, Σ, π, Δ, \(E=mc^2\))
+                            Permitir notação matemática e símbolos especiais (ex.: \(x^{2}\), \(\sqrt{x}\), \(\int\), \(\Sigma\), \(\pi\), \(\Delta\), \(E=mc^{2}\))
                         </label>
                     </div>
                     <button id="btnGenerate" onclick="generateCardsApp.generate()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium flex items-center justify-center gap-2"><i class="fa-solid fa-wand-magic-sparkles"></i> Gerar</button>

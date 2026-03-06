@@ -615,13 +615,14 @@ elseif ($action === 'generate_cards_preview') {
     $historyText = count($history_lines) > 0 ? implode("\n", $history_lines) : '(deck sem cards anteriores)';
 
     $mathPrompt = $allow_math_notation
-        ? 'Quando o tema envolver matemática/física, preserve a notação correta e didática. Regras obrigatórias: (1) não use ^ para potência quando houver equivalente tipográfico; prefira Unicode, ex.: m², s⁻², 10³; (2) para vetores, frações, derivadas, integrais, somatórios e operadores com formatação especial, use LaTeX inline no formato \\( ... \\); (3) não simplifique fórmulas perdendo símbolos. Exemplos esperados: "1 J = 1 kg·m²·s⁻²", "\\(\\vec{F}=m\\vec{a}\\)", "\\(i\\hbar\\frac{\\partial \\psi}{\\partial t}=\\hat{H}\\psi\\)".'
+        ? 'Quando o tema envolver matemática/física, preserve a notação correta e didática. Regras obrigatórias: (1) toda expressão matemática deve vir em LaTeX inline com delimitadores \\( ... \\); (2) use expoentes/subscritos em LaTeX, nunca com texto cru: x^{2}, s^{-2}, E_{k}; (3) use frações reais com \\frac{...}{...}, nunca "1/2" em texto; (4) vetores devem usar seta com \\vec{...}; (5) não simplifique fórmulas perdendo símbolos. Exemplos esperados: "\\(1\,J = 1\,kg\\cdot m^{2}\\cdot s^{-2}\\)"; "\\(\\vec{F}=m\\vec{a}\\)"; "\\(i\\hbar\\frac{\\partial \\psi}{\\partial t}=\\hat{H}\\psi\\)"; "\\(E_{k}=\\frac{1}{2}mv^{2}\\)".'
         : 'Evite notação matemática avançada e prefira linguagem textual simples.';
 
-    $systemPrompt = 'Você gera linhas de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estrutura fatos, deixe back vazio. Preserve exatamente caracteres Unicode e símbolos matemáticos sem remover ou trocar. Se usar notação matemática especial, mantenha-a em Unicode e/ou LaTeX inline com delimitadores \\( ... \\), sem converter para texto simplificado.';
+    $systemPrompt = 'Você gera linhas de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estrutura fatos, deixe back vazio. Preserve exatamente caracteres Unicode e símbolos matemáticos sem remover ou trocar. Quando houver conteúdo matemático/físico, use SEMPRE LaTeX inline com delimitadores \\( ... \\), incluindo expoentes, subscritos, vetores e frações, sem converter para texto simplificado.';
     $userPrompt = $basePrompt
         . "\n\nCARDS JÁ EXISTENTES NESTE DECK:\n" . $historyText
         . "\n\nREGRAS DE NOTAÇÃO:\n" . $mathPrompt
+        . "\n\nREGRAS DE LIMPEZA DE SAÍDA:\nNunca inclua menus, botões, placeholders, atalhos de teclado, instruções de editor matemático, termos de interface (como Álgebra/Trigonometria/Cálculo/AC/placeholder) ou listas de símbolos soltas. Retorne apenas conteúdo pedagógico dos cards."
         . "\n\nGere 15 novos cards sem repetição de conteúdo com o histórico.";
 
     $requiresBack = in_array($deck_structure, ['perguntas', 'traducoes'], true);
