@@ -179,6 +179,7 @@
                 btn.disabled = false;
                 btn.innerHTML = old;
                 if (!res) return;
+                console.log('[flashcards][openai] Resposta bruta:', res.debug_openai_response || null);
                 this.generatedCards = Array.isArray(res.cards) ? res.cards : [];
                 this.renderList();
                 this.showToast('Sugestões geradas!', 'success');
