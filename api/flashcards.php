@@ -92,28 +92,6 @@ function normalizeDeckStructure($value, $default = 'fatos') {
     return in_array($value, $allowed, true) ? $value : $default;
 }
 
-function ensureUtf8($value) {
-    $value = (string)$value;
-    if (function_exists('mb_check_encoding') && mb_check_encoding($value, 'UTF-8')) {
-        return $value;
-    }
-    if (function_exists('iconv')) {
-        $converted = @iconv('UTF-8', 'UTF-8//IGNORE', $value);
-        if ($converted !== false) {
-            return $converted;
-        }
-    }
-    return preg_replace('/[^\x09\x0A\x0D\x20-\x7E\xC2-\xF4][\x80-\xBF]*/', '', $value);
-}
-
-function safeSubstr($value, $length = 400) {
-    $value = (string)$value;
-    if (function_exists('mb_substr')) {
-        return mb_substr($value, 0, (int)$length);
-    }
-    return substr($value, 0, (int)$length);
-}
-
 function getFishReferenceIdByLanguage($language) {
     switch ($language) {
         case 'pt-BR': return FISH_REFERENCE_ID_PT_BR;
@@ -605,7 +583,7 @@ elseif ($action === 'generate_cards_preview') {
         die(json_encode(['status' => 'error', 'message' => 'OPENAI_API_KEY não configurada no .env.']));
     }
 
-    $deck_name = ensureUtf8(Security::decryptData($deck['name_encrypted']));
+    $deck_name = Security::decryptData($deck['name_encrypted']);
     $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
 
     $stmt = $pdo->prepare("SELECT front_encrypted, back_encrypted FROM flashcards WHERE directory_id = ? ORDER BY sort_order ASC, id ASC");
@@ -617,14 +595,7 @@ elseif ($action === 'generate_cards_preview') {
         $front = trim(!empty($c['front_encrypted']) ? Security::decryptData($c['front_encrypted']) : '');
         $back = trim(!empty($c['back_encrypted']) ? Security::decryptData($c['back_encrypted']) : '');
         if ($front === '' && $back === '') continue;
-
-        $front = safeSubstr(ensureUtf8($front), 400);
-        $back = safeSubstr(ensureUtf8($back), 400);
         $history_lines[] = "Frente: {$front} | Verso: {$back}";
-    }
-
-    if (count($history_lines) > 200) {
-        $history_lines = array_slice($history_lines, -200);
     }
 
     $basePrompt = '';
@@ -636,128 +607,41 @@ elseif ($action === 'generate_cards_preview') {
         $basePrompt = 'Me dê frases em inglês com o termo que eu te enviar, em uma tabela de duas colunas, onde cada linha é uma frase, a primeira coluna é a frase em português brasileiro, e a segunda é a frase em inglês. As frases devem ser de fácil compreensão. Nenhuma frase pode ser igual as frases anteriores que já fiz. Faça variações em múltiplos tempos verbais, variações com todos os pronomes, variações de número e grau. Frases positivas, negativas, interrogativas, voz passiva, voz ativa, voz reflexiva, voz recíproca, com diferentes estruturas sintáticas. O objetivo é que o aluno ao estudar as frases consiga se familiarizar com esse termo em diferentes contextos. Por favor não coloque numeração nas frases para eu não precisa remover elas manualmente depois.';
     }
 
-    $historyText = count($history_lines) > 0 ? ensureUtf8(implode("\n", $history_lines)) : '(deck sem cards anteriores)';
+    $historyText = count($history_lines) > 0 ? implode("\n", $history_lines) : '(deck sem cards anteriores)';
 
     $systemPrompt = 'Você gera linhas de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Para estrutura fatos, deixe back vazio.';
     $userPrompt = $basePrompt
         . "\n\nCARDS JÁ EXISTENTES NESTE DECK (NÃO REPETIR IDEIA):\n" . $historyText
         . "\n\nGere 15 novos cards sem repetição de conteúdo com o histórico.";
 
-    $payload = [
+    $payload = json_encode([
         'model' => 'gpt-4o-mini',
         'messages' => [
             ['role' => 'system', 'content' => $systemPrompt],
             ['role' => 'user', 'content' => $userPrompt]
         ],
-        'temperature' => 0.7,
-        'response_format' => [
-            'type' => 'json_schema',
-            'json_schema' => [
-                'name' => 'deck_cards_response',
-                'strict' => true,
-                'schema' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'cards' => [
-                            'type' => 'array',
-                            'items' => [
-                                'type' => 'object',
-                                'properties' => [
-                                    'front' => ['type' => 'string'],
-                                    'back' => ['type' => 'string']
-                                ],
-                                'required' => ['front', 'back'],
-                                'additionalProperties' => false
-                            ]
-                        ]
-                    ],
-                    'required' => ['cards'],
-                    'additionalProperties' => false
-                ]
-            ]
-        ]
-    ];
+        'temperature' => 0.7
+    ]);
 
-    $sendOpenAI = function(array $requestPayload) {
-        $encodedPayload = json_encode($requestPayload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-        if ($encodedPayload === false) {
-            return [0, false, 'Falha ao montar payload JSON para OpenAI: ' . json_last_error_msg()];
-        }
+    $ch = curl_init('https://api.openai.com/v1/chat/completions');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . OPENAI_API_KEY
+    ]);
 
-        $ch = curl_init('https://api.openai.com/v1/chat/completions');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $encodedPayload);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . OPENAI_API_KEY
-        ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-
-        $response = curl_exec($ch);
-        $curlError = curl_error($ch);
-        $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        return [$httpcode, $response, $curlError];
-    };
-
-    [$httpcode, $response, $curlError] = $sendOpenAI($payload);
+    $response = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
 
     if ($httpcode !== 200 || !$response) {
-        $fallbackPayload = $payload;
-        unset($fallbackPayload['response_format']);
-
-        [$fallbackHttp, $fallbackResponse, $fallbackCurlError] = $sendOpenAI($fallbackPayload);
-        if ($fallbackHttp !== 200 || !$fallbackResponse) {
-            $errMsg = 'Erro ao gerar cards com a OpenAI.';
-            $errDecoded = json_decode((string)$fallbackResponse, true);
-            if (!is_array($errDecoded)) {
-                $errDecoded = json_decode((string)$response, true);
-            }
-            $apiErr = trim((string)($errDecoded['error']['message'] ?? ''));
-            if ($apiErr !== '') {
-                $errMsg .= ' ' . $apiErr;
-            }
-
-            $curlErr = trim((string)$fallbackCurlError);
-            if ($curlErr === '') {
-                $curlErr = trim((string)$curlError);
-            }
-            if ($curlErr !== '') {
-                $errMsg .= ' cURL: ' . $curlErr;
-            }
-
-            $http = $fallbackHttp > 0 ? $fallbackHttp : $httpcode;
-            if ($http > 0) {
-                $errMsg .= ' (HTTP ' . $http . ')';
-            }
-
-            if ($apiErr === '') {
-                $rawBody = trim((string)$fallbackResponse);
-                if ($rawBody === '') {
-                    $rawBody = trim((string)$response);
-                }
-                if ($rawBody !== '') {
-                    $rawBody = preg_replace('/\s+/', ' ', $rawBody);
-                    $errMsg .= ' Resposta: ' . safeSubstr($rawBody, 220);
-                }
-            }
-
-            die(json_encode(['status' => 'error', 'message' => $errMsg]));
-        }
-
-        $httpcode = $fallbackHttp;
-        $response = $fallbackResponse;
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao gerar cards com a OpenAI.']));
     }
 
     $decoded = json_decode($response, true);
-    $raw = trim((string)($decoded['choices'][0]['message']['content'] ?? ''));
-
-    if (preg_match('/^```(?:json)?\s*(.*?)\s*```$/is', $raw, $m)) {
-        $raw = trim($m[1]);
-    }
-
+    $raw = trim($decoded['choices'][0]['message']['content'] ?? '');
     $json = json_decode($raw, true);
 
     if (!is_array($json) || !isset($json['cards']) || !is_array($json['cards'])) {
