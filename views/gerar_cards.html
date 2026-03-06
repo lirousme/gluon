@@ -112,6 +112,9 @@
                     const res = await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     if (res.status === 401) { window.location.href = '/'; return null; }
                     const data = await res.json();
+                    if (data && typeof data === 'object' && Object.prototype.hasOwnProperty.call(data, 'debug_openai_response')) {
+                        delete data.debug_openai_response;
+                    }
                     if (data.status !== 'success') throw new Error(data.message);
                     return data;
                 } catch (err) {
