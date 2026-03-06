@@ -2,7 +2,6 @@
   Arquivo: gerar_cards.html
   Diretório: public_html/gluon/views/gerar_cards.html
   Pilar: Bonito e Escalável.
-  Atualização: Tela dedicada para gerar cards com exportação no cabeçalho.
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -13,19 +12,11 @@
     <title>Gluon - Gerar Cards</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <script>
-        tailwind.config = {
-            theme: { extend: { colors: { gluon: { dark: '#0f172a', primary: '#3b82f6', secondary: '#1e293b', accent: '#6366f1' } } } }
-        }
-    </script>
 </head>
-<body class="bg-gluon-dark text-slate-200 min-h-[100dvh] flex flex-col font-sans pb-[env(safe-area-inset-bottom)]">
-    <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-16 flex items-center justify-between px-4 sm:px-6">
+<body class="bg-slate-950 text-slate-200 min-h-[100dvh] flex flex-col font-sans pb-[env(safe-area-inset-bottom)]">
+    <nav class="bg-slate-900 border-b border-slate-700/50 h-16 flex items-center justify-between px-4 sm:px-6">
         <div class="flex items-center gap-4 min-w-0">
-            <button onclick="goBackToMarkedRoute()" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg border border-slate-700 shadow-sm" title="Voltar">
-                <i class="fa-solid fa-arrow-left"></i>
-            </button>
+            <button onclick="goBackToMarkedRoute()" class="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-lg border border-slate-700" title="Voltar"><i class="fa-solid fa-arrow-left"></i></button>
             <div class="h-6 w-px bg-slate-700"></div>
             <div class="min-w-0">
                 <h1 class="text-sm sm:text-base font-semibold text-white truncate">Gerar Cards</h1>
@@ -33,15 +24,43 @@
             </div>
         </div>
 
-        <button id="btnExportExcel" onclick="generateCardsApp.exportToExcel()" class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700 shadow-sm transition-colors hover:bg-slate-700 text-emerald-500 hover:text-emerald-400 text-sm" title="Baixar Todo o Deck (Excel / CSV)">
+        <button id="btnExportExcel" onclick="generateCardsApp.exportToExcel()" class="flex items-center gap-2 bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-700 text-emerald-500 text-sm" title="Baixar Todo o Deck (Excel / CSV)">
             <i class="fa-solid fa-file-export text-sm"></i>
             <span class="hidden sm:inline">Baixar Cards</span>
         </button>
     </nav>
 
     <main class="flex-1 w-full p-4 sm:p-6">
-        <div class="max-w-4xl mx-auto rounded-xl border border-slate-700 bg-gluon-secondary/60 p-6 text-slate-300">
-            <p class="text-sm sm:text-base">Use esta tela para futuras ações de geração de cards. O download do deck está disponível no cabeçalho.</p>
+        <div class="max-w-5xl mx-auto space-y-4">
+            <div class="rounded-xl border border-slate-700 bg-slate-900/70 p-4 sm:p-6">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <p class="text-sm text-slate-300">Estrutura do deck: <span id="deckStructureLabel" class="font-semibold text-white">-</span></p>
+                        <p class="text-xs text-slate-500">Clique em Gerar para montar sugestões e depois editar/excluir antes de criar os cards.</p>
+                    </div>
+                    <button id="btnGenerate" onclick="generateCardsApp.generate()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium flex items-center justify-center gap-2"><i class="fa-solid fa-wand-magic-sparkles"></i> Gerar</button>
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-slate-700 bg-slate-900/70 p-4 sm:p-6">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left text-slate-400 border-b border-slate-700">
+                                <th class="py-2 pr-2">Frente</th>
+                                <th class="py-2 pr-2">Verso</th>
+                                <th class="py-2 w-28">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="generatedList"></tbody>
+                    </table>
+                </div>
+                <div id="emptyGenerated" class="text-sm text-slate-500 py-6 text-center">Nenhum item gerado ainda.</div>
+
+                <div class="pt-4 mt-2 border-t border-slate-700 flex justify-end">
+                    <button id="btnCreateCards" onclick="generateCardsApp.createCards()" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium disabled:opacity-40" disabled>Criar cards</button>
+                </div>
+            </div>
         </div>
     </main>
 
@@ -53,112 +72,155 @@
         }
 
         function goBackToMarkedRoute() {
-            if (window.history.length > 1) {
-                window.history.back();
-                return;
-            }
+            if (window.history.length > 1) return window.history.back();
             window.location.href = getMarkedBackRoute();
         }
 
         const generateCardsApp = {
             deckId: null,
+            deckStructure: 'fatos',
+            generatedCards: [],
 
             async init() {
-                const urlParams = new URLSearchParams(window.location.search);
-                this.deckId = urlParams.get('id');
-
-                if (!this.deckId) {
-                    window.location.href = getMarkedBackRoute();
-                    return;
-                }
-
+                this.deckId = new URLSearchParams(window.location.search).get('id');
+                if (!this.deckId) return goBackToMarkedRoute();
                 const res = await this.api('fetch', { deck_id: this.deckId });
-                if (res) {
-                    document.getElementById('deckName').innerText = res.deck_name || 'Deck sem nome';
-                }
+                if (!res) return;
+                document.getElementById('deckName').innerText = res.deck_name || 'Deck sem nome';
+                this.deckStructure = res.deck_structure || 'fatos';
+                const labels = { fatos: 'Fatos', perguntas: 'Perguntas', traducoes: 'Traduções' };
+                document.getElementById('deckStructureLabel').innerText = labels[this.deckStructure] || 'Fatos';
             },
 
             showToast(message, type = 'success') {
                 let toast = document.getElementById('gluon-toast');
-                if (!toast) {
-                    toast = document.createElement('div');
-                    toast.id = 'gluon-toast';
-                    document.body.appendChild(toast);
-                }
+                if (!toast) { toast = document.createElement('div'); toast.id = 'gluon-toast'; document.body.appendChild(toast); }
                 const icon = type === 'success' ? '<i class="fa-solid fa-circle-check"></i>' : '<i class="fa-solid fa-circle-exclamation"></i>';
                 const bgClass = type === 'success' ? 'bg-green-600' : 'bg-red-600';
-                toast.className = `fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-xl text-white text-sm font-medium flex items-center gap-3 z-50 transition-all duration-300 transform translate-y-10 opacity-0 ${bgClass}`;
+                toast.className = `fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-xl text-white text-sm font-medium flex items-center gap-3 z-50 ${bgClass}`;
                 toast.innerHTML = `${icon} <span>${message}</span>`;
-                setTimeout(() => { toast.classList.remove('translate-y-10', 'opacity-0'); toast.classList.add('translate-y-0', 'opacity-100'); }, 10);
-                setTimeout(() => { toast.classList.remove('translate-y-0', 'opacity-100'); toast.classList.add('translate-y-10', 'opacity-0'); }, 3000);
+                setTimeout(() => toast.remove(), 2500);
+            },
+
+            escapeHTML(str) {
+                return (str || '').replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
             },
 
             async api(action, payload = {}) {
                 payload.action = action;
                 try {
-                    const res = await fetch(`/api/flashcards`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-
-                    if (res.status === 401) {
-                        window.location.href = '/';
-                        return null;
-                    }
-
+                    const res = await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (res.status === 401) { window.location.href = '/'; return null; }
                     const data = await res.json();
                     if (data.status !== 'success') throw new Error(data.message);
                     return data;
                 } catch (err) {
-                    console.error(err);
                     this.showToast(err.message || 'Erro de conexão.', 'error');
                     return null;
                 }
             },
 
+            renderList() {
+                const tbody = document.getElementById('generatedList');
+                const empty = document.getElementById('emptyGenerated');
+                tbody.innerHTML = '';
+                if (!this.generatedCards.length) {
+                    empty.classList.remove('hidden');
+                    document.getElementById('btnCreateCards').disabled = true;
+                    return;
+                }
+
+                empty.classList.add('hidden');
+                document.getElementById('btnCreateCards').disabled = false;
+
+                this.generatedCards.forEach((card, idx) => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-slate-800 align-top';
+                    tr.innerHTML = `
+                        <td class="py-2 pr-2">
+                            <textarea data-field="front" data-index="${idx}" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 min-h-[72px]">${this.escapeHTML(card.front)}</textarea>
+                        </td>
+                        <td class="py-2 pr-2">
+                            <textarea data-field="back" data-index="${idx}" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 min-h-[72px]">${this.escapeHTML(card.back || '')}</textarea>
+                        </td>
+                        <td class="py-2">
+                            <div class="flex gap-2">
+                                <button class="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600" onclick="generateCardsApp.saveRow(${idx})"><i class="fa-solid fa-pen"></i></button>
+                                <button class="px-2 py-1 rounded bg-red-700 hover:bg-red-600" onclick="generateCardsApp.deleteRow(${idx})"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                if (window.innerWidth < 768) {
+                    [...tbody.querySelectorAll('tr')].forEach(tr => tr.classList.add('grid', 'grid-cols-1'));
+                }
+            },
+
+            saveRow(index) {
+                const frontEl = document.querySelector(`textarea[data-field="front"][data-index="${index}"]`);
+                const backEl = document.querySelector(`textarea[data-field="back"][data-index="${index}"]`);
+                this.generatedCards[index].front = frontEl.value.trim();
+                this.generatedCards[index].back = backEl.value.trim();
+                this.showToast('Item atualizado!', 'success');
+            },
+
+            deleteRow(index) {
+                this.generatedCards.splice(index, 1);
+                this.renderList();
+            },
+
+            async generate() {
+                const btn = document.getElementById('btnGenerate');
+                const old = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Gerando...';
+                const res = await this.api('generate_cards_preview', { deck_id: this.deckId });
+                btn.disabled = false;
+                btn.innerHTML = old;
+                if (!res) return;
+                this.generatedCards = Array.isArray(res.cards) ? res.cards : [];
+                this.renderList();
+                this.showToast('Sugestões geradas!', 'success');
+            },
+
+            async createCards() {
+                if (!this.generatedCards.length) return;
+                const btn = document.getElementById('btnCreateCards');
+                const old = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+                const payloadCards = this.generatedCards.map(c => ({ front: (c.front || '').trim(), back: (c.back || '').trim() })).filter(c => c.front);
+                const res = await this.api('create_generated_cards', { deck_id: this.deckId, cards: payloadCards });
+                btn.disabled = false;
+                btn.innerHTML = old;
+                if (!res) return;
+                this.generatedCards = [];
+                this.renderList();
+                this.showToast(res.message || 'Cards criados com sucesso!', 'success');
+            },
+
             async exportToExcel() {
                 const btn = document.getElementById('btnExportExcel');
-                const originalContent = btn.innerHTML;
+                const old = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-sm"></i>';
+                const res = await this.api('get_all_cards', { deck_id: this.deckId });
+                btn.disabled = false;
+                btn.innerHTML = old;
+                if (!res || !res.data?.length) return this.showToast('Não há cards para exportar neste deck.', 'error');
 
-                try {
-                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-sm"></i>';
-                    btn.disabled = true;
-
-                    const res = await this.api('get_all_cards', { deck_id: this.deckId });
-
-                    if (!res || !res.data || res.data.length === 0) {
-                        this.showToast('Não há cards para exportar neste deck.', 'error');
-                        return;
-                    }
-
-                    let csv = '\uFEFF';
-                    csv += 'Frente,Verso\n';
-
-                    res.data.forEach(card => {
-                        const front = card.front ? card.front.replace(/"/g, '""') : '';
-                        const back = card.back ? card.back.replace(/"/g, '""') : '';
-                        csv += `"${front}","${back}"\n`;
-                    });
-
-                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-
-                    const deckName = document.getElementById('deckName').innerText;
-                    const safeName = deckName.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'deck';
-
-                    a.download = `gluon_${safeName}.csv`;
-
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-
-                    this.showToast('Exportação concluída com sucesso!', 'success');
-                } catch (error) {
-                    this.showToast('Erro ao exportar: ' + error.message, 'error');
-                } finally {
-                    btn.innerHTML = originalContent;
-                    btn.disabled = false;
-                }
+                let csv = '\uFEFFFrente,Verso\n';
+                res.data.forEach(card => {
+                    csv += `"${(card.front || '').replace(/"/g, '""')}","${(card.back || '').replace(/"/g, '""')}"\n`;
+                });
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `gluon_${(document.getElementById('deckName').innerText || 'deck').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
             }
         };
 
