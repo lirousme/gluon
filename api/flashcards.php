@@ -609,12 +609,15 @@ elseif ($action === 'generate_cards_preview') {
 
     $historyText = count($history_lines) > 0 ? implode("\n", $history_lines) : '(deck sem cards anteriores)';
 
-    $systemPrompt = 'Você gera linhas de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Para estrutura fatos, deixe back vazio.';
+    $systemPrompt = 'Você gera linhas de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estrutura fatos, deixe back vazio.';
     $userPrompt = $basePrompt
         . "\n\nCARDS JÁ EXISTENTES NESTE DECK (NÃO REPETIR IDEIA):\n" . $historyText
         . "\n\nGere 15 novos cards sem repetição de conteúdo com o histórico.";
 
-    $payload = json_encode([
+    $requiresBack = in_array($deck_structure, ['perguntas', 'traducoes'], true);
+    $backSchema = $requiresBack ? ['type' => 'string', 'minLength' => 1] : ['type' => 'string'];
+
+    $payloadBase = [
         'model' => 'gpt-4o-mini',
         'messages' => [
             ['role' => 'system', 'content' => $systemPrompt],
@@ -625,16 +628,18 @@ elseif ($action === 'generate_cards_preview') {
             'type' => 'json_schema',
             'json_schema' => [
                 'name' => 'cards_preview_response',
+                'strict' => true,
                 'schema' => [
                     'type' => 'object',
                     'properties' => [
                         'cards' => [
                             'type' => 'array',
+                            'minItems' => 1,
                             'items' => [
                                 'type' => 'object',
                                 'properties' => [
-                                    'front' => ['type' => 'string'],
-                                    'back' => ['type' => 'string']
+                                    'front' => ['type' => 'string', 'minLength' => 1],
+                                    'back' => $backSchema
                                 ],
                                 'required' => ['front', 'back'],
                                 'additionalProperties' => false
@@ -646,60 +651,93 @@ elseif ($action === 'generate_cards_preview') {
                 ]
             ]
         ]
-    ]);
-
-    $ch = curl_init('https://api.openai.com/v1/chat/completions');
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Content-Type: application/json',
-        'Authorization: Bearer ' . OPENAI_API_KEY
-    ]);
-
-    $response = curl_exec($ch);
-    $curlError = curl_error($ch);
-    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($httpcode !== 200 || !$response) {
-        $apiError = '';
-        if (!empty($response)) {
-            $errorDecoded = json_decode($response, true);
-            $apiError = trim((string)($errorDecoded['error']['message'] ?? ''));
-        }
-
-        $details = trim($apiError !== '' ? $apiError : $curlError);
-        $message = 'Erro ao gerar cards com a OpenAI.';
-        if ($details !== '') {
-            $message .= ' Detalhes: ' . $details;
-        }
-
-        die(json_encode(['status' => 'error', 'message' => $message]));
-    }
-
-    $decoded = json_decode($response, true);
-    $raw = trim((string)($decoded['choices'][0]['message']['content'] ?? ''));
-
-    if ($raw !== '' && str_starts_with($raw, '```')) {
-        $raw = preg_replace('/^```(?:json)?\s*/i', '', $raw);
-        $raw = preg_replace('/\s*```$/', '', $raw);
-        $raw = trim((string)$raw);
-    }
-
-    $json = json_decode($raw, true);
-
-    if (!is_array($json) || !isset($json['cards']) || !is_array($json['cards'])) {
-        die(json_encode(['status' => 'error', 'message' => 'A API retornou conteúdo em formato inválido.']));
-    }
+    ];
 
     $cards = [];
-    foreach ($json['cards'] as $card) {
-        $front = trim((string)($card['front'] ?? ''));
-        $back = trim((string)($card['back'] ?? ''));
-        if ($front === '') continue;
-        if ($deck_structure === 'fatos') $back = '';
-        $cards[] = ['front' => $front, 'back' => $back];
+    $lastErrorMessage = '';
+
+    for ($attempt = 1; $attempt <= 3; $attempt++) {
+        $payloadData = $payloadBase;
+        if ($attempt > 1) {
+            $payloadData['messages'][] = [
+                'role' => 'user',
+                'content' => 'Sua resposta anterior não seguiu o formato esperado. Regere e valide internamente antes de responder. Nunca deixe campos vazios que sejam obrigatórios para esta estrutura.'
+            ];
+        }
+
+        $payload = json_encode($payloadData);
+
+        $ch = curl_init('https://api.openai.com/v1/chat/completions');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . OPENAI_API_KEY
+        ]);
+
+        $response = curl_exec($ch);
+        $curlError = curl_error($ch);
+        $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpcode !== 200 || !$response) {
+            $apiError = '';
+            if (!empty($response)) {
+                $errorDecoded = json_decode($response, true);
+                $apiError = trim((string)($errorDecoded['error']['message'] ?? ''));
+            }
+
+            $details = trim($apiError !== '' ? $apiError : $curlError);
+            $lastErrorMessage = 'Erro ao gerar cards com a OpenAI.';
+            if ($details !== '') {
+                $lastErrorMessage .= ' Detalhes: ' . $details;
+            }
+            continue;
+        }
+
+        $decoded = json_decode($response, true);
+        $raw = trim((string)($decoded['choices'][0]['message']['content'] ?? ''));
+
+        if ($raw !== '' && str_starts_with($raw, '```')) {
+            $raw = preg_replace('/^```(?:json)?\s*/i', '', $raw);
+            $raw = preg_replace('/\s*```$/', '', $raw);
+            $raw = trim((string)$raw);
+        }
+
+        $json = json_decode($raw, true);
+
+        if (!is_array($json) || !isset($json['cards']) || !is_array($json['cards'])) {
+            $lastErrorMessage = 'A API retornou conteúdo em formato inválido.';
+            continue;
+        }
+
+        $cards = [];
+        foreach ($json['cards'] as $card) {
+            $front = trim((string)($card['front'] ?? ''));
+            $back = trim((string)($card['back'] ?? ''));
+
+            if ($front === '') continue;
+
+            if ($deck_structure === 'fatos') {
+                $back = '';
+            } elseif ($back === '') {
+                continue;
+            }
+
+            $cards[] = ['front' => $front, 'back' => $back];
+        }
+
+        if (!empty($cards)) {
+            break;
+        }
+
+        $lastErrorMessage = 'A API retornou cards sem preenchimento obrigatório.';
+    }
+
+    if (empty($cards)) {
+        $message = $lastErrorMessage !== '' ? $lastErrorMessage : 'Não foi possível gerar cards válidos no formato esperado.';
+        die(json_encode(['status' => 'error', 'message' => $message]));
     }
 
     echo json_encode(['status' => 'success', 'cards' => $cards]);
