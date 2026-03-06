@@ -122,10 +122,34 @@
 
             renderMathInElement(element, value) {
                 if (!element) return;
-                element.textContent = value || '';
+                const normalizedValue = (value || '').trim();
+                const hasMath = this.containsMathNotation(normalizedValue);
+
+                if (!hasMath) {
+                    element.textContent = '';
+                    element.classList.add('hidden');
+                    return;
+                }
+
+                element.classList.remove('hidden');
+                element.textContent = normalizedValue;
                 if (window.MathJax?.typesetPromise) {
                     window.MathJax.typesetPromise([element]).catch(() => {});
                 }
+            },
+
+            containsMathNotation(value) {
+                if (!value) return false;
+
+                const latexDelimiters = /\\\(|\\\)|\\\[|\\\]|\$\$[^$]+\$\$|\$[^$]+\$/;
+                const commonMathSymbols = /[∑∫√≈≠≤≥∞πΔθλμ±÷×]/;
+                const superscriptSubscriptChars = /[²³¹⁰⁴⁵⁶⁷⁸⁹⁻⁺₀₁₂₃₄₅₆₇₈₉]/;
+
+                return (
+                    latexDelimiters.test(value) ||
+                    commonMathSymbols.test(value) ||
+                    superscriptSubscriptChars.test(value)
+                );
             },
 
             async api(action, payload = {}) {
