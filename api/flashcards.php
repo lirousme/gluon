@@ -653,6 +653,7 @@ elseif ($action === 'generate_cards_preview') {
     ];
 
     $cards = [];
+    $openai_debug_response = null;
     $lastErrorMessage = '';
 
     for ($attempt = 1; $attempt <= 3; $attempt++) {
@@ -696,6 +697,7 @@ elseif ($action === 'generate_cards_preview') {
         }
 
         $decoded = json_decode($response, true);
+        $openai_debug_response = $decoded;
         $raw = trim((string)($decoded['choices'][0]['message']['content'] ?? ''));
 
         if ($raw !== '' && str_starts_with($raw, '```')) {
@@ -739,7 +741,11 @@ elseif ($action === 'generate_cards_preview') {
         die(json_encode(['status' => 'error', 'message' => $message]));
     }
 
-    echo json_encode(['status' => 'success', 'cards' => $cards]);
+    echo json_encode([
+        'status' => 'success',
+        'cards' => $cards,
+        'debug_openai_response' => $openai_debug_response
+    ]);
 }
 
 elseif ($action === 'create_generated_cards') {
