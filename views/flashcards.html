@@ -258,6 +258,12 @@
                 <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <form onsubmit="flashcardApp.saveSettings(event)" class="p-6 space-y-6">
+                <div class="flex items-center gap-2 border-b border-slate-700 pb-4">
+                    <button type="button" data-settings-tab="general" onclick="flashcardApp.switchSettingsTab('general')" class="settings-tab-btn px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-700 text-white">Geral</button>
+                    <button type="button" data-settings-tab="structure" onclick="flashcardApp.switchSettingsTab('structure')" class="settings-tab-btn px-3 py-1.5 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800">Estrutura</button>
+                </div>
+
+                <div id="settingsTabGeneral" class="space-y-6">
                 <div>
                     <label class="block text-sm font-medium text-slate-300 mb-3">Modo de Estudo / Comportamento</label>
                     <div class="space-y-3">
@@ -295,6 +301,38 @@
                             <option value="en-US">Inglês Americano</option>
                             <option value="en-GB">Inglês Britânico</option>
                         </select>
+                    </div>
+                </div>
+                </div>
+
+                <div id="settingsTabStructure" class="space-y-4 hidden">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-3">Estrutura</label>
+                        <div class="space-y-3">
+                            <label class="flex items-start gap-3 cursor-pointer p-3 border border-slate-600 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors">
+                                <input type="radio" name="deckStructure" value="fatos" class="mt-1 text-gluon-primary bg-slate-900 border-slate-600 focus:ring-gluon-primary">
+                                <div>
+                                    <div class="font-medium text-white mb-0.5">Fatos</div>
+                                    <div class="text-xs text-slate-400">Gera cards com afirmações curtas e progressivas sobre o tema do deck.</div>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start gap-3 cursor-pointer p-3 border border-slate-600 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors">
+                                <input type="radio" name="deckStructure" value="perguntas" class="mt-1 text-gluon-primary bg-slate-900 border-slate-600 focus:ring-gluon-primary">
+                                <div>
+                                    <div class="font-medium text-white mb-0.5">Perguntas</div>
+                                    <div class="text-xs text-slate-400">Gera cards em formato pergunta e resposta para revisão ativa.</div>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start gap-3 cursor-pointer p-3 border border-slate-600 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors">
+                                <input type="radio" name="deckStructure" value="traducoes" class="mt-1 text-gluon-primary bg-slate-900 border-slate-600 focus:ring-gluon-primary">
+                                <div>
+                                    <div class="font-medium text-white mb-0.5">Traduções</div>
+                                    <div class="text-xs text-slate-400">Gera cards com frases em português e inglês para prática contextual.</div>
+                                </div>
+                            </label>
+                        </div>
                     </div>
                 </div>
                 
@@ -468,6 +506,7 @@
             deckMode: 'aleatorio',
             frontLanguage: 'pt-BR',
             backLanguage: 'en-GB',
+            deckStructure: 'fatos',
             deckPercentage: 0,
             totalCardsInDeck: 0,
             bookCompletedReads: 0,
@@ -551,6 +590,7 @@
                     this.deckMode = res.deck_mode || 'aleatorio';
                     this.frontLanguage = res.deck_front_language || 'pt-BR';
                     this.backLanguage = res.deck_back_language || 'en-GB';
+                    this.deckStructure = res.deck_structure || 'fatos';
                     this.cards = res.data || [];
                     this.deckPercentage = res.deck_percentage || 0;
                     this.totalCardsInDeck = res.total_cards || 0;
@@ -1210,6 +1250,24 @@
                 }, 300);
             },
 
+
+            switchSettingsTab(tab) {
+                const general = document.getElementById('settingsTabGeneral');
+                const structure = document.getElementById('settingsTabStructure');
+                const buttons = document.querySelectorAll('.settings-tab-btn');
+
+                general.classList.toggle('hidden', tab !== 'general');
+                structure.classList.toggle('hidden', tab !== 'structure');
+
+                buttons.forEach(btn => {
+                    const active = btn.dataset.settingsTab === tab;
+                    btn.classList.toggle('bg-slate-700', active);
+                    btn.classList.toggle('text-white', active);
+                    btn.classList.toggle('text-slate-300', !active);
+                    btn.classList.toggle('hover:bg-slate-800', !active);
+                });
+            },
+
             // --- Modais ---
             openSettingsModal() {
                 const radios = document.getElementsByName('deckMode');
@@ -1218,6 +1276,11 @@
                 }
                 document.getElementById('deckFrontLanguage').value = this.frontLanguage;
                 document.getElementById('deckBackLanguage').value = this.backLanguage;
+                const structureRadios = document.getElementsByName('deckStructure');
+                for (let i = 0; i < structureRadios.length; i++) {
+                    structureRadios[i].checked = (structureRadios[i].value === this.deckStructure);
+                }
+                this.switchSettingsTab('general');
                 const modal = document.getElementById('settingsModal');
                 const content = document.getElementById('settingsModalContent');
                 modal.classList.remove('hidden'); modal.classList.add('flex');
@@ -1304,6 +1367,9 @@
 
                 const frontLanguage = document.getElementById('deckFrontLanguage').value;
                 const backLanguage = document.getElementById('deckBackLanguage').value;
+                const structureRadios = document.getElementsByName('deckStructure');
+                let deckStructure = 'fatos';
+                for (let i = 0; i < structureRadios.length; i++) { if (structureRadios[i].checked) deckStructure = structureRadios[i].value; }
 
                 const btn = document.getElementById('btnSaveSettings');
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
@@ -1313,7 +1379,8 @@
                     deck_id: this.deckId,
                     deck_mode: selectedMode,
                     deck_front_language: frontLanguage,
-                    deck_back_language: backLanguage
+                    deck_back_language: backLanguage,
+                    deck_structure: deckStructure
                 });
                 if (res) {
                     this.showToast(res.message, 'success');
