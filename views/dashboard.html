@@ -283,6 +283,12 @@
                                     <i class="fa-solid fa-list-check block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Controle</span>
                                 </div>
                             </label>
+                            <label class="cursor-pointer" onclick="app.handleTypeChange(6)">
+                                <input type="radio" name="itemType" value="6" class="peer hidden type-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-code-branch block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Condicional</span>
+                                </div>
+                            </label>
                         </div>
                     </div>
 
@@ -623,7 +629,7 @@
             },
 
             navigateToItemView(type, id) {
-                const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency' };
+                const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 6: 'sistema_de_condicionais' };
                 const targetView = viewByType[type];
                 if (!targetView) return false;
                 window.location.href = this.buildViewUrl(targetView, id);
@@ -750,6 +756,10 @@
                     folderSettings.style.display = 'none';
                     nameLabel.innerText = 'Nome da Lista de Controle';
                     this.autoChangeIcon('fa-list-check');
+                } else if (typeValue === 6) {
+                    folderSettings.style.display = 'none';
+                    nameLabel.innerText = 'Nome do Sistema de Condicional';
+                    this.autoChangeIcon('fa-code-branch');
                 }
             },
 
@@ -1389,6 +1399,7 @@
                         if(dirObj.type === 2) titleText = 'Agenda';
                         if(dirObj.type === 3) titleText = 'Portal';
                         if(dirObj.type === 4) titleText = 'Flashcards';
+                        if(dirObj.type === 6) titleText = 'Sistema de Condicional';
 
                         document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-gear text-gluon-primary"></i> <span>Configurar ${titleText}</span>`;
                         document.getElementById('dirNameContainer').classList.remove('hidden');
@@ -1399,6 +1410,7 @@
                         else if(dirObj.type === 2) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome da Agenda'; iconPickerContainer.style.display = 'block'; }
                         else if(dirObj.type === 3) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Portal'; iconPickerContainer.style.display = 'none'; btnRecor.classList.add('hidden'); tabRecor.classList.add('hidden'); publicToggleContainer.classList.add('hidden'); }
                         else if(dirObj.type === 4) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Deck'; iconPickerContainer.style.display = 'block'; }
+                        else if(dirObj.type === 6) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Sistema de Condicional'; iconPickerContainer.style.display = 'block'; }
                     } else {
                         document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus text-gluon-primary"></i> <span>Novo Item</span>';
                         document.getElementById('dirNameContainer').classList.remove('hidden');
@@ -1425,7 +1437,7 @@
                 document.getElementById('dirColorFrom').value = (dirObj && dirObj.color_from) ? dirObj.color_from : '#3b82f6';
                 document.getElementById('dirColorTo').value = (dirObj && dirObj.color_to) ? dirObj.color_to : '#6366f1';
                 
-                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (isRootSettings ? 'fa-folder' : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : (dirObj?.type === 3 ? 'fa-door-open' : (dirObj?.type === 4 ? 'fa-layer-group' : 'fa-folder'))))); 
+                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (isRootSettings ? 'fa-folder' : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : (dirObj?.type === 3 ? 'fa-door-open' : (dirObj?.type === 4 ? 'fa-layer-group' : (dirObj?.type === 6 ? 'fa-code-branch' : 'fa-folder')))))); 
                 this.autoChangeIcon(iconToSelect);
 
                 document.getElementById('dirIsPublic').checked = !!(dirObj && dirObj.is_public === 1);
@@ -1734,6 +1746,9 @@
                          const rankHtml = deckData.isBookDeck ? `<span class="text-xs mt-1">Rank: <span style="color:${deckData.color}">${deckData.rank}</span></span>` : '';
                          container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60"><i class="fa-solid ${deckData.iconClass} text-4xl mb-3" style="color:${deckData.color}"></i><span class="text-sm font-medium">${deckData.title} · <span style="color:${deckData.color}">${deckData.percentage}%</span></span><span class="text-[10px] text-slate-400 leading-none mt-1">${deckData.totalCards} ${deckData.totalCards === 1 ? 'card' : 'cards'}</span>${rankHtml}<span class="text-xs mt-1 text-center px-4">Clique no topo para abrir</span></div>`;
                          return; 
+                    } else if (dir.type === 6) {
+                         container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60"><i class="fa-solid fa-code-branch text-4xl mb-3" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i><span class="text-sm font-medium">Sistema de Condicional</span><span class="text-xs mt-1 text-center px-4">Clique no topo para abrir</span></div>`;
+                         return;
                     }
 
                     const targetFetchId = dir.type === 3 ? dir.target_id : dir.id;
@@ -1754,6 +1769,7 @@
                             if(sub.type === 2) itemBorder = 'border-emerald-500/50';
                             if(sub.type === 3) itemBorder = 'border-fuchsia-500/50';
                             if(sub.type === 4) itemBorder = 'border-amber-500/50';
+                            if(sub.type === 6) itemBorder = 'border-cyan-500/50';
                             
                             const repeatIcon = sub.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
                             const subScore = this.getDeckScoreMarkup(sub, 'text-xs');
@@ -1808,6 +1824,7 @@
                         if(dir.type === 2) borderClass = 'border-emerald-600/50';
                         if(dir.type === 3) borderClass = 'border-fuchsia-600/50';
                         if(dir.type === 4) borderClass = 'border-amber-600/50';
+                        if(dir.type === 6) borderClass = 'border-cyan-600/50';
                         
                         const repeatIcon = dir.is_recurring === 1 ? `<div class="absolute top-2 left-2 bg-slate-900/80 backdrop-blur rounded p-1.5 z-20 text-gluon-primary" title="Tarefa Recorrente"><i class="fa-solid fa-repeat"></i></div>` : '';
                         const dirScore = this.getDeckScoreMarkup(dir, 'text-xs sm:text-sm');
@@ -1841,6 +1858,7 @@
                         if(dir.type === 2) borderClass = 'border-l-emerald-500';
                         if(dir.type === 3) borderClass = 'border-l-fuchsia-500';
                         if(dir.type === 4) borderClass = 'border-l-amber-500';
+                        if(dir.type === 6) borderClass = 'border-l-cyan-500';
 
                         const repeatIcon = dir.is_recurring === 1 ? `<i class="fa-solid fa-repeat ml-2 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
                         const dirScore = this.getDeckScoreMarkup(dir, 'text-xs sm:text-sm');
@@ -1871,6 +1889,7 @@
                         if(dir.type === 2) headerBorder = 'border-emerald-700';
                         if(dir.type === 3) headerBorder = 'border-fuchsia-700';
                         if(dir.type === 4) headerBorder = 'border-amber-700';
+                        if(dir.type === 6) headerBorder = 'border-cyan-700';
 
                         const dropTargetId = dir.type === 3 ? dir.target_id : dir.id;
                         const repeatIcon = dir.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-sm ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
