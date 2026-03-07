@@ -181,6 +181,19 @@ elseif ($action === 'delete') {
 
     echo json_encode(['status' => 'success']);
 }
+
+elseif ($action === 'reset_completed') {
+    $dir_id = (int)($input['directory_id'] ?? 0);
+
+    if (!verifyConditionalDirectoryOwnership($pdo, $dir_id, $user_id)) {
+        die(json_encode(['status' => 'error', 'message' => 'Sem acesso.']));
+    }
+
+    $stmt = $pdo->prepare("UPDATE conditional_items SET is_completed = 0 WHERE directory_id = ? AND is_completed = 1");
+    $stmt->execute([$dir_id]);
+
+    echo json_encode(['status' => 'success']);
+}
 else {
     echo json_encode(['status' => 'error', 'message' => 'Ação inválida.']);
 }

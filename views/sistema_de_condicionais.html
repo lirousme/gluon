@@ -18,7 +18,10 @@
             <div id="listName" class="font-semibold">Carregando...</div>
         </div>
     </div>
-    <button onclick="app.openModal(null)" class="bg-cyan-600 hover:bg-cyan-500 px-3 py-2 rounded-lg text-sm"><i class="fa-solid fa-plus"></i> Nova tarefa</button>
+    <div class="flex items-center gap-2">
+        <button onclick="app.resetCompleted()" class="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-lg text-sm"><i class="fa-solid fa-rotate-left"></i> Reset</button>
+        <button onclick="app.openModal(null)" class="bg-cyan-600 hover:bg-cyan-500 px-3 py-2 rounded-lg text-sm"><i class="fa-solid fa-plus"></i> Nova tarefa</button>
+    </div>
 </nav>
 <main class="max-w-5xl mx-auto w-full p-4">
     <div id="treeContainer" class="bg-slate-900 border border-slate-700 rounded-xl p-4"></div>
@@ -74,6 +77,21 @@ const app={
     }
     const res=await this.api('toggle',{item_id:id,is_completed:checked?1:0});
     if(res.status!=='success'){ alert(res.message||'Não foi possível concluir.'); }
+    await this.loadData();
+  },
+  async resetCompleted(){
+    const hasCompleted=this.items.some(item=>Number(item.is_completed)===1);
+    if(!hasCompleted){
+      alert('Não há tarefas concluídas para resetar.');
+      return;
+    }
+    if(!confirm('Deseja desmarcar todas as tarefas concluídas?')) return;
+
+    const res=await this.api('reset_completed');
+    if(res.status!=='success'){
+      alert(res.message||'Não foi possível resetar as tarefas.');
+      return;
+    }
     await this.loadData();
   },
   async remove(id){ if(!confirm('Excluir esta tarefa?')) return; await this.api('delete',{item_id:id}); await this.loadData(); },
