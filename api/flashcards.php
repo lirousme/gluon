@@ -1033,6 +1033,7 @@ elseif ($action === 'generate_cards_preview') {
 
     echo json_encode([
         'status' => 'success',
+        'mode' => 'realtime',
         'cards' => $cards,
         'debug_openai_response' => $openai_debug_response
     ]);
