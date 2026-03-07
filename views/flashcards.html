@@ -854,7 +854,7 @@
                 this.stopAudio(); 
                 
                 const card = this.cards[this.currentIndex];
-                if (this.deckMode === 'aleatorio') this.registerScore(card);
+                if (this.deckMode === 'aleatorio') await this.registerScore(card);
 
                 if (this.deckMode === 'livro' && this.cards.length === 1) {
                     this.incrementBookReadProgress();
@@ -890,12 +890,9 @@
                         this.playCardAudio(this.cards[this.currentIndex].id, 'front');
                     }
                 } else if (this.deckMode === 'aleatorio') {
-                    this.currentIndex = 0;
-                    this.renderCurrentCard();
-
-                    if (this.autoPlayEnabled && this.cards[this.currentIndex].has_audio_front === 1) {
-                        this.playCardAudio(this.cards[this.currentIndex].id, 'front');
-                    }
+                    // Último card da revisão do dia: recarrega para refletir as cartas vencidas restantes.
+                    // Se não houver mais cartas, o loadDeck mostra o estado "Você está em dia".
+                    await this.loadDeck();
                 }
             },
 
