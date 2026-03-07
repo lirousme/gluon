@@ -17,6 +17,7 @@ public_html/gluon/
 │   └── flashcards.php        # NOVO: Micro-API para CRUD de Flashcards
 │   └── adjacency.php        # NOVO: Micro-API para Lista adjacente
 │   └── pronuncias.php       # NOVO: CRUD administrativo para ajustes de pronúncia TTS
+│   └── sistema_de_condicionais.php # NOVO: Micro-API para tarefas com dependência condicional
 │
 ├── views/                    # Front-end (Vanilla JS + Tailwind)
 │   ├── login.html
@@ -29,6 +30,7 @@ public_html/gluon/
 │   ├── flashcards.html       # NOVO: Interface de estudo de Flashcards
 │   ├── gerar_cards_batch.html # NOVO: Interface de geração assíncrona (Batch OpenAI)
 │   ├── adjacency.html       # NOVO: Lista adjacente
+│   ├── sistema_de_condicionais.html # NOVO: Fluxo de tarefas condicionais
 │   └── errors/
 │
 └── assets/
@@ -62,7 +64,7 @@ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 user_id INT UNSIGNED NOT NULL,
 parent_id INT UNSIGNED DEFAULT NULL, -- NULL significa que está na Raiz
 target_id INT UNSIGNED DEFAULT NULL, -- NOVO: ID do diretório alvo (Apenas para Portais)
-type TINYINT DEFAULT 0,              -- 0 = Pasta, 1 = Arquivo de Código, 2 = Agenda, 3 = Portal, 4 = Deck de Flashcards
+type TINYINT DEFAULT 0,              -- 0 = Pasta, 1 = Arquivo de Código, 2 = Agenda, 3 = Portal, 4 = Deck de Flashcards, 5 = Controle, 6 = Sistema de Condicional
 deck_mode VARCHAR(20) DEFAULT 'aleatorio';
 deck_front_language VARCHAR(10) NOT NULL DEFAULT 'pt-BR', -- Idioma da frente do card (pt-BR | en-US | en-GB)
 deck_back_language VARCHAR(10) NOT NULL DEFAULT 'en-GB', -- Idioma do verso do card (pt-BR | en-US | en-GB)
@@ -180,6 +182,28 @@ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================
 
+
+
+======================================================================
+
+TABELA: conditional_items
+id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+directory_id INT UNSIGNED NOT NULL, -- Liga à tabela directories (type = 6)
+parent_id INT UNSIGNED DEFAULT NULL, -- Hierarquia de tarefas/subtarefas
+label VARCHAR(255) NOT NULL,
+conditional_item_id INT UNSIGNED DEFAULT NULL, -- A tarefa que precisa ser concluída antes desta
+is_completed TINYINT(1) DEFAULT 0,
+sort_order INT DEFAULT 0,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
+FOREIGN KEY (parent_id) REFERENCES conditional_items(id) ON DELETE CASCADE,
+FOREIGN KEY (conditional_item_id) REFERENCES conditional_items(id) ON DELETE SET NULL,
+INDEX idx_conditional_directory_parent (directory_id, parent_id),
+INDEX idx_conditional_dep (conditional_item_id)
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
 TABELA: user_follows
 follower_id INT UNSIGNED NOT NULL,
 followed_id INT UNSIGNED NOT NULL,
@@ -270,3 +294,28 @@ FISH_REFERENCE_ID_EN_GB=...
 
 (Compatibilidade: se não definidas, o sistema usa os IDs antigos FRONT/BACK.)
 
+
+======================================================================
+
+MIGRAÇÃO SQL (Sistema de Condicional)
+
+```sql
+ALTER TABLE directories
+  MODIFY COLUMN type TINYINT DEFAULT 0 COMMENT '0=Pasta,1=Código,2=Agenda,3=Portal,4=Flashcards,5=Controle,6=Sistema de Condicional';
+
+CREATE TABLE IF NOT EXISTS conditional_items (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  directory_id INT UNSIGNED NOT NULL,
+  parent_id INT UNSIGNED DEFAULT NULL,
+  label VARCHAR(255) NOT NULL,
+  conditional_item_id INT UNSIGNED DEFAULT NULL,
+  is_completed TINYINT(1) DEFAULT 0,
+  sort_order INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
+  FOREIGN KEY (parent_id) REFERENCES conditional_items(id) ON DELETE CASCADE,
+  FOREIGN KEY (conditional_item_id) REFERENCES conditional_items(id) ON DELETE SET NULL,
+  INDEX idx_conditional_directory_parent (directory_id, parent_id),
+  INDEX idx_conditional_dep (conditional_item_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <script src="/assets/zoom-lock.js" defer></script>
+    <title>Gluon - Sistema de Condicionais</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-200 min-h-[100dvh] flex flex-col">
+<nav class="h-16 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-4">
+    <div class="flex items-center gap-3">
+        <button onclick="goBackToMarkedRoute()" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2"><i class="fa-solid fa-arrow-left"></i></button>
+        <div>
+            <div class="text-xs text-cyan-400">Sistema de condicional</div>
+            <div id="listName" class="font-semibold">Carregando...</div>
+        </div>
+    </div>
+    <button onclick="app.openModal(null)" class="bg-cyan-600 hover:bg-cyan-500 px-3 py-2 rounded-lg text-sm"><i class="fa-solid fa-plus"></i> Nova tarefa</button>
+</nav>
+<main class="max-w-5xl mx-auto w-full p-4">
+    <div id="treeContainer" class="bg-slate-900 border border-slate-700 rounded-xl p-4"></div>
+</main>
+
+<div id="itemModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center">
+  <div class="bg-slate-900 border border-slate-700 rounded-xl p-4 w-full max-w-md">
+    <h3 class="font-semibold mb-3">Nova tarefa</h3>
+    <form onsubmit="app.saveItem(event)">
+      <input type="hidden" id="modalParentId">
+      <input id="modalLabel" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 mb-3" placeholder="Descrição da tarefa" required>
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="app.closeModal()" class="px-3 py-2 bg-slate-700 rounded-lg">Cancelar</button>
+        <button class="px-3 py-2 bg-cyan-600 rounded-lg">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function goBackToMarkedRoute(){
+  const p=new URLSearchParams(window.location.search);
+  window.location.href=p.get('from')||'/dashboard';
+}
+
+const app={
+  dirId:new URLSearchParams(window.location.search).get('id'),
+  items:[],
+  async api(action,payload={}){
+    const res=await fetch('/api/sistema_de_condicionais',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,action,directory_id:this.dirId})});
+    if(res.status===401) window.location.href='/';
+    return res.json();
+  },
+  async init(){ await this.loadData(); },
+  async loadData(){
+    const res=await this.api('fetch');
+    if(res.status!=='success') return;
+    document.getElementById('listName').innerText=res.name;
+    this.items=res.data;
+    this.render();
+  },
+  openModal(parentId){ document.getElementById('modalParentId').value=parentId??''; document.getElementById('modalLabel').value=''; document.getElementById('itemModal').classList.remove('hidden'); document.getElementById('itemModal').classList.add('flex');},
+  closeModal(){ document.getElementById('itemModal').classList.add('hidden'); document.getElementById('itemModal').classList.remove('flex');},
+  async saveItem(e){ e.preventDefault(); const label=document.getElementById('modalLabel').value.trim(); const parent_id=document.getElementById('modalParentId').value||null; if(!label) return; await this.api('add',{label,parent_id}); this.closeModal(); await this.loadData(); },
+  async toggle(id,checked){ const res=await this.api('toggle',{item_id:id,is_completed:checked?1:0}); if(res.status!=='success'){ alert(res.message||'Não foi possível concluir.'); } await this.loadData(); },
+  async remove(id){ if(!confirm('Excluir esta tarefa?')) return; await this.api('delete',{item_id:id}); await this.loadData(); },
+  async setConditional(itemId,value){ const conditional_item_id=value?Number(value):null; const res=await this.api('set_conditional',{item_id:itemId,conditional_item_id}); if(res.status!=='success'){ alert(res.message||'Erro ao definir condicional.'); } await this.loadData(); },
+  getChildren(parentId){ return this.items.filter(i=>String(i.parent_id??'')===String(parentId??'')).sort((a,b)=>a.sort_order-b.sort_order||a.id-b.id); },
+  renderNode(item,depth=0){
+    const all=this.items.filter(i=>i.id!==item.id);
+    const options=['<option value="">Sem condicional</option>',...all.map(i=>`<option value="${i.id}" ${Number(item.conditional_item_id)===Number(i.id)?'selected':''}>${i.label}</option>`)].join('');
+    const children=this.getChildren(item.id).map(c=>this.renderNode(c,depth+1)).join('');
+    return `<div style="margin-left:${depth*16}px" class="mb-2 border border-slate-700 rounded-lg p-3 bg-slate-800/70">
+      <div class="flex gap-2 items-start">
+        <input type="checkbox" ${item.is_completed==1?'checked':''} onchange="app.toggle(${item.id},this.checked)" class="mt-1 accent-cyan-500">
+        <div class="flex-1">
+          <div class="font-medium">${this.escape(item.label)}</div>
+          <div class="text-xs text-slate-400 mt-1">Só pode concluir após concluir a condicional.</div>
+          <div class="mt-2">
+            <label class="text-xs text-slate-400">Condicional desta tarefa</label>
+            <select onchange="app.setConditional(${item.id},this.value)" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm">${options}</select>
+          </div>
+          <div class="mt-2 flex gap-2">
+            <button onclick="app.openModal(${item.id})" class="text-xs px-2 py-1 bg-slate-700 rounded">Subtarefa</button>
+            <button onclick="app.remove(${item.id})" class="text-xs px-2 py-1 bg-red-900/60 rounded">Excluir</button>
+          </div>
+        </div>
+      </div>
+      <div class="mt-2">${children}</div>
+    </div>`;
+  },
+  render(){
+    const roots=this.getChildren(null);
+    document.getElementById('treeContainer').innerHTML=roots.length?roots.map(r=>this.renderNode(r)).join(''):'<div class="text-slate-500 text-sm">Nenhuma tarefa ainda.</div>';
+  },
+  escape(s){ return (s||'').replace(/[&<>'"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m])); }
+};
+app.init();
+</script>
+</body>
+</html>
