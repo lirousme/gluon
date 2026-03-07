@@ -377,12 +377,18 @@
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
                 const payloadCards = this.generatedCards.map(c => ({ front: (c.front || '').trim(), back: (c.back || '').trim() })).filter(c => c.front);
-                const res = await this.api('create_generated_cards', { deck_id: this.deckId, cards: payloadCards });
+                const res = await this.api('create_generated_cards', {
+                    deck_id: this.deckId,
+                    cards: payloadCards,
+                    batch_job_id: this.activeJobId
+                });
                 btn.disabled = false;
                 btn.innerHTML = old;
                 if (!res) return;
                 this.generatedCards = [];
+                this.activeJobId = null;
                 this.renderList();
+                await this.loadLatestBatchResult();
                 this.showToast(res.message || 'Cards criados com sucesso!', 'success');
             },
 
