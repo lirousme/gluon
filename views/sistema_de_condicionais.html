@@ -77,37 +77,27 @@ const app={
     await this.loadData();
   },
   async remove(id){ if(!confirm('Excluir esta tarefa?')) return; await this.api('delete',{item_id:id}); await this.loadData(); },
-  async setConditional(itemId,value){ const conditional_item_id=value?Number(value):null; const res=await this.api('set_conditional',{item_id:itemId,conditional_item_id}); if(res.status!=='success'){ alert(res.message||'Erro ao definir condicional.'); } await this.loadData(); },
   getChildren(parentId){ return this.items.filter(i=>String(i.parent_id??'')===String(parentId??'')).sort((a,b)=>a.sort_order-b.sort_order||a.id-b.id); },
   validateConditionalCompletion(itemId){
     const item=this.items.find(i=>Number(i.id)===Number(itemId));
-    if(!item || !item.conditional_item_id) return {allowed:true};
-    const conditionalItem=this.items.find(i=>Number(i.id)===Number(item.conditional_item_id));
-    if(!conditionalItem){
-      return {allowed:false,message:'A condicional configurada para esta tarefa não foi encontrada. Ajuste a condicional antes de concluir a tarefa.'};
-    }
-    if(Number(conditionalItem.is_completed)!==1){
-      return {allowed:false,message:`Conclua primeiro a condicional "${conditionalItem.label}" para finalizar esta tarefa.`};
+    if(!item) return {allowed:true};
+    const pendingSubtask=this.getChildren(item.id).find(child=>Number(child.is_completed)!==1);
+    if(pendingSubtask){
+      return {allowed:false,message:`Conclua primeiro a subtarefa "${pendingSubtask.label}" para finalizar esta tarefa.`};
     }
     return {allowed:true};
   },
   renderNode(item,depth=0){
     const validation=this.validateConditionalCompletion(item.id);
     const isBlocked=Number(item.is_completed)!==1 && !validation.allowed;
-    const all=this.items.filter(i=>i.id!==item.id);
-    const options=['<option value="">Sem condicional</option>',...all.map(i=>`<option value="${i.id}" ${Number(item.conditional_item_id)===Number(i.id)?'selected':''}>${i.label}</option>`)].join('');
     const children=this.getChildren(item.id).map(c=>this.renderNode(c,depth+1)).join('');
     return `<div style="margin-left:${depth*16}px" class="mb-2 border border-slate-700 rounded-lg p-3 bg-slate-800/70">
       <div class="flex gap-2 items-start">
         <input type="checkbox" ${item.is_completed==1?'checked':''} ${isBlocked?'disabled':''} onchange="app.toggle(${item.id},this.checked)" class="mt-1 accent-cyan-500 ${isBlocked?'opacity-60 cursor-not-allowed':''}" title="${isBlocked?this.escape(validation.message):''}">
         <div class="flex-1">
           <div class="font-medium">${this.escape(item.label)}</div>
-          <div class="text-xs text-slate-400 mt-1">Só pode concluir após concluir a condicional.</div>
+          <div class="text-xs text-slate-400 mt-1">Só pode concluir após concluir as subtarefas.</div>
           ${isBlocked?`<div class="text-xs text-amber-400 mt-1">${this.escape(validation.message)}</div>`:''}
-          <div class="mt-2">
-            <label class="text-xs text-slate-400">Condicional desta tarefa</label>
-            <select onchange="app.setConditional(${item.id},this.value)" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm">${options}</select>
-          </div>
           <div class="mt-2 flex gap-2">
             <button onclick="app.openModal(${item.id})" class="text-xs px-2 py-1 bg-slate-700 rounded">Subtarefa</button>
             <button onclick="app.remove(${item.id})" class="text-xs px-2 py-1 bg-red-900/60 rounded">Excluir</button>
