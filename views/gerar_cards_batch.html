@@ -1,0 +1,373 @@
+<!-- 
+  Arquivo: gerar_cards_batch.html
+  Diretório: public_html/gluon/views/gerar_cards_batch.html
+  Pilar: Bonito e Escalável.
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <script src="/assets/zoom-lock.js" defer></script>
+    <title>Gluon - Gerar Cards (Batch)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+            }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer></script>
+</head>
+<body class="bg-slate-950 text-slate-200 min-h-[100dvh] flex flex-col font-sans pb-[env(safe-area-inset-bottom)]">
+    <nav class="bg-slate-900 border-b border-slate-700/50 h-16 flex items-center justify-between px-4 sm:px-6">
+        <div class="flex items-center gap-4 min-w-0">
+            <button onclick="goBackToMarkedRoute()" class="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-lg border border-slate-700" title="Voltar"><i class="fa-solid fa-arrow-left"></i></button>
+            <div class="h-6 w-px bg-slate-700"></div>
+            <div class="min-w-0">
+                <h1 class="text-sm sm:text-base font-semibold text-white truncate">Gerar Cards (Batch)</h1>
+                <p id="deckName" class="text-xs text-slate-400 truncate">Carregando deck...</p>
+            </div>
+        </div>
+
+        <button id="btnExportExcel" onclick="generateCardsBatchApp.exportToExcel()" class="flex items-center gap-2 bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-700 text-emerald-500 text-sm" title="Baixar Todo o Deck (Excel / CSV)">
+            <i class="fa-solid fa-file-export text-sm"></i>
+            <span class="hidden sm:inline">Baixar Cards</span>
+        </button>
+    </nav>
+
+    <main class="flex-1 w-full p-4 sm:p-6">
+        <div class="max-w-5xl mx-auto space-y-4">
+
+            <div class="rounded-xl border border-orange-700/40 bg-orange-950/20 p-4 sm:p-6">
+                <h2 class="text-sm font-semibold text-orange-300 mb-3 flex items-center gap-2"><i class="fa-solid fa-circle-info"></i> Dúvidas rápidas sobre Batch</h2>
+                <ul class="text-xs sm:text-sm text-slate-300 space-y-2">
+                    <li><strong>Tempo médio:</strong> normalmente de alguns segundos a alguns minutos, variando conforme fila, volume e modelo.</li>
+                    <li><strong>Precisa deixar a tela aberta?</strong> Não. Você pode voltar depois para conferir.</li>
+                    <li><strong>Para onde vai o pedido?</strong> A solicitação é enviada via /v1/batches com endpoint /v1/responses; o OpenAI Batch ID fica salvo no histórico abaixo.</li>
+                    <li><strong>Como conferir depois?</strong> Abra novamente esta tela, clique em "Atualizar status" e depois em "Carregar resultado" quando concluir.</li>
+                                    <li><strong>Importante:</strong> se a resposta vier com <code>debug_openai_response</code> e <code>cards</code> imediatos, isso foi modo em tempo real (não batch).</li>
+                </ul>
+            </div>
+            <div class="rounded-xl border border-slate-700 bg-slate-900/70 p-4 sm:p-6">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <p class="text-sm text-slate-300">Estrutura do deck: <span id="deckStructureLabel" class="font-semibold text-white">-</span></p>
+                        <p class="text-xs text-slate-500">Clique em Enviar para Batch para abrir um job assíncrono real na OpenAI. Você pode sair da tela e voltar depois para atualizar status.</p>
+                        <p class="mt-2 text-xs text-slate-400">A notação matemática e símbolos especiais são aceitos por padrão quando fizer sentido para o conteúdo.</p>
+                    </div>
+                    <button id="btnGenerate" onclick="generateCardsBatchApp.generate()" class="px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-medium flex items-center justify-center gap-2"><i class="fa-solid fa-wand-magic-sparkles"></i> Enviar para Batch</button>
+                </div>
+                <div class="mt-4">
+                    <label for="topicInput" class="block text-xs text-slate-400 mb-1">Assunto (padrão: nome do deck)</label>
+                    <input id="topicInput" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm text-slate-100" placeholder="Digite o assunto para gerar os cards">
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-slate-700 bg-slate-900/70 p-4 sm:p-6">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm table-fixed">
+                        <thead class="hidden md:table-header-group">
+                            <tr class="text-left text-slate-400 border-b border-slate-700">
+                                <th class="py-2 pr-2 w-[47%]">Frente</th>
+                                <th class="py-2 pr-2 w-[47%]">Verso</th>
+                                <th class="py-2 w-28">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="generatedList"></tbody>
+                    </table>
+                </div>
+                <div id="emptyGenerated" class="text-sm text-slate-500 py-6 text-center">Nenhum item gerado ainda.</div>
+
+                <div class="pt-4 mt-2 border-t border-slate-700 flex justify-end">
+                    <button id="btnCreateCards" onclick="generateCardsBatchApp.createCards()" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium disabled:opacity-40" disabled>Criar cards</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function getMarkedBackRoute() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const from = urlParams.get('from');
+            return from ? decodeURIComponent(from) : '/dashboard';
+        }
+
+        function goBackToMarkedRoute() {
+            if (window.history.length > 1) return window.history.back();
+            window.location.href = getMarkedBackRoute();
+        }
+
+        const generateCardsBatchApp = {
+            deckId: null,
+            deckStructure: 'fatos',
+            generatedCards: [],
+            selectedJobId: null,
+
+            getStructureLabel(structure) {
+                const map = { fatos: 'Fatos', perguntas: 'Perguntas e respostas', traducoes: 'Traduções' };
+                return map[structure] || structure;
+            },
+
+            showToast(message, type = 'success') {
+                const toast = document.createElement('div');
+                toast.className = `fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg text-sm shadow-lg border ${type === 'success' ? 'bg-emerald-600/90 border-emerald-400 text-white' : 'bg-red-600/90 border-red-400 text-white'}`;
+                toast.innerText = message;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 2600);
+            },
+
+            async api(action, payload = {}) {
+                try {
+                    const res = await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...payload }) });
+                    const data = await res.json();
+                    if (data.status !== 'success') throw new Error(data.message || 'Falha na operação.');
+                    return data;
+                } catch (e) {
+                    this.showToast(e.message || 'Erro inesperado.', 'error');
+                    return null;
+                }
+            },
+
+            containsMathNotation(text) {
+                const value = String(text || '');
+                return /\$\$[^$]+\$\$|\\([\s\S]*?\\)|\\[[\s\S]*?\\]|\[a-zA-Z]+|\^|_/.test(value);
+            },
+
+            async renderMathInElement(element, text) {
+                if (!element) return;
+                const value = String(text || '');
+                element.textContent = value;
+                if (!value.trim() || !this.containsMathNotation(value)) return;
+                if (window.MathJax?.typesetPromise) {
+                    try { await window.MathJax.typesetPromise([element]); } catch (_) {}
+                }
+            },
+
+            escapeHTML(str) {
+                return String(str || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            },
+
+            async init() {
+                const params = new URLSearchParams(window.location.search);
+                this.deckId = parseInt(params.get('id') || '0', 10);
+                if (!this.deckId) {
+                    this.showToast('Deck inválido.', 'error');
+                    return setTimeout(() => goBackToMarkedRoute(), 800);
+                }
+
+                const deckRes = await this.api('fetch', { deck_id: this.deckId });
+                if (!deckRes) return;
+                document.getElementById('deckName').innerText = deckRes.deck_name || 'Deck';
+                this.deckStructure = deckRes.deck_structure || 'fatos';
+                document.getElementById('deckStructureLabel').innerText = this.getStructureLabel(this.deckStructure);
+                this.renderList();
+                this.renderBatchHistoryContainer();
+                await this.loadBatchHistory();
+            },
+
+            renderBatchHistoryContainer() {
+                if (document.getElementById('batchHistoryCard')) return;
+                const host = document.querySelector('main .max-w-5xl');
+                if (!host) return;
+                const wrap = document.createElement('div');
+                wrap.id = 'batchHistoryCard';
+                wrap.className = 'rounded-xl border border-slate-700 bg-slate-900/70 p-4 sm:p-6';
+                wrap.innerHTML = `
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <h2 class="text-sm font-semibold text-white">Histórico de lotes (Batch OpenAI)</h2>
+                        <button id="btnReloadBatchHistory" class="px-3 py-1.5 rounded-md bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-200 text-xs">Atualizar lista</button>
+                    </div>
+                    <div id="batchHistoryList" class="space-y-2 text-xs text-slate-300"></div>
+                `;
+                host.appendChild(wrap);
+                document.getElementById('btnReloadBatchHistory')?.addEventListener('click', () => this.loadBatchHistory());
+            },
+
+            renderBatchHistory(jobs) {
+                const el = document.getElementById('batchHistoryList');
+                if (!el) return;
+                if (!Array.isArray(jobs) || jobs.length === 0) {
+                    el.innerHTML = '<div class="text-slate-500">Nenhum lote enviado ainda.</div>';
+                    return;
+                }
+
+                el.innerHTML = jobs.map(job => {
+                    const statusColor = job.status === 'completed' ? 'text-emerald-400' : (job.status === 'failed' || job.status === 'cancelled' ? 'text-red-400' : 'text-amber-400');
+                    const hasResult = !!job.has_result;
+                    return `
+                        <div class="rounded-lg border border-slate-700 bg-slate-800/40 p-3">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                <div>
+                                    <div class="font-medium text-slate-100">Job #${job.id} • <span class="${statusColor}">${this.escapeHTML(job.status || '-')}</span></div>
+                                    <div class="text-slate-400 mt-1">OpenAI Batch ID: <code class="text-slate-300">${this.escapeHTML(job.openai_batch_id || '-')}</code></div>\n                                    <div class="text-slate-500 mt-1">Endpoint: <code class="text-slate-300">/v1/responses</code></div>
+                                    <div class="text-slate-500 mt-1">Tema: ${this.escapeHTML(job.topic || '(nome do deck)')}</div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button class="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-100" onclick="generateCardsBatchApp.refreshBatchJob(${job.id})">Atualizar status</button>
+                                    <button class="px-2 py-1 rounded ${hasResult ? 'bg-emerald-700 hover:bg-emerald-600 text-white' : 'bg-slate-700 text-slate-400 cursor-not-allowed'}" ${hasResult ? '' : 'disabled'} onclick="generateCardsBatchApp.loadBatchResult(' + job.id + ')">Carregar resultado</button>
+                                </div>
+                            </div>
+                            ${job.error_message ? '<div class="text-red-300 mt-2">Erro: ' + this.escapeHTML(job.error_message) + '</div>' : ''}
+                        </div>
+                    `;
+                }).join('');
+            },
+
+            async loadBatchHistory() {
+                const res = await this.api('list_batch_generations', { deck_id: this.deckId });
+                if (!res) return;
+                this.renderBatchHistory(res.jobs || []);
+            },
+
+            async refreshBatchJob(jobId) {
+                const res = await this.api('refresh_batch_generation', { job_id: jobId });
+                if (!res) return;
+                this.showToast(`Status atualizado: ${res.job?.status || '-'}`);
+                await this.loadBatchHistory();
+            },
+
+            async loadBatchResult(jobId) {
+                const res = await this.api('get_batch_generation_result', { job_id: jobId });
+                if (!res) return;
+                this.selectedJobId = jobId;
+                this.generatedCards = Array.isArray(res.cards) ? res.cards : [];
+                this.renderList();
+                this.showToast('Resultado batch carregado na grade para revisão.', 'success');
+            },
+
+            renderList() {
+                const tbody = document.getElementById('generatedList');
+                const empty = document.getElementById('emptyGenerated');
+                const btnCreate = document.getElementById('btnCreateCards');
+                tbody.innerHTML = '';
+
+                if (!this.generatedCards.length) {
+                    empty.style.display = 'block';
+                    btnCreate.disabled = true;
+                    return;
+                }
+
+                empty.style.display = 'none';
+                btnCreate.disabled = false;
+
+                this.generatedCards.forEach((card, idx) => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'align-top border-b border-slate-800';
+                    tr.innerHTML = `
+                        <td class="py-2 pr-2">
+                            <textarea data-field="front" data-index="${idx}" rows="4" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm">${this.escapeHTML(card.front || '')}</textarea>
+                            <div class="mt-2 p-2 rounded-md bg-slate-800/60 border border-slate-700 text-xs text-slate-200 whitespace-pre-wrap" data-preview-field="front" data-preview-index="${idx}"></div>
+                        </td>
+                        <td class="py-2 pr-2">
+                            <textarea data-field="back" data-index="${idx}" rows="4" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm">${this.escapeHTML(card.back || '')}</textarea>
+                            <div class="mt-2 p-2 rounded-md bg-slate-800/60 border border-slate-700 text-xs text-slate-200 whitespace-pre-wrap" data-preview-field="back" data-preview-index="${idx}"></div>
+                        </td>
+                        <td class="py-2">
+                            <div class="flex gap-2">
+                                <button class="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600" onclick="generateCardsBatchApp.saveRow(${idx})"><i class="fa-solid fa-pen"></i></button>
+                                <button class="px-2 py-1 rounded bg-red-700 hover:bg-red-600" onclick="generateCardsBatchApp.deleteRow(${idx})"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                    const frontTextarea = tr.querySelector(`textarea[data-field="front"][data-index="${idx}"]`);
+                    const backTextarea = tr.querySelector(`textarea[data-field="back"][data-index="${idx}"]`);
+                    const frontPreview = tr.querySelector(`[data-preview-field="front"][data-preview-index="${idx}"]`);
+                    const backPreview = tr.querySelector(`[data-preview-field="back"][data-preview-index="${idx}"]`);
+                    frontTextarea?.addEventListener('input', () => this.renderMathInElement(frontPreview, frontTextarea.value));
+                    backTextarea?.addEventListener('input', () => this.renderMathInElement(backPreview, backTextarea.value));
+                    this.renderMathInElement(frontPreview, card.front || '');
+                    this.renderMathInElement(backPreview, card.back || '');
+                });
+            },
+
+            saveRow(index) {
+                const frontEl = document.querySelector(`textarea[data-field="front"][data-index="${index}"]`);
+                const backEl = document.querySelector(`textarea[data-field="back"][data-index="${index}"]`);
+                this.generatedCards[index].front = frontEl.value.trim();
+                this.generatedCards[index].back = backEl.value.trim();
+                const frontPreview = document.querySelector(`[data-preview-field="front"][data-preview-index="${index}"]`);
+                const backPreview = document.querySelector(`[data-preview-field="back"][data-preview-index="${index}"]`);
+                this.renderMathInElement(frontPreview, this.generatedCards[index].front);
+                this.renderMathInElement(backPreview, this.generatedCards[index].back);
+                this.showToast('Item atualizado!', 'success');
+            },
+
+            deleteRow(index) {
+                this.generatedCards.splice(index, 1);
+                this.renderList();
+            },
+
+            async generate() {
+                const btn = document.getElementById('btnGenerate');
+                const old = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Enviando...';
+                const topicValue = (document.getElementById('topicInput')?.value || '').trim();
+                const res = await this.api('create_batch_generation', { deck_id: this.deckId, topic: topicValue });
+                btn.disabled = false;
+                btn.innerHTML = old;
+                if (!res) return;
+                if (res.mode !== 'batch') {
+                    return this.showToast('Resposta inesperada: o backend não confirmou modo batch.', 'error');
+                }
+                this.showToast(`Lote enviado! Batch ID: ${res.job?.openai_batch_id || '-'} • endpoint ${res.job?.openai_endpoint || '/v1/responses'}`);
+                await this.loadBatchHistory();
+            },
+
+            async createCards() {
+                if (!this.generatedCards.length) return;
+                const btn = document.getElementById('btnCreateCards');
+                const old = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+                const payloadCards = this.generatedCards.map(c => ({ front: (c.front || '').trim(), back: (c.back || '').trim() })).filter(c => c.front);
+                const res = await this.api('create_generated_cards', { deck_id: this.deckId, cards: payloadCards });
+                btn.disabled = false;
+                btn.innerHTML = old;
+                if (!res) return;
+                this.generatedCards = [];
+                this.renderList();
+                this.showToast(res.message || 'Cards criados com sucesso!', 'success');
+            },
+
+            async exportToExcel() {
+                const btn = document.getElementById('btnExportExcel');
+                const old = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-sm"></i>';
+                const res = await this.api('get_all_cards', { deck_id: this.deckId });
+                btn.disabled = false;
+                btn.innerHTML = old;
+                if (!res || !res.data?.length) return this.showToast('Não há cards para exportar neste deck.', 'error');
+
+                let csv = '﻿Frente,Verso
+';
+                res.data.forEach(card => {
+                    csv += `"${(card.front || '').replace(/"/g, '""')}","${(card.back || '').replace(/"/g, '""')}"
+`;
+                });
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `gluon_${(document.getElementById('deckName').innerText || 'deck').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => generateCardsBatchApp.init());
+    </script>
+</body>
+</html>
