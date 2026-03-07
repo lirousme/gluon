@@ -68,6 +68,12 @@ if (in_array($route, $admin_routes, true) && (!isset($_SESSION['user_id']) || (i
 $view_php_file = BASE_PATH . '/views/' . $route . '.php';
 $view_html_file = BASE_PATH . '/views/' . $route . '.html';
 
+if ($route === 'gerar_cards_batch') {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+}
+
 if (file_exists($view_php_file)) {
     // Prioriza views em PHP para permitir composição em partes menores
     require $view_php_file;
