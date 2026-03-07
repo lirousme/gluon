@@ -1521,13 +1521,19 @@
                     const iconRadios = document.getElementsByName('dirIcon');
                     for(let i=0; i<iconRadios.length; i++) { if(iconRadios[i].checked) selectedIcon = iconRadios[i].value; }
 
+                    const explicitParentId = document.getElementById('dirParentId').value !== '' ? Number(document.getElementById('dirParentId').value) : null;
+                    const effectiveParentId = explicitParentId !== null ? explicitParentId : this.getCurrentParentId();
+                    const parentDir = effectiveParentId !== null ? this.state.directoryCache.get(Number(effectiveParentId)) : null;
+                    const parentNewItemPosition = parentDir && parentDir.new_item_position ? parentDir.new_item_position : null;
+
                     const payload = {
                         id: id !== '' ? id : null,
-                        parent_id: document.getElementById('dirParentId').value !== '' ? document.getElementById('dirParentId').value : this.getCurrentParentId(),
+                        parent_id: effectiveParentId,
                         type: selectedType,
                         name: document.getElementById('dirName').value.trim(),
                         view: selectedView,
                         new_item_position: selectedPos,
+                        parent_new_item_position: parentNewItemPosition,
                         cover_url: document.getElementById('dirCoverBase64').value,
                         color_from: document.getElementById('dirColorFrom').value || '#3b82f6',
                         color_to: document.getElementById('dirColorTo').value || '#6366f1',
