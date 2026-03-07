@@ -241,6 +241,12 @@
                 <input type="hidden" id="dirId">
                 <input type="hidden" id="dirParentId">
 
+                <div class="px-6 pt-4">
+                    <button type="button" id="btnCopyDirModal" onclick="app.copyDirectoryFromModal()" class="hidden w-full text-blue-400 hover:text-white hover:bg-blue-500/20 px-3 py-2 rounded-lg transition-colors flex justify-center items-center gap-2 text-sm">
+                        <i class="fa-solid fa-copy"></i> <span>Copiar diretório</span>
+                    </button>
+                </div>
+
                 <div id="tab-geral" class="p-6 overflow-y-auto flex-1">
                     
                     <div id="typeSelectorContainer" class="mb-5">
@@ -761,12 +767,25 @@
                 const currentId = this.getCurrentParentId();
                 if (currentId === null) return this.showToast("Cofre Raiz não pode ser selecionado desta forma.", "error");
 
-                const response = await this.api('user', 'copy_directory', { dir_id: currentId });
+                await this.copyDirectoryById(currentId);
+            },
+
+            async copyDirectoryById(dirId) {
+                if (!dirId) return;
+
+                const response = await this.api('user', 'copy_directory', { dir_id: dirId });
                 if (response && response.status === 'success') {
-                    this.state.rootPrefs.copied_directory_id = currentId; 
+                    this.state.rootPrefs.copied_directory_id = dirId; 
                     this.updateTopButtons(); 
                     this.showToast(response.message, 'success');
                 } else this.showToast(response ? response.message : 'Erro ao copiar', 'error');
+            },
+
+            async copyDirectoryFromModal() {
+                const dirId = Number(document.getElementById('dirId').value);
+                if (!dirId) return;
+
+                await this.copyDirectoryById(dirId);
             },
 
             async pasteDirectory() {
@@ -1390,7 +1409,9 @@
                 this.handleRecurrenceTypeChange();
 
                 const btnDelete = document.getElementById('btnDeleteDir');
+                const btnCopyModal = document.getElementById('btnCopyDirModal');
                 if(id && !isRootSettings) btnDelete.classList.remove('hidden'); else btnDelete.classList.add('hidden');
+                if (id && !isRootSettings) btnCopyModal.classList.remove('hidden'); else btnCopyModal.classList.add('hidden');
 
                 const viewToSelect = (dirObj && dirObj.view) ? dirObj.view : currentViewMode;
                 const viewRadios = document.getElementsByName('dirViewMode');
