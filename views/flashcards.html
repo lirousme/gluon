@@ -806,7 +806,7 @@
                 }
 
                 document.getElementById('btnPrev').disabled = this.currentIndex === 0;
-                document.getElementById('btnNext').disabled = this.deckMode !== 'livro' && this.currentIndex === this.cards.length - 1;
+                document.getElementById('btnNext').disabled = this.deckMode !== 'livro' && this.deckMode !== 'aleatorio' && this.currentIndex === this.cards.length - 1;
             },
 
             incrementBookReadProgress() {
@@ -848,15 +848,13 @@
                 }
             },
 
-            nextCard() {
+            async nextCard() {
                 if (this.cards.length === 0) return;
                 
                 this.stopAudio(); 
                 
                 const card = this.cards[this.currentIndex];
-                const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
-
-                if (this.deckMode === 'aleatorio' && !hasBack) this.registerScore(card);
+                const scoreUpdatePromise = this.deckMode === 'aleatorio' ? this.registerScore(card) : Promise.resolve();
 
                 if (this.deckMode === 'livro' && this.cards.length === 1) {
                     this.incrementBookReadProgress();
@@ -891,6 +889,9 @@
                     if(this.autoPlayEnabled && this.cards[this.currentIndex].has_audio_front === 1) {
                         this.playCardAudio(this.cards[this.currentIndex].id, 'front');
                     }
+                } else if (this.deckMode === 'aleatorio') {
+                    await scoreUpdatePromise;
+                    await this.loadDeck();
                 }
             },
 
@@ -1117,14 +1118,14 @@
             },
 
             registerScore(card) {
-                if (card.score >= 20 || this.scoredThisSession.has(card.id)) return;
+                if (card.score >= 20 || this.scoredThisSession.has(card.id)) return Promise.resolve();
                 
                 const expireTime = localStorage.getItem(`gluon_card_expire_${card.id}`);
                 const now = new Date().getTime();
                 
                 if (expireTime && now < parseInt(expireTime)) {
                     this.scoredThisSession.add(card.id);
-                    return; 
+                    return Promise.resolve(); 
                 }
                 
                 this.scoredThisSession.add(card.id);
@@ -1152,7 +1153,7 @@
                     if (backDots) backDots.innerHTML = dotsHtml;
                 }
 
-                this.api('update_score', { card_id: card.id }).catch(e => console.error(e));
+                return this.api('update_score', { card_id: card.id }).catch(e => console.error(e));
             },
 
             saveBookProgress() {
