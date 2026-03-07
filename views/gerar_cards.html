@@ -212,8 +212,18 @@
                         </td>
                     `;
                     tbody.appendChild(tr);
+                    const frontTextarea = tr.querySelector(`textarea[data-field="front"][data-index="${idx}"]`);
+                    const backTextarea = tr.querySelector(`textarea[data-field="back"][data-index="${idx}"]`);
                     const frontPreview = tr.querySelector(`[data-preview-field="front"][data-preview-index="${idx}"]`);
                     const backPreview = tr.querySelector(`[data-preview-field="back"][data-preview-index="${idx}"]`);
+
+                    frontTextarea?.addEventListener('input', () => {
+                        this.renderMathInElement(frontPreview, frontTextarea.value);
+                    });
+                    backTextarea?.addEventListener('input', () => {
+                        this.renderMathInElement(backPreview, backTextarea.value);
+                    });
+
                     this.renderMathInElement(frontPreview, card.front || '');
                     this.renderMathInElement(backPreview, card.back || '');
                 });
