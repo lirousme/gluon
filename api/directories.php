@@ -436,7 +436,10 @@ elseif ($action === 'create') {
     $name_encrypted = Security::encryptData($name);
     $cover_url_encrypted = !empty($cover_url) ? Security::encryptData($cover_url) : null;
 
-    if ($parent_id === null) {
+    $clientParentPref = in_array($input['parent_new_item_position'] ?? '', ['start', 'end']) ? $input['parent_new_item_position'] : null;
+    if ($clientParentPref !== null) {
+        $parentPref = $clientParentPref;
+    } elseif ($parent_id === null) {
         $stmtPref = $pdo->prepare("SELECT root_new_item_position FROM users WHERE id = ?");
         $stmtPref->execute([$user_id]);
         $parentPref = $stmtPref->fetchColumn() ?: 'end';
