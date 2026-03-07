@@ -629,13 +629,10 @@ elseif ($action === 'generate_cards_preview') {
 
     $historyText = count($history_lines) > 0 ? implode("\n", $history_lines) : '(deck sem cards anteriores)';
 
-    $mathPrompt = 'Use notação matemática e símbolos especiais somente quando forem realmente necessários ao tema do card. Não force fórmulas em conteúdos que não exigem matemática e prefira texto natural quando não houver operação/expressão matemática explícita. Quando houver matemática/física, preserve a notação correta e didática: (1) não use ^ para potência quando houver equivalente tipográfico; prefira Unicode, ex.: m², s⁻², 10³; (2) para vetores, frações, derivadas, integrais, somatórios e operadores com formatação especial, use LaTeX inline no formato \( ... \); (3) não simplifique fórmulas perdendo símbolos.';
-
-    $systemPrompt = 'Você gera linhas de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estrutura fatos, deixe back vazio. Preserve exatamente caracteres Unicode. Só inclua notação matemática (Unicode/LaTeX inline com delimitadores \\( ... \\)) quando ela for necessária para explicar corretamente o conteúdo; caso contrário, responda em linguagem natural sem fórmulas desnecessárias.';
+    $systemPrompt = 'Você gera linhas de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estrutura fatos, deixe back vazio. Preserve exatamente caracteres Unicode.';
     $userPrompt = $basePrompt
         . "\n\nCARDS JÁ EXISTENTES NESTE DECK:\n" . $historyText
-        . "\n\nREGRAS DE NOTAÇÃO:\n" . $mathPrompt
-        . "\n\nREGRAS DE LIMPEZA DE SAÍDA:\nNunca inclua menus, botões, placeholders, atalhos de teclado, instruções de editor matemático, termos de interface (como Álgebra/Trigonometria/Cálculo/AC/placeholder) ou listas de símbolos soltas. Retorne apenas conteúdo pedagógico dos cards."
+        . "\n\nREGRAS DE LIMPEZA DE SAÍDA:\nNunca inclua menus, botões, placeholders, atalhos de teclado, termos de interface ou listas de símbolos soltas. Retorne apenas conteúdo pedagógico dos cards."
         . "\n\nGere 15 novos cards sem repetição de conteúdo com o histórico.";
 
     $requiresBack = in_array($deck_structure, ['perguntas', 'traducoes'], true);
