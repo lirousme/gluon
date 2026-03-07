@@ -124,6 +124,33 @@
             topic: '',
             activeJobId: null,
 
+            isProcessingStatus(status) {
+                return ['submitted', 'validating', 'in_progress', 'finalizing'].includes(status);
+            },
+
+            updateBatchStatusUI(job) {
+                const statusLabel = document.getElementById('batchStatusLabel');
+                const batchMeta = document.getElementById('batchMeta');
+                const btnRefresh = document.getElementById('btnRefreshBatch');
+                if (!statusLabel || !batchMeta || !btnRefresh) return;
+
+                if (!job) {
+                    statusLabel.textContent = 'Nenhum batch enviado ainda';
+                    batchMeta.textContent = 'Envie um batch para acompanhar por aqui.';
+                    btnRefresh.disabled = true;
+                    return;
+                }
+
+                statusLabel.textContent = `Batch #${job.id} • ${job.status || 'desconhecido'}`;
+                const meta = [];
+                if (job.topic) meta.push(`Assunto: ${job.topic}`);
+                if (job.created_at) meta.push(`Criado em: ${job.created_at}`);
+                if (job.completed_at) meta.push(`Finalizado em: ${job.completed_at}`);
+                if (job.error_message) meta.push(job.error_message);
+                batchMeta.textContent = meta.length ? meta.join(' • ') : 'Sem detalhes adicionais no momento.';
+                btnRefresh.disabled = !this.activeJobId;
+            },
+
             async init() {
                 this.deckId = new URLSearchParams(window.location.search).get('id');
                 if (!this.deckId) return goBackToMarkedRoute();
@@ -135,14 +162,19 @@
                 this.deckStructure = res.deck_structure || 'fatos';
                 const labels = { fatos: 'Fatos', perguntas: 'Perguntas', traducoes: 'Traduções' };
                 document.getElementById('deckStructureLabel').innerText = labels[this.deckStructure] || 'Fatos';
+                this.updateBatchStatusUI(null);
                 await this.loadLatestBatchResult();
             },
 
             async loadLatestBatchResult() {
                 const history = await this.api('list_batch_generations', { deck_id: this.deckId });
-                if (!history || !Array.isArray(history.jobs) || !history.jobs.length) return;
+                if (!history || !Array.isArray(history.jobs) || !history.jobs.length) {
+                    this.updateBatchStatusUI(null);
+                    return;
+                }
                 const latest = history.jobs[0];
                 this.activeJobId = latest.id;
+                this.updateBatchStatusUI(latest);
                 if (latest.has_result) {
                     const result = await this.api('get_batch_generation_result', { job_id: latest.id });
                     if (!result || !Array.isArray(result.cards)) return;
@@ -150,8 +182,8 @@
                     this.renderList();
                     return;
                 }
-                if (['validating', 'in_progress', 'finalizing', 'submitted'].includes(latest.status)) {
-                    this.showToast(`Batch #${latest.id} ainda está em processamento (${latest.status}).`, 'error');
+                if (this.isProcessingStatus(latest.status)) {
+                    this.showToast(`Batch #${latest.id} ainda está em processamento (${latest.status}).`, 'success');
                 }
             },
 
@@ -159,6 +191,7 @@
                 const refreshed = await this.api('refresh_batch_generation', { job_id: jobId });
                 if (!refreshed || !refreshed.job) return;
                 const { status, has_result: hasResult, error_message: errorMessage } = refreshed.job;
+                this.updateBatchStatusUI(refreshed.job);
                 if (hasResult) {
                     const result = await this.api('get_batch_generation_result', { job_id: jobId });
                     if (!result || !Array.isArray(result.cards)) return;
@@ -174,6 +207,11 @@
                 }
 
                 this.showToast(`Batch enviado com status ${status}. Atualize mais tarde para buscar o resultado.`, 'success');
+            },
+
+            async manualRefreshBatch() {
+                if (!this.activeJobId) return;
+                await this.refreshBatchResult(this.activeJobId);
             },
 
             showToast(message, type = 'success') {
@@ -321,6 +359,7 @@
                 if (!res) return;
 
                 this.activeJobId = res.job?.id || null;
+                this.updateBatchStatusUI(res.job || null);
                 this.showToast(res.message || 'Batch enviado com sucesso!', 'success');
                 if (this.activeJobId) {
                     await this.refreshBatchResult(this.activeJobId);

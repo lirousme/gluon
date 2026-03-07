@@ -290,6 +290,75 @@ function openaiGetRequest($url) {
     return [$httpcode, $response, $curlError];
 }
 
+function syncBatchJobWithOpenAI($pdo, $job) {
+    $openaiBatchId = trim((string)($job['openai_batch_id'] ?? ''));
+    if ($openaiBatchId === '') {
+        return ['ok' => false, 'error' => 'Job sem batch_id da OpenAI.', 'job' => null];
+    }
+
+    list($statusCode, $statusResponse, $statusErr) = openaiGetRequest('https://api.openai.com/v1/batches/' . rawurlencode($openaiBatchId));
+    if ($statusCode !== 200 || !$statusResponse) {
+        $details = trim($statusErr);
+        $decodedErr = json_decode((string)$statusResponse, true);
+        if (!$details && is_array($decodedErr)) $details = (string)($decodedErr['error']['message'] ?? '');
+        return ['ok' => false, 'error' => 'Falha ao consultar status na OpenAI.' . ($details ? (' Detalhes: ' . $details) : ''), 'job' => null];
+    }
+
+    $statusDecoded = json_decode($statusResponse, true);
+    $newStatus = trim((string)($statusDecoded['status'] ?? $job['status']));
+    $outputFileId = trim((string)($statusDecoded['output_file_id'] ?? ''));
+    $errorFileId = trim((string)($statusDecoded['error_file_id'] ?? ''));
+
+    $cardsJsonToStore = $job['result_cards_json'];
+    $errorMessage = $job['error_message'];
+    $completedAt = $job['completed_at'];
+
+    if ($newStatus === 'completed' && $outputFileId !== '') {
+        list($fileCode, $fileContent, $fileErr) = openaiGetRequest('https://api.openai.com/v1/files/' . rawurlencode($outputFileId) . '/content');
+        if ($fileCode === 200 && $fileContent) {
+            $cards = [];
+            $lines = preg_split('/\r\n|\r|\n/', (string)$fileContent);
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if ($line === '') continue;
+                $lineDecoded = json_decode($line, true);
+                $content = (string)($lineDecoded['response']['body']['choices'][0]['message']['content'] ?? '');
+                if ($content === '') continue;
+                $cards = sanitizeGeneratedCards($content, $job['deck_structure']);
+                if (!empty($cards)) break;
+            }
+            if (!empty($cards)) {
+                $cardsJsonToStore = json_encode($cards, JSON_UNESCAPED_UNICODE);
+                $errorMessage = null;
+            } else {
+                $errorMessage = 'Batch concluído, mas o conteúdo retornou vazio ou fora do formato esperado.';
+            }
+            $completedAt = date('Y-m-d H:i:s');
+        } else {
+            $errorMessage = 'Batch concluído, porém não foi possível baixar o arquivo de saída.' . ($fileErr ? (' Detalhes: ' . $fileErr) : '');
+        }
+    } elseif (in_array($newStatus, ['failed', 'cancelled', 'expired'], true)) {
+        $errorMessage = 'O batch terminou com status: ' . $newStatus;
+        $completedAt = date('Y-m-d H:i:s');
+    }
+
+    $upd = $pdo->prepare("UPDATE flashcard_batch_jobs SET status = ?, openai_output_file_id = ?, openai_error_file_id = ?, error_message = ?, result_cards_json = ?, completed_at = ? WHERE id = ?");
+    $upd->execute([$newStatus, $outputFileId !== '' ? $outputFileId : null, $errorFileId !== '' ? $errorFileId : null, $errorMessage, $cardsJsonToStore, $completedAt, (int)$job['id']]);
+
+    return [
+        'ok' => true,
+        'error' => null,
+        'job' => [
+            'id' => (int)$job['id'],
+            'openai_batch_id' => $openaiBatchId,
+            'status' => $newStatus,
+            'openai_output_file_id' => $outputFileId,
+            'has_result' => !empty($cardsJsonToStore),
+            'error_message' => $errorMessage
+        ]
+    ];
+}
+
 function fetchDeckHistoryText($pdo, $deck_id) {
     $stmt = $pdo->prepare("SELECT front_encrypted, back_encrypted FROM flashcards WHERE directory_id = ? ORDER BY sort_order ASC, id ASC");
     $stmt->execute([$deck_id]);
@@ -858,6 +927,21 @@ elseif ($action === 'list_batch_generations') {
     $stmt->execute([$user_id, $deck_id]);
     $rows = $stmt->fetchAll();
 
+    if (OPENAI_API_KEY !== '') {
+        foreach ($rows as $idx => $row) {
+            if (!in_array($row['status'], ['submitted', 'validating', 'in_progress', 'finalizing'], true)) continue;
+            $synced = syncBatchJobWithOpenAI($pdo, $row);
+            if (!$synced['ok'] || empty($synced['job'])) continue;
+
+            $rows[$idx]['status'] = $synced['job']['status'];
+            $rows[$idx]['openai_output_file_id'] = $synced['job']['openai_output_file_id'] ?: null;
+            $rows[$idx]['error_message'] = $synced['job']['error_message'];
+            if ($synced['job']['has_result']) {
+                $rows[$idx]['result_cards_json'] = '__HAS_RESULT__';
+            }
+        }
+    }
+
     $jobs = [];
     foreach ($rows as $r) {
         $jobs[] = [
@@ -889,72 +973,12 @@ elseif ($action === 'refresh_batch_generation') {
     $job = $stmt->fetch();
     if (!$job || (int)$job['owner_id'] !== (int)$user_id) die(json_encode(['status' => 'error', 'message' => 'Job não encontrado ou sem permissão.']));
 
-    $openaiBatchId = trim((string)($job['openai_batch_id'] ?? ''));
-    if ($openaiBatchId === '') die(json_encode(['status' => 'error', 'message' => 'Job sem batch_id da OpenAI.']));
-
-    list($statusCode, $statusResponse, $statusErr) = openaiGetRequest('https://api.openai.com/v1/batches/' . rawurlencode($openaiBatchId));
-    if ($statusCode !== 200 || !$statusResponse) {
-        $details = trim($statusErr);
-        $decodedErr = json_decode((string)$statusResponse, true);
-        if (!$details && is_array($decodedErr)) $details = (string)($decodedErr['error']['message'] ?? '');
-        die(json_encode(['status' => 'error', 'message' => 'Falha ao consultar status na OpenAI.' . ($details ? (' Detalhes: ' . $details) : '')]));
+    $synced = syncBatchJobWithOpenAI($pdo, $job);
+    if (!$synced['ok']) {
+        die(json_encode(['status' => 'error', 'message' => $synced['error'] ?: 'Falha ao sincronizar batch.']));
     }
 
-    $statusDecoded = json_decode($statusResponse, true);
-    $newStatus = trim((string)($statusDecoded['status'] ?? $job['status']));
-    $outputFileId = trim((string)($statusDecoded['output_file_id'] ?? ''));
-    $errorFileId = trim((string)($statusDecoded['error_file_id'] ?? ''));
-
-    $cardsJsonToStore = $job['result_cards_json'];
-    $errorMessage = $job['error_message'];
-    $completedAt = $job['completed_at'];
-
-    if ($newStatus === 'completed' && $outputFileId !== '') {
-        list($fileCode, $fileContent, $fileErr) = openaiGetRequest('https://api.openai.com/v1/files/' . rawurlencode($outputFileId) . '/content');
-        if ($fileCode === 200 && $fileContent) {
-            $cards = [];
-            $lines = preg_split('/
-|
-|
-/', (string)$fileContent);
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if ($line === '') continue;
-                $lineDecoded = json_decode($line, true);
-                $content = (string)($lineDecoded['response']['body']['choices'][0]['message']['content'] ?? '');
-                if ($content === '') continue;
-                $cards = sanitizeGeneratedCards($content, $job['deck_structure']);
-                if (!empty($cards)) break;
-            }
-            if (!empty($cards)) {
-                $cardsJsonToStore = json_encode($cards, JSON_UNESCAPED_UNICODE);
-                $errorMessage = null;
-            } else {
-                $errorMessage = 'Batch concluído, mas o conteúdo retornou vazio ou fora do formato esperado.';
-            }
-            $completedAt = date('Y-m-d H:i:s');
-        } else {
-            $errorMessage = 'Batch concluído, porém não foi possível baixar o arquivo de saída.' . ($fileErr ? (' Detalhes: ' . $fileErr) : '');
-        }
-    } elseif (in_array($newStatus, ['failed', 'cancelled', 'expired'], true)) {
-        $errorMessage = 'O batch terminou com status: ' . $newStatus;
-        $completedAt = date('Y-m-d H:i:s');
-    }
-
-    $upd = $pdo->prepare("UPDATE flashcard_batch_jobs SET status = ?, openai_output_file_id = ?, openai_error_file_id = ?, error_message = ?, result_cards_json = ?, completed_at = ? WHERE id = ?");
-    $upd->execute([$newStatus, $outputFileId !== '' ? $outputFileId : null, $errorFileId !== '' ? $errorFileId : null, $errorMessage, $cardsJsonToStore, $completedAt, $job_id]);
-
-    echo json_encode([
-        'status' => 'success',
-        'job' => [
-            'id' => $job_id,
-            'openai_batch_id' => $openaiBatchId,
-            'status' => $newStatus,
-            'openai_output_file_id' => $outputFileId,
-            'has_result' => !empty($cardsJsonToStore),
-            'error_message' => $errorMessage
-        ]
-    ]);
+    echo json_encode(['status' => 'success', 'job' => $synced['job']]);
 }
 
 elseif ($action === 'get_batch_generation_result') {
