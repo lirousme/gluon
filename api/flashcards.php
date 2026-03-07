@@ -67,6 +67,31 @@ try {
 } catch (PDOException $e) {}
 // =========================================================================
 
+
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS flashcard_batch_jobs (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        user_id INT UNSIGNED NOT NULL,
+        directory_id INT UNSIGNED NOT NULL,
+        topic VARCHAR(200) DEFAULT NULL,
+        deck_structure VARCHAR(20) NOT NULL DEFAULT 'fatos',
+        openai_input_file_id VARCHAR(80) DEFAULT NULL,
+        openai_batch_id VARCHAR(80) DEFAULT NULL,
+        openai_output_file_id VARCHAR(80) DEFAULT NULL,
+        openai_error_file_id VARCHAR(80) DEFAULT NULL,
+        status VARCHAR(30) NOT NULL DEFAULT 'submitted',
+        error_message TEXT DEFAULT NULL,
+        result_cards_json LONGTEXT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        completed_at DATETIME DEFAULT NULL,
+        INDEX idx_user_deck (user_id, directory_id),
+        INDEX idx_openai_batch (openai_batch_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
+
 // Função auxiliar para verificar se o usuário é dono do deck (Segurança IDOR)
 function verifyDeckOwnership($pdo, $deck_id, $user_id) {
     $stmt = $pdo->prepare("SELECT id, name_encrypted, deck_mode, deck_front_language, deck_back_language, deck_structure FROM directories WHERE id = ? AND user_id = ? AND type = 4");
@@ -142,6 +167,144 @@ function adjustPronunciationForTTS($pdo, $text, $language) {
     return $text;
 }
 
+
+
+function buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText) {
+    $basePrompt = '';
+    if ($deck_structure === 'fatos') {
+        $basePrompt = 'Me dê informações sobre o assunto "' . $deck_name . '", em uma tabela de uma única coluna, onde cada linha é uma informação. As informações devem ser de fácil compreensão. As informações devem ser óbvias evidentes e de rápida assimilação e de preferência curtas. Nenhuma informação pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. A ideia é conseguir vencer o paradoxo de Mênon, conseguir saber tudo sobre esse assunto, do nível para leigos ao nível expert. Caso não tenha muitas perguntas anteriores, vá pelo nível para leigos, e só aumente o nível se as perguntas anteriores já tiverem abrangido todo nível de conhecimento para leigos no assunto. Frases curtas.';
+    } elseif ($deck_structure === 'perguntas') {
+        $basePrompt = 'Me dê perguntas que induzam conhecimento hermenêutico, didático, teórico e lógico sobre o assunto "' . $deck_name . '", em uma tabela de duas colunas, onde cada linha é uma pergunta, a primeira coluna é a pergunta, e a segunda é a resposta. As perguntas e respostas devem ser óbvias evidentes e de rápida assimilação. Use linguagem simples e de fácil assimilação para pessoas de qualquer nível intelectual. As pessoas devem conseguir decodificar a informação codificada nas perguntas e respostas de forma assustadoramente fácil. As perguntas devem ser simples e de preferência curtas. Nenhuma pergunta pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. O objetivo é construir aprendizado progressivo sem redundância.';
+    } else {
+        $basePrompt = 'Crie pares de tradução sobre o assunto "' . $deck_name . '" com frases curtas e úteis para memorização. Primeira coluna na língua da frente do deck, segunda coluna na língua do verso. Sem repetições e sem conteúdo de interface.';
+    }
+
+    $systemPrompt = 'Você é um gerador de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estrutura fatos, deixe back vazio. Preserve exatamente caracteres Unicode.';
+
+    $userPrompt = $basePrompt
+        . "
+
+CARDS JÁ EXISTENTES NESTE DECK:
+" . $historyText
+        . "
+
+REGRAS DE LIMPEZA DE SAÍDA:
+Nunca inclua menus, botões, placeholders, atalhos de teclado, termos de interface ou listas de símbolos soltas. Retorne apenas conteúdo pedagógico dos cards."
+        . "
+
+Gere 15 novos cards sem repetição de conteúdo com o histórico.";
+
+    $requiresBack = in_array($deck_structure, ['perguntas', 'traducoes'], true);
+    $backSchema = $requiresBack ? ['type' => 'string', 'minLength' => 1] : ['type' => 'string'];
+
+    return [
+        'model' => 'gpt-5-nano',
+        'messages' => [
+            ['role' => 'system', 'content' => $systemPrompt],
+            ['role' => 'user', 'content' => $userPrompt]
+        ],
+        'response_format' => [
+            'type' => 'json_schema',
+            'json_schema' => [
+                'name' => 'cards_preview_response',
+                'strict' => true,
+                'schema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'cards' => [
+                            'type' => 'array',
+                            'minItems' => 1,
+                            'items' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'front' => ['type' => 'string', 'minLength' => 1],
+                                    'back' => $backSchema
+                                ],
+                                'required' => ['front', 'back'],
+                                'additionalProperties' => false
+                            ]
+                        ]
+                    ],
+                    'required' => ['cards'],
+                    'additionalProperties' => false
+                ]
+            ]
+        ]
+    ];
+}
+
+function sanitizeGeneratedCards($rawContent, $deck_structure) {
+    $raw = trim((string)$rawContent);
+    if ($raw !== '' && str_starts_with($raw, '```')) {
+        $raw = preg_replace('/^```(?:json)?\s*/i', '', $raw);
+        $raw = preg_replace('/\s*```$/', '', $raw);
+        $raw = trim((string)$raw);
+    }
+    $json = json_decode($raw, true);
+    if (!is_array($json) || !isset($json['cards']) || !is_array($json['cards'])) {
+        return [];
+    }
+
+    $cards = [];
+    foreach ($json['cards'] as $card) {
+        $front = trim((string)($card['front'] ?? ''));
+        $back = trim((string)($card['back'] ?? ''));
+        if ($front === '') continue;
+        if ($deck_structure === 'fatos') {
+            $back = '';
+        } elseif ($back === '') {
+            continue;
+        }
+        $cards[] = ['front' => $front, 'back' => $back];
+    }
+    return $cards;
+}
+
+function openaiJsonRequest($url, $payload) {
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . OPENAI_API_KEY
+    ]);
+    $response = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+    return [$httpcode, $response, $curlError];
+}
+
+function openaiGetRequest($url) {
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPGET, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . OPENAI_API_KEY
+    ]);
+    $response = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+    return [$httpcode, $response, $curlError];
+}
+
+function fetchDeckHistoryText($pdo, $deck_id) {
+    $stmt = $pdo->prepare("SELECT front_encrypted, back_encrypted FROM flashcards WHERE directory_id = ? ORDER BY sort_order ASC, id ASC");
+    $stmt->execute([$deck_id]);
+    $existing_cards = $stmt->fetchAll();
+
+    $history_lines = [];
+    foreach ($existing_cards as $c) {
+        $front = trim(!empty($c['front_encrypted']) ? Security::decryptData($c['front_encrypted']) : '');
+        $back = trim(!empty($c['back_encrypted']) ? Security::decryptData($c['back_encrypted']) : '');
+        if ($front === '' && $back === '') continue;
+        $history_lines[] = "Frente: {$front} | Verso: {$back}";
+    }
+    return !empty($history_lines) ? implode("
+", $history_lines) : 'Sem cards prévios no deck.';
+}
 
 if ($action === 'fetch') {
     $deck_id = (int)($input['deck_id'] ?? 0);
@@ -588,16 +751,262 @@ elseif ($action === 'delete_card') {
 }
 
 
+elseif ($action === 'create_batch_generation') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
+
+    $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
+    if (!$deck) die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+    if (OPENAI_API_KEY === '') die(json_encode(['status' => 'error', 'message' => 'OPENAI_API_KEY não configurada no .env.']));
+
+    $deck_name = Security::decryptData($deck['name_encrypted']);
+    $topic_input = trim((string)($input['topic'] ?? ''));
+    if ($topic_input !== '') {
+        $deck_name = function_exists('mb_substr') ? mb_substr($topic_input, 0, 200) : substr($topic_input, 0, 200);
+    }
+    $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
+    $historyText = fetchDeckHistoryText($pdo, $deck_id);
+    $chatPayload = buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText);
+
+    $schema = $chatPayload['response_format']['json_schema']['schema'] ?? null;
+    if (!is_array($schema)) {
+        die(json_encode(['status' => 'error', 'message' => 'Schema de resposta inválido para batch.']));
+    }
+
+    $batchResponsePayload = [
+        'model' => $chatPayload['model'],
+        'input' => [
+            ['role' => 'system', 'content' => (string)($chatPayload['messages'][0]['content'] ?? '')],
+            ['role' => 'user', 'content' => (string)($chatPayload['messages'][1]['content'] ?? '')]
+        ],
+        'text' => [
+            'format' => [
+                'type' => 'json_schema',
+                'name' => 'cards_preview_response',
+                'strict' => true,
+                'schema' => $schema
+            ]
+        ]
+    ];
+
+    $jsonlLine = json_encode([
+        'custom_id' => 'deck_' . $deck_id . '_user_' . $user_id . '_' . time(),
+        'method' => 'POST',
+        'url' => '/v1/responses',
+        'body' => $batchResponsePayload
+    ], JSON_UNESCAPED_UNICODE);
+
+    if ($jsonlLine === false) {
+        die(json_encode(['status' => 'error', 'message' => 'Falha ao montar payload JSONL.']));
+    }
+
+    $tmpFile = tempnam(sys_get_temp_dir(), 'gluon_batch_');
+    file_put_contents($tmpFile, $jsonlLine . "
+");
+
+    $ch = curl_init('https://api.openai.com/v1/files');
+    $postFields = [
+        'purpose' => 'batch',
+        'file' => new CURLFile($tmpFile, 'application/jsonl', 'flashcards_batch.jsonl')
+    ];
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $postFields);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Bearer ' . OPENAI_API_KEY]);
+    $uploadResponse = curl_exec($ch);
+    $uploadCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $uploadErr = curl_error($ch);
+    curl_close($ch);
+    @unlink($tmpFile);
+
+    if ($uploadCode !== 200 || !$uploadResponse) {
+        $details = trim($uploadErr);
+        $decodedErr = json_decode((string)$uploadResponse, true);
+        if (!$details && is_array($decodedErr)) $details = (string)($decodedErr['error']['message'] ?? '');
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao enviar arquivo batch para OpenAI.' . ($details ? (' Detalhes: ' . $details) : '')]));
+    }
+
+    $uploadDecoded = json_decode($uploadResponse, true);
+    $inputFileId = trim((string)($uploadDecoded['id'] ?? ''));
+    if ($inputFileId === '') die(json_encode(['status' => 'error', 'message' => 'OpenAI não retornou input_file_id.']));
+
+    list($batchCode, $batchResponse, $batchErr) = openaiJsonRequest('https://api.openai.com/v1/batches', [
+        'input_file_id' => $inputFileId,
+        'endpoint' => '/v1/responses',
+        'completion_window' => '24h',
+        'metadata' => [
+            'app' => 'gluon',
+            'feature' => 'flashcards_batch',
+            'user_id' => (string)$user_id,
+            'deck_id' => (string)$deck_id
+        ]
+    ]);
+
+    if ($batchCode !== 200 || !$batchResponse) {
+        $details = trim($batchErr);
+        $decodedErr = json_decode((string)$batchResponse, true);
+        if (!$details && is_array($decodedErr)) $details = (string)($decodedErr['error']['message'] ?? '');
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao criar job batch na OpenAI.' . ($details ? (' Detalhes: ' . $details) : '')]));
+    }
+
+    $batchDecoded = json_decode($batchResponse, true);
+    $openaiBatchId = trim((string)($batchDecoded['id'] ?? ''));
+    $status = trim((string)($batchDecoded['status'] ?? 'submitted'));
+    if ($openaiBatchId === '') die(json_encode(['status' => 'error', 'message' => 'OpenAI não retornou batch_id.']));
+
+    $stmt = $pdo->prepare("INSERT INTO flashcard_batch_jobs (user_id, directory_id, topic, deck_structure, openai_input_file_id, openai_batch_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$user_id, $deck_id, $topic_input !== '' ? $topic_input : null, $deck_structure, $inputFileId, $openaiBatchId, $status]);
+    $jobId = (int)$pdo->lastInsertId();
+
+    echo json_encode([
+        'status' => 'success',
+        'mode' => 'batch',
+        'message' => 'Batch enviado com sucesso para OpenAI.',
+        'job' => [
+            'id' => $jobId,
+            'openai_batch_id' => $openaiBatchId,
+            'openai_input_file_id' => $inputFileId,
+            'status' => $status,
+            'openai_endpoint' => '/v1/responses'
+        ]
+    ]);
+}
+
+elseif ($action === 'list_batch_generations') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
+    if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+
+    $stmt = $pdo->prepare("SELECT id, topic, deck_structure, openai_batch_id, openai_input_file_id, openai_output_file_id, status, error_message, result_cards_json, created_at, updated_at, completed_at FROM flashcard_batch_jobs WHERE user_id = ? AND directory_id = ? ORDER BY id DESC LIMIT 30");
+    $stmt->execute([$user_id, $deck_id]);
+    $rows = $stmt->fetchAll();
+
+    $jobs = [];
+    foreach ($rows as $r) {
+        $jobs[] = [
+            'id' => (int)$r['id'],
+            'topic' => $r['topic'] ?? '',
+            'deck_structure' => $r['deck_structure'],
+            'openai_batch_id' => $r['openai_batch_id'],
+            'openai_input_file_id' => $r['openai_input_file_id'],
+            'openai_output_file_id' => $r['openai_output_file_id'],
+            'status' => $r['status'],
+            'error_message' => $r['error_message'],
+            'has_result' => !empty($r['result_cards_json']),
+            'created_at' => $r['created_at'],
+            'updated_at' => $r['updated_at'],
+            'completed_at' => $r['completed_at']
+        ];
+    }
+
+    echo json_encode(['status' => 'success', 'jobs' => $jobs]);
+}
+
+elseif ($action === 'refresh_batch_generation') {
+    $job_id = (int)($input['job_id'] ?? 0);
+    if ($job_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do job inválido.']));
+    if (OPENAI_API_KEY === '') die(json_encode(['status' => 'error', 'message' => 'OPENAI_API_KEY não configurada no .env.']));
+
+    $stmt = $pdo->prepare("SELECT j.*, d.user_id as owner_id FROM flashcard_batch_jobs j JOIN directories d ON d.id = j.directory_id WHERE j.id = ? LIMIT 1");
+    $stmt->execute([$job_id]);
+    $job = $stmt->fetch();
+    if (!$job || (int)$job['owner_id'] !== (int)$user_id) die(json_encode(['status' => 'error', 'message' => 'Job não encontrado ou sem permissão.']));
+
+    $openaiBatchId = trim((string)($job['openai_batch_id'] ?? ''));
+    if ($openaiBatchId === '') die(json_encode(['status' => 'error', 'message' => 'Job sem batch_id da OpenAI.']));
+
+    list($statusCode, $statusResponse, $statusErr) = openaiGetRequest('https://api.openai.com/v1/batches/' . rawurlencode($openaiBatchId));
+    if ($statusCode !== 200 || !$statusResponse) {
+        $details = trim($statusErr);
+        $decodedErr = json_decode((string)$statusResponse, true);
+        if (!$details && is_array($decodedErr)) $details = (string)($decodedErr['error']['message'] ?? '');
+        die(json_encode(['status' => 'error', 'message' => 'Falha ao consultar status na OpenAI.' . ($details ? (' Detalhes: ' . $details) : '')]));
+    }
+
+    $statusDecoded = json_decode($statusResponse, true);
+    $newStatus = trim((string)($statusDecoded['status'] ?? $job['status']));
+    $outputFileId = trim((string)($statusDecoded['output_file_id'] ?? ''));
+    $errorFileId = trim((string)($statusDecoded['error_file_id'] ?? ''));
+
+    $cardsJsonToStore = $job['result_cards_json'];
+    $errorMessage = $job['error_message'];
+    $completedAt = $job['completed_at'];
+
+    if ($newStatus === 'completed' && $outputFileId !== '') {
+        list($fileCode, $fileContent, $fileErr) = openaiGetRequest('https://api.openai.com/v1/files/' . rawurlencode($outputFileId) . '/content');
+        if ($fileCode === 200 && $fileContent) {
+            $cards = [];
+            $lines = preg_split('/
+|
+|
+/', (string)$fileContent);
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if ($line === '') continue;
+                $lineDecoded = json_decode($line, true);
+                $content = (string)($lineDecoded['response']['body']['choices'][0]['message']['content'] ?? '');
+                if ($content === '') {
+                    $content = (string)($lineDecoded['response']['body']['output'][0]['content'][0]['text'] ?? '');
+                }
+                if ($content === '') continue;
+                $cards = sanitizeGeneratedCards($content, $job['deck_structure']);
+                if (!empty($cards)) break;
+            }
+            if (!empty($cards)) {
+                $cardsJsonToStore = json_encode($cards, JSON_UNESCAPED_UNICODE);
+                $errorMessage = null;
+            } else {
+                $errorMessage = 'Batch concluído, mas o conteúdo retornou vazio ou fora do formato esperado.';
+            }
+            $completedAt = date('Y-m-d H:i:s');
+        } else {
+            $errorMessage = 'Batch concluído, porém não foi possível baixar o arquivo de saída.' . ($fileErr ? (' Detalhes: ' . $fileErr) : '');
+        }
+    } elseif (in_array($newStatus, ['failed', 'cancelled', 'expired'], true)) {
+        $errorMessage = 'O batch terminou com status: ' . $newStatus;
+        $completedAt = date('Y-m-d H:i:s');
+    }
+
+    $upd = $pdo->prepare("UPDATE flashcard_batch_jobs SET status = ?, openai_output_file_id = ?, openai_error_file_id = ?, error_message = ?, result_cards_json = ?, completed_at = ? WHERE id = ?");
+    $upd->execute([$newStatus, $outputFileId !== '' ? $outputFileId : null, $errorFileId !== '' ? $errorFileId : null, $errorMessage, $cardsJsonToStore, $completedAt, $job_id]);
+
+    echo json_encode([
+        'status' => 'success',
+        'job' => [
+            'id' => $job_id,
+            'openai_batch_id' => $openaiBatchId,
+            'status' => $newStatus,
+            'openai_output_file_id' => $outputFileId,
+            'has_result' => !empty($cardsJsonToStore),
+            'error_message' => $errorMessage
+        ]
+    ]);
+}
+
+elseif ($action === 'get_batch_generation_result') {
+    $job_id = (int)($input['job_id'] ?? 0);
+    if ($job_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do job inválido.']));
+
+    $stmt = $pdo->prepare("SELECT j.result_cards_json, j.status, j.error_message, d.user_id as owner_id FROM flashcard_batch_jobs j JOIN directories d ON d.id = j.directory_id WHERE j.id = ? LIMIT 1");
+    $stmt->execute([$job_id]);
+    $job = $stmt->fetch();
+    if (!$job || (int)$job['owner_id'] !== (int)$user_id) die(json_encode(['status' => 'error', 'message' => 'Job não encontrado ou sem permissão.']));
+
+    $cards = json_decode((string)($job['result_cards_json'] ?? ''), true);
+    if (!is_array($cards) || empty($cards)) {
+        die(json_encode(['status' => 'error', 'message' => 'Este job ainda não possui resultado pronto. Status atual: ' . ($job['status'] ?? 'desconhecido')]));
+    }
+
+    echo json_encode(['status' => 'success', 'cards' => $cards]);
+}
+
 elseif ($action === 'generate_cards_preview') {
     $deck_id = (int)($input['deck_id'] ?? 0);
     if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
 
     $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
     if (!$deck) die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
-
-    if (OPENAI_API_KEY === '') {
-        die(json_encode(['status' => 'error', 'message' => 'OPENAI_API_KEY não configurada no .env.']));
-    }
+    if (OPENAI_API_KEY === '') die(json_encode(['status' => 'error', 'message' => 'OPENAI_API_KEY não configurada no .env.']));
 
     $deck_name = Security::decryptData($deck['name_encrypted']);
     $topic_input = trim((string)($input['topic'] ?? ''));
@@ -606,72 +1015,8 @@ elseif ($action === 'generate_cards_preview') {
     }
     $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
 
-    $stmt = $pdo->prepare("SELECT front_encrypted, back_encrypted FROM flashcards WHERE directory_id = ? ORDER BY sort_order ASC, id ASC");
-    $stmt->execute([$deck_id]);
-    $existing_cards = $stmt->fetchAll();
-
-    $history_lines = [];
-    foreach ($existing_cards as $c) {
-        $front = trim(!empty($c['front_encrypted']) ? Security::decryptData($c['front_encrypted']) : '');
-        $back = trim(!empty($c['back_encrypted']) ? Security::decryptData($c['back_encrypted']) : '');
-        if ($front === '' && $back === '') continue;
-        $history_lines[] = "Frente: {$front} | Verso: {$back}";
-    }
-
-    $basePrompt = '';
-    if ($deck_structure === 'fatos') {
-        $basePrompt = 'Me dê informações sobre o assunto "' . $deck_name . '", em uma tabela de uma única coluna, onde cada linha é uma informação. As informações devem ser de fácil compreensão. As informações devem ser óbvias evidentes e de rápida assimilação e de preferência curtas. Nenhuma informação pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. A ideia é conseguir vencer o paradoxo de Mênon, conseguir saber tudo sobre esse assunto, do nível para leigos ao nível expert. Caso não tenha muitas perguntas anteriores, vá pelo nível para leigos, e só aumente o nível se as perguntas anteriores já tiverem abrangido todo nível de conhecimento para leigos no assunto. Frases curtas.';
-    } elseif ($deck_structure === 'perguntas') {
-        $basePrompt = 'Me dê perguntas que induzam conhecimento hermenêutico, didático, teórico e lógico sobre o assunto "' . $deck_name . '", em uma tabela de duas colunas, onde cada linha é uma pergunta, a primeira coluna é a pergunta, e a segunda é a resposta. As perguntas e respostas devem ser óbvias evidentes e de rápida assimilação. Use linguagem simples e de fácil assimilação para pessoas de qualquer nível intelectual. As pessoas devem conseguir decodificar a informação codificada nas perguntas e respostas de forma assustadoramente fácil. As perguntas devem ser simples e de preferência curtas. Nenhuma pergunta pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. A ideia é conseguir vencer o paradoxo de Mênon, conseguir saber tudo sobre esse assunto, do nível para leigos ao nível expert. Caso não tenha muitas perguntas anteriores, vá pelo nível para leigos, e só aumente o nível se as perguntas anteriores já tiverem abrangido todo nível de conhecimento para leigos no assunto. Perguntas e respostas curtas.';
-    } else {
-        $basePrompt = 'Me dê frases em inglês com o termo "' . $deck_name . '", em uma tabela de duas colunas, onde cada linha é uma frase, a primeira coluna é a frase em português brasileiro, e a segunda é a frase em inglês. As frases devem ser de fácil compreensão. Nenhuma frase pode ser igual as frases anteriores que já fiz. Faça variações em múltiplos tempos verbais, variações com todos os pronomes, variações de número e grau. Frases positivas, negativas, interrogativas, voz passiva, voz ativa, voz reflexiva, voz recíproca, com diferentes estruturas sintáticas. O objetivo é que o aluno ao estudar as frases consiga se familiarizar com esse termo em diferentes contextos e em diferente lugares da estrutura sintática. Por favor não coloque numeração nas frases para eu não precisa remover elas manualmente depois.';
-    }
-
-    $historyText = count($history_lines) > 0 ? implode("\n", $history_lines) : '(deck sem cards anteriores)';
-
-    $systemPrompt = 'Você gera linhas de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estrutura fatos, deixe back vazio. Preserve exatamente caracteres Unicode.';
-    $userPrompt = $basePrompt
-        . "\n\nCARDS JÁ EXISTENTES NESTE DECK:\n" . $historyText
-        . "\n\nREGRAS DE LIMPEZA DE SAÍDA:\nNunca inclua menus, botões, placeholders, atalhos de teclado, termos de interface ou listas de símbolos soltas. Retorne apenas conteúdo pedagógico dos cards."
-        . "\n\nGere 15 novos cards sem repetição de conteúdo com o histórico.";
-
-    $requiresBack = in_array($deck_structure, ['perguntas', 'traducoes'], true);
-    $backSchema = $requiresBack ? ['type' => 'string', 'minLength' => 1] : ['type' => 'string'];
-
-    $payloadBase = [
-        'model' => 'gpt-5-nano',
-        'messages' => [
-            ['role' => 'system', 'content' => $systemPrompt],
-            ['role' => 'user', 'content' => $userPrompt]
-        ],
-        'response_format' => [
-            'type' => 'json_schema',
-            'json_schema' => [
-                'name' => 'cards_preview_response',
-                'strict' => true,
-                'schema' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'cards' => [
-                            'type' => 'array',
-                            'minItems' => 1,
-                            'items' => [
-                                'type' => 'object',
-                                'properties' => [
-                                    'front' => ['type' => 'string', 'minLength' => 1],
-                                    'back' => $backSchema
-                                ],
-                                'required' => ['front', 'back'],
-                                'additionalProperties' => false
-                            ]
-                        ]
-                    ],
-                    'required' => ['cards'],
-                    'additionalProperties' => false
-                ]
-            ]
-        ]
-    ];
+    $historyText = fetchDeckHistoryText($pdo, $deck_id);
+    $payloadBase = buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText);
 
     $cards = [];
     $openai_debug_response = null;
@@ -686,21 +1031,7 @@ elseif ($action === 'generate_cards_preview') {
             ];
         }
 
-        $payload = json_encode($payloadData);
-
-        $ch = curl_init('https://api.openai.com/v1/chat/completions');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . OPENAI_API_KEY
-        ]);
-
-        $response = curl_exec($ch);
-        $curlError = curl_error($ch);
-        $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        list($httpcode, $response, $curlError) = openaiJsonRequest('https://api.openai.com/v1/chat/completions', $payloadData);
 
         if ($httpcode !== 200 || !$response) {
             $apiError = '';
@@ -708,52 +1039,16 @@ elseif ($action === 'generate_cards_preview') {
                 $errorDecoded = json_decode($response, true);
                 $apiError = trim((string)($errorDecoded['error']['message'] ?? ''));
             }
-
             $details = trim($apiError !== '' ? $apiError : $curlError);
-            $lastErrorMessage = 'Erro ao gerar cards com a OpenAI.';
-            if ($details !== '') {
-                $lastErrorMessage .= ' Detalhes: ' . $details;
-            }
+            $lastErrorMessage = 'Erro ao gerar cards com a OpenAI.' . ($details !== '' ? (' Detalhes: ' . $details) : '');
             continue;
         }
 
         $decoded = json_decode($response, true);
         $openai_debug_response = $decoded;
-        $raw = trim((string)($decoded['choices'][0]['message']['content'] ?? ''));
-
-        if ($raw !== '' && str_starts_with($raw, '```')) {
-            $raw = preg_replace('/^```(?:json)?\s*/i', '', $raw);
-            $raw = preg_replace('/\s*```$/', '', $raw);
-            $raw = trim((string)$raw);
-        }
-
-        $json = json_decode($raw, true);
-
-        if (!is_array($json) || !isset($json['cards']) || !is_array($json['cards'])) {
-            $lastErrorMessage = 'A API retornou conteúdo em formato inválido.';
-            continue;
-        }
-
-        $cards = [];
-        foreach ($json['cards'] as $card) {
-            $front = trim((string)($card['front'] ?? ''));
-            $back = trim((string)($card['back'] ?? ''));
-
-            if ($front === '') continue;
-
-            if ($deck_structure === 'fatos') {
-                $back = '';
-            } elseif ($back === '') {
-                continue;
-            }
-
-            $cards[] = ['front' => $front, 'back' => $back];
-        }
-
-        if (!empty($cards)) {
-            break;
-        }
-
+        $raw = (string)($decoded['choices'][0]['message']['content'] ?? '');
+        $cards = sanitizeGeneratedCards($raw, $deck_structure);
+        if (!empty($cards)) break;
         $lastErrorMessage = 'A API retornou cards sem preenchimento obrigatório.';
     }
 
@@ -764,6 +1059,7 @@ elseif ($action === 'generate_cards_preview') {
 
     echo json_encode([
         'status' => 'success',
+        'mode' => 'realtime',
         'cards' => $cards,
         'debug_openai_response' => $openai_debug_response
     ]);
