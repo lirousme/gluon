@@ -68,6 +68,19 @@
                     <label for="topicInput" class="block text-xs text-slate-400 mb-1">Assunto (padrão: nome do deck)</label>
                     <input id="topicInput" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm text-slate-100" placeholder="Digite o assunto para gerar os cards">
                 </div>
+
+                <div class="mt-4 rounded-lg border border-slate-700 bg-slate-950/40 p-3 sm:p-4 space-y-3">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div class="space-y-1">
+                            <p class="text-xs text-slate-400">Status do último batch</p>
+                            <p class="text-sm font-semibold text-white"><span id="batchStatusLabel">Nenhum batch enviado ainda</span></p>
+                            <p id="batchMeta" class="text-xs text-slate-500">Envie um batch para acompanhar por aqui.</p>
+                        </div>
+                        <button id="btnRefreshBatch" onclick="generateCardsBatchApp.manualRefreshBatch()" class="px-3 py-2 rounded-lg border border-slate-600 bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm disabled:opacity-40" disabled>
+                            <i class="fa-solid fa-rotate mr-1"></i> Atualizar status
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div class="rounded-xl border border-slate-700 bg-slate-900/70 p-4 sm:p-6">
