@@ -241,6 +241,12 @@
                 <input type="hidden" id="dirId">
                 <input type="hidden" id="dirParentId">
 
+                <div class="px-6 pt-4">
+                    <button type="button" id="btnCopyDirModal" onclick="app.copyDirectoryFromModal()" class="hidden w-full text-blue-400 hover:text-white hover:bg-blue-500/20 px-3 py-2 rounded-lg transition-colors flex justify-center items-center gap-2 text-sm">
+                        <i class="fa-solid fa-copy"></i> <span>Copiar diretório</span>
+                    </button>
+                </div>
+
                 <div id="tab-geral" class="p-6 overflow-y-auto flex-1">
                     
                     <div id="typeSelectorContainer" class="mb-5">
@@ -400,9 +406,6 @@
 
                 <div class="p-5 border-t border-slate-700 bg-slate-800/50 flex flex-col-reverse sm:flex-row justify-between items-center gap-3 shrink-0">
                     <div class="w-full sm:w-auto">
-                        <button type="button" id="btnCopyDirModal" onclick="app.copyDirectoryFromModal()" class="hidden w-full text-blue-400 hover:text-white hover:bg-blue-500/20 px-3 py-2 rounded-lg transition-colors flex justify-center items-center gap-2 text-sm mb-2">
-                            <i class="fa-solid fa-copy"></i> <span>Copiar diretório</span>
-                        </button>
                         <button type="button" id="btnDeleteDir" onclick="app.deleteFromModal()" class="hidden w-full text-red-400 hover:text-white hover:bg-red-500/20 px-3 py-2 rounded-lg transition-colors flex justify-center items-center gap-2 text-sm">
                             <i class="fa-solid fa-trash"></i> <span>Excluir</span>
                         </button>
