@@ -1645,15 +1645,21 @@
                 const isDeck = dir.type === 4;
                 const isBookDeck = isDeck && dir.deck_mode === 'livro';
                 const totalCards = Math.max(0, Number(dir.deck_total_cards) || 0);
+                const dueCards = Math.max(0, Number(dir.deck_due_cards) || 0);
                 const percentageValue = isBookDeck ? Number(dir.book_percentage) : Number(dir.deck_percentage);
                 const percentage = Math.max(0, Math.min(100, percentageValue || 0));
                 const hasCards = totalCards > 0;
-                const color = hasCards ? this.getDeckScoreColor(percentage) : '#94a3b8';
+                const hasCardsToStudyNow = dueCards > 0;
+                const color = !hasCards
+                    ? '#94a3b8'
+                    : (!isBookDeck && !hasCardsToStudyNow ? '#3b82f6' : this.getDeckScoreColor(percentage));
                 return {
                     isDeck,
                     isBookDeck,
                     totalCards,
+                    dueCards,
                     hasCards,
+                    hasCardsToStudyNow,
                     percentage,
                     color,
                     rank: Math.max(0, Number(dir.book_rank) || 0),
