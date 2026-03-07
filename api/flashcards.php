@@ -600,6 +600,10 @@ elseif ($action === 'generate_cards_preview') {
     }
 
     $deck_name = Security::decryptData($deck['name_encrypted']);
+    $topic_input = trim((string)($input['topic'] ?? ''));
+    if ($topic_input !== '') {
+        $deck_name = function_exists('mb_substr') ? mb_substr($topic_input, 0, 200) : substr($topic_input, 0, 200);
+    }
     $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
 
     $stmt = $pdo->prepare("SELECT front_encrypted, back_encrypted FROM flashcards WHERE directory_id = ? ORDER BY sort_order ASC, id ASC");
