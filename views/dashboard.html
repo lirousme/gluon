@@ -240,6 +240,7 @@
             <form id="dirForm" onsubmit="app.saveDirectory(event)" class="flex flex-col flex-1 overflow-hidden">
                 <input type="hidden" id="dirId">
                 <input type="hidden" id="dirParentId">
+                <input type="hidden" id="dirParentNewItemPosition">
 
                 <div class="px-6 pt-4">
                     <button type="button" id="btnCopyDirModal" onclick="app.copyDirectoryFromModal()" class="hidden w-full text-blue-400 hover:text-white hover:bg-blue-500/20 px-3 py-2 rounded-lg transition-colors flex justify-center items-center gap-2 text-sm">
@@ -1312,6 +1313,30 @@
                 this.switchModalTab('geral');
                 document.getElementById('dirId').value = id;
                 document.getElementById('dirParentId').value = targetParentId !== null ? targetParentId : '';
+                document.getElementById('dirParentNewItemPosition').value = '';
+
+                if (!id) {
+                    let parentPosition = null;
+                    const resolvedParentId = targetParentId !== null ? Number(targetParentId) : this.getCurrentParentId();
+
+                    if (resolvedParentId !== null && !Number.isNaN(resolvedParentId)) {
+                        const parentDir = this.state.directoryCache.get(Number(resolvedParentId));
+                        if (parentDir && ['start', 'end'].includes(parentDir.new_item_position)) {
+                            parentPosition = parentDir.new_item_position;
+                        } else if (currentViewMode === 'kanban') {
+                            const columnDir = this.state.directories.find(d => Number((d.type === 3 ? d.target_id : d.id)) === Number(resolvedParentId));
+                            if (columnDir && ['start', 'end'].includes(columnDir.new_item_position)) {
+                                parentPosition = columnDir.new_item_position;
+                            }
+                        }
+                    } else {
+                        parentPosition = this.state.rootPrefs?.new_item_position || 'end';
+                    }
+
+                    if (['start', 'end'].includes(parentPosition)) {
+                        document.getElementById('dirParentNewItemPosition').value = parentPosition;
+                    }
+                }
                 
                 let dirObj = null;
                 const isRootSettings = id === 'root';
@@ -1524,7 +1549,10 @@
                     const explicitParentId = document.getElementById('dirParentId').value !== '' ? Number(document.getElementById('dirParentId').value) : null;
                     const effectiveParentId = explicitParentId !== null ? explicitParentId : this.getCurrentParentId();
                     const parentDir = effectiveParentId !== null ? this.state.directoryCache.get(Number(effectiveParentId)) : null;
-                    const parentNewItemPosition = parentDir && parentDir.new_item_position ? parentDir.new_item_position : null;
+                    const parentPositionHint = document.getElementById('dirParentNewItemPosition').value;
+                    const parentNewItemPosition = ['start', 'end'].includes(parentPositionHint)
+                        ? parentPositionHint
+                        : (parentDir && ['start', 'end'].includes(parentDir.new_item_position) ? parentDir.new_item_position : null);
 
                     const payload = {
                         id: id !== '' ? id : null,
