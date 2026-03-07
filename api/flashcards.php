@@ -914,7 +914,8 @@ elseif ($action === 'refresh_batch_generation') {
         if ($fileCode === 200 && $fileContent) {
             $cards = [];
             $lines = preg_split('/
-||
+|
+|
 /', (string)$fileContent);
             foreach ($lines as $line) {
                 $line = trim($line);
