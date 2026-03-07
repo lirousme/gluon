@@ -27,6 +27,7 @@ public_html/gluon/
 │   ├── editor.html           # Interface do editor de código
 │   ├── schedule.html         # NOVO: Interface da Linha do Tempo / Agenda
 │   ├── flashcards.html       # NOVO: Interface de estudo de Flashcards
+│   ├── gerar_cards_batch.html # NOVO: Interface de geração assíncrona (Batch OpenAI)
 │   ├── adjacency.html       # NOVO: Lista adjacente
 │   └── errors/
 │
@@ -215,6 +216,32 @@ updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
 UNIQUE KEY uniq_language_source (language, source_text),
 INDEX idx_language (language)
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+======================================================================
+
+TABELA: flashcard_batch_jobs
+id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+user_id INT UNSIGNED NOT NULL,
+directory_id INT UNSIGNED NOT NULL,
+topic VARCHAR(200) DEFAULT NULL,
+deck_structure VARCHAR(20) NOT NULL DEFAULT 'fatos',
+openai_input_file_id VARCHAR(80) DEFAULT NULL,
+openai_batch_id VARCHAR(80) DEFAULT NULL,
+openai_output_file_id VARCHAR(80) DEFAULT NULL,
+openai_error_file_id VARCHAR(80) DEFAULT NULL,
+status VARCHAR(30) NOT NULL DEFAULT 'submitted',
+error_message TEXT DEFAULT NULL,
+result_cards_json LONGTEXT DEFAULT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+completed_at DATETIME DEFAULT NULL,
+
+INDEX idx_user_deck (user_id, directory_id),
+INDEX idx_openai_batch (openai_batch_id),
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================
