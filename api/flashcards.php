@@ -1066,6 +1066,7 @@ elseif ($action === 'generate_cards_preview') {
 elseif ($action === 'create_generated_cards') {
     $deck_id = (int)($input['deck_id'] ?? 0);
     $cards = $input['cards'] ?? [];
+    $batch_job_id = (int)($input['batch_job_id'] ?? 0);
 
     if ($deck_id === 0 || !is_array($cards) || count($cards) === 0) die(json_encode(['status' => 'error', 'message' => 'Dados inválidos.']));
     if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
@@ -1081,6 +1082,12 @@ elseif ($action === 'create_generated_cards') {
             $stmt->execute([$deck_id, Security::encryptData($front), $back !== '' ? Security::encryptData($back) : null]);
             $count++;
         }
+
+        if ($batch_job_id > 0) {
+            $delStmt = $pdo->prepare("DELETE FROM flashcard_batch_jobs WHERE id = ? AND user_id = ? AND directory_id = ? AND result_cards_json IS NOT NULL");
+            $delStmt->execute([$batch_job_id, $user_id, $deck_id]);
+        }
+
         $pdo->commit();
         echo json_encode(['status' => 'success', 'message' => "$count cards criados com sucesso!"]);
     } catch (Exception $e) {
