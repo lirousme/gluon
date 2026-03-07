@@ -123,9 +123,6 @@
             generatedCards: [],
             topic: '',
             activeJobId: null,
-            activeJobStatus: '',
-            refreshTimerId: null,
-            refreshIntervalMs: 12000,
 
             async init() {
                 this.deckId = new URLSearchParams(window.location.search).get('id');
@@ -139,129 +136,44 @@
                 const labels = { fatos: 'Fatos', perguntas: 'Perguntas', traducoes: 'Traduções' };
                 document.getElementById('deckStructureLabel').innerText = labels[this.deckStructure] || 'Fatos';
                 await this.loadLatestBatchResult();
-                window.addEventListener('beforeunload', () => this.stopAutoRefresh());
-            },
-
-            formatStatus(status) {
-                const map = {
-                    submitted: 'Enviado',
-                    validating: 'Validando',
-                    in_progress: 'Processando',
-                    finalizing: 'Finalizando',
-                    completed: 'Concluído',
-                    failed: 'Falhou',
-                    cancelled: 'Cancelado',
-                    expired: 'Expirado'
-                };
-                return map[status] || (status || 'desconhecido');
-            },
-
-            setBatchStatusUI(statusText, metaText = '', canRefresh = false) {
-                const label = document.getElementById('batchStatusLabel');
-                const meta = document.getElementById('batchMeta');
-                const btnRefresh = document.getElementById('btnRefreshBatch');
-                if (label) label.textContent = statusText;
-                if (meta) meta.textContent = metaText;
-                if (btnRefresh) btnRefresh.disabled = !canRefresh;
-            },
-
-            isRunningStatus(status) {
-                return ['submitted', 'validating', 'in_progress', 'finalizing'].includes(status);
-            },
-
-            startAutoRefresh() {
-                if (!this.activeJobId) return;
-                this.stopAutoRefresh();
-                this.refreshTimerId = setInterval(() => {
-                    this.refreshBatchResult(this.activeJobId, { silentPending: true });
-                }, this.refreshIntervalMs);
-            },
-
-            stopAutoRefresh() {
-                if (this.refreshTimerId) {
-                    clearInterval(this.refreshTimerId);
-                    this.refreshTimerId = null;
-                }
             },
 
             async loadLatestBatchResult() {
                 const history = await this.api('list_batch_generations', { deck_id: this.deckId });
-                if (!history || !Array.isArray(history.jobs) || !history.jobs.length) {
-                    this.setBatchStatusUI('Nenhum batch enviado ainda', 'Envie um batch para acompanhar por aqui.', false);
-                    return;
-                }
+                if (!history || !Array.isArray(history.jobs) || !history.jobs.length) return;
                 const latest = history.jobs[0];
                 this.activeJobId = latest.id;
-                this.activeJobStatus = latest.status || '';
-                this.setBatchStatusUI(
-                    `Job #${latest.id} • ${this.formatStatus(latest.status)}`,
-                    latest.created_at ? `Criado em: ${latest.created_at}` : 'Último job carregado.',
-                    true
-                );
-
                 if (latest.has_result) {
                     const result = await this.api('get_batch_generation_result', { job_id: latest.id });
                     if (!result || !Array.isArray(result.cards)) return;
                     this.generatedCards = result.cards;
                     this.renderList();
-                    this.stopAutoRefresh();
                     return;
                 }
-
-                if (this.isRunningStatus(latest.status)) {
-                    this.startAutoRefresh();
-                    this.showToast(`Batch #${latest.id} em processamento (${this.formatStatus(latest.status)}).`, 'success');
+                if (['validating', 'in_progress', 'finalizing', 'submitted'].includes(latest.status)) {
+                    this.showToast(`Batch #${latest.id} ainda está em processamento (${latest.status}).`, 'error');
                 }
             },
 
-            async refreshBatchResult(jobId, options = {}) {
-                if (!jobId) return;
-                const { silentPending = false } = options;
+            async refreshBatchResult(jobId) {
                 const refreshed = await this.api('refresh_batch_generation', { job_id: jobId });
                 if (!refreshed || !refreshed.job) return;
-
-                const { id, status, has_result: hasResult, error_message: errorMessage } = refreshed.job;
-                this.activeJobId = id;
-                this.activeJobStatus = status || '';
-                this.setBatchStatusUI(
-                    `Job #${id} • ${this.formatStatus(status)}`,
-                    `Última atualização: ${new Date().toLocaleString('pt-BR')}`,
-                    true
-                );
-
+                const { status, has_result: hasResult, error_message: errorMessage } = refreshed.job;
                 if (hasResult) {
-                    const result = await this.api('get_batch_generation_result', { job_id: id });
+                    const result = await this.api('get_batch_generation_result', { job_id: jobId });
                     if (!result || !Array.isArray(result.cards)) return;
                     this.generatedCards = result.cards;
                     this.renderList();
-                    this.stopAutoRefresh();
-                    this.showToast('Batch concluído! Resultado pronto para revisão e criação dos cards.', 'success');
+                    this.showToast('Resultado do batch carregado!', 'success');
                     return;
                 }
 
                 if (['failed', 'cancelled', 'expired'].includes(status)) {
-                    this.stopAutoRefresh();
-                    this.showToast(errorMessage || `Batch finalizado com status ${this.formatStatus(status)}.`, 'error');
+                    this.showToast(errorMessage || `Batch finalizado com status ${status}.`, 'error');
                     return;
                 }
 
-                if (this.isRunningStatus(status)) {
-                    this.startAutoRefresh();
-                    if (!silentPending) {
-                        this.showToast(`Batch ainda em andamento (${this.formatStatus(status)}).`, 'success');
-                    }
-                    return;
-                }
-
-                this.stopAutoRefresh();
-                if (!silentPending) {
-                    this.showToast(`Status atual do batch: ${this.formatStatus(status)}.`, 'success');
-                }
-            },
-
-            async manualRefreshBatch() {
-                if (!this.activeJobId) return;
-                await this.refreshBatchResult(this.activeJobId);
+                this.showToast(`Batch enviado com status ${status}. Atualize mais tarde para buscar o resultado.`, 'success');
             },
 
             showToast(message, type = 'success') {
@@ -409,14 +321,6 @@
                 if (!res) return;
 
                 this.activeJobId = res.job?.id || null;
-                this.activeJobStatus = res.job?.status || 'submitted';
-                if (this.activeJobId) {
-                    this.setBatchStatusUI(
-                        `Job #${this.activeJobId} • ${this.formatStatus(this.activeJobStatus)}`,
-                        'Batch enviado para a OpenAI. Atualizando status automaticamente...',
-                        true
-                    );
-                }
                 this.showToast(res.message || 'Batch enviado com sucesso!', 'success');
                 if (this.activeJobId) {
                     await this.refreshBatchResult(this.activeJobId);
