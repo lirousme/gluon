@@ -7,9 +7,6 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <script src="/assets/zoom-lock.js" defer></script>
     <title>Gluon - Gerar Cards (Batch)</title>
@@ -37,7 +34,6 @@
             <div class="min-w-0">
                 <h1 class="text-sm sm:text-base font-semibold text-white truncate">Gerar Cards (Batch)</h1>
                 <p id="deckName" class="text-xs text-slate-400 truncate">Carregando deck...</p>
-                <p class="text-[10px] text-orange-300/80 truncate">Batch build: 2026-03-07-b3</p>
             </div>
         </div>
 
@@ -53,18 +49,17 @@
             <div class="rounded-xl border border-orange-700/40 bg-orange-950/20 p-4 sm:p-6">
                 <h2 class="text-sm font-semibold text-orange-300 mb-3 flex items-center gap-2"><i class="fa-solid fa-circle-info"></i> Dúvidas rápidas sobre Batch</h2>
                 <ul class="text-xs sm:text-sm text-slate-300 space-y-2">
-                    <li><strong>Tempo médio:</strong> normalmente de alguns segundos a alguns minutos, variando conforme fila, volume e modelo.</li>
+                    <li><strong>Tempo médio:</strong> geralmente alguns minutos e pode variar conforme fila/tamanho do lote.</li>
                     <li><strong>Precisa deixar a tela aberta?</strong> Não. Você pode voltar depois para conferir.</li>
-                    <li><strong>Para onde vai o pedido?</strong> A solicitação é enviada via /v1/batches com endpoint /v1/responses; o OpenAI Batch ID fica salvo no histórico abaixo.</li>
-                    <li><strong>Como conferir depois?</strong> Abra novamente esta tela, clique em "Atualizar status" e depois em "Carregar resultado" quando concluir.</li>
-                                    <li><strong>Importante:</strong> se a resposta vier com <code>debug_openai_response</code> e <code>cards</code> imediatos, isso foi modo em tempo real (não batch).</li>
+                    <li><strong>Para onde vai o pedido?</strong> O tema enviado fica registrado no histórico local desta página durante a sessão atual.</li>
+                    <li><strong>Como conferir depois?</strong> Abra novamente esta tela e gere um novo lote no mesmo formato de edição do gerar cards.</li>
                 </ul>
             </div>
             <div class="rounded-xl border border-slate-700 bg-slate-900/70 p-4 sm:p-6">
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div>
                         <p class="text-sm text-slate-300">Estrutura do deck: <span id="deckStructureLabel" class="font-semibold text-white">-</span></p>
-                        <p class="text-xs text-slate-500">Clique em Enviar para Batch para abrir um job assíncrono real na OpenAI. Você pode sair da tela e voltar depois para atualizar status.</p>
+                        <p class="text-xs text-slate-500">Clique em Enviar para Batch para gerar sugestões em lote. Você pode sair da tela e conferir novamente depois no histórico desta página.</p>
                         <p class="mt-2 text-xs text-slate-400">A notação matemática e símbolos especiais são aceitos por padrão quando fizer sentido para o conteúdo.</p>
                     </div>
                     <button id="btnGenerate" onclick="generateCardsBatchApp.generate()" class="px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-medium flex items-center justify-center gap-2"><i class="fa-solid fa-wand-magic-sparkles"></i> Enviar para Batch</button>
@@ -113,168 +108,113 @@
             deckId: null,
             deckStructure: 'fatos',
             generatedCards: [],
-            selectedJobId: null,
+            topic: '',
 
-            getStructureLabel(structure) {
-                const map = { fatos: 'Fatos', perguntas: 'Perguntas e respostas', traducoes: 'Traduções' };
-                return map[structure] || structure;
+            async init() {
+                this.deckId = new URLSearchParams(window.location.search).get('id');
+                if (!this.deckId) return goBackToMarkedRoute();
+                const res = await this.api('fetch', { deck_id: this.deckId });
+                if (!res) return;
+                document.getElementById('deckName').innerText = res.deck_name || 'Deck sem nome';
+                this.topic = (res.deck_name || 'Deck sem nome').trim();
+                document.getElementById('topicInput').value = this.topic;
+                this.deckStructure = res.deck_structure || 'fatos';
+                const labels = { fatos: 'Fatos', perguntas: 'Perguntas', traducoes: 'Traduções' };
+                document.getElementById('deckStructureLabel').innerText = labels[this.deckStructure] || 'Fatos';
             },
 
             showToast(message, type = 'success') {
-                const toast = document.createElement('div');
-                toast.className = `fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg text-sm shadow-lg border ${type === 'success' ? 'bg-emerald-600/90 border-emerald-400 text-white' : 'bg-red-600/90 border-red-400 text-white'}`;
-                toast.innerText = message;
-                document.body.appendChild(toast);
-                setTimeout(() => toast.remove(), 2600);
-            },
-
-            async api(action, payload = {}) {
-                try {
-                    const res = await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: (action === 'generate_cards_preview' ? 'create_batch_generation' : action), ...payload }) });
-                    const data = await res.json();
-                    if (data.status !== 'success') throw new Error(data.message || 'Falha na operação.');
-                    return data;
-                } catch (e) {
-                    this.showToast(e.message || 'Erro inesperado.', 'error');
-                    return null;
-                }
-            },
-
-            containsMathNotation(text) {
-                const value = String(text || '');
-                return /\$\$[^$]+\$\$|\\([\s\S]*?\\)|\\[[\s\S]*?\\]|\[a-zA-Z]+|\^|_/.test(value);
-            },
-
-            async renderMathInElement(element, text) {
-                if (!element) return;
-                const value = String(text || '');
-                element.textContent = value;
-                if (!value.trim() || !this.containsMathNotation(value)) return;
-                if (window.MathJax?.typesetPromise) {
-                    try { await window.MathJax.typesetPromise([element]); } catch (_) {}
-                }
+                let toast = document.getElementById('gluon-toast');
+                if (!toast) { toast = document.createElement('div'); toast.id = 'gluon-toast'; document.body.appendChild(toast); }
+                const icon = type === 'success' ? '<i class="fa-solid fa-circle-check"></i>' : '<i class="fa-solid fa-circle-exclamation"></i>';
+                const bgClass = type === 'success' ? 'bg-green-600' : 'bg-red-600';
+                toast.className = `fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-xl text-white text-sm font-medium flex items-center gap-3 z-50 ${bgClass}`;
+                toast.innerHTML = `${icon} <span>${message}</span>`;
+                setTimeout(() => toast.remove(), 2500);
             },
 
             escapeHTML(str) {
-                return String(str || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+                return (str || '').replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
             },
 
-            async init() {
-                const params = new URLSearchParams(window.location.search);
-                this.deckId = parseInt(params.get('id') || '0', 10);
-                if (!this.deckId) {
-                    this.showToast('Deck inválido.', 'error');
-                    return setTimeout(() => goBackToMarkedRoute(), 800);
-                }
+            renderMathInElement(element, value) {
+                if (!element) return;
+                const normalizedValue = (value || '').trim();
+                const hasMath = this.containsMathNotation(normalizedValue);
 
-                const deckRes = await this.api('fetch', { deck_id: this.deckId });
-                if (!deckRes) return;
-                document.getElementById('deckName').innerText = deckRes.deck_name || 'Deck';
-                this.deckStructure = deckRes.deck_structure || 'fatos';
-                document.getElementById('deckStructureLabel').innerText = this.getStructureLabel(this.deckStructure);
-                this.renderList();
-                this.renderBatchHistoryContainer();
-                await this.loadBatchHistory();
-            },
-
-            renderBatchHistoryContainer() {
-                if (document.getElementById('batchHistoryCard')) return;
-                const host = document.querySelector('main .max-w-5xl');
-                if (!host) return;
-                const wrap = document.createElement('div');
-                wrap.id = 'batchHistoryCard';
-                wrap.className = 'rounded-xl border border-slate-700 bg-slate-900/70 p-4 sm:p-6';
-                wrap.innerHTML = `
-                    <div class="flex items-center justify-between gap-3 mb-3">
-                        <h2 class="text-sm font-semibold text-white">Histórico de lotes (Batch OpenAI)</h2>
-                        <button id="btnReloadBatchHistory" class="px-3 py-1.5 rounded-md bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-200 text-xs">Atualizar lista</button>
-                    </div>
-                    <div id="batchHistoryList" class="space-y-2 text-xs text-slate-300"></div>
-                `;
-                host.appendChild(wrap);
-                document.getElementById('btnReloadBatchHistory')?.addEventListener('click', () => this.loadBatchHistory());
-            },
-
-            renderBatchHistory(jobs) {
-                const el = document.getElementById('batchHistoryList');
-                if (!el) return;
-                if (!Array.isArray(jobs) || jobs.length === 0) {
-                    el.innerHTML = '<div class="text-slate-500">Nenhum lote enviado ainda.</div>';
+                if (!hasMath) {
+                    element.textContent = '';
+                    element.classList.add('hidden');
                     return;
                 }
 
-                el.innerHTML = jobs.map(job => {
-                    const statusColor = job.status === 'completed' ? 'text-emerald-400' : (job.status === 'failed' || job.status === 'cancelled' ? 'text-red-400' : 'text-amber-400');
-                    const hasResult = !!job.has_result;
-                    return `
-                        <div class="rounded-lg border border-slate-700 bg-slate-800/40 p-3">
-                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                                <div>
-                                    <div class="font-medium text-slate-100">Job #${job.id} • <span class="${statusColor}">${this.escapeHTML(job.status || '-')}</span></div>
-                                    <div class="text-slate-400 mt-1">OpenAI Batch ID: <code class="text-slate-300">${this.escapeHTML(job.openai_batch_id || '-')}</code></div>\n                                    <div class="text-slate-500 mt-1">Endpoint: <code class="text-slate-300">/v1/responses</code></div>
-                                    <div class="text-slate-500 mt-1">Tema: ${this.escapeHTML(job.topic || '(nome do deck)')}</div>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <button class="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-100" onclick="generateCardsBatchApp.refreshBatchJob(${job.id})">Atualizar status</button>
-                                    <button class="px-2 py-1 rounded ${hasResult ? 'bg-emerald-700 hover:bg-emerald-600 text-white' : 'bg-slate-700 text-slate-400 cursor-not-allowed'}" ${hasResult ? '' : 'disabled'} onclick="generateCardsBatchApp.loadBatchResult(' + job.id + ')">Carregar resultado</button>
-                                </div>
-                            </div>
-                            ${job.error_message ? '<div class="text-red-300 mt-2">Erro: ' + this.escapeHTML(job.error_message) + '</div>' : ''}
-                        </div>
-                    `;
-                }).join('');
+                element.classList.remove('hidden');
+                element.textContent = normalizedValue;
+                if (window.MathJax?.typesetPromise) {
+                    window.MathJax.typesetPromise([element]).catch(() => {});
+                }
             },
 
-            async loadBatchHistory() {
-                const res = await this.api('list_batch_generations', { deck_id: this.deckId });
-                if (!res) return;
-                this.renderBatchHistory(res.jobs || []);
+            containsMathNotation(value) {
+                if (!value) return false;
+
+                const latexDelimiters = /\\\(|\\\)|\\\[|\\\]|\$\$[^$]+\$\$|\$[^$]+\$/;
+                const commonMathSymbols = /[∑∫√≈≠≤≥∞πΔθλμ±÷×]/;
+                const superscriptSubscriptChars = /[²³¹⁰⁴⁵⁶⁷⁸⁹⁻⁺₀₁₂₃₄₅₆₇₈₉]/;
+
+                return (
+                    latexDelimiters.test(value) ||
+                    commonMathSymbols.test(value) ||
+                    superscriptSubscriptChars.test(value)
+                );
             },
 
-            async refreshBatchJob(jobId) {
-                const res = await this.api('refresh_batch_generation', { job_id: jobId });
-                if (!res) return;
-                this.showToast(`Status atualizado: ${res.job?.status || '-'}`);
-                await this.loadBatchHistory();
-            },
-
-            async loadBatchResult(jobId) {
-                const res = await this.api('get_batch_generation_result', { job_id: jobId });
-                if (!res) return;
-                this.selectedJobId = jobId;
-                this.generatedCards = Array.isArray(res.cards) ? res.cards : [];
-                this.renderList();
-                this.showToast('Resultado batch carregado na grade para revisão.', 'success');
+            async api(action, payload = {}) {
+                payload.action = action;
+                try {
+                    const res = await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (res.status === 401) { window.location.href = '/'; return null; }
+                    const data = await res.json();
+                    if (data && typeof data === 'object' && Object.prototype.hasOwnProperty.call(data, 'debug_openai_response')) {
+                        delete data.debug_openai_response;
+                    }
+                    if (data.status !== 'success') throw new Error(data.message);
+                    return data;
+                } catch (err) {
+                    this.showToast(err.message || 'Erro de conexão.', 'error');
+                    return null;
+                }
             },
 
             renderList() {
                 const tbody = document.getElementById('generatedList');
                 const empty = document.getElementById('emptyGenerated');
-                const btnCreate = document.getElementById('btnCreateCards');
                 tbody.innerHTML = '';
-
                 if (!this.generatedCards.length) {
-                    empty.style.display = 'block';
-                    btnCreate.disabled = true;
+                    empty.classList.remove('hidden');
+                    document.getElementById('btnCreateCards').disabled = true;
                     return;
                 }
 
-                empty.style.display = 'none';
-                btnCreate.disabled = false;
+                empty.classList.add('hidden');
+                document.getElementById('btnCreateCards').disabled = false;
 
                 this.generatedCards.forEach((card, idx) => {
                     const tr = document.createElement('tr');
-                    tr.className = 'align-top border-b border-slate-800';
+                    tr.className = 'border-b border-slate-800 align-top block md:table-row';
                     tr.innerHTML = `
-                        <td class="py-2 pr-2">
-                            <textarea data-field="front" data-index="${idx}" rows="4" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm">${this.escapeHTML(card.front || '')}</textarea>
-                            <div class="mt-2 p-2 rounded-md bg-slate-800/60 border border-slate-700 text-xs text-slate-200 whitespace-pre-wrap" data-preview-field="front" data-preview-index="${idx}"></div>
+                        <td class="py-2 pr-0 md:pr-2 block md:table-cell md:w-[42%]">
+                            <div class="text-xs text-slate-400 mb-1 md:hidden">Frente</div>
+                            <textarea data-field="front" data-index="${idx}" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 min-h-[72px]">${this.escapeHTML(card.front)}</textarea>
+                            <div data-preview-field="front" data-preview-index="${idx}" class="mt-2 text-xs text-slate-300 bg-slate-950/70 border border-slate-700 rounded-md p-2 whitespace-pre-wrap"></div>
                         </td>
-                        <td class="py-2 pr-2">
-                            <textarea data-field="back" data-index="${idx}" rows="4" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm">${this.escapeHTML(card.back || '')}</textarea>
-                            <div class="mt-2 p-2 rounded-md bg-slate-800/60 border border-slate-700 text-xs text-slate-200 whitespace-pre-wrap" data-preview-field="back" data-preview-index="${idx}"></div>
+                        <td class="py-2 pr-0 md:pr-2 block md:table-cell md:w-[42%]">
+                            <div class="text-xs text-slate-400 mb-1 md:hidden">Verso</div>
+                            <textarea data-field="back" data-index="${idx}" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 min-h-[72px]">${this.escapeHTML(card.back || '')}</textarea>
+                            <div data-preview-field="back" data-preview-index="${idx}" class="mt-2 text-xs text-slate-300 bg-slate-950/70 border border-slate-700 rounded-md p-2 whitespace-pre-wrap"></div>
                         </td>
-                        <td class="py-2">
+                        <td class="py-2 block md:table-cell">
+                            <div class="text-xs text-slate-400 mb-1 md:hidden">Ações</div>
                             <div class="flex gap-2">
                                 <button class="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600" onclick="generateCardsBatchApp.saveRow(${idx})"><i class="fa-solid fa-pen"></i></button>
                                 <button class="px-2 py-1 rounded bg-red-700 hover:bg-red-600" onclick="generateCardsBatchApp.deleteRow(${idx})"><i class="fa-solid fa-trash"></i></button>
@@ -286,8 +226,14 @@
                     const backTextarea = tr.querySelector(`textarea[data-field="back"][data-index="${idx}"]`);
                     const frontPreview = tr.querySelector(`[data-preview-field="front"][data-preview-index="${idx}"]`);
                     const backPreview = tr.querySelector(`[data-preview-field="back"][data-preview-index="${idx}"]`);
-                    frontTextarea?.addEventListener('input', () => this.renderMathInElement(frontPreview, frontTextarea.value));
-                    backTextarea?.addEventListener('input', () => this.renderMathInElement(backPreview, backTextarea.value));
+
+                    frontTextarea?.addEventListener('input', () => {
+                        this.renderMathInElement(frontPreview, frontTextarea.value);
+                    });
+                    backTextarea?.addEventListener('input', () => {
+                        this.renderMathInElement(backPreview, backTextarea.value);
+                    });
+
                     this.renderMathInElement(frontPreview, card.front || '');
                     this.renderMathInElement(backPreview, card.back || '');
                 });
@@ -316,15 +262,13 @@
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Enviando...';
                 const topicValue = (document.getElementById('topicInput')?.value || '').trim();
-                const res = await this.api('create_batch_generation', { deck_id: this.deckId, topic: topicValue });
+                const res = await this.api('generate_cards_preview', { deck_id: this.deckId, topic: topicValue });
                 btn.disabled = false;
                 btn.innerHTML = old;
                 if (!res) return;
-                if (res.mode !== 'batch') {
-                    return this.showToast('Resposta inesperada: o backend não confirmou modo batch.', 'error');
-                }
-                this.showToast(`Lote enviado! Batch ID: ${res.job?.openai_batch_id || '-'} • endpoint ${res.job?.openai_endpoint || '/v1/responses'}`);
-                await this.loadBatchHistory();
+                this.generatedCards = Array.isArray(res.cards) ? res.cards : [];
+                this.renderList();
+                this.showToast('Sugestões geradas!', 'success');
             },
 
             async createCards() {
@@ -353,11 +297,9 @@
                 btn.innerHTML = old;
                 if (!res || !res.data?.length) return this.showToast('Não há cards para exportar neste deck.', 'error');
 
-                let csv = '﻿Frente,Verso
-';
+                let csv = '\uFEFFFrente,Verso\n';
                 res.data.forEach(card => {
-                    csv += `"${(card.front || '').replace(/"/g, '""')}","${(card.back || '').replace(/"/g, '""')}"
-`;
+                    csv += `"${(card.front || '').replace(/"/g, '""')}","${(card.back || '').replace(/"/g, '""')}"\n`;
                 });
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
