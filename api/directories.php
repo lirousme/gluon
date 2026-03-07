@@ -122,10 +122,8 @@ function duplicateDirectoryTree($source_id, $target_parent_id, $user_id, $pdo, $
     }
 
     // 2. Calcula a ordem de classificação (sort_order) para o novo local
-    $stmtMax = $pdo->prepare("SELECT MAX(sort_order) FROM directories WHERE user_id = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))");
-    $stmtMax->execute([$user_id, $target_parent_id, $target_parent_id]);
-    $maxOrder = $stmtMax->fetchColumn();
-    $newOrder = ($maxOrder !== null) ? (int)$maxOrder + 1 : 0;
+    // sempre normalizando os irmãos antes para evitar colisões de sort_order.
+    $newOrder = getNextSiblingSortOrder($pdo, $user_id, $target_parent_id);
 
     // 3. Insere o novo diretório na tabela
     $stmtInsert = $pdo->prepare("
@@ -206,6 +204,51 @@ function duplicateDirectoryTree($source_id, $target_parent_id, $user_id, $pdo, $
     }
 
     return true;
+}
+
+function normalizeSiblingSortOrders($pdo, $user_id, $parent_id) {
+    $stmt = $pdo->prepare(
+        "SELECT id, sort_order
+         FROM directories
+         WHERE user_id = ?
+           AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))
+         ORDER BY sort_order ASC, id ASC
+         FOR UPDATE"
+    );
+    $stmt->execute([$user_id, $parent_id, $parent_id]);
+
+    $siblings = $stmt->fetchAll();
+
+    foreach ($siblings as $index => $sibling) {
+        if ((int)$sibling['sort_order'] !== $index) {
+            $stmtUpdate = $pdo->prepare("UPDATE directories SET sort_order = ? WHERE id = ? AND user_id = ?");
+            $stmtUpdate->execute([$index, $sibling['id'], $user_id]);
+        }
+    }
+
+    return count($siblings);
+}
+
+function getNextSiblingSortOrder($pdo, $user_id, $parent_id) {
+    $count = normalizeSiblingSortOrders($pdo, $user_id, $parent_id);
+    return $count;
+}
+
+function getSortOrderForNewSibling($pdo, $user_id, $parent_id, $parentPref) {
+    $count = normalizeSiblingSortOrders($pdo, $user_id, $parent_id);
+
+    if ($parentPref === 'start') {
+        $stmtShift = $pdo->prepare(
+            "UPDATE directories
+             SET sort_order = sort_order + 1
+             WHERE user_id = ?
+               AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))"
+        );
+        $stmtShift->execute([$user_id, $parent_id, $parent_id]);
+        return 0;
+    }
+
+    return $count;
 }
 
 
@@ -457,20 +500,10 @@ elseif ($action === 'create') {
         $parentPref = $stmtPref->fetchColumn() ?: 'end';
     }
 
-    if ($parentPref === 'start') {
-        $stmtMin = $pdo->prepare("SELECT MIN(sort_order) FROM directories WHERE user_id = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))");
-        $stmtMin->execute([$user_id, $parent_id, $parent_id]);
-        $minOrder = ($stmtMin->fetchColumn() !== null) ? (int)$stmtMin->fetchColumn() - 1 : 0;
-        $newOrder = $minOrder;
-    } else {
-        $stmtMax = $pdo->prepare("SELECT MAX(sort_order) FROM directories WHERE user_id = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))");
-        $stmtMax->execute([$user_id, $parent_id, $parent_id]);
-        $maxOrder = ($stmtMax->fetchColumn() !== null) ? (int)$stmtMax->fetchColumn() + 1 : 0;
-        $newOrder = $maxOrder;
-    }
-
     try {
         $pdo->beginTransaction();
+
+        $newOrder = getSortOrderForNewSibling($pdo, $user_id, $parent_id, $parentPref);
 
         $stmt = $pdo->prepare("
             INSERT INTO directories (
@@ -533,21 +566,30 @@ elseif ($action === 'create_portal') {
     $decryptedName = Security::decryptData($original['name_encrypted']);
     $newNameEnc = Security::encryptData($decryptedName);
 
-    $stmtMax = $pdo->prepare("SELECT MAX(sort_order) FROM directories WHERE user_id = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))");
-    $stmtMax->execute([$user_id, $target_parent_id, $target_parent_id]);
-    $newOrder = ($stmtMax->fetchColumn() !== null) ? (int)$stmtMax->fetchColumn() + 1 : 0;
+    try {
+        $pdo->beginTransaction();
 
-    $stmtInsert = $pdo->prepare("
+        $newOrder = getNextSiblingSortOrder($pdo, $user_id, $target_parent_id);
+
+        $stmtInsert = $pdo->prepare("
         INSERT INTO directories (
             user_id, parent_id, target_id, type, name_encrypted, 
             sort_order, icon, icon_color_from, icon_color_to, start_date, end_date
         ) VALUES (?, ?, ?, 3, ?, ?, 'fa-door-open', ?, ?, ?, ?)
     ");
     
-    if ($stmtInsert->execute([$user_id, $target_parent_id, $target_id, $newNameEnc, $newOrder, $original['icon_color_from'], $original['icon_color_to'], $start_date, $end_date])) {
-        $pdo->prepare("UPDATE users SET copied_directory_id = NULL WHERE id = ?")->execute([$user_id]);
-        echo json_encode(['status' => 'success', 'message' => 'Portal criado com sucesso!']);
-    } else {
+        if ($stmtInsert->execute([$user_id, $target_parent_id, $target_id, $newNameEnc, $newOrder, $original['icon_color_from'], $original['icon_color_to'], $start_date, $end_date])) {
+            $pdo->prepare("UPDATE users SET copied_directory_id = NULL WHERE id = ?")->execute([$user_id]);
+            $pdo->commit();
+            echo json_encode(['status' => 'success', 'message' => 'Portal criado com sucesso!']);
+        } else {
+            $pdo->rollBack();
+            echo json_encode(['status' => 'error', 'message' => 'Erro interno ao criar portal.']);
+        }
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         echo json_encode(['status' => 'error', 'message' => 'Erro interno ao criar portal.']);
     }
 }
@@ -798,9 +840,7 @@ elseif ($action === 'move') {
     try {
         $pdo->beginTransaction();
         
-        $stmtMax = $pdo->prepare("SELECT MAX(sort_order) FROM directories WHERE user_id = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))");
-        $stmtMax->execute([$user_id, $target_parent_id, $target_parent_id]);
-        $newOrder = ($stmtMax->fetchColumn() !== null) ? (int)$stmtMax->fetchColumn() + 1 : 0;
+        $newOrder = getNextSiblingSortOrder($pdo, $user_id, $target_parent_id);
 
         $pdo->prepare("UPDATE directories SET parent_id = ?, sort_order = ? WHERE id = ? AND user_id = ?")->execute([$target_parent_id, $newOrder, $copied_id, $user_id]);
         $pdo->prepare("UPDATE users SET copied_directory_id = NULL WHERE id = ?")->execute([$user_id]);
