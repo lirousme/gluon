@@ -109,6 +109,7 @@
             deckStructure: 'fatos',
             generatedCards: [],
             topic: '',
+            activeJobId: null,
 
             async init() {
                 this.deckId = new URLSearchParams(window.location.search).get('id');
@@ -121,6 +122,45 @@
                 this.deckStructure = res.deck_structure || 'fatos';
                 const labels = { fatos: 'Fatos', perguntas: 'Perguntas', traducoes: 'Traduções' };
                 document.getElementById('deckStructureLabel').innerText = labels[this.deckStructure] || 'Fatos';
+                await this.loadLatestBatchResult();
+            },
+
+            async loadLatestBatchResult() {
+                const history = await this.api('list_batch_generations', { deck_id: this.deckId });
+                if (!history || !Array.isArray(history.jobs) || !history.jobs.length) return;
+                const latest = history.jobs[0];
+                this.activeJobId = latest.id;
+                if (latest.has_result) {
+                    const result = await this.api('get_batch_generation_result', { job_id: latest.id });
+                    if (!result || !Array.isArray(result.cards)) return;
+                    this.generatedCards = result.cards;
+                    this.renderList();
+                    return;
+                }
+                if (['validating', 'in_progress', 'finalizing', 'submitted'].includes(latest.status)) {
+                    this.showToast(`Batch #${latest.id} ainda está em processamento (${latest.status}).`, 'error');
+                }
+            },
+
+            async refreshBatchResult(jobId) {
+                const refreshed = await this.api('refresh_batch_generation', { job_id: jobId });
+                if (!refreshed || !refreshed.job) return;
+                const { status, has_result: hasResult, error_message: errorMessage } = refreshed.job;
+                if (hasResult) {
+                    const result = await this.api('get_batch_generation_result', { job_id: jobId });
+                    if (!result || !Array.isArray(result.cards)) return;
+                    this.generatedCards = result.cards;
+                    this.renderList();
+                    this.showToast('Resultado do batch carregado!', 'success');
+                    return;
+                }
+
+                if (['failed', 'cancelled', 'expired'].includes(status)) {
+                    this.showToast(errorMessage || `Batch finalizado com status ${status}.`, 'error');
+                    return;
+                }
+
+                this.showToast(`Batch enviado com status ${status}. Atualize mais tarde para buscar o resultado.`, 'success');
             },
 
             showToast(message, type = 'success') {
@@ -262,13 +302,16 @@
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Enviando...';
                 const topicValue = (document.getElementById('topicInput')?.value || '').trim();
-                const res = await this.api('generate_cards_preview', { deck_id: this.deckId, topic: topicValue });
+                const res = await this.api('create_batch_generation', { deck_id: this.deckId, topic: topicValue });
                 btn.disabled = false;
                 btn.innerHTML = old;
                 if (!res) return;
-                this.generatedCards = Array.isArray(res.cards) ? res.cards : [];
-                this.renderList();
-                this.showToast('Sugestões geradas!', 'success');
+
+                this.activeJobId = res.job?.id || null;
+                this.showToast(res.message || 'Batch enviado com sucesso!', 'success');
+                if (this.activeJobId) {
+                    await this.refreshBatchResult(this.activeJobId);
+                }
             },
 
             async createCards() {
