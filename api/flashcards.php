@@ -768,32 +768,11 @@ elseif ($action === 'create_batch_generation') {
     $historyText = fetchDeckHistoryText($pdo, $deck_id);
     $chatPayload = buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText);
 
-    $schema = $chatPayload['response_format']['json_schema']['schema'] ?? null;
-    if (!is_array($schema)) {
-        die(json_encode(['status' => 'error', 'message' => 'Schema de resposta inválido para batch.']));
-    }
-
-    $batchResponsePayload = [
-        'model' => $chatPayload['model'],
-        'input' => [
-            ['role' => 'system', 'content' => (string)($chatPayload['messages'][0]['content'] ?? '')],
-            ['role' => 'user', 'content' => (string)($chatPayload['messages'][1]['content'] ?? '')]
-        ],
-        'text' => [
-            'format' => [
-                'type' => 'json_schema',
-                'name' => 'cards_preview_response',
-                'strict' => true,
-                'schema' => $schema
-            ]
-        ]
-    ];
-
     $jsonlLine = json_encode([
         'custom_id' => 'deck_' . $deck_id . '_user_' . $user_id . '_' . time(),
         'method' => 'POST',
-        'url' => '/v1/responses',
-        'body' => $batchResponsePayload
+        'url' => '/v1/chat/completions',
+        'body' => $chatPayload
     ], JSON_UNESCAPED_UNICODE);
 
     if ($jsonlLine === false) {
@@ -832,7 +811,7 @@ elseif ($action === 'create_batch_generation') {
 
     list($batchCode, $batchResponse, $batchErr) = openaiJsonRequest('https://api.openai.com/v1/batches', [
         'input_file_id' => $inputFileId,
-        'endpoint' => '/v1/responses',
+        'endpoint' => '/v1/chat/completions',
         'completion_window' => '24h',
         'metadata' => [
             'app' => 'gluon',
@@ -860,14 +839,12 @@ elseif ($action === 'create_batch_generation') {
 
     echo json_encode([
         'status' => 'success',
-        'mode' => 'batch',
         'message' => 'Batch enviado com sucesso para OpenAI.',
         'job' => [
             'id' => $jobId,
             'openai_batch_id' => $openaiBatchId,
             'openai_input_file_id' => $inputFileId,
-            'status' => $status,
-            'openai_endpoint' => '/v1/responses'
+            'status' => $status
         ]
     ]);
 }
@@ -945,9 +922,6 @@ elseif ($action === 'refresh_batch_generation') {
                 if ($line === '') continue;
                 $lineDecoded = json_decode($line, true);
                 $content = (string)($lineDecoded['response']['body']['choices'][0]['message']['content'] ?? '');
-                if ($content === '') {
-                    $content = (string)($lineDecoded['response']['body']['output'][0]['content'][0]['text'] ?? '');
-                }
                 if ($content === '') continue;
                 $cards = sanitizeGeneratedCards($content, $job['deck_structure']);
                 if (!empty($cards)) break;
