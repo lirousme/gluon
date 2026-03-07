@@ -459,17 +459,29 @@ elseif ($action === 'reset_book_score') {
     if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
 
     $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
-    if (!$deck || ($deck['deck_mode'] ?? 'aleatorio') !== 'livro') {
-        die(json_encode(['status' => 'error', 'message' => 'Reset disponível apenas para decks no modo livro.']));
+    if (!$deck) {
+        die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
     }
 
-    $stmt = $pdo->prepare("
-        INSERT INTO flashcard_book_progress (user_id, directory_id, current_index, completed_reads) 
-        VALUES (?, ?, 0, 0) 
-        ON DUPLICATE KEY UPDATE completed_reads = 0
-    ");
-    $stmt->execute([$user_id, $deck_id]);
-    echo json_encode(['status' => 'success', 'message' => 'Pontuação do livro zerada.']);
+    $isBookMode = ($deck['deck_mode'] ?? 'aleatorio') === 'livro';
+
+    if ($isBookMode) {
+        $stmt = $pdo->prepare("
+            INSERT INTO flashcard_book_progress (user_id, directory_id, current_index, completed_reads) 
+            VALUES (?, ?, 0, 0) 
+            ON DUPLICATE KEY UPDATE completed_reads = 0
+        ");
+        $stmt->execute([$user_id, $deck_id]);
+        echo json_encode(['status' => 'success', 'message' => 'Pontuação do livro zerada.']);
+    } else {
+        $stmt = $pdo->prepare("
+            DELETE fs FROM flashcard_scores fs
+            INNER JOIN flashcards f ON f.id = fs.flashcard_id
+            WHERE fs.user_id = ? AND f.directory_id = ?
+        ");
+        $stmt->execute([$user_id, $deck_id]);
+        echo json_encode(['status' => 'success', 'message' => 'Pontuação do deck zerada.']);
+    }
 }
 
 elseif ($action === 'update_settings') {

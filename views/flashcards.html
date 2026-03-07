@@ -176,7 +176,7 @@
                 </div>
             </label>
 
-            <button id="btnResetBookScore" onclick="flashcardApp.openResetBookScoreModal()" class="hidden flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700 text-amber-400 hover:text-amber-300" title="Zerar pontuação do livro">
+            <button id="btnResetBookScore" onclick="flashcardApp.openResetBookScoreModal()" class="hidden flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700 text-amber-400 hover:text-amber-300" title="Zerar pontuação do deck">
                 <i class="fa-solid fa-rotate-left text-sm"></i>
             </button>
             
@@ -478,7 +478,7 @@
                 <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="p-6 space-y-5">
-                <p class="text-slate-300 text-sm leading-relaxed">Deseja realmente zerar sua pontuação de leitura completa neste deck de livro?</p>
+                <p id="resetScoreDescription" class="text-slate-300 text-sm leading-relaxed">Deseja realmente zerar sua pontuação neste deck?</p>
                 <div class="flex justify-end gap-3">
                     <button type="button" onclick="flashcardApp.closeModals()" class="px-5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
                     <button type="button" id="btnConfirmResetBookScore" onclick="flashcardApp.resetBookScore()" class="px-5 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold transition-colors">Zerar</button>
@@ -607,8 +607,8 @@
 
                     const resetBtn = document.getElementById('btnResetBookScore');
                     if (resetBtn) {
-                        resetBtn.classList.toggle('hidden', this.deckMode !== 'livro');
-                        resetBtn.classList.toggle('flex', this.deckMode === 'livro');
+                        resetBtn.classList.remove('hidden');
+                        resetBtn.classList.add('flex');
                     }
                     
                     if (this.cards.length === 0) {
@@ -1341,7 +1341,12 @@
             },
 
             openResetBookScoreModal() {
-                if (this.deckMode !== 'livro') return;
+                const desc = document.getElementById('resetScoreDescription');
+                if (desc) {
+                    desc.innerText = this.deckMode === 'livro'
+                        ? 'Deseja realmente zerar sua pontuação de leitura completa neste deck de livro?'
+                        : 'Deseja realmente zerar sua pontuação neste deck?';
+                }
                 const modal = document.getElementById('resetBookScoreModal');
                 const content = document.getElementById('resetBookScoreModalContent');
                 modal.classList.remove('hidden'); modal.classList.add('flex');
@@ -1349,7 +1354,6 @@
             },
 
             async resetBookScore() {
-                if (this.deckMode !== 'livro') return;
                 const btn = document.getElementById('btnConfirmResetBookScore');
                 const originalText = btn.innerHTML;
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
@@ -1357,7 +1361,7 @@
 
                 const res = await this.api('reset_book_score', { deck_id: this.deckId });
                 if (res) {
-                    this.bookCompletedReads = 0;
+                    if (this.deckMode === 'livro') this.bookCompletedReads = 0;
                     this.deckPercentage = 0;
                     this.updateGlobalProgressUI();
                     this.showToast(res.message || 'Pontuação zerada com sucesso!', 'success');
