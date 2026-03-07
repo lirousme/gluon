@@ -848,7 +848,7 @@
                 }
             },
 
-            nextCard() {
+            async nextCard() {
                 if (this.cards.length === 0) return;
                 
                 this.stopAudio(); 
@@ -1122,14 +1122,14 @@
             },
 
             registerScore(card) {
-                if (card.score >= 20 || this.scoredThisSession.has(card.id)) return;
+                if (card.score >= 20 || this.scoredThisSession.has(card.id)) return Promise.resolve();
                 
                 const expireTime = localStorage.getItem(`gluon_card_expire_${card.id}`);
                 const now = new Date().getTime();
                 
                 if (expireTime && now < parseInt(expireTime)) {
                     this.scoredThisSession.add(card.id);
-                    return; 
+                    return Promise.resolve(); 
                 }
                 
                 this.scoredThisSession.add(card.id);
@@ -1157,7 +1157,7 @@
                     if (backDots) backDots.innerHTML = dotsHtml;
                 }
 
-                this.api('update_score', { card_id: card.id }).catch(e => console.error(e));
+                return this.api('update_score', { card_id: card.id }).catch(e => console.error(e));
             },
 
             saveBookProgress() {
