@@ -806,7 +806,15 @@
                 }
 
                 document.getElementById('btnPrev').disabled = this.currentIndex === 0;
-                document.getElementById('btnNext').disabled = this.currentIndex === this.cards.length - 1;
+                document.getElementById('btnNext').disabled = this.deckMode !== 'livro' && this.currentIndex === this.cards.length - 1;
+            },
+
+            incrementBookReadProgress() {
+                if (this.deckMode !== 'livro' || this.bookCompletedReads >= this.bookCompletedReadsMax) return;
+
+                this.bookCompletedReads = Math.min(this.bookCompletedReads + 1, this.bookCompletedReadsMax);
+                this.deckPercentage = Math.round((this.bookCompletedReads / this.bookCompletedReadsMax) * 100);
+                this.api('increment_book_score', { deck_id: this.deckId }).catch(e => console.error(e));
             },
 
             flipCard(e) {
@@ -850,19 +858,36 @@
 
                 if (this.deckMode === 'aleatorio' && !hasBack) this.registerScore(card);
 
+                if (this.deckMode === 'livro' && this.cards.length === 1) {
+                    this.incrementBookReadProgress();
+                    this.renderCurrentCard();
+                    this.saveBookProgress();
+
+                    if (this.autoPlayEnabled && this.cards[this.currentIndex].has_audio_front === 1) {
+                        this.playCardAudio(this.cards[this.currentIndex].id, 'front');
+                    }
+                    return;
+                }
+
                 if (this.currentIndex < this.cards.length - 1) {
                     this.currentIndex++;
                     const reachedBookEnd = this.deckMode === 'livro' && this.currentIndex === this.cards.length - 1;
 
                     if (reachedBookEnd && this.bookCompletedReads < this.bookCompletedReadsMax) {
-                        this.bookCompletedReads = Math.min(this.bookCompletedReads + 1, this.bookCompletedReadsMax);
-                        this.deckPercentage = Math.round((this.bookCompletedReads / this.bookCompletedReadsMax) * 100);
-                        this.api('increment_book_score', { deck_id: this.deckId }).catch(e => console.error(e));
+                        this.incrementBookReadProgress();
                     }
 
                     this.renderCurrentCard();
                     if (this.deckMode === 'livro') this.saveBookProgress();
                     
+                    if(this.autoPlayEnabled && this.cards[this.currentIndex].has_audio_front === 1) {
+                        this.playCardAudio(this.cards[this.currentIndex].id, 'front');
+                    }
+                } else if (this.deckMode === 'livro') {
+                    this.currentIndex = 0;
+                    this.renderCurrentCard();
+                    this.saveBookProgress();
+
                     if(this.autoPlayEnabled && this.cards[this.currentIndex].has_audio_front === 1) {
                         this.playCardAudio(this.cards[this.currentIndex].id, 'front');
                     }
