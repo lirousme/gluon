@@ -353,7 +353,11 @@
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Enviando...';
                 const topicValue = (document.getElementById('topicInput')?.value || '').trim();
-                const res = await this.api('create_batch_generation', { deck_id: this.deckId, topic: topicValue });
+                const res = await this.api('create_batch_generation', {
+                    deck_id: this.deckId,
+                    topic: topicValue,
+                    model: 'gpt-5.4'
+                });
                 btn.disabled = false;
                 btn.innerHTML = old;
                 if (!res) return;
