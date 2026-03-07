@@ -169,7 +169,7 @@ function adjustPronunciationForTTS($pdo, $text, $language) {
 
 
 
-function buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText) {
+function buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, $model = 'gpt-5-nano') {
     $basePrompt = '';
     if ($deck_structure === 'fatos') {
         $basePrompt = 'Me dê informações sobre o assunto "' . $deck_name . '", em uma tabela de uma única coluna, onde cada linha é uma informação. As informações devem ser de fácil compreensão. As informações devem ser óbvias evidentes e de rápida assimilação e de preferência curtas. Nenhuma informação pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. A ideia é conseguir vencer o paradoxo de Mênon, conseguir saber tudo sobre esse assunto, do nível para leigos ao nível expert. Caso não tenha muitas perguntas anteriores, vá pelo nível para leigos, e só aumente o nível se as perguntas anteriores já tiverem abrangido todo nível de conhecimento para leigos no assunto. Frases curtas.';
@@ -198,7 +198,7 @@ Gere 15 novos cards sem repetição de conteúdo com o histórico.";
     $backSchema = $requiresBack ? ['type' => 'string', 'minLength' => 1] : ['type' => 'string'];
 
     return [
-        'model' => 'gpt-5-nano',
+        'model' => $model,
         'messages' => [
             ['role' => 'system', 'content' => $systemPrompt],
             ['role' => 'user', 'content' => $userPrompt]
@@ -835,7 +835,7 @@ elseif ($action === 'create_batch_generation') {
     }
     $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
     $historyText = fetchDeckHistoryText($pdo, $deck_id);
-    $chatPayload = buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText);
+    $chatPayload = buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, 'gpt-5.4');
 
     $jsonlLine = json_encode([
         'custom_id' => 'deck_' . $deck_id . '_user_' . $user_id . '_' . time(),
