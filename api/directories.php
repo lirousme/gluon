@@ -322,6 +322,7 @@ if ($action === 'fetch') {
             'color_to' => $dir['icon_color_to'] ?? '#6366f1',
             'cover_url' => !empty($dir['cover_url_encrypted']) ? Security::decryptData($dir['cover_url_encrypted']) : '',
             'deck_mode' => $dir['deck_mode'] ?? 'aleatorio',
+            'deck_total_cards' => $deckTotalCards,
             'deck_percentage' => $deckPercentage,
             'book_percentage' => $isBookDeck ? $bookPercentage : 0,
             'book_rank' => $isBookDeck ? $bookCompletedReads : 0,
