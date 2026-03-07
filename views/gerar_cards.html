@@ -54,6 +54,10 @@
                     </div>
                     <button id="btnGenerate" onclick="generateCardsApp.generate()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium flex items-center justify-center gap-2"><i class="fa-solid fa-wand-magic-sparkles"></i> Gerar</button>
                 </div>
+                <div class="mt-4">
+                    <label for="topicInput" class="block text-xs text-slate-400 mb-1">Assunto (padrão: nome do deck)</label>
+                    <input id="topicInput" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm text-slate-100" placeholder="Digite o assunto para gerar os cards">
+                </div>
             </div>
 
             <div class="rounded-xl border border-slate-700 bg-slate-900/70 p-4 sm:p-6">
@@ -94,6 +98,7 @@
             deckId: null,
             deckStructure: 'fatos',
             generatedCards: [],
+            topic: '',
 
             async init() {
                 this.deckId = new URLSearchParams(window.location.search).get('id');
@@ -101,6 +106,8 @@
                 const res = await this.api('fetch', { deck_id: this.deckId });
                 if (!res) return;
                 document.getElementById('deckName').innerText = res.deck_name || 'Deck sem nome';
+                this.topic = (res.deck_name || 'Deck sem nome').trim();
+                document.getElementById('topicInput').value = this.topic;
                 this.deckStructure = res.deck_structure || 'fatos';
                 const labels = { fatos: 'Fatos', perguntas: 'Perguntas', traducoes: 'Traduções' };
                 document.getElementById('deckStructureLabel').innerText = labels[this.deckStructure] || 'Fatos';
@@ -234,7 +241,8 @@
                 const old = btn.innerHTML;
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Gerando...';
-                const res = await this.api('generate_cards_preview', { deck_id: this.deckId });
+                const topicValue = (document.getElementById('topicInput')?.value || '').trim();
+                const res = await this.api('generate_cards_preview', { deck_id: this.deckId, topic: topicValue });
                 btn.disabled = false;
                 btn.innerHTML = old;
                 if (!res) return;
