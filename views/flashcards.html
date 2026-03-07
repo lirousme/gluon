@@ -854,7 +854,7 @@
                 this.stopAudio(); 
                 
                 const card = this.cards[this.currentIndex];
-                const scoreUpdatePromise = this.deckMode === 'aleatorio' ? this.registerScore(card) : Promise.resolve();
+                if (this.deckMode === 'aleatorio') this.registerScore(card);
 
                 if (this.deckMode === 'livro' && this.cards.length === 1) {
                     this.incrementBookReadProgress();
@@ -890,8 +890,12 @@
                         this.playCardAudio(this.cards[this.currentIndex].id, 'front');
                     }
                 } else if (this.deckMode === 'aleatorio') {
-                    await scoreUpdatePromise;
-                    await this.loadDeck();
+                    this.currentIndex = 0;
+                    this.renderCurrentCard();
+
+                    if (this.autoPlayEnabled && this.cards[this.currentIndex].has_audio_front === 1) {
+                        this.playCardAudio(this.cards[this.currentIndex].id, 'front');
+                    }
                 }
             },
 
