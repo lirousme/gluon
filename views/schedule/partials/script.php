@@ -711,6 +711,12 @@
                 return dates;
             },
 
+            getSevenDayWindowStartDate(anchorDate) {
+                const startDate = new Date(anchorDate);
+                startDate.setDate(startDate.getDate() - 3);
+                return startDate;
+            },
+
             getTimelineHTML() {
                 let labelsHTML = '';
                 for(let i=0; i<24; i++) {
@@ -812,20 +818,22 @@
                 const viewContainer = document.getElementById('viewContainer');
                 const selectedDate = this.currentDateObj;
                 const dStr = this.getLocalYYYYMMDD(selectedDate); 
-                const y = selectedDate.getFullYear();
-                const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
-                const d = String(selectedDate.getDate()).padStart(2, '0');
                 const label = document.getElementById('dateRangeLabel');
 
                 if (this.state.view === 'timeline') {
                     if (label) label.innerText = 'Exibição: 1 Dia';
                 } else {
-                    const endDate = new Date(selectedDate);
+                    const windowStartDate = this.getSevenDayWindowStartDate(selectedDate);
+                    const endDate = new Date(windowStartDate);
                     endDate.setDate(endDate.getDate() + 6);
+
+                    const startY = windowStartDate.getFullYear();
+                    const startM = String(windowStartDate.getMonth() + 1).padStart(2, '0');
+                    const startD = String(windowStartDate.getDate()).padStart(2, '0');
                     const endY = endDate.getFullYear();
                     const endM = String(endDate.getMonth() + 1).padStart(2, '0');
                     const endD = String(endDate.getDate()).padStart(2, '0');
-                    if (label) label.innerText = `Exibição: ${d}/${m}/${y} até ${endD}/${endM}/${endY}`;
+                    if (label) label.innerText = `Exibição: ${startD}/${startM}/${startY} até ${endD}/${endM}/${endY}`;
                 }
 
                 const unscheduledContainer = document.getElementById('unscheduledList');
@@ -861,11 +869,13 @@
                     }, 50);
 
                 } else if (this.state.view === 'kanban') {
-                    viewContainer.innerHTML = this.getKanbanHTML(selectedDate);
+                    const windowStartDate = this.getSevenDayWindowStartDate(selectedDate);
+                    viewContainer.innerHTML = this.getKanbanHTML(windowStartDate);
                     this.renderColumnsItems(scheduledItems, selectedDate, 'kanban');
                     setTimeout(() => this.customScroll.init(), 0);
                 } else if (this.state.view === 'list') {
-                    viewContainer.innerHTML = this.getListHTML(selectedDate);
+                    const windowStartDate = this.getSevenDayWindowStartDate(selectedDate);
+                    viewContainer.innerHTML = this.getListHTML(windowStartDate);
                     this.renderColumnsItems(scheduledItems, selectedDate, 'list');
                 }
 
@@ -954,7 +964,8 @@
             },
 
             renderColumnsItems(scheduledItems, startDate, viewType) {
-                const dates = this.getDatesArray(startDate, 7).map(d => this.getLocalYYYYMMDD(d));
+                const rangeStartDate = viewType === 'timeline' ? startDate : this.getSevenDayWindowStartDate(startDate);
+                const dates = this.getDatesArray(rangeStartDate, 7).map(d => this.getLocalYYYYMMDD(d));
                 
                 dates.forEach(dateStr => {
                     const col = document.querySelector(`.sortable-day-col[data-date="${dateStr}"]`);
