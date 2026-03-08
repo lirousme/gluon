@@ -68,7 +68,7 @@ type TINYINT DEFAULT 0,              -- 0 = Pasta, 1 = Arquivo de Código, 2 = A
 deck_mode VARCHAR(20) DEFAULT 'aleatorio';
 deck_front_language VARCHAR(10) NOT NULL DEFAULT 'pt-BR', -- Idioma da frente do card (pt-BR | en-US | en-GB)
 deck_back_language VARCHAR(10) NOT NULL DEFAULT 'en-GB', -- Idioma do verso do card (pt-BR | en-US | en-GB)
-deck_structure VARCHAR(20) NOT NULL DEFAULT 'perguntas', -- Estrutura da geração (fatos | perguntas | traducoes)
+deck_structure VARCHAR(20) NOT NULL DEFAULT 'perguntas', -- Estrutura da geração (fatos | perguntas | traducoes | parafrases)
 name_encrypted TEXT NOT NULL,        -- Nome do diretório criptografado
 default_view VARCHAR(10) DEFAULT 'grid',
 new_item_position VARCHAR(10) DEFAULT 'end',
@@ -133,7 +133,7 @@ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 TABELA: flashcards
 id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 directory_id INT UNSIGNED NOT NULL, -- FK referenciando directories (Deck)
-front_encrypted TEXT NOT NULL,      -- Frente do card criptografada
+front_encrypted TEXT DEFAULT NULL,   -- Frente do card criptografada (aceita NULL para cards apenas com verso)
 back_encrypted TEXT DEFAULT NULL,       -- Verso do card criptografado
 image_front_encrypted LONGTEXT DEFAULT NULL,
 image_back_encrypted LONGTEXT DEFAULT NULL,

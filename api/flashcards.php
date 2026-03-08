@@ -32,6 +32,11 @@ try {
     $pdo->exec("ALTER TABLE flashcards ADD COLUMN image_front_encrypted LONGTEXT DEFAULT NULL AFTER back_encrypted");
 } catch (PDOException $e) {}
 
+// Garante compatibilidade com cards "apenas verso": frente precisa aceitar NULL
+try {
+    $pdo->exec("ALTER TABLE flashcards MODIFY COLUMN front_encrypted TEXT DEFAULT NULL");
+} catch (PDOException $e) {}
+
 try {
     $pdo->exec("ALTER TABLE flashcards ADD COLUMN image_back_encrypted LONGTEXT DEFAULT NULL AFTER image_front_encrypted");
 } catch (PDOException $e) {}
@@ -117,7 +122,7 @@ function normalizeDeckLanguage($value, $default = 'pt-BR') {
 }
 
 function normalizeDeckStructure($value, $default = 'fatos') {
-    $allowed = ['fatos', 'perguntas', 'traducoes'];
+    $allowed = ['fatos', 'perguntas', 'traducoes', 'parafrases'];
     return in_array($value, $allowed, true) ? $value : $default;
 }
 
@@ -175,24 +180,33 @@ function buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyT
         $basePrompt = 'Me dê informações sobre o assunto "' . $deck_name . '", em uma tabela de uma única coluna, onde cada linha é uma informação. As informações devem ser de fácil compreensão. As informações devem ser óbvias evidentes e de rápida assimilação e de preferência curtas. Nenhuma informação pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. A ideia é conseguir vencer o paradoxo de Mênon, conseguir saber tudo sobre esse assunto, do nível para leigos ao nível expert. Caso não tenha muitas perguntas anteriores, vá pelo nível para leigos, e só aumente o nível se as perguntas anteriores já tiverem abrangido todo nível de conhecimento para leigos no assunto. Frases curtas.';
     } elseif ($deck_structure === 'perguntas') {
         $basePrompt = 'Me dê perguntas que induzam conhecimento hermenêutico, didático, teórico e lógico sobre o assunto "' . $deck_name . '", em uma tabela de duas colunas, onde cada linha é uma pergunta, a primeira coluna é a pergunta, e a segunda é a resposta. As perguntas e respostas devem ser óbvias evidentes e de rápida assimilação. Use linguagem simples e de fácil assimilação para pessoas de qualquer nível intelectual. As pessoas devem conseguir decodificar a informação codificada nas perguntas e respostas de forma assustadoramente fácil. As perguntas devem ser simples e de preferência curtas. Nenhuma pergunta pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. O objetivo é construir aprendizado progressivo sem redundância.';
+    } elseif ($deck_structure === 'parafrases') {
+        $basePrompt = 'gere 15 paráfrases dessa: "' . $deck_name . '"';
     } else {
         $basePrompt = 'Crie pares de tradução sobre o assunto "' . $deck_name . '" com frases curtas e úteis para memorização. Primeira coluna na língua da frente do deck, segunda coluna na língua do verso. Sem repetições e sem conteúdo de interface.';
     }
 
-    $systemPrompt = 'Você é um gerador de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estrutura fatos, deixe back vazio. Preserve exatamente caracteres Unicode.';
+    $systemPrompt = 'Você é um gerador de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estruturas fatos e parafrases, deixe back vazio. Preserve exatamente caracteres Unicode.';
 
     $userPrompt = $basePrompt
         . "
 
+REGRAS DE LIMPEZA DE SAÍDA:
+Nunca inclua menus, botões, placeholders, atalhos de teclado, termos de interface ou listas de símbolos soltas. Retorne apenas conteúdo pedagógico dos cards.";
+
+    if ($deck_structure === 'parafrases') {
+        $userPrompt .= "
+
+Não considere cards anteriores deste deck para gerar a resposta.";
+    } else {
+        $userPrompt .= "
+
 CARDS JÁ EXISTENTES NESTE DECK:
 " . $historyText
-        . "
-
-REGRAS DE LIMPEZA DE SAÍDA:
-Nunca inclua menus, botões, placeholders, atalhos de teclado, termos de interface ou listas de símbolos soltas. Retorne apenas conteúdo pedagógico dos cards."
-        . "
+            . "
 
 Gere 15 novos cards sem repetição de conteúdo com o histórico.";
+    }
 
     $requiresBack = in_array($deck_structure, ['perguntas', 'traducoes'], true);
     $backSchema = $requiresBack ? ['type' => 'string', 'minLength' => 1] : ['type' => 'string'];
@@ -250,7 +264,7 @@ function sanitizeGeneratedCards($rawContent, $deck_structure) {
         $front = trim((string)($card['front'] ?? ''));
         $back = trim((string)($card['back'] ?? ''));
         if ($front === '') continue;
-        if ($deck_structure === 'fatos') {
+        if (in_array($deck_structure, ['fatos', 'parafrases'], true)) {
             $back = '';
         } elseif ($back === '') {
             continue;
