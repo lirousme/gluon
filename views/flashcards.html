@@ -886,11 +886,20 @@
 
             async nextCard() {
                 if (this.cards.length === 0) return;
+
+                const card = this.cards[this.currentIndex];
+                const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
+                const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
+                const hasTwoSides = hasFront && hasBack;
+
+                if (hasTwoSides && !this.isFlipped) {
+                    this.flipCard();
+                    return;
+                }
                 
                 this.stopAudio(); 
                 
-                const card = this.cards[this.currentIndex];
-                if (this.deckMode === 'aleatorio') await this.registerScore(card);
+                if (this.deckMode === 'aleatorio' && !(hasTwoSides && this.isFlipped)) await this.registerScore(card);
 
                 if (this.deckMode === 'livro' && this.cards.length === 1) {
                     this.incrementBookReadProgress();
