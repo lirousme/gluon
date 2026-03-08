@@ -32,6 +32,11 @@ try {
     $pdo->exec("ALTER TABLE flashcards ADD COLUMN image_front_encrypted LONGTEXT DEFAULT NULL AFTER back_encrypted");
 } catch (PDOException $e) {}
 
+// Garante compatibilidade com cards "apenas verso": frente precisa aceitar NULL
+try {
+    $pdo->exec("ALTER TABLE flashcards MODIFY COLUMN front_encrypted TEXT DEFAULT NULL");
+} catch (PDOException $e) {}
+
 try {
     $pdo->exec("ALTER TABLE flashcards ADD COLUMN image_back_encrypted LONGTEXT DEFAULT NULL AFTER image_front_encrypted");
 } catch (PDOException $e) {}
