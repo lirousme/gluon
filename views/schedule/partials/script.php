@@ -1094,8 +1094,9 @@
                 const itemId = itemEl.getAttribute('data-id');
                 const toEl = evt.to;
                 const fromEl = evt.from;
+                const movedInsideSameColumn = toEl === fromEl && evt.oldIndex !== evt.newIndex;
                 
-                if (toEl === fromEl) {
+                if (toEl === fromEl && !movedInsideSameColumn) {
                     return;
                 }
                 
