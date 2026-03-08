@@ -1104,21 +1104,72 @@
                 } else {
                     const targetDateStr = toEl.getAttribute('data-date');
                     const item = this.state.directoryCache.get(Number(itemId));
-                    
-                    let newStart, newEnd;
-                    
-                    if (item && item.start_date && item.end_date) {
-                        const sTime = item.start_date.split(' ')[1];
-                        const eTime = item.end_date.split(' ')[1];
-                        newStart = `${targetDateStr} ${sTime}`;
-                        newEnd = `${targetDateStr} ${eTime}`;
-                    } else {
-                        newStart = `${targetDateStr} 08:00:00`;
-                        newEnd = `${targetDateStr} 09:00:00`;
+
+                    const durationMinutes = this.getItemDurationMinutes(item, targetDateStr);
+                    const orderedItems = Array.from(toEl.querySelectorAll('[data-id]'))
+                        .filter(el => !el.classList.contains('virtual-task'));
+                    const dropIndex = orderedItems.findIndex(el => el === itemEl);
+
+                    let startDate = null;
+                    if (dropIndex > 0) {
+                        const previousItemId = orderedItems[dropIndex - 1].getAttribute('data-id');
+                        const previousItem = this.state.directoryCache.get(Number(previousItemId));
+                        const previousRange = this.getItemRangeOnDate(previousItem, targetDateStr);
+                        if (previousRange?.end) {
+                            startDate = new Date(previousRange.end.getTime());
+                        }
+                    } else if (dropIndex === 0 && orderedItems.length > 1) {
+                        const nextItemId = orderedItems[1].getAttribute('data-id');
+                        const nextItem = this.state.directoryCache.get(Number(nextItemId));
+                        const nextRange = this.getItemRangeOnDate(nextItem, targetDateStr);
+                        if (nextRange?.start) {
+                            startDate = new Date(nextRange.start.getTime() - (durationMinutes * 60000));
+                        }
                     }
+
+                    if (!startDate) {
+                        const itemRange = this.getItemRangeOnDate(item, targetDateStr);
+                        if (itemRange?.start) {
+                            startDate = itemRange.start;
+                        } else {
+                            startDate = new Date(`${targetDateStr}T08:00:00`);
+                        }
+                    }
+
+                    const endDate = new Date(startDate.getTime() + (durationMinutes * 60000));
+                    const newStart = this.toMySQLFormat(startDate);
+                    const newEnd = this.toMySQLFormat(endDate);
                     
                     await this.updateItemDates(itemId, newStart, newEnd);
                 }
+            },
+
+            getItemRangeOnDate(item, dateStr) {
+                if (!item) return null;
+                const instances = this.getTaskInstancesOnDate(item, dateStr);
+                const realInstance = instances.find(inst => !inst.isProjection) || instances[0];
+                if (!realInstance?.start || !realInstance?.end) return null;
+                return {
+                    start: new Date(realInstance.start),
+                    end: new Date(realInstance.end)
+                };
+            },
+
+            getItemDurationMinutes(item, dateStr) {
+                const itemRange = this.getItemRangeOnDate(item, dateStr);
+                if (itemRange?.start && itemRange?.end) {
+                    return Math.max(1, Math.round((itemRange.end.getTime() - itemRange.start.getTime()) / 60000));
+                }
+
+                if (item?.start_date && item?.end_date) {
+                    const rawStart = new Date(item.start_date.replace(' ', 'T'));
+                    const rawEnd = new Date(item.end_date.replace(' ', 'T'));
+                    if (!Number.isNaN(rawStart.getTime()) && !Number.isNaN(rawEnd.getTime())) {
+                        return Math.max(1, Math.round((rawEnd.getTime() - rawStart.getTime()) / 60000));
+                    }
+                }
+
+                return 60;
             },
 
             startDragTimeline(e, el) {
