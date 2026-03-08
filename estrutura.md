@@ -133,7 +133,7 @@ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 TABELA: flashcards
 id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 directory_id INT UNSIGNED NOT NULL, -- FK referenciando directories (Deck)
-front_encrypted TEXT NOT NULL,      -- Frente do card criptografada
+front_encrypted TEXT DEFAULT NULL,   -- Frente do card criptografada (aceita NULL para cards apenas com verso)
 back_encrypted TEXT DEFAULT NULL,       -- Verso do card criptografado
 image_front_encrypted LONGTEXT DEFAULT NULL,
 image_back_encrypted LONGTEXT DEFAULT NULL,
