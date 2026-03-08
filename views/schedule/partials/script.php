@@ -1094,8 +1094,9 @@
                 const itemId = itemEl.getAttribute('data-id');
                 const toEl = evt.to;
                 const fromEl = evt.from;
-                
-                if (toEl === fromEl) {
+
+                const sameColumnWithoutPositionChange = toEl === fromEl && evt.oldIndex === evt.newIndex;
+                if (sameColumnWithoutPositionChange) {
                     return;
                 }
                 
@@ -1109,8 +1110,13 @@
                     const orderedItems = Array.from(toEl.querySelectorAll('[data-id]'))
                         .filter(el => !el.classList.contains('virtual-task'));
                     const dropIndex = orderedItems.findIndex(el => el === itemEl);
+                    if (dropIndex < 0) return;
 
                     let startDate = null;
+
+                    // Ao soltar em qualquer posição, o início precisa respeitar a nova ordem visual.
+                    // - Se houver item anterior: começa no fim do anterior.
+                    // - Se for o primeiro e houver próximo: termina quando o próximo começa.
                     if (dropIndex > 0) {
                         const previousItemId = orderedItems[dropIndex - 1].getAttribute('data-id');
                         const previousItem = this.state.directoryCache.get(Number(previousItemId));
