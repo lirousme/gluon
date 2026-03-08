@@ -1095,7 +1095,9 @@
                 const toEl = evt.to;
                 const fromEl = evt.from;
 
-                const sameColumnWithoutPositionChange = toEl === fromEl && evt.oldIndex === evt.newIndex;
+                const oldPosition = Number.isInteger(evt.oldDraggableIndex) ? evt.oldDraggableIndex : evt.oldIndex;
+                const newPosition = Number.isInteger(evt.newDraggableIndex) ? evt.newDraggableIndex : evt.newIndex;
+                const sameColumnWithoutPositionChange = toEl === fromEl && oldPosition === newPosition;
                 if (sameColumnWithoutPositionChange) {
                     return;
                 }
