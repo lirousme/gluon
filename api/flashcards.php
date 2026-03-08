@@ -738,8 +738,11 @@ elseif ($action === 'add_single') {
     $image_front = $input['image_front'] ?? null;
     $image_back = $input['image_back'] ?? null; 
 
-    if ($deck_id === 0 || (empty($front) && empty($image_front))) {
-        die(json_encode(['status' => 'error', 'message' => 'A frente do card precisa ter texto ou imagem.']));
+    $has_front = !empty($front) || !empty($image_front);
+    $has_back = !empty($back) || !empty($image_back);
+
+    if ($deck_id === 0 || (!$has_front && !$has_back)) {
+        die(json_encode(['status' => 'error', 'message' => 'Preencha pelo menos um lado do card com texto ou imagem.']));
     }
     if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) {
         die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
@@ -767,8 +770,11 @@ elseif ($action === 'update_card') {
     $image_front = $input['image_front'] ?? null;
     $image_back = $input['image_back'] ?? null;
 
-    if ($card_id === 0 || (empty($front) && empty($image_front))) {
-        die(json_encode(['status' => 'error', 'message' => 'Dados inválidos. A frente do card precisa ter texto ou imagem.']));
+    $has_front = !empty($front) || !empty($image_front);
+    $has_back = !empty($back) || !empty($image_back);
+
+    if ($card_id === 0 || (!$has_front && !$has_back)) {
+        die(json_encode(['status' => 'error', 'message' => 'Dados inválidos. Preencha pelo menos um lado do card com texto ou imagem.']));
     }
 
     if (!verifyCardOwnership($pdo, $card_id, $user_id)) {
