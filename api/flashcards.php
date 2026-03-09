@@ -181,7 +181,7 @@ function buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyT
     } elseif ($deck_structure === 'perguntas') {
         $basePrompt = 'Me dê perguntas que induzam conhecimento hermenêutico, didático, teórico e lógico sobre o assunto "' . $deck_name . '", em uma tabela de duas colunas, onde cada linha é uma pergunta, a primeira coluna é a pergunta, e a segunda é a resposta. As perguntas e respostas devem ser óbvias evidentes e de rápida assimilação. Use linguagem simples e de fácil assimilação para pessoas de qualquer nível intelectual. As pessoas devem conseguir decodificar a informação codificada nas perguntas e respostas de forma assustadoramente fácil. As perguntas devem ser simples e de preferência curtas. Nenhuma pergunta pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. O objetivo é construir aprendizado progressivo sem redundância.';
     } elseif ($deck_structure === 'parafrases') {
-        $basePrompt = 'gere 15 paráfrases dessa: "' . $deck_name . '"';
+        $basePrompt = 'gere 15 paráfrases dessa: "' . $deck_name . '" (Num tom de escrita de José Saramago)';
     } else {
         $basePrompt = 'Crie pares de tradução sobre o assunto "' . $deck_name . '" com frases curtas e úteis para memorização. Primeira coluna na língua da frente do deck, segunda coluna na língua do verso. Sem repetições e sem conteúdo de interface.';
     }
