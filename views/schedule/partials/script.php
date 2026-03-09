@@ -1144,7 +1144,14 @@
                     startDate = new Date(nextRange.start.getTime() - (durationMinutes * 60000));
                 } else {
                     const currentRange = this.getItemRangeOnDate(movedItem, targetDateStr, movedEl);
-                    startDate = currentRange?.start ? new Date(currentRange.start.getTime()) : new Date(`${targetDateStr}T08:00:00`);
+                    if (currentRange?.start) {
+                        const hour = String(currentRange.start.getHours()).padStart(2, '0');
+                        const minute = String(currentRange.start.getMinutes()).padStart(2, '0');
+                        const second = String(currentRange.start.getSeconds()).padStart(2, '0');
+                        startDate = new Date(`${targetDateStr}T${hour}:${minute}:${second}`);
+                    } else {
+                        startDate = new Date(`${targetDateStr}T08:00:00`);
+                    }
                 }
 
                 const endDate = new Date(startDate.getTime() + (durationMinutes * 60000));
