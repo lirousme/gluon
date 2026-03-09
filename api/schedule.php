@@ -49,13 +49,26 @@ if ($action === 'update_times') {
     try {
         $pdo->beginTransaction();
 
-        $stmtBefore = $pdo->prepare("SELECT start_date, end_date FROM directories WHERE id = ? AND user_id = ?");
+        $stmtBefore = $pdo->prepare("SELECT start_date, end_date, is_recurring FROM directories WHERE id = ? AND user_id = ?");
         $stmtBefore->execute([$id, $user_id]);
         $before = $stmtBefore->fetch(PDO::FETCH_ASSOC);
 
         if (!$before) {
             $pdo->rollBack();
             die(json_encode(['status' => 'error', 'message' => 'Tarefa não encontrada.']));
+        }
+
+        if ((int)($before['is_recurring'] ?? 0) === 1 && $start_date && $end_date && $before['start_date'] && $before['end_date']) {
+            $baseStart = new DateTime($before['start_date']);
+            $baseEnd = new DateTime($before['end_date']);
+            $newStart = new DateTime($start_date);
+            $newEnd = new DateTime($end_date);
+
+            $baseStart->setTime((int)$newStart->format('H'), (int)$newStart->format('i'), 0);
+            $baseEnd->setTime((int)$newEnd->format('H'), (int)$newEnd->format('i'), 0);
+
+            $start_date = $baseStart->format('Y-m-d H:i:s');
+            $end_date = $baseEnd->format('Y-m-d H:i:s');
         }
 
         $stmt = $pdo->prepare("UPDATE directories SET start_date = ?, end_date = ? WHERE id = ? AND user_id = ?");
@@ -67,7 +80,7 @@ if ($action === 'update_times') {
 
         if ($rec && $start_date) {
             $newStartTime = (new DateTime($start_date))->format('H:i:s');
-            $newEndTime = null;
+            $newEndTime = $end_date ? (new DateTime($end_date))->format('H:i:s') : null;
 
             if ($rec['type'] === 'hourly') {
                 $newEndTime = shiftTimeKeepingWindow($rec['time_start'], $rec['time_end'], $newStartTime);
