@@ -1106,29 +1106,33 @@
                     await this.updateItemDates(itemId, null, null);
                 } else {
                     const targetDateStr = toEl.getAttribute('data-date');
-                    const item = this.state.directoryCache.get(Number(itemId));
+                    await this.recalculateColumnTimes(toEl, targetDateStr);
+                }
+            },
+
+            async recalculateColumnTimes(columnEl, targetDateStr) {
+                const orderedItems = Array.from(columnEl.querySelectorAll('[data-id]'))
+                    .filter(el => !el.classList.contains('virtual-task'));
+
+                if (orderedItems.length === 0) return;
+
+                const updates = [];
+
+                for (let idx = 0; idx < orderedItems.length; idx++) {
+                    const el = orderedItems[idx];
+                    const id = Number(el.getAttribute('data-id'));
+                    const item = this.state.directoryCache.get(id);
+                    if (!item) continue;
 
                     const durationMinutes = this.getItemDurationMinutes(item, targetDateStr);
-                    const orderedItems = Array.from(toEl.querySelectorAll('[data-id]'))
-                        .filter(el => !el.classList.contains('virtual-task'));
-                    const dropIndex = orderedItems.findIndex(el => el === itemEl);
-                    if (dropIndex < 0) return;
+                    let startDate;
+                    const previousUpdate = updates.length > 0 ? updates[updates.length - 1] : null;
 
-                    let startDate = null;
-
-                    // Ao soltar em qualquer posição, o início precisa respeitar a nova ordem visual.
-                    // - Se houver item anterior: começa no fim do anterior.
-                    // - Se for o primeiro e houver próximo: termina quando o próximo começa.
-                    if (dropIndex > 0) {
-                        const previousItemId = orderedItems[dropIndex - 1].getAttribute('data-id');
-                        const previousItem = this.state.directoryCache.get(Number(previousItemId));
-                        const previousRange = this.getItemRangeOnDate(previousItem, targetDateStr);
-                        if (previousRange?.end) {
-                            startDate = new Date(previousRange.end.getTime());
-                        }
-                    } else if (dropIndex === 0 && orderedItems.length > 1) {
-                        const nextItemId = orderedItems[1].getAttribute('data-id');
-                        const nextItem = this.state.directoryCache.get(Number(nextItemId));
+                    if (previousUpdate) {
+                        startDate = new Date(previousUpdate.endDate.getTime());
+                    } else if (orderedItems.length > 1) {
+                        const nextId = Number(orderedItems[1].getAttribute('data-id'));
+                        const nextItem = this.state.directoryCache.get(nextId);
                         const nextRange = this.getItemRangeOnDate(nextItem, targetDateStr);
                         if (nextRange?.start) {
                             startDate = new Date(nextRange.start.getTime() - (durationMinutes * 60000));
@@ -1136,20 +1140,19 @@
                     }
 
                     if (!startDate) {
-                        const itemRange = this.getItemRangeOnDate(item, targetDateStr);
-                        if (itemRange?.start) {
-                            startDate = itemRange.start;
-                        } else {
-                            startDate = new Date(`${targetDateStr}T08:00:00`);
-                        }
+                        const currentRange = this.getItemRangeOnDate(item, targetDateStr);
+                        startDate = currentRange?.start ? new Date(currentRange.start.getTime()) : new Date(`${targetDateStr}T08:00:00`);
                     }
 
                     const endDate = new Date(startDate.getTime() + (durationMinutes * 60000));
-                    const newStart = this.toMySQLFormat(startDate);
-                    const newEnd = this.toMySQLFormat(endDate);
-                    
-                    await this.updateItemDates(itemId, newStart, newEnd);
+                    updates.push({ id, startDate, endDate });
                 }
+
+                for (const upd of updates) {
+                    await this.updateItemDates(upd.id, upd.startDate, upd.endDate, false);
+                }
+
+                await this.loadData();
             },
 
             getItemRangeOnDate(item, dateStr) {
@@ -1309,14 +1312,14 @@
                     ('0' + dateObj.getMinutes()).slice(-2) + ':00';
             },
 
-            async updateItemDates(id, startVal, endVal) {
+            async updateItemDates(id, startVal, endVal, shouldReload = true) {
                 const payload = { 
                     id: id, 
                     start_date: this.toMySQLFormat(startVal), 
                     end_date: this.toMySQLFormat(endVal) 
                 };
                 await this.api('schedule', 'update_times', payload);
-                await this.loadData();
+                if (shouldReload) await this.loadData();
             },
 
             setupFormListeners() {
