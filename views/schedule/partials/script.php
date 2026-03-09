@@ -992,16 +992,17 @@
                 const timeStr = `${inst.start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${inst.end.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
                 const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
 
-                const projectionClass = inst.isProjection ? 'virtual-task' : 'cursor-grab';
-                const borderStyle = inst.isProjection ? '' : `border-left: 4px solid ${fromColor};`;
-                const handleHTML = inst.isProjection ? '' : `<i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>`;
+                const isLockedProjection = inst.isProjection && item.rec_type === 'hourly';
+                const projectionClass = isLockedProjection ? 'virtual-task' : 'cursor-grab';
+                const borderStyle = isLockedProjection ? '' : `border-left: 4px solid ${fromColor};`;
+                const handleHTML = isLockedProjection ? '' : `<i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>`;
 
                 const instTimeStr = inst.start.getHours().toString().padStart(2,'0') + ':' + inst.start.getMinutes().toString().padStart(2,'0') + ':00';
                 const contextDateStr = `${dateStr} ${instTimeStr}`;
 
                 if (viewType === 'kanban') {
                     return `
-                    <div data-id="${item.id}" class="kanban-item bg-slate-700/80 border ${inst.isProjection ? 'border-slate-500' : 'border-slate-600'} p-2.5 rounded-lg shadow-sm hover:bg-slate-600 transition-colors flex flex-col group relative overflow-hidden mb-2 ${projectionClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                    <div data-id="${item.id}" class="kanban-item bg-slate-700/80 border ${isLockedProjection ? 'border-slate-500' : 'border-slate-600'} p-2.5 rounded-lg shadow-sm hover:bg-slate-600 transition-colors flex flex-col group relative overflow-hidden mb-2 ${projectionClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                         ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                         <div class="flex justify-between items-start z-10 relative">
                             <div class="flex items-center gap-1.5 truncate w-full pr-5">
@@ -1016,7 +1017,7 @@
                     </div>`;
                 } else {
                     return `
-                    <div data-id="${item.id}" class="list-item bg-slate-700/50 hover:bg-slate-700 border ${inst.isProjection ? 'border-slate-500' : 'border-slate-600/50'} p-3 rounded-lg shadow-sm transition-colors flex items-center justify-between group relative overflow-hidden ${projectionClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                    <div data-id="${item.id}" class="list-item bg-slate-700/50 hover:bg-slate-700 border ${isLockedProjection ? 'border-slate-500' : 'border-slate-600/50'} p-3 rounded-lg shadow-sm transition-colors flex items-center justify-between group relative overflow-hidden ${projectionClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                         ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                         <div class="flex items-center gap-3 z-10 relative overflow-hidden flex-1 pr-2">
                             ${handleHTML}
