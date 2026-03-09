@@ -46,6 +46,7 @@ remember_token VARCHAR(255) DEFAULT NULL,
 root_view VARCHAR(10) DEFAULT 'grid',
 root_new_item_position VARCHAR(10) DEFAULT 'end',
 copied_directory_id INT UNSIGNED DEFAULT NULL, -- Guarda o ID do diretório copiado
+home_directory_id INT UNSIGNED DEFAULT NULL, -- Guarda o ID da agenda definida como página inicial
 encrypted_data TEXT DEFAULT NULL,
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -54,7 +55,9 @@ INDEX idx_username (username),
 INDEX idx_email (email),
 INDEX idx_remember_token (remember_token),
 INDEX fk_users_copied_directory (copied_directory_id),
-FOREIGN KEY (copied_directory_id) REFERENCES directories(id) ON DELETE SET NULL
+INDEX fk_users_home_directory (home_directory_id),
+FOREIGN KEY (copied_directory_id) REFERENCES directories(id) ON DELETE SET NULL,
+FOREIGN KEY (home_directory_id) REFERENCES directories(id) ON DELETE SET NULL
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================
