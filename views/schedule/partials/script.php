@@ -992,7 +992,7 @@
                 const timeStr = `${inst.start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${inst.end.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
                 const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
 
-                const projectionClass = 'cursor-grab';
+                const projectionClass = `${inst.isProjection ? 'virtual-task' : ''} cursor-grab`;
                 const borderStyle = `border-left: 4px solid ${fromColor};`;
                 const handleHTML = `<i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>`;
 
@@ -1074,8 +1074,6 @@
                     ghostClass: 'sortable-ghost',
                     dragClass: 'sortable-drag',
                     delay: 100, delayOnTouchOnly: true,
-                    filter: '.virtual-task', 
-                    preventOnFilter: false,
                     onEnd: (evt) => this.handleSortableEnd(evt)
                 };
 
@@ -1124,8 +1122,7 @@
             },
 
             async recalculateColumnTimes(columnEl, targetDateStr, shouldReload = true) {
-                const orderedItems = Array.from(columnEl.querySelectorAll('[data-id]'))
-                    .filter(el => !el.classList.contains('virtual-task'));
+                const orderedItems = Array.from(columnEl.querySelectorAll('[data-id]'));
 
                 if (orderedItems.length === 0) return;
 
@@ -1158,11 +1155,20 @@
                     }
 
                     const endDate = new Date(startDate.getTime() + (durationMinutes * 60000));
-                    updates.push({ id, startDate, endDate });
+                    updates.push({
+                        id,
+                        startDate,
+                        endDate,
+                        contextStart: el.getAttribute('data-context-start') || null,
+                        contextEnd: el.getAttribute('data-context-end') || null
+                    });
                 }
 
                 for (const upd of updates) {
-                    await this.updateItemDates(upd.id, upd.startDate, upd.endDate, false);
+                    await this.updateItemDates(upd.id, upd.startDate, upd.endDate, false, {
+                        contextStart: upd.contextStart,
+                        contextEnd: upd.contextEnd
+                    });
                 }
 
                 if (shouldReload) await this.loadData();
@@ -1353,7 +1359,7 @@
                 return this.toMySQLFormat(merged);
             },
 
-            async updateItemDates(id, startVal, endVal, shouldReload = true) {
+            async updateItemDates(id, startVal, endVal, shouldReload = true, options = {}) {
                 const item = this.state.directoryCache.get(Number(id));
                 let formattedStart = this.toMySQLFormat(startVal);
                 let formattedEnd = this.toMySQLFormat(endVal);
@@ -1372,7 +1378,9 @@
                 const payload = { 
                     id: id, 
                     start_date: formattedStart,
-                    end_date: formattedEnd
+                    end_date: formattedEnd,
+                    context_start: options.contextStart || null,
+                    context_end: options.contextEnd || null
                 };
                 await this.api('schedule', 'update_times', payload);
                 if (shouldReload) await this.loadData();
