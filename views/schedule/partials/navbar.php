@@ -35,6 +35,10 @@
                     <button onclick="scheduleApp.createPortal(); scheduleApp.toggleMobileViewMenu()" id="btn-create-portal" class="w-full text-left px-4 py-2.5 text-sm text-fuchsia-400 hover:bg-slate-700 hover:text-fuchsia-300 flex items-center gap-3 transition-colors hidden">
                         <i class="fa-solid fa-door-open w-5 text-center text-lg"></i> <span class="font-medium">Criar Portal</span>
                     </button>
+
+                    <button onclick="scheduleApp.deleteOverdueTasksFromMenu()" class="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-slate-700 hover:text-red-300 flex items-center gap-3 transition-colors border-t border-slate-700/50 mt-1">
+                        <i class="fa-solid fa-trash-can-clock w-5 text-center text-lg"></i> <span class="font-medium">Apagar tarefas vencidas</span>
+                    </button>
                 </div>
             </div>
 

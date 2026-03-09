@@ -361,6 +361,21 @@
                 }
             },
 
+            async deleteOverdueTasksFromMenu() {
+                this.toggleMobileViewMenu();
+
+                const confirmed = window.confirm('Deseja apagar todas as tarefas vencidas desta agenda?');
+                if (!confirmed) return;
+
+                const response = await this.api('schedule', 'delete_overdue_tasks', { id: this.agendaId });
+                if (response && response.status === 'success') {
+                    this.showToast(response.message, 'success');
+                    await this.loadData();
+                } else {
+                    this.showToast(response ? response.message : 'Erro ao apagar tarefas vencidas', 'error');
+                }
+            },
+
             getLocalYYYYMMDD(dateObj) {
                 const y = dateObj.getFullYear();
                 const m = String(dateObj.getMonth() + 1).padStart(2, '0');
