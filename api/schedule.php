@@ -130,16 +130,17 @@ function appendUniqueExceptions(PDO $pdo, int $directoryId, array $newExceptions
 
 function collectOverdueRecurrenceExceptions(array $task, DateTime $now): array {
     $exceptions = [];
+    $tz = new DateTimeZone('America/Sao_Paulo');
 
     if (empty($task['start_date'])) return $exceptions;
 
-    $start = new DateTime($task['start_date']);
-    $end = !empty($task['end_date']) ? new DateTime($task['end_date']) : clone $start;
+    $start = new DateTime($task['start_date'], $tz);
+    $end = !empty($task['end_date']) ? new DateTime($task['end_date'], $tz) : clone $start;
     $durationSeconds = max(0, $end->getTimestamp() - $start->getTimestamp());
 
     $type = $task['rec_type'] ?? '';
     $interval = max(1, (int)($task['rec_interval'] ?? 1));
-    $recurrenceEnd = !empty($task['rec_end']) ? new DateTime($task['rec_end']) : null;
+    $recurrenceEnd = !empty($task['rec_end']) ? new DateTime($task['rec_end'], $tz) : null;
 
     if ($type === 'hourly') {
         $timeStart = !empty($task['rec_time_start']) ? substr($task['rec_time_start'], 0, 5) : $start->format('H:i');
@@ -150,7 +151,7 @@ function collectOverdueRecurrenceExceptions(array $task, DateTime $now): array {
         $windowStartMin = ($sHour * 60) + $sMin;
         $windowEndMin = ($eHour * 60) + $eMin;
 
-        $dayCursor = new DateTime($start->format('Y-m-d') . ' 00:00:00');
+        $dayCursor = new DateTime($start->format('Y-m-d') . ' 00:00:00', $tz);
         $maxLoops = 2000;
         $loops = 0;
 
@@ -164,7 +165,7 @@ function collectOverdueRecurrenceExceptions(array $task, DateTime $now): array {
                 for ($mins = $windowStartMin; $mins <= $windowEndMin; $mins += $interval * 60) {
                     $hour = (int)floor($mins / 60);
                     $min = $mins % 60;
-                    $occurrenceStart = new DateTime($dayCursor->format('Y-m-d') . sprintf(' %02d:%02d:00', $hour, $min));
+                    $occurrenceStart = new DateTime($dayCursor->format('Y-m-d') . sprintf(' %02d:%02d:00', $hour, $min), $tz);
                     $occurrenceEnd = (clone $occurrenceStart)->modify("+{$durationSeconds} seconds");
 
                     if ($occurrenceEnd < $now) {
@@ -186,7 +187,7 @@ function collectOverdueRecurrenceExceptions(array $task, DateTime $now): array {
 
         foreach ($customDates as $dateStr) {
             try {
-                $occurrenceStart = new DateTime($dateStr . ' ' . $start->format('H:i:s'));
+                $occurrenceStart = new DateTime($dateStr . ' ' . $start->format('H:i:s'), $tz);
                 if ($recurrenceEnd && $occurrenceStart > $recurrenceEnd) continue;
 
                 $occurrenceEnd = (clone $occurrenceStart)->modify("+{$durationSeconds} seconds");
@@ -353,7 +354,7 @@ else if ($action === 'delete_overdue_tasks') {
         $stmtRecurring->execute([$user_id, $agenda_id]);
         $recurringTasks = $stmtRecurring->fetchAll(PDO::FETCH_ASSOC);
 
-        $now = new DateTime('now');
+        $now = nowInBrasilia($brasiliaTz);
         foreach ($recurringTasks as $task) {
             $newExceptions = collectOverdueRecurrenceExceptions($task, $now);
             $recurrenceOccurrencesRemoved += appendUniqueExceptions($pdo, (int)$task['id'], $newExceptions);
