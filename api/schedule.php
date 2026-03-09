@@ -20,6 +20,14 @@ $user_id = $_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? '';
 
+
+$brasiliaTz = new DateTimeZone('America/Sao_Paulo');
+
+function nowInBrasilia(?DateTimeZone $tz = null): DateTime {
+    $timezone = $tz ?: new DateTimeZone('America/Sao_Paulo');
+    return new DateTime('now', $timezone);
+}
+
 function shiftTimeKeepingWindow(?string $oldStart, ?string $oldEnd, string $newStart): ?string {
     if (!$oldStart || !$oldEnd) return null;
 
