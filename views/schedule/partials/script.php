@@ -1122,19 +1122,7 @@
             },
 
             async recalculateColumnTimes(columnEl, targetDateStr, shouldReload = true) {
-                const rawOrderedItems = Array.from(columnEl.querySelectorAll('[data-id]'));
-
-                // Em recorrências do tipo hourly podem existir várias projeções do mesmo ID
-                // na mesma coluna. Atualizar o mesmo diretório múltiplas vezes na sequência
-                // causa efeitos colaterais (janela de repetição encolher/deslocar).
-                // Por isso mantemos apenas a primeira ocorrência visível de cada ID.
-                const seenIds = new Set();
-                const orderedItems = rawOrderedItems.filter((el) => {
-                    const id = Number(el.getAttribute('data-id'));
-                    if (!id || seenIds.has(id)) return false;
-                    seenIds.add(id);
-                    return true;
-                });
+                const orderedItems = Array.from(columnEl.querySelectorAll('[data-id]'));
 
                 if (orderedItems.length === 0) return;
 
@@ -1356,36 +1344,10 @@
                     ('0' + dateObj.getMinutes()).slice(-2) + ':00';
             },
 
-            applyTimeToExistingDate(baseDateTime, updatedDateTime) {
-                if (!baseDateTime || !updatedDateTime) return null;
-
-                const baseDate = typeof baseDateTime === 'string' ? new Date(baseDateTime.replace(' ', 'T')) : baseDateTime;
-                const updated = typeof updatedDateTime === 'string' ? new Date(updatedDateTime.replace(' ', 'T')) : updatedDateTime;
-
-                if (!baseDate || !updated || Number.isNaN(baseDate.getTime()) || Number.isNaN(updated.getTime())) {
-                    return null;
-                }
-
-                const merged = new Date(baseDate.getTime());
-                merged.setHours(updated.getHours(), updated.getMinutes(), 0, 0);
-                return this.toMySQLFormat(merged);
-            },
 
             async updateItemDates(id, startVal, endVal, shouldReload = true, options = {}) {
-                const item = this.state.directoryCache.get(Number(id));
                 let formattedStart = this.toMySQLFormat(startVal);
                 let formattedEnd = this.toMySQLFormat(endVal);
-
-                // Em tarefas recorrentes, preservar a data-base e alterar apenas o horário
-                // evita quebrar a régua de repetição ao reorganizar em dias projetados.
-                if (item?.is_recurring === 1 && formattedStart && formattedEnd && item.start_date && item.end_date) {
-                    const mergedStart = this.applyTimeToExistingDate(item.start_date, formattedStart);
-                    const mergedEnd = this.applyTimeToExistingDate(item.end_date, formattedEnd);
-                    if (mergedStart && mergedEnd) {
-                        formattedStart = mergedStart;
-                        formattedEnd = mergedEnd;
-                    }
-                }
 
                 const payload = { 
                     id: id, 

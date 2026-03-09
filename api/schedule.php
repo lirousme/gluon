@@ -58,19 +58,6 @@ if ($action === 'update_times') {
             die(json_encode(['status' => 'error', 'message' => 'Tarefa não encontrada.']));
         }
 
-        if ((int)($before['is_recurring'] ?? 0) === 1 && $start_date && $end_date && $before['start_date'] && $before['end_date']) {
-            $baseStart = new DateTime($before['start_date']);
-            $baseEnd = new DateTime($before['end_date']);
-            $newStart = new DateTime($start_date);
-            $newEnd = new DateTime($end_date);
-
-            $baseStart->setTime((int)$newStart->format('H'), (int)$newStart->format('i'), 0);
-            $baseEnd->setTime((int)$newEnd->format('H'), (int)$newEnd->format('i'), 0);
-
-            $start_date = $baseStart->format('Y-m-d H:i:s');
-            $end_date = $baseEnd->format('Y-m-d H:i:s');
-        }
-
         $stmt = $pdo->prepare("UPDATE directories SET start_date = ?, end_date = ? WHERE id = ? AND user_id = ?");
         $stmt->execute([$start_date, $end_date, $id, $user_id]);
 
