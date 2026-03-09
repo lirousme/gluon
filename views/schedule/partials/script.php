@@ -1102,16 +1102,29 @@
                 if (sameColumnWithoutPositionChange) {
                     return;
                 }
-                
+
+                const isDayColumn = (el) => el && el.classList && el.classList.contains('sortable-day-col');
+                const affectedColumns = [];
+                if (isDayColumn(toEl)) affectedColumns.push(toEl);
+                if (isDayColumn(fromEl) && fromEl !== toEl) affectedColumns.push(fromEl);
+
                 if (toEl.id === 'unscheduledList') {
                     await this.updateItemDates(itemId, null, null);
+                    if (isDayColumn(fromEl)) {
+                        await this.recalculateColumnTimes(fromEl, fromEl.getAttribute('data-date'), false);
+                        await this.loadData();
+                    }
                 } else {
-                    const targetDateStr = toEl.getAttribute('data-date');
-                    await this.recalculateColumnTimes(toEl, targetDateStr);
+                    for (let idx = 0; idx < affectedColumns.length; idx++) {
+                        const col = affectedColumns[idx];
+                        const dateStr = col.getAttribute('data-date');
+                        await this.recalculateColumnTimes(col, dateStr, false);
+                    }
+                    await this.loadData();
                 }
             },
 
-            async recalculateColumnTimes(columnEl, targetDateStr) {
+            async recalculateColumnTimes(columnEl, targetDateStr, shouldReload = true) {
                 const orderedItems = Array.from(columnEl.querySelectorAll('[data-id]'))
                     .filter(el => !el.classList.contains('virtual-task'));
 
@@ -1153,7 +1166,7 @@
                     await this.updateItemDates(upd.id, upd.startDate, upd.endDate, false);
                 }
 
-                await this.loadData();
+                if (shouldReload) await this.loadData();
             },
 
             getItemRangeOnDate(item, dateStr) {
@@ -1313,11 +1326,41 @@
                     ('0' + dateObj.getMinutes()).slice(-2) + ':00';
             },
 
+            applyTimeToExistingDate(baseDateTime, updatedDateTime) {
+                if (!baseDateTime || !updatedDateTime) return null;
+
+                const baseDate = typeof baseDateTime === 'string' ? new Date(baseDateTime.replace(' ', 'T')) : baseDateTime;
+                const updated = typeof updatedDateTime === 'string' ? new Date(updatedDateTime.replace(' ', 'T')) : updatedDateTime;
+
+                if (!baseDate || !updated || Number.isNaN(baseDate.getTime()) || Number.isNaN(updated.getTime())) {
+                    return null;
+                }
+
+                const merged = new Date(baseDate.getTime());
+                merged.setHours(updated.getHours(), updated.getMinutes(), 0, 0);
+                return this.toMySQLFormat(merged);
+            },
+
             async updateItemDates(id, startVal, endVal, shouldReload = true) {
+                const item = this.state.directoryCache.get(Number(id));
+                let formattedStart = this.toMySQLFormat(startVal);
+                let formattedEnd = this.toMySQLFormat(endVal);
+
+                // Em tarefas recorrentes, preservar a data-base e alterar apenas o horário
+                // evita quebrar a régua de repetição ao reorganizar em dias projetados.
+                if (item?.is_recurring === 1 && formattedStart && formattedEnd && item.start_date && item.end_date) {
+                    const mergedStart = this.applyTimeToExistingDate(item.start_date, formattedStart);
+                    const mergedEnd = this.applyTimeToExistingDate(item.end_date, formattedEnd);
+                    if (mergedStart && mergedEnd) {
+                        formattedStart = mergedStart;
+                        formattedEnd = mergedEnd;
+                    }
+                }
+
                 const payload = { 
                     id: id, 
-                    start_date: this.toMySQLFormat(startVal), 
-                    end_date: this.toMySQLFormat(endVal) 
+                    start_date: formattedStart,
+                    end_date: formattedEnd
                 };
                 await this.api('schedule', 'update_times', payload);
                 if (shouldReload) await this.loadData();
