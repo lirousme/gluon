@@ -1090,6 +1090,7 @@
             async handleSortableEnd(evt) {
                 const itemEl = evt.item;
                 const itemId = itemEl.getAttribute('data-id');
+                const movedItemContextStart = itemEl.getAttribute('data-context-start') || null;
                 const toEl = evt.to;
                 const fromEl = evt.from;
 
@@ -1108,20 +1109,26 @@
                 if (toEl.id === 'unscheduledList') {
                     await this.updateItemDates(itemId, null, null);
                     if (isDayColumn(fromEl)) {
-                        await this.recalculateColumnTimes(fromEl, fromEl.getAttribute('data-date'), false);
+                        await this.recalculateColumnTimes(fromEl, fromEl.getAttribute('data-date'), false, {
+                            movedItemId: Number(itemId),
+                            movedItemContextStart
+                        });
                         await this.loadData();
                     }
                 } else {
                     for (let idx = 0; idx < affectedColumns.length; idx++) {
                         const col = affectedColumns[idx];
                         const dateStr = col.getAttribute('data-date');
-                        await this.recalculateColumnTimes(col, dateStr, false);
+                        await this.recalculateColumnTimes(col, dateStr, false, {
+                            movedItemId: Number(itemId),
+                            movedItemContextStart
+                        });
                     }
                     await this.loadData();
                 }
             },
 
-            async recalculateColumnTimes(columnEl, targetDateStr, shouldReload = true) {
+            async recalculateColumnTimes(columnEl, targetDateStr, shouldReload = true, options = {}) {
                 const orderedItems = Array.from(columnEl.querySelectorAll('[data-id]'));
 
                 if (orderedItems.length === 0) return;
@@ -1133,6 +1140,16 @@
                     const id = Number(el.getAttribute('data-id'));
                     const item = this.state.directoryCache.get(id);
                     if (!item) continue;
+
+                    const isVirtual = el.classList.contains('virtual-task');
+                    const elContextStart = el.getAttribute('data-context-start') || null;
+                    const isMovedVirtual =
+                        isVirtual &&
+                        Number(options.movedItemId || 0) === id &&
+                        (options.movedItemContextStart || null) === elContextStart;
+
+                    // Evita recriar/alterar em massa projeções recorrentes não arrastadas.
+                    if (isVirtual && !isMovedVirtual) continue;
 
                     const durationMinutes = this.getItemDurationMinutes(item, targetDateStr, el);
                     let startDate;
