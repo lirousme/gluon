@@ -1091,6 +1091,7 @@
                 const itemEl = evt.item;
                 const itemId = itemEl.getAttribute('data-id');
                 const movedItemContextStart = itemEl.getAttribute('data-context-start') || null;
+                const movedItemContextEnd = itemEl.getAttribute('data-context-end') || null;
                 const toEl = evt.to;
                 const fromEl = evt.from;
 
@@ -1101,31 +1102,53 @@
                     return;
                 }
 
-                const isDayColumn = (el) => el && el.classList && el.classList.contains('sortable-day-col');
-                const affectedColumns = [];
-                if (isDayColumn(toEl)) affectedColumns.push(toEl);
-                if (isDayColumn(fromEl) && fromEl !== toEl) affectedColumns.push(fromEl);
-
                 if (toEl.id === 'unscheduledList') {
                     await this.updateItemDates(itemId, null, null);
-                    if (isDayColumn(fromEl)) {
-                        await this.recalculateColumnTimes(fromEl, fromEl.getAttribute('data-date'), false, {
-                            movedItemId: Number(itemId),
-                            movedItemContextStart
-                        });
-                        await this.loadData();
-                    }
                 } else {
-                    for (let idx = 0; idx < affectedColumns.length; idx++) {
-                        const col = affectedColumns[idx];
-                        const dateStr = col.getAttribute('data-date');
-                        await this.recalculateColumnTimes(col, dateStr, false, {
-                            movedItemId: Number(itemId),
-                            movedItemContextStart
-                        });
+                    const dateStr = toEl.getAttribute('data-date');
+                    const movedItem = this.state.directoryCache.get(Number(itemId));
+                    if (!movedItem || !dateStr) {
+                        await this.loadData();
+                        return;
                     }
+
+                    const anchoredRange = this.getAnchoredRangeForMovedItem(toEl, itemEl, movedItem, dateStr);
+                    await this.updateItemDates(itemId, anchoredRange.startDate, anchoredRange.endDate, false, {
+                        contextStart: movedItemContextStart,
+                        contextEnd: movedItemContextEnd
+                    });
+
                     await this.loadData();
                 }
+            },
+
+            getAnchoredRangeForMovedItem(columnEl, movedEl, movedItem, targetDateStr) {
+                const orderedItems = Array.from(columnEl.querySelectorAll('[data-id]'));
+                const movedIndex = orderedItems.indexOf(movedEl);
+                const durationMinutes = this.getItemDurationMinutes(movedItem, targetDateStr, movedEl);
+
+                const getRangeFromEl = (el) => {
+                    if (!el) return null;
+                    const id = Number(el.getAttribute('data-id'));
+                    const item = this.state.directoryCache.get(id);
+                    return this.getItemRangeOnDate(item, targetDateStr, el);
+                };
+
+                const previousRange = getRangeFromEl(movedIndex > 0 ? orderedItems[movedIndex - 1] : null);
+                const nextRange = getRangeFromEl(movedIndex >= 0 && movedIndex < (orderedItems.length - 1) ? orderedItems[movedIndex + 1] : null);
+
+                let startDate = null;
+                if (previousRange?.end) {
+                    startDate = new Date(previousRange.end.getTime());
+                } else if (nextRange?.start) {
+                    startDate = new Date(nextRange.start.getTime() - (durationMinutes * 60000));
+                } else {
+                    const currentRange = this.getItemRangeOnDate(movedItem, targetDateStr, movedEl);
+                    startDate = currentRange?.start ? new Date(currentRange.start.getTime()) : new Date(`${targetDateStr}T08:00:00`);
+                }
+
+                const endDate = new Date(startDate.getTime() + (durationMinutes * 60000));
+                return { startDate, endDate };
             },
 
             async recalculateColumnTimes(columnEl, targetDateStr, shouldReload = true, options = {}) {
