@@ -37,10 +37,57 @@ function shiftTimeKeepingWindow(?string $oldStart, ?string $oldEnd, string $newS
     return $newEndObj->format('H:i:s');
 }
 
+function normalizeExceptionValue(string $recType, ?string $contextStart): ?string {
+    if (!$contextStart) return null;
+    try {
+        $ctx = new DateTime($contextStart);
+        return $recType === 'hourly' ? $ctx->format('Y-m-d H:i:s') : $ctx->format('Y-m-d');
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+function appendRecurrenceException(PDO $pdo, int $directoryId, string $exceptionValue): void {
+    $stmtEx = $pdo->prepare("SELECT exceptions FROM directory_recurrences WHERE directory_id = ? FOR UPDATE");
+    $stmtEx->execute([$directoryId]);
+    $existingRaw = $stmtEx->fetchColumn();
+
+    $exceptions = [];
+    if (!empty($existingRaw)) {
+        $decoded = json_decode($existingRaw, true);
+        if (is_array($decoded)) $exceptions = $decoded;
+    }
+
+    if (!in_array($exceptionValue, $exceptions, true)) {
+        $exceptions[] = $exceptionValue;
+        $stmtUpd = $pdo->prepare("UPDATE directory_recurrences SET exceptions = ? WHERE directory_id = ?");
+        $stmtUpd->execute([json_encode(array_values($exceptions)), $directoryId]);
+    }
+}
+
+function createDetachedOccurrence(PDO $pdo, int $directoryId, int $userId, string $startDate, ?string $endDate): void {
+    $stmtClone = $pdo->prepare(
+        "INSERT INTO directories (
+            user_id, parent_id, target_id, type, name_encrypted, default_view,
+            deck_mode, new_item_position, sort_order, icon, icon_color_from, icon_color_to,
+            cover_url_encrypted, start_date, end_date, is_recurring, is_public
+        )
+        SELECT
+            user_id, parent_id, target_id, type, name_encrypted, default_view,
+            deck_mode, new_item_position, sort_order, icon, icon_color_from, icon_color_to,
+            cover_url_encrypted, ?, ?, 0, is_public
+        FROM directories
+        WHERE id = ? AND user_id = ?"
+    );
+    $stmtClone->execute([$startDate, $endDate, $directoryId, $userId]);
+}
+
 if ($action === 'update_times') {
     $id = (int)($input['id'] ?? 0);
     $start_date = !empty($input['start_date']) ? $input['start_date'] : null;
     $end_date = !empty($input['end_date']) ? $input['end_date'] : null;
+    $context_start = !empty($input['context_start']) ? $input['context_start'] : null;
+    $context_end = !empty($input['context_end']) ? $input['context_end'] : null;
 
     if ($id === 0) {
         die(json_encode(['status' => 'error', 'message' => 'ID de tarefa inválido.']));
@@ -49,7 +96,7 @@ if ($action === 'update_times') {
     try {
         $pdo->beginTransaction();
 
-        $stmtBefore = $pdo->prepare("SELECT start_date, end_date, is_recurring FROM directories WHERE id = ? AND user_id = ?");
+        $stmtBefore = $pdo->prepare("SELECT start_date, end_date, is_recurring FROM directories WHERE id = ? AND user_id = ? FOR UPDATE");
         $stmtBefore->execute([$id, $user_id]);
         $before = $stmtBefore->fetch(PDO::FETCH_ASSOC);
 
@@ -58,12 +105,28 @@ if ($action === 'update_times') {
             die(json_encode(['status' => 'error', 'message' => 'Tarefa não encontrada.']));
         }
 
-        $stmt = $pdo->prepare("UPDATE directories SET start_date = ?, end_date = ? WHERE id = ? AND user_id = ?");
-        $stmt->execute([$start_date, $end_date, $id, $user_id]);
-
-        $stmtRec = $pdo->prepare("SELECT type, time_start, time_end FROM directory_recurrences WHERE directory_id = ?");
+        $stmtRec = $pdo->prepare("SELECT type, time_start, time_end FROM directory_recurrences WHERE directory_id = ? FOR UPDATE");
         $stmtRec->execute([$id]);
         $rec = $stmtRec->fetch(PDO::FETCH_ASSOC);
+
+        $isRecurring = ((int)($before['is_recurring'] ?? 0) === 1) && $rec;
+        $contextIsDifferent = $context_start && $before['start_date'] && ($context_start !== $before['start_date'] || ($context_end && $before['end_date'] && $context_end !== $before['end_date']));
+
+        // Ao mover uma ocorrência projetada de tarefa recorrente, destacamos a ocorrência.
+        if ($isRecurring && $contextIsDifferent && $start_date) {
+            $exceptionValue = normalizeExceptionValue($rec['type'] ?? '', $context_start);
+            if ($exceptionValue) {
+                appendRecurrenceException($pdo, $id, $exceptionValue);
+            }
+
+            createDetachedOccurrence($pdo, $id, $user_id, $start_date, $end_date);
+            $pdo->commit();
+            echo json_encode(['status' => 'success', 'message' => 'Ocorrência recorrente destacada e atualizada com sucesso.']);
+            exit;
+        }
+
+        $stmt = $pdo->prepare("UPDATE directories SET start_date = ?, end_date = ? WHERE id = ? AND user_id = ?");
+        $stmt->execute([$start_date, $end_date, $id, $user_id]);
 
         if ($rec && $start_date) {
             $newStartTime = (new DateTime($start_date))->format('H:i:s');
