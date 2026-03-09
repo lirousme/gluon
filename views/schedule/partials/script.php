@@ -992,17 +992,16 @@
                 const timeStr = `${inst.start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${inst.end.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
                 const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
 
-                const isLockedProjection = inst.isProjection && item.rec_type === 'hourly';
-                const projectionClass = isLockedProjection ? 'virtual-task' : 'cursor-grab';
-                const borderStyle = isLockedProjection ? '' : `border-left: 4px solid ${fromColor};`;
-                const handleHTML = isLockedProjection ? '' : `<i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>`;
+                const projectionClass = 'cursor-grab';
+                const borderStyle = `border-left: 4px solid ${fromColor};`;
+                const handleHTML = `<i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>`;
 
                 const instTimeStr = inst.start.getHours().toString().padStart(2,'0') + ':' + inst.start.getMinutes().toString().padStart(2,'0') + ':00';
                 const contextDateStr = `${dateStr} ${instTimeStr}`;
 
                 if (viewType === 'kanban') {
                     return `
-                    <div data-id="${item.id}" class="kanban-item bg-slate-700/80 border ${isLockedProjection ? 'border-slate-500' : 'border-slate-600'} p-2.5 rounded-lg shadow-sm hover:bg-slate-600 transition-colors flex flex-col group relative overflow-hidden mb-2 ${projectionClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                    <div data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" class="kanban-item bg-slate-700/80 border border-slate-600 p-2.5 rounded-lg shadow-sm hover:bg-slate-600 transition-colors flex flex-col group relative overflow-hidden mb-2 ${projectionClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                         ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                         <div class="flex justify-between items-start z-10 relative">
                             <div class="flex items-center gap-1.5 truncate w-full pr-5">
@@ -1017,7 +1016,7 @@
                     </div>`;
                 } else {
                     return `
-                    <div data-id="${item.id}" class="list-item bg-slate-700/50 hover:bg-slate-700 border ${isLockedProjection ? 'border-slate-500' : 'border-slate-600/50'} p-3 rounded-lg shadow-sm transition-colors flex items-center justify-between group relative overflow-hidden ${projectionClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                    <div data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" class="list-item bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 p-3 rounded-lg shadow-sm transition-colors flex items-center justify-between group relative overflow-hidden ${projectionClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                         ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                         <div class="flex items-center gap-3 z-10 relative overflow-hidden flex-1 pr-2">
                             ${handleHTML}
@@ -1138,7 +1137,7 @@
                     const item = this.state.directoryCache.get(id);
                     if (!item) continue;
 
-                    const durationMinutes = this.getItemDurationMinutes(item, targetDateStr);
+                    const durationMinutes = this.getItemDurationMinutes(item, targetDateStr, el);
                     let startDate;
                     const previousUpdate = updates.length > 0 ? updates[updates.length - 1] : null;
 
@@ -1147,14 +1146,14 @@
                     } else if (orderedItems.length > 1) {
                         const nextId = Number(orderedItems[1].getAttribute('data-id'));
                         const nextItem = this.state.directoryCache.get(nextId);
-                        const nextRange = this.getItemRangeOnDate(nextItem, targetDateStr);
+                        const nextRange = this.getItemRangeOnDate(nextItem, targetDateStr, orderedItems[1]);
                         if (nextRange?.start) {
                             startDate = new Date(nextRange.start.getTime() - (durationMinutes * 60000));
                         }
                     }
 
                     if (!startDate) {
-                        const currentRange = this.getItemRangeOnDate(item, targetDateStr);
+                        const currentRange = this.getItemRangeOnDate(item, targetDateStr, el);
                         startDate = currentRange?.start ? new Date(currentRange.start.getTime()) : new Date(`${targetDateStr}T08:00:00`);
                     }
 
@@ -1169,19 +1168,32 @@
                 if (shouldReload) await this.loadData();
             },
 
-            getItemRangeOnDate(item, dateStr) {
+            getItemRangeOnDate(item, dateStr, itemEl = null) {
                 if (!item) return null;
+                if (itemEl) {
+                    const contextStart = itemEl.getAttribute('data-context-start');
+                    const contextEnd = itemEl.getAttribute('data-context-end');
+                    if (contextStart && contextEnd) {
+                        const contextStartDate = new Date(contextStart.replace(' ', 'T'));
+                        const contextEndDate = new Date(contextEnd.replace(' ', 'T'));
+                        if (!Number.isNaN(contextStartDate.getTime()) && !Number.isNaN(contextEndDate.getTime())) {
+                            return { start: contextStartDate, end: contextEndDate };
+                        }
+                    }
+                }
                 const instances = this.getTaskInstancesOnDate(item, dateStr);
-                const realInstance = instances.find(inst => !inst.isProjection) || instances[0];
-                if (!realInstance?.start || !realInstance?.end) return null;
+                const sameDayInstance = instances.find(inst => this.getLocalYYYYMMDD(inst.start) === dateStr);
+                const baseInstance = instances.find(inst => !inst.isProjection);
+                const pickedInstance = sameDayInstance || baseInstance || instances[0];
+                if (!pickedInstance?.start || !pickedInstance?.end) return null;
                 return {
-                    start: new Date(realInstance.start),
-                    end: new Date(realInstance.end)
+                    start: new Date(pickedInstance.start),
+                    end: new Date(pickedInstance.end)
                 };
             },
 
-            getItemDurationMinutes(item, dateStr) {
-                const itemRange = this.getItemRangeOnDate(item, dateStr);
+            getItemDurationMinutes(item, dateStr, itemEl = null) {
+                const itemRange = this.getItemRangeOnDate(item, dateStr, itemEl);
                 if (itemRange?.start && itemRange?.end) {
                     return Math.max(1, Math.round((itemRange.end.getTime() - itemRange.start.getTime()) / 60000));
                 }
