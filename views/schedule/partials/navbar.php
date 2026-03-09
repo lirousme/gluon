@@ -23,6 +23,10 @@
                         <i class="fa-solid fa-folder-gear w-5 text-center text-lg"></i> <span class="font-medium">Configurações</span>
                     </button>
 
+                    <button onclick="scheduleApp.setCurrentAgendaAsHome(); scheduleApp.toggleMobileViewMenu()" class="w-full text-left px-4 py-2.5 text-sm text-emerald-300 hover:bg-slate-700 hover:text-emerald-200 flex items-center gap-3 transition-colors">
+                        <i class="fa-solid fa-house-circle-check w-5 text-center text-lg"></i> <span class="font-medium">Definir como página inicial</span>
+                    </button>
+
                     <button onclick="scheduleApp.copyCurrentDirectory(); scheduleApp.toggleMobileViewMenu()" id="btn-copy-dir" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
                         <i class="fa-regular fa-copy w-5 text-center text-lg"></i> <span class="font-medium">Copiar Agenda</span>
                     </button>

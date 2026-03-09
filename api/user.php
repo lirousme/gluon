@@ -46,6 +46,8 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (PDOException $e) {}
 
+try { $pdo->exec("ALTER TABLE users ADD COLUMN home_directory_id INT UNSIGNED NULL DEFAULT NULL AFTER copied_directory_id"); } catch (PDOException $e) {}
+
 if ($action === 'get_session') {
     echo json_encode(['status' => 'success', 'data' => [
         'id' => $user_id,
@@ -56,7 +58,7 @@ if ($action === 'get_session') {
 // === PREFERÊNCIAS DO DASHBOARD ===
 
 else if ($action === 'get_prefs') {
-    $stmt = $pdo->prepare("SELECT root_view, root_new_item_position, copied_directory_id FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT root_view, root_new_item_position, copied_directory_id, home_directory_id FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $user = $stmt->fetch();
 
@@ -64,7 +66,8 @@ else if ($action === 'get_prefs') {
         echo json_encode(['status' => 'success', 'data' => [
             'root_view' => $user['root_view'] ?? 'grid',
             'root_new_item_position' => $user['root_new_item_position'] ?? 'end',
-            'copied_directory_id' => $user['copied_directory_id']
+            'copied_directory_id' => $user['copied_directory_id'],
+            'home_directory_id' => $user['home_directory_id'] !== null ? (int)$user['home_directory_id'] : null
         ]]);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Usuário não encontrado.']);
@@ -99,6 +102,33 @@ elseif ($action === 'copy_directory') {
         echo json_encode(['status' => 'success', 'message' => 'Diretório copiado com sucesso!']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao copiar diretório.']);
+    }
+}
+
+elseif ($action === 'set_home_directory') {
+    $dir_id = isset($input['dir_id']) && $input['dir_id'] !== null ? (int)$input['dir_id'] : null;
+
+    if ($dir_id === null) {
+        $stmt = $pdo->prepare("UPDATE users SET home_directory_id = NULL WHERE id = ?");
+        if ($stmt->execute([$user_id])) {
+            echo json_encode(['status' => 'success', 'message' => 'Página inicial redefinida para o cofre raiz.', 'data' => ['home_directory_id' => null]]);
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'Erro ao redefinir página inicial.']);
+        }
+        exit;
+    }
+
+    $stmtDir = $pdo->prepare("SELECT id FROM directories WHERE id = ? AND user_id = ? AND type = 2 LIMIT 1");
+    $stmtDir->execute([$dir_id, $user_id]);
+    if (!$stmtDir->fetch()) {
+        die(json_encode(['status' => 'error', 'message' => 'Agenda inválida ou sem permissão para definir como página inicial.']));
+    }
+
+    $stmt = $pdo->prepare("UPDATE users SET home_directory_id = ? WHERE id = ?");
+    if ($stmt->execute([$dir_id, $user_id])) {
+        echo json_encode(['status' => 'success', 'message' => 'Agenda definida como página inicial!', 'data' => ['home_directory_id' => $dir_id]]);
+    } else {
+        echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar página inicial.']);
     }
 }
 
