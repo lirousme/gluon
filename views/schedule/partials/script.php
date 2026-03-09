@@ -1122,7 +1122,19 @@
             },
 
             async recalculateColumnTimes(columnEl, targetDateStr, shouldReload = true) {
-                const orderedItems = Array.from(columnEl.querySelectorAll('[data-id]'));
+                const rawOrderedItems = Array.from(columnEl.querySelectorAll('[data-id]'));
+
+                // Em recorrências do tipo hourly podem existir várias projeções do mesmo ID
+                // na mesma coluna. Atualizar o mesmo diretório múltiplas vezes na sequência
+                // causa efeitos colaterais (janela de repetição encolher/deslocar).
+                // Por isso mantemos apenas a primeira ocorrência visível de cada ID.
+                const seenIds = new Set();
+                const orderedItems = rawOrderedItems.filter((el) => {
+                    const id = Number(el.getAttribute('data-id'));
+                    if (!id || seenIds.has(id)) return false;
+                    seenIds.add(id);
+                    return true;
+                });
 
                 if (orderedItems.length === 0) return;
 
