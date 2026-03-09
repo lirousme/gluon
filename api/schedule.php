@@ -334,13 +334,9 @@ else if ($action === 'delete_overdue_tasks') {
                AND parent_id = ?
                AND is_recurring = 0
                AND COALESCE(end_date, start_date) IS NOT NULL
-               AND COALESCE(end_date, start_date) < ?"
+               AND COALESCE(end_date, start_date) < NOW()"
         );
-
-        $now = nowInBrasilia($brasiliaTz);
-        $cutoffNow = clone $now;
-
-        $stmtDelete->execute([$user_id, $agenda_id, $cutoffNow->format('Y-m-d H:i:s')]);
+        $stmtDelete->execute([$user_id, $agenda_id]);
         $deleted = $stmtDelete->rowCount();
 
         $stmtRecurring = $pdo->prepare(
@@ -357,6 +353,7 @@ else if ($action === 'delete_overdue_tasks') {
         $stmtRecurring->execute([$user_id, $agenda_id]);
         $recurringTasks = $stmtRecurring->fetchAll(PDO::FETCH_ASSOC);
 
+        $now = new DateTime('now');
         foreach ($recurringTasks as $task) {
             $newExceptions = collectOverdueRecurrenceExceptions($task, $now);
             $recurrenceOccurrencesRemoved += appendUniqueExceptions($pdo, (int)$task['id'], $newExceptions);
