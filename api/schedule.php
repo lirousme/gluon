@@ -168,6 +168,37 @@ else if ($action === 'update_view') {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar visualização.']);
     }
 }
+else if ($action === 'delete_overdue_tasks') {
+    $agenda_id = (int)($input['id'] ?? 0);
+
+    if ($agenda_id === 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID de agenda inválido.']));
+    }
+
+    $stmtAgenda = $pdo->prepare("SELECT id FROM directories WHERE id = ? AND user_id = ? AND type = 2");
+    $stmtAgenda->execute([$agenda_id, $user_id]);
+    if (!$stmtAgenda->fetchColumn()) {
+        die(json_encode(['status' => 'error', 'message' => 'Agenda não encontrada.']));
+    }
+
+    $stmtDelete = $pdo->prepare(
+        "DELETE FROM directories
+         WHERE user_id = ?
+           AND parent_id = ?
+           AND COALESCE(end_date, start_date) IS NOT NULL
+           AND COALESCE(end_date, start_date) < NOW()"
+    );
+    $stmtDelete->execute([$user_id, $agenda_id]);
+
+    $deleted = $stmtDelete->rowCount();
+    echo json_encode([
+        'status' => 'success',
+        'message' => $deleted > 0
+            ? "{$deleted} tarefa(s) vencida(s) apagada(s) com sucesso."
+            : 'Nenhuma tarefa vencida para apagar.'
+    ]);
+}
+
 else if ($action === 'get_agenda_info') {
     // Busca informações básicas da pasta Agenda atual (Nome, Capa e View Preferida)
     $id = (int)($input['id'] ?? 0);
