@@ -327,6 +327,15 @@
                 }
             },
 
+            async setCurrentAgendaAsHome() {
+                const response = await this.api('user', 'set_home_directory', { dir_id: this.agendaId });
+                if (response && response.status === 'success') {
+                    this.showToast(response.message || 'Agenda definida como página inicial!', 'success');
+                } else {
+                    this.showToast(response ? response.message : 'Erro ao definir página inicial.', 'error');
+                }
+            },
+
             async pasteDirectory() {
                 const response = await this.api('directories', 'paste', { target_parent_id: this.agendaId });
                 if (response && response.status === 'success') {

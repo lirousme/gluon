@@ -112,6 +112,10 @@
                             <i class="fa-solid fa-folder-gear w-5 text-center text-lg"></i> <span class="font-medium">Configurações</span>
                         </button>
 
+                        <button onclick="app.setCurrentScheduleAsHome(); app.toggleMobileViewMenu()" id="btn-set-home-schedule" class="w-full text-left px-4 py-2.5 text-sm text-emerald-300 hover:bg-slate-700 hover:text-emerald-200 flex items-center gap-3 transition-colors hidden">
+                            <i class="fa-solid fa-house-circle-check w-5 text-center text-lg"></i> <span class="font-medium">Definir como página inicial</span>
+                        </button>
+
                         <button onclick="app.copyCurrentDirectory(); app.toggleMobileViewMenu()" id="btn-copy-dir" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors hidden">
                             <i class="fa-regular fa-copy w-5 text-center text-lg"></i> <span class="font-medium">Copiar Diretório</span>
                         </button>
@@ -449,7 +453,7 @@
                 path: [{ id: null, name: 'Meu Cofre', view: 'grid', type: 0 }],
                 directories: [],
                 directoryCache: new Map(), 
-                rootPrefs: { view: 'grid', new_item_position: 'end', copied_directory_id: null }, 
+                rootPrefs: { view: 'grid', new_item_position: 'end', copied_directory_id: null, home_directory_id: null }, 
                 sessionUserId: null,
                 profileUserId: null,
                 profileUsername: '',
@@ -664,6 +668,7 @@
 
                 const urlParams = new URLSearchParams(window.location.search);
                 const startId = urlParams.get('id');
+                const preferredHomeId = this.state.rootPrefs.home_directory_id;
                 const profileUser = urlParams.get('user');
 
                 if (profileUser) {
@@ -678,8 +683,10 @@
 
                 this.state.path[0].name = this.getProfileRootName();
 
-                if (startId) {
-                    const pathRes = await this.api('directories', 'get_path', { id: startId, target_user_id: this.state.profileUserId || undefined });
+                const entryId = startId || (!profileUser && preferredHomeId ? String(preferredHomeId) : null);
+
+                if (entryId) {
+                    const pathRes = await this.api('directories', 'get_path', { id: entryId, target_user_id: this.state.profileUserId || undefined });
                     if (pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
                         const targetDir = pathRes.data[pathRes.data.length - 1];
 
@@ -772,6 +779,24 @@
                 toast.innerHTML = `${icon} <span>${message}</span>`;
                 setTimeout(() => { toast.classList.remove('translate-y-10', 'opacity-0'); toast.classList.add('translate-y-0', 'opacity-100'); }, 10);
                 setTimeout(() => { toast.classList.remove('translate-y-0', 'opacity-100'); toast.classList.add('translate-y-10', 'opacity-0'); }, 3000);
+            },
+
+            async setCurrentScheduleAsHome() {
+                const currentId = this.getCurrentParentId();
+                const currentType = this.getCurrentDirectoryType();
+
+                if (currentId === null || currentType !== 2) {
+                    return this.showToast('Abra uma agenda para definir como página inicial.', 'error');
+                }
+
+                const response = await this.api('user', 'set_home_directory', { dir_id: currentId });
+                if (response && response.status === 'success') {
+                    this.state.rootPrefs.home_directory_id = currentId;
+                    this.updateTopButtons();
+                    this.showToast(response.message || 'Agenda definida como página inicial!', 'success');
+                } else {
+                    this.showToast(response ? response.message : 'Erro ao definir página inicial.', 'error');
+                }
             },
 
             async copyCurrentDirectory() {
@@ -1028,7 +1053,8 @@
                     this.state.rootPrefs = {
                         view: response.data.root_view || 'grid',
                         new_item_position: response.data.root_new_item_position || 'end',
-                        copied_directory_id: response.data.copied_directory_id 
+                        copied_directory_id: response.data.copied_directory_id,
+                        home_directory_id: response.data.home_directory_id
                     };
                     this.state.path[0].view = this.state.rootPrefs.view;
                 }
@@ -1239,7 +1265,7 @@
 
                 this.renderProfilePresentation();
 
-                const hideForVisitor = ['btn-copy-dir', 'btn-paste-dir', 'btn-move-dir', 'btn-create-portal', 'btn-reorder-desktop', 'btn-reorder-mobile', 'btn-profile-settings'];
+                const hideForVisitor = ['btn-copy-dir', 'btn-paste-dir', 'btn-move-dir', 'btn-create-portal', 'btn-set-home-schedule', 'btn-reorder-desktop', 'btn-reorder-mobile', 'btn-profile-settings'];
                 hideForVisitor.forEach(id => {
                     const el = document.getElementById(id);
                     if (!el) return;
@@ -1255,6 +1281,18 @@
                         btnCopy.classList.add('hidden'); btnCopy.classList.remove('flex');
                     } else {
                         btnCopy.classList.remove('hidden'); btnCopy.classList.add('flex');
+                    }
+                }
+
+                const btnSetHome = document.getElementById('btn-set-home-schedule');
+                if (btnSetHome) {
+                    const shouldShowSetHome = this.getCurrentParentId() !== null && this.getCurrentDirectoryType() === 2;
+                    if (shouldShowSetHome) {
+                        btnSetHome.classList.remove('hidden');
+                        btnSetHome.classList.add('flex');
+                    } else {
+                        btnSetHome.classList.add('hidden');
+                        btnSetHome.classList.remove('flex');
                     }
                 }
 
