@@ -91,7 +91,7 @@
         .current-time-item::before {
             content: '';
             position: absolute;
-            inset: -2px;
+            inset: 0;
             border-radius: inherit;
             padding: 2px;
             background: linear-gradient(120deg, #22d3ee, #8b5cf6, #f43f5e, #22d3ee);
@@ -102,6 +102,18 @@
             mask-composite: exclude;
             pointer-events: none;
             z-index: 1;
+        }
+        @supports not ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {
+            .current-time-item::before {
+                inset: 0;
+                padding: 0;
+                border: 2px solid transparent;
+                border-radius: inherit;
+                background:
+                    linear-gradient(120deg, #22d3ee, #8b5cf6, #f43f5e, #22d3ee) border-box;
+                background-size: 240% 240%;
+                animation: current-item-border-flow 3s linear infinite;
+            }
         }
         .current-time-item > * {
             position: relative;
