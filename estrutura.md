@@ -18,6 +18,7 @@ public_html/gluon/
 │   └── adjacency.php        # NOVO: Micro-API para Lista adjacente
 │   └── pronuncias.php       # NOVO: CRUD administrativo para ajustes de pronúncia TTS
 │   └── sistema_de_condicionais.php # NOVO: Micro-API para tarefas com dependência condicional
+│   └── plano.php            # NOVO: Micro-API para diretórios do tipo Plano
 │
 ├── views/                    # Front-end (Vanilla JS + Tailwind)
 │   ├── login.html
@@ -31,6 +32,7 @@ public_html/gluon/
 │   ├── gerar_cards_batch.html # NOVO: Interface de geração assíncrona (Batch OpenAI)
 │   ├── adjacency.html       # NOVO: Lista adjacente
 │   ├── sistema_de_condicionais.html # NOVO: Fluxo de tarefas condicionais
+│   ├── plano.html           # NOVO: Planejamento em 5 fases com acordeon
 │   └── errors/
 │
 └── assets/
@@ -67,7 +69,7 @@ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 user_id INT UNSIGNED NOT NULL,
 parent_id INT UNSIGNED DEFAULT NULL, -- NULL significa que está na Raiz
 target_id INT UNSIGNED DEFAULT NULL, -- NOVO: ID do diretório alvo (Apenas para Portais)
-type TINYINT DEFAULT 0,              -- 0 = Pasta, 1 = Arquivo de Código, 2 = Agenda, 3 = Portal, 4 = Deck de Flashcards, 5 = Controle, 6 = Sistema de Condicional
+type TINYINT DEFAULT 0,              -- 0 = Pasta, 1 = Arquivo de Código, 2 = Agenda, 3 = Portal, 4 = Deck de Flashcards, 5 = Controle, 6 = Sistema de Condicional, 7 = Plano
 deck_mode VARCHAR(20) DEFAULT 'aleatorio';
 deck_front_language VARCHAR(10) NOT NULL DEFAULT 'pt-BR', -- Idioma da frente do card (pt-BR | en-US | en-GB)
 deck_back_language VARCHAR(10) NOT NULL DEFAULT 'en-GB', -- Idioma do verso do card (pt-BR | en-US | en-GB)
@@ -281,3 +283,17 @@ FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================
+
+
+======================================================================
+
+TABELA: plano_meta
+directory_id INT UNSIGNED PRIMARY KEY, -- FK para directories (type = 7)
+current_phase TINYINT UNSIGNED NOT NULL DEFAULT 1, -- Fase atual automática (1 a 5)
+phases_data JSON DEFAULT NULL, -- Brainstorm/Conclusão/status por fase
+recurrence_rules JSON DEFAULT NULL, -- Configuração de repetição da agenda por fase
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
