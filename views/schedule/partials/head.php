@@ -83,6 +83,34 @@
             opacity: 0.7;
         }
         .virtual-task:hover { opacity: 0.9; }
+
+        .current-time-item {
+            position: relative;
+            isolation: isolate;
+        }
+        .current-time-item::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border-radius: inherit;
+            padding: 2px;
+            background: linear-gradient(120deg, #22d3ee, #8b5cf6, #f43f5e, #22d3ee);
+            background-size: 240% 240%;
+            animation: current-item-border-flow 3s linear infinite;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+            z-index: 1;
+        }
+        .current-time-item > * {
+            position: relative;
+            z-index: 2;
+        }
+        @keyframes current-item-border-flow {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
     </style>
 </head>
 <body class="bg-gluon-dark text-slate-200 h-[100dvh] flex flex-col font-sans overflow-hidden selection:bg-gluon-primary selection:text-white relative pb-[env(safe-area-inset-bottom)]">

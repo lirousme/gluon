@@ -260,6 +260,10 @@
                 await this.fetchUserPrefs();
                 await this.fetchAgendaInfo();
                 await this.loadData();
+
+                this.currentTimeHighlightInterval = setInterval(() => {
+                    this.refreshCurrentTimeHighlights();
+                }, 30000);
                 
                 document.addEventListener('click', (event) => {
                     const menu = document.getElementById('mobileViewMenu');
@@ -901,6 +905,8 @@
                         el.ondragstart = (e) => this.dragStart(e, el.getAttribute('data-id'));
                     });
                 }
+
+                this.refreshCurrentTimeHighlights();
             },
 
             generateBacklogCard(item) {
@@ -920,6 +926,7 @@
             renderTimelineItems(scheduledItems, selectedDateStr) {
                 const eventsLayer = document.getElementById('eventsLayer');
                 eventsLayer.innerHTML = '';
+                const now = new Date();
                 
                 let allInstances = [];
                 scheduledItems.forEach(item => {
@@ -945,14 +952,16 @@
                     const bgStyle = `background: linear-gradient(135deg, ${fromColor}33, ${toColor}33); border-color: ${fromColor}80; color: #fff; ${borderStyle}`;
                     
                     const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 opacity-80" title="Tarefa Recorrente"></i>` : '';
+                    const isCurrentTime = this.isInstanceInCurrentTime(inst, now);
                     const projClass = inst.isProjection ? 'virtual-task opacity-80' : '';
+                    const currentTimeClass = isCurrentTime ? 'current-time-item' : '';
                     const resizeHTML = inst.isProjection ? '' : `<div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>`;
 
                     const instTimeStr = inst.start.getHours().toString().padStart(2,'0') + ':' + inst.start.getMinutes().toString().padStart(2,'0') + ':00';
                     const contextDateStr = `${selectedDateStr} ${instTimeStr}`;
 
                     eventsLayer.innerHTML += `
-                        <div id="evt-${inst.uid}" class="event-card group ${projClass}" data-id="${item.id}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                        <div id="evt-${inst.uid}" class="event-card group ${projClass} ${currentTimeClass}" data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                             ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                             <div class="flex justify-between items-start pointer-events-none z-10 relative">
                                 <div class="font-bold truncate text-sm flex items-center gap-1.5 w-full pr-6">
@@ -1015,8 +1024,10 @@
                 const fromColor = item.color_from || '#3b82f6';
                 const timeStr = `${inst.start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${inst.end.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
                 const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
+                const isCurrentTime = this.isInstanceInCurrentTime(inst);
 
                 const projectionClass = `${inst.isProjection ? 'virtual-task' : ''} cursor-grab`;
+                const currentTimeClass = isCurrentTime ? 'current-time-item' : '';
                 const borderStyle = `border-left: 4px solid ${fromColor};`;
                 const handleHTML = `<i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>`;
 
@@ -1025,7 +1036,7 @@
 
                 if (viewType === 'kanban') {
                     return `
-                    <div data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" class="kanban-item bg-slate-700/80 border border-slate-600 p-2.5 rounded-lg shadow-sm hover:bg-slate-600 transition-colors flex flex-col group relative overflow-hidden mb-2 ${projectionClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                    <div data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" class="kanban-item bg-slate-700/80 border border-slate-600 p-2.5 rounded-lg shadow-sm hover:bg-slate-600 transition-colors flex flex-col group relative overflow-hidden mb-2 ${projectionClass} ${currentTimeClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                         ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                         <div class="flex justify-between items-start z-10 relative">
                             <div class="flex items-center gap-1.5 truncate w-full pr-5">
@@ -1040,7 +1051,7 @@
                     </div>`;
                 } else {
                     return `
-                    <div data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" class="list-item bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 p-3 rounded-lg shadow-sm transition-colors flex items-center justify-between group relative overflow-hidden ${projectionClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                    <div data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" class="list-item bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 p-3 rounded-lg shadow-sm transition-colors flex items-center justify-between group relative overflow-hidden ${projectionClass} ${currentTimeClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                         ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                         <div class="flex items-center gap-3 z-10 relative overflow-hidden flex-1 pr-2">
                             ${handleHTML}
@@ -1062,6 +1073,36 @@
                     return;
                 }
                 this.enterDirectoryOrFile(id);
+            },
+
+            isInstanceInCurrentTime(inst, now = new Date()) {
+                if (!inst || inst.isProjection) return false;
+                const start = inst.start instanceof Date ? inst.start : new Date(inst.start);
+                const end = inst.end instanceof Date ? inst.end : new Date(inst.end);
+                if (!(start instanceof Date) || Number.isNaN(start.getTime())) return false;
+                if (!(end instanceof Date) || Number.isNaN(end.getTime())) return false;
+                return now >= start && now <= end;
+            },
+
+            refreshCurrentTimeHighlights() {
+                const now = new Date();
+                document.querySelectorAll('.event-card, .kanban-item, .list-item').forEach((el) => {
+                    if (el.classList.contains('virtual-task')) {
+                        el.classList.remove('current-time-item');
+                        return;
+                    }
+
+                    const startStr = el.dataset.contextStart;
+                    const endStr = el.dataset.contextEnd;
+                    if (!startStr || !endStr) return;
+
+                    const start = new Date(startStr.replace(' ', 'T'));
+                    const end = new Date(endStr.replace(' ', 'T'));
+                    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+
+                    const isCurrent = now >= start && now <= end;
+                    el.classList.toggle('current-time-item', isCurrent);
+                });
             },
 
             async enterDirectoryOrFile(id) {
