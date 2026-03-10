@@ -87,6 +87,8 @@
         .current-time-item {
             position: relative;
             isolation: isolate;
+            border-color: transparent !important;
+            border-left-color: transparent !important;
         }
         .current-time-item::before {
             content: '';
