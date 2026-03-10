@@ -13,6 +13,7 @@
             startHeight: 0,
 
             sortableInstances: [],
+            currentTimeHighlightInterval: null,
 
             state: {
                 view: 'timeline',
@@ -261,9 +262,13 @@
                 await this.fetchAgendaInfo();
                 await this.loadData();
 
-                this.currentTimeHighlightInterval = setInterval(() => {
-                    this.refreshCurrentTimeHighlights();
-                }, 30000);
+                this.startRealtimeCurrentTimeSync();
+
+                document.addEventListener('visibilitychange', () => {
+                    if (!document.hidden) {
+                        this.refreshCurrentTimeHighlights();
+                    }
+                });
                 
                 document.addEventListener('click', (event) => {
                     const menu = document.getElementById('mobileViewMenu');
@@ -1103,6 +1108,18 @@
                     const isCurrent = now >= start && now <= end;
                     el.classList.toggle('current-time-item', isCurrent);
                 });
+            },
+
+            startRealtimeCurrentTimeSync() {
+                if (this.currentTimeHighlightInterval) {
+                    clearInterval(this.currentTimeHighlightInterval);
+                }
+
+                this.refreshCurrentTimeHighlights();
+
+                this.currentTimeHighlightInterval = setInterval(() => {
+                    this.refreshCurrentTimeHighlights();
+                }, 1000);
             },
 
             async enterDirectoryOrFile(id) {
