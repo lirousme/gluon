@@ -784,10 +784,6 @@
             async setCurrentDirectoryAsHome() {
                 const currentId = this.getCurrentParentId();
 
-                if (currentId === null) {
-                    return this.showToast('Abra um diretório para definir como página inicial.', 'error');
-                }
-
                 const response = await this.api('user', 'set_home_directory', { dir_id: currentId });
                 if (response && response.status === 'success') {
                     this.state.rootPrefs.home_directory_id = currentId;
@@ -1285,7 +1281,7 @@
 
                 const btnSetHome = document.getElementById('btn-set-home-directory');
                 if (btnSetHome) {
-                    const shouldShowSetHome = this.getCurrentParentId() !== null;
+                    const shouldShowSetHome = !this.isVisitingProfile();
                     if (shouldShowSetHome) {
                         btnSetHome.classList.remove('hidden');
                         btnSetHome.classList.add('flex');
