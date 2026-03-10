@@ -214,7 +214,7 @@
             },
 
             navigateToItemView(type, id) {
-                const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency' };
+                const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 7: 'plano' };
                 const targetView = viewByType[type];
                 if (!targetView) return false;
                 window.location.href = this.buildViewUrl(targetView, id);
@@ -1525,6 +1525,10 @@
                     folderSettings.style.display = 'none';
                     nameLabel.innerText = 'Nome da Agenda / Cronograma';
                     this.autoChangeIcon('fa-calendar-days');
+                } else if (typeValue === 7) {
+                    folderSettings.style.display = 'none';
+                    nameLabel.innerText = 'Nome do Plano';
+                    this.autoChangeIcon('fa-list-ol');
                 }
             },
 
@@ -1590,6 +1594,7 @@
                     if(dirObj.type === 1) titleText = 'Arquivo';
                     if(dirObj.type === 2) titleText = 'Agenda';
                     if(dirObj.type === 3) titleText = 'Portal';
+                    if(dirObj.type === 7) titleText = 'Plano';
 
                     document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-gear text-gluon-primary"></i> <span>Configurar ${titleText}</span>`;
                     typeSelector.classList.add('hidden');
@@ -1599,6 +1604,7 @@
                     else if(dirObj.type === 1) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Arquivo'; iconPickerContainer.style.display = 'block'; } 
                     else if(dirObj.type === 2) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome da Agenda'; iconPickerContainer.style.display = 'block'; }
                     else if(dirObj.type === 3) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Portal'; iconPickerContainer.style.display = 'none'; btnRecor.classList.add('hidden');}
+                    else if(dirObj.type === 7) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Plano'; iconPickerContainer.style.display = 'block'; }
                 } else {
                     document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus text-gluon-primary"></i> <span>Novo Item</span>';
                     typeSelector.classList.remove('hidden');
@@ -1623,7 +1629,7 @@
                 document.getElementById('dirColorFrom').value = (dirObj && dirObj.color_from) ? dirObj.color_from : '#3b82f6';
                 document.getElementById('dirColorTo').value = (dirObj && dirObj.color_to) ? dirObj.color_to : '#6366f1';
                 
-                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : (dirObj?.type === 3 ? 'fa-door-open' : 'fa-check-circle'))); 
+                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : (dirObj?.type === 3 ? 'fa-door-open' : (dirObj?.type === 7 ? 'fa-list-ol' : 'fa-check-circle')))); 
                 this.autoChangeIcon(iconToSelect);
 
                 const posToSelect = (dirObj && dirObj.new_item_position) ? dirObj.new_item_position : 'end';
