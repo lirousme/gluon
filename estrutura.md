@@ -181,12 +181,6 @@ FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
 FOREIGN KEY (parent_id) REFERENCES adjacency_items(id) ON DELETE CASCADE
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-
-
-======================================================================
-
-
-
 ======================================================================
 
 TABELA: conditional_items
@@ -287,38 +281,3 @@ FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================
-
-======================================================================
-
-NOVAS VARIÁVEIS DE AMBIENTE (.env) PARA VOZES TTS POR IDIOMA
-FISH_REFERENCE_ID_PT_BR=...
-FISH_REFERENCE_ID_EN_US=...
-FISH_REFERENCE_ID_EN_GB=...
-
-(Compatibilidade: se não definidas, o sistema usa os IDs antigos FRONT/BACK.)
-
-
-======================================================================
-
-MIGRAÇÃO SQL (Sistema de Condicional)
-
-```sql
-ALTER TABLE directories
-  MODIFY COLUMN type TINYINT DEFAULT 0 COMMENT '0=Pasta,1=Código,2=Agenda,3=Portal,4=Flashcards,5=Controle,6=Sistema de Condicional';
-
-CREATE TABLE IF NOT EXISTS conditional_items (
-  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  directory_id INT UNSIGNED NOT NULL,
-  parent_id INT UNSIGNED DEFAULT NULL,
-  label VARCHAR(255) NOT NULL,
-  conditional_item_id INT UNSIGNED DEFAULT NULL,
-  is_completed TINYINT(1) DEFAULT 0,
-  sort_order INT DEFAULT 0,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
-  FOREIGN KEY (parent_id) REFERENCES conditional_items(id) ON DELETE CASCADE,
-  FOREIGN KEY (conditional_item_id) REFERENCES conditional_items(id) ON DELETE SET NULL,
-  INDEX idx_conditional_directory_parent (directory_id, parent_id),
-  INDEX idx_conditional_dep (conditional_item_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-```
