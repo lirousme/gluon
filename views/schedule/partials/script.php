@@ -966,7 +966,7 @@
                     const contextDateStr = `${selectedDateStr} ${instTimeStr}`;
 
                     eventsLayer.innerHTML += `
-                        <div id="evt-${inst.uid}" class="event-card group ${projClass} ${currentTimeClass}" data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                        <div id="evt-${inst.uid}" class="event-card group ${projClass} ${currentTimeClass}" data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" data-context-start-ts="${inst.start.getTime()}" data-context-end-ts="${inst.end.getTime()}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                             ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                             <div class="flex justify-between items-start pointer-events-none z-10 relative">
                                 <div class="font-bold truncate text-sm flex items-center gap-1.5 w-full pr-6">
@@ -1041,7 +1041,7 @@
 
                 if (viewType === 'kanban') {
                     return `
-                    <div data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" class="kanban-item bg-slate-700/80 border border-slate-600 p-2.5 rounded-lg shadow-sm hover:bg-slate-600 transition-colors flex flex-col group relative overflow-hidden mb-2 ${projectionClass} ${currentTimeClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                    <div data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" data-context-start-ts="${inst.start.getTime()}" data-context-end-ts="${inst.end.getTime()}" class="kanban-item bg-slate-700/80 border border-slate-600 p-2.5 rounded-lg shadow-sm hover:bg-slate-600 transition-colors flex flex-col group relative overflow-hidden mb-2 ${projectionClass} ${currentTimeClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                         ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                         <div class="flex justify-between items-start z-10 relative">
                             <div class="flex items-center gap-1.5 truncate w-full pr-5">
@@ -1056,7 +1056,7 @@
                     </div>`;
                 } else {
                     return `
-                    <div data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" class="list-item bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 p-3 rounded-lg shadow-sm transition-colors flex items-center justify-between group relative overflow-hidden ${projectionClass} ${currentTimeClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                    <div data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" data-context-start-ts="${inst.start.getTime()}" data-context-end-ts="${inst.end.getTime()}" class="list-item bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 p-3 rounded-lg shadow-sm transition-colors flex items-center justify-between group relative overflow-hidden ${projectionClass} ${currentTimeClass}" style="${borderStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                         ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                         <div class="flex items-center gap-3 z-10 relative overflow-hidden flex-1 pr-2">
                             ${handleHTML}
@@ -1081,7 +1081,7 @@
             },
 
             isInstanceInCurrentTime(inst, now = new Date()) {
-                if (!inst || inst.isProjection) return false;
+                if (!inst) return false;
                 const start = inst.start instanceof Date ? inst.start : new Date(inst.start);
                 const end = inst.end instanceof Date ? inst.end : new Date(inst.end);
                 if (!(start instanceof Date) || Number.isNaN(start.getTime())) return false;
@@ -1092,20 +1092,12 @@
             refreshCurrentTimeHighlights() {
                 const now = new Date();
                 document.querySelectorAll('.event-card, .kanban-item, .list-item').forEach((el) => {
-                    if (el.classList.contains('virtual-task')) {
-                        el.classList.remove('current-time-item');
-                        return;
-                    }
+                    const startTs = Number(el.dataset.contextStartTs);
+                    const endTs = Number(el.dataset.contextEndTs);
+                    if (Number.isNaN(startTs) || Number.isNaN(endTs)) return;
 
-                    const startStr = el.dataset.contextStart;
-                    const endStr = el.dataset.contextEnd;
-                    if (!startStr || !endStr) return;
-
-                    const start = new Date(startStr.replace(' ', 'T'));
-                    const end = new Date(endStr.replace(' ', 'T'));
-                    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
-
-                    const isCurrent = now >= start && now <= end;
+                    const nowTs = now.getTime();
+                    const isCurrent = nowTs >= startTs && nowTs <= endTs;
                     el.classList.toggle('current-time-item', isCurrent);
                 });
             },
