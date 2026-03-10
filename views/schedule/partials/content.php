@@ -65,7 +65,7 @@
                 <div id="tab-geral" class="p-6 overflow-y-auto flex-1">
                     <div id="typeSelectorContainer" class="mb-5">
                         <label class="block text-sm font-medium text-slate-300 mb-2">Tipo de Item</label>
-                        <div class="grid grid-cols-3 gap-2">
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             <label class="cursor-pointer" onclick="scheduleApp.handleTypeChange(0)">
                                 <input type="radio" name="itemType" value="0" class="peer hidden type-radio" checked>
                                 <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
@@ -82,6 +82,13 @@
                                 <input type="radio" name="itemType" value="2" class="peer hidden type-radio">
                                 <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
                                     <i class="fa-solid fa-calendar-days block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Agenda</span>
+                                </div>
+                            </label>
+
+                            <label class="cursor-pointer" onclick="scheduleApp.handleTypeChange(7)">
+                                <input type="radio" name="itemType" value="7" class="peer hidden type-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-list-ol block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Plano</span>
                                 </div>
                             </label>
                         </div>
