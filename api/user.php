@@ -118,15 +118,15 @@ elseif ($action === 'set_home_directory') {
         exit;
     }
 
-    $stmtDir = $pdo->prepare("SELECT id FROM directories WHERE id = ? AND user_id = ? AND type = 2 LIMIT 1");
+    $stmtDir = $pdo->prepare("SELECT id FROM directories WHERE id = ? AND user_id = ? LIMIT 1");
     $stmtDir->execute([$dir_id, $user_id]);
     if (!$stmtDir->fetch()) {
-        die(json_encode(['status' => 'error', 'message' => 'Agenda inválida ou sem permissão para definir como página inicial.']));
+        die(json_encode(['status' => 'error', 'message' => 'Diretório inválido ou sem permissão para definir como página inicial.']));
     }
 
     $stmt = $pdo->prepare("UPDATE users SET home_directory_id = ? WHERE id = ?");
     if ($stmt->execute([$dir_id, $user_id])) {
-        echo json_encode(['status' => 'success', 'message' => 'Agenda definida como página inicial!', 'data' => ['home_directory_id' => $dir_id]]);
+        echo json_encode(['status' => 'success', 'message' => 'Diretório definido como página inicial!', 'data' => ['home_directory_id' => $dir_id]]);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar página inicial.']);
     }

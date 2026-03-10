@@ -112,7 +112,7 @@
                             <i class="fa-solid fa-folder-gear w-5 text-center text-lg"></i> <span class="font-medium">Configurações</span>
                         </button>
 
-                        <button onclick="app.setCurrentScheduleAsHome(); app.toggleMobileViewMenu()" id="btn-set-home-schedule" class="w-full text-left px-4 py-2.5 text-sm text-emerald-300 hover:bg-slate-700 hover:text-emerald-200 flex items-center gap-3 transition-colors hidden">
+                        <button onclick="app.setCurrentDirectoryAsHome(); app.toggleMobileViewMenu()" id="btn-set-home-directory" class="w-full text-left px-4 py-2.5 text-sm text-emerald-300 hover:bg-slate-700 hover:text-emerald-200 flex items-center gap-3 transition-colors hidden">
                             <i class="fa-solid fa-house-circle-check w-5 text-center text-lg"></i> <span class="font-medium">Definir como página inicial</span>
                         </button>
 
@@ -781,19 +781,18 @@
                 setTimeout(() => { toast.classList.remove('translate-y-0', 'opacity-100'); toast.classList.add('translate-y-10', 'opacity-0'); }, 3000);
             },
 
-            async setCurrentScheduleAsHome() {
+            async setCurrentDirectoryAsHome() {
                 const currentId = this.getCurrentParentId();
-                const currentType = this.getCurrentDirectoryType();
 
-                if (currentId === null || currentType !== 2) {
-                    return this.showToast('Abra uma agenda para definir como página inicial.', 'error');
+                if (currentId === null) {
+                    return this.showToast('Abra um diretório para definir como página inicial.', 'error');
                 }
 
                 const response = await this.api('user', 'set_home_directory', { dir_id: currentId });
                 if (response && response.status === 'success') {
                     this.state.rootPrefs.home_directory_id = currentId;
                     this.updateTopButtons();
-                    this.showToast(response.message || 'Agenda definida como página inicial!', 'success');
+                    this.showToast(response.message || 'Diretório definido como página inicial!', 'success');
                 } else {
                     this.showToast(response ? response.message : 'Erro ao definir página inicial.', 'error');
                 }
@@ -1265,7 +1264,7 @@
 
                 this.renderProfilePresentation();
 
-                const hideForVisitor = ['btn-copy-dir', 'btn-paste-dir', 'btn-move-dir', 'btn-create-portal', 'btn-set-home-schedule', 'btn-reorder-desktop', 'btn-reorder-mobile', 'btn-profile-settings'];
+                const hideForVisitor = ['btn-copy-dir', 'btn-paste-dir', 'btn-move-dir', 'btn-create-portal', 'btn-set-home-directory', 'btn-reorder-desktop', 'btn-reorder-mobile', 'btn-profile-settings'];
                 hideForVisitor.forEach(id => {
                     const el = document.getElementById(id);
                     if (!el) return;
@@ -1284,9 +1283,9 @@
                     }
                 }
 
-                const btnSetHome = document.getElementById('btn-set-home-schedule');
+                const btnSetHome = document.getElementById('btn-set-home-directory');
                 if (btnSetHome) {
-                    const shouldShowSetHome = this.getCurrentParentId() !== null && this.getCurrentDirectoryType() === 2;
+                    const shouldShowSetHome = this.getCurrentParentId() !== null;
                     if (shouldShowSetHome) {
                         btnSetHome.classList.remove('hidden');
                         btnSetHome.classList.add('flex');
