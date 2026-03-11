@@ -28,9 +28,34 @@ try {
 }
 
 function verifyPlanoOwnership($pdo, $dir_id, $user_id) {
-    $stmt = $pdo->prepare("SELECT id, name_encrypted, start_date, is_recurring FROM directories WHERE id = ? AND user_id = ? AND type = 7");
+    $stmt = $pdo->prepare("SELECT id, name_encrypted, start_date, end_date, is_recurring FROM directories WHERE id = ? AND user_id = ? AND type = 7");
     $stmt->execute([$dir_id, $user_id]);
     return $stmt->fetch();
+}
+
+function moveDirectoryToNextRoundHour($pdo, $directory_id, $currentStartDate, $currentEndDate) {
+    $nextStart = new DateTime();
+    $nextStart->modify('+1 hour');
+    $nextStart->setTime((int)$nextStart->format('H'), 0, 0);
+
+    $durationSeconds = 3600;
+    if (!empty($currentStartDate) && !empty($currentEndDate)) {
+        try {
+            $start = new DateTime($currentStartDate);
+            $end = new DateTime($currentEndDate);
+            $delta = $end->getTimestamp() - $start->getTimestamp();
+            if ($delta > 0) {
+                $durationSeconds = $delta;
+            }
+        } catch (Exception $e) {
+        }
+    }
+
+    $nextEnd = clone $nextStart;
+    $nextEnd->modify("+{$durationSeconds} seconds");
+
+    $pdo->prepare("UPDATE directories SET start_date = ?, end_date = ? WHERE id = ?")
+        ->execute([$nextStart->format('Y-m-d H:i:s'), $nextEnd->format('Y-m-d H:i:s'), $directory_id]);
 }
 
 function defaultPlanoPhases() {
@@ -282,7 +307,12 @@ elseif ($action === 'complete_phase') {
             ->execute([Security::encryptData($newName), $directory_id, $user_id]);
 
         $rule = $meta['rules'][(string)$nextPhase] ?? defaultRecurrenceRules()[(string)$nextPhase];
+        $nextPhaseIsRecurring = (int)($rule['is_recurring'] ?? 0) === 1 && trim((string)($rule['type'] ?? '')) !== '';
         applyPhaseRecurrenceToDirectory($pdo, $directory_id, $rule, $dir['start_date']);
+
+        if (!$nextPhaseIsRecurring) {
+            moveDirectoryToNextRoundHour($pdo, $directory_id, $dir['start_date'] ?? null, $dir['end_date'] ?? null);
+        }
 
         persistPlanoMeta($pdo, $directory_id, $meta['current_phase'], $meta['phases'], $meta['rules']);
 
