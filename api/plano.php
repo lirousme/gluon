@@ -28,7 +28,7 @@ try {
 }
 
 function verifyPlanoOwnership($pdo, $dir_id, $user_id) {
-    $stmt = $pdo->prepare("SELECT id, name_encrypted, start_date FROM directories WHERE id = ? AND user_id = ? AND type = 7");
+    $stmt = $pdo->prepare("SELECT id, name_encrypted, start_date, is_recurring FROM directories WHERE id = ? AND user_id = ? AND type = 7");
     $stmt->execute([$dir_id, $user_id]);
     return $stmt->fetch();
 }
@@ -45,14 +45,13 @@ function defaultRecurrenceRules() {
     $defaults = [];
     for ($i = 1; $i <= 5; $i++) {
         $defaults[(string)$i] = [
+            'is_recurring' => 0,
             'type' => '',
             'interval_value' => 1,
-            'days_of_week' => '',
             'custom_dates' => '',
             'time_start' => '',
             'time_end' => '',
-            'end_date' => '',
-            'start_date' => ''
+            'end_date' => ''
         ];
     }
     return $defaults;
@@ -142,16 +141,16 @@ function calculateNextRunDatePlano($type, $interval, $custom_dates, $base_date, 
 }
 
 function applyPhaseRecurrenceToDirectory($pdo, $directory_id, $rule, $fallbackStartDate) {
+    $isRecurring = (int)($rule['is_recurring'] ?? 0) === 1;
     $type = trim($rule['type'] ?? '');
-    if ($type === '') {
+    if (!$isRecurring || $type === '') {
         $pdo->prepare("DELETE FROM directory_recurrences WHERE directory_id = ?")->execute([$directory_id]);
         $pdo->prepare("UPDATE directories SET is_recurring = 0 WHERE id = ?")->execute([$directory_id]);
         return;
     }
 
-    $start_date = !empty($rule['start_date']) ? $rule['start_date'] . ' 00:00:00' : $fallbackStartDate;
+    $start_date = $fallbackStartDate ?: date('Y-m-d H:i:s');
     $interval = max(1, (int)($rule['interval_value'] ?? 1));
-    $days = trim($rule['days_of_week'] ?? '');
     $custom = trim($rule['custom_dates'] ?? '');
     $time_start = !empty($rule['time_start']) ? $rule['time_start'] . ':00' : null;
     $time_end = !empty($rule['time_end']) ? $rule['time_end'] . ':00' : null;
@@ -172,8 +171,20 @@ function applyPhaseRecurrenceToDirectory($pdo, $directory_id, $rule, $fallbackSt
             custom_dates = VALUES(custom_dates), exceptions = VALUES(exceptions), time_start = VALUES(time_start),
             time_end = VALUES(time_end), end_date = VALUES(end_date), next_run_date = VALUES(next_run_date)");
 
-    $stmtRec->execute([$directory_id, $type, $interval, $days ?: null, $custom ?: null, $exceptions, $time_start, $time_end, $end_date, $next_run]);
+    $stmtRec->execute([$directory_id, $type, $interval, null, $custom ?: null, $exceptions, $time_start, $time_end, $end_date, $next_run]);
     $pdo->prepare("UPDATE directories SET is_recurring = 1, start_date = ? WHERE id = ?")->execute([$start_date, $directory_id]);
+}
+
+function mapDirectoryRecurrenceToPlanoRule($directoryRecurrence, $isRecurring) {
+    return [
+        'is_recurring' => $isRecurring ? 1 : 0,
+        'type' => $directoryRecurrence['type'] ?? '',
+        'interval_value' => isset($directoryRecurrence['interval_value']) ? max(1, (int)$directoryRecurrence['interval_value']) : 1,
+        'custom_dates' => $directoryRecurrence['custom_dates'] ?? '',
+        'time_start' => !empty($directoryRecurrence['time_start']) ? substr((string)$directoryRecurrence['time_start'], 0, 5) : '',
+        'time_end' => !empty($directoryRecurrence['time_end']) ? substr((string)$directoryRecurrence['time_end'], 0, 5) : '',
+        'end_date' => !empty($directoryRecurrence['end_date']) ? substr((string)$directoryRecurrence['end_date'], 0, 10) : ''
+    ];
 }
 
 if ($action === 'fetch') {
@@ -185,6 +196,16 @@ if ($action === 'fetch') {
     }
 
     $meta = loadPlanoMeta($pdo, $directory_id);
+
+    if ((int)($dir['is_recurring'] ?? 0) === 1 && empty($meta['rules']['1']['type'])) {
+        $stmtRule = $pdo->prepare("SELECT type, interval_value, custom_dates, time_start, time_end, end_date FROM directory_recurrences WHERE directory_id = ?");
+        $stmtRule->execute([$directory_id]);
+        $directoryRule = $stmtRule->fetch();
+        if ($directoryRule) {
+            $meta['rules']['1'] = mapDirectoryRecurrenceToPlanoRule($directoryRule, true);
+            persistPlanoMeta($pdo, $directory_id, $meta['current_phase'], $meta['phases'], $meta['rules']);
+        }
+    }
 
     echo json_encode([
         'status' => 'success',
@@ -226,6 +247,10 @@ elseif ($action === 'set_phase_recurrence') {
 
     $meta = loadPlanoMeta($pdo, $directory_id);
     $meta['rules'][(string)$phase] = array_merge(defaultRecurrenceRules()[(string)$phase], is_array($rule) ? $rule : []);
+
+    if ($meta['current_phase'] === $phase) {
+        applyPhaseRecurrenceToDirectory($pdo, $directory_id, $meta['rules'][(string)$phase], $dir['start_date']);
+    }
 
     persistPlanoMeta($pdo, $directory_id, $meta['current_phase'], $meta['phases'], $meta['rules']);
     echo json_encode(['status' => 'success', 'message' => 'Repetição da fase salva.']);

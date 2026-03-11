@@ -66,27 +66,86 @@ const planoApp = {
     },
 
     recurrenceInputsHtml(phase, rule) {
+        const isRecurring = Number(rule.is_recurring || 0) === 1;
         return `
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-3">
-                <select id="rec_type_${phase}" class="bg-slate-900 border border-slate-700 rounded px-2 py-2 text-sm">
-                    <option value="" ${!rule.type ? 'selected' : ''}>Sem repetição</option>
-                    <option value="hourly" ${rule.type === 'hourly' ? 'selected' : ''}>A cada horas</option>
-                    <option value="daily" ${rule.type === 'daily' ? 'selected' : ''}>Diária</option>
-                    <option value="weekly" ${rule.type === 'weekly' ? 'selected' : ''}>Semanal</option>
-                    <option value="monthly" ${rule.type === 'monthly' ? 'selected' : ''}>Mensal</option>
-                    <option value="yearly" ${rule.type === 'yearly' ? 'selected' : ''}>Anual</option>
-                    <option value="custom" ${rule.type === 'custom' ? 'selected' : ''}>Datas custom</option>
-                </select>
-                <input id="rec_interval_${phase}" type="number" min="1" class="bg-slate-900 border border-slate-700 rounded px-2 py-2 text-sm" value="${rule.interval_value || 1}" placeholder="Intervalo">
-                <input id="rec_days_${phase}" class="bg-slate-900 border border-slate-700 rounded px-2 py-2 text-sm" value="${rule.days_of_week || ''}" placeholder="Dias semana (0,1,2)">
-                <input id="rec_custom_${phase}" class="bg-slate-900 border border-slate-700 rounded px-2 py-2 text-sm" value="${rule.custom_dates || ''}" placeholder='Datas JSON ["2026-01-05"]'>
-                <input id="rec_start_${phase}" type="date" class="bg-slate-900 border border-slate-700 rounded px-2 py-2 text-sm" value="${rule.start_date || ''}" placeholder="Data início">
-                <input id="rec_end_${phase}" type="date" class="bg-slate-900 border border-slate-700 rounded px-2 py-2 text-sm" value="${rule.end_date || ''}" placeholder="Data fim">
-                <input id="rec_time_start_${phase}" type="time" class="bg-slate-900 border border-slate-700 rounded px-2 py-2 text-sm" value="${rule.time_start || ''}" placeholder="Hora início">
-                <input id="rec_time_end_${phase}" type="time" class="bg-slate-900 border border-slate-700 rounded px-2 py-2 text-sm" value="${rule.time_end || ''}" placeholder="Hora fim">
+            <div class="mt-3 space-y-4 border-t border-slate-800 pt-3">
+                <label class="flex items-center gap-2 cursor-pointer mb-2">
+                    <input type="checkbox" id="is_recurring_${phase}" class="rounded border-slate-600 bg-slate-800 text-violet-500 focus:ring-violet-500 transition-colors" ${isRecurring ? 'checked' : ''} onchange="planoApp.toggleRecurrenceFields(${phase})">
+                    <span class="text-sm font-medium text-slate-300">Ativar Repetição Automática</span>
+                </label>
+
+                <div id="recurrence_fields_${phase}" class="space-y-4 border-t border-slate-700 pt-4 ${isRecurring ? '' : 'hidden'}">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">Frequência</label>
+                        <select id="rec_type_${phase}" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white" onchange="planoApp.handleRecurrenceTypeChange(${phase})">
+                            <option value="hourly" ${rule.type === 'hourly' ? 'selected' : ''}>De hora em hora (Diário)</option>
+                            <option value="daily" ${rule.type === 'daily' ? 'selected' : ''}>Diariamente</option>
+                            <option value="weekly" ${rule.type === 'weekly' ? 'selected' : ''}>Semanalmente</option>
+                            <option value="monthly" ${rule.type === 'monthly' ? 'selected' : ''}>Mensalmente</option>
+                            <option value="yearly" ${rule.type === 'yearly' ? 'selected' : ''}>Anualmente</option>
+                            <option value="custom" ${rule.type === 'custom' ? 'selected' : ''}>Datas Específicas</option>
+                        </select>
+                    </div>
+
+                    <div id="rec_interval_container_${phase}">
+                        <label class="block text-sm font-medium text-slate-300 mb-1">A cada (intervalo)</label>
+                        <input id="rec_interval_${phase}" type="number" min="1" value="${rule.interval_value || 1}" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+                    </div>
+
+                    <div id="rec_hourly_container_${phase}" class="hidden">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-1">Janela: Início</label>
+                                <input id="rec_time_start_${phase}" type="time" value="${rule.time_start || ''}" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-1">Janela: Término</label>
+                                <input id="rec_time_end_${phase}" type="time" value="${rule.time_end || ''}" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="rec_custom_container_${phase}" class="hidden">
+                        <label class="block text-sm font-medium text-slate-300 mb-1">Datas (formato JSON)</label>
+                        <input id="rec_custom_${phase}" type="text" value="${rule.custom_dates || ''}" placeholder='Ex: ["2026-03-01", "2026-04-05"]' class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white font-mono text-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">Parar de repetir em (Opcional)</label>
+                        <input id="rec_end_${phase}" type="date" value="${rule.end_date || ''}" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+                    </div>
+                </div>
             </div>
             <button onclick="planoApp.saveRecurrence(${phase})" class="mt-2 px-3 py-2 text-sm rounded bg-violet-600 hover:bg-violet-500">Salvar repetição da fase</button>
         `;
+    },
+
+    toggleRecurrenceFields(phase) {
+        const isChecked = document.getElementById(`is_recurring_${phase}`).checked;
+        const fields = document.getElementById(`recurrence_fields_${phase}`);
+        if (isChecked) fields.classList.remove('hidden');
+        else fields.classList.add('hidden');
+    },
+
+    handleRecurrenceTypeChange(phase) {
+        const type = document.getElementById(`rec_type_${phase}`).value;
+        const intervalCont = document.getElementById(`rec_interval_container_${phase}`);
+        const customCont = document.getElementById(`rec_custom_container_${phase}`);
+        const hourlyCont = document.getElementById(`rec_hourly_container_${phase}`);
+
+        if (type === 'custom') {
+            intervalCont.classList.add('hidden');
+            customCont.classList.remove('hidden');
+            hourlyCont.classList.add('hidden');
+        } else if (type === 'hourly') {
+            intervalCont.classList.remove('hidden');
+            customCont.classList.add('hidden');
+            hourlyCont.classList.remove('hidden');
+        } else {
+            intervalCont.classList.remove('hidden');
+            customCont.classList.add('hidden');
+            hourlyCont.classList.add('hidden');
+        }
     },
 
     render() {
@@ -124,6 +183,10 @@ const planoApp = {
                 </section>
             `;
         }).join('');
+
+        for (let phase = 1; phase <= PHASES.length; phase++) {
+            this.handleRecurrenceTypeChange(phase);
+        }
     },
 
     toggle(phase) {
@@ -151,16 +214,19 @@ const planoApp = {
     },
 
     async saveRecurrence(phase) {
+        const isRecurring = document.getElementById(`is_recurring_${phase}`).checked ? 1 : 0;
         const rule = {
+            is_recurring: isRecurring,
             type: document.getElementById(`rec_type_${phase}`).value,
             interval_value: Number(document.getElementById(`rec_interval_${phase}`).value || 1),
-            days_of_week: document.getElementById(`rec_days_${phase}`).value,
             custom_dates: document.getElementById(`rec_custom_${phase}`).value,
-            start_date: document.getElementById(`rec_start_${phase}`).value,
             end_date: document.getElementById(`rec_end_${phase}`).value,
             time_start: document.getElementById(`rec_time_start_${phase}`).value,
             time_end: document.getElementById(`rec_time_end_${phase}`).value
         };
+        if (!isRecurring) {
+            rule.type = '';
+        }
         const res = await this.api('set_phase_recurrence', { phase, rule });
         this.toast(res.message || (res.status === 'success' ? 'Repetição salva' : 'Erro'), res.status === 'success');
         if (res.status === 'success') await this.load();
