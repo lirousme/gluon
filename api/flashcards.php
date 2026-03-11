@@ -983,6 +983,23 @@ elseif ($action === 'list_batch_generations') {
     echo json_encode(['status' => 'success', 'jobs' => $jobs]);
 }
 
+elseif ($action === 'delete_batch_generation') {
+    $job_id = (int)($input['job_id'] ?? 0);
+    if ($job_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do job inválido.']));
+
+    $stmt = $pdo->prepare("SELECT j.id, j.directory_id, d.user_id as owner_id FROM flashcard_batch_jobs j JOIN directories d ON d.id = j.directory_id WHERE j.id = ? LIMIT 1");
+    $stmt->execute([$job_id]);
+    $job = $stmt->fetch();
+    if (!$job || (int)$job['owner_id'] !== (int)$user_id) die(json_encode(['status' => 'error', 'message' => 'Job não encontrado ou sem permissão.']));
+
+    $deleteStmt = $pdo->prepare("DELETE FROM flashcard_batch_jobs WHERE id = ? LIMIT 1");
+    if (!$deleteStmt->execute([$job_id])) {
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao excluir batch.']));
+    }
+
+    echo json_encode(['status' => 'success', 'message' => 'Batch excluído do histórico com sucesso.']);
+}
+
 elseif ($action === 'refresh_batch_generation') {
     $job_id = (int)($input['job_id'] ?? 0);
     if ($job_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do job inválido.']));

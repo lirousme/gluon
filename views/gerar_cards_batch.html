@@ -76,9 +76,14 @@
                             <p class="text-sm font-semibold text-white"><span id="batchStatusLabel">Nenhum batch enviado ainda</span></p>
                             <p id="batchMeta" class="text-xs text-slate-500">Envie um batch para acompanhar por aqui.</p>
                         </div>
-                        <button id="btnRefreshBatch" onclick="generateCardsBatchApp.manualRefreshBatch()" class="px-3 py-2 rounded-lg border border-slate-600 bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm disabled:opacity-40" disabled>
-                            <i class="fa-solid fa-rotate mr-1"></i> Atualizar status
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <button id="btnDeleteBatch" onclick="generateCardsBatchApp.deleteBatch()" class="px-3 py-2 rounded-lg border border-red-700/80 bg-red-950/40 hover:bg-red-900/60 text-red-200 text-sm disabled:opacity-40" disabled>
+                                <i class="fa-solid fa-trash mr-1"></i> Excluir batch
+                            </button>
+                            <button id="btnRefreshBatch" onclick="generateCardsBatchApp.manualRefreshBatch()" class="px-3 py-2 rounded-lg border border-slate-600 bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm disabled:opacity-40" disabled>
+                                <i class="fa-solid fa-rotate mr-1"></i> Atualizar status
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -132,12 +137,14 @@
                 const statusLabel = document.getElementById('batchStatusLabel');
                 const batchMeta = document.getElementById('batchMeta');
                 const btnRefresh = document.getElementById('btnRefreshBatch');
-                if (!statusLabel || !batchMeta || !btnRefresh) return;
+                const btnDelete = document.getElementById('btnDeleteBatch');
+                if (!statusLabel || !batchMeta || !btnRefresh || !btnDelete) return;
 
                 if (!job) {
                     statusLabel.textContent = 'Nenhum batch enviado ainda';
                     batchMeta.textContent = 'Envie um batch para acompanhar por aqui.';
                     btnRefresh.disabled = true;
+                    btnDelete.disabled = true;
                     return;
                 }
 
@@ -149,6 +156,7 @@
                 if (job.error_message) meta.push(job.error_message);
                 batchMeta.textContent = meta.length ? meta.join(' • ') : 'Sem detalhes adicionais no momento.';
                 btnRefresh.disabled = !this.activeJobId;
+                btnDelete.disabled = !this.activeJobId;
             },
 
             async init() {
@@ -212,6 +220,21 @@
             async manualRefreshBatch() {
                 if (!this.activeJobId) return;
                 await this.refreshBatchResult(this.activeJobId);
+            },
+
+            async deleteBatch() {
+                if (!this.activeJobId) return;
+                const confirmed = window.confirm('Tem certeza que deseja excluir este batch do histórico?');
+                if (!confirmed) return;
+
+                const res = await this.api('delete_batch_generation', { job_id: this.activeJobId });
+                if (!res) return;
+
+                this.generatedCards = [];
+                this.activeJobId = null;
+                this.renderList();
+                this.updateBatchStatusUI(null);
+                this.showToast(res.message || 'Batch excluído com sucesso.', 'success');
             },
 
             showToast(message, type = 'success') {
