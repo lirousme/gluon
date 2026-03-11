@@ -192,7 +192,7 @@ function generateAndPersistCardAudio($pdo, $card_id, $side, $text, $language) {
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         "Authorization: Bearer " . FISH_API_KEY,
         "Content-Type: application/json",
-        "model: s1"
+        "model: s2"
     ]);
 
     $response = curl_exec($ch);
