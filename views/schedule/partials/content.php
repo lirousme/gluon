@@ -23,16 +23,40 @@
                     <div id="dateControlContainer" class="flex items-center gap-2 w-full sm:w-auto"></div>
                 </div>
                 
-                <div class="flex items-center gap-1 bg-slate-900 rounded-lg p-1 border border-slate-700 w-full sm:w-auto justify-center shrink-0">
-                    <button onclick="scheduleApp.setViewMode('timeline')" id="btn-view-timeline" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition-colors" title="Linha do Tempo (1 Dia)"><i class="fa-solid fa-clock"></i></button>
-                    <button onclick="scheduleApp.setViewMode('kanban')" id="btn-view-kanban" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition-colors" title="Kanban Semanal (7 Dias)"><i class="fa-solid fa-columns"></i></button>
-                    <button onclick="scheduleApp.setViewMode('list')" id="btn-view-list" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition-colors" title="Lista por Dia (7 Dias)"><i class="fa-solid fa-list"></i></button>
+                <div class="flex items-center gap-2 w-full sm:w-auto justify-center shrink-0">
+                    <div class="flex items-center gap-1 bg-slate-900 rounded-lg p-1 border border-slate-700 w-full sm:w-auto justify-center shrink-0">
+                        <button onclick="scheduleApp.setViewMode('timeline')" id="btn-view-timeline" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition-colors" title="Linha do Tempo (1 Dia)"><i class="fa-solid fa-clock"></i></button>
+                        <button onclick="scheduleApp.setViewMode('kanban')" id="btn-view-kanban" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition-colors" title="Kanban Semanal (7 Dias)"><i class="fa-solid fa-columns"></i></button>
+                        <button onclick="scheduleApp.setViewMode('list')" id="btn-view-list" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition-colors" title="Lista por Dia (7 Dias)"><i class="fa-solid fa-list"></i></button>
+                    </div>
+                    <button onclick="scheduleApp.toggleFilterDrawer()" id="btn-filter-drawer" class="px-3 py-1.5 rounded-md text-slate-300 bg-slate-900 border border-slate-700 hover:text-white hover:bg-slate-800 transition-colors" title="Filtros da agenda">
+                        <i class="fa-solid fa-sliders"></i>
+                    </button>
                 </div>
             </div>
 
             <div id="viewContainer" class="flex-1 overflow-hidden relative flex flex-col"></div>
         </div>
     </main>
+
+    <div id="filterDrawerBackdrop" onclick="scheduleApp.closeFilterDrawer()" class="fixed inset-0 bg-black/50 z-40 hidden opacity-0 transition-opacity duration-300"></div>
+    <aside id="filterDrawer" class="fixed top-0 right-0 h-full w-full max-w-sm bg-slate-900 border-l border-slate-700 shadow-2xl z-50 translate-x-full transition-transform duration-300">
+        <div class="h-full flex flex-col">
+            <div class="p-4 border-b border-slate-700 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-white"><i class="fa-solid fa-filter mr-2 text-gluon-primary"></i>Filtros</h3>
+                <button type="button" onclick="scheduleApp.closeFilterDrawer()" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-4 space-y-4">
+                <label class="flex items-center justify-between gap-4 rounded-lg border border-slate-700 bg-slate-800/60 p-3 cursor-pointer">
+                    <div>
+                        <p class="text-sm font-semibold text-slate-200">Diretórios com revisão de flashcards vencida</p>
+                        <p class="text-xs text-slate-400 mt-1">Exibe decks no horário da revisão mais antiga pendente.</p>
+                    </div>
+                    <input id="filter-show-flashcard-due" type="checkbox" onchange="scheduleApp.handleFilterChange()" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-gluon-primary focus:ring-gluon-primary" checked>
+                </label>
+            </div>
+        </div>
+    </aside>
 
     <!-- BARRA DE ROLAGEM CUSTOMIZADA -->
     <div id="gluon-custom-scrollbar" class="hidden md:hidden fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 h-[46px] bg-slate-900/80 backdrop-blur-md border-t border-slate-800/80 z-[60] flex items-center px-2">
