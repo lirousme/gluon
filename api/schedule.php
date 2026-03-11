@@ -374,6 +374,41 @@ else if ($action === 'delete_overdue_tasks') {
     ]);
 }
 
+else if ($action === 'get_flashcard_due_directories') {
+    $stmt = $pdo->prepare(
+        "SELECT d.id, d.type, d.name_encrypted, d.icon, d.icon_color_from, d.icon_color_to, d.cover_url_encrypted,
+                MIN(COALESCE(fs.next_review_at, f.created_at)) AS oldest_review_at,
+                COUNT(f.id) AS due_cards
+         FROM directories d
+         INNER JOIN flashcards f ON f.directory_id = d.id
+         LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
+         WHERE d.user_id = ?
+           AND d.type = 4
+           AND (fs.next_review_at IS NULL OR fs.next_review_at <= NOW())
+         GROUP BY d.id, d.type, d.name_encrypted, d.icon, d.icon_color_from, d.icon_color_to, d.cover_url_encrypted
+         HAVING due_cards > 0
+         ORDER BY oldest_review_at ASC"
+    );
+    $stmt->execute([$user_id, $user_id]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $response = array_map(function ($row) {
+        return [
+            'id' => (int)$row['id'],
+            'type' => (int)$row['type'],
+            'name' => Security::decryptData($row['name_encrypted']),
+            'icon' => $row['icon'] ?? 'fa-book',
+            'color_from' => $row['icon_color_from'] ?? '#3b82f6',
+            'color_to' => $row['icon_color_to'] ?? '#6366f1',
+            'cover_url' => !empty($row['cover_url_encrypted']) ? Security::decryptData($row['cover_url_encrypted']) : '',
+            'oldest_review_at' => $row['oldest_review_at'],
+            'due_cards' => (int)$row['due_cards']
+        ];
+    }, $rows);
+
+    echo json_encode(['status' => 'success', 'data' => $response]);
+}
+
 else if ($action === 'get_agenda_info') {
     // Busca informações básicas da pasta Agenda atual (Nome, Capa e View Preferida)
     $id = (int)($input['id'] ?? 0);

@@ -2,6 +2,7 @@
         const scheduleApp = {
             agendaId: null,
             items: [],
+            flashcardDueItems: [],
             currentDateObj: null,
             
             isDragging: false,
@@ -20,6 +21,10 @@
                 sidebarOpen: false,
                 directoryCache: new Map(),
                 copied_directory_id: null,
+                filterDrawerOpen: false,
+                filters: {
+                    showFlashcardDueDirectories: true
+                },
                 pendingStartDate: null,
                 pendingEndDate: null,
                 availableIcons: [
@@ -242,6 +247,8 @@
                 
                 this.renderIconPicker();
                 this.setupFormListeners();
+                this.loadFilterSettings();
+                this.syncFilterUI();
                 
                 const savedSidebar = localStorage.getItem('gluon_agenda_sidebar');
                 if (savedSidebar === 'false') {
@@ -277,6 +284,59 @@
                         menu.classList.add('hidden');
                     }
                 });
+            },
+
+            loadFilterSettings() {
+                const saved = localStorage.getItem('gluon_schedule_filters');
+                if (!saved) return;
+                try {
+                    const parsed = JSON.parse(saved);
+                    if (typeof parsed.showFlashcardDueDirectories === 'boolean') {
+                        this.state.filters.showFlashcardDueDirectories = parsed.showFlashcardDueDirectories;
+                    }
+                } catch (e) {}
+            },
+
+            persistFilters() {
+                localStorage.setItem('gluon_schedule_filters', JSON.stringify(this.state.filters));
+            },
+
+            syncFilterUI() {
+                const checkbox = document.getElementById('filter-show-flashcard-due');
+                if (checkbox) checkbox.checked = this.state.filters.showFlashcardDueDirectories;
+            },
+
+            toggleFilterDrawer() {
+                this.state.filterDrawerOpen = !this.state.filterDrawerOpen;
+                const drawer = document.getElementById('filterDrawer');
+                const backdrop = document.getElementById('filterDrawerBackdrop');
+                if (!drawer || !backdrop) return;
+
+                if (this.state.filterDrawerOpen) {
+                    drawer.classList.remove('translate-x-full');
+                    backdrop.classList.remove('hidden');
+                    requestAnimationFrame(() => backdrop.classList.remove('opacity-0'));
+                } else {
+                    this.closeFilterDrawer();
+                }
+            },
+
+            closeFilterDrawer() {
+                this.state.filterDrawerOpen = false;
+                const drawer = document.getElementById('filterDrawer');
+                const backdrop = document.getElementById('filterDrawerBackdrop');
+                if (!drawer || !backdrop) return;
+
+                drawer.classList.add('translate-x-full');
+                backdrop.classList.add('opacity-0');
+                setTimeout(() => { if (!this.state.filterDrawerOpen) backdrop.classList.add('hidden'); }, 300);
+            },
+
+            handleFilterChange() {
+                const checkbox = document.getElementById('filter-show-flashcard-due');
+                this.state.filters.showFlashcardDueDirectories = !!checkbox?.checked;
+                this.persistFilters();
+                this.render();
             },
 
             toggleSidebar() {
@@ -480,18 +540,41 @@
             },
 
             async loadData() {
-                const res = await this.api('directories', 'fetch', { parent_id: this.agendaId });
-                if (res) {
-                    this.items = res.data;
-                    
-                    // Salva a agenda temporariamente
-                    const agendaData = this.state.directoryCache.get(Number(this.agendaId));
-                    this.state.directoryCache.clear();
-                    if (agendaData) this.state.directoryCache.set(Number(this.agendaId), agendaData);
-                    
-                    res.data.forEach(d => this.state.directoryCache.set(Number(d.id), d));
-                    this.render();
-                }
+                const [res, flashcardRes] = await Promise.all([
+                    this.api('directories', 'fetch', { parent_id: this.agendaId }),
+                    this.api('schedule', 'get_flashcard_due_directories', { id: this.agendaId })
+                ]);
+
+                if (!res) return;
+
+                this.items = res.data;
+                this.flashcardDueItems = (flashcardRes && Array.isArray(flashcardRes.data))
+                    ? flashcardRes.data.map((deck) => {
+                        const startDate = deck.oldest_review_at;
+                        const startObj = startDate ? new Date(startDate.replace(' ', 'T')) : new Date();
+                        const endObj = new Date(startObj.getTime() + (60 * 60000));
+                        return {
+                            ...deck,
+                            start_date: this.toMySQLFormat(startObj),
+                            end_date: this.toMySQLFormat(endObj),
+                            due_cards: Number(deck.due_cards || 0),
+                            is_flashcard_due_directory: 1,
+                            is_schedule_read_only: 1
+                        };
+                    })
+                    : [];
+
+                // Salva a agenda temporariamente
+                const agendaData = this.state.directoryCache.get(Number(this.agendaId));
+                this.state.directoryCache.clear();
+                if (agendaData) this.state.directoryCache.set(Number(this.agendaId), agendaData);
+
+                const mergedMap = new Map();
+                this.items.forEach((item) => mergedMap.set(Number(item.id), item));
+                this.flashcardDueItems.forEach((item) => mergedMap.set(Number(item.id), { ...mergedMap.get(Number(item.id)), ...item }));
+
+                mergedMap.forEach((item) => this.state.directoryCache.set(Number(item.id), item));
+                this.render();
             },
 
             isTaskOnDate(item, targetDateStr) {
@@ -864,8 +947,18 @@
                 const unscheduledContainer = document.getElementById('unscheduledList');
                 unscheduledContainer.innerHTML = '';
                 
-                let backlogItems = this.items.filter(item => !item.start_date || !item.end_date);
-                let scheduledItems = this.items.filter(item => item.start_date && item.end_date);
+                const allItemsMap = new Map();
+                this.items.forEach((item) => allItemsMap.set(Number(item.id), item));
+                if (this.state.filters.showFlashcardDueDirectories) {
+                    this.flashcardDueItems.forEach((item) => {
+                        const merged = { ...(allItemsMap.get(Number(item.id)) || {}), ...item };
+                        allItemsMap.set(Number(item.id), merged);
+                    });
+                }
+                const allItems = Array.from(allItemsMap.values());
+
+                let backlogItems = allItems.filter(item => !item.start_date || !item.end_date);
+                let scheduledItems = allItems.filter(item => item.start_date && item.end_date);
 
                 scheduledItems.sort((a, b) => {
                     const timeA = a.start_date ? a.start_date.split(' ')[1] : '00:00:00';
@@ -916,15 +1009,18 @@
 
             generateBacklogCard(item) {
                 const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
+                const flashcardBadge = item.is_flashcard_due_directory ? `<span class="text-[10px] text-amber-300 ml-2"><i class="fa-solid fa-bolt"></i> Revisão vencida</span>` : '';
+                const readOnlyClass = item.is_schedule_read_only ? 'readonly-schedule-item cursor-default' : 'cursor-grab';
+                const settingsButton = item.is_schedule_read_only ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20"><i class="fa-solid fa-cog"></i></button>`;
                 return `
-                <div data-id="${item.id}" class="backlog-item bg-slate-800 border border-slate-700 p-3 rounded-lg shadow-sm cursor-grab hover:bg-slate-700 transition-colors flex justify-between items-center group relative overflow-hidden mb-3" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                <div data-id="${item.id}" class="backlog-item ${readOnlyClass} bg-slate-800 border border-slate-700 p-3 rounded-lg shadow-sm hover:bg-slate-700 transition-colors flex justify-between items-center group relative overflow-hidden mb-3" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                     ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10" style="background-image: url('${item.cover_url}')"></div>` : ''}
                     <div class="flex items-center gap-2 truncate pointer-events-none z-10 flex-1 pr-2">
                         <i class="fa-solid fa-grip-vertical text-slate-500 handle hidden sortable-handle"></i>
                         <i class="fa-solid ${item.icon} text-sm" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
-                        <span class="font-medium text-sm text-slate-200 truncate w-full">${this.escapeHTML(item.name)} ${repeatIcon}</span>
+                        <span class="font-medium text-sm text-slate-200 truncate w-full">${this.escapeHTML(item.name)} ${repeatIcon} ${flashcardBadge}</span>
                     </div>
-                    <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20"><i class="fa-solid fa-cog"></i></button>
+                    ${settingsButton}
                 </div>`;
             },
 
@@ -959,14 +1055,15 @@
                     const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 opacity-80" title="Tarefa Recorrente"></i>` : '';
                     const isCurrentTime = this.isInstanceInCurrentTime(inst, now);
                     const projClass = inst.isProjection ? 'virtual-task opacity-80' : '';
+                    const readOnlyClass = item.is_schedule_read_only ? 'readonly-schedule-item' : '';
                     const currentTimeClass = isCurrentTime ? 'current-time-item' : '';
-                    const resizeHTML = inst.isProjection ? '' : `<div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>`;
+                    const resizeHTML = (inst.isProjection || item.is_schedule_read_only) ? '' : `<div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>`;
 
                     const instTimeStr = inst.start.getHours().toString().padStart(2,'0') + ':' + inst.start.getMinutes().toString().padStart(2,'0') + ':00';
                     const contextDateStr = `${selectedDateStr} ${instTimeStr}`;
 
                     eventsLayer.innerHTML += `
-                        <div id="evt-${inst.uid}" class="event-card group ${projClass} ${currentTimeClass}" data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" data-context-start-ts="${inst.start.getTime()}" data-context-end-ts="${inst.end.getTime()}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                        <div id="evt-${inst.uid}" class="event-card group ${projClass} ${readOnlyClass} ${currentTimeClass}" data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" data-context-start-ts="${inst.start.getTime()}" data-context-end-ts="${inst.end.getTime()}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                             ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                             <div class="flex justify-between items-start pointer-events-none z-10 relative">
                                 <div class="font-bold truncate text-sm flex items-center gap-1.5 w-full pr-6">
@@ -975,7 +1072,7 @@
                             </div>
                             <div class="text-[10px] opacity-70 pointer-events-none z-10 relative font-medium">${inst.start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${inst.end.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                             
-                            <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="absolute top-1 right-1 text-white/70 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 z-20 bg-black/40 rounded shadow-md"><i class="fa-solid fa-cog text-xs"></i></button>
+                            ${item.is_schedule_read_only ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="absolute top-1 right-1 text-white/70 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 z-20 bg-black/40 rounded shadow-md"><i class="fa-solid fa-cog text-xs"></i></button>`}
 
                             ${resizeHTML}
                         </div>
@@ -1029,9 +1126,10 @@
                 const fromColor = item.color_from || '#3b82f6';
                 const timeStr = `${inst.start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${inst.end.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
                 const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
+                const flashcardBadge = item.is_flashcard_due_directory ? `<span class="text-[10px] text-amber-300 ml-1"><i class="fa-solid fa-bolt"></i> Revisão vencida</span>` : '';
                 const isCurrentTime = this.isInstanceInCurrentTime(inst);
 
-                const projectionClass = `${inst.isProjection ? 'virtual-task' : ''} cursor-grab`;
+                const projectionClass = `${inst.isProjection ? 'virtual-task' : ''} ${item.is_schedule_read_only ? 'readonly-schedule-item cursor-default' : 'cursor-grab'}`;
                 const currentTimeClass = isCurrentTime ? 'current-time-item' : '';
                 const borderStyle = `border-left: 4px solid ${fromColor};`;
                 const handleHTML = `<i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>`;
@@ -1047,12 +1145,12 @@
                             <div class="flex items-center gap-1.5 truncate w-full pr-5">
                                 ${handleHTML}
                                 <i class="fa-solid ${item.icon} text-xs" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
-                                <span class="font-bold text-sm text-slate-100 truncate">${this.escapeHTML(item.name)} ${repeatIcon}</span>
+                                <span class="font-bold text-sm text-slate-100 truncate">${this.escapeHTML(item.name)} ${repeatIcon} ${flashcardBadge}</span>
                             </div>
                         </div>
                         <div class="text-[10px] text-slate-400 mt-1 z-10 relative font-medium"><i class="fa-regular fa-clock"></i> ${timeStr}</div>
                         
-                        <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="absolute top-1.5 right-1.5 text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20 bg-slate-800/80 rounded border border-slate-600"><i class="fa-solid fa-cog text-xs"></i></button>
+                        ${item.is_schedule_read_only ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="absolute top-1.5 right-1.5 text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20 bg-slate-800/80 rounded border border-slate-600"><i class="fa-solid fa-cog text-xs"></i></button>`}
                     </div>`;
                 } else {
                     return `
@@ -1065,9 +1163,9 @@
                                 <span class="text-[10px] text-slate-500">${timeStr.split(' - ')[1]}</span>
                             </div>
                             <i class="fa-solid ${item.icon} text-lg shrink-0" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
-                            <span class="font-semibold text-sm text-slate-200 truncate flex-1">${this.escapeHTML(item.name)} ${repeatIcon}</span>
+                            <span class="font-semibold text-sm text-slate-200 truncate flex-1">${this.escapeHTML(item.name)} ${repeatIcon} ${flashcardBadge}</span>
                         </div>
-                        <button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-2 z-20 shrink-0 bg-slate-800 rounded shadow"><i class="fa-solid fa-cog"></i></button>
+                        ${item.is_schedule_read_only ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-2 z-20 shrink-0 bg-slate-800 rounded shadow"><i class="fa-solid fa-cog"></i></button>`}
                     </div>`;
                 }
             },
@@ -1114,6 +1212,11 @@
                 }, 1000);
             },
 
+            isItemScheduleReadOnly(id) {
+                const item = this.state.directoryCache.get(Number(id));
+                return !!(item && item.is_schedule_read_only);
+            },
+
             async enterDirectoryOrFile(id) {
                 const item = this.state.directoryCache.get(Number(id));
                 if(!item) return;
@@ -1148,6 +1251,9 @@
                     ghostClass: 'sortable-ghost',
                     dragClass: 'sortable-drag',
                     delay: 100, delayOnTouchOnly: true,
+                    filter: '.readonly-schedule-item',
+                    preventOnFilter: false,
+                    onMove: (evt) => !evt.dragged.classList.contains('readonly-schedule-item'),
                     onEnd: (evt) => this.handleSortableEnd(evt)
                 };
 
@@ -1164,6 +1270,10 @@
             async handleSortableEnd(evt) {
                 const itemEl = evt.item;
                 const itemId = itemEl.getAttribute('data-id');
+                if (this.isItemScheduleReadOnly(itemId)) {
+                    await this.loadData();
+                    return;
+                }
                 const movedItemContextStart = itemEl.getAttribute('data-context-start') || null;
                 const movedItemContextEnd = itemEl.getAttribute('data-context-end') || null;
                 const toEl = evt.to;
@@ -1243,7 +1353,7 @@
                     const el = orderedItems[idx];
                     const id = Number(el.getAttribute('data-id'));
                     const item = this.state.directoryCache.get(id);
-                    if (!item) continue;
+                    if (!item || item.is_schedule_read_only) continue;
 
                     const isVirtual = el.classList.contains('virtual-task');
                     const elContextStart = el.getAttribute('data-context-start') || null;
@@ -1338,6 +1448,7 @@
 
             startDragTimeline(e, el) {
                 if (e.button !== 0) return;
+                if (el.classList.contains('readonly-schedule-item')) return;
                 this.isDragging = true;
                 this.wasDragged = false;
                 this.dragElement = el;
@@ -1348,6 +1459,7 @@
             },
 
             startResize(e, id) {
+                if (this.isItemScheduleReadOnly(id)) return;
                 e.preventDefault(); e.stopPropagation();
                 this.isResizing = true;
                 this.wasDragged = false;
@@ -1431,13 +1543,19 @@
                 await this.updateItemDates(id, startObj, endObj);
             },
 
-            dragStart(ev, id) { ev.dataTransfer.setData("text/plain", id); },
+            dragStart(ev, id) {
+                if (this.isItemScheduleReadOnly(id)) {
+                    ev.preventDefault();
+                    return;
+                }
+                ev.dataTransfer.setData("text/plain", id);
+            },
             allowDrop(ev) { ev.preventDefault(); },
             
             async dropOnTimeline(ev) {
                 ev.preventDefault();
                 const id = ev.dataTransfer.getData("text/plain");
-                if (!id) return;
+                if (!id || this.isItemScheduleReadOnly(id)) return;
                 const containerRect = document.getElementById('timelineScroll').getBoundingClientRect();
                 const dropY = ev.clientY - containerRect.top + document.getElementById('timelineScroll').scrollTop;
                 const snappedY = Math.floor(dropY / 30) * 30; 
@@ -1467,6 +1585,11 @@
 
 
             async updateItemDates(id, startVal, endVal, shouldReload = true, options = {}) {
+                if (this.isItemScheduleReadOnly(id)) {
+                    this.showToast('Este diretório de revisão vencida é apenas leitura na Agenda.', 'error');
+                    return;
+                }
+
                 let formattedStart = this.toMySQLFormat(startVal);
                 let formattedEnd = this.toMySQLFormat(endVal);
 
@@ -1633,11 +1756,14 @@
 
                 if (id) {
                     dirObj = this.state.directoryCache.get(Number(id));
-                    
-                    if (dirObj) {
-                        if (dirObj.start_date) document.getElementById('dirStartDate').value = dirObj.start_date;
-                        if (dirObj.end_date) document.getElementById('dirEndDate').value = dirObj.end_date;
+                    if (!dirObj) return;
+                    if (dirObj.is_schedule_read_only) {
+                        this.showToast('Este diretório é apenas leitura na Agenda. Abra no Flashcards para editar.', 'error');
+                        return;
                     }
+
+                    if (dirObj.start_date) document.getElementById('dirStartDate').value = dirObj.start_date;
+                    if (dirObj.end_date) document.getElementById('dirEndDate').value = dirObj.end_date;
                     
                     let titleText = 'Item';
                     if(dirObj.type === 0) titleText = 'Tarefa / Pasta';
@@ -1756,6 +1882,11 @@
                 if (e && e.preventDefault) e.preventDefault();
                 
                 const id = document.getElementById('dirId').value;
+
+                if (id && this.isItemScheduleReadOnly(id)) {
+                    this.showToast('Este diretório de revisão vencida não pode ser editado pela Agenda.', 'error');
+                    return;
+                }
                 
                 if (!document.getElementById('dirName').value.trim()) {
                     return this.showToast("O nome do item é obrigatório.", "error");
@@ -1829,6 +1960,10 @@
 
             deleteFromModal() {
                 const id = document.getElementById('dirId').value;
+                if (id && this.isItemScheduleReadOnly(id)) {
+                    this.showToast('Este diretório de revisão vencida não pode ser excluído pela Agenda.', 'error');
+                    return;
+                }
                 const isRecurring = document.getElementById('is_recurring').checked;
                 
                 if(!id) return;
