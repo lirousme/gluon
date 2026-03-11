@@ -34,15 +34,16 @@ function verifyPlanoOwnership($pdo, $dir_id, $user_id) {
 }
 
 function moveDirectoryToNextRoundHour($pdo, $directory_id, $currentStartDate, $currentEndDate) {
-    $nextStart = new DateTime();
+    $brasiliaTz = new DateTimeZone('America/Sao_Paulo');
+    $nextStart = new DateTime('now', $brasiliaTz);
     $nextStart->modify('+1 hour');
     $nextStart->setTime((int)$nextStart->format('H'), 0, 0);
 
     $durationSeconds = 3600;
     if (!empty($currentStartDate) && !empty($currentEndDate)) {
         try {
-            $start = new DateTime($currentStartDate);
-            $end = new DateTime($currentEndDate);
+            $start = new DateTime($currentStartDate, $brasiliaTz);
+            $end = new DateTime($currentEndDate, $brasiliaTz);
             $delta = $end->getTimestamp() - $start->getTimestamp();
             if ($delta > 0) {
                 $durationSeconds = $delta;
