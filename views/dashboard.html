@@ -112,6 +112,10 @@
                             <i class="fa-solid fa-folder-gear w-5 text-center text-lg"></i> <span class="font-medium">Configurações</span>
                         </button>
 
+                        <button onclick="app.generateMissingAudiosFromDirectory(); app.toggleMobileViewMenu()" id="btn-generate-missing-audios" class="w-full text-left px-4 py-2.5 text-sm text-cyan-300 hover:bg-slate-700 hover:text-cyan-200 flex items-center gap-3 transition-colors hidden">
+                            <i class="fa-solid fa-volume-high w-5 text-center text-lg"></i> <span class="font-medium">Gerar áudios pendentes</span>
+                        </button>
+
                         <button onclick="app.setCurrentDirectoryAsHome(); app.toggleMobileViewMenu()" id="btn-set-home-directory" class="w-full text-left px-4 py-2.5 text-sm text-emerald-300 hover:bg-slate-700 hover:text-emerald-200 flex items-center gap-3 transition-colors hidden">
                             <i class="fa-solid fa-house-circle-check w-5 text-center text-lg"></i> <span class="font-medium">Definir como página inicial</span>
                         </button>
@@ -856,6 +860,35 @@
                 }
             },
 
+
+            async generateMissingAudiosFromDirectory() {
+                const directoryId = this.getCurrentParentId();
+                if (!directoryId) {
+                    return this.showToast('Entre em um diretório para gerar áudios pendentes.', 'error');
+                }
+
+                const button = document.getElementById('btn-generate-missing-audios');
+                if (button) {
+                    button.disabled = true;
+                    button.classList.add('opacity-60', 'pointer-events-none');
+                }
+
+                const response = await this.api('flashcards', 'generate_missing_audios_from_directory', { directory_id: directoryId });
+
+                if (button) {
+                    button.disabled = false;
+                    button.classList.remove('opacity-60', 'pointer-events-none');
+                }
+
+                if (response) {
+                    const details = response.data || {};
+                    const message = `${response.message || 'Processo concluído.'} (Gerados: ${details.generated_count || 0}, ignorados: ${details.skipped_count || 0}, falhas: ${details.failed_count || 0})`;
+                    this.showToast(message, details.failed_count > 0 ? 'error' : 'success');
+                } else {
+                    this.showToast('Falha ao gerar áudios pendentes.', 'error');
+                }
+            },
+
             handleCoverUpload(e) {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -1264,7 +1297,7 @@
 
                 this.renderProfilePresentation();
 
-                const hideForVisitor = ['btn-copy-dir', 'btn-paste-dir', 'btn-move-dir', 'btn-create-portal', 'btn-set-home-directory', 'btn-reorder-desktop', 'btn-reorder-mobile', 'btn-profile-settings'];
+                const hideForVisitor = ['btn-copy-dir', 'btn-paste-dir', 'btn-move-dir', 'btn-create-portal', 'btn-set-home-directory', 'btn-reorder-desktop', 'btn-reorder-mobile', 'btn-profile-settings', 'btn-generate-missing-audios'];
                 hideForVisitor.forEach(id => {
                     const el = document.getElementById(id);
                     if (!el) return;
@@ -1298,6 +1331,17 @@
                 const btnPaste = document.getElementById('btn-paste-dir');
                 const btnMove = document.getElementById('btn-move-dir');
                 const btnPortal = document.getElementById('btn-create-portal');
+                const btnGenerateAudio = document.getElementById('btn-generate-missing-audios');
+
+                if (btnGenerateAudio) {
+                    if (this.getCurrentParentId() !== null) {
+                        btnGenerateAudio.classList.remove('hidden');
+                        btnGenerateAudio.classList.add('flex');
+                    } else {
+                        btnGenerateAudio.classList.add('hidden');
+                        btnGenerateAudio.classList.remove('flex');
+                    }
+                }
 
                 if (btnPaste && btnMove && btnPortal) {
                     if (this.state.rootPrefs.copied_directory_id !== null && this.state.rootPrefs.copied_directory_id !== undefined) {
