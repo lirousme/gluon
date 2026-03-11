@@ -174,6 +174,50 @@ function adjustPronunciationForTTS($pdo, $text, $language) {
 
 
 
+
+function generateAndPersistCardAudio($pdo, $card_id, $side, $text, $language) {
+    $text_to_speech = adjustPronunciationForTTS($pdo, $text, $language);
+    $reference_id = getFishReferenceIdByLanguage($language);
+
+    $ch = curl_init('https://api.fish.audio/v1/tts');
+    $payload = json_encode([
+        "text" => $text_to_speech,
+        "reference_id" => $reference_id,
+        "format" => "mp3"
+    ]);
+
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        "Authorization: Bearer " . FISH_API_KEY,
+        "Content-Type: application/json",
+        "model: s1"
+    ]);
+
+    $response = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpcode !== 200 || !$response) {
+        return false;
+    }
+
+    $audio_dir = __DIR__ . '/../assets/audio/';
+    if (!is_dir($audio_dir)) {
+        mkdir($audio_dir, 0755, true);
+    }
+
+    $file_path = $audio_dir . 'card_' . $card_id . '_' . $side . '.mp3';
+    file_put_contents($file_path, $response);
+
+    $col = $side === 'front' ? 'has_audio_front' : 'has_audio_back';
+    $stmt = $pdo->prepare("UPDATE flashcards SET $col = 1 WHERE id = ?");
+    $stmt->execute([$card_id]);
+
+    return true;
+}
+
 function buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, $model = 'gpt-5-nano') {
     $basePrompt = '';
     if ($deck_structure === 'fatos') {
@@ -544,47 +588,91 @@ elseif ($action === 'generate_audio') {
     $back_language = normalizeDeckLanguage($card['deck_back_language'] ?? 'en-GB', 'en-GB');
     $side_language = $side === 'front' ? $front_language : $back_language;
 
-    // Ajuste de pronúncia atualmente otimizado para PT-BR
-    $text_to_speech = adjustPronunciationForTTS($pdo, $clean_text, $side_language);
-    $reference_id = getFishReferenceIdByLanguage($side_language);
-
-    $ch = curl_init('https://api.fish.audio/v1/tts');
-    $payload = json_encode([
-        "text" => $text_to_speech,
-        "reference_id" => $reference_id,
-        "format" => "mp3"
-    ]);
-
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        "Authorization: Bearer " . FISH_API_KEY,
-        "Content-Type: application/json",
-        "model: s1"
-    ]);
-
-    $response = curl_exec($ch);
-    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($httpcode !== 200 || !$response) {
+    $ok = generateAndPersistCardAudio($pdo, $card_id, $side, $clean_text, $side_language);
+    if (!$ok) {
         die(json_encode(['status' => 'error', 'message' => 'Erro ao comunicar com a API de voz. O serviço pode estar indisponível.']));
     }
 
-    $audio_dir = __DIR__ . '/../assets/audio/';
-    if (!is_dir($audio_dir)) {
-        mkdir($audio_dir, 0755, true);
+    echo json_encode(['status' => 'success', 'message' => 'Áudio gerado e salvo com sucesso!']);
+}
+
+elseif ($action === 'generate_missing_audios_from_directory') {
+    $directory_id = (int)($input['directory_id'] ?? 0);
+    if ($directory_id === 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID do diretório inválido.']));
     }
 
-    $file_path = $audio_dir . 'card_' . $card_id . '_' . $side . '.mp3';
-    file_put_contents($file_path, $response);
+    $deck = verifyDeckOwnership($pdo, $directory_id, $user_id);
+    if (!$deck) {
+        die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+    }
 
-    $col = $side === 'front' ? 'has_audio_front' : 'has_audio_back';
-    $stmt = $pdo->prepare("UPDATE flashcards SET $col = 1 WHERE id = ?");
-    $stmt->execute([$card_id]);
+    $front_language = normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR');
+    $back_language = normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB');
 
-    echo json_encode(['status' => 'success', 'message' => 'Áudio gerado e salvo com sucesso!']);
+    $stmt = $pdo->prepare("SELECT id, front_encrypted, back_encrypted, has_audio_front, has_audio_back FROM flashcards WHERE directory_id = ? ORDER BY sort_order ASC, id ASC");
+    $stmt->execute([$directory_id]);
+    $cards = $stmt->fetchAll();
+
+    $generated_count = 0;
+    $skipped_count = 0;
+    $failed_count = 0;
+
+    foreach ($cards as $card) {
+        $front_text = !empty($card['front_encrypted']) ? trim(strip_tags(Security::decryptData($card['front_encrypted']))) : '';
+        $back_text = !empty($card['back_encrypted']) ? trim(strip_tags(Security::decryptData($card['back_encrypted']))) : '';
+
+        $jobs = [
+            [
+                'side' => 'front',
+                'has_audio' => (int)$card['has_audio_front'] === 1,
+                'text' => $front_text,
+                'language' => $front_language
+            ],
+            [
+                'side' => 'back',
+                'has_audio' => (int)$card['has_audio_back'] === 1,
+                'text' => $back_text,
+                'language' => $back_language
+            ]
+        ];
+
+        foreach ($jobs as $job) {
+            if ($job['has_audio']) {
+                $skipped_count++;
+                continue;
+            }
+
+            if ($job['text'] === '') {
+                $skipped_count++;
+                continue;
+            }
+
+            $ok = generateAndPersistCardAudio($pdo, (int)$card['id'], $job['side'], $job['text'], $job['language']);
+            if ($ok) {
+                $generated_count++;
+            } else {
+                $failed_count++;
+            }
+        }
+    }
+
+    $baseMessage = 'Geração em fila concluída.';
+    if ($generated_count === 0 && $failed_count === 0) {
+        $baseMessage = 'Nenhum áudio pendente com texto encontrado neste deck.';
+    } elseif ($failed_count > 0) {
+        $baseMessage = 'Processo concluído com falhas em alguns cards.';
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'message' => $baseMessage,
+        'data' => [
+            'generated_count' => $generated_count,
+            'skipped_count' => $skipped_count,
+            'failed_count' => $failed_count
+        ]
+    ]);
 }
 
 elseif ($action === 'translate_text') {
