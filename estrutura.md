@@ -49,6 +49,7 @@ root_view VARCHAR(10) DEFAULT 'grid',
 root_new_item_position VARCHAR(10) DEFAULT 'end',
 copied_directory_id INT UNSIGNED DEFAULT NULL, -- Guarda o ID do diretório copiado
 home_directory_id INT UNSIGNED DEFAULT NULL, -- Guarda o ID da agenda definida como página inicial
+tts_provider VARCHAR(20) NOT NULL DEFAULT 'fishaudio', -- Provedor padrão de TTS por usuário (fishaudio | openai)
 encrypted_data TEXT DEFAULT NULL,
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

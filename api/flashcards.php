@@ -65,6 +65,10 @@ try {
     $pdo->exec("ALTER TABLE flashcard_book_progress ADD COLUMN completed_reads TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER current_index");
 } catch (PDOException $e) {}
 
+try {
+    $pdo->exec("ALTER TABLE users ADD COLUMN tts_provider VARCHAR(20) NOT NULL DEFAULT 'fishaudio' AFTER home_directory_id");
+} catch (PDOException $e) {}
+
 
 try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS pronuncias (
@@ -381,13 +385,24 @@ function normalizeStoredAudioToBinary($audioValue) {
     return $audioValue;
 }
 
+function normalizeTtsProvider($value, $default = 'fishaudio') {
+    $allowed = ['fishaudio', 'openai'];
+    return in_array($value, $allowed, true) ? $value : $default;
+}
 
+function getUserTtsProvider($pdo, $user_id) {
+    $stmt = $pdo->prepare("SELECT tts_provider FROM users WHERE id = ? LIMIT 1");
+    $stmt->execute([$user_id]);
+    $provider = $stmt->fetchColumn();
+    return normalizeTtsProvider((string)$provider, 'fishaudio');
+}
 
+function requestFishAudioTts($text_to_speech, $language) {
+    if (trim((string)FISH_API_KEY) === '') {
+        return null;
+    }
 
-function generateAndPersistCardAudio($pdo, $card_id, $side, $text, $language) {
-    $text_to_speech = adjustPronunciationForTTS($pdo, $text, $language);
     $reference_id = getFishReferenceIdByLanguage($language);
-
     $ch = curl_init('https://api.fish.audio/v1/tts');
     $payload = json_encode([
         "text" => $text_to_speech,
@@ -409,12 +424,11 @@ function generateAndPersistCardAudio($pdo, $card_id, $side, $text, $language) {
     curl_close($ch);
 
     if ($httpcode !== 200 || !$response) {
-        return false;
+        return null;
     }
 
     $audio_binary = null;
     $decodedResponse = json_decode($response, true);
-
     if (json_last_error() === JSON_ERROR_NONE && is_array($decodedResponse)) {
         $audio_binary = decodeTtsAudioBinaryFromJsonPayload($decodedResponse);
     }
@@ -422,6 +436,77 @@ function generateAndPersistCardAudio($pdo, $card_id, $side, $text, $language) {
     if ($audio_binary === null) {
         $audio_binary = $response;
     }
+
+    return is_string($audio_binary) && $audio_binary !== '' ? $audio_binary : null;
+}
+
+function getOpenAITtsProfileByLanguage($language) {
+    $language = normalizeDeckLanguage($language, 'pt-BR');
+
+    switch ($language) {
+        case 'en-GB':
+            return [
+                'voice' => OPENAI_TTS_VOICE_EN_GB,
+                'instructions' => 'Speak with a clear British English accent (UK), preserving natural UK pronunciation and rhythm.'
+            ];
+        case 'en-US':
+            return [
+                'voice' => OPENAI_TTS_VOICE_EN_US,
+                'instructions' => 'Speak with a clear American English accent (US), preserving natural US pronunciation and rhythm.'
+            ];
+        case 'pt-BR':
+        default:
+            return [
+                'voice' => OPENAI_TTS_VOICE_PT_BR,
+                'instructions' => 'Fale em português brasileiro, com pronúncia natural e clara.'
+            ];
+    }
+}
+
+function requestOpenAITts($text_to_speech, $language) {
+    if (trim((string)OPENAI_API_KEY) === '') {
+        return null;
+    }
+
+    $profile = getOpenAITtsProfileByLanguage($language);
+
+    $ch = curl_init('https://api.openai.com/v1/audio/speech');
+    $payload = json_encode([
+        'model' => 'gpt-4o-mini-tts',
+        'voice' => $profile['voice'],
+        'input' => $text_to_speech,
+        'format' => 'mp3',
+        'instructions' => $profile['instructions']
+    ]);
+
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . OPENAI_API_KEY,
+        'Content-Type: application/json'
+    ]);
+
+    $response = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpcode !== 200 || !$response) {
+        return null;
+    }
+
+    return is_string($response) && $response !== '' ? $response : null;
+}
+
+
+
+function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $language) {
+    $text_to_speech = adjustPronunciationForTTS($pdo, $text, $language);
+    $provider = getUserTtsProvider($pdo, (int)$user_id);
+
+    $audio_binary = $provider === 'openai'
+        ? requestOpenAITts($text_to_speech, $language)
+        : requestFishAudioTts($text_to_speech, $language);
 
     if (!is_string($audio_binary) || $audio_binary === '') {
         return false;
@@ -852,7 +937,7 @@ elseif ($action === 'generate_audio') {
     $back_language = normalizeDeckLanguage($card['deck_back_language'] ?? 'en-GB', 'en-GB');
     $side_language = $side === 'front' ? $front_language : $back_language;
 
-    $ok = generateAndPersistCardAudio($pdo, $card_id, $side, $clean_text, $side_language);
+    $ok = generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $clean_text, $side_language);
     if (!$ok) {
         die(json_encode(['status' => 'error', 'message' => 'Erro ao comunicar com a API de voz. O serviço pode estar indisponível.']));
     }
@@ -921,7 +1006,7 @@ elseif ($action === 'generate_missing_audios_from_directory') {
                     continue;
                 }
 
-                $ok = generateAndPersistCardAudio($pdo, (int)$card['id'], $job['side'], $job['text'], $job['language']);
+                $ok = generateAndPersistCardAudio($pdo, $user_id, (int)$card['id'], $job['side'], $job['text'], $job['language']);
                 if ($ok) {
                     $generated_count++;
                 } else {
@@ -1013,7 +1098,7 @@ elseif ($action === 'generate_next_missing_audio_from_directory') {
         exit;
     }
 
-    $ok = generateAndPersistCardAudio($pdo, $next_job['card_id'], $next_job['side'], $next_job['text'], $next_job['language']);
+    $ok = generateAndPersistCardAudio($pdo, $user_id, $next_job['card_id'], $next_job['side'], $next_job['text'], $next_job['language']);
     $remaining_pending = 0;
     foreach ($decks as $deck) {
         $remaining_pending += countPendingAudiosForDeck($pdo, (int)$deck['id']);
