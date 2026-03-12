@@ -1421,11 +1421,11 @@ elseif ($action === 'update_card') {
     $img_front_enc = !empty($image_front) ? Security::encryptData($image_front) : null;
     $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
 
-    // Zera as flags de áudio porque o texto mudou e o áudio antigo não bate mais com a descrição
-    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, has_audio_front = 0, has_audio_back = 0, audio_front_encrypted = NULL, audio_back_encrypted = NULL WHERE id = ?");
+    // Mantém os áudios existentes. Eles só devem ser alterados quando o usuário solicitar nova geração.
+    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ? WHERE id = ?");
     
     if ($stmt->execute([$front_enc, $back_enc, $img_front_enc, $img_back_enc, $card_id])) {
-        echo json_encode(['status' => 'success', 'message' => 'Card atualizado. Áudios redefinidos.']);
+        echo json_encode(['status' => 'success', 'message' => 'Card atualizado.']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar card.']);
     }
