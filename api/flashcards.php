@@ -493,7 +493,7 @@ function requestOpenAITts($text_to_speech, &$error_details = null) {
 
     $ch = curl_init('https://api.openai.com/v1/audio/speech');
     $payload = json_encode([
-        'model' => 'gpt-4o-mini-tts',
+        'model' => 'gpt-5.4',
         'voice' => 'alloy',
         'input' => $text_to_speech,
         'format' => 'mp3'
@@ -608,7 +608,7 @@ function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $la
     return true;
 }
 
-function buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, $model = 'gpt-5-nano') {
+function buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, $model = 'gpt-5.4') {
     $basePrompt = '';
     if ($deck_structure === 'fatos') {
         $basePrompt = 'Me dê informações sobre o assunto "' . $deck_name . '", em uma tabela de uma única coluna, onde cada linha é uma informação. As informações devem ser de fácil compreensão. As informações devem ser óbvias evidentes e de rápida assimilação e de preferência curtas. Nenhuma informação pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. A ideia é conseguir vencer o paradoxo de Mênon, conseguir saber tudo sobre esse assunto, do nível para leigos ao nível expert. Caso não tenha muitas perguntas anteriores, vá pelo nível para leigos, e só aumente o nível se as perguntas anteriores já tiverem abrangido todo nível de conhecimento para leigos no assunto. Frases curtas.';
@@ -1233,7 +1233,7 @@ elseif ($action === 'translate_text') {
     );
 
     $payload = json_encode([
-        'model' => 'gpt-4o-mini',
+        'model' => 'gpt-5.4',
         'messages' => [
             ['role' => 'system', 'content' => $systemPrompt],
             ['role' => 'user', 'content' => $text]
