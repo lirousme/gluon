@@ -167,14 +167,14 @@ function countPendingAudiosForDeck($pdo, $deck_id) {
     foreach ($cards as $card) {
         if ((int)$card['has_audio_front'] === 0) {
             $front_text = !empty($card['front_encrypted']) ? trim(strip_tags(Security::decryptData($card['front_encrypted']))) : '';
-            if ($front_text !== '') {
+            if ($front_text !== '' && !cardTextContainsMathNotation($front_text)) {
                 $pending++;
             }
         }
 
         if ((int)$card['has_audio_back'] === 0) {
             $back_text = !empty($card['back_encrypted']) ? trim(strip_tags(Security::decryptData($card['back_encrypted']))) : '';
-            if ($back_text !== '') {
+            if ($back_text !== '' && !cardTextContainsMathNotation($back_text)) {
                 $pending++;
             }
         }
@@ -191,7 +191,7 @@ function findNextPendingAudioJobForDeck($pdo, $deck_id, $front_language, $back_l
     foreach ($cards as $card) {
         if ((int)$card['has_audio_front'] === 0) {
             $front_text = !empty($card['front_encrypted']) ? trim(strip_tags(Security::decryptData($card['front_encrypted']))) : '';
-            if ($front_text !== '') {
+            if ($front_text !== '' && !cardTextContainsMathNotation($front_text)) {
                 return [
                     'card_id' => (int)$card['id'],
                     'side' => 'front',
@@ -203,7 +203,7 @@ function findNextPendingAudioJobForDeck($pdo, $deck_id, $front_language, $back_l
 
         if ((int)$card['has_audio_back'] === 0) {
             $back_text = !empty($card['back_encrypted']) ? trim(strip_tags(Security::decryptData($card['back_encrypted']))) : '';
-            if ($back_text !== '') {
+            if ($back_text !== '' && !cardTextContainsMathNotation($back_text)) {
                 return [
                     'card_id' => (int)$card['id'],
                     'side' => 'back',
@@ -283,6 +283,31 @@ function adjustPronunciationForTTS($pdo, $text, $language) {
     }
 
     return $text;
+}
+
+function cardTextContainsMathNotation($text) {
+    $value = trim((string)$text);
+    if ($value === '') {
+        return false;
+    }
+
+    $patterns = [
+        '/\\\\\(|\\\\\)|\\\\\[|\\\\\]/u',
+        '/\$\$[^$]+\$\$|\$[^$]+\$/u',
+        '/\\\\(frac|sqrt|sum|int|prod|lim|cdot|times|pm|mp|neq|leq|geq|left|right|alpha|beta|gamma|delta|theta|lambda|mu|pi|sigma|omega)\b/iu',
+        '/[∑∫√≈≠≤≥∞πΔθλμ±÷×]/u',
+        '/[²³¹⁰⁴⁵⁶⁷⁸⁹⁻⁺₀₁₂₃₄₅₆₇₈₉]/u',
+        '/[A-Za-z0-9\)\]]\s*=\s*[A-Za-z0-9\(\[\\-]/u',
+        '/\d+\s*[+\-*/^]\s*\d+/u',
+    ];
+
+    foreach ($patterns as $pattern) {
+        if (preg_match($pattern, $value) === 1) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 
@@ -697,6 +722,10 @@ elseif ($action === 'generate_audio') {
         die(json_encode(['status' => 'error', 'message' => 'O lado selecionado deste card não possui texto.']));
     }
 
+    if (cardTextContainsMathNotation($clean_text)) {
+        die(json_encode(['status' => 'error', 'message' => 'Este conteúdo possui notação matemática e não pode ter áudio gerado.']));
+    }
+
     $front_language = normalizeDeckLanguage($card['deck_front_language'] ?? 'pt-BR', 'pt-BR');
     $back_language = normalizeDeckLanguage($card['deck_back_language'] ?? 'en-GB', 'en-GB');
     $side_language = $side === 'front' ? $front_language : $back_language;
@@ -761,6 +790,11 @@ elseif ($action === 'generate_missing_audios_from_directory') {
                 }
 
                 if ($job['text'] === '') {
+                    $skipped_count++;
+                    continue;
+                }
+
+                if (cardTextContainsMathNotation($job['text'])) {
                     $skipped_count++;
                     continue;
                 }
