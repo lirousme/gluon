@@ -167,14 +167,14 @@ function countPendingAudiosForDeck($pdo, $deck_id) {
     foreach ($cards as $card) {
         if ((int)$card['has_audio_front'] === 0) {
             $front_text = !empty($card['front_encrypted']) ? trim(strip_tags(Security::decryptData($card['front_encrypted']))) : '';
-            if ($front_text !== '') {
+            if ($front_text !== '' && !hasMathNotationInText($front_text)) {
                 $pending++;
             }
         }
 
         if ((int)$card['has_audio_back'] === 0) {
             $back_text = !empty($card['back_encrypted']) ? trim(strip_tags(Security::decryptData($card['back_encrypted']))) : '';
-            if ($back_text !== '') {
+            if ($back_text !== '' && !hasMathNotationInText($back_text)) {
                 $pending++;
             }
         }
@@ -191,7 +191,7 @@ function findNextPendingAudioJobForDeck($pdo, $deck_id, $front_language, $back_l
     foreach ($cards as $card) {
         if ((int)$card['has_audio_front'] === 0) {
             $front_text = !empty($card['front_encrypted']) ? trim(strip_tags(Security::decryptData($card['front_encrypted']))) : '';
-            if ($front_text !== '') {
+            if ($front_text !== '' && !hasMathNotationInText($front_text)) {
                 return [
                     'card_id' => (int)$card['id'],
                     'side' => 'front',
@@ -203,7 +203,7 @@ function findNextPendingAudioJobForDeck($pdo, $deck_id, $front_language, $back_l
 
         if ((int)$card['has_audio_back'] === 0) {
             $back_text = !empty($card['back_encrypted']) ? trim(strip_tags(Security::decryptData($card['back_encrypted']))) : '';
-            if ($back_text !== '') {
+            if ($back_text !== '' && !hasMathNotationInText($back_text)) {
                 return [
                     'card_id' => (int)$card['id'],
                     'side' => 'back',
@@ -232,6 +232,22 @@ function verifyCardOwnership($pdo, $card_id, $user_id) {
 function normalizeDeckLanguage($value, $default = 'pt-BR') {
     $allowed = ['pt-BR', 'en-US', 'en-GB'];
     return in_array($value, $allowed, true) ? $value : $default;
+}
+
+function hasMathNotationInText($value) {
+    if (!is_string($value) || trim($value) === '') {
+        return false;
+    }
+
+    if (preg_match('/\\\\\(|\\\\\)|\\\\\[|\\\\\]|\$\$[^$]+\$\$|\$[^$]+\$/u', $value) === 1) {
+        return true;
+    }
+
+    if (preg_match('/[∑∫√≈≠≤≥∞πΔθλμ±÷×]/u', $value) === 1) {
+        return true;
+    }
+
+    return preg_match('/[²³¹⁰⁴⁵⁶⁷⁸⁹⁻⁺₀₁₂₃₄₅₆₇₈₉]/u', $value) === 1;
 }
 
 function normalizeDeckStructure($value, $default = 'fatos') {
@@ -761,6 +777,11 @@ elseif ($action === 'generate_missing_audios_from_directory') {
                 }
 
                 if ($job['text'] === '') {
+                    $skipped_count++;
+                    continue;
+                }
+
+                if (hasMathNotationInText($job['text'])) {
                     $skipped_count++;
                     continue;
                 }
