@@ -23,7 +23,7 @@ if (!isset($_SESSION['user_id'])) {
 $pdo = Database::getConnection();
 $user_id = $_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true);
-$action = $input['action'] ?? '';
+$action = $input['action'] ?? ($_GET['action'] ?? '');
 
 // =========================================================================
 // FAIL-SAFE MIGRATION: Garante que as colunas de imagens existam sem stress
@@ -39,6 +39,14 @@ try {
 
 try {
     $pdo->exec("ALTER TABLE flashcards ADD COLUMN image_back_encrypted LONGTEXT DEFAULT NULL AFTER image_front_encrypted");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE flashcards ADD COLUMN audio_front_encrypted LONGTEXT DEFAULT NULL AFTER image_back_encrypted");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE flashcards ADD COLUMN audio_back_encrypted LONGTEXT DEFAULT NULL AFTER audio_front_encrypted");
 } catch (PDOException $e) {}
 
 try {
@@ -341,17 +349,13 @@ function generateAndPersistCardAudio($pdo, $card_id, $side, $text, $language) {
         return false;
     }
 
-    $audio_dir = __DIR__ . '/../assets/audio/';
-    if (!is_dir($audio_dir)) {
-        mkdir($audio_dir, 0755, true);
-    }
+    $audio_b64 = base64_encode($response);
+    $audio_encrypted = Security::encryptData($audio_b64);
 
-    $file_path = $audio_dir . 'card_' . $card_id . '_' . $side . '.mp3';
-    file_put_contents($file_path, $response);
-
+    $audioCol = $side === 'front' ? 'audio_front_encrypted' : 'audio_back_encrypted';
     $col = $side === 'front' ? 'has_audio_front' : 'has_audio_back';
-    $stmt = $pdo->prepare("UPDATE flashcards SET $col = 1 WHERE id = ?");
-    $stmt->execute([$card_id]);
+    $stmt = $pdo->prepare("UPDATE flashcards SET $col = 1, $audioCol = ? WHERE id = ?");
+    $stmt->execute([$audio_encrypted, $card_id]);
 
     return true;
 }
@@ -660,6 +664,46 @@ if ($action === 'fetch') {
         'current_index' => $current_index,
         'data' => $response
     ]);
+}
+
+// ==== Streaming de áudio do card via conteúdo criptografado no banco ====
+elseif ($action === 'get_audio') {
+    $card_id = (int)($_GET['card_id'] ?? 0);
+    $side = ($_GET['side'] ?? '') === 'back' ? 'back' : 'front';
+
+    if ($card_id === 0) {
+        http_response_code(400);
+        die('Card inválido');
+    }
+
+    if (!verifyCardOwnership($pdo, $card_id, $user_id)) {
+        http_response_code(403);
+        die('Acesso negado');
+    }
+
+    $audioCol = $side === 'front' ? 'audio_front_encrypted' : 'audio_back_encrypted';
+    $hasAudioCol = $side === 'front' ? 'has_audio_front' : 'has_audio_back';
+    $stmt = $pdo->prepare("SELECT $audioCol AS audio_encrypted, $hasAudioCol AS has_audio FROM flashcards WHERE id = ? LIMIT 1");
+    $stmt->execute([$card_id]);
+    $card = $stmt->fetch();
+
+    if (!$card || (int)$card['has_audio'] !== 1 || empty($card['audio_encrypted'])) {
+        http_response_code(404);
+        die('Áudio não encontrado');
+    }
+
+    $audio_b64 = Security::decryptData($card['audio_encrypted']);
+    $audio_binary = base64_decode($audio_b64, true);
+
+    if ($audio_binary === false) {
+        http_response_code(500);
+        die('Falha ao ler áudio');
+    }
+
+    header('Content-Type: audio/mpeg');
+    header('Content-Length: ' . strlen($audio_binary));
+    echo $audio_binary;
+    exit;
 }
 
 // ==== Exportar todos os cards para Excel/CSV ====
@@ -1125,7 +1169,7 @@ elseif ($action === 'update_card') {
     $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
 
     // Zera as flags de áudio porque o texto mudou e o áudio antigo não bate mais com a descrição
-    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, has_audio_front = 0, has_audio_back = 0 WHERE id = ?");
+    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, has_audio_front = 0, has_audio_back = 0, audio_front_encrypted = NULL, audio_back_encrypted = NULL WHERE id = ?");
     
     if ($stmt->execute([$front_enc, $back_enc, $img_front_enc, $img_back_enc, $card_id])) {
         echo json_encode(['status' => 'success', 'message' => 'Card atualizado. Áudios redefinidos.']);
@@ -1149,14 +1193,6 @@ elseif ($action === 'delete_card') {
     $stmt = $pdo->prepare("DELETE FROM flashcards WHERE id = ?");
     
     if ($stmt->execute([$card_id])) {
-        // Remove arquivos de áudio associados ao card para economizar espaço
-        $audio_dir = __DIR__ . '/../assets/audio/';
-        $file_front = $audio_dir . 'card_' . $card_id . '_front.mp3';
-        $file_back = $audio_dir . 'card_' . $card_id . '_back.mp3';
-        
-        if (file_exists($file_front)) @unlink($file_front);
-        if (file_exists($file_back)) @unlink($file_back);
-
         echo json_encode(['status' => 'success', 'message' => 'Card excluído com sucesso.']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro interno ao excluir card.']);
