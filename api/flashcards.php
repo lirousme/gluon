@@ -318,6 +318,69 @@ function cardTextContainsMathNotation($text) {
     return false;
 }
 
+function decodeTtsAudioBinaryFromJsonPayload($payload) {
+    if (!is_array($payload)) {
+        return null;
+    }
+
+    $candidateKeys = ['audio', 'audio_base64', 'audioContent', 'base64', 'data', 'result'];
+
+    foreach ($candidateKeys as $key) {
+        if (!array_key_exists($key, $payload)) {
+            continue;
+        }
+
+        $value = $payload[$key];
+        if (is_array($value)) {
+            $nested = decodeTtsAudioBinaryFromJsonPayload($value);
+            if ($nested !== null) {
+                return $nested;
+            }
+            continue;
+        }
+
+        if (!is_string($value)) {
+            continue;
+        }
+
+        $raw = trim($value);
+        if ($raw === '') {
+            continue;
+        }
+
+        if (preg_match('#^data:audio/[^;]+;base64,#i', $raw) === 1) {
+            $parts = explode(',', $raw, 2);
+            $raw = $parts[1] ?? '';
+        }
+
+        $decoded = base64_decode($raw, true);
+        if ($decoded !== false && $decoded !== '') {
+            return $decoded;
+        }
+    }
+
+    return null;
+}
+
+function normalizeStoredAudioToBinary($audioValue) {
+    if (!is_string($audioValue) || $audioValue === '') {
+        return null;
+    }
+
+    $raw = trim($audioValue);
+    if (preg_match('#^data:audio/[^;]+;base64,#i', $raw) === 1) {
+        $parts = explode(',', $raw, 2);
+        $raw = $parts[1] ?? '';
+    }
+
+    $decoded = base64_decode($raw, true);
+    if ($decoded !== false && $decoded !== '') {
+        return $decoded;
+    }
+
+    return $audioValue;
+}
+
 
 
 
@@ -349,7 +412,22 @@ function generateAndPersistCardAudio($pdo, $card_id, $side, $text, $language) {
         return false;
     }
 
-    $audio_b64 = base64_encode($response);
+    $audio_binary = null;
+    $decodedResponse = json_decode($response, true);
+
+    if (json_last_error() === JSON_ERROR_NONE && is_array($decodedResponse)) {
+        $audio_binary = decodeTtsAudioBinaryFromJsonPayload($decodedResponse);
+    }
+
+    if ($audio_binary === null) {
+        $audio_binary = $response;
+    }
+
+    if (!is_string($audio_binary) || $audio_binary === '') {
+        return false;
+    }
+
+    $audio_b64 = base64_encode($audio_binary);
     $audio_encrypted = Security::encryptData($audio_b64);
 
     $audioCol = $side === 'front' ? 'audio_front_encrypted' : 'audio_back_encrypted';
@@ -692,10 +770,10 @@ elseif ($action === 'get_audio') {
         die('Áudio não encontrado');
     }
 
-    $audio_b64 = Security::decryptData($card['audio_encrypted']);
-    $audio_binary = base64_decode($audio_b64, true);
+    $audio_decrypted = Security::decryptData($card['audio_encrypted']);
+    $audio_binary = normalizeStoredAudioToBinary($audio_decrypted);
 
-    if ($audio_binary === false) {
+    if ($audio_binary === null || $audio_binary === '') {
         http_response_code(500);
         die('Falha ao ler áudio');
     }

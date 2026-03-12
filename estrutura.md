@@ -142,6 +142,8 @@ front_encrypted TEXT DEFAULT NULL,   -- Frente do card criptografada (aceita NUL
 back_encrypted TEXT DEFAULT NULL,       -- Verso do card criptografado
 image_front_encrypted LONGTEXT DEFAULT NULL,
 image_back_encrypted LONGTEXT DEFAULT NULL,
+audio_front_encrypted LONGTEXT DEFAULT NULL, -- Áudio (MP3/Base64) da frente criptografado
+audio_back_encrypted LONGTEXT DEFAULT NULL,  -- Áudio (MP3/Base64) do verso criptografado
 has_audio_front TINYINT(1) DEFAULT 0,  -- NOVO: Flag para o áudio da frente
 has_audio_back TINYINT(1) DEFAULT 0,   -- NOVO: Flag para o áudio do verso
 sort_order INT DEFAULT 0,           -- Para ordenar os cards no futuro, se necessário
