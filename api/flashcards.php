@@ -406,8 +406,40 @@ function getUserTtsProvider($pdo, $user_id) {
     return normalizeTtsProvider((string)$provider, 'fishaudio');
 }
 
-function requestFishAudioTts($text_to_speech, $language) {
+function buildTtsProviderErrorDetails($provider, $httpcode, $curlError, $responseBody = null) {
+    $providerLabel = strtoupper((string)$provider);
+    $parts = ["Provider {$providerLabel}"];
+
+    if ($httpcode > 0) {
+        $parts[] = "HTTP {$httpcode}";
+    }
+
+    if (is_string($curlError) && trim($curlError) !== '') {
+        $parts[] = 'cURL: ' . trim($curlError);
+    }
+
+    if (is_string($responseBody) && trim($responseBody) !== '') {
+        $decoded = json_decode($responseBody, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+            $apiMessage = null;
+            if (isset($decoded['error']['message']) && is_string($decoded['error']['message'])) {
+                $apiMessage = $decoded['error']['message'];
+            } elseif (isset($decoded['message']) && is_string($decoded['message'])) {
+                $apiMessage = $decoded['message'];
+            }
+
+            if ($apiMessage !== null && trim($apiMessage) !== '') {
+                $parts[] = 'API: ' . trim($apiMessage);
+            }
+        }
+    }
+
+    return implode(' | ', $parts);
+}
+
+function requestFishAudioTts($text_to_speech, $language, &$error_details = null) {
     if (trim((string)FISH_API_KEY) === '') {
+        $error_details = 'Chave FISH_API_KEY não configurada.';
         return null;
     }
 
@@ -430,9 +462,11 @@ function requestFishAudioTts($text_to_speech, $language) {
 
     $response = curl_exec($ch);
     $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
     curl_close($ch);
 
     if ($httpcode !== 200 || !$response) {
+        $error_details = buildTtsProviderErrorDetails('fishaudio', (int)$httpcode, $curlError, is_string($response) ? $response : null);
         return null;
     }
 
@@ -446,11 +480,14 @@ function requestFishAudioTts($text_to_speech, $language) {
         $audio_binary = $response;
     }
 
+    $error_details = null;
+
     return is_string($audio_binary) && $audio_binary !== '' ? $audio_binary : null;
 }
 
-function requestOpenAITts($text_to_speech) {
+function requestOpenAITts($text_to_speech, &$error_details = null) {
     if (trim((string)OPENAI_API_KEY) === '') {
+        $error_details = 'Chave OPENAI_API_KEY não configurada.';
         return null;
     }
 
@@ -472,18 +509,23 @@ function requestOpenAITts($text_to_speech) {
 
     $response = curl_exec($ch);
     $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
     curl_close($ch);
 
     if ($httpcode !== 200 || !$response) {
+        $error_details = buildTtsProviderErrorDetails('openai', (int)$httpcode, $curlError, is_string($response) ? $response : null);
         return null;
     }
+
+    $error_details = null;
 
     return is_string($response) && $response !== '' ? $response : null;
 }
 
 
-function requestGoogleCloudTts($text_to_speech, $language) {
+function requestGoogleCloudTts($text_to_speech, $language, &$error_details = null) {
     if (trim((string)GOOGLE_CLOUD_API_KEY) === '') {
+        $error_details = 'Chave GOOGLE_CLOUD_API_KEY não configurada.';
         return null;
     }
 
@@ -509,36 +551,47 @@ function requestGoogleCloudTts($text_to_speech, $language) {
 
     $response = curl_exec($ch);
     $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
     curl_close($ch);
 
     if ($httpcode !== 200 || !$response) {
+        $error_details = buildTtsProviderErrorDetails('google', (int)$httpcode, $curlError, is_string($response) ? $response : null);
         return null;
     }
 
     $decodedResponse = json_decode($response, true);
     if (json_last_error() !== JSON_ERROR_NONE || !is_array($decodedResponse)) {
+        $error_details = 'Provider GOOGLE | resposta inválida ao decodificar JSON.';
         return null;
     }
 
     $audio_binary = decodeTtsAudioBinaryFromJsonPayload($decodedResponse);
+    if (!is_string($audio_binary) || $audio_binary === '') {
+        $error_details = buildTtsProviderErrorDetails('google', (int)$httpcode, '', $response);
+        return null;
+    }
+
+    $error_details = null;
     return is_string($audio_binary) && $audio_binary !== '' ? $audio_binary : null;
 }
 
 
 
-function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $language) {
+function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $language, &$error_details = null) {
     $text_to_speech = adjustPronunciationForTTS($pdo, $text, $language);
     $provider = getUserTtsProvider($pdo, (int)$user_id);
+    $provider_error = null;
 
     if ($provider === 'openai') {
-        $audio_binary = requestOpenAITts($text_to_speech);
+        $audio_binary = requestOpenAITts($text_to_speech, $provider_error);
     } elseif ($provider === 'google') {
-        $audio_binary = requestGoogleCloudTts($text_to_speech, $language);
+        $audio_binary = requestGoogleCloudTts($text_to_speech, $language, $provider_error);
     } else {
-        $audio_binary = requestFishAudioTts($text_to_speech, $language);
+        $audio_binary = requestFishAudioTts($text_to_speech, $language, $provider_error);
     }
 
     if (!is_string($audio_binary) || $audio_binary === '') {
+        $error_details = $provider_error ?: ('Falha ao gerar áudio com o provider ' . strtoupper($provider) . '.');
         return false;
     }
 
@@ -549,6 +602,8 @@ function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $la
     $col = $side === 'front' ? 'has_audio_front' : 'has_audio_back';
     $stmt = $pdo->prepare("UPDATE flashcards SET $col = 1, $audioCol = ? WHERE id = ?");
     $stmt->execute([$audio_encrypted, $card_id]);
+
+    $error_details = null;
 
     return true;
 }
@@ -967,9 +1022,14 @@ elseif ($action === 'generate_audio') {
     $back_language = normalizeDeckLanguage($card['deck_back_language'] ?? 'en-GB', 'en-GB');
     $side_language = $side === 'front' ? $front_language : $back_language;
 
-    $ok = generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $clean_text, $side_language);
+    $tts_error_details = null;
+    $ok = generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $clean_text, $side_language, $tts_error_details);
     if (!$ok) {
-        die(json_encode(['status' => 'error', 'message' => 'Erro ao comunicar com a API de voz. O serviço pode estar indisponível.']));
+        die(json_encode([
+            'status' => 'error',
+            'message' => 'Erro ao comunicar com a API de voz. O serviço pode estar indisponível.',
+            'details' => $tts_error_details ?: 'Sem detalhes adicionais retornados pelo provider.'
+        ]));
     }
 
     echo json_encode(['status' => 'success', 'message' => 'Áudio gerado e salvo com sucesso!']);
