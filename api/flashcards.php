@@ -262,9 +262,9 @@ function getFishReferenceIdByLanguage($language) {
 
 function getGoogleTtsVoiceByLanguage($language) {
     switch ($language) {
-        case 'pt-BR': return 'pt-BR-Chirp3-HD-Schedar';
+        case 'pt-BR': return 'pt-BR-Chirp3-HD-Algieba';
         case 'en-US': return 'en-US-Chirp3-HD-Fenrir';
-        case 'en-GB': return 'en-GB-Chirp3-HD-Iapetus';
+        case 'en-GB': return 'en-GB-Chirp3-HD-Algenib';
         default: return 'en-US-Chirp3-HD-Fenrir';
     }
 }
