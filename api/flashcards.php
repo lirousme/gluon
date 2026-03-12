@@ -158,6 +158,65 @@ function collectDecksFromDirectoryTree($pdo, $root_directory_id, $user_id) {
     return $decks;
 }
 
+function countPendingAudiosForDeck($pdo, $deck_id) {
+    $pending = 0;
+    $stmtCards = $pdo->prepare("SELECT front_encrypted, back_encrypted, has_audio_front, has_audio_back FROM flashcards WHERE directory_id = ?");
+    $stmtCards->execute([$deck_id]);
+    $cards = $stmtCards->fetchAll();
+
+    foreach ($cards as $card) {
+        if ((int)$card['has_audio_front'] === 0) {
+            $front_text = !empty($card['front_encrypted']) ? trim(strip_tags(Security::decryptData($card['front_encrypted']))) : '';
+            if ($front_text !== '') {
+                $pending++;
+            }
+        }
+
+        if ((int)$card['has_audio_back'] === 0) {
+            $back_text = !empty($card['back_encrypted']) ? trim(strip_tags(Security::decryptData($card['back_encrypted']))) : '';
+            if ($back_text !== '') {
+                $pending++;
+            }
+        }
+    }
+
+    return $pending;
+}
+
+function findNextPendingAudioJobForDeck($pdo, $deck_id, $front_language, $back_language) {
+    $stmtCards = $pdo->prepare("SELECT id, front_encrypted, back_encrypted, has_audio_front, has_audio_back FROM flashcards WHERE directory_id = ? AND (has_audio_front = 0 OR has_audio_back = 0) ORDER BY sort_order ASC, id ASC");
+    $stmtCards->execute([$deck_id]);
+    $cards = $stmtCards->fetchAll();
+
+    foreach ($cards as $card) {
+        if ((int)$card['has_audio_front'] === 0) {
+            $front_text = !empty($card['front_encrypted']) ? trim(strip_tags(Security::decryptData($card['front_encrypted']))) : '';
+            if ($front_text !== '') {
+                return [
+                    'card_id' => (int)$card['id'],
+                    'side' => 'front',
+                    'text' => $front_text,
+                    'language' => $front_language
+                ];
+            }
+        }
+
+        if ((int)$card['has_audio_back'] === 0) {
+            $back_text = !empty($card['back_encrypted']) ? trim(strip_tags(Security::decryptData($card['back_encrypted']))) : '';
+            if ($back_text !== '') {
+                return [
+                    'card_id' => (int)$card['id'],
+                    'side' => 'back',
+                    'text' => $back_text,
+                    'language' => $back_language
+                ];
+            }
+        }
+    }
+
+    return null;
+}
+
 // Função auxiliar para verificar a propriedade de um card unitário
 function verifyCardOwnership($pdo, $card_id, $user_id) {
     $stmt = $pdo->prepare("SELECT f.id, f.directory_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND d.user_id = ?");
@@ -730,6 +789,90 @@ elseif ($action === 'generate_missing_audios_from_directory') {
             'generated_count' => $generated_count,
             'skipped_count' => $skipped_count,
             'failed_count' => $failed_count
+        ]
+    ]);
+}
+
+elseif ($action === 'count_missing_audios_from_directory') {
+    $directory_id = (int)($input['directory_id'] ?? 0);
+    if ($directory_id === 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID do diretório inválido.']));
+    }
+
+    $directory = verifyDirectoryOwnership($pdo, $directory_id, $user_id);
+    if (!$directory) {
+        die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+    }
+
+    $decks = collectDecksFromDirectoryTree($pdo, $directory_id, $user_id);
+    $total_pending = 0;
+
+    foreach ($decks as $deck) {
+        $total_pending += countPendingAudiosForDeck($pdo, (int)$deck['id']);
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'message' => $total_pending > 0 ? 'Áudios pendentes encontrados.' : 'Nenhum áudio pendente encontrado.',
+        'data' => [
+            'total_pending' => $total_pending
+        ]
+    ]);
+}
+
+elseif ($action === 'generate_next_missing_audio_from_directory') {
+    $directory_id = (int)($input['directory_id'] ?? 0);
+    if ($directory_id === 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID do diretório inválido.']));
+    }
+
+    $directory = verifyDirectoryOwnership($pdo, $directory_id, $user_id);
+    if (!$directory) {
+        die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+    }
+
+    $decks = collectDecksFromDirectoryTree($pdo, $directory_id, $user_id);
+    $next_job = null;
+
+    foreach ($decks as $deck) {
+        $front_language = normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR');
+        $back_language = normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB');
+        $next_job = findNextPendingAudioJobForDeck($pdo, (int)$deck['id'], $front_language, $back_language);
+        if ($next_job) {
+            break;
+        }
+    }
+
+    if (!$next_job) {
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Nenhum áudio pendente restante.',
+            'data' => [
+                'done' => true,
+                'generated_count' => 0,
+                'failed_count' => 0,
+                'remaining_pending' => 0
+            ]
+        ]);
+        exit;
+    }
+
+    $ok = generateAndPersistCardAudio($pdo, $next_job['card_id'], $next_job['side'], $next_job['text'], $next_job['language']);
+    $remaining_pending = 0;
+    foreach ($decks as $deck) {
+        $remaining_pending += countPendingAudiosForDeck($pdo, (int)$deck['id']);
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'message' => $ok ? 'Áudio gerado com sucesso.' : 'Falha ao gerar áudio do card atual.',
+        'data' => [
+            'done' => $remaining_pending === 0,
+            'generated_count' => $ok ? 1 : 0,
+            'failed_count' => $ok ? 0 : 1,
+            'remaining_pending' => $remaining_pending,
+            'card_id' => $next_job['card_id'],
+            'side' => $next_job['side']
         ]
     ]);
 }
