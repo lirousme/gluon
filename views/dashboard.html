@@ -451,6 +451,58 @@
         </div>
     </div>
 
+    <!-- Modal de Progresso da Geração de Áudios -->
+    <div id="audioGenerationModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-[70] opacity-0 transition-opacity duration-300 px-4">
+        <div id="audioGenerationModalContent" class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg transform scale-95 transition-transform duration-300 overflow-hidden">
+            <div class="p-5 border-b border-slate-700 flex items-center justify-between bg-slate-800/50">
+                <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-wave-square text-cyan-300"></i>
+                    <span>Gerando áudios pendentes</span>
+                </h3>
+                <span id="audioGenerationStatusBadge" class="text-xs px-2.5 py-1 rounded-full bg-slate-700 text-slate-200">Preparando...</span>
+            </div>
+
+            <div class="p-5 space-y-4">
+                <p id="audioGenerationModalMessage" class="text-sm text-slate-300">Iniciando contagem de áudios pendentes...</p>
+
+                <div>
+                    <div class="flex justify-between text-xs text-slate-400 mb-1">
+                        <span>Progresso</span>
+                        <span id="audioGenerationProgressLabel">0 / 0</span>
+                    </div>
+                    <div class="h-2 bg-slate-800 rounded-full overflow-hidden">
+                        <div id="audioGenerationProgressBar" class="h-full w-0 bg-cyan-400 transition-all duration-300"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3 text-center">
+                    <div class="bg-slate-800/70 border border-slate-700 rounded-lg py-3">
+                        <div id="audioGeneratedCount" class="text-xl font-semibold text-emerald-300">0</div>
+                        <div class="text-xs text-slate-400 mt-1">Gerados</div>
+                    </div>
+                    <div class="bg-slate-800/70 border border-slate-700 rounded-lg py-3">
+                        <div id="audioRemainingCount" class="text-xl font-semibold text-amber-300">0</div>
+                        <div class="text-xs text-slate-400 mt-1">Faltam</div>
+                    </div>
+                    <div class="bg-slate-800/70 border border-slate-700 rounded-lg py-3">
+                        <div id="audioFailedCount" class="text-xl font-semibold text-rose-300">0</div>
+                        <div class="text-xs text-slate-400 mt-1">Falhas</div>
+                    </div>
+                </div>
+
+                <div id="audioGenerationLog" class="max-h-48 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900/50 p-3 space-y-2 text-xs text-slate-300"></div>
+            </div>
+
+            <div class="px-5 pb-5 flex justify-end gap-3">
+                <button id="audioGenerationStopBtn" type="button" onclick="app.stopAudioGeneration()" class="px-4 py-2 rounded-lg bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/40 text-sm font-medium">
+                    <i class="fa-solid fa-stop mr-2"></i>Interromper
+                </button>
+                <button id="audioGenerationCloseBtn" type="button" onclick="app.closeAudioGenerationModal()" class="hidden px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 text-sm font-medium">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+
     <script>
         const app = {
             state: {
@@ -466,6 +518,15 @@
                 isCurrentDirectorySaved: false,
                 isLoading: false,
                 reorderMode: false,
+                audioGeneration: {
+                    running: false,
+                    stopRequested: false,
+                    directoryId: null,
+                    totalPending: 0,
+                    generated: 0,
+                    failed: 0,
+                    remaining: 0
+                },
                 availableIcons: [
                     'fa-folder', 'fa-folder-open', 'fa-file-code', 'fa-calendar-days', 'fa-layer-group', 'fa-door-open', 'fa-clock', 'fa-file-lines', 'fa-file-image', 'fa-file-pdf', 'fa-star', 'fa-heart', 'fa-image', 'fa-music', 'fa-video', 
                     'fa-code', 'fa-terminal', 'fa-database', 'fa-server', 'fa-lock', 'fa-vault', 'fa-book', 'fa-briefcase', 'fa-globe', 'fa-list-check'
@@ -873,20 +934,221 @@
                     button.classList.add('opacity-60', 'pointer-events-none');
                 }
 
-                const response = await this.api('flashcards', 'generate_missing_audios_from_directory', { directory_id: directoryId });
+                const countResponse = await this.api('flashcards', 'count_missing_audios_from_directory', { directory_id: directoryId });
+
+                if (!countResponse) {
+                    if (button) {
+                        button.disabled = false;
+                        button.classList.remove('opacity-60', 'pointer-events-none');
+                    }
+                    return this.showToast('Falha ao verificar áudios pendentes.', 'error');
+                }
+
+                const totalPending = Number((countResponse.data || {}).total_pending || 0);
+                this.openAudioGenerationModal({ directoryId, totalPending });
+
+                if (totalPending === 0) {
+                    this.finishAudioGeneration(true);
+                    if (button) {
+                        button.disabled = false;
+                        button.classList.remove('opacity-60', 'pointer-events-none');
+                    }
+                    return;
+                }
+
+                while (this.state.audioGeneration.running && !this.state.audioGeneration.stopRequested) {
+                    const response = await this.api('flashcards', 'generate_next_missing_audio_from_directory', { directory_id: directoryId });
+
+                    if (!response) {
+                        this.appendAudioGenerationLog('Falha de comunicação ao gerar áudio.', 'error');
+                        this.state.audioGeneration.failed += 1;
+                        this.state.audioGeneration.remaining = Math.max(0, this.state.audioGeneration.remaining - 1);
+                        this.updateAudioGenerationModalUI('Falha ao gerar o item atual, tentando próximo...');
+                        continue;
+                    }
+
+                    const data = response.data || {};
+                    this.state.audioGeneration.generated += Number(data.generated_count || 0);
+                    this.state.audioGeneration.failed += Number(data.failed_count || 0);
+                    this.state.audioGeneration.remaining = Number(data.remaining_pending || 0);
+
+                    if (Number(data.generated_count || 0) > 0) {
+                        this.appendAudioGenerationLog(`Card #${data.card_id || '-'} (${data.side || '-'}) gerado com sucesso.`, 'success');
+                    } else if (Number(data.failed_count || 0) > 0) {
+                        this.appendAudioGenerationLog(`Card #${data.card_id || '-'} (${data.side || '-'}) falhou.`, 'error');
+                    }
+
+                    this.updateAudioGenerationModalUI(response.message || 'Processando...');
+
+                    if (data.done === true || this.state.audioGeneration.remaining === 0) {
+                        break;
+                    }
+                }
+
+                const wasStopped = this.state.audioGeneration.stopRequested;
+                this.finishAudioGeneration(!wasStopped);
 
                 if (button) {
                     button.disabled = false;
                     button.classList.remove('opacity-60', 'pointer-events-none');
                 }
+            },
 
-                if (response) {
-                    const details = response.data || {};
-                    const message = `${response.message || 'Processo concluído.'} (Gerados: ${details.generated_count || 0}, ignorados: ${details.skipped_count || 0}, falhas: ${details.failed_count || 0})`;
-                    this.showToast(message, details.failed_count > 0 ? 'error' : 'success');
-                } else {
-                    this.showToast('Falha ao gerar áudios pendentes.', 'error');
+            openAudioGenerationModal({ directoryId, totalPending }) {
+                this.state.audioGeneration = {
+                    running: true,
+                    stopRequested: false,
+                    directoryId: directoryId,
+                    totalPending: totalPending,
+                    generated: 0,
+                    failed: 0,
+                    remaining: totalPending
+                };
+
+                const modal = document.getElementById('audioGenerationModal');
+                const content = document.getElementById('audioGenerationModalContent');
+                const closeBtn = document.getElementById('audioGenerationCloseBtn');
+                const stopBtn = document.getElementById('audioGenerationStopBtn');
+                const log = document.getElementById('audioGenerationLog');
+
+                if (log) {
+                    log.innerHTML = '';
                 }
+
+                if (closeBtn) closeBtn.classList.add('hidden');
+                if (stopBtn) {
+                    stopBtn.disabled = false;
+                    stopBtn.classList.remove('opacity-60', 'pointer-events-none');
+                }
+
+                this.appendAudioGenerationLog(`Iniciado. Total pendente: ${totalPending}.`, 'info');
+                this.updateAudioGenerationModalUI(totalPending > 0 ? 'Gerando áudios pendentes...' : 'Nenhum áudio pendente encontrado.');
+
+                if (modal) {
+                    modal.classList.remove('hidden');
+                    modal.classList.add('flex');
+                    requestAnimationFrame(() => {
+                        modal.classList.remove('opacity-0');
+                        if (content) content.classList.remove('scale-95');
+                    });
+                }
+            },
+
+            updateAudioGenerationModalUI(message = '') {
+                const state = this.state.audioGeneration;
+                const total = Math.max(0, Number(state.totalPending || 0));
+                const remaining = Math.max(0, Number(state.remaining || 0));
+                const generated = Math.max(0, Number(state.generated || 0));
+                const failed = Math.max(0, Number(state.failed || 0));
+                const doneCount = Math.max(0, total - remaining);
+                const progressPct = total > 0 ? Math.min(100, Math.round((doneCount / total) * 100)) : 100;
+
+                const generatedEl = document.getElementById('audioGeneratedCount');
+                const remainingEl = document.getElementById('audioRemainingCount');
+                const failedEl = document.getElementById('audioFailedCount');
+                const progressLabel = document.getElementById('audioGenerationProgressLabel');
+                const progressBar = document.getElementById('audioGenerationProgressBar');
+                const msgEl = document.getElementById('audioGenerationModalMessage');
+                const badge = document.getElementById('audioGenerationStatusBadge');
+
+                if (generatedEl) generatedEl.textContent = String(generated);
+                if (remainingEl) remainingEl.textContent = String(remaining);
+                if (failedEl) failedEl.textContent = String(failed);
+                if (progressLabel) progressLabel.textContent = `${doneCount} / ${total}`;
+                if (progressBar) progressBar.style.width = `${progressPct}%`;
+                if (msgEl && message) msgEl.textContent = message;
+
+                if (badge) {
+                    if (state.running && !state.stopRequested) {
+                        badge.textContent = 'Em andamento';
+                        badge.className = 'text-xs px-2.5 py-1 rounded-full bg-cyan-500/20 text-cyan-300';
+                    } else if (state.stopRequested) {
+                        badge.textContent = 'Interrompido';
+                        badge.className = 'text-xs px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300';
+                    } else {
+                        badge.textContent = 'Concluído';
+                        badge.className = 'text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300';
+                    }
+                }
+            },
+
+            appendAudioGenerationLog(message, level = 'info') {
+                const log = document.getElementById('audioGenerationLog');
+                if (!log) return;
+
+                const colors = {
+                    success: 'text-emerald-300',
+                    error: 'text-rose-300',
+                    info: 'text-slate-300'
+                };
+
+                const row = document.createElement('div');
+                row.className = colors[level] || colors.info;
+                const now = new Date();
+                const hh = String(now.getHours()).padStart(2, '0');
+                const mm = String(now.getMinutes()).padStart(2, '0');
+                const ss = String(now.getSeconds()).padStart(2, '0');
+                row.textContent = `[${hh}:${mm}:${ss}] ${message}`;
+                log.appendChild(row);
+                log.scrollTop = log.scrollHeight;
+            },
+
+            stopAudioGeneration() {
+                if (!this.state.audioGeneration.running) return;
+                this.state.audioGeneration.stopRequested = true;
+                this.appendAudioGenerationLog('Interrupção solicitada pelo usuário.', 'info');
+                this.updateAudioGenerationModalUI('Interrompendo geração...');
+                const stopBtn = document.getElementById('audioGenerationStopBtn');
+                if (stopBtn) {
+                    stopBtn.disabled = true;
+                    stopBtn.classList.add('opacity-60', 'pointer-events-none');
+                }
+            },
+
+            finishAudioGeneration(completedNaturally = true) {
+                const state = this.state.audioGeneration;
+                state.running = false;
+
+                let message = 'Geração concluída.';
+                let toastType = state.failed > 0 ? 'error' : 'success';
+
+                if (!completedNaturally || state.stopRequested) {
+                    message = `Geração interrompida. Você ainda tem ${state.remaining} áudio(s) pendente(s).`;
+                    toastType = 'error';
+                } else if (state.totalPending === 0) {
+                    message = 'Nenhum áudio pendente com texto encontrado neste diretório e subdiretórios.';
+                    toastType = 'success';
+                } else {
+                    message = `Processo concluído. Gerados: ${state.generated}, falhas: ${state.failed}, faltam: ${state.remaining}.`;
+                }
+
+                this.appendAudioGenerationLog(message, (!completedNaturally || state.stopRequested || state.failed > 0) ? 'error' : 'success');
+                this.updateAudioGenerationModalUI(message);
+
+                const closeBtn = document.getElementById('audioGenerationCloseBtn');
+                const stopBtn = document.getElementById('audioGenerationStopBtn');
+                if (closeBtn) closeBtn.classList.remove('hidden');
+                if (stopBtn) stopBtn.classList.add('hidden');
+
+                this.showToast(message, toastType);
+            },
+
+            closeAudioGenerationModal() {
+                const modal = document.getElementById('audioGenerationModal');
+                const content = document.getElementById('audioGenerationModalContent');
+                const stopBtn = document.getElementById('audioGenerationStopBtn');
+                const closeBtn = document.getElementById('audioGenerationCloseBtn');
+
+                if (stopBtn) stopBtn.classList.remove('hidden');
+                if (closeBtn) closeBtn.classList.add('hidden');
+
+                if (!modal) return;
+                modal.classList.add('opacity-0');
+                if (content) content.classList.add('scale-95');
+                setTimeout(() => {
+                    modal.classList.remove('flex');
+                    modal.classList.add('hidden');
+                }, 250);
             },
 
             handleCoverUpload(e) {
