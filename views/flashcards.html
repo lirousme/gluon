@@ -1114,7 +1114,7 @@
             playCardAudio(cardId, side) {
                 this.stopAudio();
                 const ts = new Date().getTime(); // Bypassa o cache do navegador para ouvir o novo audio regerado
-                this.currentAudioElement = new Audio(`/api/flashcards.php?action=get_audio&card_id=${cardId}&side=${side}&t=${ts}`);
+                this.currentAudioElement = new Audio(`/api/flashcards?action=get_audio&card_id=${cardId}&side=${side}&t=${ts}`);
                 const sideLanguage = side === 'front' ? this.frontLanguage : this.backLanguage;
                 this.currentAudioElement.volume = sideLanguage === 'en-GB' ? 1 : 0.6;
                 this.currentAudioElement.play().catch(e => console.error("Erro ao tocar áudio:", e));
