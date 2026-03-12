@@ -94,6 +94,8 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 FOREIGN KEY (parent_id) REFERENCES directories(id) ON DELETE CASCADE,
 FOREIGN KEY (target_id) REFERENCES directories(id) ON DELETE CASCADE,
 INDEX idx_user_parent (user_id, parent_id),
+INDEX idx_user_parent_public_sort (user_id, parent_id, is_public, sort_order, id),
+INDEX idx_user_type_parent_recurrence (user_id, type, parent_id, is_recurring),
 INDEX idx_sort_order (sort_order),
 INDEX idx_type (type),
 INDEX idx_dates (start_date, end_date),
@@ -131,7 +133,8 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
 FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
-INDEX idx_directory (directory_id)
+INDEX idx_directory (directory_id),
+INDEX idx_directory_id_id (directory_id, id)
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================
@@ -167,7 +170,8 @@ last_reviewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 UNIQUE KEY unique_user_card (user_id, flashcard_id),
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 FOREIGN KEY (flashcard_id) REFERENCES flashcards(id) ON DELETE CASCADE,
-INDEX idx_user_card (user_id, flashcard_id)
+INDEX idx_user_card (user_id, flashcard_id),
+INDEX idx_flashcard_user_next_review (flashcard_id, user_id, next_review_at, score)
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================
