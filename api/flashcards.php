@@ -440,43 +440,17 @@ function requestFishAudioTts($text_to_speech, $language) {
     return is_string($audio_binary) && $audio_binary !== '' ? $audio_binary : null;
 }
 
-function getOpenAITtsProfileByLanguage($language) {
-    $language = normalizeDeckLanguage($language, 'pt-BR');
-
-    switch ($language) {
-        case 'en-GB':
-            return [
-                'voice' => OPENAI_TTS_VOICE_EN_GB,
-                'instructions' => 'Speak with a clear British English accent (UK), preserving natural UK pronunciation and rhythm.'
-            ];
-        case 'en-US':
-            return [
-                'voice' => OPENAI_TTS_VOICE_EN_US,
-                'instructions' => 'Speak with a clear American English accent (US), preserving natural US pronunciation and rhythm.'
-            ];
-        case 'pt-BR':
-        default:
-            return [
-                'voice' => OPENAI_TTS_VOICE_PT_BR,
-                'instructions' => 'Fale em português brasileiro, com pronúncia natural e clara.'
-            ];
-    }
-}
-
-function requestOpenAITts($text_to_speech, $language) {
+function requestOpenAITts($text_to_speech) {
     if (trim((string)OPENAI_API_KEY) === '') {
         return null;
     }
 
-    $profile = getOpenAITtsProfileByLanguage($language);
-
     $ch = curl_init('https://api.openai.com/v1/audio/speech');
     $payload = json_encode([
         'model' => 'gpt-4o-mini-tts',
-        'voice' => $profile['voice'],
+        'voice' => 'alloy',
         'input' => $text_to_speech,
-        'format' => 'mp3',
-        'instructions' => $profile['instructions']
+        'format' => 'mp3'
     ]);
 
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -505,7 +479,7 @@ function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $la
     $provider = getUserTtsProvider($pdo, (int)$user_id);
 
     $audio_binary = $provider === 'openai'
-        ? requestOpenAITts($text_to_speech, $language)
+        ? requestOpenAITts($text_to_speech)
         : requestFishAudioTts($text_to_speech, $language);
 
     if (!is_string($audio_binary) || $audio_binary === '') {
