@@ -260,6 +260,15 @@ function getFishReferenceIdByLanguage($language) {
     }
 }
 
+function getGoogleTtsVoiceByLanguage($language) {
+    switch ($language) {
+        case 'pt-BR': return 'pt-BR-Chirp3-HD-Schedar';
+        case 'en-US': return 'en-US-Chirp3-HD-Fenrir';
+        case 'en-GB': return 'en-GB-Chirp3-HD-Iapetus';
+        default: return 'en-US-Chirp3-HD-Fenrir';
+    }
+}
+
 function getLanguageLabel($language) {
     $map = [
         'pt-BR' => 'Português Brasileiro',
@@ -386,7 +395,7 @@ function normalizeStoredAudioToBinary($audioValue) {
 }
 
 function normalizeTtsProvider($value, $default = 'fishaudio') {
-    $allowed = ['fishaudio', 'openai'];
+    $allowed = ['fishaudio', 'openai', 'google'];
     return in_array($value, $allowed, true) ? $value : $default;
 }
 
@@ -473,14 +482,61 @@ function requestOpenAITts($text_to_speech) {
 }
 
 
+function requestGoogleCloudTts($text_to_speech, $language) {
+    if (trim((string)GOOGLE_CLOUD_API_KEY) === '') {
+        return null;
+    }
+
+    $voice_name = getGoogleTtsVoiceByLanguage($language);
+    $ch = curl_init('https://texttospeech.googleapis.com/v1/text:synthesize?key=' . rawurlencode(GOOGLE_CLOUD_API_KEY));
+    $payload = json_encode([
+        'input' => ['text' => $text_to_speech],
+        'voice' => [
+            'languageCode' => $language,
+            'name' => $voice_name
+        ],
+        'audioConfig' => [
+            'audioEncoding' => 'MP3'
+        ]
+    ]);
+
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json'
+    ]);
+
+    $response = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpcode !== 200 || !$response) {
+        return null;
+    }
+
+    $decodedResponse = json_decode($response, true);
+    if (json_last_error() !== JSON_ERROR_NONE || !is_array($decodedResponse)) {
+        return null;
+    }
+
+    $audio_binary = decodeTtsAudioBinaryFromJsonPayload($decodedResponse);
+    return is_string($audio_binary) && $audio_binary !== '' ? $audio_binary : null;
+}
+
+
 
 function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $language) {
     $text_to_speech = adjustPronunciationForTTS($pdo, $text, $language);
     $provider = getUserTtsProvider($pdo, (int)$user_id);
 
-    $audio_binary = $provider === 'openai'
-        ? requestOpenAITts($text_to_speech)
-        : requestFishAudioTts($text_to_speech, $language);
+    if ($provider === 'openai') {
+        $audio_binary = requestOpenAITts($text_to_speech);
+    } elseif ($provider === 'google') {
+        $audio_binary = requestGoogleCloudTts($text_to_speech, $language);
+    } else {
+        $audio_binary = requestFishAudioTts($text_to_speech, $language);
+    }
 
     if (!is_string($audio_binary) || $audio_binary === '') {
         return false;
