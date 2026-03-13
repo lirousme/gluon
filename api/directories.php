@@ -244,6 +244,17 @@ function normalizeDeckStructureForDirectory($value, $default = 'fatos') {
     return in_array($value, $allowed, true) ? $value : $default;
 }
 
+function normalizeChildDefaultType($value, $default = 0) {
+    $allowed = [0, 1, 2, 3, 4, 5, 6, 7];
+    $type = (int)$value;
+    return in_array($type, $allowed, true) ? $type : (int)$default;
+}
+
+function normalizeChildDefaultView($value, $default = 'grid') {
+    $allowed = ['grid', 'list', 'kanban'];
+    return in_array($value, $allowed, true) ? $value : $default;
+}
+
 function getFolderDeckPresetForParentChain($pdo, $user_id, $parent_id) {
     $front = 'pt-BR';
     $back = 'en-GB';
