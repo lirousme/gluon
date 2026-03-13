@@ -242,6 +242,7 @@
             <div class="flex border-b border-slate-700 bg-slate-900/30">
                 <button type="button" onclick="app.switchModalTab('geral')" id="tab-btn-geral" class="flex-1 py-3 text-sm font-medium border-b-2 border-gluon-primary text-white transition-colors">Geral</button>
                 <button type="button" onclick="app.switchModalTab('apar')" id="tab-btn-apar" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Aparência</button>
+                <button type="button" onclick="app.switchModalTab('preset')" id="tab-btn-preset" class="hidden flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Pré-config</button>
                 <button type="button" onclick="app.switchModalTab('recor')" id="tab-btn-recor" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Repetição</button>
                 <button type="button" onclick="app.switchModalTab('deckpreset')" id="tab-btn-deckpreset" class="hidden flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Pré-deck</button>
             </div>
@@ -311,7 +312,7 @@
                     <div id="publicToggleContainer" class="mb-5">
                         <label class="flex items-center justify-between bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 cursor-pointer">
                             <span class="text-sm text-slate-200 font-medium"><i class="fa-solid fa-earth-americas mr-2 text-gluon-primary"></i>Diretório público</span>
-                            <input type="checkbox" id="dirIsPublic" class="w-4 h-4 accent-gluon-primary">
+                            <input type="checkbox" id="dirIsPublic" class="w-4 h-4 accent-gluon-primary" checked>
                         </label>
                     </div>
 
@@ -381,6 +382,34 @@
                     <div id="iconPickerContainer">
                         <label class="block text-sm font-medium text-slate-300 mb-2"><i class="fa-solid fa-icons mr-1"></i> Selecionar Ícone</label>
                         <div class="grid grid-cols-5 gap-2 max-h-40 overflow-y-auto no-scrollbar p-1" id="icon-picker"></div>
+                    </div>
+                </div>
+
+                <div id="tab-preset" class="hidden p-6 overflow-y-auto flex-1 space-y-5">
+                    <div class="bg-slate-900/40 border border-slate-700 rounded-lg p-3 text-xs text-slate-300 leading-relaxed">
+                        <i class="fa-solid fa-sitemap text-gluon-primary mr-1"></i>
+                        Esta pré-configuração vale para novos itens criados dentro desta pasta, dentro de subpastas e assim por diante.
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Tipo padrão para novos itens filhos</label>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="0" class="peer hidden" checked><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-folder block text-lg mb-1"></i><span class="text-xs">Pasta</span></div></label>
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="1" class="peer hidden"><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-file-code block text-lg mb-1"></i><span class="text-xs">Código fonte</span></div></label>
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="2" class="peer hidden"><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-calendar-days block text-lg mb-1"></i><span class="text-xs">Agenda</span></div></label>
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="4" class="peer hidden"><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-layer-group block text-lg mb-1"></i><span class="text-xs">Flashcards</span></div></label>
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="5" class="peer hidden"><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-list-check block text-lg mb-1"></i><span class="text-xs">Controle</span></div></label>
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="6" class="peer hidden"><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-code-branch block text-lg mb-1"></i><span class="text-xs">Condicional</span></div></label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Visualização padrão para novas pastas</label>
+                        <div class="grid grid-cols-3 gap-2 sm:gap-3">
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetView" value="grid" class="peer hidden" checked><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-border-all block text-xl mb-1"></i><span class="text-xs font-medium">Grid</span></div></label>
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetView" value="list" class="peer hidden"><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-list-ul block text-xl mb-1"></i><span class="text-xs font-medium">Lista</span></div></label>
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetView" value="kanban" class="peer hidden"><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-columns block text-xl mb-1"></i><span class="text-xs font-medium">Kanban</span></div></label>
+                        </div>
                     </div>
                 </div>
 
@@ -1654,7 +1683,7 @@
             },
 
             switchModalTab(tabName) {
-                const tabs = ['geral', 'apar', 'recor', 'deckpreset'];
+                const tabs = ['geral', 'apar', 'preset', 'recor', 'deckpreset'];
                 tabs.forEach(t => {
                     const tEl = document.getElementById(`tab-${t}`);
                     const bEl = document.getElementById(`tab-btn-${t}`);
@@ -1772,6 +1801,7 @@
                 const publicToggleContainer = document.getElementById('publicToggleContainer');
                 const btnApar = document.getElementById('tab-btn-apar');
                 const btnRecor = document.getElementById('tab-btn-recor');
+                const btnPreset = document.getElementById('tab-btn-preset');
                 const btnDeckPreset = document.getElementById('tab-btn-deckpreset');
                 const tabRecor = document.getElementById('tab-recor');
                 const recurrenceEnabled = this.isRecurrenceContext();
@@ -1782,6 +1812,7 @@
                     document.getElementById('dirNameContainer').classList.add('hidden');
                     btnApar.classList.add('hidden');
                     btnRecor.classList.add('hidden');
+                    btnPreset.classList.add('hidden');
                     btnDeckPreset.classList.add('hidden');
                     tabRecor.classList.add('hidden');
                     typeSelector.classList.add('hidden');
@@ -1789,6 +1820,7 @@
                     publicToggleContainer.classList.add('hidden');
                 } else {
                     btnApar.classList.remove('hidden');
+                    btnPreset.classList.add('hidden');
                     btnDeckPreset.classList.add('hidden');
                     if (recurrenceEnabled) {
                         btnRecor.classList.remove('hidden');
@@ -1822,6 +1854,7 @@
                         else if(dirObj.type === 7) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Plano'; iconPickerContainer.style.display = 'block'; }
 
                         if (dirObj.type === 0) {
+                            btnPreset.classList.remove('hidden');
                             btnDeckPreset.classList.remove('hidden');
                         }
                     } else {
@@ -1847,6 +1880,17 @@
                     structureRadios[i].checked = structureRadios[i].value === deckStructure;
                 }
 
+                const dirPresetTypeToSelect = Number((dirObj && dirObj.child_default_type) ?? 0);
+                const dirPresetViewToSelect = ['grid', 'list', 'kanban'].includes((dirObj && dirObj.child_default_view) ?? '') ? dirObj.child_default_view : 'grid';
+                const dirPresetTypeRadiosBase = document.getElementsByName('dirPresetType');
+                for (let i = 0; i < dirPresetTypeRadiosBase.length; i++) {
+                    dirPresetTypeRadiosBase[i].checked = Number(dirPresetTypeRadiosBase[i].value) === dirPresetTypeToSelect;
+                }
+                const dirPresetViewRadiosBase = document.getElementsByName('dirPresetView');
+                for (let i = 0; i < dirPresetViewRadiosBase.length; i++) {
+                    dirPresetViewRadiosBase[i].checked = dirPresetViewRadiosBase[i].value === dirPresetViewToSelect;
+                }
+
                 dirNameInput.value = dirObj ? dirObj.name : name;
 
                 this.removeCover();
@@ -1863,7 +1907,7 @@
                 const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (isRootSettings ? 'fa-folder' : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : (dirObj?.type === 3 ? 'fa-door-open' : (dirObj?.type === 4 ? 'fa-layer-group' : (dirObj?.type === 6 ? 'fa-code-branch' : (dirObj?.type === 7 ? 'fa-list-ol' : 'fa-folder'))))))); 
                 this.autoChangeIcon(iconToSelect);
 
-                document.getElementById('dirIsPublic').checked = id ? !!(dirObj && dirObj.is_public === 1) : true;
+                document.getElementById('dirIsPublic').checked = !id || id === 'root' ? true : !!(dirObj && dirObj.is_public === 1);
 
                 const posToSelect = (dirObj && dirObj.new_item_position) ? dirObj.new_item_position : 'end';
                 const posRadios = document.getElementsByName('dirItemPosition');
@@ -2043,6 +2087,15 @@
                         rec_end: rec_end,
                         is_public: document.getElementById('dirIsPublic').checked ? 1 : 0
                     };
+
+                    let childDefaultType = 0;
+                    const dirPresetTypeRadios = document.getElementsByName('dirPresetType');
+                    for (let i = 0; i < dirPresetTypeRadios.length; i++) { if (dirPresetTypeRadios[i].checked) childDefaultType = Number(dirPresetTypeRadios[i].value); }
+                    let childDefaultView = 'grid';
+                    const dirPresetViewRadios = document.getElementsByName('dirPresetView');
+                    for (let i = 0; i < dirPresetViewRadios.length; i++) { if (dirPresetViewRadios[i].checked) childDefaultView = dirPresetViewRadios[i].value; }
+                    payload.child_default_type = childDefaultType;
+                    payload.child_default_view = childDefaultView;
 
                     const existingType = id ? Number(this.state.directoryCache.get(Number(id))?.type ?? 0) : null;
                     const effectiveType = id ? existingType : selectedType;
