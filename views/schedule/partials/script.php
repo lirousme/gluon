@@ -1265,6 +1265,12 @@
                     return;
                 }
 
+                const item = this.state.directoryCache.get(Number(id));
+                if (item && Number(item.type) === 4) {
+                    this.enterDirectoryOrFile(id);
+                    return;
+                }
+
                 const card = e && e.currentTarget ? e.currentTarget : null;
                 const contextStart = card ? card.getAttribute('data-context-start') : null;
                 const contextEnd = card ? card.getAttribute('data-context-end') : null;
@@ -1935,8 +1941,23 @@
 
                 const btnOpenItem = document.getElementById('btnOpenItemFromModal');
                 if (btnOpenItem) {
-                    if (id) btnOpenItem.classList.remove('hidden');
-                    else btnOpenItem.classList.add('hidden');
+                    if (id) {
+                        btnOpenItem.classList.remove('hidden');
+                        const openLabelByType = {
+                            0: 'Entrar na pasta',
+                            1: 'Abrir arquivo',
+                            2: 'Abrir agenda',
+                            3: 'Abrir portal',
+                            4: 'Abrir flashcards',
+                            5: 'Abrir mapa',
+                            7: 'Abrir plano'
+                        };
+                        const openLabel = openLabelByType[Number(dirObj?.type)] || 'Abrir item';
+                        btnOpenItem.innerHTML = `<i class="fa-solid fa-arrow-up-right-from-square"></i> ${openLabel}`;
+                    } else {
+                        btnOpenItem.classList.add('hidden');
+                        btnOpenItem.innerHTML = '<i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir item';
+                    }
                 }
 
                 const viewToSelect = (dirObj && dirObj.view) ? dirObj.view : 'grid';
