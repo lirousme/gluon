@@ -458,7 +458,7 @@ elseif ($action === 'get_path') {
     $curr = $dir_id;
     
     while ($curr !== null) {
-        $stmt = $pdo->prepare("SELECT id, type, name_encrypted, default_view, parent_id, is_public FROM directories WHERE id = ? AND user_id = ?");
+        $stmt = $pdo->prepare("SELECT id, type, name_encrypted, default_view, parent_id, is_public, child_default_type, child_default_view FROM directories WHERE id = ? AND user_id = ?");
         $stmt->execute([$curr, $target_user_id]);
         $dir = $stmt->fetch();
         
@@ -471,7 +471,9 @@ elseif ($action === 'get_path') {
                 'id' => $dir['id'],
                 'type' => (int)$dir['type'],
                 'name' => Security::decryptData($dir['name_encrypted']),
-                'view' => $dir['default_view']
+                'view' => $dir['default_view'],
+                'child_default_type' => normalizeChildDefaultType($dir['child_default_type'] ?? 0, 0),
+                'child_default_view' => normalizeChildDefaultView($dir['child_default_view'] ?? 'grid', 'grid')
             ]);
             $curr = $dir['parent_id'];
         } else {

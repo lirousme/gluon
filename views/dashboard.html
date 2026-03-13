@@ -1717,6 +1717,32 @@
                 return null;
             },
 
+            resolveParentCreationPreset(parentId) {
+                const defaults = { type: 0, view: 'grid' };
+                if (parentId === null || Number.isNaN(Number(parentId))) {
+                    return defaults;
+                }
+
+                const normalizedParentId = Number(parentId);
+                const parentDir = this.state.directoryCache.get(normalizedParentId);
+                if (parentDir) {
+                    return {
+                        type: Number(parentDir.child_default_type ?? 0),
+                        view: ['grid', 'list', 'kanban'].includes(parentDir.child_default_view) ? parentDir.child_default_view : 'grid'
+                    };
+                }
+
+                const parentInPath = this.state.path.find(p => Number(p.id) === normalizedParentId);
+                if (parentInPath) {
+                    return {
+                        type: Number(parentInPath.child_default_type ?? 0),
+                        view: ['grid', 'list', 'kanban'].includes(parentInPath.child_default_view) ? parentInPath.child_default_view : 'grid'
+                    };
+                }
+
+                return defaults;
+            },
+
             openModal(id = '', name = '', targetParentId = null, currentViewMode = 'grid') {
                 if(this.state.reorderMode || this.isVisitingProfile()) return;
                 if (id && id !== 'root' && !this.canEditDirectory(this.state.directoryCache.get(Number(id)))) return;
@@ -1837,7 +1863,7 @@
                 const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (isRootSettings ? 'fa-folder' : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : (dirObj?.type === 3 ? 'fa-door-open' : (dirObj?.type === 4 ? 'fa-layer-group' : (dirObj?.type === 6 ? 'fa-code-branch' : (dirObj?.type === 7 ? 'fa-list-ol' : 'fa-folder'))))))); 
                 this.autoChangeIcon(iconToSelect);
 
-                document.getElementById('dirIsPublic').checked = !!(dirObj && dirObj.is_public === 1);
+                document.getElementById('dirIsPublic').checked = id ? !!(dirObj && dirObj.is_public === 1) : true;
 
                 const posToSelect = (dirObj && dirObj.new_item_position) ? dirObj.new_item_position : 'end';
                 const posRadios = document.getElementsByName('dirItemPosition');
@@ -1857,7 +1883,27 @@
                 if(id && !isRootSettings) btnDelete.classList.remove('hidden'); else btnDelete.classList.add('hidden');
                 if (id && !isRootSettings) btnCopyModal.classList.remove('hidden'); else btnCopyModal.classList.add('hidden');
 
-                const viewToSelect = (dirObj && dirObj.view) ? dirObj.view : currentViewMode;
+                let viewToSelect = (dirObj && dirObj.view) ? dirObj.view : currentViewMode;
+                if (!id) {
+                    const resolvedParentId = targetParentId !== null ? Number(targetParentId) : this.getCurrentParentId();
+                    const parentPreset = this.resolveParentCreationPreset(resolvedParentId);
+                    viewToSelect = parentPreset.view;
+
+                    const typeRadios = document.getElementsByName('itemType');
+                    for (let i = 0; i < typeRadios.length; i++) {
+                        typeRadios[i].checked = Number(typeRadios[i].value) === parentPreset.type;
+                    }
+                    this.handleTypeChange(parentPreset.type);
+
+                    const dirPresetTypeRadios = document.getElementsByName('dirPresetType');
+                    for (let i = 0; i < dirPresetTypeRadios.length; i++) {
+                        dirPresetTypeRadios[i].checked = Number(dirPresetTypeRadios[i].value) === parentPreset.type;
+                    }
+                    const dirPresetViewRadios = document.getElementsByName('dirPresetView');
+                    for (let i = 0; i < dirPresetViewRadios.length; i++) {
+                        dirPresetViewRadios[i].checked = dirPresetViewRadios[i].value === parentPreset.view;
+                    }
+                }
                 const viewRadios = document.getElementsByName('dirViewMode');
                 for(let i=0; i<viewRadios.length; i++) { viewRadios[i].checked = (viewRadios[i].value === viewToSelect); }
                 
