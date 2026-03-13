@@ -243,6 +243,8 @@
                 <button type="button" onclick="app.switchModalTab('geral')" id="tab-btn-geral" class="flex-1 py-3 text-sm font-medium border-b-2 border-gluon-primary text-white transition-colors">Geral</button>
                 <button type="button" onclick="app.switchModalTab('apar')" id="tab-btn-apar" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Aparência</button>
                 <button type="button" onclick="app.switchModalTab('recor')" id="tab-btn-recor" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Repetição</button>
+                <button type="button" onclick="app.switchModalTab('deckpreset')" id="tab-btn-deckpreset" class="hidden flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Pré-deck</button>
+                <button type="button" onclick="app.switchModalTab('dirpreset')" id="tab-btn-dirpreset" class="hidden flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Pré-diretório</button>
             </div>
 
             <form id="dirForm" onsubmit="app.saveDirectory(event)" class="flex flex-col flex-1 overflow-hidden">
@@ -415,6 +417,67 @@
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Parar de repetir em (Opcional)</label>
                             <input type="date" id="rec_end" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab-deckpreset" class="hidden p-6 overflow-y-auto flex-1 space-y-4">
+                    <div class="text-xs text-slate-400 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2">
+                        Esse padrão vale para decks criados nesta pasta e em todos os descendentes dela.
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">Idioma da frente</label>
+                        <select id="deckPresetFrontLanguage" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors">
+                            <option value="pt-BR">Português (Brasil)</option>
+                            <option value="en-US">Inglês (EUA)</option>
+                            <option value="en-GB">Inglês (Reino Unido)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">Idioma do verso</label>
+                        <select id="deckPresetBackLanguage" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors">
+                            <option value="en-GB">Inglês (Reino Unido)</option>
+                            <option value="en-US">Inglês (EUA)</option>
+                            <option value="pt-BR">Português (Brasil)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Estrutura padrão</label>
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <label class="flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="deckPresetStructure" value="perguntas" class="accent-gluon-primary"><span>Perguntas</span></label>
+                            <label class="flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="deckPresetStructure" value="fatos" class="accent-gluon-primary" checked><span>Fatos</span></label>
+                            <label class="flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="deckPresetStructure" value="traducoes" class="accent-gluon-primary"><span>Traduções</span></label>
+                            <label class="flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="deckPresetStructure" value="parafrases" class="accent-gluon-primary"><span>Paráfrases</span></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab-dirpreset" class="hidden p-6 overflow-y-auto flex-1 space-y-4">
+                    <div class="text-xs text-slate-400 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2">
+                        Esse padrão vale para novos diretórios criados nesta pasta e em todos os descendentes dela.
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Tipo padrão do novo diretório</label>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="0" class="peer hidden type-radio" checked><div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-folder block text-lg mb-1"></i><span class="text-[11px] font-medium block">Pasta</span></div></label>
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="1" class="peer hidden type-radio"><div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-file-code block text-lg mb-1"></i><span class="text-[11px] font-medium block">Cód. Fonte</span></div></label>
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="2" class="peer hidden type-radio"><div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-calendar-days block text-lg mb-1"></i><span class="text-[11px] font-medium block">Agenda</span></div></label>
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="4" class="peer hidden type-radio"><div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-layer-group block text-lg mb-1"></i><span class="text-[11px] font-medium block">Flashcards</span></div></label>
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="5" class="peer hidden type-radio"><div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-list-check block text-lg mb-1"></i><span class="text-[11px] font-medium block">Controle</span></div></label>
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="6" class="peer hidden type-radio"><div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-code-branch block text-lg mb-1"></i><span class="text-[11px] font-medium block">Condicional</span></div></label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Visualização padrão do novo diretório</label>
+                        <div class="grid grid-cols-3 gap-2 sm:gap-3">
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetView" value="grid" class="peer hidden view-radio" checked><div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-border-all block text-xl mb-1"></i><span class="text-xs font-medium">Grid</span></div></label>
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetView" value="list" class="peer hidden view-radio"><div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-list-ul block text-xl mb-1"></i><span class="text-xs font-medium">Lista</span></div></label>
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetView" value="kanban" class="peer hidden view-radio"><div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700"><i class="fa-solid fa-columns block text-xl mb-1"></i><span class="text-xs font-medium">Kanban</span></div></label>
                         </div>
                     </div>
                 </div>
@@ -1619,7 +1682,7 @@
             },
 
             switchModalTab(tabName) {
-                const tabs = ['geral', 'apar', 'recor'];
+                const tabs = ['geral', 'apar', 'recor', 'deckpreset', 'dirpreset'];
                 tabs.forEach(t => {
                     const tEl = document.getElementById(`tab-${t}`);
                     const bEl = document.getElementById(`tab-btn-${t}`);
@@ -1682,9 +1745,35 @@
                 return null;
             },
 
+            resolveParentCreationPreset(parentId) {
+                const defaults = { type: 0, view: 'grid' };
+                if (parentId === null || Number.isNaN(Number(parentId))) {
+                    return defaults;
+                }
+
+                const normalizedParentId = Number(parentId);
+                const parentDir = this.state.directoryCache.get(normalizedParentId);
+                if (parentDir) {
+                    return {
+                        type: Number(parentDir.child_default_type ?? 0),
+                        view: ['grid', 'list', 'kanban'].includes(parentDir.child_default_view) ? parentDir.child_default_view : 'grid'
+                    };
+                }
+
+                const parentInPath = this.state.path.find(p => Number(p.id) === normalizedParentId);
+                if (parentInPath) {
+                    return {
+                        type: Number(parentInPath.child_default_type ?? 0),
+                        view: ['grid', 'list', 'kanban'].includes(parentInPath.child_default_view) ? parentInPath.child_default_view : 'grid'
+                    };
+                }
+
+                return defaults;
+            },
+
             openModal(id = '', name = '', targetParentId = null, currentViewMode = 'grid') {
                 if(this.state.reorderMode || this.isVisitingProfile()) return;
-                if (id && !this.canEditDirectory(this.state.directoryCache.get(Number(id)))) return;
+                if (id && id !== 'root' && !this.canEditDirectory(this.state.directoryCache.get(Number(id)))) return;
                 if (!id && this.isCurrentDirectoryReadOnly()) return; 
 
                 this.switchModalTab('geral');
@@ -1711,6 +1800,8 @@
                 const publicToggleContainer = document.getElementById('publicToggleContainer');
                 const btnApar = document.getElementById('tab-btn-apar');
                 const btnRecor = document.getElementById('tab-btn-recor');
+                const btnDeckPreset = document.getElementById('tab-btn-deckpreset');
+                const btnDirPreset = document.getElementById('tab-btn-dirpreset');
                 const tabRecor = document.getElementById('tab-recor');
                 const recurrenceEnabled = this.isRecurrenceContext();
 
@@ -1720,12 +1811,16 @@
                     document.getElementById('dirNameContainer').classList.add('hidden');
                     btnApar.classList.add('hidden');
                     btnRecor.classList.add('hidden');
+                    btnDeckPreset.classList.add('hidden');
+                    btnDirPreset.classList.add('hidden');
                     tabRecor.classList.add('hidden');
                     typeSelector.classList.add('hidden');
                     iconPickerContainer.style.display = 'block';
                     publicToggleContainer.classList.add('hidden');
                 } else {
                     btnApar.classList.remove('hidden');
+                    btnDeckPreset.classList.add('hidden');
+                    btnDirPreset.classList.add('hidden');
                     if (recurrenceEnabled) {
                         btnRecor.classList.remove('hidden');
                     } else {
@@ -1756,6 +1851,11 @@
                         else if(dirObj.type === 4) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Deck'; iconPickerContainer.style.display = 'block'; }
                         else if(dirObj.type === 6) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Sistema de Condicional'; iconPickerContainer.style.display = 'block'; }
                         else if(dirObj.type === 7) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Plano'; iconPickerContainer.style.display = 'block'; }
+
+                        if (dirObj.type === 0) {
+                            btnDeckPreset.classList.remove('hidden');
+                            btnDirPreset.classList.remove('hidden');
+                        }
                     } else {
                         document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus text-gluon-primary"></i> <span>Novo Item</span>';
                         document.getElementById('dirNameContainer').classList.remove('hidden');
@@ -1767,6 +1867,26 @@
                         this.handleTypeChange(0);
                         publicToggleContainer.classList.remove('hidden');
                     }
+                }
+
+                const frontLanguage = (dirObj && dirObj.deck_front_language) ? dirObj.deck_front_language : 'pt-BR';
+                const backLanguage = (dirObj && dirObj.deck_back_language) ? dirObj.deck_back_language : 'en-GB';
+                const deckStructure = (dirObj && dirObj.deck_structure) ? dirObj.deck_structure : 'fatos';
+                const childDefaultType = Number((dirObj && dirObj.child_default_type) ? dirObj.child_default_type : 0);
+                const childDefaultView = (dirObj && ['grid', 'list', 'kanban'].includes(dirObj.child_default_view)) ? dirObj.child_default_view : 'grid';
+                document.getElementById('deckPresetFrontLanguage').value = frontLanguage;
+                document.getElementById('deckPresetBackLanguage').value = backLanguage;
+                const structureRadios = document.getElementsByName('deckPresetStructure');
+                for (let i = 0; i < structureRadios.length; i++) {
+                    structureRadios[i].checked = structureRadios[i].value === deckStructure;
+                }
+                const dirPresetTypeRadios = document.getElementsByName('dirPresetType');
+                for (let i = 0; i < dirPresetTypeRadios.length; i++) {
+                    dirPresetTypeRadios[i].checked = Number(dirPresetTypeRadios[i].value) === childDefaultType;
+                }
+                const dirPresetViewRadios = document.getElementsByName('dirPresetView');
+                for (let i = 0; i < dirPresetViewRadios.length; i++) {
+                    dirPresetViewRadios[i].checked = dirPresetViewRadios[i].value === childDefaultView;
                 }
 
                 dirNameInput.value = dirObj ? dirObj.name : name;
@@ -1785,7 +1905,7 @@
                 const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (isRootSettings ? 'fa-folder' : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : (dirObj?.type === 3 ? 'fa-door-open' : (dirObj?.type === 4 ? 'fa-layer-group' : (dirObj?.type === 6 ? 'fa-code-branch' : (dirObj?.type === 7 ? 'fa-list-ol' : 'fa-folder'))))))); 
                 this.autoChangeIcon(iconToSelect);
 
-                document.getElementById('dirIsPublic').checked = !!(dirObj && dirObj.is_public === 1);
+                document.getElementById('dirIsPublic').checked = id ? !!(dirObj && dirObj.is_public === 1) : true;
 
                 const posToSelect = (dirObj && dirObj.new_item_position) ? dirObj.new_item_position : 'end';
                 const posRadios = document.getElementsByName('dirItemPosition');
@@ -1805,7 +1925,27 @@
                 if(id && !isRootSettings) btnDelete.classList.remove('hidden'); else btnDelete.classList.add('hidden');
                 if (id && !isRootSettings) btnCopyModal.classList.remove('hidden'); else btnCopyModal.classList.add('hidden');
 
-                const viewToSelect = (dirObj && dirObj.view) ? dirObj.view : currentViewMode;
+                let viewToSelect = (dirObj && dirObj.view) ? dirObj.view : currentViewMode;
+                if (!id) {
+                    const resolvedParentId = targetParentId !== null ? Number(targetParentId) : this.getCurrentParentId();
+                    const parentPreset = this.resolveParentCreationPreset(resolvedParentId);
+                    viewToSelect = parentPreset.view;
+
+                    const typeRadios = document.getElementsByName('itemType');
+                    for (let i = 0; i < typeRadios.length; i++) {
+                        typeRadios[i].checked = Number(typeRadios[i].value) === parentPreset.type;
+                    }
+                    this.handleTypeChange(parentPreset.type);
+
+                    const dirPresetTypeRadios = document.getElementsByName('dirPresetType');
+                    for (let i = 0; i < dirPresetTypeRadios.length; i++) {
+                        dirPresetTypeRadios[i].checked = Number(dirPresetTypeRadios[i].value) === parentPreset.type;
+                    }
+                    const dirPresetViewRadios = document.getElementsByName('dirPresetView');
+                    for (let i = 0; i < dirPresetViewRadios.length; i++) {
+                        dirPresetViewRadios[i].checked = dirPresetViewRadios[i].value === parentPreset.view;
+                    }
+                }
                 const viewRadios = document.getElementsByName('dirViewMode');
                 for(let i=0; i<viewRadios.length; i++) { viewRadios[i].checked = (viewRadios[i].value === viewToSelect); }
                 
@@ -1875,6 +2015,24 @@
                 const typeRadios = document.getElementsByName('itemType');
                 for(let i=0; i<typeRadios.length; i++) { if(typeRadios[i].checked) selectedType = parseInt(typeRadios[i].value); }
 
+                let selectedDeckStructure = 'fatos';
+                const structureRadios = document.getElementsByName('deckPresetStructure');
+                for (let i = 0; i < structureRadios.length; i++) {
+                    if (structureRadios[i].checked) selectedDeckStructure = structureRadios[i].value;
+                }
+
+                let selectedDirPresetType = 0;
+                const dirPresetTypeRadios = document.getElementsByName('dirPresetType');
+                for (let i = 0; i < dirPresetTypeRadios.length; i++) {
+                    if (dirPresetTypeRadios[i].checked) selectedDirPresetType = parseInt(dirPresetTypeRadios[i].value);
+                }
+
+                let selectedDirPresetView = 'grid';
+                const dirPresetViewRadios = document.getElementsByName('dirPresetView');
+                for (let i = 0; i < dirPresetViewRadios.length; i++) {
+                    if (dirPresetViewRadios[i].checked) selectedDirPresetView = dirPresetViewRadios[i].value;
+                }
+
                 // Extrair valores de recorrência
                 const recurrenceEnabled = this.isRecurrenceContext();
                 let is_recurring = recurrenceEnabled && document.getElementById('is_recurring').checked ? 1 : 0;
@@ -1939,6 +2097,16 @@
                         rec_end: rec_end,
                         is_public: document.getElementById('dirIsPublic').checked ? 1 : 0
                     };
+
+                    const existingType = id ? Number(this.state.directoryCache.get(Number(id))?.type ?? 0) : null;
+                    const effectiveType = id ? existingType : selectedType;
+                    if (effectiveType === 0) {
+                        payload.deck_front_language = document.getElementById('deckPresetFrontLanguage').value;
+                        payload.deck_back_language = document.getElementById('deckPresetBackLanguage').value;
+                        payload.deck_structure = selectedDeckStructure;
+                        payload.child_default_type = selectedDirPresetType;
+                        payload.child_default_view = selectedDirPresetView;
+                    }
 
                     response = await this.api('directories', id !== '' ? 'update' : 'create', payload);
                 }
