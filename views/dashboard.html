@@ -243,6 +243,7 @@
                 <button type="button" onclick="app.switchModalTab('geral')" id="tab-btn-geral" class="flex-1 py-3 text-sm font-medium border-b-2 border-gluon-primary text-white transition-colors">Geral</button>
                 <button type="button" onclick="app.switchModalTab('apar')" id="tab-btn-apar" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Aparência</button>
                 <button type="button" onclick="app.switchModalTab('recor')" id="tab-btn-recor" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Repetição</button>
+                <button type="button" onclick="app.switchModalTab('deckpreset')" id="tab-btn-deckpreset" class="hidden flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Pré-deck</button>
             </div>
 
             <form id="dirForm" onsubmit="app.saveDirectory(event)" class="flex flex-col flex-1 overflow-hidden">
@@ -415,6 +416,40 @@
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Parar de repetir em (Opcional)</label>
                             <input type="date" id="rec_end" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab-deckpreset" class="hidden p-6 overflow-y-auto flex-1 space-y-4">
+                    <div class="text-xs text-slate-400 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2">
+                        Esse padrão vale para decks criados nesta pasta e em todos os descendentes dela.
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">Idioma da frente</label>
+                        <select id="deckPresetFrontLanguage" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors">
+                            <option value="pt-BR">Português (Brasil)</option>
+                            <option value="en-US">Inglês (EUA)</option>
+                            <option value="en-GB">Inglês (Reino Unido)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">Idioma do verso</label>
+                        <select id="deckPresetBackLanguage" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors">
+                            <option value="en-GB">Inglês (Reino Unido)</option>
+                            <option value="en-US">Inglês (EUA)</option>
+                            <option value="pt-BR">Português (Brasil)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Estrutura padrão</label>
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <label class="flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="deckPresetStructure" value="perguntas" class="accent-gluon-primary"><span>Perguntas</span></label>
+                            <label class="flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="deckPresetStructure" value="fatos" class="accent-gluon-primary" checked><span>Fatos</span></label>
+                            <label class="flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="deckPresetStructure" value="traducoes" class="accent-gluon-primary"><span>Traduções</span></label>
+                            <label class="flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="deckPresetStructure" value="parafrases" class="accent-gluon-primary"><span>Paráfrases</span></label>
                         </div>
                     </div>
                 </div>
@@ -1619,7 +1654,7 @@
             },
 
             switchModalTab(tabName) {
-                const tabs = ['geral', 'apar', 'recor'];
+                const tabs = ['geral', 'apar', 'recor', 'deckpreset'];
                 tabs.forEach(t => {
                     const tEl = document.getElementById(`tab-${t}`);
                     const bEl = document.getElementById(`tab-btn-${t}`);
@@ -1684,7 +1719,7 @@
 
             openModal(id = '', name = '', targetParentId = null, currentViewMode = 'grid') {
                 if(this.state.reorderMode || this.isVisitingProfile()) return;
-                if (id && !this.canEditDirectory(this.state.directoryCache.get(Number(id)))) return;
+                if (id && id !== 'root' && !this.canEditDirectory(this.state.directoryCache.get(Number(id)))) return;
                 if (!id && this.isCurrentDirectoryReadOnly()) return; 
 
                 this.switchModalTab('geral');
@@ -1711,6 +1746,7 @@
                 const publicToggleContainer = document.getElementById('publicToggleContainer');
                 const btnApar = document.getElementById('tab-btn-apar');
                 const btnRecor = document.getElementById('tab-btn-recor');
+                const btnDeckPreset = document.getElementById('tab-btn-deckpreset');
                 const tabRecor = document.getElementById('tab-recor');
                 const recurrenceEnabled = this.isRecurrenceContext();
 
@@ -1720,12 +1756,14 @@
                     document.getElementById('dirNameContainer').classList.add('hidden');
                     btnApar.classList.add('hidden');
                     btnRecor.classList.add('hidden');
+                    btnDeckPreset.classList.add('hidden');
                     tabRecor.classList.add('hidden');
                     typeSelector.classList.add('hidden');
                     iconPickerContainer.style.display = 'block';
                     publicToggleContainer.classList.add('hidden');
                 } else {
                     btnApar.classList.remove('hidden');
+                    btnDeckPreset.classList.add('hidden');
                     if (recurrenceEnabled) {
                         btnRecor.classList.remove('hidden');
                     } else {
@@ -1756,6 +1794,10 @@
                         else if(dirObj.type === 4) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Deck'; iconPickerContainer.style.display = 'block'; }
                         else if(dirObj.type === 6) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Sistema de Condicional'; iconPickerContainer.style.display = 'block'; }
                         else if(dirObj.type === 7) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Plano'; iconPickerContainer.style.display = 'block'; }
+
+                        if (dirObj.type === 0) {
+                            btnDeckPreset.classList.remove('hidden');
+                        }
                     } else {
                         document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus text-gluon-primary"></i> <span>Novo Item</span>';
                         document.getElementById('dirNameContainer').classList.remove('hidden');
@@ -1767,6 +1809,16 @@
                         this.handleTypeChange(0);
                         publicToggleContainer.classList.remove('hidden');
                     }
+                }
+
+                const frontLanguage = (dirObj && dirObj.deck_front_language) ? dirObj.deck_front_language : 'pt-BR';
+                const backLanguage = (dirObj && dirObj.deck_back_language) ? dirObj.deck_back_language : 'en-GB';
+                const deckStructure = (dirObj && dirObj.deck_structure) ? dirObj.deck_structure : 'fatos';
+                document.getElementById('deckPresetFrontLanguage').value = frontLanguage;
+                document.getElementById('deckPresetBackLanguage').value = backLanguage;
+                const structureRadios = document.getElementsByName('deckPresetStructure');
+                for (let i = 0; i < structureRadios.length; i++) {
+                    structureRadios[i].checked = structureRadios[i].value === deckStructure;
                 }
 
                 dirNameInput.value = dirObj ? dirObj.name : name;
@@ -1875,6 +1927,12 @@
                 const typeRadios = document.getElementsByName('itemType');
                 for(let i=0; i<typeRadios.length; i++) { if(typeRadios[i].checked) selectedType = parseInt(typeRadios[i].value); }
 
+                let selectedDeckStructure = 'fatos';
+                const structureRadios = document.getElementsByName('deckPresetStructure');
+                for (let i = 0; i < structureRadios.length; i++) {
+                    if (structureRadios[i].checked) selectedDeckStructure = structureRadios[i].value;
+                }
+
                 // Extrair valores de recorrência
                 const recurrenceEnabled = this.isRecurrenceContext();
                 let is_recurring = recurrenceEnabled && document.getElementById('is_recurring').checked ? 1 : 0;
@@ -1939,6 +1997,14 @@
                         rec_end: rec_end,
                         is_public: document.getElementById('dirIsPublic').checked ? 1 : 0
                     };
+
+                    const existingType = id ? Number(this.state.directoryCache.get(Number(id))?.type ?? 0) : null;
+                    const effectiveType = id ? existingType : selectedType;
+                    if (effectiveType === 0) {
+                        payload.deck_front_language = document.getElementById('deckPresetFrontLanguage').value;
+                        payload.deck_back_language = document.getElementById('deckPresetBackLanguage').value;
+                        payload.deck_structure = selectedDeckStructure;
+                    }
 
                     response = await this.api('directories', id !== '' ? 'update' : 'create', payload);
                 }
