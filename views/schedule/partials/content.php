@@ -54,6 +54,14 @@
                     </div>
                     <input id="filter-show-flashcard-due" type="checkbox" onchange="scheduleApp.handleFilterChange()" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-gluon-primary focus:ring-gluon-primary" checked>
                 </label>
+
+                <label class="flex items-center justify-between gap-4 rounded-lg border border-slate-700 bg-slate-800/60 p-3 cursor-pointer">
+                    <div>
+                        <p class="text-sm font-semibold text-slate-200">Mostrar apenas tarefas vencidas</p>
+                        <p class="text-xs text-slate-400 mt-1">Exibe todas as tarefas cuja data final já passou e oculta dias vazios.</p>
+                    </div>
+                    <input id="filter-show-only-overdue" type="checkbox" onchange="scheduleApp.handleFilterChange()" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-gluon-primary focus:ring-gluon-primary">
+                </label>
             </div>
         </div>
     </aside>
