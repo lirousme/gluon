@@ -23,7 +23,8 @@
                 copied_directory_id: null,
                 filterDrawerOpen: false,
                 filters: {
-                    showFlashcardDueDirectories: true
+                    showFlashcardDueDirectories: true,
+                    showOnlyOverdueTasks: false
                 },
                 pendingStartDate: null,
                 pendingEndDate: null,
@@ -294,6 +295,9 @@
                     if (typeof parsed.showFlashcardDueDirectories === 'boolean') {
                         this.state.filters.showFlashcardDueDirectories = parsed.showFlashcardDueDirectories;
                     }
+                    if (typeof parsed.showOnlyOverdueTasks === 'boolean') {
+                        this.state.filters.showOnlyOverdueTasks = parsed.showOnlyOverdueTasks;
+                    }
                 } catch (e) {}
             },
 
@@ -304,6 +308,9 @@
             syncFilterUI() {
                 const checkbox = document.getElementById('filter-show-flashcard-due');
                 if (checkbox) checkbox.checked = this.state.filters.showFlashcardDueDirectories;
+
+                const overdueCheckbox = document.getElementById('filter-show-only-overdue');
+                if (overdueCheckbox) overdueCheckbox.checked = this.state.filters.showOnlyOverdueTasks;
             },
 
             toggleFilterDrawer() {
@@ -335,6 +342,9 @@
             handleFilterChange() {
                 const checkbox = document.getElementById('filter-show-flashcard-due');
                 this.state.filters.showFlashcardDueDirectories = !!checkbox?.checked;
+
+                const overdueCheckbox = document.getElementById('filter-show-only-overdue');
+                this.state.filters.showOnlyOverdueTasks = !!overdueCheckbox?.checked;
                 this.persistFilters();
                 this.render();
             },
@@ -519,6 +529,10 @@
             },
 
             async setViewMode(view) {
+                if (this.state.filters.showOnlyOverdueTasks && view === 'timeline') {
+                    view = 'list';
+                }
+
                 this.state.view = view;
                 this.updateViewButtons();
                 this.render();
@@ -526,11 +540,25 @@
             },
 
             updateViewButtons() {
+                const timelineBlocked = this.state.filters.showOnlyOverdueTasks;
+
                 ['timeline', 'kanban', 'list'].forEach(v => {
                     const btn = document.getElementById(`btn-view-${v}`);
                     if(btn) {
-                        btn.classList.remove('bg-slate-700', 'text-white');
+                        const isTimelineButton = v === 'timeline';
+
+                        btn.classList.remove('bg-slate-700', 'text-white', 'opacity-40', 'cursor-not-allowed');
                         btn.classList.add('text-slate-400');
+                        btn.disabled = false;
+
+                        if (isTimelineButton && timelineBlocked) {
+                            btn.disabled = true;
+                            btn.classList.add('opacity-40', 'cursor-not-allowed');
+                            btn.title = 'Desative o filtro de tarefas vencidas para usar Linha do Tempo';
+                        } else if (isTimelineButton) {
+                            btn.title = 'Linha do Tempo (1 Dia)';
+                        }
+
                         if(v === this.state.view) {
                             btn.classList.remove('text-slate-400');
                             btn.classList.add('bg-slate-700', 'text-white');
@@ -842,8 +870,8 @@
                 </div>`;
             },
 
-            getKanbanHTML(startDate) {
-                const dates = this.getDatesArray(startDate, 7);
+            getKanbanHTML(startDate, customDates = null) {
+                const dates = Array.isArray(customDates) && customDates.length > 0 ? customDates : this.getDatesArray(startDate, 7);
                 const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
                 
                 // Removido snap-x e alterado o padding-bottom para criar espaço na barra inferior
@@ -897,8 +925,8 @@
                 this.openModal(null, '', this.state.pendingStartDate, this.state.pendingEndDate, dateStr);
             },
 
-            getListHTML(startDate) {
-                const dates = this.getDatesArray(startDate, 7);
+            getListHTML(startDate, customDates = null) {
+                const dates = Array.isArray(customDates) && customDates.length > 0 ? customDates : this.getDatesArray(startDate, 7);
                 const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
                 
                 let html = `<div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 relative h-full no-scrollbar pb-20">`;
@@ -920,6 +948,29 @@
                 return html;
             },
 
+            getOverdueWindowBounds() {
+                const now = new Date();
+                const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                start.setDate(start.getDate() - 365);
+                const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                return { start, end, now };
+            },
+
+            getOverdueDatesForItems(scheduledItems) {
+                if (!this.state.filters.showOnlyOverdueTasks) return [];
+
+                const { start, end, now } = this.getOverdueWindowBounds();
+                const dates = this.getDatesArray(start, 366).filter((dateObj) => dateObj <= end);
+
+                return dates.filter((dateObj) => {
+                    const dateStr = this.getLocalYYYYMMDD(dateObj);
+                    return scheduledItems.some((item) => {
+                        const instances = this.getTaskInstancesOnDate(item, dateStr);
+                        return instances.some((inst) => inst.end < now);
+                    });
+                });
+            },
+
             render() {
                 if (this.state.view !== 'kanban') this.customScroll.destroy();
 
@@ -935,6 +986,8 @@
 
                 if (this.state.view === 'timeline') {
                     if (label) label.innerText = 'Exibição: 1 Dia';
+                } else if (this.state.filters.showOnlyOverdueTasks) {
+                    if (label) label.innerText = 'Exibição: somente tarefas vencidas';
                 } else {
                     const endDate = new Date(selectedDate);
                     endDate.setDate(endDate.getDate() + 6);
@@ -946,6 +999,12 @@
 
                 const unscheduledContainer = document.getElementById('unscheduledList');
                 unscheduledContainer.innerHTML = '';
+
+                const isOverdueOnly = this.state.filters.showOnlyOverdueTasks;
+                if (isOverdueOnly && this.state.view === 'timeline') {
+                    this.state.view = 'list';
+                    this.updateViewButtons();
+                }
                 
                 const allItemsMap = new Map();
                 this.items.forEach((item) => allItemsMap.set(Number(item.id), item));
@@ -959,6 +1018,15 @@
 
                 let backlogItems = allItems.filter(item => !item.start_date || !item.end_date);
                 let scheduledItems = allItems.filter(item => item.start_date && item.end_date);
+
+                if (isOverdueOnly) {
+                    const now = new Date();
+                    backlogItems = [];
+                    scheduledItems = scheduledItems.filter((item) => {
+                        const itemEnd = new Date(String(item.end_date).replace(' ', 'T'));
+                        return itemEnd < now;
+                    });
+                }
 
                 scheduledItems.sort((a, b) => {
                     const timeA = a.start_date ? a.start_date.split(' ')[1] : '00:00:00';
@@ -987,12 +1055,32 @@
                     }, 50);
 
                 } else if (this.state.view === 'kanban') {
-                    viewContainer.innerHTML = this.getKanbanHTML(selectedDate);
-                    this.renderColumnsItems(scheduledItems, selectedDate, 'kanban');
-                    setTimeout(() => this.customScroll.init(), 0);
+                    const overdueDates = this.getOverdueDatesForItems(scheduledItems);
+                    if (this.state.filters.showOnlyOverdueTasks) {
+                        viewContainer.innerHTML = overdueDates.length > 0
+                            ? this.getKanbanHTML(overdueDates[0], overdueDates)
+                            : '<div class="flex-1 flex items-center justify-center text-slate-400 text-sm p-6">Nenhuma tarefa vencida encontrada.</div>';
+                    } else {
+                        viewContainer.innerHTML = this.getKanbanHTML(selectedDate);
+                    }
+
+                    if (overdueDates.length > 0 || !this.state.filters.showOnlyOverdueTasks) {
+                        this.renderColumnsItems(scheduledItems, selectedDate, 'kanban', overdueDates);
+                        setTimeout(() => this.customScroll.init(), 0);
+                    }
                 } else if (this.state.view === 'list') {
-                    viewContainer.innerHTML = this.getListHTML(selectedDate);
-                    this.renderColumnsItems(scheduledItems, selectedDate, 'list');
+                    const overdueDates = this.getOverdueDatesForItems(scheduledItems);
+                    if (this.state.filters.showOnlyOverdueTasks) {
+                        viewContainer.innerHTML = overdueDates.length > 0
+                            ? this.getListHTML(overdueDates[0], overdueDates)
+                            : '<div class="flex-1 flex items-center justify-center text-slate-400 text-sm p-6">Nenhuma tarefa vencida encontrada.</div>';
+                    } else {
+                        viewContainer.innerHTML = this.getListHTML(selectedDate);
+                    }
+
+                    if (overdueDates.length > 0 || !this.state.filters.showOnlyOverdueTasks) {
+                        this.renderColumnsItems(scheduledItems, selectedDate, 'list', overdueDates);
+                    }
                 }
 
                 if (this.state.view === 'kanban' || this.state.view === 'list') {
@@ -1088,8 +1176,9 @@
                 });
             },
 
-            renderColumnsItems(scheduledItems, startDate, viewType) {
-                const dates = this.getDatesArray(startDate, 7).map(d => this.getLocalYYYYMMDD(d));
+            renderColumnsItems(scheduledItems, startDate, viewType, customDates = null) {
+                const datesSource = Array.isArray(customDates) && customDates.length > 0 ? customDates : this.getDatesArray(startDate, 7);
+                const dates = datesSource.map(d => this.getLocalYYYYMMDD(d));
                 
                 dates.forEach(dateStr => {
                     const col = document.querySelector(`.sortable-day-col[data-date="${dateStr}"]`);
