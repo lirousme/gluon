@@ -1831,7 +1831,15 @@
                     publicToggleContainer.classList.remove('hidden');
                     
                     if (id) {
-                        dirObj = this.state.directoryCache.get(Number(id));
+                        const numericId = Number(id);
+                        dirObj = this.state.directoryCache.get(numericId)
+                            || this.state.path.find(p => Number(p.id) === numericId)
+                            || this.state.directories.find(d => Number(d.id) === numericId || (Number(d.type) === 3 && Number(d.target_id) === numericId));
+
+                        if (!dirObj) {
+                            this.showToast('Não foi possível carregar os dados para configuração deste item.', 'error');
+                            return;
+                        }
                         
                         let titleText = 'Pasta';
                         if(dirObj.type === 1) titleText = 'Arquivo';
