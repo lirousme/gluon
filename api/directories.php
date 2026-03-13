@@ -244,17 +244,6 @@ function normalizeDeckStructureForDirectory($value, $default = 'fatos') {
     return in_array($value, $allowed, true) ? $value : $default;
 }
 
-function normalizeChildDefaultType($value, $default = 0) {
-    $allowed = [0, 1, 2, 4, 5, 6, 7];
-    $type = is_numeric($value) ? (int)$value : $default;
-    return in_array($type, $allowed, true) ? $type : $default;
-}
-
-function normalizeChildDefaultView($value, $default = 'grid') {
-    $allowed = ['grid', 'list', 'kanban'];
-    return in_array($value, $allowed, true) ? $value : $default;
-}
-
 function getFolderDeckPresetForParentChain($pdo, $user_id, $parent_id) {
     $front = 'pt-BR';
     $back = 'en-GB';
@@ -321,7 +310,6 @@ if ($action === 'fetch') {
     $query = "
         SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,
                d.deck_front_language, d.deck_back_language, d.deck_structure,
-               d.child_default_type, d.child_default_view,
                d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to, 
                d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, d.is_public,
                COALESCE(deck_stats.total_cards, 0) as deck_total_cards,
@@ -374,14 +362,14 @@ if ($action === 'fetch') {
     $directories = $stmt->fetchAll();
 
     if ($parent_id === null && $is_owner_context) {
-        $stmtSavedRoot = $pdo->prepare("\n            SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,\n                   d.deck_front_language, d.deck_back_language, d.deck_structure,\n                   d.child_default_type, d.child_default_view,\n                   d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to,\n                   d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, d.is_public,\n                   COALESCE(deck_stats.total_cards, 0) as deck_total_cards,\n                   COALESCE(deck_stats.total_score, 0) as deck_total_score,
+        $stmtSavedRoot = $pdo->prepare("\n            SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,\n                   d.deck_front_language, d.deck_back_language, d.deck_structure,\n                   d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to,\n                   d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, d.is_public,\n                   COALESCE(deck_stats.total_cards, 0) as deck_total_cards,\n                   COALESCE(deck_stats.total_score, 0) as deck_total_score,
                COALESCE(deck_stats.due_cards, 0) as deck_due_cards,\n                   COALESCE(book_progress.current_index, 0) as book_current_index,\n                   COALESCE(book_progress.completed_reads, 0) as book_completed_reads,\n                   dr.type as rec_type, dr.interval_value as rec_interval, dr.days_of_week as rec_days,\n                   dr.custom_dates as rec_custom, dr.exceptions as rec_exceptions, dr.time_start as rec_time_start, dr.time_end as rec_time_end, dr.end_date as rec_end,\n                   d.user_id as owner_user_id\n            FROM saved_directories sd\n            INNER JOIN directories d ON d.id = sd.directory_id\n            LEFT JOIN directory_recurrences dr ON d.id = dr.directory_id\n            LEFT JOIN (\n                SELECT f.directory_id,\n                       COUNT(f.id) as total_cards,\n                       COALESCE(SUM(fs.score), 0) as total_score,
                    COALESCE(SUM(CASE WHEN fs.next_review_at IS NULL OR fs.next_review_at <= NOW() THEN 1 ELSE 0 END), 0) as due_cards\n                FROM flashcards f\n                INNER JOIN saved_directories sd_filter ON sd_filter.directory_id = f.directory_id AND sd_filter.user_id = ?\n                LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?\n                GROUP BY f.directory_id\n            ) deck_stats ON deck_stats.directory_id = d.id\n            LEFT JOIN flashcard_book_progress book_progress ON book_progress.directory_id = d.id AND book_progress.user_id = ?\n            WHERE sd.user_id = ? AND d.user_id != ? AND d.is_public = 1 AND d.parent_id IS NULL\n        ");
         $stmtSavedRoot->execute([$user_id, $user_id, $user_id, $user_id, $user_id]);
         $directories = array_merge($directories, $stmtSavedRoot->fetchAll());
     }
     elseif ($parent_id === null && !$is_owner_context) {
-        $stmtSavedRootTarget = $pdo->prepare("\n            SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,\n                   d.deck_front_language, d.deck_back_language, d.deck_structure,\n                   d.child_default_type, d.child_default_view,\n                   d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to,\n                   d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, d.is_public,\n                   COALESCE(deck_stats.total_cards, 0) as deck_total_cards,\n                   COALESCE(deck_stats.total_score, 0) as deck_total_score,
+        $stmtSavedRootTarget = $pdo->prepare("\n            SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,\n                   d.deck_front_language, d.deck_back_language, d.deck_structure,\n                   d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to,\n                   d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, d.is_public,\n                   COALESCE(deck_stats.total_cards, 0) as deck_total_cards,\n                   COALESCE(deck_stats.total_score, 0) as deck_total_score,
                COALESCE(deck_stats.due_cards, 0) as deck_due_cards,\n                   COALESCE(book_progress.current_index, 0) as book_current_index,\n                   COALESCE(book_progress.completed_reads, 0) as book_completed_reads,\n                   dr.type as rec_type, dr.interval_value as rec_interval, dr.days_of_week as rec_days,\n                   dr.custom_dates as rec_custom, dr.exceptions as rec_exceptions, dr.time_start as rec_time_start, dr.time_end as rec_time_end, dr.end_date as rec_end,\n                   d.user_id as owner_user_id\n            FROM saved_directories sd\n            INNER JOIN directories d ON d.id = sd.directory_id\n            LEFT JOIN directory_recurrences dr ON d.id = dr.directory_id\n            LEFT JOIN (\n                SELECT f.directory_id,\n                       COUNT(f.id) as total_cards,\n                       COALESCE(SUM(fs.score), 0) as total_score,
                    COALESCE(SUM(CASE WHEN fs.next_review_at IS NULL OR fs.next_review_at <= NOW() THEN 1 ELSE 0 END), 0) as due_cards\n                FROM flashcards f\n                INNER JOIN saved_directories sd_filter ON sd_filter.directory_id = f.directory_id AND sd_filter.user_id = ?\n                LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?\n                GROUP BY f.directory_id\n            ) deck_stats ON deck_stats.directory_id = d.id\n            LEFT JOIN flashcard_book_progress book_progress ON book_progress.directory_id = d.id AND book_progress.user_id = ?\n            WHERE sd.user_id = ? AND d.user_id != ? AND d.is_public = 1 AND d.parent_id IS NULL\n        ");
         $stmtSavedRootTarget->execute([$effective_target_user_id, $user_id, $user_id, $effective_target_user_id, $effective_target_user_id]);
@@ -416,8 +404,6 @@ if ($action === 'fetch') {
             'deck_front_language' => normalizeDeckLanguageForDirectory($dir['deck_front_language'] ?? 'pt-BR', 'pt-BR'),
             'deck_back_language' => normalizeDeckLanguageForDirectory($dir['deck_back_language'] ?? 'en-GB', 'en-GB'),
             'deck_structure' => normalizeDeckStructureForDirectory($dir['deck_structure'] ?? 'fatos', 'fatos'),
-            'child_default_type' => normalizeChildDefaultType($dir['child_default_type'] ?? 0, 0),
-            'child_default_view' => normalizeChildDefaultView($dir['child_default_view'] ?? 'grid', 'grid'),
             'deck_total_cards' => $deckTotalCards,
             'deck_due_cards' => $deckDueCards,
             'deck_percentage' => $deckPercentage,
@@ -531,8 +517,6 @@ elseif ($action === 'create') {
     $deck_front_language = normalizeDeckLanguageForDirectory($input['deck_front_language'] ?? 'pt-BR', 'pt-BR');
     $deck_back_language = normalizeDeckLanguageForDirectory($input['deck_back_language'] ?? 'en-GB', 'en-GB');
     $deck_structure = normalizeDeckStructureForDirectory($input['deck_structure'] ?? 'fatos', 'fatos');
-    $child_default_type = normalizeChildDefaultType($input['child_default_type'] ?? 0, 0);
-    $child_default_view = normalizeChildDefaultView($input['child_default_view'] ?? 'grid', 'grid');
 
     if (empty($name)) {
         die(json_encode(['status' => 'error', 'message' => 'O nome não pode ser vazio.']));
@@ -568,17 +552,15 @@ elseif ($action === 'create') {
                 user_id, parent_id, type, name_encrypted, default_view, 
                 new_item_position, sort_order, icon, icon_color_from, 
                 icon_color_to, cover_url_encrypted, start_date, end_date, is_recurring, is_public,
-                deck_front_language, deck_back_language, deck_structure,
-                child_default_type, child_default_view
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                deck_front_language, deck_back_language, deck_structure
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         
         $stmt->execute([
             $user_id, $parent_id, $type, $name_encrypted, $view, 
             $new_item_position, $newOrder, $icon, $color_from, $color_to, 
             $cover_url_encrypted, $start_date, $end_date, $is_recurring, $is_public,
-            $deck_front_language, $deck_back_language, $deck_structure,
-            $child_default_type, $child_default_view
+            $deck_front_language, $deck_back_language, $deck_structure
         ]);
         
         $new_dir_id = $pdo->lastInsertId();
@@ -679,8 +661,6 @@ elseif ($action === 'update') {
     $deck_front_language = normalizeDeckLanguageForDirectory($input['deck_front_language'] ?? 'pt-BR', 'pt-BR');
     $deck_back_language = normalizeDeckLanguageForDirectory($input['deck_back_language'] ?? 'en-GB', 'en-GB');
     $deck_structure = normalizeDeckStructureForDirectory($input['deck_structure'] ?? 'fatos', 'fatos');
-    $child_default_type = normalizeChildDefaultType($input['child_default_type'] ?? 0, 0);
-    $child_default_view = normalizeChildDefaultView($input['child_default_view'] ?? 'grid', 'grid');
 
     if (empty($name) || $id === 0) {
         die(json_encode(['status' => 'error', 'message' => 'Dados inválidos.']));
@@ -708,22 +688,20 @@ elseif ($action === 'update') {
                     name_encrypted = ?, default_view = ?, new_item_position = ?, 
                     icon = ?, icon_color_from = ?, icon_color_to = ?, cover_url_encrypted = ?, 
                     start_date = ?, end_date = ?, is_recurring = ?, is_public = ?,
-                    deck_front_language = ?, deck_back_language = ?, deck_structure = ?,
-                    child_default_type = ?, child_default_view = ?
+                    deck_front_language = ?, deck_back_language = ?, deck_structure = ?
                 WHERE id = ? AND user_id = ?
             ");
-            $stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $start_date, $end_date, $is_recurring, $is_public, $deck_front_language, $deck_back_language, $deck_structure, $child_default_type, $child_default_view, $id, $user_id]);
+            $stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $start_date, $end_date, $is_recurring, $is_public, $deck_front_language, $deck_back_language, $deck_structure, $id, $user_id]);
         } else {
             $stmt = $pdo->prepare("
                 UPDATE directories SET 
                     name_encrypted = ?, default_view = ?, new_item_position = ?, 
                     icon = ?, icon_color_from = ?, icon_color_to = ?, cover_url_encrypted = ?, 
                     is_recurring = ?, is_public = ?,
-                    deck_front_language = ?, deck_back_language = ?, deck_structure = ?,
-                    child_default_type = ?, child_default_view = ?
+                    deck_front_language = ?, deck_back_language = ?, deck_structure = ?
                 WHERE id = ? AND user_id = ?
             ");
-            $stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $is_recurring, $is_public, $deck_front_language, $deck_back_language, $deck_structure, $child_default_type, $child_default_view, $id, $user_id]);
+            $stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $is_recurring, $is_public, $deck_front_language, $deck_back_language, $deck_structure, $id, $user_id]);
         }
 
         // Se ativado, processa a recorrência salvando os dados
