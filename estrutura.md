@@ -75,8 +75,6 @@ deck_mode VARCHAR(20) DEFAULT 'aleatorio';
 deck_front_language VARCHAR(10) NOT NULL DEFAULT 'pt-BR', -- Idioma da frente do card (pt-BR | en-US | en-GB)
 deck_back_language VARCHAR(10) NOT NULL DEFAULT 'en-GB', -- Idioma do verso do card (pt-BR | en-US | en-GB)
 deck_structure VARCHAR(20) NOT NULL DEFAULT 'fatos', -- Estrutura da geração (fatos | perguntas | traducoes | parafrases)
-child_default_type TINYINT NOT NULL DEFAULT 0, -- Tipo padrão para novos diretórios filhos (0,1,2,4,5,6,7)
-child_default_view VARCHAR(10) NOT NULL DEFAULT 'grid', -- View padrão para novos diretórios filhos (grid | list | kanban)
 name_encrypted TEXT NOT NULL,        -- Nome do diretório criptografado
 default_view VARCHAR(10) DEFAULT 'grid',
 new_item_position VARCHAR(10) DEFAULT 'end',
