@@ -124,6 +124,10 @@
                             <i class="fa-regular fa-copy w-5 text-center text-lg"></i> <span class="font-medium">Copiar Diretório</span>
                         </button>
 
+                        <button onclick="app.copyDescendantDirectoryNames(); app.toggleMobileViewMenu()" id="btn-copy-descendant-dir-names" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                            <i class="fa-regular fa-clipboard w-5 text-center text-lg"></i> <span class="font-medium">Copiar nomes dos descendentes</span>
+                        </button>
+
                         <button onclick="app.pasteDirectory(); app.toggleMobileViewMenu()" id="btn-paste-dir" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors hidden">
                             <i class="fa-solid fa-paste w-5 text-center text-lg"></i> <span class="font-medium">Colar Arquivos</span>
                         </button>
@@ -932,6 +936,72 @@
                 if (currentId === null) return this.showToast("Cofre Raiz não pode ser selecionado desta forma.", "error");
 
                 await this.copyDirectoryById(currentId);
+            },
+
+            async copyDescendantDirectoryNames() {
+                const currentParentId = this.getCurrentParentId();
+                const collectedNames = [];
+                const visitedParents = new Set();
+
+                const collectRecursively = async (parentId) => {
+                    const normalizedParentId = parentId === undefined ? null : parentId;
+                    const visitedKey = normalizedParentId === null ? 'root' : String(normalizedParentId);
+                    if (visitedParents.has(visitedKey)) return;
+                    visitedParents.add(visitedKey);
+
+                    const response = await this.api('directories', 'fetch', {
+                        parent_id: normalizedParentId,
+                        target_user_id: this.state.profileUserId || undefined
+                    });
+
+                    if (!response || response.status !== 'success' || !Array.isArray(response.data)) {
+                        throw new Error('Falha ao carregar a árvore de diretórios.');
+                    }
+
+                    for (const dir of response.data) {
+                        if (!dir || typeof dir.name !== 'string') continue;
+                        collectedNames.push(dir.name);
+
+                        const nextParentId = dir.type === 3 ? dir.target_id : dir.id;
+                        if (nextParentId === null || nextParentId === undefined) continue;
+                        await collectRecursively(Number(nextParentId));
+                    }
+                };
+
+                try {
+                    await collectRecursively(currentParentId);
+
+                    if (collectedNames.length === 0) {
+                        return this.showToast('Não há diretórios descendentes para copiar.', 'error');
+                    }
+
+                    const textToCopy = collectedNames.join('\n');
+                    await this.copyTextToClipboard(textToCopy);
+                    this.showToast(`${collectedNames.length} nomes copiados para a área de transferência.`, 'success');
+                } catch (error) {
+                    this.showToast('Não foi possível copiar os nomes dos diretórios.', 'error');
+                }
+            },
+
+            async copyTextToClipboard(text) {
+                if (!text) return;
+
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(text);
+                    return;
+                }
+
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                const copied = document.execCommand('copy');
+                document.body.removeChild(textarea);
+                if (!copied) throw new Error('Copy fallback failed');
             },
 
             async copyDirectoryById(dirId) {
