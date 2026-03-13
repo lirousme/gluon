@@ -260,6 +260,9 @@
                         </button>
                     </div>
                     <div class="flex gap-2 w-full sm:w-auto justify-end">
+                        <button type="button" id="btnOpenItemFromModal" onclick="scheduleApp.openItemFromModal()" class="hidden px-4 py-2 rounded-lg text-slate-200 bg-slate-700 hover:bg-slate-600 transition-colors text-sm font-medium flex items-center gap-2">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir item
+                        </button>
                         <button type="button" onclick="scheduleApp.closeModal()" class="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors text-sm font-medium">Cancelar</button>
                         <button type="submit" id="btnSaveDir" class="px-4 py-2 bg-gluon-primary hover:bg-blue-600 text-white rounded-lg shadow-lg flex items-center gap-2 text-sm font-medium transition-all">
                             <i class="fa-solid fa-check"></i> Salvar

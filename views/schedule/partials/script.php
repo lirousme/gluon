@@ -1264,7 +1264,24 @@
                     this.wasDragged = false;
                     return;
                 }
-                this.enterDirectoryOrFile(id);
+
+                const card = e && e.currentTarget ? e.currentTarget : null;
+                const contextStart = card ? card.getAttribute('data-context-start') : null;
+                const contextEnd = card ? card.getAttribute('data-context-end') : null;
+
+                let contextDate = null;
+                if (contextStart && contextEnd) {
+                    const startValue = String(contextStart).replace('T', ' ');
+                    const endValue = String(contextEnd).replace('T', ' ');
+                    const datePart = startValue.split(' ')[0] || '';
+                    const startTime = (startValue.split(' ')[1] || '').slice(0, 5);
+                    const endTime = (endValue.split(' ')[1] || '').slice(0, 5);
+                    if (datePart && startTime && endTime) {
+                        contextDate = `${datePart} ${startTime}-${endTime}`;
+                    }
+                }
+
+                this.openModal(id, '', contextStart, contextEnd, contextDate);
             },
 
             isInstanceInCurrentTime(inst, now = new Date()) {
@@ -1916,6 +1933,12 @@
                 const btnDelete = document.getElementById('btnDeleteDir');
                 if(id) btnDelete.classList.remove('hidden'); else btnDelete.classList.add('hidden');
 
+                const btnOpenItem = document.getElementById('btnOpenItemFromModal');
+                if (btnOpenItem) {
+                    if (id) btnOpenItem.classList.remove('hidden');
+                    else btnOpenItem.classList.add('hidden');
+                }
+
                 const viewToSelect = (dirObj && dirObj.view) ? dirObj.view : 'grid';
                 const viewRadios = document.getElementsByName('dirViewMode');
                 for(let i=0; i<viewRadios.length; i++) { viewRadios[i].checked = (viewRadios[i].value === viewToSelect); }
@@ -1935,6 +1958,13 @@
 
                     if(!id) dirNameInput.focus(); 
                 }, 20);
+            },
+
+
+            openItemFromModal() {
+                const id = document.getElementById('dirId').value;
+                if (!id) return;
+                this.enterDirectoryOrFile(id);
             },
 
             closeModal() {
@@ -1963,6 +1993,9 @@
                         btnDelete.innerHTML = '<i class="fa-solid fa-trash"></i> <span>Excluir</span>';
                         btnDelete.disabled = false;
                     }
+
+                    const btnOpenItem = document.getElementById('btnOpenItemFromModal');
+                    if (btnOpenItem) btnOpenItem.classList.add('hidden');
 
                 }, 300);
             },
