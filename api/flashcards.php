@@ -264,7 +264,7 @@ function getGoogleTtsVoiceByLanguage($language) {
     switch ($language) {
         case 'pt-BR': return 'pt-BR-Chirp3-HD-Algenib';
         case 'en-US': return 'en-US-Chirp3-HD-Fenrir';
-        case 'en-GB': return 'en-GB-Chirp3-HD-Algenib';
+        case 'en-GB': return 'en-GB-Chirp3-HD-Enceladus';
         default: return 'en-US-Chirp3-HD-Fenrir';
     }
 }
@@ -639,7 +639,7 @@ function buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyT
     } elseif ($deck_structure === 'parafrases') {
         $basePrompt = 'gere 15 paráfrases dessa: "' . $deck_name . '" (Num tom de escrita de José Saramago)';
     } else {
-        $basePrompt = 'Crie pares de tradução sobre o assunto "' . $deck_name . '" com frases curtas e úteis para memorização. Primeira coluna na língua da frente do deck, segunda coluna na língua do verso. Sem repetições e sem conteúdo de interface.';
+        $basePrompt = 'Crie frases ordinárias que tenha dentro da usa estrutura sintática o termo "' . $deck_name . '". Quero variações em diferentes tempos verbais, diferentes sujeitos, com o termo em diferentes posições de estrutura sintáticas, afirmações, negações, perguntas positivas, perguntas negativas, optativas, condicionais, voz ativa, voz passiva, voz reflexiva, faça frases com e abreviações das palavras, flexões nominais, de gênero, número e grau, variações de tempo, modo, lugar, oposição, entre outros, use e forme verbos frasais, verbos modais, entre outros tipos. Nenhuma frase pode ser igual as frases anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. Tanto a língua do verso quanto a língua da frente devem ser estruturadas com palavras ordinárias. Faça frases com o termo "' . $deck_name . '" em sua forma pura original e flexionando ele também, quando for possível. As vezes um mesmo termo pode ser traduzido termos com significados muito ou ligeiramente diferentes, crie frases para todas esses significados diferentes, isso aqui é muito importante, use sinônimos do português, para as frases em português não ficarem todas com a mesma tradução do termo. Primeira coluna na língua da frente do deck, segunda coluna na língua do verso. Sem repetições e sem conteúdo de interface.';
     }
 
     $systemPrompt = 'Você é um gerador de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estruturas fatos e parafrases, deixe back vazio. Preserve exatamente caracteres Unicode.';
