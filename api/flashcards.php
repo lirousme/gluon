@@ -126,7 +126,7 @@ function collectDecksFromDirectoryTree($pdo, $root_directory_id, $user_id) {
     $decks = [];
     $visited = [];
 
-    $stmtRoot = $pdo->prepare("SELECT id, type, deck_front_language, deck_back_language FROM directories WHERE id = ? AND user_id = ?");
+    $stmtRoot = $pdo->prepare("SELECT id, type, deck_front_language, deck_back_language, deck_structure FROM directories WHERE id = ? AND user_id = ?");
     $stmtRoot->execute([$root_directory_id, $user_id]);
     $root = $stmtRoot->fetch();
     if (!$root) {
@@ -153,7 +153,7 @@ function collectDecksFromDirectoryTree($pdo, $root_directory_id, $user_id) {
 
         $placeholders = implode(',', array_fill(0, count($pending), '?'));
         $params = array_merge([$user_id], $pending);
-        $stmtChildren = $pdo->prepare("SELECT id, type, deck_front_language, deck_back_language FROM directories WHERE user_id = ? AND parent_id IN ($placeholders)");
+        $stmtChildren = $pdo->prepare("SELECT id, type, deck_front_language, deck_back_language, deck_structure FROM directories WHERE user_id = ? AND parent_id IN ($placeholders)");
         $stmtChildren->execute($params);
         $children = $stmtChildren->fetchAll();
 
@@ -267,6 +267,28 @@ function getGoogleTtsVoiceByLanguage($language) {
         case 'en-GB': return 'en-GB-Chirp3-HD-Algenib';
         default: return 'en-US-Chirp3-HD-Fenrir';
     }
+}
+
+function getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $front_language, $back_language) {
+    $normalized_structure = normalizeDeckStructure($deck_structure, 'fatos');
+    $normalized_front = normalizeDeckLanguage($front_language, 'pt-BR');
+    $normalized_back = normalizeDeckLanguage($back_language, 'en-GB');
+
+    if (
+        $normalized_structure === 'perguntas'
+        && $normalized_front === 'pt-BR'
+        && $normalized_back === 'pt-BR'
+    ) {
+        if ($side === 'front') {
+            return 'pt-BR-Chirp3-HD-Rasalgethi';
+        }
+
+        if ($side === 'back') {
+            return 'pt-BR-Chirp3-HD-Algenib';
+        }
+    }
+
+    return getGoogleTtsVoiceByLanguage($language);
 }
 
 function getLanguageLabel($language) {
@@ -523,13 +545,13 @@ function requestOpenAITts($text_to_speech, &$error_details = null) {
 }
 
 
-function requestGoogleCloudTts($text_to_speech, $language, &$error_details = null) {
+function requestGoogleCloudTts($text_to_speech, $language, $side = null, $deck_structure = 'fatos', $front_language = 'pt-BR', $back_language = 'en-GB', &$error_details = null) {
     if (trim((string)GOOGLE_CLOUD_API_KEY) === '') {
         $error_details = 'Chave GOOGLE_CLOUD_API_KEY não configurada.';
         return null;
     }
 
-    $voice_name = getGoogleTtsVoiceByLanguage($language);
+    $voice_name = getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $front_language, $back_language);
     $ch = curl_init('https://texttospeech.googleapis.com/v1/text:synthesize?key=' . rawurlencode(GOOGLE_CLOUD_API_KEY));
     $payload = json_encode([
         'input' => ['text' => $text_to_speech],
@@ -577,7 +599,7 @@ function requestGoogleCloudTts($text_to_speech, $language, &$error_details = nul
 
 
 
-function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $language, &$error_details = null) {
+function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $language, $deck_structure = 'fatos', $front_language = 'pt-BR', $back_language = 'en-GB', &$error_details = null) {
     $text_to_speech = adjustPronunciationForTTS($pdo, $text, $language);
     $provider = getUserTtsProvider($pdo, (int)$user_id);
     $provider_error = null;
@@ -585,7 +607,7 @@ function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $la
     if ($provider === 'openai') {
         $audio_binary = requestOpenAITts($text_to_speech, $provider_error);
     } elseif ($provider === 'google') {
-        $audio_binary = requestGoogleCloudTts($text_to_speech, $language, $provider_error);
+        $audio_binary = requestGoogleCloudTts($text_to_speech, $language, $side, $deck_structure, $front_language, $back_language, $provider_error);
     } else {
         $audio_binary = requestFishAudioTts($text_to_speech, $language, $provider_error);
     }
@@ -999,7 +1021,7 @@ elseif ($action === 'generate_audio') {
         die(json_encode(['status' => 'error', 'message' => 'Parâmetros inválidos.']));
     }
 
-    $stmt = $pdo->prepare("SELECT f.front_encrypted, f.back_encrypted, d.user_id, d.deck_front_language, d.deck_back_language FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ?");
+    $stmt = $pdo->prepare("SELECT f.front_encrypted, f.back_encrypted, d.user_id, d.deck_front_language, d.deck_back_language, d.deck_structure FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ?");
     $stmt->execute([$card_id]);
     $card = $stmt->fetch();
 
@@ -1020,10 +1042,11 @@ elseif ($action === 'generate_audio') {
 
     $front_language = normalizeDeckLanguage($card['deck_front_language'] ?? 'pt-BR', 'pt-BR');
     $back_language = normalizeDeckLanguage($card['deck_back_language'] ?? 'en-GB', 'en-GB');
+    $deck_structure = normalizeDeckStructure($card['deck_structure'] ?? 'fatos', 'fatos');
     $side_language = $side === 'front' ? $front_language : $back_language;
 
     $tts_error_details = null;
-    $ok = generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $clean_text, $side_language, $tts_error_details);
+    $ok = generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $clean_text, $side_language, $deck_structure, $front_language, $back_language, $tts_error_details);
     if (!$ok) {
         die(json_encode([
             'status' => 'error',
@@ -1057,6 +1080,7 @@ elseif ($action === 'generate_missing_audios_from_directory') {
         $deck_id = (int)$deck['id'];
         $front_language = normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR');
         $back_language = normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB');
+        $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
 
         $stmtCards->execute([$deck_id]);
         $cards = $stmtCards->fetchAll();
@@ -1096,7 +1120,7 @@ elseif ($action === 'generate_missing_audios_from_directory') {
                     continue;
                 }
 
-                $ok = generateAndPersistCardAudio($pdo, $user_id, (int)$card['id'], $job['side'], $job['text'], $job['language']);
+                $ok = generateAndPersistCardAudio($pdo, $user_id, (int)$card['id'], $job['side'], $job['text'], $job['language'], $deck_structure, $front_language, $back_language);
                 if ($ok) {
                     $generated_count++;
                 } else {
@@ -1168,8 +1192,12 @@ elseif ($action === 'generate_next_missing_audio_from_directory') {
     foreach ($decks as $deck) {
         $front_language = normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR');
         $back_language = normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB');
+        $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
         $next_job = findNextPendingAudioJobForDeck($pdo, (int)$deck['id'], $front_language, $back_language);
         if ($next_job) {
+            $next_job['deck_structure'] = $deck_structure;
+            $next_job['front_language'] = $front_language;
+            $next_job['back_language'] = $back_language;
             break;
         }
     }
@@ -1188,7 +1216,17 @@ elseif ($action === 'generate_next_missing_audio_from_directory') {
         exit;
     }
 
-    $ok = generateAndPersistCardAudio($pdo, $user_id, $next_job['card_id'], $next_job['side'], $next_job['text'], $next_job['language']);
+    $ok = generateAndPersistCardAudio(
+        $pdo,
+        $user_id,
+        $next_job['card_id'],
+        $next_job['side'],
+        $next_job['text'],
+        $next_job['language'],
+        $next_job['deck_structure'] ?? 'fatos',
+        $next_job['front_language'] ?? 'pt-BR',
+        $next_job['back_language'] ?? 'en-GB'
+    );
     $remaining_pending = 0;
     foreach ($decks as $deck) {
         $remaining_pending += countPendingAudiosForDeck($pdo, (int)$deck['id']);
