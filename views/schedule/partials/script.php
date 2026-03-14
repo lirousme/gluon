@@ -31,9 +31,9 @@
                 availableIcons: [
                     'fa-folder', 'fa-folder-open', 'fa-check-circle', 'fa-file-code', 'fa-calendar-days', 'fa-door-open', 'fa-clock', 'fa-file-lines', 'fa-file-image', 'fa-file-pdf', 'fa-star', 'fa-heart', 'fa-image', 'fa-music', 'fa-video', 
                     'fa-code', 'fa-terminal', 'fa-database', 'fa-server', 'fa-lock', 'fa-vault', 'fa-book', 'fa-briefcase', 'fa-globe', 'fa-list-check',
-                    'fa-soap', 'fa-seedling', 'fa-ticket-simple', 'fa-whatsapp', 'fa-location-dot', 'fa-thumbtack', 'fa-sack-dollar', 'fa-piggy-bank', 'fa-credit-card', 'fa-circle-dollar-to-slot',
+                    'fa-soap', 'fa-seedling', 'fa-ticket-simple', 'fa-location-dot', 'fa-thumbtack', 'fa-sack-dollar', 'fa-piggy-bank', 'fa-credit-card', 'fa-circle-dollar-to-slot',
                     'fa-carrot', 'fa-cookie-bite', 'fa-blender', 'fa-basket-shopping', 'fa-paw', 'fa-mug-hot', 'fa-utensils', 'fa-pizza-slice', 'fa-cheese', 'fa-burger',
-                    'fa-atom', 'fa-flask-round-potion', 'fa-dna', 'fa-magnet', 'fa-mushroom', 'fa-battery-bolt', 'fa-beer-mug', 'fa-cake-slice', 'fa-pie'
+                    'fa-atom', 'fa-dna', 'fa-magnet', "fa-lightbulb", "fa-bolt-lightning", "fa-bolt", "fa-bolt", "fa-bolt", "fa-bolt", "fa-bolt"
                 ]
             },
 
