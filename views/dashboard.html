@@ -577,6 +577,8 @@
                 path: [{ id: null, name: 'Meu Cofre', view: 'grid', type: 0 }],
                 directories: [],
                 directoryCache: new Map(), 
+                kanbanChildCache: new Map(),
+                kanbanCacheScopeKey: null,
                 rootPrefs: { view: 'grid', new_item_position: 'end', copied_directory_id: null, home_directory_id: null }, 
                 sessionUserId: null,
                 profileUserId: null,
@@ -1492,7 +1494,14 @@
                 this.setLoading(true);
                 this.renderBreadcrumbs();
                 this.updateTopButtons();
-                const response = await this.api('directories', 'fetch', { parent_id: this.getCurrentParentId(), target_user_id: this.state.profileUserId || undefined });
+                const parentId = this.getCurrentParentId();
+                const scopeKey = `${this.state.profileUserId || 'self'}:${parentId === null ? 'root' : parentId}`;
+                if (this.state.kanbanCacheScopeKey !== scopeKey) {
+                    this.state.kanbanChildCache.clear();
+                    this.state.kanbanCacheScopeKey = scopeKey;
+                }
+
+                const response = await this.api('directories', 'fetch', { parent_id: parentId, target_user_id: this.state.profileUserId || undefined });
                 if (response) { 
                     this.state.directories = response.data; 
                     response.data.forEach(d => this.state.directoryCache.set(Number(d.id), d));
@@ -2319,7 +2328,6 @@
 
             async loadKanbanContents() {
                 const promises = this.state.directories.map(async (dir) => {
-                    const canEdit = this.canEditDirectory(dir);
                     const container = document.getElementById(`kanban-col-${dir.id}`);
                     if (!container) return;
                     
@@ -2349,12 +2357,19 @@
                         return;
                     }
 
-                    const res = await this.api('directories', 'fetch', { parent_id: targetFetchId, target_user_id: this.state.profileUserId || undefined });
+                    let childDirectories = this.state.kanbanChildCache.get(targetFetchId);
+                    if (!childDirectories) {
+                        const res = await this.api('directories', 'fetch', { parent_id: targetFetchId, target_user_id: this.state.profileUserId || undefined });
+                        childDirectories = (res && Array.isArray(res.data)) ? res.data : null;
+                        if (childDirectories) {
+                            this.state.kanbanChildCache.set(targetFetchId, childDirectories);
+                        }
+                    }
                     
-                    if (res && res.data && res.data.length > 0) {
-                        res.data.forEach(d => this.state.directoryCache.set(Number(d.id), d));
+                    if (Array.isArray(childDirectories) && childDirectories.length > 0) {
+                        childDirectories.forEach(d => this.state.directoryCache.set(Number(d.id), d));
 
-                        container.innerHTML = res.data.map(sub => {
+                        container.innerHTML = childDirectories.map(sub => {
                             let itemBorder = 'border-slate-600';
                             if(sub.type === 1) itemBorder = 'border-indigo-500/50';
                             if(sub.type === 2) itemBorder = 'border-emerald-500/50';
