@@ -62,6 +62,23 @@
                     </div>
                     <input id="filter-show-only-overdue" type="checkbox" onchange="scheduleApp.handleFilterChange()" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-gluon-primary focus:ring-gluon-primary">
                 </label>
+
+                <div class="rounded-lg border border-slate-700 bg-slate-800/60 p-3 space-y-3">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <p class="text-sm font-semibold text-slate-200">Tags</p>
+                            <p class="text-xs text-slate-400 mt-1">Crie, edite, exclua e filtre tarefas por tags.</p>
+                        </div>
+                    </div>
+
+                    <form onsubmit="scheduleApp.handleTagCreate(event)" class="flex items-center gap-2">
+                        <input id="newTagName" type="text" maxlength="80" placeholder="Nome da tag" class="flex-1 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm text-white focus:outline-none focus:border-gluon-primary">
+                        <input id="newTagColor" type="color" value="#3b82f6" class="w-10 h-10 bg-transparent border border-slate-600 rounded-lg p-1">
+                        <button type="submit" class="px-3 py-2 rounded-lg bg-gluon-primary hover:bg-blue-600 text-white text-xs font-semibold"><i class="fa-solid fa-plus"></i></button>
+                    </form>
+
+                    <div id="filter-tags-list" class="space-y-2 max-h-64 overflow-y-auto no-scrollbar"></div>
+                </div>
             </div>
         </div>
     </aside>
@@ -132,6 +149,12 @@
                             <i class="fa-solid fa-pen absolute left-3 top-3.5 text-slate-500 text-sm"></i>
                             <textarea id="dirName" rows="1" autocomplete="off" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 pl-9 pr-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-all resize-none overflow-hidden min-h-[44px]"></textarea>
                         </div>
+                    </div>
+
+                    <div id="taskTagsContainer" class="mb-5">
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Tags da tarefa</label>
+                        <div id="taskTagSelector" class="flex flex-wrap gap-2"></div>
+                        <p class="text-xs text-slate-500 mt-2">Você pode selecionar mais de uma tag.</p>
                     </div>
 
                     <div id="folderSettingsGroup">

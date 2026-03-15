@@ -268,6 +268,44 @@ function normalizeChildDefaultView($value, $default = 'grid') {
     return in_array($value, $allowed, true) ? $value : $default;
 }
 
+function ensureScheduleTagTables(PDO $pdo): void {
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS schedule_tags (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NOT NULL,
+            name VARCHAR(80) NOT NULL,
+            color VARCHAR(7) NOT NULL DEFAULT '#3b82f6',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_user_tag_name (user_id, name),
+            INDEX idx_user_id (user_id),
+            CONSTRAINT fk_schedule_tags_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS directory_tag_links (
+            directory_id INT UNSIGNED NOT NULL,
+            tag_id INT UNSIGNED NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (directory_id, tag_id),
+            INDEX idx_tag_id (tag_id),
+            CONSTRAINT fk_directory_tag_links_directory FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
+            CONSTRAINT fk_directory_tag_links_tag FOREIGN KEY (tag_id) REFERENCES schedule_tags(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+}
+
+function normalizeTagIds($value): array {
+    if (!is_array($value)) return [];
+    $clean = [];
+    foreach ($value as $id) {
+        $tagId = (int)$id;
+        if ($tagId > 0) $clean[] = $tagId;
+    }
+    return array_values(array_unique($clean));
+}
+
 function getFolderDeckPresetForParentChain($pdo, $user_id, $parent_id) {
     $front = 'pt-BR';
     $back = 'en-GB';
@@ -308,6 +346,7 @@ function getFolderDeckPresetForParentChain($pdo, $user_id, $parent_id) {
 // =========================================================================
 
 if ($action === 'fetch') {
+    ensureScheduleTagTables($pdo);
     $parent_id = isset($input['parent_id']) && $input['parent_id'] !== null ? (int)$input['parent_id'] : null;
     $target_user_id = isset($input['target_user_id']) ? (int)$input['target_user_id'] : $user_id;
     $effective_target_user_id = $target_user_id;
@@ -401,7 +440,31 @@ if ($action === 'fetch') {
     }
     $response = [];
     
+    $directoryIds = array_map(static fn($dir) => (int)$dir['id'], $directories);
+    $tagsByDirectory = [];
+    if (!empty($directoryIds)) {
+        $placeholders = implode(',', array_fill(0, count($directoryIds), '?'));
+        $stmtTags = $pdo->prepare(
+            "SELECT dtl.directory_id, st.id, st.name, st.color
+             FROM directory_tag_links dtl
+             INNER JOIN schedule_tags st ON st.id = dtl.tag_id
+             WHERE st.user_id = ? AND dtl.directory_id IN ($placeholders)
+             ORDER BY st.name ASC"
+        );
+        $stmtTags->execute(array_merge([$user_id], $directoryIds));
+        foreach ($stmtTags->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $dirId = (int)$row['directory_id'];
+            if (!isset($tagsByDirectory[$dirId])) $tagsByDirectory[$dirId] = [];
+            $tagsByDirectory[$dirId][] = [
+                'id' => (int)$row['id'],
+                'name' => $row['name'],
+                'color' => $row['color']
+            ];
+        }
+    }
+
     foreach ($directories as $dir) {
+        $dirId = (int)$dir['id'];
         $deckTotalCards = (int)($dir['deck_total_cards'] ?? 0);
         $deckTotalScore = (int)($dir['deck_total_score'] ?? 0);
         $deckDueCards = (int)($dir['deck_due_cards'] ?? 0);
@@ -449,6 +512,7 @@ if ($action === 'fetch') {
             'rec_end' => $dir['rec_end'] ?? '',
             'owner_user_id' => isset($dir['owner_user_id']) ? (int)$dir['owner_user_id'] : (int)$effective_target_user_id,
             'is_read_only' => (isset($dir['owner_user_id']) ? (int)$dir['owner_user_id'] : (int)$effective_target_user_id) !== (int)$user_id ? 1 : 0
+            ,'tags' => $tagsByDirectory[$dirId] ?? []
         ];
     }
 
@@ -511,6 +575,7 @@ elseif ($action === 'get_path') {
 }
 
 elseif ($action === 'create') {
+    ensureScheduleTagTables($pdo);
     $name = trim($input['name'] ?? '');
     $parent_id = isset($input['parent_id']) && $input['parent_id'] !== null ? (int)$input['parent_id'] : null;
     $type = isset($input['type']) ? (int)$input['type'] : 0; 
@@ -545,6 +610,7 @@ elseif ($action === 'create') {
     $deck_front_language = normalizeDeckLanguageForDirectory($input['deck_front_language'] ?? 'pt-BR', 'pt-BR');
     $deck_back_language = normalizeDeckLanguageForDirectory($input['deck_back_language'] ?? 'en-GB', 'en-GB');
     $deck_structure = normalizeDeckStructureForDirectory($input['deck_structure'] ?? 'fatos', 'fatos');
+    $tag_ids = normalizeTagIds($input['tag_ids'] ?? []);
 
     if (empty($name)) {
         die(json_encode(['status' => 'error', 'message' => 'O nome não pode ser vazio.']));
@@ -594,6 +660,19 @@ elseif ($action === 'create') {
         ]);
         
         $new_dir_id = $pdo->lastInsertId();
+
+        if (!empty($tag_ids)) {
+            $stmtValidTags = $pdo->prepare("SELECT id FROM schedule_tags WHERE user_id = ? AND id IN (" . implode(',', array_fill(0, count($tag_ids), '?')) . ")");
+            $stmtValidTags->execute(array_merge([$user_id], $tag_ids));
+            $validTagIds = array_map('intval', $stmtValidTags->fetchAll(PDO::FETCH_COLUMN));
+
+            if (!empty($validTagIds)) {
+                $stmtLink = $pdo->prepare("INSERT INTO directory_tag_links (directory_id, tag_id) VALUES (?, ?)");
+                foreach ($validTagIds as $tagId) {
+                    $stmtLink->execute([$new_dir_id, $tagId]);
+                }
+            }
+        }
 
         if ($is_recurring) {
             $next_run = calculateNextRunDate($rec_type, $rec_interval, $rec_days, $rec_custom, $start_date, $rec_time_start, $rec_time_end);
@@ -669,6 +748,7 @@ elseif ($action === 'create_portal') {
 }
 
 elseif ($action === 'update') {
+    ensureScheduleTagTables($pdo);
     $id = (int)($input['id'] ?? 0);
     $name = trim($input['name'] ?? '');
     $view = in_array($input['view'] ?? '', ['grid', 'list', 'kanban']) ? $input['view'] : 'grid';
@@ -693,6 +773,7 @@ elseif ($action === 'update') {
     $deck_front_language = normalizeDeckLanguageForDirectory($input['deck_front_language'] ?? 'pt-BR', 'pt-BR');
     $deck_back_language = normalizeDeckLanguageForDirectory($input['deck_back_language'] ?? 'en-GB', 'en-GB');
     $deck_structure = normalizeDeckStructureForDirectory($input['deck_structure'] ?? 'fatos', 'fatos');
+    $tag_ids = normalizeTagIds($input['tag_ids'] ?? []);
 
     if (empty($name) || $id === 0) {
         die(json_encode(['status' => 'error', 'message' => 'Dados inválidos.']));
@@ -767,6 +848,20 @@ elseif ($action === 'update') {
             $stmtRec->execute([$id, $rec_type, $rec_interval, $rec_days, $rec_custom, $existing_exceptions, $rec_time_start, $rec_time_end, $rec_end, $next_run]);
         } else {
             $pdo->prepare("DELETE FROM directory_recurrences WHERE directory_id = ?")->execute([$id]);
+        }
+
+        $pdo->prepare("DELETE FROM directory_tag_links WHERE directory_id = ?")->execute([$id]);
+        if (!empty($tag_ids)) {
+            $stmtValidTags = $pdo->prepare("SELECT id FROM schedule_tags WHERE user_id = ? AND id IN (" . implode(',', array_fill(0, count($tag_ids), '?')) . ")");
+            $stmtValidTags->execute(array_merge([$user_id], $tag_ids));
+            $validTagIds = array_map('intval', $stmtValidTags->fetchAll(PDO::FETCH_COLUMN));
+
+            if (!empty($validTagIds)) {
+                $stmtLink = $pdo->prepare("INSERT INTO directory_tag_links (directory_id, tag_id) VALUES (?, ?)");
+                foreach ($validTagIds as $tagId) {
+                    $stmtLink->execute([$id, $tagId]);
+                }
+            }
         }
 
         $pdo->commit();
