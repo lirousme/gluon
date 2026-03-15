@@ -430,24 +430,68 @@ else if ($action === 'delete_overdue_tasks') {
 
 else if ($action === 'complete_task') {
     $id = (int)($input['id'] ?? 0);
+    $contextStart = !empty($input['context_start']) ? (string)$input['context_start'] : null;
+    $contextEnd = !empty($input['context_end']) ? (string)$input['context_end'] : null;
     if ($id <= 0) {
         die(json_encode(['status' => 'error', 'message' => 'ID de tarefa inválido.']));
     }
 
-    $stmt = $pdo->prepare(
-        "UPDATE directories
-         SET is_completed = 1,
-             end_date = COALESCE(end_date, NOW())
-         WHERE id = ?
-           AND user_id = ?
-           AND type = 0"
-    );
-    $stmt->execute([$id, $user_id]);
+    try {
+        $pdo->beginTransaction();
 
-    if ($stmt->rowCount() === 0) {
-        echo json_encode(['status' => 'error', 'message' => 'Tarefa não encontrada ou não pode ser concluída.']);
-    } else {
+        $stmtTask = $pdo->prepare(
+            "SELECT d.id, d.user_id, d.type, d.is_recurring, d.start_date, d.end_date,
+                    dr.type AS rec_type
+             FROM directories d
+             LEFT JOIN directory_recurrences dr ON dr.directory_id = d.id
+             WHERE d.id = ?
+               AND d.user_id = ?
+               AND d.type = 0
+             FOR UPDATE"
+        );
+        $stmtTask->execute([$id, $user_id]);
+        $task = $stmtTask->fetch(PDO::FETCH_ASSOC);
+
+        if (!$task) {
+            $pdo->rollBack();
+            echo json_encode(['status' => 'error', 'message' => 'Tarefa não encontrada ou não pode ser concluída.']);
+            exit;
+        }
+
+        $isRecurring = ((int)($task['is_recurring'] ?? 0) === 1);
+        $hasContext = !empty($contextStart);
+
+        if ($isRecurring && $hasContext) {
+            $exceptionValue = normalizeExceptionValue((string)($task['rec_type'] ?? ''), $contextStart);
+            if ($exceptionValue) {
+                appendRecurrenceException($pdo, $id, $exceptionValue);
+                $pdo->commit();
+                echo json_encode(['status' => 'success', 'message' => 'Ocorrência concluída com sucesso.']);
+                exit;
+            }
+        }
+
+        $stmt = $pdo->prepare(
+            "UPDATE directories
+             SET is_completed = 1,
+                 end_date = COALESCE(end_date, NOW())
+             WHERE id = ?
+               AND user_id = ?
+               AND type = 0"
+        );
+        $stmt->execute([$id, $user_id]);
+
+        if ($stmt->rowCount() === 0) {
+            $pdo->rollBack();
+            echo json_encode(['status' => 'error', 'message' => 'Tarefa não encontrada ou não pode ser concluída.']);
+            exit;
+        }
+
+        $pdo->commit();
         echo json_encode(['status' => 'success', 'message' => 'Tarefa concluída com sucesso.']);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        echo json_encode(['status' => 'error', 'message' => 'Erro ao concluir tarefa.']);
     }
 }
 
