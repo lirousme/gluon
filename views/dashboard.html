@@ -1728,36 +1728,39 @@
                 };
 
                 const hoveredKanbanColumn = currentView === 'kanban'
-                    ? this.getDropElementFromEvent(evt, '.kanban-scroll', evt?.dragged)
+                    ? this.getDropElementFromEvent(evt, '.kanban-scroll', draggedEl)
                     : null;
-
                 if (hoveredKanbanColumn) {
-                    const hoveredColumnRect = hoveredKanbanColumn.getBoundingClientRect();
-                    if (!hasMeaningfulOverlap(hoveredColumnRect)) {
-                        this.dragState.rootDropParentId = null;
-                        return true;
-                    }
-
                     const columnTargetParentId = Number(hoveredKanbanColumn.getAttribute('data-parent-id'));
-                    this.dragState.rootDropParentId = Number.isFinite(columnTargetParentId) && columnTargetParentId > 0
-                        ? columnTargetParentId
-                        : null;
-                    return true;
+                    if (Number.isFinite(columnTargetParentId) && columnTargetParentId > 0 && columnTargetParentId !== draggedId) {
+                        return columnTargetParentId;
+                    }
+                }
+
+                const hoveredRootCard = this.getDropElementFromEvent(evt, '.draggable-item', draggedEl);
+                if (hoveredRootCard) {
+                    const hoveredRootId = Number(hoveredRootCard.getAttribute('data-id'));
+                    const resolvedTargetId = this.getDirectoryDropTargetId(hoveredRootId);
+                    if (resolvedTargetId && resolvedTargetId !== draggedId) return resolvedTargetId;
                 }
 
                 const relatedRootId = Number(evt?.related?.getAttribute?.('data-id'));
                 if (relatedRootId && relatedRootId !== draggedId) {
-                    const relatedRect = evt?.relatedRect || evt?.related?.getBoundingClientRect?.();
-                    if (!hasMeaningfulOverlap(relatedRect)) {
-                        this.dragState.rootDropParentId = null;
-                        return true;
-                    }
-
-                    this.dragState.rootDropParentId = this.getDirectoryDropTargetId(relatedRootId);
-                    return true;
+                    const relatedTargetId = this.getDirectoryDropTargetId(relatedRootId);
+                    if (relatedTargetId && relatedTargetId !== draggedId) return relatedTargetId;
                 }
 
-                this.dragState.rootDropParentId = null;
+                return null;
+            },
+
+            trackRootDropTarget(evt, currentView) {
+                const pointerEvt = evt?.originalEvent;
+                if (typeof pointerEvt?.clientX === 'number' && typeof pointerEvt?.clientY === 'number') {
+                    this.dragState.pointerX = pointerEvt.clientX;
+                    this.dragState.pointerY = pointerEvt.clientY;
+                }
+
+                this.dragState.rootDropParentId = this.resolveRootDropParentId(evt, currentView);
                 return true;
             },
 
@@ -1801,17 +1804,7 @@
                 const rootId = this.getCurrentParentId();
                 if (rootId === null) {
                     const draggedId = Number(evt?.item?.getAttribute('data-id'));
-                    const fallbackKanbanColumn = currentView === 'kanban'
-                        ? this.getDropElementFromEvent(evt, '.kanban-scroll', evt?.item)
-                        : null;
-
-                    const fallbackDir = this.getDropElementFromEvent(evt, '.draggable-item', evt?.item);
-                    const fallbackRootId = fallbackDir ? Number(fallbackDir.getAttribute('data-id')) : null;
-                    const fallbackTargetParentId = fallbackKanbanColumn
-                        ? Number(fallbackKanbanColumn.getAttribute('data-parent-id'))
-                        : (fallbackRootId ? this.getDirectoryDropTargetId(fallbackRootId) : null);
-
-                    const targetParentId = this.dragState.rootDropParentId || fallbackTargetParentId;
+                    const targetParentId = this.resolveRootDropParentId(evt, currentView) || this.dragState.rootDropParentId;
                     this.dragState.rootDropParentId = null;
 
                     if (draggedId && targetParentId && draggedId !== targetParentId) {
