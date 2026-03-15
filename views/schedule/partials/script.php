@@ -25,6 +25,7 @@
                 filters: {
                     showFlashcardDueDirectories: true,
                     showOnlyOverdueTasks: false,
+                    showCompletedTasks: false,
                     selectedTagIds: []
                 },
                 tags: [],
@@ -305,6 +306,9 @@
                     if (typeof parsed.showOnlyOverdueTasks === 'boolean') {
                         this.state.filters.showOnlyOverdueTasks = parsed.showOnlyOverdueTasks;
                     }
+                    if (typeof parsed.showCompletedTasks === 'boolean') {
+                        this.state.filters.showCompletedTasks = parsed.showCompletedTasks;
+                    }
                     if (Array.isArray(parsed.selectedTagIds)) {
                         this.state.filters.selectedTagIds = parsed.selectedTagIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0);
                         this.state.hasPersistedTagFilter = true;
@@ -322,6 +326,9 @@
 
                 const overdueCheckbox = document.getElementById('filter-show-only-overdue');
                 if (overdueCheckbox) overdueCheckbox.checked = this.state.filters.showOnlyOverdueTasks;
+
+                const completedCheckbox = document.getElementById('filter-show-completed');
+                if (completedCheckbox) completedCheckbox.checked = this.state.filters.showCompletedTasks;
 
                 this.renderTagFilterList();
                 this.renderTaskTagSelector();
@@ -497,6 +504,9 @@
 
                 const overdueCheckbox = document.getElementById('filter-show-only-overdue');
                 this.state.filters.showOnlyOverdueTasks = !!overdueCheckbox?.checked;
+
+                const completedCheckbox = document.getElementById('filter-show-completed');
+                this.state.filters.showCompletedTasks = !!completedCheckbox?.checked;
                 this.persistFilters();
                 this.render();
             },
@@ -1167,7 +1177,8 @@
                         allItemsMap.set(Number(item.id), merged);
                     });
                 }
-                const allItems = Array.from(allItemsMap.values());
+                const showCompletedTasks = !!this.state.filters.showCompletedTasks;
+                const allItems = Array.from(allItemsMap.values()).filter((item) => showCompletedTasks || Number(item.is_completed || 0) !== 1);
 
                 const selectedTagIds = Array.isArray(this.state.filters.selectedTagIds) ? this.state.filters.selectedTagIds : [];
                 const selectedTagSet = new Set(selectedTagIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0));
@@ -1267,11 +1278,15 @@
                 const tagsHTML = this.getTagBadgesHTML(item.tags);
                 const readOnlyClass = item.is_schedule_read_only ? 'readonly-schedule-item cursor-default' : 'cursor-grab';
                 const settingsButton = item.is_schedule_read_only ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20"><i class="fa-solid fa-cog"></i></button>`;
+                const completeButton = (!item.is_schedule_read_only && Number(item.type) === 0)
+                    ? `<button type="button" onclick="event.stopPropagation(); scheduleApp.completeTask(${item.id})" class="pointer-events-auto text-slate-400 hover:text-emerald-300 transition-colors" title="Concluir tarefa"><i class="fa-solid fa-circle-check text-sm"></i></button>`
+                    : '';
                 return `
                 <div data-id="${item.id}" class="backlog-item ${readOnlyClass} bg-slate-800 border border-slate-700 p-3 rounded-lg shadow-sm hover:bg-slate-700 transition-colors flex justify-between items-center group relative overflow-hidden mb-3" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                     ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-10" style="background-image: url('${item.cover_url}')"></div>` : ''}
                     <div class="flex items-center gap-2 truncate pointer-events-none z-10 flex-1 pr-2">
                         <i class="fa-solid fa-grip-vertical text-slate-500 handle hidden sortable-handle"></i>
+                        ${completeButton}
                         <i class="fa-solid ${item.icon} text-sm" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
                         <span class="font-medium text-sm text-slate-200 truncate w-full">${this.escapeHTML(item.name)} ${repeatIcon} ${flashcardBadge}</span>
                     </div>
@@ -1323,6 +1338,9 @@
                     const readOnlyClass = item.is_schedule_read_only ? 'readonly-schedule-item' : '';
                     const currentTimeClass = isCurrentTime ? 'current-time-item' : '';
                     const resizeHTML = (inst.isProjection || item.is_schedule_read_only) ? '' : `<div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>`;
+                    const completeButton = (!item.is_schedule_read_only && Number(item.type) === 0)
+                        ? `<button type="button" onclick="event.stopPropagation(); scheduleApp.completeTask(${item.id})" class="pointer-events-auto text-white/80 hover:text-emerald-200 transition-colors" title="Concluir tarefa"><i class="fa-solid fa-circle-check text-xs"></i></button>`
+                        : '';
 
                     const instTimeStr = inst.start.getHours().toString().padStart(2,'0') + ':' + inst.start.getMinutes().toString().padStart(2,'0') + ':00';
                     const contextDateStr = `${selectedDateStr} ${instTimeStr}`;
@@ -1332,7 +1350,7 @@
                             ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                             <div class="flex justify-between items-start pointer-events-none z-10 relative">
                                 <div class="font-bold truncate text-sm flex items-center gap-1.5 w-full pr-6">
-                                    <i class="fa-solid ${item.icon} text-xs"></i> <span class="truncate">${this.escapeHTML(item.name)} ${repeatIcon}</span>
+                                    ${completeButton} <i class="fa-solid ${item.icon} text-xs"></i> <span class="truncate">${this.escapeHTML(item.name)} ${repeatIcon}</span>
                                 </div>
                             </div>
                             ${tagsHTML ? `<div class="mt-1 pointer-events-none z-10 relative flex flex-wrap gap-1">${tagsHTML}</div>` : ''}
@@ -1401,6 +1419,9 @@
                 const currentTimeClass = isCurrentTime ? 'current-time-item' : '';
                 const borderStyle = `border-left: 4px solid ${fromColor};`;
                 const handleHTML = `<i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>`;
+                const completeButton = (!item.is_schedule_read_only && Number(item.type) === 0)
+                    ? `<button type="button" onclick="event.stopPropagation(); scheduleApp.completeTask(${item.id})" class="text-slate-300 hover:text-emerald-300 transition-colors" title="Concluir tarefa"><i class="fa-solid fa-circle-check text-xs"></i></button>`
+                    : '';
 
                 const instTimeStr = inst.start.getHours().toString().padStart(2,'0') + ':' + inst.start.getMinutes().toString().padStart(2,'0') + ':00';
                 const contextDateStr = `${dateStr} ${instTimeStr}`;
@@ -1412,6 +1433,7 @@
                         <div class="flex justify-between items-start z-10 relative">
                             <div class="flex items-center gap-1.5 truncate w-full pr-5">
                                 ${handleHTML}
+                                ${completeButton}
                                 <i class="fa-solid ${item.icon} text-xs" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
                                 <span class="font-bold text-sm text-slate-100 truncate">${this.escapeHTML(item.name)} ${repeatIcon} ${flashcardBadge}</span>
                             </div>
@@ -1431,6 +1453,7 @@
                                 <span class="text-xs text-slate-300 font-semibold tracking-wide">${timeStr.split(' - ')[0]}</span>
                                 <span class="text-[10px] text-slate-500">${timeStr.split(' - ')[1]}</span>
                             </div>
+                            ${completeButton}
                             <i class="fa-solid ${item.icon} text-lg shrink-0" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
                             <div class="min-w-0 flex-1">
                                 <span class="font-semibold text-sm text-slate-200 truncate block">${this.escapeHTML(item.name)} ${repeatIcon} ${flashcardBadge}</span>
@@ -1440,6 +1463,20 @@
                         ${item.is_schedule_read_only ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-2 z-20 shrink-0 bg-slate-800 rounded shadow"><i class="fa-solid fa-cog"></i></button>`}
                     </div>`;
                 }
+            },
+
+            async completeTask(id) {
+                const itemId = Number(id);
+                if (!Number.isInteger(itemId) || itemId <= 0) return;
+
+                const item = this.state.directoryCache.get(itemId);
+                if (!item || Number(item.is_schedule_read_only) === 1) return;
+
+                const response = await this.api('schedule', 'complete_task', { id: itemId });
+                if (!response) return;
+
+                this.showToast(response.message || 'Tarefa concluída com sucesso.', 'success');
+                await this.loadData();
             },
 
             handleEventClick(e, id) {

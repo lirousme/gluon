@@ -20,6 +20,7 @@ $user_id = $_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? '';
 
+ensureDirectoriesCompletionColumn($pdo);
 
 $brasiliaTz = new DateTimeZone('America/Sao_Paulo');
 
@@ -264,6 +265,16 @@ function ensureScheduleTagTables(PDO $pdo): void {
     );
 }
 
+
+
+function ensureDirectoriesCompletionColumn(PDO $pdo): void {
+    $stmt = $pdo->query("SHOW COLUMNS FROM directories LIKE 'is_completed'");
+    $exists = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
+    if (!$exists) {
+        $pdo->exec("ALTER TABLE directories ADD COLUMN is_completed TINYINT(1) NOT NULL DEFAULT 0 AFTER is_recurring");
+        $pdo->exec("CREATE INDEX idx_is_completed ON directories (is_completed)");
+    }
+}
 if ($action === 'update_times') {
     ensureScheduleTagTables($pdo);
 
@@ -414,6 +425,30 @@ else if ($action === 'delete_overdue_tasks') {
             ? "{$deleted} tarefa(s) vencida(s) apagada(s) e {$recurrenceOccurrencesRemoved} ocorrência(s) recorrente(s) vencida(s) removida(s)."
             : 'Nenhuma tarefa vencida para apagar.'
     ]);
+}
+
+
+else if ($action === 'complete_task') {
+    $id = (int)($input['id'] ?? 0);
+    if ($id <= 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID de tarefa inválido.']));
+    }
+
+    $stmt = $pdo->prepare(
+        "UPDATE directories
+         SET is_completed = 1,
+             end_date = COALESCE(end_date, NOW())
+         WHERE id = ?
+           AND user_id = ?
+           AND type = 0"
+    );
+    $stmt->execute([$id, $user_id]);
+
+    if ($stmt->rowCount() === 0) {
+        echo json_encode(['status' => 'error', 'message' => 'Tarefa não encontrada ou não pode ser concluída.']);
+    } else {
+        echo json_encode(['status' => 'success', 'message' => 'Tarefa concluída com sucesso.']);
+    }
 }
 
 else if ($action === 'get_flashcard_due_directories') {

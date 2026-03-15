@@ -86,6 +86,7 @@ cover_url_encrypted TEXT DEFAULT NULL,     -- URL da imagem de capa (Criptografa
 start_date DATETIME DEFAULT NULL,    -- NOVO: Início da tarefa/evento na agenda
 end_date DATETIME DEFAULT NULL,      -- NOVO: Fim da tarefa/evento na agenda
 is_recurring TINYINT(1) DEFAULT 0,   -- NOVO: Flag para saber se tem regra de recorrência
+is_completed TINYINT(1) DEFAULT 0,   -- NOVO: 1 = tarefa concluída (oculta na agenda por padrão)
 is_public TINYINT(1) DEFAULT 0,      -- NOVO: 1 = diretório visível em perfil público
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -100,6 +101,7 @@ INDEX idx_sort_order (sort_order),
 INDEX idx_type (type),
 INDEX idx_dates (start_date, end_date),
 INDEX idx_is_recurring (is_recurring),
+INDEX idx_is_completed (is_completed),
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================
