@@ -1691,17 +1691,41 @@
             isPointerInsideElement(evt, element) {
                 if (!element) return false;
                 const pointerEvt = evt?.originalEvent;
-                const clientX = typeof pointerEvt?.clientX === 'number' ? pointerEvt.clientX : this.dragState.pointerX;
-                const clientY = typeof pointerEvt?.clientY === 'number' ? pointerEvt.clientY : this.dragState.pointerY;
-                if (typeof clientX !== 'number' || typeof clientY !== 'number') return false;
-                const rect = element.getBoundingClientRect();
-                return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
-            },
+                if (typeof pointerEvt?.clientX === 'number' && typeof pointerEvt?.clientY === 'number') {
+                    this.dragState.pointerX = pointerEvt.clientX;
+                    this.dragState.pointerY = pointerEvt.clientY;
+                }
 
-            resolveRootDropParentId(evt, currentView) {
-                const draggedEl = evt?.dragged || evt?.item || null;
-                const draggedId = Number(draggedEl?.getAttribute?.('data-id'));
-                if (!draggedId || this.getCurrentParentId() !== null) return null;
+                if (!draggedId || this.getCurrentParentId() !== null) {
+                    this.dragState.rootDropParentId = null;
+                    return true;
+                }
+
+                const draggedRect = evt?.draggedRect || evt?.dragged?.getBoundingClientRect?.();
+
+                const hasMeaningfulOverlap = (targetRect) => {
+                    if (!draggedRect || !targetRect) return false;
+
+                    const pointerInsideTarget = typeof this.dragState.pointerX === 'number'
+                        && typeof this.dragState.pointerY === 'number'
+                        && this.dragState.pointerX >= targetRect.left
+                        && this.dragState.pointerX <= targetRect.right
+                        && this.dragState.pointerY >= targetRect.top
+                        && this.dragState.pointerY <= targetRect.bottom;
+
+                    if (pointerInsideTarget) return true;
+
+                    const overlapWidth = Math.max(0, Math.min(draggedRect.right, targetRect.right) - Math.max(draggedRect.left, targetRect.left));
+                    const overlapHeight = Math.max(0, Math.min(draggedRect.bottom, targetRect.bottom) - Math.max(draggedRect.top, targetRect.top));
+                    const overlapArea = overlapWidth * overlapHeight;
+                    if (!overlapArea) return false;
+
+                    const draggedArea = Math.max(1, draggedRect.width * draggedRect.height);
+                    const targetArea = Math.max(1, targetRect.width * targetRect.height);
+                    const overlapAgainstSmaller = overlapArea / Math.min(draggedArea, targetArea);
+
+                    return overlapAgainstSmaller >= 0.18;
+                };
 
                 const hoveredKanbanColumn = currentView === 'kanban'
                     ? this.getDropElementFromEvent(evt, '.kanban-scroll', draggedEl)
@@ -1736,16 +1760,7 @@
                     this.dragState.pointerY = pointerEvt.clientY;
                 }
 
-                const resolvedTargetId = this.resolveRootDropParentId(evt, currentView);
-                if (resolvedTargetId) {
-                    this.dragState.rootDropParentId = resolvedTargetId;
-                    return true;
-                }
-
-                const wrapper = document.getElementById('sortable-wrapper');
-                if (this.isPointerInsideElement(evt, wrapper)) {
-                    this.dragState.rootDropParentId = null;
-                }
+                this.dragState.rootDropParentId = this.resolveRootDropParentId(evt, currentView);
                 return true;
             },
 
@@ -1789,7 +1804,7 @@
                 const rootId = this.getCurrentParentId();
                 if (rootId === null) {
                     const draggedId = Number(evt?.item?.getAttribute('data-id'));
-                    const targetParentId = this.dragState.rootDropParentId || this.resolveRootDropParentId(evt, currentView);
+                    const targetParentId = this.resolveRootDropParentId(evt, currentView) || this.dragState.rootDropParentId;
                     this.dragState.rootDropParentId = null;
 
                     if (draggedId && targetParentId && draggedId !== targetParentId) {
