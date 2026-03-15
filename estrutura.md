@@ -174,6 +174,35 @@ INDEX idx_user_card (user_id, flashcard_id),
 INDEX idx_flashcard_user_next_review (flashcard_id, user_id, next_review_at, score)
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
+======================================================================
+
+TABELA: schedule_tags
+id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+user_id INT UNSIGNED NOT NULL,
+name VARCHAR(80) NOT NULL,
+color VARCHAR(7) NOT NULL DEFAULT '#3b82f6',
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+UNIQUE KEY uniq_user_tag_name (user_id, name),
+INDEX idx_user_id (user_id),
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+======================================================================
+
+TABELA: directory_tag_links
+directory_id INT UNSIGNED NOT NULL,
+tag_id INT UNSIGNED NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+PRIMARY KEY (directory_id, tag_id),
+INDEX idx_tag_id (tag_id),
+FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
+FOREIGN KEY (tag_id) REFERENCES schedule_tags(id) ON DELETE CASCADE
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 ======================================================================
 
 TABELA: adjacency_items

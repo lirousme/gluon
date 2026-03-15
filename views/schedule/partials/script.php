@@ -28,6 +28,7 @@
                     selectedTagIds: []
                 },
                 tags: [],
+                hasPersistedTagFilter: false,
                 pendingStartDate: null,
                 pendingEndDate: null,
                 availableIcons: [
@@ -306,6 +307,7 @@
                     }
                     if (Array.isArray(parsed.selectedTagIds)) {
                         this.state.filters.selectedTagIds = parsed.selectedTagIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0);
+                        this.state.hasPersistedTagFilter = true;
                     }
                 } catch (e) {}
             },
@@ -338,7 +340,13 @@
 
             syncTagFilterSelection() {
                 const validIds = new Set(this.state.tags.map((tag) => Number(tag.id)));
-                this.state.filters.selectedTagIds = this.state.filters.selectedTagIds.filter((id) => validIds.has(Number(id)));
+
+                if (!this.state.hasPersistedTagFilter && this.state.filters.selectedTagIds.length === 0 && validIds.size > 0) {
+                    this.state.filters.selectedTagIds = Array.from(validIds);
+                } else {
+                    this.state.filters.selectedTagIds = this.state.filters.selectedTagIds.filter((id) => validIds.has(Number(id)));
+                }
+
                 this.persistFilters();
             },
 
@@ -377,6 +385,7 @@
                 } else {
                     this.state.filters.selectedTagIds = this.state.filters.selectedTagIds.filter((v) => v !== id);
                 }
+                this.state.hasPersistedTagFilter = true;
                 this.persistFilters();
                 this.render();
             },
@@ -1160,12 +1169,16 @@
                 }
                 const allItems = Array.from(allItemsMap.values());
 
-                const selectedTagIds = this.state.filters.selectedTagIds;
-                const hasTagFilter = Array.isArray(selectedTagIds) && selectedTagIds.length > 0;
-                const filteredItems = hasTagFilter
+                const selectedTagIds = Array.isArray(this.state.filters.selectedTagIds) ? this.state.filters.selectedTagIds : [];
+                const selectedTagSet = new Set(selectedTagIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0));
+                const allTagCount = Array.isArray(this.state.tags) ? this.state.tags.length : 0;
+                const hasPartialTagFilter = allTagCount > 0 && selectedTagSet.size < allTagCount;
+
+                const filteredItems = hasPartialTagFilter
                     ? allItems.filter((item) => {
                         const itemTagIds = Array.isArray(item.tags) ? item.tags.map((tag) => Number(tag.id)) : [];
-                        return selectedTagIds.some((tagId) => itemTagIds.includes(Number(tagId)));
+                        if (itemTagIds.length === 0) return true;
+                        return itemTagIds.every((tagId) => selectedTagSet.has(tagId));
                     })
                     : allItems;
 
