@@ -37,7 +37,20 @@ function calculateNextRunDateCron($type, $interval, $custom_dates, $base_date, $
     $date = $base_date ? new DateTime($base_date) : new DateTime();
     $interval = (int)$interval > 0 ? (int)$interval : 1;
 
-    if ($type === 'hourly') {
+    if ($type === 'minutely') {
+        $date->modify("+$interval minute");
+
+        if ($time_start && $time_end) {
+            $currentTimeStr = $date->format('H:i:s');
+
+            if ($currentTimeStr >= $time_end) {
+                $date->modify('+1 day');
+                $date->setTime((int)substr($time_start, 0, 2), (int)substr($time_start, 3, 2), 0);
+            } elseif ($currentTimeStr < $time_start) {
+                $date->setTime((int)substr($time_start, 0, 2), (int)substr($time_start, 3, 2), 0);
+            }
+        }
+    } elseif ($type === 'hourly') {
         $date->modify("+$interval hour");
 
         // Checa se ultrapassou a janela diária do usuário

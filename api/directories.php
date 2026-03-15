@@ -39,7 +39,20 @@ function calculateNextRunDate($type, $interval, $days_of_week, $custom_dates, $b
     $date = $base_date ? new DateTime($base_date) : new DateTime();
     $interval = (int)$interval > 0 ? (int)$interval : 1;
 
-    if ($type === 'hourly') {
+    if ($type === 'minutely') {
+        $date->modify("+$interval minute");
+
+        if ($time_start && $time_end) {
+            $currentTimeStr = $date->format('H:i:s');
+
+            if ($currentTimeStr >= $time_end) {
+                $date->modify('+1 day');
+                $date->setTime((int)substr($time_start, 0, 2), (int)substr($time_start, 3, 2), 0);
+            } elseif ($currentTimeStr < $time_start) {
+                $date->setTime((int)substr($time_start, 0, 2), (int)substr($time_start, 3, 2), 0);
+            }
+        }
+    } elseif ($type === 'hourly') {
         $date->modify("+$interval hour");
 
         // Regra do Limite de Horário (Janela)
@@ -819,7 +832,7 @@ elseif ($action === 'delete') {
             
             // Regra especial: Se for repetição por hora, a exclusão é do bloco específico (Data + Hora)
             // Se for diária/semanal, exclui o dia todo (Y-m-d).
-            if ($rec['type'] === 'hourly') {
+            if (in_array($rec['type'], ['hourly', 'minutely'], true)) {
                 $exception_value = (new DateTime($target_date_str))->format('Y-m-d H:i:s');
                 $msg_date = date('d/m/Y H:i', strtotime($exception_value));
             } else {

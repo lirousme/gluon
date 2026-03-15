@@ -213,6 +213,7 @@
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Frequência</label>
                             <select id="rec_type" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors" onchange="scheduleApp.handleRecurrenceTypeChange()">
+                                <option value="minutely">De minuto em minuto (Diário)</option>
                                 <option value="hourly">De hora em hora (Diário)</option>
                                 <option value="daily">Diariamente</option>
                                 <option value="weekly">Semanalmente</option>
