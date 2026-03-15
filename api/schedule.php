@@ -225,6 +225,34 @@ function collectOverdueRecurrenceExceptions(array $task, DateTime $now): array {
     return array_values(array_unique($exceptions));
 }
 
+function ensureScheduleTagTables(PDO $pdo): void {
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS schedule_tags (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NOT NULL,
+            name VARCHAR(80) NOT NULL,
+            color VARCHAR(7) NOT NULL DEFAULT '#3b82f6',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_user_tag_name (user_id, name),
+            INDEX idx_user_id (user_id),
+            CONSTRAINT fk_schedule_tags_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS directory_tag_links (
+            directory_id INT UNSIGNED NOT NULL,
+            tag_id INT UNSIGNED NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (directory_id, tag_id),
+            INDEX idx_tag_id (tag_id),
+            CONSTRAINT fk_directory_tag_links_directory FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE,
+            CONSTRAINT fk_directory_tag_links_tag FOREIGN KEY (tag_id) REFERENCES schedule_tags(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+}
+
 if ($action === 'update_times') {
     $id = (int)($input['id'] ?? 0);
     $start_date = !empty($input['start_date']) ? $input['start_date'] : null;
@@ -410,6 +438,82 @@ else if ($action === 'get_flashcard_due_directories') {
     }, $rows);
 
     echo json_encode(['status' => 'success', 'data' => $response]);
+}
+else if ($action === 'get_tags') {
+    ensureScheduleTagTables($pdo);
+
+    $stmt = $pdo->prepare("SELECT id, name, color FROM schedule_tags WHERE user_id = ? ORDER BY name ASC");
+    $stmt->execute([$user_id]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $data = array_map(static function ($row) {
+        return [
+            'id' => (int)$row['id'],
+            'name' => $row['name'],
+            'color' => $row['color']
+        ];
+    }, $rows);
+
+    echo json_encode(['status' => 'success', 'data' => $data]);
+}
+else if ($action === 'create_tag') {
+    ensureScheduleTagTables($pdo);
+
+    $name = trim((string)($input['name'] ?? ''));
+    $color = trim((string)($input['color'] ?? '#3b82f6'));
+
+    if ($name === '' || mb_strlen($name) > 80) {
+        die(json_encode(['status' => 'error', 'message' => 'Nome da tag inválido.']));
+    }
+    if (!preg_match('/^#[a-fA-F0-9]{6}$/', $color)) {
+        $color = '#3b82f6';
+    }
+
+    try {
+        $stmt = $pdo->prepare("INSERT INTO schedule_tags (user_id, name, color) VALUES (?, ?, ?)");
+        $stmt->execute([$user_id, $name, $color]);
+        echo json_encode(['status' => 'success', 'message' => 'Tag criada com sucesso.']);
+    } catch (Throwable $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Já existe uma tag com este nome.']);
+    }
+}
+else if ($action === 'update_tag') {
+    ensureScheduleTagTables($pdo);
+
+    $id = (int)($input['id'] ?? 0);
+    $name = trim((string)($input['name'] ?? ''));
+    $color = trim((string)($input['color'] ?? '#3b82f6'));
+
+    if ($id <= 0 || $name === '' || mb_strlen($name) > 80) {
+        die(json_encode(['status' => 'error', 'message' => 'Dados da tag inválidos.']));
+    }
+    if (!preg_match('/^#[a-fA-F0-9]{6}$/', $color)) {
+        $color = '#3b82f6';
+    }
+
+    try {
+        $stmt = $pdo->prepare("UPDATE schedule_tags SET name = ?, color = ? WHERE id = ? AND user_id = ?");
+        $stmt->execute([$name, $color, $id, $user_id]);
+        if ($stmt->rowCount() === 0) {
+            echo json_encode(['status' => 'error', 'message' => 'Tag não encontrada.']);
+        } else {
+            echo json_encode(['status' => 'success', 'message' => 'Tag atualizada com sucesso.']);
+        }
+    } catch (Throwable $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Já existe uma tag com este nome.']);
+    }
+}
+else if ($action === 'delete_tag') {
+    ensureScheduleTagTables($pdo);
+
+    $id = (int)($input['id'] ?? 0);
+    if ($id <= 0) {
+        die(json_encode(['status' => 'error', 'message' => 'Tag inválida.']));
+    }
+
+    $stmt = $pdo->prepare("DELETE FROM schedule_tags WHERE id = ? AND user_id = ?");
+    $stmt->execute([$id, $user_id]);
+    echo json_encode(['status' => 'success', 'message' => 'Tag removida com sucesso.']);
 }
 
 else if ($action === 'get_agenda_info') {

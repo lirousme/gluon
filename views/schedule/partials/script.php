@@ -24,8 +24,10 @@
                 filterDrawerOpen: false,
                 filters: {
                     showFlashcardDueDirectories: true,
-                    showOnlyOverdueTasks: false
+                    showOnlyOverdueTasks: false,
+                    selectedTagIds: []
                 },
+                tags: [],
                 pendingStartDate: null,
                 pendingEndDate: null,
                 availableIcons: [
@@ -252,6 +254,7 @@
                 this.renderIconPicker();
                 this.setupFormListeners();
                 this.loadFilterSettings();
+                await this.loadTags();
                 this.syncFilterUI();
                 
                 const savedSidebar = localStorage.getItem('gluon_agenda_sidebar');
@@ -301,6 +304,9 @@
                     if (typeof parsed.showOnlyOverdueTasks === 'boolean') {
                         this.state.filters.showOnlyOverdueTasks = parsed.showOnlyOverdueTasks;
                     }
+                    if (Array.isArray(parsed.selectedTagIds)) {
+                        this.state.filters.selectedTagIds = parsed.selectedTagIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0);
+                    }
                 } catch (e) {}
             },
 
@@ -314,6 +320,140 @@
 
                 const overdueCheckbox = document.getElementById('filter-show-only-overdue');
                 if (overdueCheckbox) overdueCheckbox.checked = this.state.filters.showOnlyOverdueTasks;
+
+                this.renderTagFilterList();
+                this.renderTaskTagSelector();
+            },
+
+            async loadTags() {
+                const response = await this.api('schedule', 'get_tags');
+                if (response && Array.isArray(response.data)) {
+                    this.state.tags = response.data;
+                } else {
+                    this.state.tags = [];
+                }
+                this.syncTagFilterSelection();
+                this.syncFilterUI();
+            },
+
+            syncTagFilterSelection() {
+                const validIds = new Set(this.state.tags.map((tag) => Number(tag.id)));
+                this.state.filters.selectedTagIds = this.state.filters.selectedTagIds.filter((id) => validIds.has(Number(id)));
+                this.persistFilters();
+            },
+
+            renderTagFilterList() {
+                const list = document.getElementById('filter-tags-list');
+                if (!list) return;
+
+                if (!Array.isArray(this.state.tags) || this.state.tags.length === 0) {
+                    list.innerHTML = '<p class="text-xs text-slate-500">Nenhuma tag criada ainda.</p>';
+                    return;
+                }
+
+                list.innerHTML = this.state.tags.map((tag) => {
+                    const checked = this.state.filters.selectedTagIds.includes(Number(tag.id));
+                    return `
+                        <div class="rounded-lg border border-slate-700 bg-slate-900/70 p-2">
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" ${checked ? 'checked' : ''} onchange="scheduleApp.toggleTagFilter(${tag.id}, this.checked)" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-gluon-primary focus:ring-gluon-primary">
+                                <span class="inline-flex items-center gap-2 flex-1 min-w-0">
+                                    <span class="w-2.5 h-2.5 rounded-full" style="background:${tag.color}"></span>
+                                    <span class="text-sm text-slate-200 truncate">${this.escapeHTML(tag.name)}</span>
+                                </span>
+                                <button type="button" onclick="scheduleApp.editTagPrompt(${tag.id})" class="text-slate-400 hover:text-white p-1" title="Editar tag"><i class="fa-solid fa-pen"></i></button>
+                                <button type="button" onclick="scheduleApp.deleteTag(${tag.id})" class="text-slate-400 hover:text-red-400 p-1" title="Excluir tag"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            },
+
+            toggleTagFilter(tagId, checked) {
+                const id = Number(tagId);
+                if (!id) return;
+                if (checked) {
+                    if (!this.state.filters.selectedTagIds.includes(id)) this.state.filters.selectedTagIds.push(id);
+                } else {
+                    this.state.filters.selectedTagIds = this.state.filters.selectedTagIds.filter((v) => v !== id);
+                }
+                this.persistFilters();
+                this.render();
+            },
+
+            async handleTagCreate(event) {
+                if (event && event.preventDefault) event.preventDefault();
+                const nameInput = document.getElementById('newTagName');
+                const colorInput = document.getElementById('newTagColor');
+                const name = nameInput ? nameInput.value.trim() : '';
+                const color = colorInput ? colorInput.value : '#3b82f6';
+                if (!name) return this.showToast('Informe um nome para a tag.', 'error');
+
+                const res = await this.api('schedule', 'create_tag', { name, color });
+                if (!res) return;
+                if (nameInput) nameInput.value = '';
+                await this.loadTags();
+                this.showToast('Tag criada com sucesso.');
+            },
+
+            async editTagPrompt(tagId) {
+                const tag = this.state.tags.find((t) => Number(t.id) === Number(tagId));
+                if (!tag) return;
+                const newName = window.prompt('Editar nome da tag:', tag.name);
+                if (newName === null) return;
+                const cleaned = newName.trim();
+                if (!cleaned) return this.showToast('Nome da tag não pode ser vazio.', 'error');
+
+                const newColor = window.prompt('Cor hexadecimal da tag (ex: #3b82f6):', tag.color || '#3b82f6');
+                if (newColor === null) return;
+                const color = String(newColor).trim();
+                if (!/^#[a-fA-F0-9]{6}$/.test(color)) return this.showToast('Cor inválida. Use formato #RRGGBB.', 'error');
+
+                const res = await this.api('schedule', 'update_tag', { id: tagId, name: cleaned, color });
+                if (!res) return;
+                await this.loadTags();
+                this.showToast('Tag atualizada com sucesso.');
+            },
+
+            async deleteTag(tagId) {
+                if (!window.confirm('Excluir esta tag? Ela será removida das tarefas vinculadas.')) return;
+                const res = await this.api('schedule', 'delete_tag', { id: tagId });
+                if (!res) return;
+                await this.loadTags();
+                await this.loadData();
+                this.showToast('Tag excluída com sucesso.');
+            },
+
+            renderTaskTagSelector(selectedIds = null) {
+                const container = document.getElementById('taskTagSelector');
+                if (!container) return;
+
+                const selectedSet = new Set(Array.isArray(selectedIds)
+                    ? selectedIds.map((id) => Number(id))
+                    : Array.from(container.querySelectorAll('input[name="taskTagIds"]:checked')).map((el) => Number(el.value))
+                );
+
+                if (!Array.isArray(this.state.tags) || this.state.tags.length === 0) {
+                    container.innerHTML = '<p class="text-xs text-slate-500">Crie tags no menu de filtros para usar aqui.</p>';
+                    return;
+                }
+
+                container.innerHTML = this.state.tags.map((tag) => {
+                    const checked = selectedSet.has(Number(tag.id));
+                    return `
+                        <label class="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border ${checked ? 'border-gluon-primary bg-slate-700/80' : 'border-slate-600 bg-slate-800'} cursor-pointer text-xs text-slate-200">
+                            <input type="checkbox" name="taskTagIds" value="${tag.id}" ${checked ? 'checked' : ''} class="h-3.5 w-3.5 rounded border-slate-500 bg-slate-900 text-gluon-primary focus:ring-gluon-primary">
+                            <span class="w-2 h-2 rounded-full" style="background:${tag.color}"></span>
+                            <span>${this.escapeHTML(tag.name)}</span>
+                        </label>
+                    `;
+                }).join('');
+            },
+
+            getSelectedTaskTagIds() {
+                return Array.from(document.querySelectorAll('input[name="taskTagIds"]:checked'))
+                    .map((el) => Number(el.value))
+                    .filter((id) => Number.isInteger(id) && id > 0);
             },
 
             toggleFilterDrawer() {
@@ -1020,8 +1160,17 @@
                 }
                 const allItems = Array.from(allItemsMap.values());
 
-                let backlogItems = allItems.filter(item => !item.start_date || !item.end_date);
-                let scheduledItems = allItems.filter(item => item.start_date && item.end_date);
+                const selectedTagIds = this.state.filters.selectedTagIds;
+                const hasTagFilter = Array.isArray(selectedTagIds) && selectedTagIds.length > 0;
+                const filteredItems = hasTagFilter
+                    ? allItems.filter((item) => {
+                        const itemTagIds = Array.isArray(item.tags) ? item.tags.map((tag) => Number(tag.id)) : [];
+                        return selectedTagIds.some((tagId) => itemTagIds.includes(Number(tagId)));
+                    })
+                    : allItems;
+
+                let backlogItems = filteredItems.filter(item => !item.start_date || !item.end_date);
+                let scheduledItems = filteredItems.filter(item => item.start_date && item.end_date);
 
                 if (isOverdueOnly) {
                     const now = new Date();
@@ -1102,6 +1251,7 @@
             generateBacklogCard(item) {
                 const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
                 const flashcardBadge = item.is_flashcard_due_directory ? `<span class="text-[10px] text-amber-300 ml-2"><i class="fa-solid fa-bolt"></i> Revisão vencida</span>` : '';
+                const tagsHTML = this.getTagBadgesHTML(item.tags);
                 const readOnlyClass = item.is_schedule_read_only ? 'readonly-schedule-item cursor-default' : 'cursor-grab';
                 const settingsButton = item.is_schedule_read_only ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20"><i class="fa-solid fa-cog"></i></button>`;
                 return `
@@ -1112,8 +1262,17 @@
                         <i class="fa-solid ${item.icon} text-sm" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
                         <span class="font-medium text-sm text-slate-200 truncate w-full">${this.escapeHTML(item.name)} ${repeatIcon} ${flashcardBadge}</span>
                     </div>
+                    ${tagsHTML ? `<div class="pointer-events-none z-10 mr-2 hidden sm:flex items-center gap-1 flex-wrap justify-end max-w-[45%]">${tagsHTML}</div>` : ''}
                     ${settingsButton}
                 </div>`;
+            },
+
+            getTagBadgesHTML(tags = []) {
+                if (!Array.isArray(tags) || tags.length === 0) return '';
+                return tags.map((tag) => {
+                    const color = /^#[a-fA-F0-9]{6}$/.test(tag.color || '') ? tag.color : '#3b82f6';
+                    return `<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] border border-slate-600 bg-slate-900/80 text-slate-200"><span class="w-1.5 h-1.5 rounded-full" style="background:${color}"></span>${this.escapeHTML(tag.name || '')}</span>`;
+                }).join('');
             },
 
             renderTimelineItems(scheduledItems, selectedDateStr) {
@@ -1145,6 +1304,7 @@
                     const bgStyle = `background: linear-gradient(135deg, ${fromColor}33, ${toColor}33); border-color: ${fromColor}80; color: #fff; ${borderStyle}`;
                     
                     const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 opacity-80" title="Tarefa Recorrente"></i>` : '';
+                    const tagsHTML = this.getTagBadgesHTML(item.tags);
                     const isCurrentTime = this.isInstanceInCurrentTime(inst, now);
                     const projClass = inst.isProjection ? 'virtual-task opacity-80' : '';
                     const readOnlyClass = item.is_schedule_read_only ? 'readonly-schedule-item' : '';
@@ -1162,6 +1322,7 @@
                                     <i class="fa-solid ${item.icon} text-xs"></i> <span class="truncate">${this.escapeHTML(item.name)} ${repeatIcon}</span>
                                 </div>
                             </div>
+                            ${tagsHTML ? `<div class="mt-1 pointer-events-none z-10 relative flex flex-wrap gap-1">${tagsHTML}</div>` : ''}
                             <div class="text-[10px] opacity-70 pointer-events-none z-10 relative font-medium">${inst.start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${inst.end.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                             
                             ${item.is_schedule_read_only ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="absolute top-1 right-1 text-white/70 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 z-20 bg-black/40 rounded shadow-md"><i class="fa-solid fa-cog text-xs"></i></button>`}
@@ -1220,6 +1381,7 @@
                 const timeStr = `${inst.start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${inst.end.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
                 const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
                 const flashcardBadge = item.is_flashcard_due_directory ? `<span class="text-[10px] text-amber-300 ml-1"><i class="fa-solid fa-bolt"></i> Revisão vencida</span>` : '';
+                const tagsHTML = this.getTagBadgesHTML(item.tags);
                 const isCurrentTime = this.isInstanceInCurrentTime(inst);
 
                 const projectionClass = `${inst.isProjection ? 'virtual-task' : ''} ${item.is_schedule_read_only ? 'readonly-schedule-item cursor-default' : 'cursor-grab'}`;
@@ -1242,6 +1404,7 @@
                             </div>
                         </div>
                         <div class="text-[10px] text-slate-400 mt-1 z-10 relative font-medium"><i class="fa-regular fa-clock"></i> ${timeStr}</div>
+                        ${tagsHTML ? `<div class="mt-1 z-10 relative flex flex-wrap gap-1">${tagsHTML}</div>` : ''}
                         
                         ${item.is_schedule_read_only ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="absolute top-1.5 right-1.5 text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20 bg-slate-800/80 rounded border border-slate-600"><i class="fa-solid fa-cog text-xs"></i></button>`}
                     </div>`;
@@ -1256,7 +1419,10 @@
                                 <span class="text-[10px] text-slate-500">${timeStr.split(' - ')[1]}</span>
                             </div>
                             <i class="fa-solid ${item.icon} text-lg shrink-0" style="${this.getTextGradientStyle(item.color_from, item.color_to)}"></i>
-                            <span class="font-semibold text-sm text-slate-200 truncate flex-1">${this.escapeHTML(item.name)} ${repeatIcon} ${flashcardBadge}</span>
+                            <div class="min-w-0 flex-1">
+                                <span class="font-semibold text-sm text-slate-200 truncate block">${this.escapeHTML(item.name)} ${repeatIcon} ${flashcardBadge}</span>
+                                ${tagsHTML ? `<div class="mt-1 flex flex-wrap gap-1">${tagsHTML}</div>` : ''}
+                            </div>
                         </div>
                         ${item.is_schedule_read_only ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-2 z-20 shrink-0 bg-slate-800 rounded shadow"><i class="fa-solid fa-cog"></i></button>`}
                     </div>`;
@@ -1801,6 +1967,7 @@
             handleTypeChange(typeValue) {
                 const folderSettings = document.getElementById('folderSettingsGroup');
                 const nameLabel = document.getElementById('nameLabel');
+                const taskTagsContainer = document.getElementById('taskTagsContainer');
                 
                 if (typeValue === 0) {
                     folderSettings.style.display = 'block';
@@ -1818,6 +1985,11 @@
                     folderSettings.style.display = 'none';
                     nameLabel.innerText = 'Nome do Plano';
                     this.autoChangeIcon('fa-list-ol');
+                }
+
+                if (taskTagsContainer) {
+                    if (Number(typeValue) === 0) taskTagsContainer.classList.remove('hidden');
+                    else taskTagsContainer.classList.add('hidden');
                 }
             },
 
@@ -1869,6 +2041,7 @@
                 const nameLabel = document.getElementById('nameLabel');
                 const iconPickerContainer = document.getElementById('iconPickerContainer');
                 const btnRecor = document.getElementById('tab-btn-recor');
+                const taskTagsContainer = document.getElementById('taskTagsContainer');
 
                 if (id) {
                     dirObj = this.state.directoryCache.get(Number(id));
@@ -1908,6 +2081,15 @@
                     this.handleTypeChange(0);
                 }
 
+                if (taskTagsContainer) {
+                    const selectedTypeForTags = dirObj ? Number(dirObj.type) : 0;
+                    if (selectedTypeForTags === 0) {
+                        taskTagsContainer.classList.remove('hidden');
+                    } else {
+                        taskTagsContainer.classList.add('hidden');
+                    }
+                }
+
                 dirNameInput.value = dirObj ? dirObj.name : name;
 
                 this.removeCover();
@@ -1939,6 +2121,7 @@
 
                 this.toggleRecurrenceFields();
                 this.handleRecurrenceTypeChange();
+                this.renderTaskTagSelector(Array.isArray(dirObj?.tags) ? dirObj.tags.map((tag) => Number(tag.id)) : []);
 
                 const btnDelete = document.getElementById('btnDeleteDir');
                 if(id) btnDelete.classList.remove('hidden'); else btnDelete.classList.add('hidden');
@@ -2062,6 +2245,7 @@
                 const rec_end = document.getElementById('rec_end').value || null;
                 const rec_time_start = document.getElementById('rec_time_start').value || null;
                 const rec_time_end = document.getElementById('rec_time_end').value || null;
+                const tag_ids = this.getSelectedTaskTagIds();
 
                 const btn = document.getElementById('btnSaveDir');
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
@@ -2086,7 +2270,8 @@
                     rec_custom: rec_custom,
                     rec_end: rec_end,
                     rec_time_start: rec_time_start,
-                    rec_time_end: rec_time_end
+                    rec_time_end: rec_time_end,
+                    tag_ids: tag_ids
                 };
 
                 const response = await this.api('directories', id !== '' ? 'update' : 'create', payload);
