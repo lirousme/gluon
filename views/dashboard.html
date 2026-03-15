@@ -604,6 +604,9 @@
             },
             
             sortableInstances: [],
+            dragState: {
+                rootDropParentId: null
+            },
 
             customScroll: {
                 active: false,
@@ -1634,11 +1637,15 @@
                 const wrapper = document.getElementById('sortable-wrapper');
                 const currentView = this.getCurrentView();
 
+                this.dragState.rootDropParentId = null;
+
                 if (wrapper) {
                     this.sortableInstances.push(new Sortable(wrapper, {
                         animation: 250, delay: 150, delayOnTouchOnly: true, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', forceFallback: true, fallbackOnBody: true, scroll: true, scrollSensitivity: 80, scrollSpeed: 15,       
                         direction: currentView === 'kanban' ? 'horizontal' : (currentView === 'list' ? 'vertical' : undefined),
                         handle: currentView === 'kanban' ? '.kanban-col-handle' : undefined,
+                        onStart: () => { this.dragState.rootDropParentId = null; },
+                        onMove: (evt) => this.trackRootDropTarget(evt, currentView),
                         onEnd: (evt) => this.handleRootDragEnd(evt, currentView)
                     }));
                 }
@@ -1670,6 +1677,35 @@
                 const dir = this.state.directories.find(d => Number(d.id) === Number(directoryId));
                 if (!dir) return null;
                 return Number(dir.type) === 3 ? dir.target_id : dir.id;
+            },
+
+            trackRootDropTarget(evt, currentView) {
+                const draggedId = Number(evt?.dragged?.getAttribute('data-id'));
+                if (!draggedId || this.getCurrentParentId() !== null) {
+                    this.dragState.rootDropParentId = null;
+                    return true;
+                }
+
+                const hoveredKanbanColumn = currentView === 'kanban'
+                    ? this.getDropElementFromEvent(evt, '.kanban-scroll', evt?.dragged)
+                    : null;
+
+                if (hoveredKanbanColumn) {
+                    const columnTargetParentId = Number(hoveredKanbanColumn.getAttribute('data-parent-id'));
+                    this.dragState.rootDropParentId = Number.isFinite(columnTargetParentId) && columnTargetParentId > 0
+                        ? columnTargetParentId
+                        : null;
+                    return true;
+                }
+
+                const relatedRootId = Number(evt?.related?.getAttribute?.('data-id'));
+                if (relatedRootId && relatedRootId !== draggedId) {
+                    this.dragState.rootDropParentId = this.getDirectoryDropTargetId(relatedRootId);
+                    return true;
+                }
+
+                this.dragState.rootDropParentId = null;
+                return true;
             },
 
             getDropElementFromEvent(evt, selector, ignoreElement = null) {
@@ -1712,23 +1748,25 @@
                 const rootId = this.getCurrentParentId();
                 if (rootId === null) {
                     const draggedId = Number(evt?.item?.getAttribute('data-id'));
-                    const hoveredKanbanColumn = currentView === 'kanban'
+                    const fallbackKanbanColumn = currentView === 'kanban'
                         ? this.getDropElementFromEvent(evt, '.kanban-scroll', evt?.item)
                         : null;
 
-                    if (draggedId && hoveredKanbanColumn) {
-                        const targetParentId = hoveredKanbanColumn ? Number(hoveredKanbanColumn.getAttribute('data-parent-id')) : null;
-                        if (targetParentId && draggedId !== targetParentId && await this.moveDirectoryToParent(draggedId, targetParentId)) return;
-                    }
+                    const fallbackDir = this.getDropElementFromEvent(evt, '.draggable-item', evt?.item);
+                    const fallbackRootId = fallbackDir ? Number(fallbackDir.getAttribute('data-id')) : null;
+                    const fallbackTargetParentId = fallbackKanbanColumn
+                        ? Number(fallbackKanbanColumn.getAttribute('data-parent-id'))
+                        : (fallbackRootId ? this.getDirectoryDropTargetId(fallbackRootId) : null);
 
-                    const hoveredDir = this.getDropElementFromEvent(evt, '.draggable-item', evt?.item);
-                    const hoveredRootId = hoveredDir ? Number(hoveredDir.getAttribute('data-id')) : null;
-                    if (draggedId && hoveredRootId && draggedId !== hoveredRootId) {
-                        const targetParentId = this.getDirectoryDropTargetId(hoveredRootId);
+                    const targetParentId = this.dragState.rootDropParentId || fallbackTargetParentId;
+                    this.dragState.rootDropParentId = null;
+
+                    if (draggedId && targetParentId && draggedId !== targetParentId) {
                         if (await this.moveDirectoryToParent(draggedId, targetParentId)) return;
                     }
                 }
 
+                this.dragState.rootDropParentId = null;
                 await this.saveNewOrder();
             },
 
