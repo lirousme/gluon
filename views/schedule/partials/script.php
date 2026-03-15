@@ -1338,8 +1338,10 @@
                     const readOnlyClass = item.is_schedule_read_only ? 'readonly-schedule-item' : '';
                     const currentTimeClass = isCurrentTime ? 'current-time-item' : '';
                     const resizeHTML = (inst.isProjection || item.is_schedule_read_only) ? '' : `<div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>`;
+                    const contextStart = this.toMySQLFormat(inst.start);
+                    const contextEnd = this.toMySQLFormat(inst.end);
                     const completeButton = (!item.is_schedule_read_only && Number(item.type) === 0)
-                        ? `<button type="button" onclick="event.stopPropagation(); scheduleApp.completeTask(${item.id})" class="pointer-events-auto text-white/80 hover:text-emerald-200 transition-colors" title="Concluir tarefa"><i class="fa-solid fa-circle-check text-xs"></i></button>`
+                        ? `<button type="button" onclick="event.stopPropagation(); scheduleApp.completeTask(${item.id}, '${contextStart}', '${contextEnd}')" class="pointer-events-auto text-white/80 hover:text-emerald-200 transition-colors" title="Concluir tarefa"><i class="fa-solid fa-circle-check text-xs"></i></button>`
                         : '';
 
                     const instTimeStr = inst.start.getHours().toString().padStart(2,'0') + ':' + inst.start.getMinutes().toString().padStart(2,'0') + ':00';
@@ -1419,8 +1421,10 @@
                 const currentTimeClass = isCurrentTime ? 'current-time-item' : '';
                 const borderStyle = `border-left: 4px solid ${fromColor};`;
                 const handleHTML = `<i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>`;
+                const contextStart = this.toMySQLFormat(inst.start);
+                const contextEnd = this.toMySQLFormat(inst.end);
                 const completeButton = (!item.is_schedule_read_only && Number(item.type) === 0)
-                    ? `<button type="button" onclick="event.stopPropagation(); scheduleApp.completeTask(${item.id})" class="text-slate-300 hover:text-emerald-300 transition-colors" title="Concluir tarefa"><i class="fa-solid fa-circle-check text-xs"></i></button>`
+                    ? `<button type="button" onclick="event.stopPropagation(); scheduleApp.completeTask(${item.id}, '${contextStart}', '${contextEnd}')" class="text-slate-300 hover:text-emerald-300 transition-colors" title="Concluir tarefa"><i class="fa-solid fa-circle-check text-xs"></i></button>`
                     : '';
 
                 const instTimeStr = inst.start.getHours().toString().padStart(2,'0') + ':' + inst.start.getMinutes().toString().padStart(2,'0') + ':00';
@@ -1465,14 +1469,18 @@
                 }
             },
 
-            async completeTask(id) {
+            async completeTask(id, contextStart = null, contextEnd = null) {
                 const itemId = Number(id);
                 if (!Number.isInteger(itemId) || itemId <= 0) return;
 
                 const item = this.state.directoryCache.get(itemId);
                 if (!item || Number(item.is_schedule_read_only) === 1) return;
 
-                const response = await this.api('schedule', 'complete_task', { id: itemId });
+                const response = await this.api('schedule', 'complete_task', {
+                    id: itemId,
+                    context_start: contextStart || null,
+                    context_end: contextEnd || null
+                });
                 if (!response) return;
 
                 this.showToast(response.message || 'Tarefa concluída com sucesso.', 'success');
