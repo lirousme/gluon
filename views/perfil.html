@@ -1156,7 +1156,7 @@
                         animation: 250, delay: 150, delayOnTouchOnly: true, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', forceFallback: true, fallbackOnBody: true, scroll: true, scrollSensitivity: 80, scrollSpeed: 15,       
                         direction: currentView === 'kanban' ? 'horizontal' : (currentView === 'list' ? 'vertical' : undefined),
                         handle: currentView === 'kanban' ? '.kanban-col-handle' : undefined,
-                        onEnd: () => this.saveNewOrder()
+                        onEnd: (evt) => this.handleRootDropOrReorder(evt)
                     }));
                 }
 
@@ -1173,6 +1173,92 @@
                         }));
                     });
                 }
+            },
+
+            getPointerFromEvent(evt) {
+                const oe = evt?.originalEvent;
+                if (!oe) return null;
+                if (typeof oe.clientX === 'number' && typeof oe.clientY === 'number') {
+                    return { x: oe.clientX, y: oe.clientY };
+                }
+                const touch = oe.changedTouches?.[0] || oe.touches?.[0];
+                if (!touch) return null;
+                return { x: touch.clientX, y: touch.clientY };
+            },
+
+            getDropParentIdFromRootDrag(evt) {
+                const draggedEl = evt?.item;
+                const draggedId = parseInt(draggedEl?.getAttribute('data-id') || '', 10);
+                if (!draggedEl || !Number.isInteger(draggedId)) return null;
+
+                const pointer = this.getPointerFromEvent(evt);
+                if (pointer) {
+                    const targetAtPointer = document.elementFromPoint(pointer.x, pointer.y);
+                    const kanbanCol = targetAtPointer?.closest('.kanban-scroll[data-parent-id]');
+                    if (kanbanCol) {
+                        const parentId = parseInt(kanbanCol.getAttribute('data-parent-id') || '', 10);
+                        if (Number.isInteger(parentId) && parentId !== draggedId) return parentId;
+                    }
+
+                    const dropCard = targetAtPointer?.closest('.draggable-item[data-id]');
+                    if (dropCard && dropCard !== draggedEl) {
+                        const rawTargetId = parseInt(dropCard.getAttribute('data-id') || '', 10);
+                        if (Number.isInteger(rawTargetId) && rawTargetId !== draggedId) {
+                            const targetDir = this.state.directories.find(d => d.id == rawTargetId);
+                            if (!targetDir) return rawTargetId;
+                            if (targetDir.type === 3 && Number.isInteger(parseInt(targetDir.target_id, 10))) {
+                                return parseInt(targetDir.target_id, 10);
+                            }
+                            return rawTargetId;
+                        }
+                    }
+                }
+
+                const dragRect = draggedEl.getBoundingClientRect();
+                let best = { id: null, overlap: 0 };
+                document.querySelectorAll('#sortable-wrapper .draggable-item[data-id]').forEach(el => {
+                    if (el === draggedEl) return;
+                    const r = el.getBoundingClientRect();
+                    const overlapX = Math.max(0, Math.min(dragRect.right, r.right) - Math.max(dragRect.left, r.left));
+                    const overlapY = Math.max(0, Math.min(dragRect.bottom, r.bottom) - Math.max(dragRect.top, r.top));
+                    const overlapArea = overlapX * overlapY;
+                    if (overlapArea <= 0) return;
+                    const targetArea = Math.max(1, r.width * r.height);
+                    const ratio = overlapArea / targetArea;
+                    if (ratio > best.overlap) {
+                        best = { id: parseInt(el.getAttribute('data-id') || '', 10), overlap: ratio };
+                    }
+                });
+
+                if (!Number.isInteger(best.id) || best.overlap < 0.35 || best.id === draggedId) return null;
+                const targetDir = this.state.directories.find(d => d.id == best.id);
+                if (!targetDir) return best.id;
+                if (targetDir.type === 3 && Number.isInteger(parseInt(targetDir.target_id, 10))) {
+                    return parseInt(targetDir.target_id, 10);
+                }
+                return best.id;
+            },
+
+            async handleRootDropOrReorder(evt) {
+                const draggedId = parseInt(evt?.item?.getAttribute('data-id') || '', 10);
+                if (!Number.isInteger(draggedId)) return this.saveNewOrder();
+
+                const currentParentId = this.getCurrentParentId();
+                const canNestFromHere = currentParentId === null;
+                const targetParentId = canNestFromHere ? this.getDropParentIdFromRootDrag(evt) : null;
+
+                if (!Number.isInteger(targetParentId) || targetParentId === draggedId) {
+                    return this.saveNewOrder();
+                }
+
+                const res = await this.api('directories', 'reorder', { order: [draggedId], parent_id: targetParentId });
+                if (!res || res.status !== 'success') {
+                    this.showToast(res?.message || 'Não foi possível mover o diretório para dentro do alvo.', 'error');
+                    return this.fetchDirectories();
+                }
+
+                this.showToast('Diretório inserido dentro do destino.', 'success');
+                await this.fetchDirectories();
             },
 
             async saveNewOrder() {
