@@ -1639,7 +1639,7 @@
                         animation: 250, delay: 150, delayOnTouchOnly: true, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', forceFallback: true, fallbackOnBody: true, scroll: true, scrollSensitivity: 80, scrollSpeed: 15,       
                         direction: currentView === 'kanban' ? 'horizontal' : (currentView === 'list' ? 'vertical' : undefined),
                         handle: currentView === 'kanban' ? '.kanban-col-handle' : undefined,
-                        onEnd: () => this.saveNewOrder()
+                        onEnd: (evt) => this.handleRootDragEnd(evt, currentView)
                     }));
                 }
 
@@ -1664,6 +1664,61 @@
                 const orderIds = Array.from(wrapper.children).map(item => item.getAttribute('data-id')).filter(id => id !== null);
                 this.state.directories = orderIds.map(id => this.state.directories.find(d => d.id == id)).filter(Boolean);
                 await this.api('directories', 'reorder', { order: orderIds });
+            },
+
+            getDirectoryDropTargetId(directoryId) {
+                const dir = this.state.directories.find(d => Number(d.id) === Number(directoryId));
+                if (!dir) return null;
+                return Number(dir.type) === 3 ? dir.target_id : dir.id;
+            },
+
+            getDropElementFromEvent(evt, selector) {
+                const pointerEvt = evt?.originalEvent;
+                const clientX = pointerEvt?.clientX;
+                const clientY = pointerEvt?.clientY;
+                if (typeof clientX !== 'number' || typeof clientY !== 'number') return null;
+                return document.elementFromPoint(clientX, clientY)?.closest(selector) || null;
+            },
+
+            async moveDirectoryToParent(directoryId, targetParentId) {
+                const sourceId = Number(directoryId);
+                const destinationId = Number(targetParentId);
+                if (!sourceId || !destinationId || sourceId === destinationId) return false;
+
+                const response = await this.api('directories', 'reorder', { order: [sourceId], parent_id: destinationId });
+                if (!response) {
+                    this.showToast('Não foi possível mover o diretório.', 'error');
+                    await this.fetchDirectories();
+                    return true;
+                }
+
+                await this.saveNewOrder();
+                await this.fetchDirectories();
+                return true;
+            },
+
+            async handleRootDragEnd(evt, currentView) {
+                const rootId = this.getCurrentParentId();
+                if (rootId === null) {
+                    const draggedId = Number(evt?.item?.getAttribute('data-id'));
+                    const hoveredDir = this.getDropElementFromEvent(evt, '.draggable-item');
+                    const hoveredRootId = hoveredDir ? Number(hoveredDir.getAttribute('data-id')) : null;
+
+                    if (draggedId && hoveredRootId && draggedId !== hoveredRootId) {
+                        const targetParentId = this.getDirectoryDropTargetId(hoveredRootId);
+                        if (await this.moveDirectoryToParent(draggedId, targetParentId)) return;
+                    }
+
+                    if (currentView === 'kanban') {
+                        const hoveredKanbanColumn = this.getDropElementFromEvent(evt, '.kanban-scroll');
+                        const targetParentId = hoveredKanbanColumn ? Number(hoveredKanbanColumn.getAttribute('data-parent-id')) : null;
+                        if (draggedId && targetParentId && draggedId !== targetParentId) {
+                            if (await this.moveDirectoryToParent(draggedId, targetParentId)) return;
+                        }
+                    }
+                }
+
+                await this.saveNewOrder();
             },
 
             async saveInnerOrder(columnEl, newParentId) {
