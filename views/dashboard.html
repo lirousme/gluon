@@ -1672,12 +1672,23 @@
                 return Number(dir.type) === 3 ? dir.target_id : dir.id;
             },
 
-            getDropElementFromEvent(evt, selector) {
+            getDropElementFromEvent(evt, selector, ignoreElement = null) {
                 const pointerEvt = evt?.originalEvent;
                 const clientX = pointerEvt?.clientX;
                 const clientY = pointerEvt?.clientY;
                 if (typeof clientX !== 'number' || typeof clientY !== 'number') return null;
-                return document.elementFromPoint(clientX, clientY)?.closest(selector) || null;
+
+                const elementsAtPoint = document.elementsFromPoint(clientX, clientY);
+                for (const element of elementsAtPoint) {
+                    if (!element || (ignoreElement && (element === ignoreElement || ignoreElement.contains(element)))) continue;
+                    const match = element.closest(selector);
+                    if (!match) continue;
+                    if (ignoreElement && (match === ignoreElement || ignoreElement.contains(match))) continue;
+                    if (match.classList?.contains('sortable-drag') || match.classList?.contains('sortable-ghost')) continue;
+                    return match;
+                }
+
+                return null;
             },
 
             async moveDirectoryToParent(directoryId, targetParentId) {
@@ -1701,20 +1712,20 @@
                 const rootId = this.getCurrentParentId();
                 if (rootId === null) {
                     const draggedId = Number(evt?.item?.getAttribute('data-id'));
-                    const hoveredDir = this.getDropElementFromEvent(evt, '.draggable-item');
-                    const hoveredRootId = hoveredDir ? Number(hoveredDir.getAttribute('data-id')) : null;
+                    const hoveredKanbanColumn = currentView === 'kanban'
+                        ? this.getDropElementFromEvent(evt, '.kanban-scroll', evt?.item)
+                        : null;
 
+                    if (draggedId && hoveredKanbanColumn) {
+                        const targetParentId = hoveredKanbanColumn ? Number(hoveredKanbanColumn.getAttribute('data-parent-id')) : null;
+                        if (targetParentId && draggedId !== targetParentId && await this.moveDirectoryToParent(draggedId, targetParentId)) return;
+                    }
+
+                    const hoveredDir = this.getDropElementFromEvent(evt, '.draggable-item', evt?.item);
+                    const hoveredRootId = hoveredDir ? Number(hoveredDir.getAttribute('data-id')) : null;
                     if (draggedId && hoveredRootId && draggedId !== hoveredRootId) {
                         const targetParentId = this.getDirectoryDropTargetId(hoveredRootId);
                         if (await this.moveDirectoryToParent(draggedId, targetParentId)) return;
-                    }
-
-                    if (currentView === 'kanban') {
-                        const hoveredKanbanColumn = this.getDropElementFromEvent(evt, '.kanban-scroll');
-                        const targetParentId = hoveredKanbanColumn ? Number(hoveredKanbanColumn.getAttribute('data-parent-id')) : null;
-                        if (draggedId && targetParentId && draggedId !== targetParentId) {
-                            if (await this.moveDirectoryToParent(draggedId, targetParentId)) return;
-                        }
                     }
                 }
 
