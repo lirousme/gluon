@@ -49,7 +49,7 @@ function normalizeExceptionValue(string $recType, ?string $contextStart): ?strin
     if (!$contextStart) return null;
     try {
         $ctx = new DateTime($contextStart);
-        return $recType === 'hourly' ? $ctx->format('Y-m-d H:i:s') : $ctx->format('Y-m-d');
+        return in_array($recType, ['hourly', 'minutely'], true) ? $ctx->format('Y-m-d H:i:s') : $ctx->format('Y-m-d');
     } catch (Throwable $e) {
         return null;
     }
@@ -142,7 +142,7 @@ function collectOverdueRecurrenceExceptions(array $task, DateTime $now): array {
     $interval = max(1, (int)($task['rec_interval'] ?? 1));
     $recurrenceEnd = !empty($task['rec_end']) ? new DateTime($task['rec_end'], $tz) : null;
 
-    if ($type === 'hourly') {
+    if ($type === 'hourly' || $type === 'minutely') {
         $timeStart = !empty($task['rec_time_start']) ? substr($task['rec_time_start'], 0, 5) : $start->format('H:i');
         $timeEnd = !empty($task['rec_time_end']) ? substr($task['rec_time_end'], 0, 5) : '23:59';
 
@@ -162,7 +162,8 @@ function collectOverdueRecurrenceExceptions(array $task, DateTime $now): array {
             if ($isPastDay) {
                 $exceptions[] = $dayCursor->format('Y-m-d');
             } else {
-                for ($mins = $windowStartMin; $mins <= $windowEndMin; $mins += $interval * 60) {
+                $stepMinutes = $type === 'minutely' ? $interval : $interval * 60;
+                for ($mins = $windowStartMin; $mins <= $windowEndMin; $mins += $stepMinutes) {
                     $hour = (int)floor($mins / 60);
                     $min = $mins % 60;
                     $occurrenceStart = new DateTime($dayCursor->format('Y-m-d') . sprintf(' %02d:%02d:00', $hour, $min), $tz);
@@ -274,7 +275,7 @@ if ($action === 'update_times') {
             $newStartTime = (new DateTime($start_date))->format('H:i:s');
             $newEndTime = $end_date ? (new DateTime($end_date))->format('H:i:s') : null;
 
-            if ($rec['type'] === 'hourly') {
+            if (in_array($rec['type'], ['hourly', 'minutely'], true)) {
                 $newEndTime = shiftTimeKeepingWindow($rec['time_start'], $rec['time_end'], $newStartTime);
                 if (!$newEndTime && $end_date) {
                     $newEndTime = (new DateTime($end_date))->format('H:i:s');

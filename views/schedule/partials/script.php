@@ -633,8 +633,8 @@
                 const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
                 const interval = parseInt(item.rec_interval) || 1;
 
-                if (item.rec_type === 'hourly') {
-                    return true; // Se é de hora em hora, ele se repete TODOS os dias a partir da data base.
+                if (item.rec_type === 'minutely' || item.rec_type === 'hourly') {
+                    return true; // Se é de minuto/hora em hora, ele se repete TODOS os dias a partir da data base.
                 } else if (item.rec_type === 'daily') {
                     return diffDays % interval === 0;
                 } else if (item.rec_type === 'weekly') {
@@ -673,11 +673,12 @@
                 }
 
                 // Tratar a repetição "De hora em hora" (Hourly) para gerar os múltiplos blocos no dia
-                if (item.is_recurring === 1 && item.rec_type === 'hourly') {
+                if (item.is_recurring === 1 && (item.rec_type === 'hourly' || item.rec_type === 'minutely')) {
                     
                     let tStart = item.rec_time_start ? item.rec_time_start.substring(0, 5) : origStart.toTimeString().substring(0, 5);
                     let tEnd = item.rec_time_end ? item.rec_time_end.substring(0, 5) : '23:59';
                     const interval = parseInt(item.rec_interval) || 1;
+                    const stepMinutes = item.rec_type === 'minutely' ? interval : interval * 60;
                     
                     const [sHour, sMin] = tStart.split(':').map(Number);
                     const [eHour, eMin] = tEnd.split(':').map(Number);
@@ -702,7 +703,7 @@
                             instances.push({ start: instStart, end: instEnd, isProjection: isProj, uid: `${item.id}-${curH}-${curM}` });
                         }
                         
-                        currentMins += interval * 60; // Avança o relógio
+                        currentMins += stepMinutes; // Avança o relógio
                     }
                 } else {
                     // Tarefas normais (apenas UMA instância por dia, na mesma hora)
@@ -1786,7 +1787,7 @@
                     intervalCont.classList.add('hidden');
                     customCont.classList.remove('hidden');
                     if (hourlyCont) hourlyCont.classList.add('hidden');
-                } else if (type === 'hourly') {
+                } else if (type === 'hourly' || type === 'minutely') {
                     intervalCont.classList.remove('hidden');
                     customCont.classList.add('hidden');
                     if (hourlyCont) hourlyCont.classList.remove('hidden');
