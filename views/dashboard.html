@@ -1701,10 +1701,20 @@
                     return true;
                 }
 
-                const draggedRect = evt?.draggedRect;
+                const draggedRect = evt?.draggedRect || evt?.dragged?.getBoundingClientRect?.();
 
                 const hasMeaningfulOverlap = (targetRect) => {
                     if (!draggedRect || !targetRect) return false;
+
+                    const pointerInsideTarget = typeof this.dragState.pointerX === 'number'
+                        && typeof this.dragState.pointerY === 'number'
+                        && this.dragState.pointerX >= targetRect.left
+                        && this.dragState.pointerX <= targetRect.right
+                        && this.dragState.pointerY >= targetRect.top
+                        && this.dragState.pointerY <= targetRect.bottom;
+
+                    if (pointerInsideTarget) return true;
+
                     const overlapWidth = Math.max(0, Math.min(draggedRect.right, targetRect.right) - Math.max(draggedRect.left, targetRect.left));
                     const overlapHeight = Math.max(0, Math.min(draggedRect.bottom, targetRect.bottom) - Math.max(draggedRect.top, targetRect.top));
                     const overlapArea = overlapWidth * overlapHeight;
@@ -1714,7 +1724,7 @@
                     const targetArea = Math.max(1, targetRect.width * targetRect.height);
                     const overlapAgainstSmaller = overlapArea / Math.min(draggedArea, targetArea);
 
-                    return overlapAgainstSmaller >= 0.35;
+                    return overlapAgainstSmaller >= 0.18;
                 };
 
                 const hoveredKanbanColumn = currentView === 'kanban'
