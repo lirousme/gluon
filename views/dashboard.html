@@ -2370,6 +2370,7 @@
                         childDirectories.forEach(d => this.state.directoryCache.set(Number(d.id), d));
 
                         container.innerHTML = childDirectories.map(sub => {
+                            const canEditSub = this.canEditDirectory(sub);
                             let itemBorder = 'border-slate-600';
                             if(sub.type === 1) itemBorder = 'border-indigo-500/50';
                             if(sub.type === 2) itemBorder = 'border-emerald-500/50';
@@ -2389,7 +2390,7 @@
                                     ${subScore.iconHtml.replace('></i>', ' text-sm></i>')}
                                     <span class="text-sm text-slate-200 truncate font-medium">${this.escapeHTML(sub.name)} ${sub.type === 4 ? `${subScore.percentHtml}<span class="text-[10px] text-slate-400 ml-1">${subScore.totalCards} ${subScore.totalCards === 1 ? 'card' : 'cards'}</span>${subScore.isBookDeck ? `<span class="text-[10px] text-slate-400 ml-1">R:${subScore.rank}</span>` : ''}` : ''} ${repeatIcon}</span>
                                 </div>
-                                ${canEdit ? `<button onclick="event.stopPropagation(); app.openModal(${sub.id})" class="relative z-10 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 sm:opacity-0 group-hover:opacity-100 transition-all border border-slate-600 cog-btn"><i class="fa-solid fa-cog text-xs"></i></button>` : ''}
+                                ${canEditSub ? `<button onclick="event.stopPropagation(); app.openModal(${sub.id})" class="relative z-10 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 sm:opacity-0 group-hover:opacity-100 transition-all border border-slate-600 cog-btn"><i class="fa-solid fa-cog text-xs"></i></button>` : ''}
                             </div>`;
                         }).join('');
                     } else {
