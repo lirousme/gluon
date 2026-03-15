@@ -88,6 +88,17 @@ function createDetachedOccurrence(PDO $pdo, int $directoryId, int $userId, strin
         WHERE id = ? AND user_id = ?"
     );
     $stmtClone->execute([$startDate, $endDate, $directoryId, $userId]);
+
+    $detachedId = (int)$pdo->lastInsertId();
+    if ($detachedId > 0) {
+        $stmtCloneTags = $pdo->prepare(
+            "INSERT IGNORE INTO directory_tag_links (directory_id, tag_id)
+             SELECT ?, tag_id
+             FROM directory_tag_links
+             WHERE directory_id = ?"
+        );
+        $stmtCloneTags->execute([$detachedId, $directoryId]);
+    }
 }
 
 function addIntervalByType(DateTime $date, string $type, int $interval): DateTime {
@@ -254,6 +265,8 @@ function ensureScheduleTagTables(PDO $pdo): void {
 }
 
 if ($action === 'update_times') {
+    ensureScheduleTagTables($pdo);
+
     $id = (int)($input['id'] ?? 0);
     $start_date = !empty($input['start_date']) ? $input['start_date'] : null;
     $end_date = !empty($input['end_date']) ? $input['end_date'] : null;
