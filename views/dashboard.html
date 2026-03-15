@@ -1654,8 +1654,7 @@
                             this.dragState.pointerX = null;
                             this.dragState.pointerY = null;
                         },
-                        onMove: (evt) => this.trackRootDropTarget(evt, currentView),
-                        onEnd: (evt) => this.handleRootDragEnd(evt, currentView)
+                        onEnd: () => this.handleRootDragEnd()
                     }));
                 }
 
@@ -1814,11 +1813,14 @@
                     }
                 }
 
+            async handleRootDragEnd() {
                 this.dragState.rootDropParentId = null;
                 this.dragState.pointerX = null;
                 this.dragState.pointerY = null;
                 await this.saveNewOrder();
             },
+
+
 
             async saveInnerOrder(columnEl, newParentId) {
                 if (!columnEl) return;
