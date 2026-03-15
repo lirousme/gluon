@@ -1688,66 +1688,64 @@
                 return Number(dir.type) === 3 ? dir.target_id : dir.id;
             },
 
+            isPointerInsideElement(evt, element) {
+                if (!element) return false;
+                const pointerEvt = evt?.originalEvent;
+                const clientX = typeof pointerEvt?.clientX === 'number' ? pointerEvt.clientX : this.dragState.pointerX;
+                const clientY = typeof pointerEvt?.clientY === 'number' ? pointerEvt.clientY : this.dragState.pointerY;
+                if (typeof clientX !== 'number' || typeof clientY !== 'number') return false;
+                const rect = element.getBoundingClientRect();
+                return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+            },
+
+            resolveRootDropParentId(evt, currentView) {
+                const draggedEl = evt?.dragged || evt?.item || null;
+                const draggedId = Number(draggedEl?.getAttribute?.('data-id'));
+                if (!draggedId || this.getCurrentParentId() !== null) return null;
+
+                const hoveredKanbanColumn = currentView === 'kanban'
+                    ? this.getDropElementFromEvent(evt, '.kanban-scroll', draggedEl)
+                    : null;
+                if (hoveredKanbanColumn) {
+                    const columnTargetParentId = Number(hoveredKanbanColumn.getAttribute('data-parent-id'));
+                    if (Number.isFinite(columnTargetParentId) && columnTargetParentId > 0 && columnTargetParentId !== draggedId) {
+                        return columnTargetParentId;
+                    }
+                }
+
+                const hoveredRootCard = this.getDropElementFromEvent(evt, '.draggable-item', draggedEl);
+                if (hoveredRootCard) {
+                    const hoveredRootId = Number(hoveredRootCard.getAttribute('data-id'));
+                    const resolvedTargetId = this.getDirectoryDropTargetId(hoveredRootId);
+                    if (resolvedTargetId && resolvedTargetId !== draggedId) return resolvedTargetId;
+                }
+
+                const relatedRootId = Number(evt?.related?.getAttribute?.('data-id'));
+                if (relatedRootId && relatedRootId !== draggedId) {
+                    const relatedTargetId = this.getDirectoryDropTargetId(relatedRootId);
+                    if (relatedTargetId && relatedTargetId !== draggedId) return relatedTargetId;
+                }
+
+                return null;
+            },
+
             trackRootDropTarget(evt, currentView) {
-                const draggedId = Number(evt?.dragged?.getAttribute('data-id'));
                 const pointerEvt = evt?.originalEvent;
                 if (typeof pointerEvt?.clientX === 'number' && typeof pointerEvt?.clientY === 'number') {
                     this.dragState.pointerX = pointerEvt.clientX;
                     this.dragState.pointerY = pointerEvt.clientY;
                 }
 
-                if (!draggedId || this.getCurrentParentId() !== null) {
+                const resolvedTargetId = this.resolveRootDropParentId(evt, currentView);
+                if (resolvedTargetId) {
+                    this.dragState.rootDropParentId = resolvedTargetId;
+                    return true;
+                }
+
+                const wrapper = document.getElementById('sortable-wrapper');
+                if (this.isPointerInsideElement(evt, wrapper)) {
                     this.dragState.rootDropParentId = null;
-                    return true;
                 }
-
-                const draggedRect = evt?.draggedRect;
-
-                const hasMeaningfulOverlap = (targetRect) => {
-                    if (!draggedRect || !targetRect) return false;
-                    const overlapWidth = Math.max(0, Math.min(draggedRect.right, targetRect.right) - Math.max(draggedRect.left, targetRect.left));
-                    const overlapHeight = Math.max(0, Math.min(draggedRect.bottom, targetRect.bottom) - Math.max(draggedRect.top, targetRect.top));
-                    const overlapArea = overlapWidth * overlapHeight;
-                    if (!overlapArea) return false;
-
-                    const draggedArea = Math.max(1, draggedRect.width * draggedRect.height);
-                    const targetArea = Math.max(1, targetRect.width * targetRect.height);
-                    const overlapAgainstSmaller = overlapArea / Math.min(draggedArea, targetArea);
-
-                    return overlapAgainstSmaller >= 0.35;
-                };
-
-                const hoveredKanbanColumn = currentView === 'kanban'
-                    ? this.getDropElementFromEvent(evt, '.kanban-scroll', evt?.dragged)
-                    : null;
-
-                if (hoveredKanbanColumn) {
-                    const hoveredColumnRect = hoveredKanbanColumn.getBoundingClientRect();
-                    if (!hasMeaningfulOverlap(hoveredColumnRect)) {
-                        this.dragState.rootDropParentId = null;
-                        return true;
-                    }
-
-                    const columnTargetParentId = Number(hoveredKanbanColumn.getAttribute('data-parent-id'));
-                    this.dragState.rootDropParentId = Number.isFinite(columnTargetParentId) && columnTargetParentId > 0
-                        ? columnTargetParentId
-                        : null;
-                    return true;
-                }
-
-                const relatedRootId = Number(evt?.related?.getAttribute?.('data-id'));
-                if (relatedRootId && relatedRootId !== draggedId) {
-                    const relatedRect = evt?.relatedRect || evt?.related?.getBoundingClientRect?.();
-                    if (!hasMeaningfulOverlap(relatedRect)) {
-                        this.dragState.rootDropParentId = null;
-                        return true;
-                    }
-
-                    this.dragState.rootDropParentId = this.getDirectoryDropTargetId(relatedRootId);
-                    return true;
-                }
-
-                this.dragState.rootDropParentId = null;
                 return true;
             },
 
@@ -1791,17 +1789,7 @@
                 const rootId = this.getCurrentParentId();
                 if (rootId === null) {
                     const draggedId = Number(evt?.item?.getAttribute('data-id'));
-                    const fallbackKanbanColumn = currentView === 'kanban'
-                        ? this.getDropElementFromEvent(evt, '.kanban-scroll', evt?.item)
-                        : null;
-
-                    const fallbackDir = this.getDropElementFromEvent(evt, '.draggable-item', evt?.item);
-                    const fallbackRootId = fallbackDir ? Number(fallbackDir.getAttribute('data-id')) : null;
-                    const fallbackTargetParentId = fallbackKanbanColumn
-                        ? Number(fallbackKanbanColumn.getAttribute('data-parent-id'))
-                        : (fallbackRootId ? this.getDirectoryDropTargetId(fallbackRootId) : null);
-
-                    const targetParentId = this.dragState.rootDropParentId || fallbackTargetParentId;
+                    const targetParentId = this.dragState.rootDropParentId || this.resolveRootDropParentId(evt, currentView);
                     this.dragState.rootDropParentId = null;
 
                     if (draggedId && targetParentId && draggedId !== targetParentId) {
