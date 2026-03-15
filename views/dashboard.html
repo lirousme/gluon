@@ -1688,8 +1688,8 @@
                 return Number(dir.type) === 3 ? dir.target_id : dir.id;
             },
 
-            trackRootDropTarget(evt, currentView) {
-                const draggedId = Number(evt?.dragged?.getAttribute('data-id'));
+            isPointerInsideElement(evt, element) {
+                if (!element) return false;
                 const pointerEvt = evt?.originalEvent;
                 if (typeof pointerEvt?.clientX === 'number' && typeof pointerEvt?.clientY === 'number') {
                     this.dragState.pointerX = pointerEvt.clientX;
