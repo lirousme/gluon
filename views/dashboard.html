@@ -1683,6 +1683,28 @@
                 this.state.relocateHoverTargetId = null;
             },
 
+            getRelocateDropTargetFromEvent(evt, draggedId) {
+                const originalEvent = evt?.originalEvent;
+                const pointTarget = originalEvent
+                    ? document.elementFromPoint(originalEvent.clientX, originalEvent.clientY)
+                    : null;
+
+                let candidate = pointTarget ? pointTarget.closest('.draggable-item') : null;
+                if (!candidate && evt?.related) candidate = evt.related.closest('.draggable-item');
+                if (!candidate) return null;
+
+                const relatedId = candidate.getAttribute('data-id');
+                if (!relatedId || String(relatedId) === String(draggedId)) return null;
+
+                const targetItem = this.state.directoryCache.get(Number(relatedId));
+                if (!targetItem || ![0, 3].includes(Number(targetItem.type))) return null;
+
+                const targetId = Number(targetItem.type) === 3 ? targetItem.target_id : targetItem.id;
+                if (!targetId) return null;
+
+                return { candidate, targetId, targetLabel: targetItem.name || 'Diretório' };
+            },
+
             toggleRelocateMode() {
                 if (this.isVisitingProfile()) return;
                 this.state.relocateMode = !this.state.relocateMode;
@@ -1746,18 +1768,18 @@
                 if (wrapper) {
                     if (this.state.relocateMode) {
                         this.sortableInstances.push(new Sortable(wrapper, {
-                            animation: currentView === 'grid' ? 110 : 170,
+                            animation: currentView === 'grid' ? 70 : 120,
                             delay: 0,
                             delayOnTouchOnly: false,
                             touchStartThreshold: 4,
                             ghostClass: 'sortable-ghost-relocate',
                             dragClass: 'sortable-drag',
-                            forceFallback: true,
+                            forceFallback: currentView !== 'grid',
                             fallbackOnBody: true,
-                            fallbackTolerance: 6,
+                            fallbackTolerance: currentView === 'grid' ? 2 : 6,
                             scroll: true,
-                            scrollSensitivity: currentView === 'grid' ? 140 : 90,
-                            scrollSpeed: currentView === 'grid' ? 24 : 16,
+                            scrollSensitivity: currentView === 'grid' ? 95 : 90,
+                            scrollSpeed: currentView === 'grid' ? 18 : 16,
                             sort: false,
                             direction: currentView === 'kanban' ? 'horizontal' : (currentView === 'list' ? 'vertical' : undefined),
                             handle: currentView === 'kanban' ? '.kanban-col-handle' : undefined,
@@ -1768,40 +1790,38 @@
                             onMove: (evt) => {
                                 const draggedEl = evt.dragged || evt.item;
                                 const draggedId = draggedEl ? draggedEl.getAttribute('data-id') : this.state.relocateDraggedId;
-                                const related = evt.related ? evt.related.closest('.draggable-item') : null;
-                                if (!related || !draggedId) { this.clearRelocateHover(); return false; }
+                                if (!draggedId) { this.clearRelocateHover(); return false; }
 
                                 const draggedItem = this.state.directoryCache.get(Number(draggedId));
                                 if (!draggedItem || ![0, 3].includes(Number(draggedItem.type))) { this.clearRelocateHover(); return false; }
 
-                                const relatedId = related.getAttribute('data-id');
-                                if (!relatedId || relatedId === draggedId) { this.clearRelocateHover(); return false; }
-
-                                const targetItem = this.state.directoryCache.get(Number(relatedId));
-                                if (!targetItem || ![0, 3].includes(Number(targetItem.type))) { this.clearRelocateHover(); return false; }
+                                const dropTarget = this.getRelocateDropTargetFromEvent(evt, draggedId);
+                                if (!dropTarget) { this.clearRelocateHover(); return false; }
 
                                 const draggedRealId = Number(draggedItem.type) === 3 ? draggedItem.target_id : draggedItem.id;
-                                const targetId = Number(targetItem.type) === 3 ? targetItem.target_id : targetItem.id;
+                                const targetId = dropTarget.targetId;
                                 if (!targetId || !draggedRealId || String(targetId) === String(draggedRealId)) { this.clearRelocateHover(); return false; }
 
                                 this.clearRelocateHover();
-                                related.classList.add('relocate-drop-hover');
-                                related.setAttribute('data-relocate-label', targetItem.name || 'Diretório');
+                                dropTarget.candidate.classList.add('relocate-drop-hover');
+                                dropTarget.candidate.setAttribute('data-relocate-label', dropTarget.targetLabel);
                                 this.state.relocateHoverTargetId = targetId;
                                 return false;
                             },
                             onEnd: async (evt) => {
                                 const draggedId = evt.item ? evt.item.getAttribute('data-id') : this.state.relocateDraggedId;
-                                const targetId = this.state.relocateHoverTargetId;
+                                const draggedItem = draggedId ? this.state.directoryCache.get(Number(draggedId)) : null;
+                                const draggedRealId = draggedItem ? (Number(draggedItem.type) === 3 ? draggedItem.target_id : draggedItem.id) : null;
+                                const targetId = this.state.relocateHoverTargetId || this.getRelocateDropTargetFromEvent(evt, draggedId)?.targetId;
                                 this.clearRelocateHover();
                                 this.state.relocateDraggedId = null;
-                                if (!draggedId || !targetId) return;
-                                await this.relocateDirectory(draggedId, targetId);
+                                if (!draggedRealId || !targetId || String(draggedRealId) === String(targetId)) return;
+                                await this.relocateDirectory(draggedRealId, targetId);
                             }
                         }));
                     } else {
                         this.sortableInstances.push(new Sortable(wrapper, {
-                            animation: currentView === 'grid' ? 120 : 220, delay: currentView === 'grid' ? 0 : 80, delayOnTouchOnly: currentView !== 'grid', touchStartThreshold: 4, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', forceFallback: true, fallbackOnBody: true, fallbackTolerance: 6, scroll: true, scrollSensitivity: currentView === 'grid' ? 130 : 80, scrollSpeed: currentView === 'grid' ? 24 : 15,
+                            animation: currentView === 'grid' ? 80 : 220, delay: currentView === 'grid' ? 0 : 80, delayOnTouchOnly: currentView !== 'grid', touchStartThreshold: 4, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', forceFallback: currentView !== 'grid', fallbackOnBody: true, fallbackTolerance: currentView === 'grid' ? 2 : 6, scroll: true, scrollSensitivity: currentView === 'grid' ? 95 : 80, scrollSpeed: currentView === 'grid' ? 18 : 15,
                             direction: currentView === 'kanban' ? 'horizontal' : (currentView === 'list' ? 'vertical' : undefined),
                             handle: currentView === 'kanban' ? '.kanban-col-handle' : undefined,
                             swapThreshold: 0.65,
