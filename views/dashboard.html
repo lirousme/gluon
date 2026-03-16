@@ -51,6 +51,7 @@
         .reorder-active.snap-x { scroll-snap-type: none !important; }
         .reorder-active .snap-start { scroll-snap-align: none !important; }
         .sortable-ghost { opacity: 0.3; background-color: #1e293b !important; border: 2px dashed #22c55e !important; }
+        .sortable-ghost-relocate { opacity: 0.35; background-color: #1e293b !important; border: 2px dashed #3b82f6 !important; }
         .sortable-drag { opacity: 1 !important; cursor: grabbing !important; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important; }
 
         .relocate-active .draggable-item { border-color: #3b82f6 !important; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.12); }
@@ -628,6 +629,7 @@
                 reorderMode: false,
                 relocateMode: false,
                 relocateHoverTargetId: null,
+                relocateDraggedId: null,
                 audioGeneration: {
                     running: false,
                     stopRequested: false,
@@ -1744,25 +1746,28 @@
                 if (wrapper) {
                     if (this.state.relocateMode) {
                         this.sortableInstances.push(new Sortable(wrapper, {
-                            animation: 200,
-                            delay: 120,
-                            delayOnTouchOnly: true,
-                            ghostClass: 'sortable-ghost',
+                            animation: currentView === 'grid' ? 110 : 170,
+                            delay: 0,
+                            delayOnTouchOnly: false,
+                            touchStartThreshold: 4,
+                            ghostClass: 'sortable-ghost-relocate',
                             dragClass: 'sortable-drag',
                             forceFallback: true,
                             fallbackOnBody: true,
+                            fallbackTolerance: 6,
                             scroll: true,
-                            scrollSensitivity: 80,
-                            scrollSpeed: 15,
+                            scrollSensitivity: currentView === 'grid' ? 140 : 90,
+                            scrollSpeed: currentView === 'grid' ? 24 : 16,
                             sort: false,
                             direction: currentView === 'kanban' ? 'horizontal' : (currentView === 'list' ? 'vertical' : undefined),
                             handle: currentView === 'kanban' ? '.kanban-col-handle' : undefined,
-                            onStart: () => {
+                            onStart: (evt) => {
                                 this.clearRelocateHover();
+                                this.state.relocateDraggedId = evt.item ? evt.item.getAttribute('data-id') : null;
                             },
                             onMove: (evt) => {
                                 const draggedEl = evt.dragged || evt.item;
-                                const draggedId = draggedEl ? draggedEl.getAttribute('data-id') : null;
+                                const draggedId = draggedEl ? draggedEl.getAttribute('data-id') : this.state.relocateDraggedId;
                                 const related = evt.related ? evt.related.closest('.draggable-item') : null;
                                 if (!related || !draggedId) { this.clearRelocateHover(); return false; }
 
@@ -1775,8 +1780,9 @@
                                 const targetItem = this.state.directoryCache.get(Number(relatedId));
                                 if (!targetItem || ![0, 3].includes(Number(targetItem.type))) { this.clearRelocateHover(); return false; }
 
+                                const draggedRealId = Number(draggedItem.type) === 3 ? draggedItem.target_id : draggedItem.id;
                                 const targetId = Number(targetItem.type) === 3 ? targetItem.target_id : targetItem.id;
-                                if (!targetId || String(targetId) === String(draggedId)) { this.clearRelocateHover(); return false; }
+                                if (!targetId || !draggedRealId || String(targetId) === String(draggedRealId)) { this.clearRelocateHover(); return false; }
 
                                 this.clearRelocateHover();
                                 related.classList.add('relocate-drop-hover');
@@ -1785,16 +1791,17 @@
                                 return false;
                             },
                             onEnd: async (evt) => {
-                                const draggedId = evt.item ? evt.item.getAttribute('data-id') : null;
+                                const draggedId = evt.item ? evt.item.getAttribute('data-id') : this.state.relocateDraggedId;
                                 const targetId = this.state.relocateHoverTargetId;
                                 this.clearRelocateHover();
+                                this.state.relocateDraggedId = null;
                                 if (!draggedId || !targetId) return;
                                 await this.relocateDirectory(draggedId, targetId);
                             }
                         }));
                     } else {
                         this.sortableInstances.push(new Sortable(wrapper, {
-                            animation: 250, delay: 150, delayOnTouchOnly: true, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', forceFallback: true, fallbackOnBody: true, scroll: true, scrollSensitivity: 80, scrollSpeed: 15,       
+                            animation: currentView === 'grid' ? 120 : 220, delay: currentView === 'grid' ? 0 : 80, delayOnTouchOnly: currentView !== 'grid', touchStartThreshold: 4, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', forceFallback: true, fallbackOnBody: true, fallbackTolerance: 6, scroll: true, scrollSensitivity: currentView === 'grid' ? 130 : 80, scrollSpeed: currentView === 'grid' ? 24 : 15,
                             direction: currentView === 'kanban' ? 'horizontal' : (currentView === 'list' ? 'vertical' : undefined),
                             handle: currentView === 'kanban' ? '.kanban-col-handle' : undefined,
                             swapThreshold: 0.65,
