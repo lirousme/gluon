@@ -56,7 +56,32 @@
         .relocate-active .draggable-item { border-color: #3b82f6 !important; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.12); }
         .relocate-active .draggable-item { cursor: grab !important; }
         .relocate-active .draggable-item:active { cursor: grabbing !important; }
-        .relocate-drop-hover { border-color: #60a5fa !important; box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.45), 0 12px 20px -8px rgba(59, 130, 246, 0.55) !important; background-color: rgba(30, 58, 138, 0.35) !important; }
+        .relocate-drop-hover {
+            border-color: #60a5fa !important;
+            box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.55), 0 16px 28px -12px rgba(59, 130, 246, 0.7) !important;
+            background-color: rgba(30, 64, 175, 0.28) !important;
+            position: relative;
+        }
+        .relocate-drop-hover::after {
+            content: 'Solte para mover para: ' attr(data-relocate-label);
+            position: absolute;
+            left: 0.5rem;
+            right: 0.5rem;
+            bottom: 0.5rem;
+            z-index: 30;
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-align: center;
+            color: #dbeafe;
+            background: rgba(30, 58, 138, 0.9);
+            border: 1px solid rgba(96, 165, 250, 0.75);
+            border-radius: 0.5rem;
+            padding: 0.2rem 0.45rem;
+            pointer-events: none;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
 
         .icon-gradient {
             -webkit-background-clip: text;
@@ -1649,7 +1674,10 @@
             },
 
             clearRelocateHover() {
-                document.querySelectorAll('.relocate-drop-hover').forEach(el => el.classList.remove('relocate-drop-hover'));
+                document.querySelectorAll('.relocate-drop-hover').forEach(el => {
+                    el.classList.remove('relocate-drop-hover');
+                    el.removeAttribute('data-relocate-label');
+                });
                 this.state.relocateHoverTargetId = null;
             },
 
@@ -1678,11 +1706,11 @@
             async relocateDirectory(draggedId, targetId) {
                 if (!draggedId || !targetId || String(draggedId) === String(targetId)) return;
                 const response = await this.api('directories', 'reorder', { order: [String(draggedId)], parent_id: parseInt(targetId, 10) });
-                if (response) {
+                if (response && response.status === 'success') {
                     this.showToast(response.message || 'Diretório realocado com sucesso.', 'success');
                     await this.fetchDirectories();
                 } else {
-                    this.showToast('Não foi possível realocar este diretório.', 'error');
+                    this.showToast(response?.message || 'Não foi possível realocar este diretório.', 'error');
                 }
             },
 
@@ -1729,11 +1757,17 @@
                             sort: false,
                             direction: currentView === 'kanban' ? 'horizontal' : (currentView === 'list' ? 'vertical' : undefined),
                             handle: currentView === 'kanban' ? '.kanban-col-handle' : undefined,
-                            onStart: () => this.clearRelocateHover(),
+                            onStart: () => {
+                                this.clearRelocateHover();
+                            },
                             onMove: (evt) => {
-                                const related = evt.related;
-                                const draggedId = evt.dragged ? evt.dragged.getAttribute('data-id') : null;
+                                const draggedEl = evt.dragged || evt.item;
+                                const draggedId = draggedEl ? draggedEl.getAttribute('data-id') : null;
+                                const related = evt.related ? evt.related.closest('.draggable-item') : null;
                                 if (!related || !draggedId) { this.clearRelocateHover(); return false; }
+
+                                const draggedItem = this.state.directoryCache.get(Number(draggedId));
+                                if (!draggedItem || ![0, 3].includes(Number(draggedItem.type))) { this.clearRelocateHover(); return false; }
 
                                 const relatedId = related.getAttribute('data-id');
                                 if (!relatedId || relatedId === draggedId) { this.clearRelocateHover(); return false; }
@@ -1741,9 +1775,13 @@
                                 const targetItem = this.state.directoryCache.get(Number(relatedId));
                                 if (!targetItem || ![0, 3].includes(Number(targetItem.type))) { this.clearRelocateHover(); return false; }
 
+                                const targetId = Number(targetItem.type) === 3 ? targetItem.target_id : targetItem.id;
+                                if (!targetId || String(targetId) === String(draggedId)) { this.clearRelocateHover(); return false; }
+
                                 this.clearRelocateHover();
                                 related.classList.add('relocate-drop-hover');
-                                this.state.relocateHoverTargetId = Number(targetItem.type) === 3 ? targetItem.target_id : targetItem.id;
+                                related.setAttribute('data-relocate-label', targetItem.name || 'Diretório');
+                                this.state.relocateHoverTargetId = targetId;
                                 return false;
                             },
                             onEnd: async (evt) => {
