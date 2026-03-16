@@ -1700,6 +1700,28 @@
                 return pointerX >= rect.left && pointerX <= rect.right && pointerY >= rect.top && pointerY <= rect.bottom;
             },
 
+            isPointerInsideNestZone(evt, element, currentView) {
+                if (!element) return false;
+
+                const { x: pointerX, y: pointerY } = this.getPointerCoordinates(evt);
+                if (typeof pointerX !== 'number' || typeof pointerY !== 'number') return false;
+
+                const rect = element.getBoundingClientRect();
+                if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+
+                const horizontalPadding = rect.width * 0.22;
+                const verticalPadding = currentView === 'list'
+                    ? rect.height * 0.30
+                    : rect.height * 0.22;
+
+                const zoneLeft = rect.left + horizontalPadding;
+                const zoneRight = rect.right - horizontalPadding;
+                const zoneTop = rect.top + verticalPadding;
+                const zoneBottom = rect.bottom - verticalPadding;
+
+                return pointerX >= zoneLeft && pointerX <= zoneRight && pointerY >= zoneTop && pointerY <= zoneBottom;
+            },
+
             resolveRootDropParentId(evt, currentView) {
                 const draggedEl = evt?.dragged || evt?.item;
                 const draggedId = Number(draggedEl?.getAttribute?.('data-id'));
@@ -1740,7 +1762,12 @@
                     : null;
                 if (hoveredKanbanColumn) {
                     const columnTargetParentId = Number(hoveredKanbanColumn.getAttribute('data-parent-id'));
-                    if (Number.isFinite(columnTargetParentId) && columnTargetParentId > 0 && columnTargetParentId !== draggedId) {
+                    if (
+                        Number.isFinite(columnTargetParentId)
+                        && columnTargetParentId > 0
+                        && columnTargetParentId !== draggedId
+                        && this.isPointerInsideNestZone(evt, hoveredKanbanColumn, currentView)
+                    ) {
                         return columnTargetParentId;
                     }
                 }
@@ -1748,7 +1775,7 @@
                 const hoveredRootCard = this.getDropElementFromEvent(evt, '.draggable-item', draggedEl);
                 if (hoveredRootCard) {
                     const targetRect = hoveredRootCard.getBoundingClientRect();
-                    if (hasMeaningfulOverlap(targetRect) || this.isPointerInsideElement(evt, hoveredRootCard)) {
+                    if ((hasMeaningfulOverlap(targetRect) || this.isPointerInsideElement(evt, hoveredRootCard)) && this.isPointerInsideNestZone(evt, hoveredRootCard, currentView)) {
                         const hoveredRootId = Number(hoveredRootCard.getAttribute('data-id'));
                         const resolvedTargetId = this.getDirectoryDropTargetId(hoveredRootId);
                         if (resolvedTargetId && resolvedTargetId !== draggedId) return resolvedTargetId;
@@ -1759,7 +1786,12 @@
                 if (relatedRootId && relatedRootId !== draggedId) {
                     const relatedTargetId = this.getDirectoryDropTargetId(relatedRootId);
                     const relatedRect = evt?.relatedRect || evt?.related?.getBoundingClientRect?.();
-                    if (relatedTargetId && relatedTargetId !== draggedId && (hasMeaningfulOverlap(relatedRect) || this.isPointerInsideElement(evt, evt.related))) {
+                    if (
+                        relatedTargetId
+                        && relatedTargetId !== draggedId
+                        && (hasMeaningfulOverlap(relatedRect) || this.isPointerInsideElement(evt, evt.related))
+                        && this.isPointerInsideNestZone(evt, evt.related, currentView)
+                    ) {
                         return relatedTargetId;
                     }
                 }
