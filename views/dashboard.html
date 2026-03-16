@@ -89,8 +89,7 @@
             position: relative;
             z-index: 20;
         }
-        .relocate-drop-hover::after {
-            content: 'Mover para cá';
+        .relocate-drop-tag {
             position: absolute;
             left: 0.5rem;
             right: 0.5rem;
@@ -1750,12 +1749,32 @@
                     el.classList.remove('relocate-drop-hover');
                     el.removeAttribute('data-relocate-label');
                     el.removeAttribute('data-relocate-grid-target');
+                    el.querySelectorAll('.relocate-drop-tag').forEach(tag => tag.remove());
                     el.style.removeProperty('background-color');
                     el.style.removeProperty('border-color');
                     el.style.removeProperty('box-shadow');
                 });
                 this.state.relocateHoverTargetId = null;
                 document.body.classList.remove('relocate-dragging');
+            },
+
+            applyRelocateHover(candidate, targetLabel = 'Diretório') {
+                if (!candidate || !this.state.relocateMode) return;
+                candidate.classList.add('relocate-drop-hover');
+                candidate.querySelectorAll('.relocate-drop-tag').forEach(tag => tag.remove());
+
+                const tag = document.createElement('div');
+                tag.className = 'relocate-drop-tag';
+                tag.textContent = 'Mover para cá';
+                tag.setAttribute('aria-label', `Mover para ${targetLabel}`);
+                candidate.appendChild(tag);
+
+                if (this.getCurrentView() === 'grid') {
+                    candidate.setAttribute('data-relocate-grid-target', '1');
+                    candidate.style.setProperty('background-color', 'rgba(22, 163, 74, 0.95)', 'important');
+                    candidate.style.setProperty('border-color', '#bbf7d0', 'important');
+                    candidate.style.setProperty('box-shadow', '0 0 0 4px rgba(187, 247, 208, 0.95), 0 0 36px rgba(34, 197, 94, 0.9), 0 30px 42px -16px rgba(20, 83, 45, 1)', 'important');
+                }
             },
 
             getRelocateDropTargetFromEvent(evt, draggedId, draggedEl = null) {
@@ -1953,13 +1972,7 @@
                                 if (!targetId || !draggedRealId || String(targetId) === String(draggedRealId)) { this.clearRelocateHover(); return false; }
 
                                 this.clearRelocateHover();
-                                dropTarget.candidate.classList.add('relocate-drop-hover');
-                                if (this.getCurrentView() === 'grid') {
-                                    dropTarget.candidate.setAttribute('data-relocate-grid-target', '1');
-                                    dropTarget.candidate.style.setProperty('background-color', 'rgba(22, 163, 74, 0.95)', 'important');
-                                    dropTarget.candidate.style.setProperty('border-color', '#bbf7d0', 'important');
-                                    dropTarget.candidate.style.setProperty('box-shadow', '0 0 0 4px rgba(187, 247, 208, 0.95), 0 0 36px rgba(34, 197, 94, 0.9), 0 30px 42px -16px rgba(20, 83, 45, 1)', 'important');
-                                }
+                                this.applyRelocateHover(dropTarget.candidate, dropTarget.targetLabel);
 
                                 this.state.relocateHoverTargetId = targetId;
                                 return false;
