@@ -58,10 +58,12 @@
         .relocate-active .draggable-item { cursor: grab !important; }
         .relocate-active .draggable-item:active { cursor: grabbing !important; }
         .relocate-drop-hover {
-            border-color: #60a5fa !important;
-            box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.55), 0 16px 28px -12px rgba(59, 130, 246, 0.7) !important;
-            background-color: rgba(30, 64, 175, 0.28) !important;
+            border-color: #38bdf8 !important;
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.72), inset 0 0 0 1px rgba(191, 219, 254, 0.55), 0 20px 34px -14px rgba(37, 99, 235, 0.92) !important;
+            background-color: rgba(30, 64, 175, 0.42) !important;
             position: relative;
+            z-index: 2;
+            transform: translateY(-1px);
         }
         .relocate-drop-hover::after {
             content: 'Solte para mover para: ' attr(data-relocate-label);
@@ -73,9 +75,9 @@
             font-size: 0.72rem;
             font-weight: 600;
             text-align: center;
-            color: #dbeafe;
-            background: rgba(30, 58, 138, 0.9);
-            border: 1px solid rgba(96, 165, 250, 0.75);
+            color: #eff6ff;
+            background: rgba(30, 64, 175, 0.94);
+            border: 1px solid rgba(125, 211, 252, 0.95);
             border-radius: 0.5rem;
             padding: 0.2rem 0.45rem;
             pointer-events: none;
@@ -1800,7 +1802,7 @@
                             touchStartThreshold: 4,
                             ghostClass: 'sortable-ghost-relocate',
                             dragClass: 'sortable-drag',
-                            forceFallback: currentView !== 'grid',
+                            forceFallback: true,
                             fallbackOnBody: true,
                             fallbackTolerance: currentView === 'grid' ? 2 : 6,
                             scroll: true,
