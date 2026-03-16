@@ -51,19 +51,23 @@
         .reorder-active.snap-x { scroll-snap-type: none !important; }
         .reorder-active .snap-start { scroll-snap-align: none !important; }
         .sortable-ghost { opacity: 0.3; background-color: #1e293b !important; border: 2px dashed #22c55e !important; }
-        .sortable-ghost-relocate { opacity: 0.35; background-color: #1e293b !important; border: 2px dashed #3b82f6 !important; }
+        .sortable-ghost-relocate { opacity: 0.4; background-color: rgba(30, 58, 138, 0.35) !important; border: 2px dashed #60a5fa !important; }
         .sortable-drag { opacity: 1 !important; cursor: grabbing !important; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important; }
 
         .relocate-active .draggable-item { border-color: #3b82f6 !important; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.12); }
         .relocate-active .draggable-item { cursor: grab !important; }
         .relocate-active .draggable-item:active { cursor: grabbing !important; }
+        .relocate-active .sortable-chosen {
+            border-color: #60a5fa !important;
+            box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.6), 0 12px 24px -12px rgba(37, 99, 235, 0.7) !important;
+        }
         .relocate-drop-hover {
-            border-color: #38bdf8 !important;
-            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.72), inset 0 0 0 1px rgba(191, 219, 254, 0.55), 0 20px 34px -14px rgba(37, 99, 235, 0.92) !important;
+            border-color: #93c5fd !important;
+            box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.95), 0 20px 32px -14px rgba(30, 64, 175, 0.85) !important;
             background-color: rgba(30, 64, 175, 0.42) !important;
             position: relative;
-            z-index: 2;
-            transform: translateY(-1px);
+            transform: translateY(-2px);
+            transition: box-shadow 0.12s ease, background-color 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
         }
         .relocate-drop-hover::after {
             content: 'Solte para mover para: ' attr(data-relocate-label);
@@ -75,15 +79,16 @@
             font-size: 0.72rem;
             font-weight: 600;
             text-align: center;
-            color: #eff6ff;
-            background: rgba(30, 64, 175, 0.94);
-            border: 1px solid rgba(125, 211, 252, 0.95);
+            color: #dbeafe;
+            background: rgba(30, 64, 175, 0.95);
+            border: 1px solid rgba(191, 219, 254, 0.95);
             border-radius: 0.5rem;
             padding: 0.2rem 0.45rem;
             pointer-events: none;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            box-shadow: 0 6px 14px rgba(2, 132, 199, 0.45);
         }
 
         .icon-gradient {
