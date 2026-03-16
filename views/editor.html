@@ -56,24 +56,42 @@
         
         <div class="flex items-center gap-3">
             <div id="saveStatus" class="text-xs text-slate-500 hidden sm:block">Salvo na nuvem</div>
-            
-            <select id="langSelect" onchange="editorApp.changeLanguage()" class="bg-slate-800 border border-slate-600 text-slate-300 text-xs rounded px-2 py-1.5 outline-none focus:border-gluon-primary">
-                <option value="javascript">JavaScript</option>
-                <option value="htmlmixed">HTML</option>
-                <option value="css">CSS</option>
-                <option value="php">PHP</option>
-                <option value="python">Python</option>
-                <option value="sql">SQL</option>
-            </select>
 
             <button onclick="editorApp.saveContent()" id="btnSave" class="bg-gluon-primary hover:bg-blue-600 text-white text-sm font-medium py-1.5 px-4 rounded shadow-lg transition-all flex items-center gap-2">
                 <i class="fa-solid fa-floppy-disk"></i> <span class="hidden sm:inline">Salvar</span>
+            </button>
+
+            <button onclick="editorApp.toggleRightPanel()" id="btnRightPanel" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm py-1.5 px-3 rounded transition-all" title="Abrir menu lateral direito" aria-label="Abrir menu lateral direito">
+                <i class="fa-solid fa-sliders"></i>
             </button>
         </div>
     </nav>
 
     <!-- Container do CodeMirror (min-h-0 é crucial aqui para evitar que o flex-1 expanda além da tela) -->
     <main class="flex-1 w-full relative min-h-0" id="editorContainer"></main>
+
+    <aside id="rightPanel" class="fixed top-14 right-0 h-[calc(100dvh-3.5rem)] w-72 max-w-[85vw] bg-gluon-secondary border-l border-slate-700/70 shadow-2xl z-50 transform translate-x-full transition-transform duration-200">
+        <div class="p-4 space-y-4">
+            <div class="flex items-center justify-between">
+                <h2 class="text-sm font-semibold text-slate-200">Configurações</h2>
+                <button onclick="editorApp.closeRightPanel()" class="text-slate-400 hover:text-white" title="Fechar menu" aria-label="Fechar menu lateral direito">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div>
+                <label for="langSelect" class="block text-xs uppercase tracking-wide text-slate-400 mb-2">Tipo do arquivo</label>
+                <select id="langSelect" onchange="editorApp.changeLanguage()" class="w-full bg-slate-800 border border-slate-600 text-slate-300 text-sm rounded px-3 py-2 outline-none focus:border-gluon-primary">
+                    <option value="javascript">JavaScript</option>
+                    <option value="htmlmixed">HTML</option>
+                    <option value="css">CSS</option>
+                    <option value="php">PHP</option>
+                    <option value="python">Python</option>
+                    <option value="sql">SQL</option>
+                </select>
+            </div>
+        </div>
+    </aside>
 
     <!-- Scripts do CodeMirror -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
@@ -105,6 +123,7 @@
             cm: null,
             fileId: null,
             isDirty: false,
+            isRightPanelOpen: false,
 
             async init() {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -200,6 +219,17 @@
                 const lang = document.getElementById('langSelect').value;
                 this.cm.setOption("mode", lang);
                 this.isDirty = true; // Força aviso de não salvo ao mudar a linguagem
+            },
+
+            toggleRightPanel() {
+                this.isRightPanelOpen = !this.isRightPanelOpen;
+                const panel = document.getElementById('rightPanel');
+                panel.classList.toggle('translate-x-full', !this.isRightPanelOpen);
+            },
+
+            closeRightPanel() {
+                this.isRightPanelOpen = false;
+                document.getElementById('rightPanel').classList.add('translate-x-full');
             }
         };
 
