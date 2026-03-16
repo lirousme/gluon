@@ -1811,12 +1811,6 @@
                     }) || null;
                 }
 
-                if ((!Number.isFinite(pointerX) || !Number.isFinite(pointerY)) && draggedEl) {
-                    const dragRect = draggedEl.getBoundingClientRect();
-                    pointerX = dragRect.left + (dragRect.width / 2);
-                    pointerY = dragRect.top + (dragRect.height / 2);
-                }
-
                 if (!candidate && draggedEl) {
                     const dragRect = draggedEl.getBoundingClientRect();
                     const draggedArea = Math.max(1, dragRect.width * dragRect.height);
