@@ -745,6 +745,7 @@
                 relocateDragPreviewEl: null,
                 relocatePointerX: 0,
                 relocatePointerY: 0,
+                relocatePointerTrackingHandler: null,
                 audioGeneration: {
                     running: false,
                     stopRequested: false,
@@ -1806,12 +1807,35 @@
 
             updateRelocatePointerPosition(evt) {
                 const source = evt?.originalEvent || evt;
-                const x = source?.clientX;
-                const y = source?.clientY;
+                const point = source?.touches?.[0] || source?.changedTouches?.[0] || source;
+                const x = point?.clientX;
+                const y = point?.clientY;
                 if (!Number.isFinite(x) || !Number.isFinite(y)) return;
                 this.state.relocatePointerX = x;
                 this.state.relocatePointerY = y;
                 this.positionRelocatePreview();
+            },
+
+            startRelocatePointerTracking() {
+                this.stopRelocatePointerTracking();
+                const handler = (evt) => this.updateRelocatePointerPosition(evt);
+                this.state.relocatePointerTrackingHandler = handler;
+
+                document.addEventListener('mousemove', handler, { capture: true });
+                document.addEventListener('pointermove', handler, { capture: true });
+                document.addEventListener('touchmove', handler, { capture: true, passive: true });
+                document.addEventListener('dragover', handler, { capture: true });
+            },
+
+            stopRelocatePointerTracking() {
+                const handler = this.state.relocatePointerTrackingHandler;
+                if (!handler) return;
+
+                document.removeEventListener('mousemove', handler, true);
+                document.removeEventListener('pointermove', handler, true);
+                document.removeEventListener('touchmove', handler, true);
+                document.removeEventListener('dragover', handler, true);
+                this.state.relocatePointerTrackingHandler = null;
             },
 
             positionRelocatePreview() {
@@ -1851,6 +1875,7 @@
                     this.state.relocateDragPreviewEl.remove();
                     this.state.relocateDragPreviewEl = null;
                 }
+                this.stopRelocatePointerTracking();
             },
 
             applyRelocateHover(candidate, targetLabel = 'Diretório') {
@@ -2053,6 +2078,7 @@
                                 this.updateRelocatePointerPosition(evt);
                                 const dragName = evt.item ? evt.item.querySelector('[data-dir-name]')?.textContent?.trim() : '';
                                 this.createRelocateDragPreview(evt.item, dragName || 'Diretório');
+                                this.startRelocatePointerTracking();
                                 document.body.classList.add('relocate-dragging');
                             },
                             onMove: (evt) => {
