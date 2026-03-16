@@ -37,6 +37,11 @@
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
             background-color: rgba(22, 163, 74, 0.2);
         }
+        .relocate-active .dir-card:not(.relocate-drop-hover):hover {
+            background-color: transparent;
+            box-shadow: none;
+            transform: none;
+        }
         
         .kanban-scroll::-webkit-scrollbar { width: 4px; }
         .kanban-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -1759,9 +1764,10 @@
             },
 
             getRelocateDropTargetFromEvent(evt, draggedId, draggedEl = null) {
-                const originalEvent = evt?.originalEvent;
-                const pointerX = originalEvent?.clientX;
-                const pointerY = originalEvent?.clientY;
+                const originalEvent = evt?.originalEvent || evt?.event || null;
+                const pointerSource = originalEvent?.touches?.[0] || originalEvent?.changedTouches?.[0] || originalEvent;
+                let pointerX = pointerSource?.clientX;
+                let pointerY = pointerSource?.clientY;
                 const draggableSelector = '.draggable-item:not(.sortable-chosen):not(.sortable-fallback):not(.sortable-drag)';
                 const activeView = this.getCurrentView();
                 const isGridView = activeView === 'grid';
@@ -1809,6 +1815,12 @@
                         const rect = item.getBoundingClientRect();
                         return pointerX >= rect.left && pointerX <= rect.right && pointerY >= rect.top && pointerY <= rect.bottom;
                     }) || null;
+                }
+
+                if ((!Number.isFinite(pointerX) || !Number.isFinite(pointerY)) && draggedEl) {
+                    const dragRect = draggedEl.getBoundingClientRect();
+                    pointerX = dragRect.left + (dragRect.width / 2);
+                    pointerY = dragRect.top + (dragRect.height / 2);
                 }
 
                 if (!candidate && draggedEl) {
