@@ -55,7 +55,12 @@
             transition: opacity 0.2s ease;
         }
         .relocate-active .dir-card:hover::after {
-            content: 'ARRASTE E SOLTE AQUI';
+            content: 'CLIQUE E ARRASTE';
+            opacity: 1;
+        }
+        body.relocate-dragging .relocate-active .dir-card:hover::after,
+        .relocate-active .dir-card.relocate-drop-hover::after {
+            content: 'SOLTE AQUI';
             opacity: 1;
         }
         .relocate-active .dir-card:hover .dir-card-content {
