@@ -1685,12 +1685,38 @@
 
             getRelocateDropTargetFromEvent(evt, draggedId) {
                 const originalEvent = evt?.originalEvent;
-                const pointTarget = originalEvent
-                    ? document.elementFromPoint(originalEvent.clientX, originalEvent.clientY)
-                    : null;
+                const pointerX = originalEvent?.clientX;
+                const pointerY = originalEvent?.clientY;
+                const draggableSelector = '.draggable-item:not(.sortable-chosen):not(.sortable-fallback):not(.sortable-drag)';
+                const findCandidateAtPoint = (x, y) => {
+                    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
 
-                let candidate = pointTarget ? pointTarget.closest('.draggable-item') : null;
-                if (!candidate && evt?.related) candidate = evt.related.closest('.draggable-item');
+                    const stack = document.elementsFromPoint(x, y)
+                        .map(el => el.closest('.draggable-item'))
+                        .filter(Boolean);
+
+                    return stack.find(el => {
+                        const id = el.getAttribute('data-id');
+                        return id && String(id) !== String(draggedId);
+                    }) || null;
+                };
+
+                let candidate = findCandidateAtPoint(pointerX, pointerY);
+
+                if (!candidate && evt?.related) {
+                    candidate = evt.related.closest('.draggable-item');
+                }
+
+                if (!candidate && Number.isFinite(pointerX) && Number.isFinite(pointerY)) {
+                    const pool = Array.from(document.querySelectorAll(draggableSelector));
+                    candidate = pool.find((item) => {
+                        const itemId = item.getAttribute('data-id');
+                        if (!itemId || String(itemId) === String(draggedId)) return false;
+                        const rect = item.getBoundingClientRect();
+                        return pointerX >= rect.left && pointerX <= rect.right && pointerY >= rect.top && pointerY <= rect.bottom;
+                    }) || null;
+                }
+
                 if (!candidate) return null;
 
                 const relatedId = candidate.getAttribute('data-id');
