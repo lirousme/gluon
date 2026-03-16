@@ -180,18 +180,30 @@
                     this.updateBatchStatusUI(null);
                     return;
                 }
-                const latest = history.jobs[0];
-                this.activeJobId = latest.id;
-                this.updateBatchStatusUI(latest);
-                if (latest.has_result) {
-                    const result = await this.api('get_batch_generation_result', { job_id: latest.id });
+                const oldest = history.jobs.reduce((selected, current) => {
+                    if (!selected) return current;
+                    const selectedDate = selected.created_at ? Date.parse(selected.created_at) : NaN;
+                    const currentDate = current.created_at ? Date.parse(current.created_at) : NaN;
+                    if (!Number.isNaN(selectedDate) && !Number.isNaN(currentDate)) {
+                        return currentDate < selectedDate ? current : selected;
+                    }
+                    return Number(current.id) < Number(selected.id) ? current : selected;
+                }, null);
+                if (!oldest) {
+                    this.updateBatchStatusUI(null);
+                    return;
+                }
+                this.activeJobId = oldest.id;
+                this.updateBatchStatusUI(oldest);
+                if (oldest.has_result) {
+                    const result = await this.api('get_batch_generation_result', { job_id: oldest.id });
                     if (!result || !Array.isArray(result.cards)) return;
                     this.generatedCards = result.cards;
                     this.renderList();
                     return;
                 }
-                if (this.isProcessingStatus(latest.status)) {
-                    this.showToast(`Batch #${latest.id} ainda está em processamento (${latest.status}).`, 'success');
+                if (this.isProcessingStatus(oldest.status)) {
+                    this.showToast(`Batch #${oldest.id} ainda está em processamento (${oldest.status}).`, 'success');
                 }
             },
 
