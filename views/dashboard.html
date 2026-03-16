@@ -1764,10 +1764,9 @@
             },
 
             getRelocateDropTargetFromEvent(evt, draggedId, draggedEl = null) {
-                const originalEvent = evt?.originalEvent || evt?.event || null;
-                const pointerSource = originalEvent?.touches?.[0] || originalEvent?.changedTouches?.[0] || originalEvent;
-                let pointerX = pointerSource?.clientX;
-                let pointerY = pointerSource?.clientY;
+                const originalEvent = evt?.originalEvent;
+                const pointerX = originalEvent?.clientX;
+                const pointerY = originalEvent?.clientY;
                 const draggableSelector = '.draggable-item:not(.sortable-chosen):not(.sortable-fallback):not(.sortable-drag)';
                 const activeView = this.getCurrentView();
                 const isGridView = activeView === 'grid';
