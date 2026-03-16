@@ -1687,7 +1687,14 @@
             getDirectoryDropTargetId(directoryId) {
                 const dir = this.state.directories.find(d => Number(d.id) === Number(directoryId));
                 if (!dir) return null;
-                return Number(dir.type) === 3 ? dir.target_id : dir.id;
+
+                const targetId = Number(dir.id);
+                if (!Number.isFinite(targetId) || targetId <= 0) return null;
+
+                const targetDir = this.state.directoryCache.get(targetId);
+                if (!targetDir || !this.canEditDirectory(targetDir)) return null;
+
+                return targetId;
             },
 
             isPointerInsideElement(evt, element) {
@@ -1740,7 +1747,14 @@
                     : null;
                 if (hoveredKanbanColumn) {
                     const columnTargetParentId = Number(hoveredKanbanColumn.getAttribute('data-parent-id'));
-                    if (Number.isFinite(columnTargetParentId) && columnTargetParentId > 0 && columnTargetParentId !== draggedId) {
+                    const columnTargetDir = this.state.directoryCache.get(columnTargetParentId);
+                    if (
+                        Number.isFinite(columnTargetParentId)
+                        && columnTargetParentId > 0
+                        && columnTargetParentId !== draggedId
+                        && columnTargetDir
+                        && this.canEditDirectory(columnTargetDir)
+                    ) {
                         return columnTargetParentId;
                     }
                 }
