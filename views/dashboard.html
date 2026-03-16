@@ -606,6 +606,7 @@
             sortableInstances: [],
             dragState: {
                 rootDropParentId: null,
+                rootHoverDirectoryId: null,
                 pointerX: null,
                 pointerY: null
             },
@@ -1651,6 +1652,7 @@
                         invertedSwapThreshold: 0.75,
                         onStart: () => {
                             this.dragState.rootDropParentId = null;
+                            this.dragState.rootHoverDirectoryId = null;
                             this.dragState.pointerX = null;
                             this.dragState.pointerY = null;
                         },
@@ -1691,9 +1693,7 @@
             isPointerInsideElement(evt, element) {
                 if (!element) return false;
 
-                const pointerEvt = evt?.originalEvent;
-                const pointerX = typeof pointerEvt?.clientX === 'number' ? pointerEvt.clientX : this.dragState.pointerX;
-                const pointerY = typeof pointerEvt?.clientY === 'number' ? pointerEvt.clientY : this.dragState.pointerY;
+                const { x: pointerX, y: pointerY } = this.getPointerCoordinates(evt);
                 if (typeof pointerX !== 'number' || typeof pointerY !== 'number') return false;
 
                 const rect = element.getBoundingClientRect();
@@ -1705,6 +1705,7 @@
                 const draggedId = Number(draggedEl?.getAttribute?.('data-id'));
                 if (!draggedId || this.getCurrentParentId() !== null) {
                     this.dragState.rootDropParentId = null;
+                    this.dragState.rootHoverDirectoryId = null;
                     return null;
                 }
 
@@ -1757,27 +1758,52 @@
                 const relatedRootId = Number(evt?.related?.getAttribute?.('data-id'));
                 if (relatedRootId && relatedRootId !== draggedId) {
                     const relatedTargetId = this.getDirectoryDropTargetId(relatedRootId);
-                    if (relatedTargetId && relatedTargetId !== draggedId) return relatedTargetId;
+                    const relatedRect = evt?.relatedRect || evt?.related?.getBoundingClientRect?.();
+                    if (relatedTargetId && relatedTargetId !== draggedId && (hasMeaningfulOverlap(relatedRect) || this.isPointerInsideElement(evt, evt.related))) {
+                        return relatedTargetId;
+                    }
                 }
 
                 return null;
             },
 
             trackRootDropTarget(evt, currentView) {
-                const pointerEvt = evt?.originalEvent;
-                if (typeof pointerEvt?.clientX === 'number' && typeof pointerEvt?.clientY === 'number') {
-                    this.dragState.pointerX = pointerEvt.clientX;
-                    this.dragState.pointerY = pointerEvt.clientY;
+                const { x: pointerX, y: pointerY } = this.getPointerCoordinates(evt);
+                if (typeof pointerX === 'number' && typeof pointerY === 'number') {
+                    this.dragState.pointerX = pointerX;
+                    this.dragState.pointerY = pointerY;
                 }
+
+                const relatedRootId = Number(evt?.related?.getAttribute?.('data-id'));
+                this.dragState.rootHoverDirectoryId = Number.isFinite(relatedRootId) && relatedRootId > 0 ? relatedRootId : null;
 
                 this.dragState.rootDropParentId = this.resolveRootDropParentId(evt, currentView);
                 return true;
             },
 
-            getDropElementFromEvent(evt, selector, ignoreElement = null) {
+            getPointerCoordinates(evt) {
                 const pointerEvt = evt?.originalEvent;
-                const clientX = typeof pointerEvt?.clientX === 'number' ? pointerEvt.clientX : this.dragState.pointerX;
-                const clientY = typeof pointerEvt?.clientY === 'number' ? pointerEvt.clientY : this.dragState.pointerY;
+                if (typeof pointerEvt?.clientX === 'number' && typeof pointerEvt?.clientY === 'number') {
+                    return { x: pointerEvt.clientX, y: pointerEvt.clientY };
+                }
+
+                if (typeof this.dragState.pointerX === 'number' && typeof this.dragState.pointerY === 'number') {
+                    return { x: this.dragState.pointerX, y: this.dragState.pointerY };
+                }
+
+                const draggedRect = evt?.draggedRect || evt?.dragged?.getBoundingClientRect?.() || evt?.item?.getBoundingClientRect?.();
+                if (draggedRect) {
+                    return {
+                        x: draggedRect.left + draggedRect.width / 2,
+                        y: draggedRect.top + draggedRect.height / 2
+                    };
+                }
+
+                return { x: null, y: null };
+            },
+
+            getDropElementFromEvent(evt, selector, ignoreElement = null) {
+                const { x: clientX, y: clientY } = this.getPointerCoordinates(evt);
                 if (typeof clientX !== 'number' || typeof clientY !== 'number') return null;
 
                 const elementsAtPoint = document.elementsFromPoint(clientX, clientY);
@@ -1814,8 +1840,10 @@
                 const rootId = this.getCurrentParentId();
                 if (rootId === null) {
                     const draggedId = Number(evt?.item?.getAttribute('data-id'));
-                    const targetParentId = this.resolveRootDropParentId(evt, currentView) || this.dragState.rootDropParentId;
+                    const hoveredDirectoryDropId = this.getDirectoryDropTargetId(this.dragState.rootHoverDirectoryId);
+                    const targetParentId = this.resolveRootDropParentId(evt, currentView) || this.dragState.rootDropParentId || hoveredDirectoryDropId;
                     this.dragState.rootDropParentId = null;
+                    this.dragState.rootHoverDirectoryId = null;
 
                     if (draggedId && targetParentId && draggedId !== targetParentId) {
                         this.dragState.pointerX = null;
@@ -1825,6 +1853,7 @@
                 }
 
                 this.dragState.rootDropParentId = null;
+                this.dragState.rootHoverDirectoryId = null;
                 this.dragState.pointerX = null;
                 this.dragState.pointerY = null;
                 await this.saveNewOrder();
