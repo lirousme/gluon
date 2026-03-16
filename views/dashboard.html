@@ -1825,13 +1825,13 @@
                 if (!sourceId || !destinationId || sourceId === destinationId) return false;
 
                 const response = await this.api('directories', 'reorder', { order: [sourceId], parent_id: destinationId });
-                if (!response) {
-                    this.showToast('Não foi possível mover o diretório.', 'error');
+                if (!response || response.status !== 'success') {
+                    this.showToast(response?.message || 'Não foi possível mover o diretório.', 'error');
                     await this.fetchDirectories();
                     return true;
                 }
 
-                await this.saveNewOrder();
+                this.showToast('Diretório inserido dentro do destino.', 'success');
                 await this.fetchDirectories();
                 return true;
             },
