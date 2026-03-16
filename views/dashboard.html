@@ -1691,7 +1691,7 @@
                 this.state.relocateHoverTargetId = null;
             },
 
-            getRelocateDropTargetFromEvent(evt, draggedId) {
+            getRelocateDropTargetFromEvent(evt, draggedId, draggedEl = null) {
                 const originalEvent = evt?.originalEvent;
                 const pointerX = originalEvent?.clientX;
                 const pointerY = originalEvent?.clientY;
@@ -1742,6 +1742,35 @@
                         const rect = item.getBoundingClientRect();
                         return pointerX >= rect.left && pointerX <= rect.right && pointerY >= rect.top && pointerY <= rect.bottom;
                     }) || null;
+                }
+
+                if (!candidate && draggedEl) {
+                    const dragRect = draggedEl.getBoundingClientRect();
+                    const draggedArea = Math.max(1, dragRect.width * dragRect.height);
+                    let best = null;
+
+                    document.querySelectorAll(draggableSelector).forEach((item) => {
+                        const itemId = item.getAttribute('data-id');
+                        if (!itemId || String(itemId) === String(draggedId)) return;
+
+                        const rect = item.getBoundingClientRect();
+                        const overlapX = Math.max(0, Math.min(dragRect.right, rect.right) - Math.max(dragRect.left, rect.left));
+                        const overlapY = Math.max(0, Math.min(dragRect.bottom, rect.bottom) - Math.max(dragRect.top, rect.top));
+                        const overlapArea = overlapX * overlapY;
+                        if (overlapArea <= 0) return;
+
+                        const ratioByTarget = overlapArea / Math.max(1, rect.width * rect.height);
+                        const ratioByDragged = overlapArea / draggedArea;
+                        const score = Math.max(ratioByTarget, ratioByDragged);
+
+                        if (!best || score > best.score) {
+                            best = { item, score };
+                        }
+                    });
+
+                    if (best && best.score >= 0.22) {
+                        candidate = best.item;
+                    }
                 }
 
                 if (!candidate) return null;
@@ -1848,7 +1877,7 @@
                                 const draggedItem = this.state.directoryCache.get(Number(draggedId));
                                 if (!draggedItem || ![0, 3].includes(Number(draggedItem.type))) { this.clearRelocateHover(); return false; }
 
-                                const dropTarget = this.getRelocateDropTargetFromEvent(evt, draggedId);
+                                const dropTarget = this.getRelocateDropTargetFromEvent(evt, draggedId, draggedEl);
                                 if (!dropTarget) { this.clearRelocateHover(); return false; }
 
                                 const draggedRealId = Number(draggedItem.type) === 3 ? draggedItem.target_id : draggedItem.id;
@@ -1865,7 +1894,7 @@
                                 const draggedId = evt.item ? evt.item.getAttribute('data-id') : this.state.relocateDraggedId;
                                 const draggedItem = draggedId ? this.state.directoryCache.get(Number(draggedId)) : null;
                                 const draggedRealId = draggedItem ? (Number(draggedItem.type) === 3 ? draggedItem.target_id : draggedItem.id) : null;
-                                const targetId = this.state.relocateHoverTargetId || this.getRelocateDropTargetFromEvent(evt, draggedId)?.targetId;
+                                const targetId = this.state.relocateHoverTargetId || this.getRelocateDropTargetFromEvent(evt, draggedId, evt.item)?.targetId;
                                 this.clearRelocateHover();
                                 this.state.relocateDraggedId = null;
                                 if (!draggedRealId || !targetId || String(draggedRealId) === String(targetId)) return;
