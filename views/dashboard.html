@@ -52,6 +52,7 @@
         .reorder-active .snap-start { scroll-snap-align: none !important; }
         .sortable-ghost { opacity: 0.3; background-color: #1e293b !important; border: 2px dashed #22c55e !important; }
         .sortable-ghost-relocate { opacity: 0.4; background-color: rgba(30, 58, 138, 0.35) !important; border: 2px dashed #60a5fa !important; }
+        .sortable-fallback { pointer-events: none !important; }
         .sortable-drag { opacity: 1 !important; cursor: grabbing !important; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important; }
 
         .relocate-active .draggable-item { border-color: #3b82f6 !important; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.12); }
@@ -1695,6 +1696,8 @@
                 const pointerX = originalEvent?.clientX;
                 const pointerY = originalEvent?.clientY;
                 const draggableSelector = '.draggable-item:not(.sortable-chosen):not(.sortable-fallback):not(.sortable-drag)';
+                const activeView = this.getCurrentView();
+                const isGridView = activeView === 'grid';
                 const findCandidateAtPoint = (x, y) => {
                     if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
 
@@ -1712,6 +1715,23 @@
 
                 if (!candidate && evt?.related) {
                     candidate = evt.related.closest('.draggable-item');
+                }
+
+                if (!candidate && isGridView && evt?.to) {
+                    const toRect = evt.to.getBoundingClientRect();
+                    if (Number.isFinite(pointerX) && Number.isFinite(pointerY) && pointerX >= toRect.left && pointerX <= toRect.right && pointerY >= toRect.top && pointerY <= toRect.bottom) {
+                        const gridItems = Array.from(evt.to.querySelectorAll(draggableSelector));
+                        candidate = gridItems.find((item) => {
+                            const itemId = item.getAttribute('data-id');
+                            if (!itemId || String(itemId) === String(draggedId)) return false;
+                            const rect = item.getBoundingClientRect();
+                            const paddedLeft = rect.left - 8;
+                            const paddedRight = rect.right + 8;
+                            const paddedTop = rect.top - 8;
+                            const paddedBottom = rect.bottom + 8;
+                            return pointerX >= paddedLeft && pointerX <= paddedRight && pointerY >= paddedTop && pointerY <= paddedBottom;
+                        }) || null;
+                    }
                 }
 
                 if (!candidate && Number.isFinite(pointerX) && Number.isFinite(pointerY)) {
