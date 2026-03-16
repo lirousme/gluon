@@ -52,6 +52,11 @@
         .reorder-active .snap-start { scroll-snap-align: none !important; }
         .sortable-ghost { opacity: 0.3; background-color: #1e293b !important; border: 2px dashed #22c55e !important; }
         .sortable-drag { opacity: 1 !important; cursor: grabbing !important; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important; }
+        .root-nest-target {
+            border-color: #60a5fa !important;
+            box-shadow: inset 0 0 0 2px rgba(96, 165, 250, 0.9), 0 0 0 4px rgba(59, 130, 246, 0.2) !important;
+            background-color: rgba(30, 64, 175, 0.2) !important;
+        }
 
         .icon-gradient {
             -webkit-background-clip: text;
@@ -608,7 +613,8 @@
                 rootDropParentId: null,
                 rootHoverDirectoryId: null,
                 pointerX: null,
-                pointerY: null
+                pointerY: null,
+                rootNestTargetElement: null
             },
 
             customScroll: {
@@ -1636,11 +1642,13 @@
 
             initSortable() {
                 if (this.sortableInstances.length > 0) { this.sortableInstances.forEach(inst => inst.destroy()); this.sortableInstances = []; }
+                this.clearRootNestPreview();
                 if (!this.state.reorderMode) return;
                 const wrapper = document.getElementById('sortable-wrapper');
                 const currentView = this.getCurrentView();
 
                 this.dragState.rootDropParentId = null;
+                this.dragState.rootNestTargetElement = null;
 
                 if (wrapper) {
                     this.sortableInstances.push(new Sortable(wrapper, {
@@ -1655,6 +1663,7 @@
                             this.dragState.rootHoverDirectoryId = null;
                             this.dragState.pointerX = null;
                             this.dragState.pointerY = null;
+                            this.clearRootNestPreview();
                         },
                         onMove: (evt) => this.trackRootDropTarget(evt, currentView),
                         onEnd: (evt) => this.handleRootDragEnd(evt, currentView)
@@ -1757,6 +1766,39 @@
                     return overlapAgainstSmaller >= 0.18;
                 };
 
+                const isInsideNestZone = (targetRect) => {
+                    if (!targetRect) return false;
+
+                    const pointerX = this.dragState.pointerX;
+                    const pointerY = this.dragState.pointerY;
+
+                    const insetX = Math.max(18, Math.min(60, targetRect.width * 0.22));
+                    const insetY = Math.max(14, Math.min(50, targetRect.height * 0.22));
+
+                    const centerLeft = targetRect.left + insetX;
+                    const centerRight = targetRect.right - insetX;
+                    const centerTop = targetRect.top + insetY;
+                    const centerBottom = targetRect.bottom - insetY;
+
+                    const pointerInsideCenter = typeof pointerX === 'number'
+                        && typeof pointerY === 'number'
+                        && pointerX >= centerLeft
+                        && pointerX <= centerRight
+                        && pointerY >= centerTop
+                        && pointerY <= centerBottom;
+
+                    if (pointerInsideCenter) return true;
+
+                    if (!draggedRect) return false;
+                    const overlapWidth = Math.max(0, Math.min(draggedRect.right, centerRight) - Math.max(draggedRect.left, centerLeft));
+                    const overlapHeight = Math.max(0, Math.min(draggedRect.bottom, centerBottom) - Math.max(draggedRect.top, centerTop));
+                    const overlapArea = overlapWidth * overlapHeight;
+                    if (!overlapArea) return false;
+
+                    const draggedArea = Math.max(1, draggedRect.width * draggedRect.height);
+                    return (overlapArea / draggedArea) >= 0.45;
+                };
+
                 const hoveredKanbanColumn = currentView === 'kanban'
                     ? this.getDropElementFromEvent(evt, '.kanban-scroll', draggedEl)
                     : null;
@@ -1775,7 +1817,7 @@
                 const hoveredRootCard = this.getDropElementFromEvent(evt, '.draggable-item', draggedEl);
                 if (hoveredRootCard) {
                     const targetRect = hoveredRootCard.getBoundingClientRect();
-                    if ((hasMeaningfulOverlap(targetRect) || this.isPointerInsideElement(evt, hoveredRootCard)) && this.isPointerInsideNestZone(evt, hoveredRootCard, currentView)) {
+                    if ((hasMeaningfulOverlap(targetRect) || this.isPointerInsideElement(evt, hoveredRootCard)) && isInsideNestZone(targetRect)) {
                         const hoveredRootId = Number(hoveredRootCard.getAttribute('data-id'));
                         const resolvedTargetId = this.getDirectoryDropTargetId(hoveredRootId);
                         if (resolvedTargetId && resolvedTargetId !== draggedId) return resolvedTargetId;
@@ -1790,7 +1832,7 @@
                         relatedTargetId
                         && relatedTargetId !== draggedId
                         && (hasMeaningfulOverlap(relatedRect) || this.isPointerInsideElement(evt, evt.related))
-                        && this.isPointerInsideNestZone(evt, evt.related, currentView)
+                        && isInsideNestZone(relatedRect)
                     ) {
                         return relatedTargetId;
                     }
@@ -1810,7 +1852,26 @@
                 this.dragState.rootHoverDirectoryId = Number.isFinite(relatedRootId) && relatedRootId > 0 ? relatedRootId : null;
 
                 this.dragState.rootDropParentId = this.resolveRootDropParentId(evt, currentView);
+                this.updateRootNestPreview(this.dragState.rootDropParentId, evt);
                 return true;
+            },
+
+            clearRootNestPreview() {
+                if (this.dragState.rootNestTargetElement) {
+                    this.dragState.rootNestTargetElement.classList.remove('root-nest-target');
+                }
+                this.dragState.rootNestTargetElement = null;
+            },
+
+            updateRootNestPreview(targetParentId, evt) {
+                this.clearRootNestPreview();
+                if (!targetParentId || this.getCurrentParentId() !== null) return;
+
+                const targetEl = document.querySelector(`#sortable-wrapper .draggable-item[data-id="${targetParentId}"]`) || evt?.related || null;
+                if (!targetEl || targetEl.classList?.contains('sortable-drag') || targetEl.classList?.contains('sortable-ghost')) return;
+
+                targetEl.classList.add('root-nest-target');
+                this.dragState.rootNestTargetElement = targetEl;
             },
 
             getPointerCoordinates(evt) {
@@ -1876,6 +1937,7 @@
                     const targetParentId = this.resolveRootDropParentId(evt, currentView) || this.dragState.rootDropParentId || hoveredDirectoryDropId;
                     this.dragState.rootDropParentId = null;
                     this.dragState.rootHoverDirectoryId = null;
+                    this.clearRootNestPreview();
 
                     if (draggedId && targetParentId && draggedId !== targetParentId) {
                         this.dragState.pointerX = null;
@@ -1888,6 +1950,7 @@
                 this.dragState.rootHoverDirectoryId = null;
                 this.dragState.pointerX = null;
                 this.dragState.pointerY = null;
+                this.clearRootNestPreview();
                 await this.saveNewOrder();
             },
 
