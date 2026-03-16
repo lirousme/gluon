@@ -1654,7 +1654,8 @@
                             this.dragState.pointerX = null;
                             this.dragState.pointerY = null;
                         },
-                        onEnd: () => this.handleRootDragEnd()
+                        onMove: (evt) => this.trackRootDropTarget(evt, currentView),
+                        onEnd: (evt) => this.handleRootDragEnd(evt, currentView)
                     }));
                 }
 
@@ -1689,18 +1690,25 @@
 
             isPointerInsideElement(evt, element) {
                 if (!element) return false;
-                const pointerEvt = evt?.originalEvent;
-                if (typeof pointerEvt?.clientX === 'number' && typeof pointerEvt?.clientY === 'number') {
-                    this.dragState.pointerX = pointerEvt.clientX;
-                    this.dragState.pointerY = pointerEvt.clientY;
-                }
 
+                const pointerEvt = evt?.originalEvent;
+                const pointerX = typeof pointerEvt?.clientX === 'number' ? pointerEvt.clientX : this.dragState.pointerX;
+                const pointerY = typeof pointerEvt?.clientY === 'number' ? pointerEvt.clientY : this.dragState.pointerY;
+                if (typeof pointerX !== 'number' || typeof pointerY !== 'number') return false;
+
+                const rect = element.getBoundingClientRect();
+                return pointerX >= rect.left && pointerX <= rect.right && pointerY >= rect.top && pointerY <= rect.bottom;
+            },
+
+            resolveRootDropParentId(evt, currentView) {
+                const draggedEl = evt?.dragged || evt?.item;
+                const draggedId = Number(draggedEl?.getAttribute?.('data-id'));
                 if (!draggedId || this.getCurrentParentId() !== null) {
                     this.dragState.rootDropParentId = null;
-                    return true;
+                    return null;
                 }
 
-                const draggedRect = evt?.draggedRect || evt?.dragged?.getBoundingClientRect?.();
+                const draggedRect = evt?.draggedRect || draggedEl?.getBoundingClientRect?.();
 
                 const hasMeaningfulOverlap = (targetRect) => {
                     if (!draggedRect || !targetRect) return false;
@@ -1738,9 +1746,12 @@
 
                 const hoveredRootCard = this.getDropElementFromEvent(evt, '.draggable-item', draggedEl);
                 if (hoveredRootCard) {
-                    const hoveredRootId = Number(hoveredRootCard.getAttribute('data-id'));
-                    const resolvedTargetId = this.getDirectoryDropTargetId(hoveredRootId);
-                    if (resolvedTargetId && resolvedTargetId !== draggedId) return resolvedTargetId;
+                    const targetRect = hoveredRootCard.getBoundingClientRect();
+                    if (hasMeaningfulOverlap(targetRect) || this.isPointerInsideElement(evt, hoveredRootCard)) {
+                        const hoveredRootId = Number(hoveredRootCard.getAttribute('data-id'));
+                        const resolvedTargetId = this.getDirectoryDropTargetId(hoveredRootId);
+                        if (resolvedTargetId && resolvedTargetId !== draggedId) return resolvedTargetId;
+                    }
                 }
 
                 const relatedRootId = Number(evt?.related?.getAttribute?.('data-id'));
