@@ -53,6 +53,11 @@
         .sortable-ghost { opacity: 0.3; background-color: #1e293b !important; border: 2px dashed #22c55e !important; }
         .sortable-drag { opacity: 1 !important; cursor: grabbing !important; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important; }
 
+        .relocate-active .draggable-item { border-color: #3b82f6 !important; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.12); }
+        .relocate-active .draggable-item { cursor: grab !important; }
+        .relocate-active .draggable-item:active { cursor: grabbing !important; }
+        .relocate-drop-hover { border-color: #60a5fa !important; box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.45), 0 12px 20px -8px rgba(59, 130, 246, 0.55) !important; background-color: rgba(30, 58, 138, 0.35) !important; }
+
         .icon-gradient {
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -89,6 +94,11 @@
                 <button onclick="app.toggleReorderMode()" id="btn-reorder-desktop" class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent font-medium text-sm transition-all text-slate-400 hover:text-white hover:bg-slate-700" title="Ativar Modo de Reordenação">
                     <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90"></i>
                     <span>Ordem</span>
+                </button>
+
+                <button onclick="app.toggleRelocateMode()" id="btn-relocate-desktop" class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent font-medium text-sm transition-all text-slate-400 hover:text-white hover:bg-slate-700" title="Ativar Modo de Realocação">
+                    <i class="fa-solid fa-folder-tree"></i>
+                    <span>Realocar</span>
                 </button>
 
                 <div class="hidden md:block w-px h-6 bg-slate-700 mx-1"></div>
@@ -146,6 +156,9 @@
                         <div class="md:hidden">
                             <button onclick="app.toggleReorderMode(); app.toggleMobileViewMenu()" id="btn-reorder-mobile" class="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors border-b border-slate-700/50 mb-1">
                                 <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90 w-5 text-center text-lg"></i> <span class="font-medium">Alterar Ordem</span>
+                            </button>
+                            <button onclick="app.toggleRelocateMode(); app.toggleMobileViewMenu()" id="btn-relocate-mobile" class="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors border-b border-slate-700/50 mb-1">
+                                <i class="fa-solid fa-folder-tree w-5 text-center text-lg"></i> <span class="font-medium">Realocar</span>
                             </button>
                             <div class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Visualização</div>
                             <button onclick="app.setViewMode('grid'); app.toggleMobileViewMenu()" id="btn-mobile-view-grid" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors"><i class="fa-solid fa-border-all w-5 text-center text-lg"></i> <span class="font-medium">Grid</span></button>
@@ -588,6 +601,8 @@
                 isCurrentDirectorySaved: false,
                 isLoading: false,
                 reorderMode: false,
+                relocateMode: false,
+                relocateHoverTargetId: null,
                 audioGeneration: {
                     running: false,
                     stopRequested: false,
@@ -839,6 +854,7 @@
                     if (event.state && event.state.path) {
                         this.state.path = event.state.path;
                         if (this.state.reorderMode) this.toggleReorderMode();
+                        if (this.state.relocateMode) this.toggleRelocateMode();
                         await this.fetchDirectories();
                     } else {
                         window.location.reload();
@@ -1512,7 +1528,7 @@
             },
 
             async enterDirectoryOrFile(id) {
-                if(this.state.reorderMode) return; 
+                if(this.state.reorderMode || this.state.relocateMode) return; 
                 const item = this.state.directoryCache.get(Number(id));
                 if(!item) return;
 
@@ -1541,6 +1557,7 @@
                         this.updateHistoryState(targetDir.id, item.id);
                         
                         if (this.state.reorderMode) this.toggleReorderMode();
+                        if (this.state.relocateMode) this.toggleRelocateMode();
                         await this.fetchDirectories();
                     } else {
                         this.setLoading(false);
@@ -1552,6 +1569,7 @@
                     this.updateHistoryState(item.id);
                     
                     if (this.state.reorderMode) this.toggleReorderMode();
+                    if (this.state.relocateMode) this.toggleRelocateMode();
                     await this.fetchDirectories();
                 }
             },
@@ -1569,6 +1587,7 @@
                 this.updateHistoryState(targetStep.id);
 
                 if (this.state.reorderMode) this.toggleReorderMode();
+                if (this.state.relocateMode) this.toggleRelocateMode();
                 await this.fetchDirectories();
             },
 
@@ -1607,6 +1626,66 @@
                 }
             },
 
+
+            updateDragHint(mode = null) {
+                const hint = document.getElementById('reorder-hint');
+                if (!hint) return;
+
+                hint.classList.remove('hidden', 'text-green-400', 'bg-green-500/10', 'border-green-500/20', 'text-blue-300', 'bg-blue-500/10', 'border-blue-500/20');
+
+                if (mode === 'reorder') {
+                    hint.classList.add('text-green-400', 'bg-green-500/10', 'border-green-500/20');
+                    hint.innerHTML = '<i class="fa-solid fa-hand-pointer mr-2"></i> Arraste os itens para reordenar';
+                    return;
+                }
+
+                if (mode === 'relocate') {
+                    hint.classList.add('text-blue-300', 'bg-blue-500/10', 'border-blue-500/20');
+                    hint.innerHTML = '<i class="fa-solid fa-folder-tree mr-2"></i> Arraste um diretório para dentro de outro diretório';
+                    return;
+                }
+
+                hint.classList.add('hidden');
+            },
+
+            clearRelocateHover() {
+                document.querySelectorAll('.relocate-drop-hover').forEach(el => el.classList.remove('relocate-drop-hover'));
+                this.state.relocateHoverTargetId = null;
+            },
+
+            toggleRelocateMode() {
+                if (this.isVisitingProfile()) return;
+                this.state.relocateMode = !this.state.relocateMode;
+                if (this.state.relocateMode && this.state.reorderMode) this.toggleReorderMode();
+
+                const btnDesk = document.getElementById('btn-relocate-desktop');
+                const btnMob = document.getElementById('btn-relocate-mobile');
+                const container = document.getElementById('viewContainer');
+                const wrapper = document.getElementById('sortable-wrapper');
+
+                if (this.state.relocateMode) {
+                    if(btnDesk) { btnDesk.classList.add('bg-blue-600', 'text-white', 'border-blue-500', 'shadow-lg', 'shadow-blue-500/20'); btnDesk.classList.remove('text-slate-400', 'hover:bg-slate-700'); }
+                    if(btnMob) { btnMob.classList.add('text-blue-300', 'bg-slate-700/50'); btnMob.classList.remove('text-slate-300'); }
+                    container.classList.add('relocate-active'); if(wrapper) wrapper.classList.add('relocate-active'); this.updateDragHint('relocate');
+                } else {
+                    if(btnDesk) { btnDesk.classList.remove('bg-blue-600', 'text-white', 'border-blue-500', 'shadow-lg', 'shadow-blue-500/20'); btnDesk.classList.add('text-slate-400', 'hover:bg-slate-700'); }
+                    if(btnMob) { btnMob.classList.remove('text-blue-300', 'bg-slate-700/50'); btnMob.classList.add('text-slate-300'); }
+                    container.classList.remove('relocate-active'); if(wrapper) wrapper.classList.remove('relocate-active'); this.updateDragHint(null); this.clearRelocateHover();
+                }
+                this.initSortable();
+            },
+
+            async relocateDirectory(draggedId, targetId) {
+                if (!draggedId || !targetId || String(draggedId) === String(targetId)) return;
+                const response = await this.api('directories', 'reorder', { order: [String(draggedId)], parent_id: parseInt(targetId, 10) });
+                if (response) {
+                    this.showToast(response.message || 'Diretório realocado com sucesso.', 'success');
+                    await this.fetchDirectories();
+                } else {
+                    this.showToast('Não foi possível realocar este diretório.', 'error');
+                }
+            },
+
             toggleReorderMode() {
                 if (this.isVisitingProfile()) return;
                 this.state.reorderMode = !this.state.reorderMode;
@@ -1614,39 +1693,81 @@
                 const btnMob = document.getElementById('btn-reorder-mobile');
                 const container = document.getElementById('viewContainer');
                 const wrapper = document.getElementById('sortable-wrapper');
-                const hint = document.getElementById('reorder-hint');
 
                 if(this.state.reorderMode) {
+                    if (this.state.relocateMode) this.toggleRelocateMode();
                     btnDesk.classList.add('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20'); btnDesk.classList.remove('text-slate-400', 'hover:bg-slate-700');
                     if(btnMob) { btnMob.classList.add('text-green-400', 'bg-slate-700/50'); btnMob.classList.remove('text-slate-300'); }
-                    container.classList.add('reorder-active'); if(wrapper) wrapper.classList.add('reorder-active'); hint.classList.remove('hidden');
+                    container.classList.add('reorder-active'); if(wrapper) wrapper.classList.add('reorder-active'); this.updateDragHint('reorder');
                 } else {
                     btnDesk.classList.remove('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20'); btnDesk.classList.add('text-slate-400', 'hover:bg-slate-700');
                     if(btnMob) { btnMob.classList.remove('text-green-400', 'bg-slate-700/50'); btnMob.classList.add('text-slate-300'); }
-                    container.classList.remove('reorder-active'); if(wrapper) wrapper.classList.remove('reorder-active'); hint.classList.add('hidden');
+                    container.classList.remove('reorder-active'); if(wrapper) wrapper.classList.remove('reorder-active'); this.updateDragHint(null);
                 }
                 this.initSortable();
             },
 
             initSortable() {
                 if (this.sortableInstances.length > 0) { this.sortableInstances.forEach(inst => inst.destroy()); this.sortableInstances = []; }
-                if (!this.state.reorderMode) return;
+                if (!this.state.reorderMode && !this.state.relocateMode) return;
                 const wrapper = document.getElementById('sortable-wrapper');
                 const currentView = this.getCurrentView();
 
                 if (wrapper) {
-                    this.sortableInstances.push(new Sortable(wrapper, {
-                        animation: 250, delay: 150, delayOnTouchOnly: true, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', forceFallback: true, fallbackOnBody: true, scroll: true, scrollSensitivity: 80, scrollSpeed: 15,       
-                        direction: currentView === 'kanban' ? 'horizontal' : (currentView === 'list' ? 'vertical' : undefined),
-                        handle: currentView === 'kanban' ? '.kanban-col-handle' : undefined,
-                        swapThreshold: 0.65,
-                        invertSwap: true,
-                        invertedSwapThreshold: 0.75,
-                        onEnd: () => this.handleRootDragEnd()
-                    }));
+                    if (this.state.relocateMode) {
+                        this.sortableInstances.push(new Sortable(wrapper, {
+                            animation: 200,
+                            delay: 120,
+                            delayOnTouchOnly: true,
+                            ghostClass: 'sortable-ghost',
+                            dragClass: 'sortable-drag',
+                            forceFallback: true,
+                            fallbackOnBody: true,
+                            scroll: true,
+                            scrollSensitivity: 80,
+                            scrollSpeed: 15,
+                            sort: false,
+                            direction: currentView === 'kanban' ? 'horizontal' : (currentView === 'list' ? 'vertical' : undefined),
+                            handle: currentView === 'kanban' ? '.kanban-col-handle' : undefined,
+                            onStart: () => this.clearRelocateHover(),
+                            onMove: (evt) => {
+                                const related = evt.related;
+                                const draggedId = evt.dragged ? evt.dragged.getAttribute('data-id') : null;
+                                if (!related || !draggedId) { this.clearRelocateHover(); return false; }
+
+                                const relatedId = related.getAttribute('data-id');
+                                if (!relatedId || relatedId === draggedId) { this.clearRelocateHover(); return false; }
+
+                                const targetItem = this.state.directoryCache.get(Number(relatedId));
+                                if (!targetItem || ![0, 3].includes(Number(targetItem.type))) { this.clearRelocateHover(); return false; }
+
+                                this.clearRelocateHover();
+                                related.classList.add('relocate-drop-hover');
+                                this.state.relocateHoverTargetId = Number(targetItem.type) === 3 ? targetItem.target_id : targetItem.id;
+                                return false;
+                            },
+                            onEnd: async (evt) => {
+                                const draggedId = evt.item ? evt.item.getAttribute('data-id') : null;
+                                const targetId = this.state.relocateHoverTargetId;
+                                this.clearRelocateHover();
+                                if (!draggedId || !targetId) return;
+                                await this.relocateDirectory(draggedId, targetId);
+                            }
+                        }));
+                    } else {
+                        this.sortableInstances.push(new Sortable(wrapper, {
+                            animation: 250, delay: 150, delayOnTouchOnly: true, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', forceFallback: true, fallbackOnBody: true, scroll: true, scrollSensitivity: 80, scrollSpeed: 15,       
+                            direction: currentView === 'kanban' ? 'horizontal' : (currentView === 'list' ? 'vertical' : undefined),
+                            handle: currentView === 'kanban' ? '.kanban-col-handle' : undefined,
+                            swapThreshold: 0.65,
+                            invertSwap: true,
+                            invertedSwapThreshold: 0.75,
+                            onEnd: () => this.handleRootDragEnd()
+                        }));
+                    }
                 }
 
-                if (currentView === 'kanban') {
+                if (currentView === 'kanban' && this.state.reorderMode) {
                     document.querySelectorAll('.kanban-scroll').forEach(col => {
                         this.sortableInstances.push(new Sortable(col, {
                             group: 'kanban-items', animation: 250, delay: 150, delayOnTouchOnly: true, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', forceFallback: true, fallbackOnBody: true, scroll: true, scrollSensitivity: 60, scrollSpeed: 15,
@@ -1711,7 +1832,7 @@
 
                 this.renderProfilePresentation();
 
-                const hideForVisitor = ['btn-copy-dir', 'btn-paste-dir', 'btn-move-dir', 'btn-create-portal', 'btn-set-home-directory', 'btn-reorder-desktop', 'btn-reorder-mobile', 'btn-profile-settings', 'btn-generate-missing-audios'];
+                const hideForVisitor = ['btn-copy-dir', 'btn-paste-dir', 'btn-move-dir', 'btn-create-portal', 'btn-set-home-directory', 'btn-reorder-desktop', 'btn-reorder-mobile', 'btn-relocate-desktop', 'btn-relocate-mobile', 'btn-profile-settings', 'btn-generate-missing-audios'];
                 hideForVisitor.forEach(id => {
                     const el = document.getElementById(id);
                     if (!el) return;
@@ -1861,7 +1982,7 @@
             },
 
             openModal(id = '', name = '', targetParentId = null, currentViewMode = 'grid') {
-                if(this.state.reorderMode || this.isVisitingProfile()) return;
+                if(this.state.reorderMode || this.state.relocateMode || this.isVisitingProfile()) return;
                 if (id && id !== 'root' && !this.canEditDirectory(this.state.directoryCache.get(Number(id)))) return;
                 if (!id && this.isCurrentDirectoryReadOnly()) return; 
 
@@ -2412,7 +2533,7 @@
                     this.customScroll.update();
                 }
                 
-                if (this.state.reorderMode) this.initSortable();
+                if (this.state.reorderMode || this.state.relocateMode) this.initSortable();
             },
 
             render() {
@@ -2552,7 +2673,14 @@
                 }
 
                 container.innerHTML = html;
-                if (this.state.reorderMode) { document.getElementById('sortable-wrapper').classList.add('reorder-active'); this.initSortable(); }
+                if (this.state.reorderMode || this.state.relocateMode) {
+                    const sortableWrapper = document.getElementById('sortable-wrapper');
+                    if (sortableWrapper) {
+                        if (this.state.reorderMode) sortableWrapper.classList.add('reorder-active');
+                        if (this.state.relocateMode) sortableWrapper.classList.add('relocate-active');
+                    }
+                    this.initSortable();
+                }
             }
         };
 
