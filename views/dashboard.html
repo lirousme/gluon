@@ -62,6 +62,8 @@
         .relocate-active .draggable-item { border-color: #3b82f6 !important; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.12); }
         .relocate-active .draggable-item { cursor: grab !important; }
         .relocate-active .draggable-item:active { cursor: grabbing !important; }
+        body.relocate-dragging,
+        body.relocate-dragging * { cursor: grabbing !important; }
         .relocate-active .sortable-chosen {
             border-color: #60a5fa !important;
             box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.6), 0 12px 24px -12px rgba(37, 99, 235, 0.7) !important;
@@ -88,11 +90,11 @@
             z-index: 20;
         }
         .relocate-drop-hover::after {
-            content: 'Solte para mover para: ' attr(data-relocate-label);
+            content: 'Mover para cá';
             position: absolute;
             left: 0.5rem;
             right: 0.5rem;
-            bottom: 0.5rem;
+            top: 0.5rem;
             z-index: 30;
             font-size: 0.72rem;
             font-weight: 600;
@@ -1753,6 +1755,7 @@
                     el.style.removeProperty('box-shadow');
                 });
                 this.state.relocateHoverTargetId = null;
+                document.body.classList.remove('relocate-dragging');
             },
 
             getRelocateDropTargetFromEvent(evt, draggedId, draggedEl = null) {
@@ -1932,6 +1935,7 @@
                             onStart: (evt) => {
                                 this.clearRelocateHover();
                                 this.state.relocateDraggedId = evt.item ? evt.item.getAttribute('data-id') : null;
+                                document.body.classList.add('relocate-dragging');
                             },
                             onMove: (evt) => {
                                 const draggedEl = evt.dragged || evt.item;
@@ -1950,8 +1954,6 @@
 
                                 this.clearRelocateHover();
                                 dropTarget.candidate.classList.add('relocate-drop-hover');
-                                dropTarget.candidate.setAttribute('data-relocate-label', dropTarget.targetLabel);
-
                                 if (this.getCurrentView() === 'grid') {
                                     dropTarget.candidate.setAttribute('data-relocate-grid-target', '1');
                                     dropTarget.candidate.style.setProperty('background-color', 'rgba(22, 163, 74, 0.95)', 'important');
@@ -1969,6 +1971,7 @@
                                 const targetId = this.state.relocateHoverTargetId || this.getRelocateDropTargetFromEvent(evt, draggedId, evt.item)?.targetId;
                                 this.clearRelocateHover();
                                 this.state.relocateDraggedId = null;
+                                document.body.classList.remove('relocate-dragging');
                                 if (!draggedRealId || !targetId || String(draggedRealId) === String(targetId)) return;
                                 await this.relocateDirectory(draggedRealId, targetId);
                             }
