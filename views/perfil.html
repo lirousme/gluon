@@ -1663,7 +1663,8 @@
                 const isBookDeck = isDeck && dir.deck_mode === 'livro';
                 const percentageValue = isBookDeck ? Number(dir.book_percentage) : Number(dir.deck_percentage);
                 const percentage = Math.max(0, Math.min(100, percentageValue || 0));
-                const color = this.getDeckScoreColor(percentage);
+                const hasNoDueReviews = isDeck && Number(dir.deck_total_cards || 0) > 0 && Number(dir.deck_due_cards || 0) === 0;
+                const color = hasNoDueReviews ? 'rgb(59, 130, 246)' : this.getDeckScoreColor(percentage);
                 return {
                     isDeck,
                     isBookDeck,

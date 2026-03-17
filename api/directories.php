@@ -30,6 +30,10 @@ $method = $_SERVER['REQUEST_METHOD'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? '';
 
+try {
+    $pdo->exec("ALTER TABLE flashcard_book_progress ADD COLUMN next_review_at DATETIME DEFAULT NULL AFTER completed_reads");
+} catch (PDOException $e) {}
+
 
 // =========================================================================
 // FUNÇÃO HELPER: CALCULAR A PRÓXIMA DATA DE RECORRÊNCIA
@@ -391,6 +395,7 @@ if ($action === 'fetch') {
                COALESCE(deck_stats.due_cards, 0) as deck_due_cards,
                COALESCE(book_progress.current_index, 0) as book_current_index,
                COALESCE(book_progress.completed_reads, 0) as book_completed_reads,
+               book_progress.next_review_at as book_next_review_at,
                dr.type as rec_type, dr.interval_value as rec_interval, dr.days_of_week as rec_days, 
                dr.custom_dates as rec_custom, dr.exceptions as rec_exceptions, dr.time_start as rec_time_start, dr.time_end as rec_time_end, dr.end_date as rec_end 
         FROM directories d 
@@ -437,14 +442,16 @@ if ($action === 'fetch') {
 
     if ($parent_id === null && $is_owner_context) {
         $stmtSavedRoot = $pdo->prepare("\n            SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,\n                   d.deck_front_language, d.deck_back_language, d.deck_structure,\n                   d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to,\n                   d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, d.is_completed, d.is_public, d.child_default_type, d.child_default_view,\n                   COALESCE(deck_stats.total_cards, 0) as deck_total_cards,\n                   COALESCE(deck_stats.total_score, 0) as deck_total_score,
-               COALESCE(deck_stats.due_cards, 0) as deck_due_cards,\n                   COALESCE(book_progress.current_index, 0) as book_current_index,\n                   COALESCE(book_progress.completed_reads, 0) as book_completed_reads,\n                   dr.type as rec_type, dr.interval_value as rec_interval, dr.days_of_week as rec_days,\n                   dr.custom_dates as rec_custom, dr.exceptions as rec_exceptions, dr.time_start as rec_time_start, dr.time_end as rec_time_end, dr.end_date as rec_end,\n                   d.user_id as owner_user_id\n            FROM saved_directories sd\n            INNER JOIN directories d ON d.id = sd.directory_id\n            LEFT JOIN directory_recurrences dr ON d.id = dr.directory_id\n            LEFT JOIN (\n                SELECT f.directory_id,\n                       COUNT(f.id) as total_cards,\n                       COALESCE(SUM(fs.score), 0) as total_score,
+               COALESCE(deck_stats.due_cards, 0) as deck_due_cards,\n                   COALESCE(book_progress.current_index, 0) as book_current_index,\n                   COALESCE(book_progress.completed_reads, 0) as book_completed_reads,
+               book_progress.next_review_at as book_next_review_at,\n                   dr.type as rec_type, dr.interval_value as rec_interval, dr.days_of_week as rec_days,\n                   dr.custom_dates as rec_custom, dr.exceptions as rec_exceptions, dr.time_start as rec_time_start, dr.time_end as rec_time_end, dr.end_date as rec_end,\n                   d.user_id as owner_user_id\n            FROM saved_directories sd\n            INNER JOIN directories d ON d.id = sd.directory_id\n            LEFT JOIN directory_recurrences dr ON d.id = dr.directory_id\n            LEFT JOIN (\n                SELECT f.directory_id,\n                       COUNT(f.id) as total_cards,\n                       COALESCE(SUM(fs.score), 0) as total_score,
                    COALESCE(SUM(CASE WHEN fs.next_review_at IS NULL OR fs.next_review_at <= NOW() THEN 1 ELSE 0 END), 0) as due_cards\n                FROM flashcards f\n                INNER JOIN saved_directories sd_filter ON sd_filter.directory_id = f.directory_id AND sd_filter.user_id = ?\n                LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?\n                GROUP BY f.directory_id\n            ) deck_stats ON deck_stats.directory_id = d.id\n            LEFT JOIN flashcard_book_progress book_progress ON book_progress.directory_id = d.id AND book_progress.user_id = ?\n            WHERE sd.user_id = ? AND d.user_id != ? AND d.is_public = 1 AND d.parent_id IS NULL\n        ");
         $stmtSavedRoot->execute([$user_id, $user_id, $user_id, $user_id, $user_id]);
         $directories = array_merge($directories, $stmtSavedRoot->fetchAll());
     }
     elseif ($parent_id === null && !$is_owner_context) {
         $stmtSavedRootTarget = $pdo->prepare("\n            SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,\n                   d.deck_front_language, d.deck_back_language, d.deck_structure,\n                   d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to,\n                   d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, d.is_completed, d.is_public, d.child_default_type, d.child_default_view,\n                   COALESCE(deck_stats.total_cards, 0) as deck_total_cards,\n                   COALESCE(deck_stats.total_score, 0) as deck_total_score,
-               COALESCE(deck_stats.due_cards, 0) as deck_due_cards,\n                   COALESCE(book_progress.current_index, 0) as book_current_index,\n                   COALESCE(book_progress.completed_reads, 0) as book_completed_reads,\n                   dr.type as rec_type, dr.interval_value as rec_interval, dr.days_of_week as rec_days,\n                   dr.custom_dates as rec_custom, dr.exceptions as rec_exceptions, dr.time_start as rec_time_start, dr.time_end as rec_time_end, dr.end_date as rec_end,\n                   d.user_id as owner_user_id\n            FROM saved_directories sd\n            INNER JOIN directories d ON d.id = sd.directory_id\n            LEFT JOIN directory_recurrences dr ON d.id = dr.directory_id\n            LEFT JOIN (\n                SELECT f.directory_id,\n                       COUNT(f.id) as total_cards,\n                       COALESCE(SUM(fs.score), 0) as total_score,
+               COALESCE(deck_stats.due_cards, 0) as deck_due_cards,\n                   COALESCE(book_progress.current_index, 0) as book_current_index,\n                   COALESCE(book_progress.completed_reads, 0) as book_completed_reads,
+               book_progress.next_review_at as book_next_review_at,\n                   dr.type as rec_type, dr.interval_value as rec_interval, dr.days_of_week as rec_days,\n                   dr.custom_dates as rec_custom, dr.exceptions as rec_exceptions, dr.time_start as rec_time_start, dr.time_end as rec_time_end, dr.end_date as rec_end,\n                   d.user_id as owner_user_id\n            FROM saved_directories sd\n            INNER JOIN directories d ON d.id = sd.directory_id\n            LEFT JOIN directory_recurrences dr ON d.id = dr.directory_id\n            LEFT JOIN (\n                SELECT f.directory_id,\n                       COUNT(f.id) as total_cards,\n                       COALESCE(SUM(fs.score), 0) as total_score,
                    COALESCE(SUM(CASE WHEN fs.next_review_at IS NULL OR fs.next_review_at <= NOW() THEN 1 ELSE 0 END), 0) as due_cards\n                FROM flashcards f\n                INNER JOIN saved_directories sd_filter ON sd_filter.directory_id = f.directory_id AND sd_filter.user_id = ?\n                LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?\n                GROUP BY f.directory_id\n            ) deck_stats ON deck_stats.directory_id = d.id\n            LEFT JOIN flashcard_book_progress book_progress ON book_progress.directory_id = d.id AND book_progress.user_id = ?\n            WHERE sd.user_id = ? AND d.user_id != ? AND d.is_public = 1 AND d.parent_id IS NULL\n        ");
         $stmtSavedRootTarget->execute([$effective_target_user_id, $user_id, $user_id, $effective_target_user_id, $effective_target_user_id]);
         $directories = array_merge($directories, $stmtSavedRootTarget->fetchAll());
@@ -483,6 +490,11 @@ if ($action === 'fetch') {
         $isBookDeck = (($dir['deck_mode'] ?? 'aleatorio') === 'livro');
         $bookCurrentIndex = (int)($dir['book_current_index'] ?? 0);
         $bookCompletedReads = (int)($dir['book_completed_reads'] ?? 0);
+        $bookNextReviewAt = $dir['book_next_review_at'] ?? null;
+        if ($isBookDeck) {
+            $bookHasDueReview = empty($bookNextReviewAt) || strtotime($bookNextReviewAt) <= time();
+            $deckDueCards = ($deckTotalCards > 0 && $bookHasDueReview) ? $deckTotalCards : 0;
+        }
         $bookPercentage = $deckTotalCards > 0 ? (int)round((min($bookCurrentIndex, $deckTotalCards) / $deckTotalCards) * 100) : 0;
 
         $response[] = [
