@@ -41,11 +41,43 @@
                 <span class="font-bold text-lg sm:text-xl tracking-wide text-slate-300 group-hover:text-white transition-colors hidden sm:block">Buscar</span>
             </button>
             
-            <button onclick="window.location.href='/dashboard'" class="text-sm bg-slate-800 border border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 font-medium shadow-sm">
-                <i class="fa-solid fa-arrow-left"></i> <span class="hidden sm:inline">Voltar ao Workspace</span>
-            </button>
+            <div class="flex items-center gap-2">
+                <button onclick="window.location.href='/dashboard'" class="text-sm bg-slate-800 border border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 font-medium shadow-sm">
+                    <i class="fa-solid fa-arrow-left"></i> <span class="hidden sm:inline">Voltar ao Workspace</span>
+                </button>
+                <button onclick="app.toggleRightPanel()" id="btnRightPanel" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm py-2 px-3 rounded-lg transition-all" title="Abrir menu lateral direito" aria-label="Abrir menu lateral direito">
+                    <i class="fa-solid fa-sliders"></i>
+                </button>
+            </div>
         </div>
     </nav>
+
+    <div id="rightPanelOverlay" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 hidden" onclick="app.closeRightPanel()"></div>
+    <aside id="rightPanel" class="fixed top-16 right-0 h-[calc(100dvh-4rem)] w-72 max-w-[85vw] bg-gluon-secondary border-l border-slate-700/70 shadow-2xl z-50 transform translate-x-full transition-transform duration-200">
+        <div class="p-4 space-y-4">
+            <div class="flex items-center justify-between">
+                <h2 class="text-sm font-semibold text-slate-200">Ações rápidas</h2>
+                <button onclick="app.closeRightPanel()" class="text-slate-400 hover:text-white" title="Fechar menu" aria-label="Fechar menu lateral direito">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <button onclick="window.location.href='/dashboard'" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm py-2.5 px-3 rounded-lg transition-all text-left flex items-center gap-2">
+                <i class="fa-solid fa-arrow-left w-4 text-slate-400"></i>
+                Voltar ao Workspace
+            </button>
+
+            <button onclick="app.logout()" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm py-2.5 px-3 rounded-lg transition-all text-left flex items-center gap-2">
+                <i class="fa-solid fa-power-off w-4 text-slate-400"></i>
+                Sair da Conta
+            </button>
+
+            <button onclick="app.openDeleteModal()" class="w-full bg-red-600/90 hover:bg-red-500 text-white text-sm py-2.5 px-3 rounded-lg transition-all text-left flex items-center gap-2">
+                <i class="fa-solid fa-trash w-4"></i>
+                Excluir Conta
+            </button>
+        </div>
+    </aside>
 
     <!-- Main Content -->
     <main class="flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
@@ -162,6 +194,8 @@
 
     <script>
         const app = {
+            isRightPanelOpen: false,
+
             async init() {
                 await this.loadProfile();
                 this.setupListeners();
@@ -169,6 +203,25 @@
 
             setupListeners() {
                 document.getElementById('profileForm').addEventListener('submit', (e) => this.saveProfile(e));
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        this.closeRightPanel();
+                    }
+                });
+            },
+
+            toggleRightPanel() {
+                this.isRightPanelOpen = !this.isRightPanelOpen;
+                const panel = document.getElementById('rightPanel');
+                const overlay = document.getElementById('rightPanelOverlay');
+                panel.classList.toggle('translate-x-full', !this.isRightPanelOpen);
+                overlay.classList.toggle('hidden', !this.isRightPanelOpen);
+            },
+
+            closeRightPanel() {
+                this.isRightPanelOpen = false;
+                document.getElementById('rightPanel').classList.add('translate-x-full');
+                document.getElementById('rightPanelOverlay').classList.add('hidden');
             },
 
             showToast(message, type = 'success') {
@@ -244,14 +297,18 @@
             },
 
             async logout() {
+                this.closeRightPanel();
                 const btn = document.getElementById('btnLogout');
-                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Saindo...';
+                if (btn) {
+                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Saindo...';
+                }
                 
                 const res = await this.api('auth', 'logout');
                 if (res) window.location.href = '/';
             },
 
             openDeleteModal() {
+                this.closeRightPanel();
                 const modal = document.getElementById('deleteModal');
                 const content = document.getElementById('deleteModalContent');
                 document.getElementById('delete_password').value = '';
