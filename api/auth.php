@@ -49,7 +49,6 @@ if ($action === 'register') {
 elseif ($action === 'login') {
     $login_id = trim($input['login_id'] ?? '');
     $password = $input['password'] ?? '';
-    $remember = $input['remember'] ?? false;
 
     if (empty($login_id) || empty($password)) {
         die(json_encode(['status' => 'error', 'message' => 'Preencha todos os campos.']));
@@ -63,15 +62,14 @@ elseif ($action === 'login') {
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['username'] = $user['username'];
 
-        if ($remember) {
-            $token = bin2hex(random_bytes(32)); 
-            $token_hash = hash('sha256', $token);
-            
-            $stmt = $pdo->prepare("UPDATE users SET remember_token = ? WHERE id = ?");
-            $stmt->execute([$token_hash, $user['id']]);
+        $remember_lifetime = 60 * 60 * 24 * 365 * 10; // 10 anos
+        $token = bin2hex(random_bytes(32));
+        $token_hash = hash('sha256', $token);
 
-            setcookie('gluon_remember', $token, time() + (86400 * 30), "/", "", false, true);
-        }
+        $stmt = $pdo->prepare("UPDATE users SET remember_token = ? WHERE id = ?");
+        $stmt->execute([$token_hash, $user['id']]);
+
+        setcookie('gluon_remember', $token, time() + $remember_lifetime, "/", "", isset($_SERVER['HTTPS']), true);
 
         echo json_encode(['status' => 'success', 'message' => 'Login realizado com sucesso.', 'redirect' => '/dashboard']);
     } else {
@@ -91,7 +89,12 @@ elseif ($action === 'logout') {
     session_destroy();
     
     // Deleta o cookie do navegador definindo data de expiração no passado
-    setcookie('gluon_remember', '', time() - 3600, "/", "", false, true);
+    setcookie('gluon_remember', '', time() - 3600, "/", "", isset($_SERVER['HTTPS']), true);
+
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 3600, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+    }
     
     echo json_encode(['status' => 'success', 'message' => 'Deslogado com sucesso.']);
 }

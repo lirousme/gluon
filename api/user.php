@@ -389,7 +389,12 @@ elseif ($action === 'delete_account') {
     if ($stmt->execute([$user_id])) {
         session_unset();
         session_destroy();
-        setcookie('gluon_remember', '', time() - 3600, "/", "", false, true);
+        setcookie('gluon_remember', '', time() - 3600, "/", "", isset($_SERVER['HTTPS']), true);
+
+        if (ini_get('session.use_cookies')) {
+            $params = session_get_cookie_params();
+            setcookie(session_name(), '', time() - 3600, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+        }
 
         echo json_encode(['status' => 'success', 'message' => 'Conta e dados excluídos permanentemente.']);
     } else {
