@@ -2795,7 +2795,7 @@
                 const hasCardsToStudyNow = dueCards > 0;
                 const color = !hasCards
                     ? '#94a3b8'
-                    : (!isBookDeck && !hasCardsToStudyNow ? '#3b82f6' : this.getDeckScoreColor(percentage));
+                    : (!hasCardsToStudyNow ? '#3b82f6' : this.getDeckScoreColor(percentage));
                 return {
                     isDeck,
                     isBookDeck,
