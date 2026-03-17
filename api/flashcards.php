@@ -66,6 +66,10 @@ try {
 } catch (PDOException $e) {}
 
 try {
+    $pdo->exec("ALTER TABLE flashcard_book_progress ADD COLUMN next_review_at DATETIME DEFAULT NULL AFTER completed_reads");
+} catch (PDOException $e) {}
+
+try {
     $pdo->exec("ALTER TABLE users ADD COLUMN tts_provider VARCHAR(20) NOT NULL DEFAULT 'fishaudio' AFTER home_directory_id");
 } catch (PDOException $e) {}
 
@@ -858,6 +862,8 @@ if ($action === 'fetch') {
     $current_index = 0;
     $book_completed_reads = 0;
 
+    $book_next_review_at = null;
+
     if ($deck_mode === 'aleatorio') {
         $stmt = $pdo->prepare("
             SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score 
@@ -876,16 +882,22 @@ if ($action === 'fetch') {
         ");
         $stmt->execute([$deck_id]);
 
-        $stmtProg = $pdo->prepare("SELECT current_index, completed_reads FROM flashcard_book_progress WHERE user_id = ? AND directory_id = ?");
+        $stmtProg = $pdo->prepare("SELECT current_index, completed_reads, next_review_at FROM flashcard_book_progress WHERE user_id = ? AND directory_id = ?");
         $stmtProg->execute([$user_id, $deck_id]);
         $progressData = $stmtProg->fetch();
         if ($progressData) {
             $current_index = (int)($progressData['current_index'] ?? 0);
             $book_completed_reads = min(3, (int)($progressData['completed_reads'] ?? 0));
+            $book_next_review_at = $progressData['next_review_at'] ?? null;
         }
     }
     
     $cards = $stmt->fetchAll();
+
+    if ($deck_mode === 'livro' && !empty($book_next_review_at) && strtotime($book_next_review_at) > time()) {
+        $cards = [];
+        $current_index = 0;
+    }
 
     $stmtTotal = $pdo->prepare("SELECT COUNT(id) FROM flashcards WHERE directory_id = ?");
     $stmtTotal->execute([$deck_id]);
@@ -930,6 +942,7 @@ if ($action === 'fetch') {
         'deck_percentage' => $deck_percentage,
         'book_completed_reads' => $book_completed_reads,
         'book_completed_reads_max' => 3,
+        'book_next_review_at' => $book_next_review_at,
         'total_cards' => $total_cards_in_deck,
         'current_index' => $current_index,
         'data' => $response
@@ -1351,9 +1364,12 @@ elseif ($action === 'increment_book_score') {
     }
 
     $stmt = $pdo->prepare("
-        INSERT INTO flashcard_book_progress (user_id, directory_id, current_index, completed_reads) 
-        VALUES (?, ?, 0, 1) 
-        ON DUPLICATE KEY UPDATE completed_reads = LEAST(completed_reads + 1, 3)
+        INSERT INTO flashcard_book_progress (user_id, directory_id, current_index, completed_reads, next_review_at) 
+        VALUES (?, ?, 0, 1, DATE_ADD(NOW(), INTERVAL 24 HOUR)) 
+        ON DUPLICATE KEY UPDATE
+            current_index = 0,
+            completed_reads = LEAST(completed_reads + 1, 3),
+            next_review_at = DATE_ADD(NOW(), INTERVAL (LEAST(completed_reads + 1, 20) * 24) HOUR)
     ");
     $stmt->execute([$user_id, $deck_id]);
     echo json_encode(['status' => 'success']);
@@ -1372,9 +1388,9 @@ elseif ($action === 'reset_book_score') {
 
     if ($isBookMode) {
         $stmt = $pdo->prepare("
-            INSERT INTO flashcard_book_progress (user_id, directory_id, current_index, completed_reads) 
-            VALUES (?, ?, 0, 0) 
-            ON DUPLICATE KEY UPDATE completed_reads = 0
+            INSERT INTO flashcard_book_progress (user_id, directory_id, current_index, completed_reads, next_review_at) 
+            VALUES (?, ?, 0, 0, NULL) 
+            ON DUPLICATE KEY UPDATE current_index = 0, completed_reads = 0, next_review_at = NULL
         ");
         $stmt->execute([$user_id, $deck_id]);
         echo json_encode(['status' => 'success', 'message' => 'Pontuação do livro zerada.']);
