@@ -74,10 +74,7 @@
             </div>
 
             <div class="flex items-center justify-between">
-                <label class="flex items-center gap-2 cursor-pointer text-sm text-slate-400 hover:text-white transition-colors">
-                    <input type="checkbox" id="loginRemember" class="rounded border-slate-600 bg-slate-800 text-gluon-primary focus:ring-gluon-primary focus:ring-offset-slate-900">
-                    <span>Manter logado</span>
-                </label>
+                <span class="text-sm text-emerald-400">Login persistente ativado</span>
                 <a href="#" class="text-sm text-gluon-primary hover:text-blue-400 transition-colors">Esqueceu a senha?</a>
             </div>
 
@@ -175,8 +172,7 @@
             const payload = {
                 action: 'login',
                 login_id: document.getElementById('loginId').value,
-                password: document.getElementById('loginPass').value,
-                remember: document.getElementById('loginRemember').checked
+                password: document.getElementById('loginPass').value
             };
 
             try {

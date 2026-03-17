@@ -9,12 +9,39 @@
  * Evita repetição de código e centraliza a segurança.
  */
 
-// Inicia sessão segura
+// Inicia sessão segura e persistente (permanece logado até logout manual)
+$persistent_session_lifetime = 60 * 60 * 24 * 365 * 10; // 10 anos
 session_start([
     'cookie_httponly' => true, // Previne roubo de sessão via XSS
     'cookie_secure' => isset($_SERVER['HTTPS']), // Apenas HTTPS se disponível
-    'use_strict_mode' => true
+    'use_strict_mode' => true,
+    'cookie_lifetime' => $persistent_session_lifetime,
+    'gc_maxlifetime' => $persistent_session_lifetime,
+    'cookie_samesite' => 'Lax'
 ]);
+
+// Restaura sessão automaticamente via cookie persistente (se existir)
+if (!isset($_SESSION['user_id']) && !empty($_COOKIE['gluon_remember'])) {
+    try {
+        require_once __DIR__ . '/config/database.php';
+        $pdo = Database::getConnection();
+
+        $token_hash = hash('sha256', (string)$_COOKIE['gluon_remember']);
+        $stmt = $pdo->prepare("SELECT id, username FROM users WHERE remember_token = ? LIMIT 1");
+        $stmt->execute([$token_hash]);
+        $user = $stmt->fetch();
+
+        if ($user) {
+            $_SESSION['user_id'] = (int)$user['id'];
+            $_SESSION['username'] = $user['username'];
+
+            // Renova expiração do cookie persistente a cada acesso
+            setcookie('gluon_remember', (string)$_COOKIE['gluon_remember'], time() + $persistent_session_lifetime, '/', '', isset($_SERVER['HTTPS']), true);
+        }
+    } catch (Throwable $e) {
+        // Fail-safe: em caso de erro de banco, segue fluxo normal sem restaurar sessão.
+    }
+}
 
 // Configurações básicas
 define('BASE_PATH', __DIR__);
