@@ -100,15 +100,16 @@
     <div id="dirModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
         <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-0 transform scale-95 transition-transform duration-300 overflow-hidden flex flex-col max-h-[90vh]" id="dirModalContent">
             
-            <div class="p-5 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
-                <h3 class="text-xl font-semibold text-white flex items-center gap-2" id="modalTitle">
-                    <i class="fa-solid fa-plus text-gluon-primary"></i> <span>Novo Item</span>
-                </h3>
-                <button type="button" onclick="scheduleApp.closeModal()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+            <div class="p-5 border-b border-slate-700 flex justify-between items-center bg-slate-800/50 gap-3">
+                <button type="button" id="btnDeleteDir" onclick="scheduleApp.deleteFromModal()" class="hidden flex text-red-400 hover:text-white hover:bg-red-500/20 px-3 py-2 rounded-lg transition-colors items-center gap-2 text-sm">
+                    <i class="fa-solid fa-trash"></i> <span>Excluir</span>
+                </button>
+                <button type="button" onclick="scheduleApp.closeModal()" class="ml-auto text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
             </div>
 
             <div class="flex border-b border-slate-700 bg-slate-900/30">
                 <button type="button" onclick="scheduleApp.switchModalTab('geral')" id="tab-btn-geral" class="flex-1 py-3 text-sm font-medium border-b-2 border-gluon-primary text-white transition-colors">Geral</button>
+                <button type="button" onclick="scheduleApp.switchModalTab('config')" id="tab-btn-config" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Configurações</button>
                 <button type="button" onclick="scheduleApp.switchModalTab('apar')" id="tab-btn-apar" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Aparência</button>
                 <button type="button" onclick="scheduleApp.switchModalTab('recor')" id="tab-btn-recor" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Repetição</button>
             </div>
@@ -120,6 +121,22 @@
                 <input type="hidden" id="dirContextDate"> 
 
                 <div id="tab-geral" class="p-6 overflow-y-auto flex-1">
+                    <div id="dirNameContainer" class="mb-5">
+                        <label class="block text-sm font-medium text-slate-300 mb-1" id="nameLabel">Nome do Item</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-pen absolute left-3 top-3.5 text-slate-500 text-sm"></i>
+                            <textarea id="dirName" rows="1" autocomplete="off" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 pl-9 pr-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-all resize-none overflow-hidden min-h-[44px]"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="mb-2">
+                        <button type="button" id="btnOpenItemFromModal" onclick="scheduleApp.openItemFromModal()" class="hidden flex w-full px-4 py-2 rounded-lg text-slate-200 bg-slate-700 hover:bg-slate-600 transition-colors text-sm font-medium items-center justify-center gap-2">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir item
+                        </button>
+                    </div>
+                </div>
+
+                <div id="tab-config" class="hidden p-6 overflow-y-auto flex-1">
                     <div id="typeSelectorContainer" class="mb-5">
                         <label class="block text-sm font-medium text-slate-300 mb-2">Tipo de Item</label>
                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -148,14 +165,6 @@
                                     <i class="fa-solid fa-list-ol block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Plano</span>
                                 </div>
                             </label>
-                        </div>
-                    </div>
-
-                    <div id="dirNameContainer" class="mb-5">
-                        <label class="block text-sm font-medium text-slate-300 mb-1" id="nameLabel">Nome do Item</label>
-                        <div class="relative">
-                            <i class="fa-solid fa-pen absolute left-3 top-3.5 text-slate-500 text-sm"></i>
-                            <textarea id="dirName" rows="1" autocomplete="off" class="w-full bg-slate-800 border border-slate-600 rounded-lg py-2.5 pl-9 pr-3 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-all resize-none overflow-hidden min-h-[44px]"></textarea>
                         </div>
                     </div>
 
@@ -285,16 +294,8 @@
                     </div>
                 </div>
 
-                <div class="p-5 border-t border-slate-700 bg-slate-800/50 flex flex-col-reverse sm:flex-row justify-between items-center gap-3 shrink-0">
-                    <div class="w-full sm:w-auto">
-                        <button type="button" id="btnDeleteDir" onclick="scheduleApp.deleteFromModal()" class="hidden w-full text-red-400 hover:text-white hover:bg-red-500/20 px-3 py-2 rounded-lg transition-colors flex justify-center items-center gap-2 text-sm">
-                            <i class="fa-solid fa-trash"></i> <span>Excluir</span>
-                        </button>
-                    </div>
+                <div class="p-5 border-t border-slate-700 bg-slate-800/50 flex justify-end items-center gap-2 shrink-0">
                     <div class="flex gap-2 w-full sm:w-auto justify-end">
-                        <button type="button" id="btnOpenItemFromModal" onclick="scheduleApp.openItemFromModal()" class="hidden px-4 py-2 rounded-lg text-slate-200 bg-slate-700 hover:bg-slate-600 transition-colors text-sm font-medium flex items-center gap-2">
-                            <i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir item
-                        </button>
                         <button type="button" onclick="scheduleApp.closeModal()" class="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors text-sm font-medium">Cancelar</button>
                         <button type="submit" id="btnSaveDir" class="px-4 py-2 bg-gluon-primary hover:bg-blue-600 text-white rounded-lg shadow-lg flex items-center gap-2 text-sm font-medium transition-all">
                             <i class="fa-solid fa-check"></i> Salvar

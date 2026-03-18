@@ -1976,7 +1976,7 @@
             },
 
             switchModalTab(tabName) {
-                const tabs = ['geral', 'apar', 'recor'];
+                const tabs = ['geral', 'config', 'apar', 'recor'];
                 tabs.forEach(t => {
                     const tEl = document.getElementById(`tab-${t}`);
                     const bEl = document.getElementById(`tab-btn-${t}`);
@@ -2112,14 +2112,6 @@
                     if (dirObj.start_date) document.getElementById('dirStartDate').value = dirObj.start_date;
                     if (dirObj.end_date) document.getElementById('dirEndDate').value = dirObj.end_date;
                     
-                    let titleText = 'Item';
-                    if(dirObj.type === 0) titleText = 'Tarefa / Pasta';
-                    if(dirObj.type === 1) titleText = 'Arquivo';
-                    if(dirObj.type === 2) titleText = 'Agenda';
-                    if(dirObj.type === 3) titleText = 'Portal';
-                    if(dirObj.type === 7) titleText = 'Plano';
-
-                    document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-gear text-gluon-primary"></i> <span>Configurar ${titleText}</span>`;
                     typeSelector.classList.add('hidden');
                     btnRecor.classList.remove('hidden');
                     
@@ -2129,7 +2121,6 @@
                     else if(dirObj.type === 3) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Portal'; iconPickerContainer.style.display = 'none'; btnRecor.classList.add('hidden');}
                     else if(dirObj.type === 7) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Plano'; iconPickerContainer.style.display = 'block'; }
                 } else {
-                    document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus text-gluon-primary"></i> <span>Novo Item</span>';
                     typeSelector.classList.remove('hidden');
                     iconPickerContainer.style.display = 'block';
                     btnRecor.classList.remove('hidden');
