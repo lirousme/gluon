@@ -256,65 +256,6 @@
                     <i class="fa-solid fa-sliders"></i>
                 </button>
 
-                <!-- Menu de Opções Geral (3 pontinhos) -->
-                <div class="relative">
-                    <button onclick="app.toggleMobileViewMenu()" id="btn-mobile-menu-trigger" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors outline-none focus:ring-2 focus:ring-slate-700">
-                        <i class="fa-solid fa-ellipsis-vertical px-1"></i>
-                    </button>
-                    <div id="mobileViewMenu" class="hidden absolute right-0 top-12 w-56 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 origin-top-right transition-all">
-                        
-                        <div class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Ações do Diretório</div>
-                        
-                        <button onclick="app.openModal(app.getCurrentParentId() || 'root'); app.toggleMobileViewMenu()" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
-                            <i class="fa-solid fa-folder-gear w-5 text-center text-lg"></i> <span class="font-medium">Configurações</span>
-                        </button>
-
-                        <button onclick="app.generateMissingAudiosFromDirectory(); app.toggleMobileViewMenu()" id="btn-generate-missing-audios" class="w-full text-left px-4 py-2.5 text-sm text-cyan-300 hover:bg-slate-700 hover:text-cyan-200 flex items-center gap-3 transition-colors hidden">
-                            <i class="fa-solid fa-volume-high w-5 text-center text-lg"></i> <span class="font-medium">Gerar áudios pendentes</span>
-                        </button>
-
-                        <button onclick="app.setCurrentDirectoryAsHome(); app.toggleMobileViewMenu()" id="btn-set-home-directory" class="w-full text-left px-4 py-2.5 text-sm text-emerald-300 hover:bg-slate-700 hover:text-emerald-200 flex items-center gap-3 transition-colors hidden">
-                            <i class="fa-solid fa-house-circle-check w-5 text-center text-lg"></i> <span class="font-medium">Definir como página inicial</span>
-                        </button>
-
-                        <button onclick="app.copyCurrentDirectory(); app.toggleMobileViewMenu()" id="btn-copy-dir" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors hidden">
-                            <i class="fa-regular fa-copy w-5 text-center text-lg"></i> <span class="font-medium">Copiar Diretório</span>
-                        </button>
-
-                        <button onclick="app.copyDescendantDirectoryNames(); app.toggleMobileViewMenu()" id="btn-copy-descendant-dir-names" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
-                            <i class="fa-regular fa-clipboard w-5 text-center text-lg"></i> <span class="font-medium">Copiar nomes dos descendentes</span>
-                        </button>
-
-                        <button onclick="app.pasteDirectory(); app.toggleMobileViewMenu()" id="btn-paste-dir" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors hidden">
-                            <i class="fa-solid fa-paste w-5 text-center text-lg"></i> <span class="font-medium">Colar Arquivos</span>
-                        </button>
-                        
-                        <button onclick="app.moveDirectory(); app.toggleMobileViewMenu()" id="btn-move-dir" class="w-full text-left px-4 py-2.5 text-sm text-amber-400 hover:bg-slate-700 hover:text-amber-300 flex items-center gap-3 transition-colors hidden">
-                            <i class="fa-solid fa-truck-fast w-5 text-center text-lg"></i> <span class="font-medium">Mover para cá</span>
-                        </button>
-
-                        <button onclick="app.createPortal(); app.toggleMobileViewMenu()" id="btn-create-portal" class="w-full text-left px-4 py-2.5 text-sm text-fuchsia-400 hover:bg-slate-700 hover:text-fuchsia-300 flex items-center gap-3 transition-colors hidden">
-                            <i class="fa-solid fa-door-open w-5 text-center text-lg"></i> <span class="font-medium">Criar Portal</span>
-                        </button>
-
-                        <div class="h-px bg-slate-700/50 my-2 md:hidden"></div>
-
-                        <!-- Opções exclusivas do Mobile -->
-                        <div class="md:hidden">
-                            <button onclick="app.toggleReorderMode(); app.toggleMobileViewMenu()" id="btn-reorder-mobile" class="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors border-b border-slate-700/50 mb-1">
-                                <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90 w-5 text-center text-lg"></i> <span class="font-medium">Alterar Ordem</span>
-                            </button>
-                            <button onclick="app.toggleRelocateMode(); app.toggleMobileViewMenu()" id="btn-relocate-mobile" class="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors border-b border-slate-700/50 mb-1">
-                                <i class="fa-solid fa-folder-tree w-5 text-center text-lg"></i> <span class="font-medium">Realocar</span>
-                            </button>
-                            <div class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Visualização</div>
-                            <button onclick="app.setViewMode('grid'); app.toggleMobileViewMenu()" id="btn-mobile-view-grid" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors"><i class="fa-solid fa-border-all w-5 text-center text-lg"></i> <span class="font-medium">Grid</span></button>
-                            <button onclick="app.setViewMode('list'); app.toggleMobileViewMenu()" id="btn-mobile-view-list" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors"><i class="fa-solid fa-list-ul w-5 text-center text-lg"></i> <span class="font-medium">Lista</span></button>
-                            <button onclick="app.setViewMode('kanban'); app.toggleMobileViewMenu()" id="btn-mobile-view-kanban" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors"><i class="fa-solid fa-columns w-5 text-center text-lg"></i> <span class="font-medium">Kanban</span></button>
-                        </div>
-                    </div>
-                </div>
-                
                 <div class="h-6 w-px bg-slate-700"></div>
                 
                 <button onclick="window.location.href='/adm'" id="btn-admin-header" class="hidden text-sm text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-2" title="Painel administrativo">
@@ -345,26 +286,50 @@
             </div>
 
             <div class="p-3 space-y-1 overflow-y-auto">
-                <div class="px-2 pb-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Ações</div>
+                <div class="px-2 pb-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Ações do diretório</div>
                 <button onclick="app.openModal(app.getCurrentParentId() || 'root'); app.closeRightPanel()" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
                     <i class="fa-solid fa-folder-gear w-5 text-center"></i><span class="font-medium">Configurações</span>
                 </button>
-                <button onclick="app.toggleReorderMode(); app.closeRightPanel()" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                <button onclick="app.generateMissingAudiosFromDirectory(); app.closeRightPanel()" id="btn-generate-missing-audios" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-cyan-300 hover:bg-slate-700 hover:text-cyan-200 flex items-center gap-3 transition-colors hidden">
+                    <i class="fa-solid fa-volume-high w-5 text-center"></i><span class="font-medium">Gerar áudios pendentes</span>
+                </button>
+                <button onclick="app.setCurrentDirectoryAsHome(); app.closeRightPanel()" id="btn-set-home-directory" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-emerald-300 hover:bg-slate-700 hover:text-emerald-200 flex items-center gap-3 transition-colors hidden">
+                    <i class="fa-solid fa-house-circle-check w-5 text-center"></i><span class="font-medium">Definir como página inicial</span>
+                </button>
+                <button onclick="app.copyCurrentDirectory(); app.closeRightPanel()" id="btn-copy-dir" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors hidden">
+                    <i class="fa-regular fa-copy w-5 text-center"></i><span class="font-medium">Copiar Diretório</span>
+                </button>
+                <button onclick="app.copyDescendantDirectoryNames(); app.closeRightPanel()" id="btn-copy-descendant-dir-names" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                    <i class="fa-regular fa-clipboard w-5 text-center"></i><span class="font-medium">Copiar nomes dos descendentes</span>
+                </button>
+                <button onclick="app.pasteDirectory(); app.closeRightPanel()" id="btn-paste-dir" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors hidden">
+                    <i class="fa-solid fa-paste w-5 text-center"></i><span class="font-medium">Colar Arquivos</span>
+                </button>
+                <button onclick="app.moveDirectory(); app.closeRightPanel()" id="btn-move-dir" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-amber-400 hover:bg-slate-700 hover:text-amber-300 flex items-center gap-3 transition-colors hidden">
+                    <i class="fa-solid fa-truck-fast w-5 text-center"></i><span class="font-medium">Mover para cá</span>
+                </button>
+                <button onclick="app.createPortal(); app.closeRightPanel()" id="btn-create-portal" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-fuchsia-400 hover:bg-slate-700 hover:text-fuchsia-300 flex items-center gap-3 transition-colors hidden">
+                    <i class="fa-solid fa-door-open w-5 text-center"></i><span class="font-medium">Criar Portal</span>
+                </button>
+
+                <div class="h-px bg-slate-700/70 my-2"></div>
+                <div class="px-2 pb-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Organização</div>
+                <button onclick="app.toggleReorderMode(); app.closeRightPanel()" id="btn-reorder-mobile" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
                     <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90 w-5 text-center"></i><span class="font-medium">Alterar ordem</span>
                 </button>
-                <button onclick="app.toggleRelocateMode(); app.closeRightPanel()" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                <button onclick="app.toggleRelocateMode(); app.closeRightPanel()" id="btn-relocate-mobile" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
                     <i class="fa-solid fa-folder-tree w-5 text-center"></i><span class="font-medium">Realocar</span>
                 </button>
 
                 <div class="h-px bg-slate-700/70 my-2"></div>
                 <div class="px-2 pb-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Visualização</div>
-                <button onclick="app.setViewMode('grid'); app.closeRightPanel()" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                <button onclick="app.setViewMode('grid'); app.closeRightPanel()" id="btn-mobile-view-grid" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
                     <i class="fa-solid fa-border-all w-5 text-center"></i><span class="font-medium">Grid</span>
                 </button>
-                <button onclick="app.setViewMode('list'); app.closeRightPanel()" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                <button onclick="app.setViewMode('list'); app.closeRightPanel()" id="btn-mobile-view-list" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
                     <i class="fa-solid fa-list-ul w-5 text-center"></i><span class="font-medium">Lista</span>
                 </button>
-                <button onclick="app.setViewMode('kanban'); app.closeRightPanel()" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                <button onclick="app.setViewMode('kanban'); app.closeRightPanel()" id="btn-mobile-view-kanban" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
                     <i class="fa-solid fa-columns w-5 text-center"></i><span class="font-medium">Kanban</span>
                 </button>
             </div>
@@ -1061,7 +1026,7 @@
                 document.addEventListener('click', (event) => {
                     const menu = document.getElementById('mobileViewMenu');
                     const trigger = document.getElementById('btn-mobile-menu-trigger');
-                    if (menu && !menu.classList.contains('hidden') && !menu.contains(event.target) && !trigger.contains(event.target)) {
+                    if (menu && !menu.classList.contains('hidden') && !menu.contains(event.target) && (!trigger || !trigger.contains(event.target))) {
                         menu.classList.add('hidden');
                     }
 
@@ -1818,7 +1783,10 @@
                 }).join('');
             },
 
-            toggleMobileViewMenu() { document.getElementById('mobileViewMenu').classList.toggle('hidden'); },
+            toggleMobileViewMenu() {
+                const menu = document.getElementById('mobileViewMenu');
+                if (menu) menu.classList.toggle('hidden');
+            },
 
             toggleRightPanel() {
                 this.state.isRightPanelOpen = !this.state.isRightPanelOpen;
