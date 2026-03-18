@@ -10,7 +10,7 @@ public_html/gluon/
 ├── api/                      # Back-end API (JSON/POST)
 │   ├── auth.php
 │   ├── directories.php       # CRUD de Diretórios/Arquivos/Agendas
-│   ├── user.php
+│   ├── user.php              # Preferências de usuário e resolução do diretório obrigatório de Código Fonte
 │   ├── editor.php            # Gerencia leitura e gravação de códigos
 │   └── schedule.php          # NOVO: Micro-API para arrastar/redimensionar eventos
 │   └── cron_recurrence.php   # NOVO: Motor autônomo de repetição de tarefas (via CRON)
@@ -22,7 +22,7 @@ public_html/gluon/
 │
 ├── views/                    # Front-end (Vanilla JS + Tailwind)
 │   ├── login.html
-│   ├── dashboard.html        # ATUALIZADO: Botão ADM no cabeçalho (apenas usuário 1)
+│   ├── dashboard.html        # ATUALIZADO: Atalho no cabeçalho para o diretório obrigatório de Código Fonte
 │   ├── adm.php               # NOVO: Painel administrativo (restrito ao usuário 1)
 │   ├── configuracao-tts.php  # NOVO: CRUD mobile para tabela pronuncias
 │   ├── settings.html
@@ -49,6 +49,7 @@ root_view VARCHAR(10) DEFAULT 'grid',
 root_new_item_position VARCHAR(10) DEFAULT 'end',
 copied_directory_id INT UNSIGNED DEFAULT NULL, -- Guarda o ID do diretório copiado
 home_directory_id INT UNSIGNED DEFAULT NULL, -- Guarda o ID da agenda definida como página inicial
+source_directory_id INT UNSIGNED DEFAULT NULL, -- Guarda o ID do diretório obrigatório de Código Fonte do usuário
 tts_provider VARCHAR(20) NOT NULL DEFAULT 'fishaudio', -- Provedor padrão de TTS por usuário (fishaudio | openai)
 encrypted_data TEXT DEFAULT NULL,
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -59,8 +60,10 @@ INDEX idx_email (email),
 INDEX idx_remember_token (remember_token),
 INDEX fk_users_copied_directory (copied_directory_id),
 INDEX fk_users_home_directory (home_directory_id),
+INDEX fk_users_source_directory (source_directory_id),
 FOREIGN KEY (copied_directory_id) REFERENCES directories(id) ON DELETE SET NULL,
-FOREIGN KEY (home_directory_id) REFERENCES directories(id) ON DELETE SET NULL
+FOREIGN KEY (home_directory_id) REFERENCES directories(id) ON DELETE SET NULL,
+FOREIGN KEY (source_directory_id) REFERENCES directories(id) ON DELETE SET NULL
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================

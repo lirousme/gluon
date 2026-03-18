@@ -937,6 +937,13 @@ elseif ($action === 'delete') {
         die(json_encode(['status' => 'error', 'message' => 'ID inválido.']));
     }
 
+    $stmtProtected = $pdo->prepare("SELECT source_directory_id FROM users WHERE id = ? LIMIT 1");
+    $stmtProtected->execute([$user_id]);
+    $source_directory_id = (int)($stmtProtected->fetchColumn() ?: 0);
+    if ($source_directory_id > 0 && $id === $source_directory_id) {
+        die(json_encode(['status' => 'error', 'message' => 'Este diretório é obrigatório da sua conta e não pode ser excluído.']));
+    }
+
     if ($scope === 'single') {
         if (!$target_date_str) {
             die(json_encode(['status' => 'error', 'message' => 'Data alvo para exclusão não foi informada.']));
