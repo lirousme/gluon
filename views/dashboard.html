@@ -252,6 +252,10 @@
                     <button onclick="app.setViewMode('kanban')" id="btn-view-kanban" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Kanban"><i class="fa-solid fa-columns"></i></button>
                 </div>
 
+                <button onclick="app.toggleRightPanel()" id="btn-right-panel" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm py-1.5 px-3 rounded transition-all" title="Abrir menu lateral direito" aria-label="Abrir menu lateral direito">
+                    <i class="fa-solid fa-sliders"></i>
+                </button>
+
                 <!-- Menu de Opções Geral (3 pontinhos) -->
                 <div class="relative">
                     <button onclick="app.toggleMobileViewMenu()" id="btn-mobile-menu-trigger" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors outline-none focus:ring-2 focus:ring-slate-700">
@@ -329,6 +333,43 @@
             </div>
         </div>
     </nav>
+
+    <div id="rightPanelBackdrop" class="fixed inset-0 bg-slate-950/45 z-40 hidden" onclick="app.closeRightPanel()" aria-hidden="true"></div>
+    <aside id="rightPanel" class="fixed top-16 right-0 h-[calc(100dvh-4rem)] w-72 max-w-[85vw] bg-gluon-secondary border-l border-slate-700/70 shadow-2xl z-50 transform translate-x-full transition-transform duration-200">
+        <div class="h-full flex flex-col">
+            <div class="p-4 border-b border-slate-700/60 flex items-center justify-between">
+                <h2 class="text-sm font-semibold text-slate-100">Menu rápido</h2>
+                <button onclick="app.closeRightPanel()" class="text-slate-400 hover:text-white" title="Fechar menu" aria-label="Fechar menu lateral direito">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="p-3 space-y-1 overflow-y-auto">
+                <div class="px-2 pb-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Ações</div>
+                <button onclick="app.openModal(app.getCurrentParentId() || 'root'); app.closeRightPanel()" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                    <i class="fa-solid fa-folder-gear w-5 text-center"></i><span class="font-medium">Configurações</span>
+                </button>
+                <button onclick="app.toggleReorderMode(); app.closeRightPanel()" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                    <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90 w-5 text-center"></i><span class="font-medium">Alterar ordem</span>
+                </button>
+                <button onclick="app.toggleRelocateMode(); app.closeRightPanel()" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                    <i class="fa-solid fa-folder-tree w-5 text-center"></i><span class="font-medium">Realocar</span>
+                </button>
+
+                <div class="h-px bg-slate-700/70 my-2"></div>
+                <div class="px-2 pb-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Visualização</div>
+                <button onclick="app.setViewMode('grid'); app.closeRightPanel()" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                    <i class="fa-solid fa-border-all w-5 text-center"></i><span class="font-medium">Grid</span>
+                </button>
+                <button onclick="app.setViewMode('list'); app.closeRightPanel()" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                    <i class="fa-solid fa-list-ul w-5 text-center"></i><span class="font-medium">Lista</span>
+                </button>
+                <button onclick="app.setViewMode('kanban'); app.closeRightPanel()" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                    <i class="fa-solid fa-columns w-5 text-center"></i><span class="font-medium">Kanban</span>
+                </button>
+            </div>
+        </div>
+    </aside>
 
     <!-- Main Workspace -->
     <main class="flex-1 max-w-none w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-0 flex flex-col overflow-hidden relative min-h-0">
@@ -760,6 +801,7 @@
                     failed: 0,
                     remaining: 0
                 },
+                isRightPanelOpen: false,
                 availableIcons: [
                     'fa-folder', 'fa-folder-open', 'fa-file-code', 'fa-calendar-days', 'fa-layer-group', 'fa-door-open', 'fa-clock', 'fa-file-lines', 'fa-file-image', 'fa-file-pdf', 'fa-star', 'fa-heart', 'fa-image', 'fa-music', 'fa-video', 
                     'fa-code', 'fa-terminal', 'fa-database', 'fa-server', 'fa-lock', 'fa-vault', 'fa-book', 'fa-briefcase', 'fa-globe', 'fa-list-check'
@@ -1021,6 +1063,23 @@
                     const trigger = document.getElementById('btn-mobile-menu-trigger');
                     if (menu && !menu.classList.contains('hidden') && !menu.contains(event.target) && !trigger.contains(event.target)) {
                         menu.classList.add('hidden');
+                    }
+
+                    if (this.state.isRightPanelOpen) {
+                        const panel = document.getElementById('rightPanel');
+                        const panelTrigger = document.getElementById('btn-right-panel');
+                        const clickedInsidePanel = panel && panel.contains(event.target);
+                        const clickedOnTrigger = panelTrigger && panelTrigger.contains(event.target);
+
+                        if (!clickedInsidePanel && !clickedOnTrigger) {
+                            this.closeRightPanel();
+                        }
+                    }
+                });
+
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && this.state.isRightPanelOpen) {
+                        this.closeRightPanel();
                     }
                 });
 
@@ -1760,6 +1819,26 @@
             },
 
             toggleMobileViewMenu() { document.getElementById('mobileViewMenu').classList.toggle('hidden'); },
+
+            toggleRightPanel() {
+                this.state.isRightPanelOpen = !this.state.isRightPanelOpen;
+                const panel = document.getElementById('rightPanel');
+                const backdrop = document.getElementById('rightPanelBackdrop');
+                if (!panel || !backdrop) return;
+
+                panel.classList.toggle('translate-x-full', !this.state.isRightPanelOpen);
+                backdrop.classList.toggle('hidden', !this.state.isRightPanelOpen);
+            },
+
+            closeRightPanel() {
+                this.state.isRightPanelOpen = false;
+                const panel = document.getElementById('rightPanel');
+                const backdrop = document.getElementById('rightPanelBackdrop');
+                if (!panel || !backdrop) return;
+
+                panel.classList.add('translate-x-full');
+                backdrop.classList.add('hidden');
+            },
 
             async setViewMode(viewName) {
                 this.state.path[this.state.path.length - 1].view = viewName;
