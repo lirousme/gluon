@@ -2177,8 +2177,15 @@
 
                 const btnOpenItem = document.getElementById('btnOpenItemFromModal');
                 if (btnOpenItem) {
+                    const isFolderType = Number(dirObj?.type) === 0;
                     if (id) {
                         btnOpenItem.classList.remove('hidden');
+                        btnOpenItem.classList.toggle('bg-emerald-600', isFolderType);
+                        btnOpenItem.classList.toggle('hover:bg-emerald-500', isFolderType);
+                        btnOpenItem.classList.toggle('text-white', isFolderType);
+                        btnOpenItem.classList.toggle('bg-slate-700', !isFolderType);
+                        btnOpenItem.classList.toggle('hover:bg-slate-600', !isFolderType);
+                        btnOpenItem.classList.toggle('text-slate-200', !isFolderType);
                         const openLabelByType = {
                             0: 'Entrar na pasta',
                             1: 'Abrir arquivo',
@@ -2192,6 +2199,8 @@
                         btnOpenItem.innerHTML = `<i class="fa-solid fa-arrow-up-right-from-square"></i> ${openLabel}`;
                     } else {
                         btnOpenItem.classList.add('hidden');
+                        btnOpenItem.classList.remove('bg-emerald-600', 'hover:bg-emerald-500', 'text-white');
+                        btnOpenItem.classList.add('bg-slate-700', 'hover:bg-slate-600', 'text-slate-200');
                         btnOpenItem.innerHTML = '<i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir item';
                     }
                 }
