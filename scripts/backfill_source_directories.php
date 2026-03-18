@@ -37,31 +37,8 @@ $stmtMissing = $pdo->query("
 ");
 $userIds = array_map('intval', $stmtMissing->fetchAll(PDO::FETCH_COLUMN));
 
-$stmtLinked = $pdo->query("
-    SELECT u.id AS user_id, d.id AS directory_id, d.name_encrypted
-    FROM users u
-    INNER JOIN directories d ON d.id = u.source_directory_id AND d.user_id = u.id
-    ORDER BY u.id ASC
-");
-$linkedDirs = $stmtLinked->fetchAll();
-
-$renamed = 0;
-foreach ($linkedDirs as $row) {
-    $decryptedName = Security::decryptData($row['name_encrypted']);
-    if (trim((string)$decryptedName) !== 'Anotações') {
-        if ($dryRun) {
-            echo "[dry-run] usuário {$row['user_id']} teria o nome do diretório obrigatório ajustado para Anotações.\n";
-            continue;
-        }
-        $stmtRename = $pdo->prepare("UPDATE directories SET name_encrypted = ? WHERE id = ? AND user_id = ?");
-        $stmtRename->execute([Security::encryptData('Anotações'), (int)$row['directory_id'], (int)$row['user_id']]);
-        $renamed += $stmtRename->rowCount();
-    }
-}
-
 if (empty($userIds)) {
-    echo "Nenhum usuário pendente para criação. ";
-    echo $renamed > 0 ? "Renomeações aplicadas: {$renamed}.\n" : "Nenhuma renomeação necessária.\n";
+    echo "Nenhum usuário pendente. Nada para fazer.\n";
     exit(0);
 }
 
@@ -114,4 +91,5 @@ foreach ($userIds as $userId) {
     }
 }
 
-echo "Concluído. Criados: {$created} | Usuários atualizados: {$updated} | Renomeados: {$renamed} | Erros: {$errors}\n";
+echo "Concluído. Criados: {$created} | Usuários atualizados: {$updated} | Erros: {$errors}\n";
+

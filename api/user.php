@@ -55,15 +55,9 @@ function ensureSourceDirectory(PDO $pdo, int $user_id): int {
     $source_directory_id = $stmtUser->fetchColumn();
 
     if ($source_directory_id) {
-        $stmtDir = $pdo->prepare("SELECT id, name_encrypted FROM directories WHERE id = ? AND user_id = ? LIMIT 1");
+        $stmtDir = $pdo->prepare("SELECT id FROM directories WHERE id = ? AND user_id = ? LIMIT 1");
         $stmtDir->execute([(int)$source_directory_id, $user_id]);
-        $existingDir = $stmtDir->fetch();
-        if ($existingDir) {
-            $currentName = Security::decryptData($existingDir['name_encrypted']);
-            if (trim((string)$currentName) !== 'Anotações') {
-                $stmtRename = $pdo->prepare("UPDATE directories SET name_encrypted = ? WHERE id = ? AND user_id = ?");
-                $stmtRename->execute([Security::encryptData('Anotações'), (int)$existingDir['id'], $user_id]);
-            }
+        if ($stmtDir->fetchColumn()) {
             return (int)$source_directory_id;
         }
     }
@@ -72,7 +66,7 @@ function ensureSourceDirectory(PDO $pdo, int $user_id): int {
     $stmtRootOrder->execute([$user_id]);
     $nextSortOrder = (int)$stmtRootOrder->fetchColumn();
 
-    $sourceNameEncrypted = Security::encryptData('Anotações');
+    $sourceNameEncrypted = Security::encryptData('Código fonte');
     $stmtCreate = $pdo->prepare("
         INSERT INTO directories (
             user_id, parent_id, type, name_encrypted, default_view,
