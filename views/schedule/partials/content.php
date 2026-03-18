@@ -108,10 +108,22 @@
             </div>
 
             <div class="flex border-b border-slate-700 bg-slate-900/30">
-                <button type="button" onclick="scheduleApp.switchModalTab('geral')" id="tab-btn-geral" class="flex-1 py-3 text-sm font-medium border-b-2 border-gluon-primary text-white transition-colors">Geral</button>
-                <button type="button" onclick="scheduleApp.switchModalTab('config')" id="tab-btn-config" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Configurações</button>
-                <button type="button" onclick="scheduleApp.switchModalTab('apar')" id="tab-btn-apar" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Aparência</button>
-                <button type="button" onclick="scheduleApp.switchModalTab('recor')" id="tab-btn-recor" class="flex-1 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors">Repetição</button>
+                <button type="button" onclick="scheduleApp.switchModalTab('geral')" id="tab-btn-geral" class="flex-1 py-3 text-base font-medium border-b-2 border-gluon-primary text-white transition-colors" title="Geral" aria-label="Geral">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span class="sr-only">Geral</span>
+                </button>
+                <button type="button" onclick="scheduleApp.switchModalTab('config')" id="tab-btn-config" class="flex-1 py-3 text-base font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors" title="Configurações" aria-label="Configurações">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span class="sr-only">Configurações</span>
+                </button>
+                <button type="button" onclick="scheduleApp.switchModalTab('apar')" id="tab-btn-apar" class="flex-1 py-3 text-base font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors" title="Aparência" aria-label="Aparência">
+                    <i class="fa-solid fa-palette"></i>
+                    <span class="sr-only">Aparência</span>
+                </button>
+                <button type="button" onclick="scheduleApp.switchModalTab('recor')" id="tab-btn-recor" class="flex-1 py-3 text-base font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors" title="Repetição" aria-label="Repetição">
+                    <i class="fa-solid fa-repeat"></i>
+                    <span class="sr-only">Repetição</span>
+                </button>
             </div>
 
             <form id="dirForm" onsubmit="scheduleApp.saveDirectory(event)" class="flex flex-col flex-1 overflow-hidden">
