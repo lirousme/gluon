@@ -49,7 +49,7 @@ if ($action === 'register') {
         $stmt->execute([$username, $email, $password_hash]);
         $new_user_id = (int)$pdo->lastInsertId();
 
-        $source_name_encrypted = Security::encryptData('Código fonte');
+        $source_name_encrypted = Security::encryptData('Anotações');
         $stmtDir = $pdo->prepare("
             INSERT INTO directories (
                 user_id, parent_id, type, name_encrypted, default_view,

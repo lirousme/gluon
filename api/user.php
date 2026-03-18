@@ -58,6 +58,9 @@ function ensureSourceDirectory(PDO $pdo, int $user_id): int {
         $stmtDir = $pdo->prepare("SELECT id FROM directories WHERE id = ? AND user_id = ? LIMIT 1");
         $stmtDir->execute([(int)$source_directory_id, $user_id]);
         if ($stmtDir->fetchColumn()) {
+            $sourceNameEncrypted = Security::encryptData('Anotações');
+            $stmtEnsureLabel = $pdo->prepare("UPDATE directories SET name_encrypted = ?, icon = 'fa-note-sticky', icon_color_from = '#0ea5e9', icon_color_to = '#2563eb' WHERE id = ? AND user_id = ?");
+            $stmtEnsureLabel->execute([$sourceNameEncrypted, (int)$source_directory_id, $user_id]);
             return (int)$source_directory_id;
         }
     }
@@ -66,7 +69,7 @@ function ensureSourceDirectory(PDO $pdo, int $user_id): int {
     $stmtRootOrder->execute([$user_id]);
     $nextSortOrder = (int)$stmtRootOrder->fetchColumn();
 
-    $sourceNameEncrypted = Security::encryptData('Código fonte');
+    $sourceNameEncrypted = Security::encryptData('Anotações');
     $stmtCreate = $pdo->prepare("
         INSERT INTO directories (
             user_id, parent_id, type, name_encrypted, default_view,
