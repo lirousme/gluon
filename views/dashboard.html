@@ -234,24 +234,6 @@
             </button>
             
             <div class="flex items-center gap-2 sm:gap-4">
-                <button onclick="app.toggleReorderMode()" id="btn-reorder-desktop" class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent font-medium text-sm transition-all text-slate-400 hover:text-white hover:bg-slate-700" title="Ativar Modo de Reordenação">
-                    <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90"></i>
-                    <span>Ordem</span>
-                </button>
-
-                <button onclick="app.toggleRelocateMode()" id="btn-relocate-desktop" class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent font-medium text-sm transition-all text-slate-400 hover:text-white hover:bg-slate-700" title="Ativar Modo de Realocação">
-                    <i class="fa-solid fa-folder-tree"></i>
-                    <span>Realocar</span>
-                </button>
-
-                <div class="hidden md:block w-px h-6 bg-slate-700 mx-1"></div>
-
-                <div class="hidden md:flex items-center gap-1 bg-slate-800 rounded-lg p-1 border border-slate-700">
-                    <button onclick="app.setViewMode('grid')" id="btn-view-grid" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Grid"><i class="fa-solid fa-border-all"></i></button>
-                    <button onclick="app.setViewMode('list')" id="btn-view-list" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Lista"><i class="fa-solid fa-list-ul"></i></button>
-                    <button onclick="app.setViewMode('kanban')" id="btn-view-kanban" class="view-btn px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Kanban"><i class="fa-solid fa-columns"></i></button>
-                </div>
-
                 <button onclick="app.toggleRightPanel()" id="btn-right-panel" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm py-1.5 px-3 rounded transition-all" title="Abrir menu lateral direito" aria-label="Abrir menu lateral direito">
                     <i class="fa-solid fa-sliders"></i>
                 </button>
@@ -311,10 +293,10 @@
 
                 <div class="h-px bg-slate-700/70 my-2"></div>
                 <div class="px-2 pb-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Organização</div>
-                <button onclick="app.toggleReorderMode(); app.closeRightPanel()" id="btn-reorder-mobile" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                <button onclick="app.toggleReorderMode()" id="btn-reorder-mobile" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white border border-transparent flex items-center gap-3 transition-colors">
                     <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90 w-5 text-center"></i><span class="font-medium">Alterar ordem</span>
                 </button>
-                <button onclick="app.toggleRelocateMode(); app.closeRightPanel()" id="btn-relocate-mobile" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                <button onclick="app.toggleRelocateMode()" id="btn-relocate-mobile" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white border border-transparent flex items-center gap-3 transition-colors">
                     <i class="fa-solid fa-folder-tree w-5 text-center"></i><span class="font-medium">Realocar</span>
                 </button>
 
@@ -2054,11 +2036,17 @@
 
                 if (this.state.relocateMode) {
                     if(btnDesk) { btnDesk.classList.add('bg-blue-600', 'text-white', 'border-blue-500', 'shadow-lg', 'shadow-blue-500/20'); btnDesk.classList.remove('text-slate-400', 'hover:bg-slate-700'); }
-                    if(btnMob) { btnMob.classList.add('text-blue-300', 'bg-slate-700/50'); btnMob.classList.remove('text-slate-300'); }
+                    if(btnMob) {
+                        btnMob.classList.add('bg-blue-600', 'text-white', 'border-blue-500', 'shadow-lg', 'shadow-blue-500/20');
+                        btnMob.classList.remove('text-slate-300', 'hover:bg-slate-700', 'hover:text-white');
+                    }
                     container.classList.add('relocate-active'); if(wrapper) wrapper.classList.add('relocate-active'); this.updateDragHint('relocate');
                 } else {
                     if(btnDesk) { btnDesk.classList.remove('bg-blue-600', 'text-white', 'border-blue-500', 'shadow-lg', 'shadow-blue-500/20'); btnDesk.classList.add('text-slate-400', 'hover:bg-slate-700'); }
-                    if(btnMob) { btnMob.classList.remove('text-blue-300', 'bg-slate-700/50'); btnMob.classList.add('text-slate-300'); }
+                    if(btnMob) {
+                        btnMob.classList.remove('bg-blue-600', 'text-white', 'border-blue-500', 'shadow-lg', 'shadow-blue-500/20');
+                        btnMob.classList.add('text-slate-300', 'hover:bg-slate-700', 'hover:text-white');
+                    }
                     container.classList.remove('relocate-active'); if(wrapper) wrapper.classList.remove('relocate-active'); this.updateDragHint(null); this.clearRelocateHover(); this.removeRelocateDragPreview();
                 }
                 this.initSortable();
@@ -2085,12 +2073,18 @@
 
                 if(this.state.reorderMode) {
                     if (this.state.relocateMode) this.toggleRelocateMode();
-                    btnDesk.classList.add('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20'); btnDesk.classList.remove('text-slate-400', 'hover:bg-slate-700');
-                    if(btnMob) { btnMob.classList.add('text-green-400', 'bg-slate-700/50'); btnMob.classList.remove('text-slate-300'); }
+                    if (btnDesk) { btnDesk.classList.add('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20'); btnDesk.classList.remove('text-slate-400', 'hover:bg-slate-700'); }
+                    if(btnMob) {
+                        btnMob.classList.add('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20');
+                        btnMob.classList.remove('text-slate-300', 'hover:bg-slate-700', 'hover:text-white');
+                    }
                     container.classList.add('reorder-active'); if(wrapper) wrapper.classList.add('reorder-active'); this.updateDragHint('reorder');
                 } else {
-                    btnDesk.classList.remove('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20'); btnDesk.classList.add('text-slate-400', 'hover:bg-slate-700');
-                    if(btnMob) { btnMob.classList.remove('text-green-400', 'bg-slate-700/50'); btnMob.classList.add('text-slate-300'); }
+                    if (btnDesk) { btnDesk.classList.remove('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20'); btnDesk.classList.add('text-slate-400', 'hover:bg-slate-700'); }
+                    if(btnMob) {
+                        btnMob.classList.remove('bg-green-600', 'text-white', 'border-green-500', 'shadow-lg', 'shadow-green-500/20');
+                        btnMob.classList.add('text-slate-300', 'hover:bg-slate-700', 'hover:text-white');
+                    }
                     container.classList.remove('reorder-active'); if(wrapper) wrapper.classList.remove('reorder-active'); this.updateDragHint(null);
                 }
                 this.initSortable();
