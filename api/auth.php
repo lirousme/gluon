@@ -38,10 +38,34 @@ if ($action === 'register') {
 
     $password_hash = password_hash($password, PASSWORD_ARGON2ID);
 
-    $stmt = $pdo->prepare("INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)");
-    if ($stmt->execute([$username, $email, $password_hash])) {
+    try {
+        $pdo->beginTransaction();
+
+        try {
+            $pdo->exec("ALTER TABLE users ADD COLUMN source_directory_id INT UNSIGNED DEFAULT NULL AFTER home_directory_id");
+        } catch (PDOException $e) {}
+
+        $stmt = $pdo->prepare("INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)");
+        $stmt->execute([$username, $email, $password_hash]);
+        $new_user_id = (int)$pdo->lastInsertId();
+
+        $source_name_encrypted = Security::encryptData('Anotações');
+        $stmtDir = $pdo->prepare("
+            INSERT INTO directories (
+                user_id, parent_id, type, name_encrypted, default_view,
+                new_item_position, sort_order, icon, icon_color_from, icon_color_to
+            ) VALUES (?, NULL, 1, ?, 'grid', 'end', 0, 'fa-note-sticky', '#0ea5e9', '#2563eb')
+        ");
+        $stmtDir->execute([$new_user_id, $source_name_encrypted]);
+        $source_directory_id = (int)$pdo->lastInsertId();
+
+        $stmtUser = $pdo->prepare("UPDATE users SET source_directory_id = ? WHERE id = ?");
+        $stmtUser->execute([$source_directory_id, $new_user_id]);
+
+        $pdo->commit();
         echo json_encode(['status' => 'success', 'message' => 'Conta criada com sucesso! Você já pode fazer login.']);
-    } else {
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
         echo json_encode(['status' => 'error', 'message' => 'Erro ao criar conta.']);
     }
 } 
