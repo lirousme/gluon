@@ -66,7 +66,7 @@ function ensureSourceDirectory(PDO $pdo, int $user_id): int {
     $stmtRootOrder->execute([$user_id]);
     $nextSortOrder = (int)$stmtRootOrder->fetchColumn();
 
-    $sourceNameEncrypted = Security::encryptData('Anotações');
+    $sourceNameEncrypted = Security::encryptData('Código fonte');
     $stmtCreate = $pdo->prepare("
         INSERT INTO directories (
             user_id, parent_id, type, name_encrypted, default_view,
