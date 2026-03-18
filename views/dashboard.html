@@ -256,21 +256,6 @@
                     <i class="fa-solid fa-sliders"></i>
                 </button>
 
-                <div class="h-6 w-px bg-slate-700"></div>
-                
-                <button onclick="window.location.href='/adm'" id="btn-admin-header" class="hidden text-sm text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-2" title="Painel administrativo">
-                    <i class="fa-solid fa-user-shield text-xl"></i>
-                    <span class="hidden sm:inline font-medium">ADM</span>
-                </button>
-
-                <button onclick="app.openFollowingList()" id="btn-following-header" class="text-sm text-slate-300 hover:text-white transition-colors flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800/70 hover:bg-slate-700" title="Usuários que você segue">
-                    <span class="font-medium">Seguindo</span>
-                </button>
-
-                <button onclick="window.location.href='/settings'" id="btn-profile-settings" class="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2" title="Meu Perfil">
-                    <i class="fa-solid fa-circle-user text-xl"></i> 
-                    <span class="hidden sm:inline font-medium">Perfil</span>
-                </button>
             </div>
         </div>
     </nav>
@@ -286,6 +271,18 @@
             </div>
 
             <div class="p-3 space-y-1 overflow-y-auto">
+                <div class="px-2 pb-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Conta</div>
+                <button onclick="app.openFollowingList(); app.closeRightPanel()" id="btn-following-header" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors" title="Usuários que você segue">
+                    <i class="fa-solid fa-user-group w-5 text-center"></i><span class="font-medium">Seguindo</span>
+                </button>
+                <button onclick="window.location.href='/settings'" id="btn-profile-settings" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors" title="Meu Perfil">
+                    <i class="fa-solid fa-circle-user w-5 text-center"></i><span class="font-medium">Perfil</span>
+                </button>
+                <button onclick="window.location.href='/adm'" id="btn-admin-header" class="hidden w-full text-left px-3 py-2.5 text-sm rounded-lg text-amber-400 hover:bg-slate-700 hover:text-amber-300 flex items-center gap-3 transition-colors" title="Painel administrativo">
+                    <i class="fa-solid fa-user-shield w-5 text-center"></i><span class="font-medium">ADM</span>
+                </button>
+
+                <div class="h-px bg-slate-700/70 my-2"></div>
                 <div class="px-2 pb-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Ações do diretório</div>
                 <button onclick="app.openModal(app.getCurrentParentId() || 'root'); app.closeRightPanel()" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
                     <i class="fa-solid fa-folder-gear w-5 text-center"></i><span class="font-medium">Configurações</span>
