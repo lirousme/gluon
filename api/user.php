@@ -47,6 +47,46 @@ try {
 } catch (PDOException $e) {}
 
 try { $pdo->exec("ALTER TABLE users ADD COLUMN home_directory_id INT UNSIGNED NULL DEFAULT NULL AFTER copied_directory_id"); } catch (PDOException $e) {}
+try { $pdo->exec("ALTER TABLE users ADD COLUMN source_directory_id INT UNSIGNED NULL DEFAULT NULL AFTER home_directory_id"); } catch (PDOException $e) {}
+
+function ensureSourceDirectory(PDO $pdo, int $user_id): int {
+    $stmtUser = $pdo->prepare("SELECT source_directory_id FROM users WHERE id = ? LIMIT 1");
+    $stmtUser->execute([$user_id]);
+    $source_directory_id = $stmtUser->fetchColumn();
+
+    if ($source_directory_id) {
+        $stmtDir = $pdo->prepare("SELECT id, name_encrypted FROM directories WHERE id = ? AND user_id = ? LIMIT 1");
+        $stmtDir->execute([(int)$source_directory_id, $user_id]);
+        $existingDir = $stmtDir->fetch();
+        if ($existingDir) {
+            $currentName = Security::decryptData($existingDir['name_encrypted']);
+            if (trim((string)$currentName) !== 'Anotações') {
+                $stmtRename = $pdo->prepare("UPDATE directories SET name_encrypted = ? WHERE id = ? AND user_id = ?");
+                $stmtRename->execute([Security::encryptData('Anotações'), (int)$existingDir['id'], $user_id]);
+            }
+            return (int)$source_directory_id;
+        }
+    }
+
+    $stmtRootOrder = $pdo->prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM directories WHERE user_id = ? AND parent_id IS NULL");
+    $stmtRootOrder->execute([$user_id]);
+    $nextSortOrder = (int)$stmtRootOrder->fetchColumn();
+
+    $sourceNameEncrypted = Security::encryptData('Anotações');
+    $stmtCreate = $pdo->prepare("
+        INSERT INTO directories (
+            user_id, parent_id, type, name_encrypted, default_view,
+            new_item_position, sort_order, icon, icon_color_from, icon_color_to
+        ) VALUES (?, NULL, 1, ?, 'grid', 'end', ?, 'fa-note-sticky', '#0ea5e9', '#2563eb')
+    ");
+    $stmtCreate->execute([$user_id, $sourceNameEncrypted, $nextSortOrder]);
+    $newDirectoryId = (int)$pdo->lastInsertId();
+
+    $stmtUpdateUser = $pdo->prepare("UPDATE users SET source_directory_id = ? WHERE id = ?");
+    $stmtUpdateUser->execute([$newDirectoryId, $user_id]);
+
+    return $newDirectoryId;
+}
 
 if ($action === 'get_session') {
     echo json_encode(['status' => 'success', 'data' => [
@@ -58,20 +98,29 @@ if ($action === 'get_session') {
 // === PREFERÊNCIAS DO DASHBOARD ===
 
 else if ($action === 'get_prefs') {
-    $stmt = $pdo->prepare("SELECT root_view, root_new_item_position, copied_directory_id, home_directory_id FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT root_view, root_new_item_position, copied_directory_id, home_directory_id, source_directory_id FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $user = $stmt->fetch();
 
     if ($user) {
+        $source_directory_id = $user['source_directory_id'] !== null ? (int)$user['source_directory_id'] : ensureSourceDirectory($pdo, $user_id);
         echo json_encode(['status' => 'success', 'data' => [
             'root_view' => $user['root_view'] ?? 'grid',
             'root_new_item_position' => $user['root_new_item_position'] ?? 'end',
             'copied_directory_id' => $user['copied_directory_id'],
-            'home_directory_id' => $user['home_directory_id'] !== null ? (int)$user['home_directory_id'] : null
+            'home_directory_id' => $user['home_directory_id'] !== null ? (int)$user['home_directory_id'] : null,
+            'source_directory_id' => $source_directory_id
         ]]);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Usuário não encontrado.']);
     }
+}
+
+elseif ($action === 'get_source_directory') {
+    $source_directory_id = ensureSourceDirectory($pdo, $user_id);
+    echo json_encode(['status' => 'success', 'data' => [
+        'source_directory_id' => $source_directory_id
+    ]]);
 }
 
 elseif ($action === 'update_root_prefs') {
