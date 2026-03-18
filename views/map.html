@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gluon • Mapa de Fases</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@500;700&display=swap" rel="stylesheet" />
+    <style>
+        :root {
+            --sky-top: #71d0ff;
+            --sky-bottom: #d6f4ff;
+            --grass-main: #7ddc5d;
+            --grass-dark: #4ea13a;
+            --rock-top: #9d7f56;
+            --rock-mid: #775b3b;
+            --rock-deep: #4f3a25;
+            --path-main: #f8d774;
+            --path-edge: #d8a64a;
+            --node-locked: #d4dde8;
+            --node-active: #ff4f4f;
+            --node-done: #31c56e;
+            --ink: #18304b;
+            --hud: rgba(17, 29, 47, 0.6);
+            --hud-border: rgba(255, 255, 255, 0.2);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            min-height: 100vh;
+            background:
+                radial-gradient(circle at 12% 15%, rgba(255, 255, 255, 0.36) 0 2.2rem, transparent 2.3rem),
+                radial-gradient(circle at 88% 70%, rgba(255, 255, 255, 0.3) 0 1.6rem, transparent 1.7rem),
+                linear-gradient(180deg, var(--sky-top), var(--sky-bottom));
+            color: #fff;
+            font-family: "Nunito", sans-serif;
+            overflow: hidden;
+        }
+
+        .cloud {
+            position: fixed;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.8);
+            filter: drop-shadow(0 0.3rem 0.4rem rgba(23, 74, 107, 0.18));
+            animation: drift linear infinite;
+            z-index: 0;
+        }
+
+        .cloud::before,
+        .cloud::after {
+            content: "";
+            position: absolute;
+            border-radius: 50%;
+            background: inherit;
+        }
+
+        .cloud::before { width: 45%; height: 80%; left: 8%; top: -35%; }
+        .cloud::after { width: 38%; height: 70%; right: 12%; top: -25%; }
+        .cloud.c1 { width: 9rem; height: 3.2rem; top: 10vh; left: -10rem; animation-duration: 48s; }
+        .cloud.c2 { width: 7rem; height: 2.6rem; top: 64vh; left: -9rem; animation-duration: 62s; animation-delay: -16s; }
+        .cloud.c3 { width: 8rem; height: 2.8rem; top: 31vh; left: -11rem; animation-duration: 52s; animation-delay: -29s; }
+
+        @keyframes drift {
+            from { transform: translateX(0); }
+            to { transform: translateX(calc(100vw + 22rem)); }
+        }
+
+        .page {
+            position: relative;
+            z-index: 2;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 1.3rem;
+        }
+
+        .map-shell {
+            width: min(100%, 30rem);
+            height: min(95vh, 58rem);
+            border-radius: 2rem;
+            border: 0.14rem solid rgba(255, 255, 255, 0.5);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05));
+            backdrop-filter: blur(0.2rem);
+            box-shadow:
+                0 1.5rem 3.5rem rgba(17, 39, 72, 0.28),
+                inset 0 0 0 0.2rem rgba(255, 255, 255, 0.08);
+            padding: 1rem;
+            display: grid;
+            grid-template-rows: auto 1fr;
+            gap: 0.8rem;
+        }
+
+        .hud {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.8rem;
+            background: var(--hud);
+            border: 1px solid var(--hud-border);
+            border-radius: 1rem;
+            padding: 0.6rem 0.75rem;
+        }
+
+        .hud h1 {
+            font-family: "Baloo 2", cursive;
+            font-size: 1.2rem;
+            letter-spacing: 0.02em;
+        }
+
+        .season-switch {
+            display: flex;
+            gap: 0.45rem;
+        }
+
+        .season-switch button {
+            cursor: pointer;
+            border: 0;
+            border-radius: 0.8rem;
+            padding: 0.45rem 0.65rem;
+            font-weight: 700;
+            color: #18324f;
+            background: rgba(255, 255, 255, 0.75);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        .season-switch button[aria-pressed="true"] {
+            background: #fff;
+            box-shadow: 0 0.45rem 1rem rgba(255, 255, 255, 0.4);
+        }
+
+        .season-switch button:hover {
+            transform: translateY(-2px);
+        }
+
+        .map-board {
+            position: relative;
+            border-radius: 1.4rem;
+            overflow: hidden;
+            isolation: isolate;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+            background: linear-gradient(180deg, #74cdf4, #bfe8ff);
+        }
+
+        .island {
+            position: absolute;
+            inset: 2.4rem 2.1rem 1.6rem;
+            background:
+                radial-gradient(circle at 26% 16%, #92f869 0 20%, transparent 21%),
+                radial-gradient(circle at 75% 18%, #7be657 0 18%, transparent 19%),
+                radial-gradient(circle at 30% 44%, #9bf46f 0 20%, transparent 21%),
+                radial-gradient(circle at 71% 58%, #8be663 0 20%, transparent 21%),
+                radial-gradient(circle at 40% 81%, #9afa72 0 23%, transparent 24%),
+                linear-gradient(180deg, var(--grass-main), #8dea6a);
+            border-radius: 46% 46% 40% 40% / 18% 18% 34% 32%;
+            box-shadow:
+                0 0.8rem 0 0 var(--rock-top),
+                0 1.8rem 0 0 var(--rock-mid),
+                0 2.8rem 0 0 var(--rock-deep),
+                0 2.9rem 2.7rem rgba(50, 34, 18, 0.44);
+        }
+
+        .season-winter .island {
+            background:
+                radial-gradient(circle at 26% 16%, #ffffff 0 17%, transparent 18%),
+                radial-gradient(circle at 75% 18%, #f2f9ff 0 16%, transparent 17%),
+                radial-gradient(circle at 30% 44%, #eff8ff 0 16%, transparent 17%),
+                radial-gradient(circle at 71% 58%, #ffffff 0 15%, transparent 16%),
+                radial-gradient(circle at 40% 81%, #f2fcff 0 18%, transparent 19%),
+                linear-gradient(180deg, #76e5d0, #59ccbe);
+        }
+
+        .path {
+            position: absolute;
+            inset: 3rem 3.1rem 2.4rem;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .path svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+
+        .path-track {
+            fill: none;
+            stroke: var(--path-main);
+            stroke-width: 2.2rem;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            filter: drop-shadow(0 0.3rem 0.25rem rgba(104, 70, 14, 0.35));
+        }
+
+        .path-outline {
+            fill: none;
+            stroke: var(--path-edge);
+            stroke-width: 2.55rem;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            opacity: 0.8;
+        }
+
+        .nodes {
+            position: absolute;
+            inset: 2.5rem 2rem 1.7rem;
+            z-index: 4;
+        }
+
+        .level-btn {
+            --size: 2.75rem;
+            position: absolute;
+            width: var(--size);
+            height: var(--size);
+            border-radius: 50%;
+            border: 0;
+            cursor: pointer;
+            display: grid;
+            place-items: center;
+            font-weight: 800;
+            color: #fff;
+            font-size: 1rem;
+            font-family: "Baloo 2", cursive;
+            background:
+                radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.45), transparent 36%),
+                linear-gradient(180deg, #ff7676, #d92f2f);
+            box-shadow:
+                0 0 0 0.22rem #ffd95a,
+                0 0.42rem 0 #9d1414,
+                0 0.8rem 1.1rem rgba(50, 13, 13, 0.4);
+            transition: transform 0.2s ease, filter 0.2s ease;
+        }
+
+        .level-btn::after {
+            content: "★";
+            font-size: 1.2rem;
+            transform: translateY(-1px);
+            text-shadow: 0 0.05rem 0.08rem rgba(0, 0, 0, 0.28);
+        }
+
+        .level-btn small {
+            position: absolute;
+            top: -0.78rem;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.68rem;
+            font-weight: 900;
+            color: #ffe76f;
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+            letter-spacing: 0.03em;
+        }
+
+        .level-btn:hover,
+        .level-btn:focus-visible {
+            transform: translateY(-3px) scale(1.04);
+            filter: brightness(1.08);
+            outline: none;
+        }
+
+        .level-btn[data-state="done"] {
+            background:
+                radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.45), transparent 36%),
+                linear-gradient(180deg, #57dc8d, #1f9b58);
+            box-shadow:
+                0 0 0 0.22rem #d5ffd3,
+                0 0.42rem 0 #0c5d33,
+                0 0.8rem 1.1rem rgba(9, 55, 31, 0.35);
+        }
+
+        .level-btn[data-state="locked"] {
+            background:
+                radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.35), transparent 36%),
+                linear-gradient(180deg, #dce4ef, #a8b4c6);
+            box-shadow:
+                0 0 0 0.22rem #eff4ff,
+                0 0.4rem 0 #758296,
+                0 0.8rem 1rem rgba(50, 62, 79, 0.35);
+            cursor: not-allowed;
+            filter: saturate(0.7);
+        }
+
+        .level-btn[data-state="locked"]::after {
+            content: "🔒";
+            font-size: 1rem;
+            transform: translateY(-1px);
+        }
+
+        .legend {
+            position: absolute;
+            left: 50%;
+            bottom: 0.85rem;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            padding: 0.36rem 0.7rem;
+            border-radius: 999px;
+            background: rgba(13, 32, 53, 0.54);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 0.74rem;
+            font-weight: 700;
+            z-index: 8;
+            backdrop-filter: blur(0.3rem);
+        }
+
+        .legend-dot {
+            width: 0.62rem;
+            height: 0.62rem;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .legend-dot.done { background: var(--node-done); }
+        .legend-dot.current { background: var(--node-active); }
+        .legend-dot.locked { background: var(--node-locked); }
+
+        .msg {
+            position: absolute;
+            top: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            min-width: 14rem;
+            max-width: calc(100% - 2rem);
+            padding: 0.7rem 0.85rem;
+            border-radius: 0.8rem;
+            text-align: center;
+            font-weight: 700;
+            color: #fff;
+            background: rgba(18, 41, 66, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            backdrop-filter: blur(0.2rem);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.28s ease;
+            z-index: 12;
+        }
+
+        .msg.show { opacity: 1; }
+
+        @media (max-width: 520px) {
+            .map-shell { height: min(95vh, 53rem); }
+            .level-btn { --size: 2.5rem; font-size: 0.95rem; }
+            .path-track { stroke-width: 2.05rem; }
+            .path-outline { stroke-width: 2.4rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="cloud c1"></div>
+    <div class="cloud c2"></div>
+    <div class="cloud c3"></div>
+
+    <main class="page" id="app">
+        <section class="map-shell" aria-label="Mapa de fases">
+            <header class="hud">
+                <h1>🗺️ Mundo da Jornada</h1>
+                <div class="season-switch" role="group" aria-label="Tema do mapa">
+                    <button type="button" data-theme="summer" aria-pressed="true">Verão</button>
+                    <button type="button" data-theme="winter" aria-pressed="false">Inverno</button>
+                </div>
+            </header>
+
+            <div class="map-board" id="mapBoard">
+                <div class="msg" id="mapMsg" aria-live="polite"></div>
+                <div class="island" aria-hidden="true"></div>
+
+                <div class="path" aria-hidden="true">
+                    <svg viewBox="0 0 100 190" preserveAspectRatio="none">
+                        <path class="path-outline" d="M52 7 C 76 10, 78 25, 56 32 C 29 42, 33 52, 60 60 C 83 67, 74 85, 47 93 C 20 102, 26 117, 58 124 C 86 130, 77 148, 49 155 C 25 161, 27 179, 57 184" />
+                        <path class="path-track" d="M52 7 C 76 10, 78 25, 56 32 C 29 42, 33 52, 60 60 C 83 67, 74 85, 47 93 C 20 102, 26 117, 58 124 C 86 130, 77 148, 49 155 C 25 161, 27 179, 57 184" />
+                    </svg>
+                </div>
+
+                <div class="nodes" id="nodes">
+                    <button class="level-btn" style="left: 47%; top: 3%;" data-level="1" data-state="done"><small>★★★</small></button>
+                    <button class="level-btn" style="left: 68%; top: 12%;" data-level="2" data-state="done"><small>★★☆</small></button>
+                    <button class="level-btn" style="left: 34%; top: 19%;" data-level="3" data-state="done"><small>★★★</small></button>
+                    <button class="level-btn" style="left: 50%; top: 28%;" data-level="4" data-state="active"><small>★☆☆</small></button>
+                    <button class="level-btn" style="left: 72%; top: 37%;" data-level="5" data-state="locked"><small>---</small></button>
+                    <button class="level-btn" style="left: 42%; top: 46%;" data-level="6" data-state="locked"><small>---</small></button>
+                    <button class="level-btn" style="left: 25%; top: 55%;" data-level="7" data-state="locked"><small>---</small></button>
+                    <button class="level-btn" style="left: 58%; top: 64%;" data-level="8" data-state="locked"><small>---</small></button>
+                    <button class="level-btn" style="left: 70%; top: 73%;" data-level="9" data-state="locked"><small>---</small></button>
+                    <button class="level-btn" style="left: 48%; top: 82%;" data-level="10" data-state="locked"><small>---</small></button>
+                </div>
+
+                <div class="legend" aria-hidden="true">
+                    <span><span class="legend-dot done"></span> Concluída</span>
+                    <span><span class="legend-dot current"></span> Atual</span>
+                    <span><span class="legend-dot locked"></span> Bloqueada</span>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const board = document.getElementById("mapBoard");
+        const msg = document.getElementById("mapMsg");
+        const themeButtons = Array.from(document.querySelectorAll("[data-theme]"));
+
+        function showMessage(text) {
+            msg.textContent = text;
+            msg.classList.add("show");
+            clearTimeout(showMessage.timer);
+            showMessage.timer = setTimeout(() => msg.classList.remove("show"), 1800);
+        }
+
+        document.getElementById("nodes").addEventListener("click", (event) => {
+            const button = event.target.closest(".level-btn");
+            if (!button) return;
+
+            const level = Number(button.dataset.level);
+            const state = button.dataset.state;
+
+            if (state === "locked") {
+                showMessage(`Fase ${level} ainda bloqueada. Termine a fase atual para liberar.`);
+                return;
+            }
+
+            if (state === "done") {
+                showMessage(`Rejogar fase ${level} 🎯`);
+                return;
+            }
+
+            showMessage(`Entrando na fase ${level}...`);
+        });
+
+        themeButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                const chosen = button.dataset.theme;
+                const isWinter = chosen === "winter";
+                board.classList.toggle("season-winter", isWinter);
+
+                themeButtons.forEach((btn) => {
+                    btn.setAttribute("aria-pressed", String(btn === button));
+                });
+
+                showMessage(isWinter ? "Tema Inverno aplicado ❄️" : "Tema Verão aplicado ☀️");
+            });
+        });
+    </script>
+</body>
+</html>
