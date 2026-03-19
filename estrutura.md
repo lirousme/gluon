@@ -19,6 +19,7 @@ public_html/gluon/
 │   └── pronuncias.php       # NOVO: CRUD administrativo para ajustes de pronúncia TTS
 │   └── sistema_de_condicionais.php # NOVO: Micro-API para tarefas com dependência condicional
 │   └── plano.php            # NOVO: Micro-API para diretórios do tipo Plano
+│   └── trilha.php           # NOVO: Micro-API para trilhas dinâmicas de estudo (mapas/fases/GPT)
 │
 ├── views/                    # Front-end (Vanilla JS + Tailwind)
 │   ├── login.html
@@ -33,6 +34,8 @@ public_html/gluon/
 │   ├── adjacency.html       # NOVO: Lista adjacente
 │   ├── sistema_de_condicionais.html # NOVO: Fluxo de tarefas condicionais
 │   ├── plano.html           # NOVO: Planejamento em 5 fases com acordeon
+│   ├── map.html             # ATUALIZADO: Mapa jogável dinâmico (fases vindas do banco)
+│   ├── map_admin.html       # NOVO: Administração da trilha (gerar/editar/excluir fases)
 │   └── errors/
 │
 └── assets/
@@ -73,7 +76,7 @@ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 user_id INT UNSIGNED NOT NULL,
 parent_id INT UNSIGNED DEFAULT NULL, -- NULL significa que está na Raiz
 target_id INT UNSIGNED DEFAULT NULL, -- NOVO: ID do diretório alvo (Apenas para Portais)
-type TINYINT DEFAULT 0,              -- 0 = Pasta, 1 = Arquivo de Código, 2 = Agenda, 3 = Portal, 4 = Deck de Flashcards, 5 = Controle, 6 = Sistema de Condicional, 7 = Plano
+type TINYINT DEFAULT 0,              -- 0 = Pasta, 1 = Arquivo de Código, 2 = Agenda, 3 = Portal, 4 = Deck de Flashcards, 5 = Controle, 6 = Sistema de Condicional, 7 = Plano, 8 = Trilha
 deck_mode VARCHAR(20) DEFAULT 'aleatorio';
 deck_front_language VARCHAR(10) NOT NULL DEFAULT 'pt-BR', -- Idioma da frente do card (pt-BR | en-US | en-GB)
 deck_back_language VARCHAR(10) NOT NULL DEFAULT 'en-GB', -- Idioma do verso do card (pt-BR | en-US | en-GB)
@@ -337,4 +340,57 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
 FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+======================================================================
+
+TABELA: track_nodes
+id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+track_directory_id INT UNSIGNED NOT NULL, -- FK para directories (type = 8, a matéria/trilha)
+position_index INT UNSIGNED NOT NULL, -- Ordem global da trilha (1..N)
+map_number INT UNSIGNED NOT NULL, -- Mapa calculado automaticamente (10 fases por mapa)
+phase_number TINYINT UNSIGNED NOT NULL, -- Fase dentro do mapa (1..10)
+title VARCHAR(255) NOT NULL,
+objective TEXT DEFAULT NULL,
+questions_json LONGTEXT DEFAULT NULL, -- Perguntas diagnósticas por fase (JSON array)
+source VARCHAR(20) NOT NULL DEFAULT 'manual', -- manual | gpt | fallback
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+UNIQUE KEY uniq_track_position (track_directory_id, position_index),
+INDEX idx_track_map (track_directory_id, map_number, phase_number),
+FOREIGN KEY (track_directory_id) REFERENCES directories(id) ON DELETE CASCADE
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+======================================================================
+
+TABELA: track_user_progress
+id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+user_id INT UNSIGNED NOT NULL,
+track_directory_id INT UNSIGNED NOT NULL,
+current_position INT UNSIGNED NOT NULL DEFAULT 1, -- próxima fase desbloqueada
+completed_positions_json LONGTEXT DEFAULT NULL, -- posições concluídas (JSON array)
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+UNIQUE KEY uniq_user_track (user_id, track_directory_id),
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+FOREIGN KEY (track_directory_id) REFERENCES directories(id) ON DELETE CASCADE
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+======================================================================
+
+TABELA: track_generation_jobs
+id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+user_id INT UNSIGNED NOT NULL,
+track_directory_id INT UNSIGNED NOT NULL,
+model VARCHAR(40) NOT NULL DEFAULT 'gpt-5.4',
+prompt_payload LONGTEXT DEFAULT NULL, -- Prompt enviado para o GPT
+response_payload LONGTEXT DEFAULT NULL, -- Resposta bruta para auditoria
+status VARCHAR(20) NOT NULL DEFAULT 'completed',
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+INDEX idx_track_jobs (track_directory_id, created_at),
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+FOREIGN KEY (track_directory_id) REFERENCES directories(id) ON DELETE CASCADE
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

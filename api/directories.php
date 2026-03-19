@@ -262,7 +262,7 @@ function normalizeDeckStructureForDirectory($value, $default = 'fatos') {
 }
 
 function normalizeChildDefaultType($value, $default = 0) {
-    $allowed = [0, 1, 2, 3, 4, 5, 6, 7];
+    $allowed = [0, 1, 2, 3, 4, 5, 6, 7, 8];
     $type = (int)$value;
     return in_array($type, $allowed, true) ? $type : (int)$default;
 }
@@ -611,6 +611,7 @@ elseif ($action === 'create') {
     if($type === 2) $default_icon = 'fa-calendar-days';
     if($type === 5) $default_icon = 'fa-list-check';
     if($type === 6) $default_icon = 'fa-code-branch';
+    if($type === 8) $default_icon = 'fa-map-location-dot';
 
     $icon = preg_match('/^fa-[a-z0-9-]+$/', $input['icon'] ?? '') ? $input['icon'] : $default_icon;
     $color_from = preg_match('/^#[a-fA-F0-9]{6}$/', $input['color_from'] ?? '') ? $input['color_from'] : '#3b82f6';

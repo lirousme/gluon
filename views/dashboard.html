@@ -453,6 +453,12 @@
                                     <i class="fa-solid fa-code-branch block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Condicional</span>
                                 </div>
                             </label>
+                            <label class="cursor-pointer" onclick="app.handleTypeChange(8)">
+                                <input type="radio" name="itemType" value="8" class="peer hidden type-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-map-location-dot block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Trilha</span>
+                                </div>
+                            </label>
                         </div>
                     </div>
 
@@ -554,6 +560,7 @@
                             <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="4" class="peer hidden"><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-layer-group block text-lg mb-1"></i><span class="text-xs">Flashcards</span></div></label>
                             <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="5" class="peer hidden"><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-list-check block text-lg mb-1"></i><span class="text-xs">Controle</span></div></label>
                             <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="6" class="peer hidden"><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-code-branch block text-lg mb-1"></i><span class="text-xs">Condicional</span></div></label>
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="8" class="peer hidden"><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-map-location-dot block text-lg mb-1"></i><span class="text-xs">Trilha</span></div></label>
                         </div>
                     </div>
 
@@ -926,7 +933,7 @@
             },
 
             navigateToItemView(type, id) {
-                const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 6: 'sistema_de_condicionais', 7: 'plano' };
+                const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 6: 'sistema_de_condicionais', 7: 'plano', 8: 'map_admin' };
                 const targetView = viewByType[type];
                 if (!targetView) return false;
                 window.location.href = this.buildViewUrl(targetView, id);
@@ -1082,6 +1089,10 @@
                     folderSettings.style.display = 'none';
                     nameLabel.innerText = 'Nome do Plano';
                     this.autoChangeIcon('fa-list-ol');
+                } else if (typeValue === 8) {
+                    folderSettings.style.display = 'none';
+                    nameLabel.innerText = 'Nome da Matéria (Ex: Física, Matemática)';
+                    this.autoChangeIcon('fa-map-location-dot');
                 }
             },
 
