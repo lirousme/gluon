@@ -9,15 +9,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@500;700&display=swap" rel="stylesheet" />
     <style>
         :root {
-            --sky-top: #71d0ff;
-            --sky-bottom: #d6f4ff;
-            --sky-glow-a: rgba(255, 255, 255, 0.36);
-            --sky-glow-b: rgba(255, 255, 255, 0.3);
-            --grass-main: #7ddc5d;
-            --grass-dark: #4ea13a;
-            --rock-top: #9d7f56;
-            --rock-mid: #775b3b;
-            --rock-deep: #4f3a25;
+            --body-bg: #f6afc6;
+            --body-glow-a: rgba(255, 255, 255, 0.28);
+            --body-glow-b: rgba(255, 238, 210, 0.28);
+            --board-image: url("../assets/map-bg-candy.svg");
             --path-main: #f8d774;
             --path-edge: #d8a64a;
             --node-locked: #d4dde8;
@@ -26,9 +21,7 @@
             --ink: #18304b;
             --hud: rgba(17, 29, 47, 0.6);
             --hud-border: rgba(255, 255, 255, 0.2);
-            --board-top: #74cdf4;
-            --board-bottom: #bfe8ff;
-            --cloud-color: rgba(255, 255, 255, 0.8);
+                        --cloud-color: rgba(255, 255, 255, 0.8);
             --cloud-shadow: rgba(23, 74, 107, 0.18);
         }
 
@@ -41,9 +34,9 @@
         body {
             min-height: 100vh;
             background:
-                radial-gradient(circle at 12% 15%, var(--sky-glow-a) 0 2.2rem, transparent 2.3rem),
-                radial-gradient(circle at 88% 70%, var(--sky-glow-b) 0 1.6rem, transparent 1.7rem),
-                linear-gradient(180deg, var(--sky-top), var(--sky-bottom));
+                radial-gradient(circle at 12% 15%, var(--body-glow-a) 0 2.2rem, transparent 2.3rem),
+                radial-gradient(circle at 88% 70%, var(--body-glow-b) 0 1.6rem, transparent 1.7rem),
+                var(--body-bg);
             color: #fff;
             font-family: "Nunito", sans-serif;
             overflow: hidden;
@@ -51,23 +44,19 @@
         }
 
         body.season-winter {
-            --sky-top: #96c9ff;
-            --sky-bottom: #edf7ff;
-            --sky-glow-a: rgba(239, 248, 255, 0.58);
-            --sky-glow-b: rgba(225, 241, 255, 0.5);
-            --board-top: #9ad7ff;
-            --board-bottom: #d7edff;
+            --body-bg: #95bf6f;
+            --body-glow-a: rgba(249, 255, 227, 0.25);
+            --body-glow-b: rgba(255, 222, 144, 0.22);
+            --board-image: url("../assets/map-bg-farm.svg");
             --cloud-color: rgba(244, 250, 255, 0.88);
             --cloud-shadow: rgba(74, 113, 152, 0.26);
         }
 
         body.season-larva {
-            --sky-top: #3a2a18;
-            --sky-bottom: #8a5b2f;
-            --sky-glow-a: rgba(245, 201, 120, 0.26);
-            --sky-glow-b: rgba(74, 255, 162, 0.18);
-            --board-top: #5c3a24;
-            --board-bottom: #9a6a3c;
+            --body-bg: #2a1b34;
+            --body-glow-a: rgba(255, 145, 67, 0.25);
+            --body-glow-b: rgba(142, 99, 255, 0.22);
+            --board-image: url("../assets/map-bg-volcano.svg");
             --path-main: #f6c972;
             --path-edge: #b8783b;
             --hud: rgba(30, 20, 11, 0.72);
@@ -177,51 +166,10 @@
             overflow: hidden;
             isolation: isolate;
             box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
-            background: linear-gradient(180deg, var(--board-top), var(--board-bottom));
-            transition: background 0.35s ease;
-        }
-
-        .island {
-            position: absolute;
-            inset: 2.4rem 2.1rem 1.6rem;
             background:
-                radial-gradient(circle at 26% 16%, #92f869 0 20%, transparent 21%),
-                radial-gradient(circle at 75% 18%, #7be657 0 18%, transparent 19%),
-                radial-gradient(circle at 30% 44%, #9bf46f 0 20%, transparent 21%),
-                radial-gradient(circle at 71% 58%, #8be663 0 20%, transparent 21%),
-                radial-gradient(circle at 40% 81%, #9afa72 0 23%, transparent 24%),
-                linear-gradient(180deg, var(--grass-main), #8dea6a);
-            border-radius: 46% 46% 40% 40% / 18% 18% 34% 32%;
-            box-shadow:
-                0 0.8rem 0 0 var(--rock-top),
-                0 1.8rem 0 0 var(--rock-mid),
-                0 2.8rem 0 0 var(--rock-deep),
-                0 2.9rem 2.7rem rgba(50, 34, 18, 0.44);
-        }
-
-        body.season-winter .island {
-            background:
-                radial-gradient(circle at 26% 16%, #ffffff 0 17%, transparent 18%),
-                radial-gradient(circle at 75% 18%, #f2f9ff 0 16%, transparent 17%),
-                radial-gradient(circle at 30% 44%, #eff8ff 0 16%, transparent 17%),
-                radial-gradient(circle at 71% 58%, #ffffff 0 15%, transparent 16%),
-                radial-gradient(circle at 40% 81%, #f2fcff 0 18%, transparent 19%),
-                linear-gradient(180deg, #76e5d0, #59ccbe);
-        }
-
-        body.season-larva .island {
-            background:
-                radial-gradient(circle at 24% 18%, #f0ff93 0 16%, transparent 17%),
-                radial-gradient(circle at 75% 20%, #c0f85a 0 14%, transparent 15%),
-                radial-gradient(circle at 31% 46%, #8ce24d 0 17%, transparent 18%),
-                radial-gradient(circle at 70% 57%, #dbff95 0 16%, transparent 17%),
-                radial-gradient(circle at 43% 80%, #c3f466 0 18%, transparent 19%),
-                linear-gradient(180deg, #5fa235, #3f7222);
-            box-shadow:
-                0 0.8rem 0 0 #7f5835,
-                0 1.8rem 0 0 #5d3d26,
-                0 2.8rem 0 0 #3d2618,
-                0 2.9rem 2.7rem rgba(29, 14, 7, 0.52);
+                linear-gradient(180deg, rgba(14, 18, 30, 0.15), rgba(14, 18, 30, 0.25)),
+                var(--board-image) center / cover no-repeat;
+            transition: background 0.35s ease, filter 0.35s ease;
         }
 
         .path {
@@ -409,16 +357,14 @@
             <header class="hud">
                 <h1>🗺️ Mundo da Jornada</h1>
                 <div class="season-switch" role="group" aria-label="Tema do mapa">
-                    <button type="button" data-theme="summer" aria-pressed="true">Verão</button>
-                    <button type="button" data-theme="winter" aria-pressed="false">Inverno</button>
-                    <button type="button" data-theme="larva" aria-pressed="false">Larva</button>
+                    <button type="button" data-theme="summer" aria-pressed="true">Doce</button>
+                    <button type="button" data-theme="winter" aria-pressed="false">Fazenda</button>
+                    <button type="button" data-theme="larva" aria-pressed="false">Eclipse</button>
                 </div>
             </header>
 
             <div class="map-board" id="mapBoard">
                 <div class="msg" id="mapMsg" aria-live="polite"></div>
-                <div class="island" aria-hidden="true"></div>
-
                 <div class="path" aria-hidden="true">
                     <svg viewBox="0 0 100 190" preserveAspectRatio="none">
                         <path class="path-outline" d="M52 7 C 76 10, 78 25, 56 32 C 29 42, 33 52, 60 60 C 83 67, 74 85, 47 93 C 20 102, 26 117, 58 124 C 86 130, 77 148, 49 155 C 25 161, 27 179, 57 184" />
@@ -491,16 +437,16 @@
                 });
 
                 if (chosen === "winter") {
-                    showMessage("Tema Inverno aplicado ❄️");
+                    showMessage("Fase Fazenda aplicada 🐮");
                     return;
                 }
 
                 if (chosen === "larva") {
-                    showMessage("Tema Larva aplicado 🐛");
+                    showMessage("Fase Eclipse aplicada 🌋");
                     return;
                 }
 
-                showMessage("Tema Verão aplicado ☀️");
+                showMessage("Fase Doce aplicada 🍭");
             });
         });
     </script>
