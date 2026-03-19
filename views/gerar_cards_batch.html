@@ -68,6 +68,16 @@
                     <label for="topicInput" class="block text-xs text-slate-400 mb-1">Assunto (padrão: nome do deck)</label>
                     <input id="topicInput" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm text-slate-100" placeholder="Digite o assunto para gerar os cards">
                 </div>
+                <div class="mt-4">
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                        <label for="basePromptInput" class="block text-xs text-slate-400">Prompt base da geração (editável)</label>
+                        <button id="btnResetBasePrompt" type="button" onclick="generateCardsBatchApp.resetBasePrompt()" class="text-xs px-2 py-1 rounded border border-slate-600 bg-slate-800 hover:bg-slate-700 text-slate-200">
+                            Restaurar padrão
+                        </button>
+                    </div>
+                    <textarea id="basePromptInput" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm text-slate-100 min-h-[140px]" placeholder="O prompt padrão do deck aparecerá aqui e você pode editar antes de enviar."></textarea>
+                    <p class="mt-1 text-xs text-slate-500">Você pode ajustar instruções para fatos, perguntas, traduções ou paráfrases. O texto acima será usado como prompt base enviado para geração.</p>
+                </div>
 
                 <div class="mt-4 rounded-lg border border-slate-700 bg-slate-950/40 p-3 sm:p-4 space-y-3">
                     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -128,6 +138,7 @@
             generatedCards: [],
             topic: '',
             activeJobId: null,
+            defaultBasePrompt: '',
 
             isProcessingStatus(status) {
                 return ['submitted', 'validating', 'in_progress', 'finalizing'].includes(status);
@@ -167,11 +178,20 @@
                 document.getElementById('deckName').innerText = res.deck_name || 'Deck sem nome';
                 this.topic = (res.deck_name || 'Deck sem nome').trim();
                 document.getElementById('topicInput').value = this.topic;
+                this.defaultBasePrompt = (res.generation_base_prompt_default || '').trim();
+                document.getElementById('basePromptInput').value = this.defaultBasePrompt;
                 this.deckStructure = res.deck_structure || 'fatos';
                 const labels = { fatos: 'Fatos', perguntas: 'Perguntas', traducoes: 'Traduções', parafrases: 'Paráfrases' };
                 document.getElementById('deckStructureLabel').innerText = labels[this.deckStructure] || 'Fatos';
                 this.updateBatchStatusUI(null);
                 await this.loadLatestBatchResult();
+            },
+
+            resetBasePrompt() {
+                const promptEl = document.getElementById('basePromptInput');
+                if (!promptEl) return;
+                promptEl.value = this.defaultBasePrompt || '';
+                this.showToast('Prompt base restaurado para o padrão do deck.', 'success');
             },
 
             async loadLatestBatchResult() {
@@ -388,9 +408,11 @@
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Enviando...';
                 const topicValue = (document.getElementById('topicInput')?.value || '').trim();
+                const basePromptValue = (document.getElementById('basePromptInput')?.value || '').trim();
                 const res = await this.api('create_batch_generation', {
                     deck_id: this.deckId,
                     topic: topicValue,
+                    base_prompt: basePromptValue,
                     model: 'gpt-5.4'
                 });
                 btn.disabled = false;
