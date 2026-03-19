@@ -62,6 +62,10 @@ try {
 } catch (PDOException $e) {}
 
 try {
+    $pdo->exec("ALTER TABLE directories ADD COLUMN deck_generation_base_prompt TEXT DEFAULT NULL AFTER deck_structure");
+} catch (PDOException $e) {}
+
+try {
     $pdo->exec("ALTER TABLE flashcard_book_progress ADD COLUMN completed_reads TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER current_index");
 } catch (PDOException $e) {}
 
@@ -115,7 +119,7 @@ try {
 
 // Função auxiliar para verificar se o usuário é dono do deck (Segurança IDOR)
 function verifyDeckOwnership($pdo, $deck_id, $user_id) {
-    $stmt = $pdo->prepare("SELECT id, name_encrypted, deck_mode, deck_front_language, deck_back_language, deck_structure FROM directories WHERE id = ? AND user_id = ? AND type = 4");
+    $stmt = $pdo->prepare("SELECT id, name_encrypted, deck_mode, deck_front_language, deck_back_language, deck_structure, deck_generation_base_prompt FROM directories WHERE id = ? AND user_id = ? AND type = 4");
     $stmt->execute([$deck_id, $user_id]);
     return $stmt->fetch();
 }
@@ -948,6 +952,14 @@ if ($action === 'fetch') {
         ];
     }
 
+    $stored_base_prompt = trim((string)($deck['deck_generation_base_prompt'] ?? ''));
+    if ($stored_base_prompt === '') {
+        $stored_base_prompt = buildDefaultBasePromptByStructure(
+            Security::decryptData($deck['name_encrypted']),
+            normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos')
+        );
+    }
+
     echo json_encode([
         'status' => 'success', 
         'deck_name' => Security::decryptData($deck['name_encrypted']),
@@ -955,10 +967,7 @@ if ($action === 'fetch') {
         'deck_front_language' => normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR'),
         'deck_back_language' => normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB'),
         'deck_structure' => normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos'),
-        'generation_base_prompt_default' => buildDefaultBasePromptByStructure(
-            Security::decryptData($deck['name_encrypted']),
-            normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos')
-        ),
+        'generation_base_prompt_default' => $stored_base_prompt,
         'deck_percentage' => $deck_percentage,
         'book_completed_reads' => $book_completed_reads,
         'book_completed_reads_max' => 3,
@@ -1542,6 +1551,10 @@ elseif ($action === 'create_batch_generation') {
     }
     $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
     $custom_base_prompt = normalizeGenerationBasePromptInput($input['base_prompt'] ?? '');
+    if ($custom_base_prompt !== '') {
+        $savePromptStmt = $pdo->prepare("UPDATE directories SET deck_generation_base_prompt = ? WHERE id = ? AND user_id = ? LIMIT 1");
+        $savePromptStmt->execute([$custom_base_prompt, $deck_id, $user_id]);
+    }
     $historyText = fetchDeckHistoryText($pdo, $deck_id);
     $chatPayload = buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, 'gpt-5.4', $custom_base_prompt);
 
