@@ -89,12 +89,7 @@ function renderNodes(nodes){
         b.title = `${node.title}`;
         b.onclick = async () => {
             if (node.state === 'locked') return toast('Fase bloqueada.');
-            if (node.state !== 'done') {
-                const done = await api('complete_phase', {directory_id: trackId, node_id: node.id});
-                if (done.status !== 'success') return toast(done.message || 'Erro ao salvar progresso.');
-            }
-            toast(`${node.title}`);
-            await loadMap(activeMap);
+            window.location.href = `/phase?id=${trackId}&node=${node.id}`;
         };
         nodesEl.appendChild(b);
     });
@@ -106,6 +101,8 @@ async function loadMap(mapNumber = 1){
     activeMap = data.map_number; totalMaps = data.total_maps;
     document.getElementById('trackTitle').textContent = `🗺️ ${data.track.name}`;
     document.getElementById('mapMeta').textContent = `Mapa ${activeMap} de ${totalMaps} · 10 fases por mapa`;
+    const hue = (activeMap * 37) % 360;
+    document.documentElement.style.setProperty('--hud', `hsla(${hue},55%,20%,0.6)`);
     document.getElementById('adminLink').href = `/map_admin?id=${trackId}`;
     renderNodes(data.nodes);
 }

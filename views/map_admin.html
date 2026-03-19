@@ -13,11 +13,13 @@
       <div class="flex gap-2">
         <a id="playLink" class="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-sm" href="#">Abrir mapa</a>
         <button id="btnGenerate" class="px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-500 text-sm">Gerar +10 fases (GPT)</button>
+        <button id="btnPublish" class="px-3 py-2 rounded bg-amber-600 hover:bg-amber-500 text-sm">Confirmar fases pendentes</button>
       </div>
     </header>
 
     <section class="bg-slate-900 border border-slate-700 rounded-xl p-4">
-      <p class="text-sm text-slate-300">Cada fase precisa ser pequena e sequencial. O botão de geração pede 10 fases por vez ao modelo <strong>gpt-5.4</strong>, com perguntas diagnósticas para evitar lacunas (paradoxo de Mênon).</p>
+      <p class="text-sm text-slate-300">Geração e publicação foram separadas: você gera lotes de 10, revisa/edita e só depois publica para os jogadores. Conteúdo de cada fase (slides) é gerado separadamente na tela da fase.</p>
+      <p id="pendingInfo" class="text-xs text-amber-300 mt-2"></p>
     </section>
 
     <section id="list" class="space-y-3"></section>
@@ -36,10 +38,16 @@ function esc(v){ return String(v || '').replace(/[&<>'"]/g, (m)=>({ '&':'&amp;',
 
 function itemCard(node){
   const questions = (node.questions || []).map(q => `<li>${esc(q)}</li>`).join('');
+  const badge = node.is_published
+    ? '<span class="text-xs px-2 py-1 rounded bg-emerald-900 text-emerald-300">Publicado</span>'
+    : '<span class="text-xs px-2 py-1 rounded bg-amber-900 text-amber-300">Pendente</span>';
+
   return `<article class="bg-slate-900 border border-slate-700 rounded-xl p-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <h3 class="font-semibold">Mapa ${node.map_number} · Fase ${node.phase_number} · #${node.position_index}</h3>
-      <div class="flex gap-2">
+      <div class="flex items-center gap-2">
+        ${badge}
+        <a href="/phase?id=${trackId}&node=${node.id}&admin=1" class="text-xs px-2 py-1 rounded bg-violet-700 hover:bg-violet-600">Slides</a>
         <button data-edit="${node.id}" class="text-xs px-2 py-1 rounded bg-blue-600 hover:bg-blue-500">Editar</button>
         <button data-del="${node.id}" class="text-xs px-2 py-1 rounded bg-rose-700 hover:bg-rose-600">Excluir</button>
       </div>
@@ -59,6 +67,7 @@ async function loadAdmin() {
 
   document.getElementById('title').textContent = `Admin da trilha: ${data.track.name}`;
   document.getElementById('playLink').href = `/map?id=${trackId}`;
+  document.getElementById('pendingInfo').textContent = `${data.pending_count || 0} fase(s) pendente(s) de confirmação para o mapa.`;
   document.getElementById('list').innerHTML = data.nodes.length ? data.nodes.map(itemCard).join('') : '<p class="text-slate-400">Sem fases ainda. Clique em "Gerar +10 fases (GPT)".</p>';
 
   document.querySelectorAll('[data-del]').forEach(btn => btn.onclick = async () => {
@@ -76,6 +85,7 @@ async function loadAdmin() {
     if (questionsRaw === null) return;
     const questions = questionsRaw.split('\n').map(s => s.trim()).filter(Boolean);
     await api('upsert_node', { directory_id: trackId, node_id: node.id, title, objective, questions });
+    alert('Edição salva. Esta fase voltou para status pendente e precisa ser confirmada novamente.');
     loadAdmin();
   });
 }
@@ -86,6 +96,13 @@ document.getElementById('btnGenerate').onclick = async () => {
   const res = await api('generate_batch', { directory_id: trackId });
   btn.disabled = false; btn.textContent = 'Gerar +10 fases (GPT)';
   if (res.status !== 'success') alert(res.message || 'Falha ao gerar.');
+  loadAdmin();
+};
+
+document.getElementById('btnPublish').onclick = async () => {
+  const res = await api('publish_pending', { directory_id: trackId });
+  if (res.status !== 'success') return alert(res.message || 'Falha ao publicar fases.');
+  alert(`Fases confirmadas: ${res.published || 0}`);
   loadAdmin();
 };
 

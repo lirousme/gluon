@@ -35,7 +35,8 @@ public_html/gluon/
 │   ├── sistema_de_condicionais.html # NOVO: Fluxo de tarefas condicionais
 │   ├── plano.html           # NOVO: Planejamento em 5 fases com acordeon
 │   ├── map.html             # ATUALIZADO: Mapa jogável dinâmico (fases vindas do banco)
-│   ├── map_admin.html       # NOVO: Administração da trilha (gerar/editar/excluir fases)
+│   ├── map_admin.html       # ATUALIZADO: Administração da trilha (gerar/editar/excluir/confirmar publicação)
+│   ├── phase.html           # NOVO: Tela da fase com slides (jogador + edição do criador)
 │   └── errors/
 │
 └── assets/
@@ -355,11 +356,14 @@ title VARCHAR(255) NOT NULL,
 objective TEXT DEFAULT NULL,
 questions_json LONGTEXT DEFAULT NULL, -- Perguntas diagnósticas por fase (JSON array)
 source VARCHAR(20) NOT NULL DEFAULT 'manual', -- manual | gpt | fallback
+is_published TINYINT(1) NOT NULL DEFAULT 0, -- NOVO: só aparece no mapa após confirmação do criador
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+published_at DATETIME DEFAULT NULL, -- NOVO: data de publicação da fase
 
 UNIQUE KEY uniq_track_position (track_directory_id, position_index),
 INDEX idx_track_map (track_directory_id, map_number, phase_number),
+INDEX idx_track_publish (track_directory_id, is_published, position_index),
 FOREIGN KEY (track_directory_id) REFERENCES directories(id) ON DELETE CASCADE
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -393,4 +397,20 @@ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 INDEX idx_track_jobs (track_directory_id, created_at),
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 FOREIGN KEY (track_directory_id) REFERENCES directories(id) ON DELETE CASCADE
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+======================================================================
+
+TABELA: track_node_slides
+id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+node_id BIGINT UNSIGNED NOT NULL, -- FK para track_nodes (uma fase específica)
+content_json LONGTEXT DEFAULT NULL, -- Slides da fase (array JSON)
+model VARCHAR(40) DEFAULT NULL, -- gpt-5.4 | fallback | manual
+created_by INT UNSIGNED NOT NULL, -- usuário que gerou/editou por último
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+UNIQUE KEY uniq_node_slide (node_id),
+FOREIGN KEY (node_id) REFERENCES track_nodes(id) ON DELETE CASCADE,
+FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
