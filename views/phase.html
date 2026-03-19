@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gluon • Fase</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+  <main class="max-w-4xl mx-auto p-4 sm:p-6 space-y-4">
+    <header class="flex flex-wrap items-center justify-between gap-2">
+      <div>
+        <h1 id="phaseTitle" class="text-xl font-bold">Carregando fase...</h1>
+        <p id="phaseMeta" class="text-sm text-slate-400"></p>
+      </div>
+      <div class="flex gap-2">
+        <a id="backMap" class="px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 text-sm" href="#">Voltar ao mapa</a>
+        <button id="btnComplete" class="px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-500 text-sm">Concluir fase</button>
+      </div>
+    </header>
+
+    <section id="adminBox" class="hidden bg-slate-900 border border-slate-700 rounded-xl p-4 space-y-2">
+      <p class="text-sm text-slate-300">Administração do conteúdo da fase (slide): gere em separado para economizar tokens da trilha.</p>
+      <div class="flex flex-wrap gap-2">
+        <button id="btnGenerateSlides" class="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-sm">Gerar slides com GPT</button>
+        <button id="btnSaveSlides" class="px-3 py-2 rounded bg-amber-600 hover:bg-amber-500 text-sm">Salvar edição manual</button>
+      </div>
+    </section>
+
+    <section class="bg-slate-900 border border-slate-700 rounded-xl p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold">Slides da fase</h2>
+        <div class="text-xs text-slate-400"><span id="slideCounter">0/0</span></div>
+      </div>
+      <article id="slideCard" class="min-h-[240px] rounded-lg bg-slate-800 border border-slate-700 p-4">
+        <h3 id="slideTitle" class="font-semibold text-lg"></h3>
+        <pre id="slideBody" class="whitespace-pre-wrap text-sm text-slate-200 mt-2 font-sans"></pre>
+      </article>
+      <div class="mt-3 flex items-center justify-between">
+        <button id="btnPrevSlide" class="px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 text-sm">◀ Anterior</button>
+        <button id="btnNextSlide" class="px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 text-sm">Próximo ▶</button>
+      </div>
+    </section>
+
+    <section id="editorBox" class="hidden bg-slate-900 border border-slate-700 rounded-xl p-4">
+      <label class="text-sm text-slate-300">Edição rápida JSON (array de slides):</label>
+      <textarea id="slidesJson" class="w-full h-64 mt-2 p-3 rounded bg-slate-800 border border-slate-600 text-xs"></textarea>
+    </section>
+  </main>
+
+<script>
+const qs = new URLSearchParams(location.search);
+const trackId = Number(qs.get('id') || 0);
+const nodeId = Number(qs.get('node') || 0);
+let slides = [];
+let idx = 0;
+let isOwner = false;
+
+async function api(action, payload={}) {
+  const res = await fetch('/api/trilha', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({action, ...payload})
+  });
+  return res.json();
+}
+
+function renderSlide() {
+  if (!slides.length) {
+    document.getElementById('slideTitle').textContent = 'Sem conteúdo de slide ainda';
+    document.getElementById('slideBody').textContent = 'Se você for o criador da trilha, use "Gerar slides com GPT".';
+    document.getElementById('slideCounter').textContent = '0/0';
+    return;
+  }
+  idx = Math.max(0, Math.min(idx, slides.length - 1));
+  const s = slides[idx];
+  document.getElementById('slideTitle').textContent = `${s.title}`;
+  document.getElementById('slideBody').textContent = `${s.body}`;
+  document.getElementById('slideCounter').textContent = `${idx + 1}/${slides.length}`;
+  if (isOwner) {
+    document.getElementById('slidesJson').value = JSON.stringify(slides, null, 2);
+  }
+}
+
+async function load() {
+  const data = await api('fetch_phase', { directory_id: trackId, node_id: nodeId });
+  if (data.status !== 'success') return alert(data.message || 'Erro ao carregar fase.');
+
+  isOwner = data.is_owner === true;
+  slides = Array.isArray(data.slides) ? data.slides : [];
+  idx = 0;
+
+  document.getElementById('phaseTitle').textContent = data.node.title;
+  document.getElementById('phaseMeta').textContent = `${data.track.name} · Mapa ${data.node.map_number} · Fase ${data.node.phase_number}`;
+  document.getElementById('backMap').href = `/map?id=${trackId}`;
+
+  if (isOwner) {
+    document.getElementById('adminBox').classList.remove('hidden');
+    document.getElementById('editorBox').classList.remove('hidden');
+  }
+
+  renderSlide();
+}
+
+document.getElementById('btnPrevSlide').onclick = () => { idx--; renderSlide(); };
+document.getElementById('btnNextSlide').onclick = () => { idx++; renderSlide(); };
+
+document.getElementById('btnComplete').onclick = async () => {
+  const res = await api('complete_phase', { directory_id: trackId, node_id: nodeId });
+  if (res.status !== 'success') return alert(res.message || 'Erro ao concluir fase.');
+  alert('Fase concluída!');
+  window.location.href = `/map?id=${trackId}`;
+};
+
+document.getElementById('btnGenerateSlides').onclick = async () => {
+  if (!isOwner) return;
+  const btn = document.getElementById('btnGenerateSlides');
+  btn.disabled = true; btn.textContent = 'Gerando...';
+  const res = await api('generate_phase_content', { directory_id: trackId, node_id: nodeId });
+  btn.disabled = false; btn.textContent = 'Gerar slides com GPT';
+  if (res.status !== 'success') return alert(res.message || 'Erro ao gerar slides.');
+  slides = Array.isArray(res.slides) ? res.slides : [];
+  idx = 0;
+  renderSlide();
+};
+
+document.getElementById('btnSaveSlides').onclick = async () => {
+  if (!isOwner) return;
+  let parsed;
+  try {
+    parsed = JSON.parse(document.getElementById('slidesJson').value || '[]');
+  } catch {
+    return alert('JSON inválido.');
+  }
+  const res = await api('save_phase_content', { directory_id: trackId, node_id: nodeId, slides: parsed });
+  if (res.status !== 'success') return alert(res.message || 'Erro ao salvar slides.');
+  slides = parsed;
+  idx = 0;
+  renderSlide();
+  alert('Slides salvos.');
+};
+
+if (!trackId || !nodeId) alert('Parâmetros inválidos. Use /phase?id=TRILHA&node=FASE');
+else load();
+</script>
+</body>
+</html>

@@ -22,12 +22,25 @@ function ensureTrailTables(PDO $pdo): void {
         objective TEXT DEFAULT NULL,
         questions_json LONGTEXT DEFAULT NULL,
         source VARCHAR(20) NOT NULL DEFAULT 'manual',
+        is_published TINYINT(1) NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        published_at DATETIME DEFAULT NULL,
         UNIQUE KEY uniq_track_position (track_directory_id, position_index),
         INDEX idx_track_map (track_directory_id, map_number, phase_number),
+        INDEX idx_track_publish (track_directory_id, is_published, position_index),
         CONSTRAINT fk_track_nodes_directory FOREIGN KEY (track_directory_id) REFERENCES directories(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    try {
+        $pdo->exec("ALTER TABLE track_nodes ADD COLUMN is_published TINYINT(1) NOT NULL DEFAULT 0 AFTER source");
+    } catch (Throwable $e) {}
+    try {
+        $pdo->exec("ALTER TABLE track_nodes ADD COLUMN published_at DATETIME DEFAULT NULL AFTER updated_at");
+    } catch (Throwable $e) {}
+    try {
+        $pdo->exec("CREATE INDEX idx_track_publish ON track_nodes (track_directory_id, is_published, position_index)");
+    } catch (Throwable $e) {}
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS track_user_progress (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -53,6 +66,19 @@ function ensureTrailTables(PDO $pdo): void {
         CONSTRAINT fk_track_jobs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         CONSTRAINT fk_track_jobs_directory FOREIGN KEY (track_directory_id) REFERENCES directories(id) ON DELETE CASCADE,
         INDEX idx_track_jobs (track_directory_id, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS track_node_slides (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        node_id BIGINT UNSIGNED NOT NULL,
+        content_json LONGTEXT DEFAULT NULL,
+        model VARCHAR(40) DEFAULT NULL,
+        created_by INT UNSIGNED NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_node_slide (node_id),
+        CONSTRAINT fk_track_node_slides_node FOREIGN KEY (node_id) REFERENCES track_nodes(id) ON DELETE CASCADE,
+        CONSTRAINT fk_track_node_slides_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 }
 
@@ -122,7 +148,7 @@ function generateItemsWithGPT(string $subject, array $existingTitles, int $start
         'model' => 'gpt-5.4',
         'response_format' => ['type' => 'json_object'],
         'messages' => [
-            ['role' => 'system', 'content' => 'Você cria trilhas pedagógicas sequenciais evitando granularidade ruim. Gere exatamente 10 fases novas. Se um item estiver amplo, já quebre em fases menores.'],
+            ['role' => 'system', 'content' => 'Você cria trilhas pedagógicas sequenciais evitando granularidade ruim. Gere exatamente 10 fases novas. Se um item estiver amplo, já quebre em fases menores. Você pode inserir pré-requisitos faltantes e reordenar para manter linearidade.'],
             ['role' => 'user', 'content' => "Matéria: {$subject}.\nÚltimos itens já existentes:\n{$context}\n\nGere exatamente 10 novos itens sequenciais a partir da posição {$startPosition}.\nFormato JSON obrigatório: {\"items\":[{\"title\":\"\",\"objective\":\"\",\"questions\":[\"\",\"\",\"\",\"\"]}]}.\nCada item deve ter 4 perguntas diagnósticas que evitem paradoxo de Mênon (pré-requisito, definição, aplicação, erro comum). Não repita itens existentes."]
         ]
     ];
@@ -173,6 +199,65 @@ function generateItemsWithGPT(string $subject, array $existingTitles, int $start
     return ['items' => $items, 'prompt' => $prompt, 'response' => $decoded, 'model' => 'gpt-5.4'];
 }
 
+function buildFallbackSlides(string $subject, string $title, string $objective, array $questions): array {
+    return [
+        ['type' => 'intro', 'title' => $title, 'body' => "Objetivo: {$objective}"],
+        ['type' => 'conceito', 'title' => 'Definição essencial', 'body' => "Explique de forma simples o conceito central de {$title} em {$subject}."],
+        ['type' => 'imagem', 'title' => 'Imagem de apoio', 'body' => "[INSIRA IMAGEM REPRESENTATIVA DE {$title} AQUI]"],
+        ['type' => 'aplicacao', 'title' => 'Aplicação', 'body' => "Mostre um caso prático de {$title}."],
+        ['type' => 'check', 'title' => 'Perguntas de checagem', 'body' => implode("\n", array_map(fn($q) => "- {$q}", $questions))]
+    ];
+}
+
+function generateSlidesWithGPT(string $subject, string $title, string $objective, array $questions): array {
+    if (trim((string)OPENAI_API_KEY) === '') {
+        return ['slides' => buildFallbackSlides($subject, $title, $objective, $questions), 'model' => 'fallback'];
+    }
+
+    $prompt = [
+        'model' => 'gpt-5.4',
+        'response_format' => ['type' => 'json_object'],
+        'messages' => [
+            ['role' => 'system', 'content' => 'Você cria conteúdo didático em slides curtos, sem consumir tokens demais. Não gere imagens reais, apenas placeholders [INSIRA IMAGEM ... AQUI].'],
+            ['role' => 'user', 'content' => "Matéria: {$subject}\nFase: {$title}\nObjetivo: {$objective}\nPerguntas diagnósticas:\n- " . implode("\n- ", $questions) . "\n\nRetorne JSON no formato: {\"slides\":[{\"type\":\"intro|conceito|imagem|aplicacao|check\",\"title\":\"\",\"body\":\"\"}]}. Gere de 5 a 8 slides curtos."]
+        ]
+    ];
+
+    [$code, $resp] = openaiJsonRequest('https://api.openai.com/v1/chat/completions', $prompt);
+    if ($code !== 200 || !$resp) {
+        return ['slides' => buildFallbackSlides($subject, $title, $objective, $questions), 'model' => 'fallback'];
+    }
+
+    $decoded = json_decode($resp, true);
+    $raw = trim((string)($decoded['choices'][0]['message']['content'] ?? ''));
+    if (str_starts_with($raw, '```')) {
+        $raw = preg_replace('/^```(?:json)?\s*/i', '', $raw);
+        $raw = preg_replace('/\s*```$/', '', $raw);
+        $raw = trim($raw);
+    }
+    $json = json_decode($raw, true);
+    $slides = [];
+    if (is_array($json) && isset($json['slides']) && is_array($json['slides'])) {
+        foreach ($json['slides'] as $slide) {
+            $titleOut = trim((string)($slide['title'] ?? ''));
+            $bodyOut = trim((string)($slide['body'] ?? ''));
+            if ($titleOut === '' || $bodyOut === '') continue;
+            $slides[] = [
+                'type' => trim((string)($slide['type'] ?? 'conceito')),
+                'title' => $titleOut,
+                'body' => $bodyOut
+            ];
+        }
+    }
+
+    if (!$slides) {
+        $slides = buildFallbackSlides($subject, $title, $objective, $questions);
+        return ['slides' => $slides, 'model' => 'fallback'];
+    }
+
+    return ['slides' => array_slice($slides, 0, 10), 'model' => 'gpt-5.4'];
+}
+
 ensureTrailTables($pdo);
 
 if ($action === 'fetch_admin') {
@@ -180,10 +265,13 @@ if ($action === 'fetch_admin') {
     $dir = verifyTrackOwnership($pdo, $directory_id, $user_id);
     if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Trilha não encontrada.']));
 
-    $stmt = $pdo->prepare("SELECT id, position_index, map_number, phase_number, title, objective, questions_json, source FROM track_nodes WHERE track_directory_id = ? ORDER BY position_index ASC");
+    $stmt = $pdo->prepare("SELECT id, position_index, map_number, phase_number, title, objective, questions_json, source, is_published FROM track_nodes WHERE track_directory_id = ? ORDER BY position_index ASC");
     $stmt->execute([$directory_id]);
     $nodes = [];
+    $pending = 0;
     foreach ($stmt->fetchAll() as $row) {
+        $published = (int)($row['is_published'] ?? 0) === 1;
+        if (!$published) $pending++;
         $nodes[] = [
             'id' => (int)$row['id'],
             'position_index' => (int)$row['position_index'],
@@ -192,11 +280,12 @@ if ($action === 'fetch_admin') {
             'title' => $row['title'],
             'objective' => (string)($row['objective'] ?? ''),
             'questions' => decodeQuestions($row['questions_json']),
-            'source' => $row['source']
+            'source' => $row['source'],
+            'is_published' => $published
         ];
     }
 
-    echo json_encode(['status' => 'success', 'track' => ['id' => (int)$dir['id'], 'name' => Security::decryptData($dir['name_encrypted'])], 'nodes' => $nodes]);
+    echo json_encode(['status' => 'success', 'track' => ['id' => (int)$dir['id'], 'name' => Security::decryptData($dir['name_encrypted'])], 'pending_count' => $pending, 'nodes' => $nodes]);
 }
 elseif ($action === 'generate_batch') {
     $directory_id = (int)($input['directory_id'] ?? 0);
@@ -214,7 +303,7 @@ elseif ($action === 'generate_batch') {
 
     $pdo->beginTransaction();
     try {
-        $stmtIns = $pdo->prepare("INSERT INTO track_nodes (track_directory_id, position_index, map_number, phase_number, title, objective, questions_json, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmtIns = $pdo->prepare("INSERT INTO track_nodes (track_directory_id, position_index, map_number, phase_number, title, objective, questions_json, source, is_published) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)");
         $inserted = [];
         foreach ($generated['items'] as $offset => $item) {
             $position = $startPosition + $offset;
@@ -229,7 +318,8 @@ elseif ($action === 'generate_batch') {
                 'phase_number' => $phase,
                 'title' => trim((string)$item['title']),
                 'objective' => trim((string)($item['objective'] ?? '')),
-                'questions' => $questions
+                'questions' => $questions,
+                'is_published' => false
             ];
         }
 
@@ -243,6 +333,15 @@ elseif ($action === 'generate_batch') {
         echo json_encode(['status' => 'error', 'message' => 'Falha ao gerar lote de fases.']);
     }
 }
+elseif ($action === 'publish_pending') {
+    $directory_id = (int)($input['directory_id'] ?? 0);
+    $dir = verifyTrackOwnership($pdo, $directory_id, $user_id);
+    if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Trilha não encontrada.']));
+
+    $stmt = $pdo->prepare("UPDATE track_nodes SET is_published = 1, published_at = NOW() WHERE track_directory_id = ? AND is_published = 0");
+    $stmt->execute([$directory_id]);
+    echo json_encode(['status' => 'success', 'published' => $stmt->rowCount()]);
+}
 elseif ($action === 'upsert_node') {
     $directory_id = (int)($input['directory_id'] ?? 0);
     $dir = verifyTrackOwnership($pdo, $directory_id, $user_id);
@@ -255,7 +354,7 @@ elseif ($action === 'upsert_node') {
     if ($title === '') die(json_encode(['status' => 'error', 'message' => 'Título obrigatório.']));
 
     if ($node_id > 0) {
-        $stmt = $pdo->prepare("UPDATE track_nodes SET title = ?, objective = ?, questions_json = ?, source = 'manual' WHERE id = ? AND track_directory_id = ?");
+        $stmt = $pdo->prepare("UPDATE track_nodes SET title = ?, objective = ?, questions_json = ?, source = 'manual', is_published = 0, published_at = NULL WHERE id = ? AND track_directory_id = ?");
         $stmt->execute([$title, $objective, json_encode($questions, JSON_UNESCAPED_UNICODE), $node_id, $directory_id]);
     }
 
@@ -291,7 +390,7 @@ elseif ($action === 'fetch_map') {
     $dir = verifyTrackAccess($pdo, $directory_id, $user_id);
     if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Trilha indisponível.']));
 
-    $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM track_nodes WHERE track_directory_id = ?");
+    $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM track_nodes WHERE track_directory_id = ? AND is_published = 1");
     $stmtCount->execute([$directory_id]);
     $totalNodes = (int)$stmtCount->fetchColumn();
     $totalMaps = max(1, (int)ceil($totalNodes / 10));
@@ -309,7 +408,7 @@ elseif ($action === 'fetch_map') {
 
     $offsetStart = (($activeMap - 1) * 10) + 1;
     $offsetEnd = $offsetStart + 9;
-    $stmtNodes = $pdo->prepare("SELECT id, position_index, map_number, phase_number, title, objective, questions_json FROM track_nodes WHERE track_directory_id = ? AND position_index BETWEEN ? AND ? ORDER BY position_index ASC");
+    $stmtNodes = $pdo->prepare("SELECT n.id, n.position_index, n.map_number, n.phase_number, n.title, n.objective, n.questions_json, (s.id IS NOT NULL) AS has_slide FROM track_nodes n LEFT JOIN track_node_slides s ON s.node_id = n.id WHERE n.track_directory_id = ? AND n.is_published = 1 AND n.position_index BETWEEN ? AND ? ORDER BY n.position_index ASC");
     $stmtNodes->execute([$directory_id, $offsetStart, $offsetEnd]);
 
     $nodes = [];
@@ -323,6 +422,7 @@ elseif ($action === 'fetch_map') {
             'title' => $row['title'],
             'objective' => (string)($row['objective'] ?? ''),
             'questions' => decodeQuestions($row['questions_json']),
+            'has_slide' => (int)$row['has_slide'] === 1,
             'state' => $state
         ];
     }
@@ -336,13 +436,94 @@ elseif ($action === 'fetch_map') {
         'nodes' => $nodes
     ]);
 }
+elseif ($action === 'fetch_phase') {
+    $directory_id = (int)($input['directory_id'] ?? 0);
+    $node_id = (int)($input['node_id'] ?? 0);
+    $dir = verifyTrackAccess($pdo, $directory_id, $user_id);
+    if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Trilha indisponível.']));
+
+    $owner = (int)$dir['user_id'] === $user_id;
+    $stmt = $pdo->prepare("SELECT id, position_index, map_number, phase_number, title, objective, questions_json, is_published FROM track_nodes WHERE id = ? AND track_directory_id = ? LIMIT 1");
+    $stmt->execute([$node_id, $directory_id]);
+    $node = $stmt->fetch();
+    if (!$node) die(json_encode(['status' => 'error', 'message' => 'Fase não encontrada.']));
+    if (!$owner && (int)$node['is_published'] !== 1) die(json_encode(['status' => 'error', 'message' => 'Fase ainda não publicada.']));
+
+    $slideStmt = $pdo->prepare("SELECT content_json FROM track_node_slides WHERE node_id = ? LIMIT 1");
+    $slideStmt->execute([$node_id]);
+    $slide = $slideStmt->fetchColumn();
+    $slides = json_decode((string)$slide, true);
+    if (!is_array($slides)) $slides = [];
+
+    echo json_encode([
+        'status' => 'success',
+        'track' => ['id' => (int)$dir['id'], 'name' => Security::decryptData($dir['name_encrypted'])],
+        'node' => [
+            'id' => (int)$node['id'],
+            'position_index' => (int)$node['position_index'],
+            'map_number' => (int)$node['map_number'],
+            'phase_number' => (int)$node['phase_number'],
+            'title' => $node['title'],
+            'objective' => (string)($node['objective'] ?? ''),
+            'questions' => decodeQuestions($node['questions_json']),
+            'is_published' => (int)$node['is_published'] === 1
+        ],
+        'is_owner' => $owner,
+        'slides' => $slides
+    ]);
+}
+elseif ($action === 'generate_phase_content') {
+    $directory_id = (int)($input['directory_id'] ?? 0);
+    $node_id = (int)($input['node_id'] ?? 0);
+    $dir = verifyTrackOwnership($pdo, $directory_id, $user_id);
+    if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Sem permissão para gerar conteúdo.']));
+
+    $stmt = $pdo->prepare("SELECT id, title, objective, questions_json FROM track_nodes WHERE id = ? AND track_directory_id = ? LIMIT 1");
+    $stmt->execute([$node_id, $directory_id]);
+    $node = $stmt->fetch();
+    if (!$node) die(json_encode(['status' => 'error', 'message' => 'Fase não encontrada.']));
+
+    $subject = Security::decryptData($dir['name_encrypted']);
+    $questions = decodeQuestions($node['questions_json']);
+    $generated = generateSlidesWithGPT($subject, (string)$node['title'], (string)($node['objective'] ?? ''), $questions);
+
+    $upsert = $pdo->prepare("INSERT INTO track_node_slides (node_id, content_json, model, created_by) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE content_json = VALUES(content_json), model = VALUES(model), created_by = VALUES(created_by)");
+    $upsert->execute([$node_id, json_encode($generated['slides'], JSON_UNESCAPED_UNICODE), $generated['model'], $user_id]);
+
+    echo json_encode(['status' => 'success', 'slides' => $generated['slides'], 'model' => $generated['model']]);
+}
+elseif ($action === 'save_phase_content') {
+    $directory_id = (int)($input['directory_id'] ?? 0);
+    $node_id = (int)($input['node_id'] ?? 0);
+    $dir = verifyTrackOwnership($pdo, $directory_id, $user_id);
+    if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Sem permissão para salvar conteúdo.']));
+
+    $slides = (array)($input['slides'] ?? []);
+    $norm = [];
+    foreach ($slides as $s) {
+        $title = trim((string)($s['title'] ?? ''));
+        $body = trim((string)($s['body'] ?? ''));
+        if ($title === '' || $body === '') continue;
+        $norm[] = [
+            'type' => trim((string)($s['type'] ?? 'conceito')),
+            'title' => $title,
+            'body' => $body
+        ];
+    }
+    if (!$norm) die(json_encode(['status' => 'error', 'message' => 'Envie ao menos 1 slide válido.']));
+
+    $upsert = $pdo->prepare("INSERT INTO track_node_slides (node_id, content_json, model, created_by) VALUES (?, ?, 'manual', ?) ON DUPLICATE KEY UPDATE content_json = VALUES(content_json), model = 'manual', created_by = VALUES(created_by)");
+    $upsert->execute([$node_id, json_encode(array_slice($norm, 0, 20), JSON_UNESCAPED_UNICODE), $user_id]);
+
+    echo json_encode(['status' => 'success']);
+}
 elseif ($action === 'complete_phase') {
     $directory_id = (int)($input['directory_id'] ?? 0);
     $node_id = (int)($input['node_id'] ?? 0);
     $dir = verifyTrackAccess($pdo, $directory_id, $user_id);
     if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Trilha indisponível.']));
 
-    $stmtNode = $pdo->prepare("SELECT position_index FROM track_nodes WHERE id = ? AND track_directory_id = ?");
+    $stmtNode = $pdo->prepare("SELECT position_index FROM track_nodes WHERE id = ? AND track_directory_id = ? AND is_published = 1");
     $stmtNode->execute([$node_id, $directory_id]);
     $nodePos = (int)$stmtNode->fetchColumn();
     if ($nodePos <= 0) die(json_encode(['status' => 'error', 'message' => 'Fase inválida.']));
