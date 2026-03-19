@@ -634,7 +634,7 @@ function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $la
     return true;
 }
 
-function buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, $model = 'gpt-5.4') {
+function buildDefaultBasePromptByStructure($deck_name, $deck_structure) {
     $basePrompt = '';
     if ($deck_structure === 'fatos') {
         $basePrompt = 'Me dê informações sobre o assunto "' . $deck_name . '", em uma tabela de uma única coluna, onde cada linha é uma informação. As informações devem ser de fácil compreensão. As informações devem ser óbvias evidentes e de rápida assimilação e de preferência curtas. Nenhuma informação pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. A ideia é conseguir vencer o paradoxo de Mênon, conseguir saber tudo sobre esse assunto, do nível para leigos ao nível expert. Caso não tenha muitas perguntas anteriores, vá pelo nível para leigos, e só aumente o nível se as perguntas anteriores já tiverem abrangido todo nível de conhecimento para leigos no assunto. Frases curtas.';
@@ -644,6 +644,22 @@ function buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyT
         $basePrompt = 'gere 15 paráfrases dessa: "' . $deck_name . '" (Num tom de escrita de imagético, cético e ao mesmo tempo poético, elucidando a mensagem abstrata codificada na frase original, mantendo os sujeitos e os objetos simples e compostos, alterando apenas advérbios, verbos e adjetivos, etc.)';
     } else {
         $basePrompt = 'Crie frases ordinárias que tenha dentro da usa estrutura sintática o termo "' . $deck_name . '". Quero variações em diferentes tempos verbais, diferentes sujeitos, com o termo em diferentes posições de estrutura sintáticas, afirmações, negações, perguntas positivas, perguntas negativas, optativas, condicionais, voz ativa, voz passiva, voz reflexiva, faça frases com e abreviações das palavras, flexões nominais, de gênero, número e grau, variações de tempo, modo, lugar, oposição, entre outros, use e forme verbos frasais, verbos modais, entre outros tipos. Nenhuma frase pode ser igual as frases anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. Tanto a língua do verso quanto a língua da frente devem ser estruturadas com palavras ordinárias. Faça frases com o termo "' . $deck_name . '" em sua forma pura original e flexionando ele também, quando for possível. As vezes um mesmo termo pode ser traduzido termos com significados muito ou ligeiramente diferentes, crie frases para todas esses significados diferentes, isso aqui é muito importante, use sinônimos do português, para as frases em português não ficarem todas com a mesma tradução do termo. Primeira coluna na língua da frente do deck, segunda coluna na língua do verso. Sem repetições e sem conteúdo de interface.';
+    }
+    return $basePrompt;
+}
+
+function normalizeGenerationBasePromptInput($value) {
+    $text = trim((string)$value);
+    if ($text === '') {
+        return '';
+    }
+    return function_exists('mb_substr') ? mb_substr($text, 0, 5000) : substr($text, 0, 5000);
+}
+
+function buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, $model = 'gpt-5.4', $customBasePrompt = '') {
+    $basePrompt = normalizeGenerationBasePromptInput($customBasePrompt);
+    if ($basePrompt === '') {
+        $basePrompt = buildDefaultBasePromptByStructure($deck_name, $deck_structure);
     }
 
     $systemPrompt = 'Você é um gerador de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estruturas fatos e parafrases, deixe back vazio. Preserve exatamente caracteres Unicode.';
@@ -939,6 +955,10 @@ if ($action === 'fetch') {
         'deck_front_language' => normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR'),
         'deck_back_language' => normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB'),
         'deck_structure' => normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos'),
+        'generation_base_prompt_default' => buildDefaultBasePromptByStructure(
+            Security::decryptData($deck['name_encrypted']),
+            normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos')
+        ),
         'deck_percentage' => $deck_percentage,
         'book_completed_reads' => $book_completed_reads,
         'book_completed_reads_max' => 3,
@@ -1521,8 +1541,9 @@ elseif ($action === 'create_batch_generation') {
         $deck_name = function_exists('mb_substr') ? mb_substr($topic_input, 0, 200) : substr($topic_input, 0, 200);
     }
     $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
+    $custom_base_prompt = normalizeGenerationBasePromptInput($input['base_prompt'] ?? '');
     $historyText = fetchDeckHistoryText($pdo, $deck_id);
-    $chatPayload = buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, 'gpt-5.4');
+    $chatPayload = buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, 'gpt-5.4', $custom_base_prompt);
 
     $jsonlLine = json_encode([
         'custom_id' => 'deck_' . $deck_id . '_user_' . $user_id . '_' . time(),
@@ -1716,9 +1737,10 @@ elseif ($action === 'generate_cards_preview') {
         $deck_name = function_exists('mb_substr') ? mb_substr($topic_input, 0, 200) : substr($topic_input, 0, 200);
     }
     $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
+    $custom_base_prompt = normalizeGenerationBasePromptInput($input['base_prompt'] ?? '');
 
     $historyText = fetchDeckHistoryText($pdo, $deck_id);
-    $payloadBase = buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText);
+    $payloadBase = buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, 'gpt-5.4', $custom_base_prompt);
 
     $cards = [];
     $openai_debug_response = null;
