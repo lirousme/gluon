@@ -126,13 +126,7 @@ function buildFallbackItems(string $subject, int $startPosition): array {
         $num = $startPosition + $i;
         $items[] = [
             'title' => "{$subject} · Tópico {$num}",
-            'objective' => "Compreender o tópico {$num} com exemplos práticos.",
-            'questions' => [
-                "O que é o tópico {$num} em {$subject}?",
-                "Qual pré-requisito preciso antes do tópico {$num}?",
-                "Quais erros comuns devo evitar no tópico {$num}?",
-                "Como aplico o tópico {$num} em um exercício real?"
-            ]
+            'objective' => "Compreender o tópico {$num} com exemplos práticos."
         ];
     }
     return $items;
@@ -149,7 +143,7 @@ function generateItemsWithGPT(string $subject, array $existingTitles, int $start
         'response_format' => ['type' => 'json_object'],
         'messages' => [
             ['role' => 'system', 'content' => 'Você cria trilhas pedagógicas sequenciais evitando granularidade ruim. Gere exatamente 10 fases novas. Se um item estiver amplo, já quebre em fases menores. Você pode inserir pré-requisitos faltantes e reordenar para manter linearidade.'],
-            ['role' => 'user', 'content' => "Matéria: {$subject}.\nÚltimos itens já existentes:\n{$context}\n\nGere exatamente 10 novos itens sequenciais a partir da posição {$startPosition}.\nFormato JSON obrigatório: {\"items\":[{\"title\":\"\",\"objective\":\"\",\"questions\":[\"\",\"\",\"\",\"\"]}]}.\nCada item deve ter 4 perguntas diagnósticas que evitem paradoxo de Mênon (pré-requisito, definição, aplicação, erro comum). Não repita itens existentes."]
+            ['role' => 'user', 'content' => "Matéria: {$subject}.\nÚltimos itens já existentes:\n{$context}\n\nGere exatamente 10 novos itens sequenciais a partir da posição {$startPosition}.\nFormato JSON obrigatório: {\"items\":[{\"title\":\"\",\"objective\":\"\"}]}.\nIMPORTANTE: não gere perguntas, quiz, respostas ou conteúdo de slide. Aqui é só o índice/trilha de fases. Não repita itens existentes."]
         ]
     ];
 
@@ -171,20 +165,9 @@ function generateItemsWithGPT(string $subject, array $existingTitles, int $start
         foreach ($json['items'] as $item) {
             $title = trim((string)($item['title'] ?? ''));
             if ($title === '') continue;
-            $questions = array_values(array_filter(array_map(fn($q) => trim((string)$q), (array)($item['questions'] ?? [])), fn($q) => $q !== ''));
-            if (count($questions) < 4) {
-                $questions = array_merge($questions, [
-                    "Qual definição essencial deste tópico?",
-                    "Qual pré-requisito devo revisar antes?",
-                    "Como aplicar este tópico em um caso prático?",
-                    "Qual erro comum devo evitar neste tópico?"
-                ]);
-                $questions = array_slice($questions, 0, 4);
-            }
             $items[] = [
                 'title' => $title,
-                'objective' => trim((string)($item['objective'] ?? '')),
-                'questions' => array_slice($questions, 0, 6)
+                'objective' => trim((string)($item['objective'] ?? ''))
             ];
         }
     }
@@ -197,6 +180,17 @@ function generateItemsWithGPT(string $subject, array $existingTitles, int $start
     }
 
     return ['items' => $items, 'prompt' => $prompt, 'response' => $decoded, 'model' => 'gpt-5.4'];
+}
+
+function defaultDiagnosticQuestions(string $title, string $objective): array {
+    $topic = trim($title) !== '' ? $title : 'este tópico';
+    $objectiveHint = trim($objective);
+    return [
+        "Qual definição essencial de {$topic}?",
+        "Qual conhecimento prévio preciso dominar antes de {$topic}?",
+        "Como aplicar {$topic} em um exercício ou caso real?",
+        "Qual erro comum devo evitar em {$topic}?" . ($objectiveHint !== '' ? " (objetivo: {$objectiveHint})" : '')
+    ];
 }
 
 function buildFallbackSlides(string $subject, string $title, string $objective, array $questions): array {
@@ -309,8 +303,7 @@ elseif ($action === 'generate_batch') {
             $position = $startPosition + $offset;
             $map = (int)floor(($position - 1) / 10) + 1;
             $phase = (($position - 1) % 10) + 1;
-            $questions = array_slice(array_values(array_filter((array)($item['questions'] ?? []), fn($q) => trim((string)$q) !== '')), 0, 8);
-            $stmtIns->execute([$directory_id, $position, $map, $phase, trim((string)$item['title']), trim((string)($item['objective'] ?? '')), json_encode($questions, JSON_UNESCAPED_UNICODE), $generated['model'] === 'gpt-5.4' ? 'gpt' : 'fallback']);
+            $stmtIns->execute([$directory_id, $position, $map, $phase, trim((string)$item['title']), trim((string)($item['objective'] ?? '')), json_encode([], JSON_UNESCAPED_UNICODE), $generated['model'] === 'gpt-5.4' ? 'gpt' : 'fallback']);
             $inserted[] = [
                 'id' => (int)$pdo->lastInsertId(),
                 'position_index' => $position,
@@ -318,7 +311,7 @@ elseif ($action === 'generate_batch') {
                 'phase_number' => $phase,
                 'title' => trim((string)$item['title']),
                 'objective' => trim((string)($item['objective'] ?? '')),
-                'questions' => $questions,
+                'questions' => [],
                 'is_published' => false
             ];
         }
@@ -485,6 +478,9 @@ elseif ($action === 'generate_phase_content') {
 
     $subject = Security::decryptData($dir['name_encrypted']);
     $questions = decodeQuestions($node['questions_json']);
+    if (!$questions) {
+        $questions = defaultDiagnosticQuestions((string)$node['title'], (string)($node['objective'] ?? ''));
+    }
     $generated = generateSlidesWithGPT($subject, (string)$node['title'], (string)($node['objective'] ?? ''), $questions);
 
     $upsert = $pdo->prepare("INSERT INTO track_node_slides (node_id, content_json, model, created_by) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE content_json = VALUES(content_json), model = VALUES(model), created_by = VALUES(created_by)");

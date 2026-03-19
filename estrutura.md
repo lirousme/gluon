@@ -355,6 +355,7 @@ phase_number TINYINT UNSIGNED NOT NULL, -- Fase dentro do mapa (1..10)
 title VARCHAR(255) NOT NULL,
 objective TEXT DEFAULT NULL,
 questions_json LONGTEXT DEFAULT NULL, -- Perguntas diagnósticas por fase (JSON array)
+                              -- OBS: geração de "Gerar +10 fases (GPT)" cria só índice; perguntas são opcionais e podem ser geradas/editadas depois na tela da fase
 source VARCHAR(20) NOT NULL DEFAULT 'manual', -- manual | gpt | fallback
 is_published TINYINT(1) NOT NULL DEFAULT 0, -- NOVO: só aparece no mapa após confirmação do criador
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

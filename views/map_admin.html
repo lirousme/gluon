@@ -18,7 +18,7 @@
     </header>
 
     <section class="bg-slate-900 border border-slate-700 rounded-xl p-4">
-      <p class="text-sm text-slate-300">Geração e publicação foram separadas: você gera lotes de 10, revisa/edita e só depois publica para os jogadores. Conteúdo de cada fase (slides) é gerado separadamente na tela da fase.</p>
+      <p class="text-sm text-slate-300">Geração e publicação foram separadas: você gera lotes de 10 itens de índice/trilha, revisa/edita e só depois publica para os jogadores. Conteúdo de cada fase (slides) é gerado separadamente na tela da fase.</p>
       <p id="pendingInfo" class="text-xs text-amber-300 mt-2"></p>
     </section>
 
@@ -37,7 +37,6 @@ async function api(action, payload={}) {
 function esc(v){ return String(v || '').replace(/[&<>'"]/g, (m)=>({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' }[m])); }
 
 function itemCard(node){
-  const questions = (node.questions || []).map(q => `<li>${esc(q)}</li>`).join('');
   const badge = node.is_published
     ? '<span class="text-xs px-2 py-1 rounded bg-emerald-900 text-emerald-300">Publicado</span>'
     : '<span class="text-xs px-2 py-1 rounded bg-amber-900 text-amber-300">Pendente</span>';
@@ -54,7 +53,6 @@ function itemCard(node){
     </div>
     <p class="mt-1 text-sm text-emerald-300">${esc(node.title)}</p>
     <p class="mt-1 text-sm text-slate-300">${esc(node.objective || '')}</p>
-    <ul class="mt-2 text-sm list-disc pl-5 text-slate-200">${questions}</ul>
   </article>`;
 }
 
@@ -81,10 +79,7 @@ async function loadAdmin() {
     if (!node) return;
     const title = prompt('Título da fase', node.title); if (title === null) return;
     const objective = prompt('Objetivo curto', node.objective || '') ?? '';
-    const questionsRaw = prompt('Perguntas (uma por linha)', (node.questions || []).join('\n'));
-    if (questionsRaw === null) return;
-    const questions = questionsRaw.split('\n').map(s => s.trim()).filter(Boolean);
-    await api('upsert_node', { directory_id: trackId, node_id: node.id, title, objective, questions });
+    await api('upsert_node', { directory_id: trackId, node_id: node.id, title, objective, questions: [] });
     alert('Edição salva. Esta fase voltou para status pendente e precisa ser confirmada novamente.');
     loadAdmin();
   });
