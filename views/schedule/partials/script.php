@@ -285,11 +285,11 @@
 
             navigateToItemView(type, id, openMode = 'fullscreen', item = null) {
                 const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 7: 'plano' };
-                const targetView = viewByType[type];
-                if (!targetView) return false;
                 if (openMode === 'preview') {
                     return this.openItemPreviewModal(item || { id, type });
                 }
+                const targetView = viewByType[type];
+                if (!targetView) return false;
                 window.location.href = this.buildViewUrl(targetView, id);
                 return true;
             },
