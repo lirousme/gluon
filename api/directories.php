@@ -129,9 +129,9 @@ function duplicateDirectoryTree($source_id, $target_parent_id, $user_id, $pdo, $
     $stmtInsert = $pdo->prepare("
         INSERT INTO directories (
             user_id, parent_id, target_id, type, name_encrypted, default_view, 
-            new_item_position, sort_order, icon, icon_color_from, icon_color_to, 
+            open_mode, new_item_position, sort_order, icon, icon_color_from, icon_color_to, 
             cover_url_encrypted, start_date, end_date, is_recurring
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
     
     $stmtInsert->execute([
@@ -141,6 +141,7 @@ function duplicateDirectoryTree($source_id, $target_parent_id, $user_id, $pdo, $
         $sourceDir['type'],
         $newNameEnc,
         $sourceDir['default_view'],
+        in_array($sourceDir['open_mode'] ?? '', ['fullscreen', 'preview'], true) ? $sourceDir['open_mode'] : 'fullscreen',
         $sourceDir['new_item_position'],
         $newOrder,
         $sourceDir['icon'],
@@ -386,7 +387,7 @@ if ($action === 'fetch') {
     }
 
     $query = "
-        SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,
+        SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.open_mode, d.deck_mode,
                d.deck_front_language, d.deck_back_language, d.deck_structure,
                d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to, 
                d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, d.is_completed, d.is_public, d.child_default_type, d.child_default_view,
@@ -441,7 +442,7 @@ if ($action === 'fetch') {
     $directories = $stmt->fetchAll();
 
     if ($parent_id === null && $is_owner_context) {
-        $stmtSavedRoot = $pdo->prepare("\n            SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,\n                   d.deck_front_language, d.deck_back_language, d.deck_structure,\n                   d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to,\n                   d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, d.is_completed, d.is_public, d.child_default_type, d.child_default_view,\n                   COALESCE(deck_stats.total_cards, 0) as deck_total_cards,\n                   COALESCE(deck_stats.total_score, 0) as deck_total_score,
+        $stmtSavedRoot = $pdo->prepare("\n            SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.open_mode, d.deck_mode,\n                   d.deck_front_language, d.deck_back_language, d.deck_structure,\n                   d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to,\n                   d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, d.is_completed, d.is_public, d.child_default_type, d.child_default_view,\n                   COALESCE(deck_stats.total_cards, 0) as deck_total_cards,\n                   COALESCE(deck_stats.total_score, 0) as deck_total_score,
                COALESCE(deck_stats.due_cards, 0) as deck_due_cards,\n                   COALESCE(book_progress.current_index, 0) as book_current_index,\n                   COALESCE(book_progress.completed_reads, 0) as book_completed_reads,
                book_progress.next_review_at as book_next_review_at,\n                   dr.type as rec_type, dr.interval_value as rec_interval, dr.days_of_week as rec_days,\n                   dr.custom_dates as rec_custom, dr.exceptions as rec_exceptions, dr.time_start as rec_time_start, dr.time_end as rec_time_end, dr.end_date as rec_end,\n                   d.user_id as owner_user_id\n            FROM saved_directories sd\n            INNER JOIN directories d ON d.id = sd.directory_id\n            LEFT JOIN directory_recurrences dr ON d.id = dr.directory_id\n            LEFT JOIN (\n                SELECT f.directory_id,\n                       COUNT(f.id) as total_cards,\n                       COALESCE(SUM(fs.score), 0) as total_score,
                    COALESCE(SUM(CASE WHEN fs.next_review_at IS NULL OR fs.next_review_at <= NOW() THEN 1 ELSE 0 END), 0) as due_cards\n                FROM flashcards f\n                INNER JOIN saved_directories sd_filter ON sd_filter.directory_id = f.directory_id AND sd_filter.user_id = ?\n                LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?\n                GROUP BY f.directory_id\n            ) deck_stats ON deck_stats.directory_id = d.id\n            LEFT JOIN flashcard_book_progress book_progress ON book_progress.directory_id = d.id AND book_progress.user_id = ?\n            WHERE sd.user_id = ? AND d.user_id != ? AND d.is_public = 1 AND d.parent_id IS NULL\n        ");
@@ -449,7 +450,7 @@ if ($action === 'fetch') {
         $directories = array_merge($directories, $stmtSavedRoot->fetchAll());
     }
     elseif ($parent_id === null && !$is_owner_context) {
-        $stmtSavedRootTarget = $pdo->prepare("\n            SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.deck_mode,\n                   d.deck_front_language, d.deck_back_language, d.deck_structure,\n                   d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to,\n                   d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, d.is_completed, d.is_public, d.child_default_type, d.child_default_view,\n                   COALESCE(deck_stats.total_cards, 0) as deck_total_cards,\n                   COALESCE(deck_stats.total_score, 0) as deck_total_score,
+        $stmtSavedRootTarget = $pdo->prepare("\n            SELECT d.id, d.type, d.target_id, d.name_encrypted, d.parent_id, d.default_view, d.open_mode, d.deck_mode,\n                   d.deck_front_language, d.deck_back_language, d.deck_structure,\n                   d.new_item_position, d.sort_order, d.icon, d.icon_color_from, d.icon_color_to,\n                   d.cover_url_encrypted, d.start_date, d.end_date, d.is_recurring, d.is_completed, d.is_public, d.child_default_type, d.child_default_view,\n                   COALESCE(deck_stats.total_cards, 0) as deck_total_cards,\n                   COALESCE(deck_stats.total_score, 0) as deck_total_score,
                COALESCE(deck_stats.due_cards, 0) as deck_due_cards,\n                   COALESCE(book_progress.current_index, 0) as book_current_index,\n                   COALESCE(book_progress.completed_reads, 0) as book_completed_reads,
                book_progress.next_review_at as book_next_review_at,\n                   dr.type as rec_type, dr.interval_value as rec_interval, dr.days_of_week as rec_days,\n                   dr.custom_dates as rec_custom, dr.exceptions as rec_exceptions, dr.time_start as rec_time_start, dr.time_end as rec_time_end, dr.end_date as rec_end,\n                   d.user_id as owner_user_id\n            FROM saved_directories sd\n            INNER JOIN directories d ON d.id = sd.directory_id\n            LEFT JOIN directory_recurrences dr ON d.id = dr.directory_id\n            LEFT JOIN (\n                SELECT f.directory_id,\n                       COUNT(f.id) as total_cards,\n                       COALESCE(SUM(fs.score), 0) as total_score,
                    COALESCE(SUM(CASE WHEN fs.next_review_at IS NULL OR fs.next_review_at <= NOW() THEN 1 ELSE 0 END), 0) as due_cards\n                FROM flashcards f\n                INNER JOIN saved_directories sd_filter ON sd_filter.directory_id = f.directory_id AND sd_filter.user_id = ?\n                LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?\n                GROUP BY f.directory_id\n            ) deck_stats ON deck_stats.directory_id = d.id\n            LEFT JOIN flashcard_book_progress book_progress ON book_progress.directory_id = d.id AND book_progress.user_id = ?\n            WHERE sd.user_id = ? AND d.user_id != ? AND d.is_public = 1 AND d.parent_id IS NULL\n        ");
@@ -503,6 +504,7 @@ if ($action === 'fetch') {
             'target_id' => $dir['target_id'],
             'parent_id' => $dir['parent_id'],
             'view' => $dir['default_view'] ?? 'grid',
+            'open_mode' => in_array($dir['open_mode'] ?? '', ['fullscreen', 'preview'], true) ? $dir['open_mode'] : 'fullscreen',
             'new_item_position' => $dir['new_item_position'] ?? 'end',
             'sort_order' => (int)($dir['sort_order'] ?? 0),
             'name' => Security::decryptData($dir['name_encrypted']),
@@ -572,7 +574,7 @@ elseif ($action === 'get_path') {
     $curr = $dir_id;
     
     while ($curr !== null) {
-        $stmt = $pdo->prepare("SELECT id, type, name_encrypted, default_view, parent_id, is_public, child_default_type, child_default_view FROM directories WHERE id = ? AND user_id = ?");
+        $stmt = $pdo->prepare("SELECT id, type, name_encrypted, default_view, open_mode, parent_id, is_public, child_default_type, child_default_view FROM directories WHERE id = ? AND user_id = ?");
         $stmt->execute([$curr, $target_user_id]);
         $dir = $stmt->fetch();
         
@@ -586,6 +588,7 @@ elseif ($action === 'get_path') {
                 'type' => (int)$dir['type'],
                 'name' => Security::decryptData($dir['name_encrypted']),
                 'view' => $dir['default_view'],
+                'open_mode' => in_array($dir['open_mode'] ?? '', ['fullscreen', 'preview'], true) ? $dir['open_mode'] : 'fullscreen',
                 'child_default_type' => normalizeChildDefaultType($dir['child_default_type'] ?? 0, 0),
                 'child_default_view' => normalizeChildDefaultView($dir['child_default_view'] ?? 'grid', 'grid')
             ]);
@@ -605,6 +608,7 @@ elseif ($action === 'create') {
     $type = isset($input['type']) ? (int)$input['type'] : 0; 
     $view = in_array($input['view'] ?? '', ['grid', 'list', 'kanban']) ? $input['view'] : 'grid';
     $new_item_position = in_array($input['new_item_position'] ?? '', ['start', 'end']) ? $input['new_item_position'] : 'end';
+    $open_mode = in_array($input['open_mode'] ?? '', ['fullscreen', 'preview'], true) ? $input['open_mode'] : 'fullscreen';
     
     $default_icon = 'fa-folder';
     if($type === 1) $default_icon = 'fa-file-code';
@@ -669,15 +673,15 @@ elseif ($action === 'create') {
         $stmt = $pdo->prepare("
             INSERT INTO directories (
                 user_id, parent_id, type, name_encrypted, default_view, 
-                new_item_position, sort_order, icon, icon_color_from, 
+                open_mode, new_item_position, sort_order, icon, icon_color_from, 
                 icon_color_to, cover_url_encrypted, start_date, end_date, is_recurring, is_public,
                 child_default_type, child_default_view,
                 deck_front_language, deck_back_language, deck_structure
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         
         $stmt->execute([
-            $user_id, $parent_id, $type, $name_encrypted, $view, 
+            $user_id, $parent_id, $type, $name_encrypted, $view, $open_mode, 
             $new_item_position, $newOrder, $icon, $color_from, $color_to, 
             $cover_url_encrypted, $start_date, $end_date, $is_recurring, $is_public,
             $child_default_type, $child_default_view,
@@ -778,6 +782,7 @@ elseif ($action === 'update') {
     $name = trim($input['name'] ?? '');
     $view = in_array($input['view'] ?? '', ['grid', 'list', 'kanban']) ? $input['view'] : 'grid';
     $new_item_position = in_array($input['new_item_position'] ?? '', ['start', 'end']) ? $input['new_item_position'] : 'end';
+    $open_mode = in_array($input['open_mode'] ?? '', ['fullscreen', 'preview'], true) ? $input['open_mode'] : 'fullscreen';
     
     $icon = preg_match('/^fa-[a-z0-9-]+$/', $input['icon'] ?? '') ? $input['icon'] : 'fa-folder';
     $color_from = preg_match('/^#[a-fA-F0-9]{6}$/', $input['color_from'] ?? '') ? $input['color_from'] : '#3b82f6';
@@ -825,24 +830,26 @@ elseif ($action === 'update') {
             $stmt = $pdo->prepare("
                 UPDATE directories SET 
                     type = ?, name_encrypted = ?, default_view = ?, new_item_position = ?, 
+                    open_mode = ?,
                     icon = ?, icon_color_from = ?, icon_color_to = ?, cover_url_encrypted = ?, 
                     start_date = ?, end_date = ?, is_recurring = ?, is_public = ?,
                     child_default_type = ?, child_default_view = ?,
                     deck_front_language = ?, deck_back_language = ?, deck_structure = ?
                 WHERE id = ? AND user_id = ?
             ");
-            $stmt->execute([$type, $name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $start_date, $end_date, $is_recurring, $is_public, $child_default_type, $child_default_view, $deck_front_language, $deck_back_language, $deck_structure, $id, $user_id]);
+            $stmt->execute([$type, $name_encrypted, $view, $new_item_position, $open_mode, $icon, $color_from, $color_to, $cover_url_encrypted, $start_date, $end_date, $is_recurring, $is_public, $child_default_type, $child_default_view, $deck_front_language, $deck_back_language, $deck_structure, $id, $user_id]);
         } else {
             $stmt = $pdo->prepare("
                 UPDATE directories SET 
                     type = ?, name_encrypted = ?, default_view = ?, new_item_position = ?, 
+                    open_mode = ?,
                     icon = ?, icon_color_from = ?, icon_color_to = ?, cover_url_encrypted = ?, 
                     is_recurring = ?, is_public = ?,
                     child_default_type = ?, child_default_view = ?,
                     deck_front_language = ?, deck_back_language = ?, deck_structure = ?
                 WHERE id = ? AND user_id = ?
             ");
-            $stmt->execute([$type, $name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $is_recurring, $is_public, $child_default_type, $child_default_view, $deck_front_language, $deck_back_language, $deck_structure, $id, $user_id]);
+            $stmt->execute([$type, $name_encrypted, $view, $new_item_position, $open_mode, $icon, $color_from, $color_to, $cover_url_encrypted, $is_recurring, $is_public, $child_default_type, $child_default_view, $deck_front_language, $deck_back_language, $deck_structure, $id, $user_id]);
         }
 
         // Se ativado, processa a recorrência salvando os dados

@@ -497,7 +497,7 @@ else if ($action === 'complete_task') {
 
 else if ($action === 'get_flashcard_due_directories') {
     $stmt = $pdo->prepare(
-        "SELECT d.id, d.type, d.name_encrypted, d.icon, d.icon_color_from, d.icon_color_to, d.cover_url_encrypted,
+        "SELECT d.id, d.type, d.name_encrypted, d.icon, d.icon_color_from, d.icon_color_to, d.cover_url_encrypted, d.open_mode,
                 MIN(fs.next_review_at) AS oldest_review_at,
                 COUNT(fs.flashcard_id) AS due_cards
          FROM directories d
@@ -508,7 +508,7 @@ else if ($action === 'get_flashcard_due_directories') {
            AND fs.user_id = ?
            AND fs.next_review_at IS NOT NULL
            AND fs.next_review_at <= NOW()
-         GROUP BY d.id, d.type, d.name_encrypted, d.icon, d.icon_color_from, d.icon_color_to, d.cover_url_encrypted
+         GROUP BY d.id, d.type, d.name_encrypted, d.icon, d.icon_color_from, d.icon_color_to, d.cover_url_encrypted, d.open_mode
          HAVING due_cards > 0
          ORDER BY oldest_review_at ASC"
     );
@@ -524,6 +524,7 @@ else if ($action === 'get_flashcard_due_directories') {
             'color_from' => $row['icon_color_from'] ?? '#3b82f6',
             'color_to' => $row['icon_color_to'] ?? '#6366f1',
             'cover_url' => !empty($row['cover_url_encrypted']) ? Security::decryptData($row['cover_url_encrypted']) : '',
+            'open_mode' => in_array($row['open_mode'] ?? '', ['fullscreen', 'preview'], true) ? $row['open_mode'] : 'fullscreen',
             'oldest_review_at' => $row['oldest_review_at'],
             'due_cards' => (int)$row['due_cards']
         ];
@@ -611,7 +612,7 @@ else if ($action === 'delete_tag') {
 else if ($action === 'get_agenda_info') {
     // Busca informações básicas da pasta Agenda atual (Nome, Capa e View Preferida)
     $id = (int)($input['id'] ?? 0);
-    $stmt = $pdo->prepare("SELECT id, type, name_encrypted, icon, icon_color_from, icon_color_to, default_view, cover_url_encrypted FROM directories WHERE id = ? AND user_id = ? AND type = 2");
+    $stmt = $pdo->prepare("SELECT id, type, name_encrypted, icon, icon_color_from, icon_color_to, default_view, cover_url_encrypted, open_mode FROM directories WHERE id = ? AND user_id = ? AND type = 2");
     $stmt->execute([$id, $user_id]);
     $agenda = $stmt->fetch();
 
@@ -626,7 +627,8 @@ else if ($action === 'get_agenda_info') {
                 'color_from' => $agenda['icon_color_from'],
                 'color_to' => $agenda['icon_color_to'],
                 'view' => $agenda['default_view'] ?? 'timeline',
-                'cover_url' => !empty($agenda['cover_url_encrypted']) ? Security::decryptData($agenda['cover_url_encrypted']) : ''
+                'cover_url' => !empty($agenda['cover_url_encrypted']) ? Security::decryptData($agenda['cover_url_encrypted']) : '',
+                'open_mode' => in_array($agenda['open_mode'] ?? '', ['fullscreen', 'preview'], true) ? $agenda['open_mode'] : 'fullscreen'
             ]
         ]);
     } else {

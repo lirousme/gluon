@@ -125,6 +125,9 @@
             0% { background-position: 0% 50%; }
             100% { background-position: 200% 50%; }
         }
+        body.embedded-preview {
+            padding-bottom: 0 !important;
+        }
     </style>
 </head>
 <body class="bg-gluon-dark text-slate-200 h-[100dvh] flex flex-col font-sans overflow-hidden selection:bg-gluon-primary selection:text-white relative pb-[env(safe-area-inset-bottom)]">

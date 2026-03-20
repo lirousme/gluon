@@ -15,7 +15,7 @@
         </aside>
 
         <div class="flex-1 relative flex flex-col bg-gluon-dark overflow-hidden">
-            <div class="p-3 sm:p-4 border-b border-slate-700 bg-slate-800/80 backdrop-blur shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 z-20">
+            <div id="scheduleToolbar" class="p-3 sm:p-4 border-b border-slate-700 bg-slate-800/80 backdrop-blur shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 z-20">
                 <div class="flex items-center gap-2 w-full sm:w-auto">
                     <button onclick="scheduleApp.toggleSidebar()" id="btnToggleSidebarNav" class="px-3 py-1.5 rounded-md text-gluon-primary bg-slate-800 hover:text-white hover:bg-slate-700 transition-colors border border-slate-700 shadow-sm shrink-0" title="Alternar Backlog">
                         <i class="fa-solid fa-inbox"></i>
@@ -223,6 +223,24 @@
                             </div>
                         </div>
                     </div>
+
+                    <div id="openModeSettingsGroup" class="mt-5">
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Abertura do diretório</label>
+                        <div class="grid grid-cols-2 gap-2 sm:gap-3">
+                            <label class="cursor-pointer">
+                                <input type="radio" name="dirOpenMode" value="fullscreen" class="peer hidden view-radio" checked>
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-up-right-and-down-left-from-center block text-xl mb-1"></i><span class="text-xs font-medium">Tela inteira</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="dirOpenMode" value="preview" class="peer hidden view-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-regular fa-window-restore block text-xl mb-1"></i><span class="text-xs font-medium">Preview (Modal)</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="tab-apar" class="hidden p-6 overflow-y-auto flex-1 space-y-5">
@@ -362,4 +380,14 @@
         <button onclick="scheduleApp.triggerPortalFromMenu()" class="w-full text-left px-4 py-2.5 text-sm text-fuchsia-400 hover:bg-slate-700 hover:text-fuchsia-300 flex items-center gap-3 transition-colors border-t border-slate-700/50 mt-1">
             <i class="fa-solid fa-door-open text-center w-4"></i> <span class="font-medium">Criar Portal</span>
         </button>
+    </div>
+
+    <div id="itemPreviewModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-[80] opacity-0 transition-opacity duration-300 p-2 sm:p-4">
+        <div id="itemPreviewModalContent" class="w-full h-full max-w-7xl max-h-[95dvh] bg-slate-900 border border-slate-700 rounded-xl overflow-hidden transform scale-95 transition-transform duration-300 flex flex-col">
+            <div class="h-12 px-4 border-b border-slate-700 bg-slate-800/80 flex items-center justify-between gap-3 shrink-0">
+                <div class="text-sm text-slate-200 truncate"><i class="fa-regular fa-window-restore mr-2 text-gluon-primary"></i><span id="itemPreviewTitle">Preview</span></div>
+                <button type="button" onclick="scheduleApp.closeItemPreviewModal()" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <iframe id="itemPreviewFrame" class="w-full flex-1 bg-slate-950" src="about:blank" loading="lazy"></iframe>
+        </div>
     </div>
