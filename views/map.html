@@ -88,7 +88,12 @@ function renderNodes(nodes){
         b.textContent = String(node.phase_number);
         b.title = `${node.title}`;
         b.onclick = async () => {
-            if (node.state === 'locked') return toast('Fase bloqueada.');
+            if (node.state === 'locked') {
+                if (Array.isArray(node.missing_depends_on_positions) && node.missing_depends_on_positions.length) {
+                    return toast(`Fase bloqueada. Pré-requisitos: ${node.missing_depends_on_positions.join(', ')}`);
+                }
+                return toast('Fase bloqueada.');
+            }
             window.location.href = `/phase?id=${trackId}&node=${node.id}`;
         };
         nodesEl.appendChild(b);
