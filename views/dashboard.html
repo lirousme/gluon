@@ -222,7 +222,7 @@
 <body class="bg-gluon-dark text-slate-200 h-dvh overflow-hidden flex flex-col font-sans selection:bg-gluon-primary selection:text-white relative pb-[env(safe-area-inset-bottom)]">
 
     <!-- Top Navigation -->
-    <nav id="topNav" class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 backdrop-blur-md bg-opacity-90">
+    <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 backdrop-blur-md bg-opacity-90">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             
             <div class="flex items-center gap-2">
@@ -325,7 +325,7 @@
     </aside>
 
     <!-- Main Workspace -->
-    <main id="mainWorkspace" class="flex-1 max-w-none w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-0 flex flex-col overflow-hidden relative min-h-0">
+    <main class="flex-1 max-w-none w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-0 flex flex-col overflow-hidden relative min-h-0">
         <div class="flex flex-col mb-6 gap-3 shrink-0">
             <section id="profilePresentation" class="hidden w-full rounded-2xl border border-slate-700/70 bg-gluon-secondary/90 p-4 sm:p-5">
                 <div class="flex items-start gap-4">
@@ -733,34 +733,6 @@
         </div>
     </div>
 
-    <div id="openModeModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-[75] opacity-0 transition-opacity duration-300 px-4">
-        <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-5 transform scale-95 transition-transform duration-300">
-            <div class="flex items-center justify-between gap-3">
-                <h3 class="text-lg font-semibold text-white">Como deseja abrir?</h3>
-                <button type="button" onclick="app.cancelOpenModeSelection()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <p id="openModeTargetLabel" class="text-sm text-slate-300 mt-3"></p>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
-                <button type="button" onclick="app.resolveOpenModeSelection('fullscreen')" class="px-4 py-3 rounded-lg bg-gluon-primary hover:bg-blue-600 text-white font-medium flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-up-right-and-down-left-from-center"></i> Tela inteira
-                </button>
-                <button type="button" onclick="app.resolveOpenModeSelection('preview')" class="px-4 py-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-100 font-medium flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-window-maximize"></i> Preview
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <div id="previewViewModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-[80] px-3 sm:px-6">
-        <div class="w-full h-[90dvh] bg-slate-900 border border-slate-700 rounded-xl overflow-hidden flex flex-col shadow-2xl">
-            <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-                <h3 id="previewViewTitle" class="text-sm sm:text-base font-semibold text-slate-100">Preview</h3>
-                <button type="button" onclick="app.closePreviewModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
-            </div>
-            <iframe id="previewViewIframe" class="flex-1 w-full bg-slate-950" title="Preview de diretório"></iframe>
-        </div>
-    </div>
-
 
     <script>
         const app = {
@@ -795,8 +767,6 @@
                     failed: 0,
                     remaining: 0
                 },
-                openModeResolver: null,
-                openModeItemName: '',
                 isRightPanelOpen: false,
                 availableIcons: [
                     'fa-folder', 'fa-folder-open', 'fa-file-code', 'fa-calendar-days', 'fa-layer-group', 'fa-door-open', 'fa-clock', 'fa-file-lines', 'fa-file-image', 'fa-file-pdf', 'fa-star', 'fa-heart', 'fa-image', 'fa-music', 'fa-video', 
@@ -968,78 +938,12 @@
                 return `/${view}?id=${id}&from=${from}`;
             },
 
-            buildViewPreviewUrl(view, id, extras = {}) {
-                const url = new URL(this.buildViewUrl(view, id), window.location.origin);
-                url.searchParams.set('preview', '1');
-                url.searchParams.set('embed', '1');
-                Object.entries(extras).forEach(([key, value]) => {
-                    if (value !== null && value !== undefined) url.searchParams.set(key, String(value));
-                });
-                return `${url.pathname}${url.search}`;
-            },
-
             navigateToItemView(type, id) {
                 const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 6: 'sistema_de_condicionais', 7: 'plano', 8: 'map' };
                 const targetView = viewByType[type];
                 if (!targetView) return false;
                 window.location.href = this.buildViewUrl(targetView, id);
                 return true;
-            },
-
-            askOpenModeSelection(itemName) {
-                return new Promise((resolve) => {
-                    this.state.openModeResolver = resolve;
-                    this.state.openModeItemName = itemName || 'este item';
-                    const label = document.getElementById('openModeTargetLabel');
-                    if (label) label.innerHTML = `Abrir <strong>${this.escapeHTML(this.state.openModeItemName)}</strong> em tela inteira ou em preview?`;
-                    const modal = document.getElementById('openModeModal');
-                    if (!modal) return resolve('fullscreen');
-                    modal.classList.remove('hidden');
-                    modal.classList.add('flex');
-                    requestAnimationFrame(() => {
-                        modal.classList.remove('opacity-0');
-                        modal.firstElementChild?.classList.remove('scale-95');
-                    });
-                });
-            },
-
-            resolveOpenModeSelection(mode) {
-                const resolver = this.state.openModeResolver;
-                this.state.openModeResolver = null;
-                const modal = document.getElementById('openModeModal');
-                if (modal) {
-                    modal.classList.add('opacity-0');
-                    modal.firstElementChild?.classList.add('scale-95');
-                    setTimeout(() => {
-                        modal.classList.add('hidden');
-                        modal.classList.remove('flex');
-                    }, 180);
-                }
-                if (resolver) resolver(mode || 'fullscreen');
-            },
-
-            cancelOpenModeSelection() {
-                this.resolveOpenModeSelection('fullscreen');
-            },
-
-            openPreviewModal(url, title) {
-                const modal = document.getElementById('previewViewModal');
-                const iframe = document.getElementById('previewViewIframe');
-                const titleEl = document.getElementById('previewViewTitle');
-                if (!modal || !iframe) return;
-                if (titleEl) titleEl.textContent = `Preview · ${title || 'Item'}`;
-                iframe.src = url;
-                modal.classList.remove('hidden');
-                modal.classList.add('flex');
-            },
-
-            closePreviewModal() {
-                const modal = document.getElementById('previewViewModal');
-                const iframe = document.getElementById('previewViewIframe');
-                if (iframe) iframe.src = 'about:blank';
-                if (!modal) return;
-                modal.classList.add('hidden');
-                modal.classList.remove('flex');
             },
 
             updateHistoryState(id, portalId = null) {
@@ -1059,15 +963,6 @@
             },
 
             async init() {
-                const currentParams = new URLSearchParams(window.location.search);
-                const isCompactPreview = currentParams.get('preview') === '1' && currentParams.get('embed') === '1' && currentParams.get('preview_normal') === '1';
-                if (isCompactPreview) {
-                    document.getElementById('topNav')?.classList.add('hidden');
-                    document.getElementById('breadcrumbs')?.classList.add('hidden');
-                    document.getElementById('mainWorkspace')?.classList.remove('pt-6', 'sm:pt-8');
-                    document.getElementById('mainWorkspace')?.classList.add('pt-3', 'sm:pt-4');
-                }
-
                 this.renderIconPicker();
                 this.setLoading(true);
                 await this.fetchUserPrefs(); 
@@ -1835,31 +1730,6 @@
                 if(this.state.reorderMode || this.state.relocateMode) return; 
                 const item = this.state.directoryCache.get(Number(id));
                 if(!item) return;
-
-                const openMode = await this.askOpenModeSelection(item.name);
-                if (openMode === 'preview') {
-                    const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 6: 'sistema_de_condicionais', 7: 'plano', 8: 'map' };
-                    if (viewByType[item.type]) {
-                        this.openPreviewModal(this.buildViewPreviewUrl(viewByType[item.type], id), item.name);
-                        return;
-                    }
-                    if (item.type === 3 && item.target_id) {
-                        const pathRes = await this.api('directories', 'get_path', { id: item.target_id, target_user_id: this.state.profileUserId || undefined });
-                        const targetDir = (pathRes && pathRes.status === 'success' && pathRes.data.length > 0) ? pathRes.data[pathRes.data.length - 1] : null;
-                        if (!targetDir) return this.showToast('Erro ao abrir preview do portal.', 'error');
-                        const previewView = viewByType[targetDir.type];
-                        if (previewView) {
-                            this.openPreviewModal(this.buildViewPreviewUrl(previewView, targetDir.id), item.name);
-                            return;
-                        }
-                        const dashboardUrl = `/dashboard?id=${id}&target_id=${item.target_id}&portal=1&preview=1&embed=1&preview_normal=1`;
-                        this.openPreviewModal(dashboardUrl, item.name);
-                        return;
-                    }
-                    const dashboardUrl = `/dashboard?id=${id}&preview=1&embed=1&preview_normal=1`;
-                    this.openPreviewModal(dashboardUrl, item.name);
-                    return;
-                }
 
                 if (!this.isVisitingProfile() && this.navigateToItemView(item.type, id)) {
                     return;
