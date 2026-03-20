@@ -53,6 +53,7 @@ function itemCard(node){
     </div>
     <p class="mt-1 text-sm text-emerald-300">${esc(node.title)}</p>
     <p class="mt-1 text-sm text-slate-300">${esc(node.objective || '')}</p>
+    <p class="mt-1 text-xs text-slate-400">Pré-requisitos: ${node.depends_on_positions?.length ? node.depends_on_positions.join(', ') : 'nenhum'}</p>
   </article>`;
 }
 
@@ -79,7 +80,10 @@ async function loadAdmin() {
     if (!node) return;
     const title = prompt('Título da fase', node.title); if (title === null) return;
     const objective = prompt('Objetivo curto', node.objective || '') ?? '';
-    await api('upsert_node', { directory_id: trackId, node_id: node.id, title, objective, questions: [] });
+    const depsRaw = prompt('Pré-requisitos (posições separadas por vírgula, ex: 1,2,3)', (node.depends_on_positions || []).join(','));
+    if (depsRaw === null) return;
+    const depends_on_positions = String(depsRaw).split(',').map(v => Number(v.trim())).filter(v => Number.isInteger(v) && v > 0);
+    await api('upsert_node', { directory_id: trackId, node_id: node.id, title, objective, questions: [], depends_on_positions });
     alert('Edição salva. Esta fase voltou para status pendente e precisa ser confirmada novamente.');
     loadAdmin();
   });
