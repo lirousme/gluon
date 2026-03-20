@@ -355,34 +355,6 @@
         </div>
     </div>
 
-    <div id="openModeModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-[75] opacity-0 transition-opacity duration-300 px-4">
-        <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-5 transform scale-95 transition-transform duration-300">
-            <div class="flex items-center justify-between gap-3">
-                <h3 class="text-lg font-semibold text-white">Como deseja abrir?</h3>
-                <button type="button" onclick="scheduleApp.cancelOpenModeSelection()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <p id="openModeTargetLabel" class="text-sm text-slate-300 mt-3"></p>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
-                <button type="button" onclick="scheduleApp.resolveOpenModeSelection('fullscreen')" class="px-4 py-3 rounded-lg bg-gluon-primary hover:bg-blue-600 text-white font-medium flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-up-right-and-down-left-from-center"></i> Tela inteira
-                </button>
-                <button type="button" onclick="scheduleApp.resolveOpenModeSelection('preview')" class="px-4 py-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-100 font-medium flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-window-maximize"></i> Preview
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <div id="previewViewModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-[80] px-3 sm:px-6">
-        <div class="w-full h-[90dvh] bg-slate-900 border border-slate-700 rounded-xl overflow-hidden flex flex-col shadow-2xl">
-            <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-                <h3 id="previewViewTitle" class="text-sm sm:text-base font-semibold text-slate-100">Preview</h3>
-                <button type="button" onclick="scheduleApp.closePreviewModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
-            </div>
-            <iframe id="previewViewIframe" class="flex-1 w-full bg-slate-950" title="Preview de diretório"></iframe>
-        </div>
-    </div>
-
     <div id="timelineContextMenu" class="hidden absolute bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-1.5 z-50 min-w-[170px] transition-opacity">
         <button onclick="scheduleApp.triggerModalFromMenu()" class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
             <i class="fa-solid fa-plus text-gluon-primary text-center w-4"></i> <span class="font-medium">Criar Tarefa</span>
