@@ -209,9 +209,15 @@
         body.embedded-preview {
             padding-bottom: 0 !important;
         }
+        #btn-header-embedded-back {
+            display: none;
+        }
         body.embedded-preview #btn-header-search,
         body.embedded-preview #btn-header-notes {
             display: none !important;
+        }
+        body.embedded-preview #btn-header-embedded-back {
+            display: inline-flex;
         }
 
         input[type="color"] {
@@ -233,6 +239,10 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             
             <div class="flex items-center gap-2">
+                <button id="btn-header-embedded-back" type="button" onclick="app.goBackFromEmbeddedPreview()" class="items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-200 hover:text-white hover:border-gluon-primary transition-colors" title="Voltar">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span class="font-semibold text-sm">Voltar</span>
+                </button>
                 <!-- Botão de Busca Global (Substituindo o Logo antigo) -->
                 <button id="btn-header-search" onclick="window.location.href='/buscar'" class="flex items-center gap-3 cursor-pointer group outline-none hover:bg-slate-800/50 p-1.5 -ml-1.5 rounded-xl transition-colors" title="Buscar Usuários na Rede">
                     <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-slate-800 border border-slate-600 flex items-center justify-center shadow-lg group-hover:border-gluon-primary/50 transition-colors">
@@ -1003,7 +1013,7 @@
 
                 const params = { preview: '1', embedded: '1' };
                 const previewUrl = targetView === 'dashboard'
-                    ? `/dashboard?id=${encodeURIComponent(targetId)}&embedded=1&preview=1`
+                    ? this.buildViewUrl('dashboard', targetId, params)
                     : this.buildViewUrl(targetView, targetId, params);
                 frame.src = previewUrl;
 
@@ -1057,6 +1067,15 @@
                 }
                 const url = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
                 history.pushState({ path: JSON.parse(JSON.stringify(this.state.path)) }, '', url);
+            },
+
+            goBackFromEmbeddedPreview() {
+                const from = new URLSearchParams(window.location.search).get('from');
+                if (window.history.length > 1) {
+                    window.history.back();
+                    return;
+                }
+                window.location.href = from ? decodeURIComponent(from) : '/dashboard';
             },
 
             async init() {
