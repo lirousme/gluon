@@ -309,9 +309,7 @@
                 this.state.isEmbeddedPreview = urlParams.get('embedded') === '1';
 
                 if (this.state.isEmbeddedPreview) {
-                    const navbar = document.getElementById('scheduleNavbar');
                     const toolbar = document.getElementById('scheduleToolbar');
-                    if (navbar) navbar.classList.add('hidden');
                     if (toolbar) toolbar.classList.add('hidden');
                     document.body.classList.add('embedded-preview');
                 }
