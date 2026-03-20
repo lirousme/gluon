@@ -21,6 +21,7 @@
                 sidebarOpen: false,
                 directoryCache: new Map(),
                 copied_directory_id: null,
+                openModeResolver: null,
                 filterDrawerOpen: false,
                 filters: {
                     showFlashcardDueDirectories: true,
@@ -227,12 +228,77 @@
                 return `/${view}?id=${id}&from=${from}`;
             },
 
+            buildViewPreviewUrl(view, id, extras = {}) {
+                const url = new URL(this.buildViewUrl(view, id), window.location.origin);
+                url.searchParams.set('preview', '1');
+                url.searchParams.set('embed', '1');
+                Object.entries(extras).forEach(([key, value]) => {
+                    if (value !== null && value !== undefined) url.searchParams.set(key, String(value));
+                });
+                return `${url.pathname}${url.search}`;
+            },
+
             navigateToItemView(type, id) {
                 const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 7: 'plano' };
                 const targetView = viewByType[type];
                 if (!targetView) return false;
                 window.location.href = this.buildViewUrl(targetView, id);
                 return true;
+            },
+
+            askOpenModeSelection(itemName) {
+                return new Promise((resolve) => {
+                    this.state.openModeResolver = resolve;
+                    const label = document.getElementById('openModeTargetLabel');
+                    if (label) label.innerHTML = `Abrir <strong>${this.escapeHTML(itemName || 'este item')}</strong> em tela inteira ou em preview?`;
+                    const modal = document.getElementById('openModeModal');
+                    if (!modal) return resolve('fullscreen');
+                    modal.classList.remove('hidden');
+                    modal.classList.add('flex');
+                    requestAnimationFrame(() => {
+                        modal.classList.remove('opacity-0');
+                        modal.firstElementChild?.classList.remove('scale-95');
+                    });
+                });
+            },
+
+            resolveOpenModeSelection(mode) {
+                const resolver = this.state.openModeResolver;
+                this.state.openModeResolver = null;
+                const modal = document.getElementById('openModeModal');
+                if (modal) {
+                    modal.classList.add('opacity-0');
+                    modal.firstElementChild?.classList.add('scale-95');
+                    setTimeout(() => {
+                        modal.classList.add('hidden');
+                        modal.classList.remove('flex');
+                    }, 180);
+                }
+                if (resolver) resolver(mode || 'fullscreen');
+            },
+
+            cancelOpenModeSelection() {
+                this.resolveOpenModeSelection('fullscreen');
+            },
+
+            openPreviewModal(url, title) {
+                const modal = document.getElementById('previewViewModal');
+                const iframe = document.getElementById('previewViewIframe');
+                const titleEl = document.getElementById('previewViewTitle');
+                if (!modal || !iframe) return;
+                if (titleEl) titleEl.textContent = `Preview · ${title || 'Item'}`;
+                iframe.src = url;
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            },
+
+            closePreviewModal() {
+                const modal = document.getElementById('previewViewModal');
+                const iframe = document.getElementById('previewViewIframe');
+                if (iframe) iframe.src = 'about:blank';
+                if (!modal) return;
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
             },
 
             goBack() {
@@ -1560,6 +1626,29 @@
             async enterDirectoryOrFile(id) {
                 const item = this.state.directoryCache.get(Number(id));
                 if(!item) return;
+
+                const openMode = await this.askOpenModeSelection(item.name);
+                if (openMode === 'preview') {
+                    const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 7: 'plano' };
+                    if (viewByType[item.type]) {
+                        this.openPreviewModal(this.buildViewPreviewUrl(viewByType[item.type], id), item.name);
+                        return;
+                    }
+                    if (item.type === 3 && item.target_id) {
+                        const pathRes = await this.api('directories', 'get_path', { id: item.target_id });
+                        const targetDir = (pathRes && pathRes.status === 'success' && pathRes.data.length > 0) ? pathRes.data[pathRes.data.length - 1] : null;
+                        if (!targetDir) return this.showToast('Erro ao abrir preview do portal.', 'error');
+                        const targetView = viewByType[targetDir.type];
+                        if (targetView) {
+                            this.openPreviewModal(this.buildViewPreviewUrl(targetView, targetDir.id), item.name);
+                            return;
+                        }
+                        this.openPreviewModal(`/dashboard?id=${id}&target_id=${item.target_id}&portal=1&preview=1&embed=1&preview_normal=1`, item.name);
+                        return;
+                    }
+                    this.openPreviewModal(`/dashboard?id=${id}&preview=1&embed=1&preview_normal=1`, item.name);
+                    return;
+                }
 
                 if (this.navigateToItemView(item.type, id)) {
                     return;
