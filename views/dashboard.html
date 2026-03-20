@@ -206,6 +206,9 @@
             -webkit-text-fill-color: transparent;
             display: inline-block;
         }
+        body.embedded-preview {
+            padding-bottom: 0 !important;
+        }
 
         input[type="color"] {
             -webkit-appearance: none;
@@ -222,7 +225,7 @@
 <body class="bg-gluon-dark text-slate-200 h-dvh overflow-hidden flex flex-col font-sans selection:bg-gluon-primary selection:text-white relative pb-[env(safe-area-inset-bottom)]">
 
     <!-- Top Navigation -->
-    <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 backdrop-blur-md bg-opacity-90">
+    <nav id="dashboardNavbar" class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 backdrop-blur-md bg-opacity-90">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             
             <div class="flex items-center gap-2">
@@ -325,8 +328,8 @@
     </aside>
 
     <!-- Main Workspace -->
-    <main class="flex-1 max-w-none w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-0 flex flex-col overflow-hidden relative min-h-0">
-        <div class="flex flex-col mb-6 gap-3 shrink-0">
+    <main id="dashboardMain" class="flex-1 max-w-none w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-0 flex flex-col overflow-hidden relative min-h-0">
+        <div id="directoryHeader" class="flex flex-col mb-6 gap-3 shrink-0">
             <section id="profilePresentation" class="hidden w-full rounded-2xl border border-slate-700/70 bg-gluon-secondary/90 p-4 sm:p-5">
                 <div class="flex items-start gap-4">
                     <div id="profileAvatar" class="w-20 h-20 rounded-full border border-slate-600 bg-slate-800 flex items-center justify-center shrink-0 overflow-hidden">
@@ -517,6 +520,24 @@
                                     </div>
                                 </label>
                             </div>
+                        </div>
+                    </div>
+
+                    <div id="openModeSettingsGroup" class="mt-5">
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Abertura do diretório</label>
+                        <div class="grid grid-cols-2 gap-2 sm:gap-3">
+                            <label class="cursor-pointer">
+                                <input type="radio" name="dirOpenMode" value="fullscreen" class="peer hidden view-radio" checked>
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-up-right-and-down-left-from-center block text-xl mb-1"></i><span class="text-xs font-medium">Tela inteira</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="dirOpenMode" value="preview" class="peer hidden view-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 sm:p-3 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-regular fa-window-restore block text-xl mb-1"></i><span class="text-xs font-medium">Preview (Modal)</span>
+                                </div>
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -733,6 +754,16 @@
         </div>
     </div>
 
+    <div id="itemPreviewModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-[80] opacity-0 transition-opacity duration-300 p-2 sm:p-4">
+        <div id="itemPreviewModalContent" class="w-full h-full max-w-7xl max-h-[95dvh] bg-slate-900 border border-slate-700 rounded-xl overflow-hidden transform scale-95 transition-transform duration-300 flex flex-col">
+            <div class="h-12 px-4 border-b border-slate-700 bg-slate-800/80 flex items-center justify-between gap-3 shrink-0">
+                <div class="text-sm text-slate-200 truncate"><i class="fa-regular fa-window-restore mr-2 text-gluon-primary"></i><span id="itemPreviewTitle">Preview</span></div>
+                <button type="button" onclick="app.closeItemPreviewModal()" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <iframe id="itemPreviewFrame" class="w-full flex-1 bg-slate-950" src="about:blank" loading="lazy"></iframe>
+        </div>
+    </div>
+
 
     <script>
         const app = {
@@ -767,6 +798,8 @@
                     failed: 0,
                     remaining: 0
                 },
+                isEmbeddedPreview: false,
+                previewModalOpen: false,
                 isRightPanelOpen: false,
                 availableIcons: [
                     'fa-folder', 'fa-folder-open', 'fa-file-code', 'fa-calendar-days', 'fa-layer-group', 'fa-door-open', 'fa-clock', 'fa-file-lines', 'fa-file-image', 'fa-file-pdf', 'fa-star', 'fa-heart', 'fa-image', 'fa-music', 'fa-video', 
@@ -933,15 +966,75 @@
                 return `${window.location.pathname}${window.location.search}`;
             },
 
-            buildViewUrl(view, id) {
+            buildViewUrl(view, id, extraParams = {}) {
                 const from = encodeURIComponent(this.getCurrentRoute());
-                return `/${view}?id=${id}&from=${from}`;
+                const params = new URLSearchParams({ id: String(id), from });
+                Object.entries(extraParams || {}).forEach(([key, value]) => {
+                    if (value !== null && value !== undefined && value !== '') {
+                        params.set(key, String(value));
+                    }
+                });
+                return `/${view}?${params.toString()}`;
             },
 
-            navigateToItemView(type, id) {
+            resolveOpenMode(item) {
+                return item && item.open_mode === 'preview' ? 'preview' : 'fullscreen';
+            },
+
+            openItemPreviewModal(item, forcedView = null, forcedId = null) {
+                const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 6: 'sistema_de_condicionais', 7: 'plano', 8: 'map' };
+                const targetType = forcedView ? null : Number(item?.type);
+                const targetView = forcedView || viewByType[targetType] || 'dashboard';
+                const targetId = forcedId || item?.id;
+                if (!targetId) return false;
+
+                const modal = document.getElementById('itemPreviewModal');
+                const content = document.getElementById('itemPreviewModalContent');
+                const frame = document.getElementById('itemPreviewFrame');
+                const title = document.getElementById('itemPreviewTitle');
+                if (!modal || !content || !frame) return false;
+
+                const modalTitle = item?.name ? `Preview · ${item.name}` : 'Preview';
+                if (title) title.textContent = modalTitle;
+
+                const params = { preview: '1', embedded: '1' };
+                const previewUrl = targetView === 'dashboard'
+                    ? `/dashboard?id=${encodeURIComponent(targetId)}&embedded=1&preview=1`
+                    : this.buildViewUrl(targetView, targetId, params);
+                frame.src = previewUrl;
+
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => {
+                    modal.classList.remove('opacity-0');
+                    content.classList.remove('scale-95');
+                }, 10);
+                this.state.previewModalOpen = true;
+                return true;
+            },
+
+            closeItemPreviewModal() {
+                const modal = document.getElementById('itemPreviewModal');
+                const content = document.getElementById('itemPreviewModalContent');
+                const frame = document.getElementById('itemPreviewFrame');
+                if (!modal || !content || !frame) return;
+                modal.classList.add('opacity-0');
+                content.classList.add('scale-95');
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                    frame.src = 'about:blank';
+                }, 250);
+                this.state.previewModalOpen = false;
+            },
+
+            navigateToItemView(type, id, openMode = 'fullscreen', item = null) {
                 const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 6: 'sistema_de_condicionais', 7: 'plano', 8: 'map' };
                 const targetView = viewByType[type];
                 if (!targetView) return false;
+                if (openMode === 'preview') {
+                    return this.openItemPreviewModal(item || { id, type });
+                }
                 window.location.href = this.buildViewUrl(targetView, id);
                 return true;
             },
@@ -974,8 +1067,22 @@
 
                 const urlParams = new URLSearchParams(window.location.search);
                 const startId = urlParams.get('id');
+                const isEmbeddedPreview = urlParams.get('embedded') === '1';
                 const preferredHomeId = this.state.rootPrefs.home_directory_id;
                 const profileUser = urlParams.get('user');
+                this.state.isEmbeddedPreview = isEmbeddedPreview;
+
+                if (isEmbeddedPreview) {
+                    document.body.classList.add('embedded-preview');
+                    const navbar = document.getElementById('dashboardNavbar');
+                    const main = document.getElementById('dashboardMain');
+                    const breadcrumbs = document.getElementById('breadcrumbs');
+                    const profilePresentation = document.getElementById('profilePresentation');
+                    if (navbar) navbar.classList.add('hidden');
+                    if (breadcrumbs) breadcrumbs.classList.add('hidden');
+                    if (profilePresentation) profilePresentation.classList.add('hidden');
+                    if (main) main.classList.remove('pt-6', 'sm:pt-8');
+                }
 
                 if (profileUser) {
                     const profileRes = await this.api('user', 'get_public_profile', { target_user_id: Number(profileUser) });
@@ -996,7 +1103,8 @@
                     if (pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
                         const targetDir = pathRes.data[pathRes.data.length - 1];
 
-                        if (!this.isVisitingProfile() && this.navigateToItemView(targetDir.type, targetDir.id)) {
+                        const resolvedOpenMode = targetDir.open_mode === 'preview' ? 'preview' : 'fullscreen';
+                        if (!isEmbeddedPreview && !this.isVisitingProfile() && this.navigateToItemView(targetDir.type, targetDir.id, resolvedOpenMode, targetDir)) {
                             return;
                         }
 
@@ -1025,6 +1133,10 @@
 
             setupEventListeners() {
                 document.addEventListener('click', (event) => {
+                    const previewModal = document.getElementById('itemPreviewModal');
+                    if (previewModal && this.state.previewModalOpen && event.target === previewModal) {
+                        this.closeItemPreviewModal();
+                    }
                     const menu = document.getElementById('mobileViewMenu');
                     const trigger = document.getElementById('btn-mobile-menu-trigger');
                     if (menu && !menu.classList.contains('hidden') && !menu.contains(event.target) && (!trigger || !trigger.contains(event.target))) {
@@ -1040,6 +1152,11 @@
                         if (!clickedInsidePanel && !clickedOnTrigger) {
                             this.closeRightPanel();
                         }
+                    }
+                });
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && this.state.previewModalOpen) {
+                        this.closeItemPreviewModal();
                     }
                 });
 
@@ -1065,6 +1182,7 @@
 
             handleTypeChange(typeValue) {
                 const folderSettings = document.getElementById('folderSettingsGroup');
+                const openModeSettingsGroup = document.getElementById('openModeSettingsGroup');
                 const nameLabel = document.getElementById('nameLabel');
                 
                 if (typeValue === 0) {
@@ -1730,8 +1848,9 @@
                 if(this.state.reorderMode || this.state.relocateMode) return; 
                 const item = this.state.directoryCache.get(Number(id));
                 if(!item) return;
+                const openMode = this.resolveOpenMode(item);
 
-                if (!this.isVisitingProfile() && this.navigateToItemView(item.type, id)) {
+                if (!this.state.isEmbeddedPreview && !this.isVisitingProfile() && this.navigateToItemView(item.type, id, openMode, item)) {
                     return;
                 } else if (item.type === 3) {
                     if (!item.target_id) return this.showToast('Portal corrompido: Destino não encontrado.', 'error');
@@ -1742,7 +1861,8 @@
                     if(pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
                         const targetDir = pathRes.data[pathRes.data.length - 1];
                         
-                        if (this.navigateToItemView(targetDir.type, targetDir.id)) {
+                        const portalOpenMode = this.resolveOpenMode(item);
+                        if (!this.state.isEmbeddedPreview && this.navigateToItemView(targetDir.type, targetDir.id, portalOpenMode, { ...targetDir, name: item.name })) {
                             return;
                         }
 
@@ -1778,7 +1898,9 @@
                 const targetStep = this.state.path[this.state.path.length - 1];
                 
                 if (targetStep.id !== null) {
-                    if (this.navigateToItemView(targetStep.type, targetStep.id)) {
+                    const cachedStep = this.state.directoryCache.get(Number(targetStep.id)) || targetStep;
+                    const stepOpenMode = this.resolveOpenMode(cachedStep);
+                    if (!this.state.isEmbeddedPreview && this.navigateToItemView(targetStep.type, targetStep.id, stepOpenMode, cachedStep)) {
                         return;
                     }
                 }
@@ -2478,6 +2600,7 @@
                     btnDeckPreset.classList.add('hidden');
                     tabRecor.classList.add('hidden');
                     typeSelector.classList.add('hidden');
+                    openModeSettingsGroup.classList.add('hidden');
                     iconPickerContainer.style.display = 'block';
                     publicToggleContainer.classList.add('hidden');
                 } else {
@@ -2491,6 +2614,7 @@
                         tabRecor.classList.add('hidden');
                     }
                     publicToggleContainer.classList.remove('hidden');
+                    openModeSettingsGroup.classList.remove('hidden');
                     
                     if (id) {
                         const numericId = Number(id);
@@ -2515,6 +2639,7 @@
                         document.getElementById('dirNameContainer').classList.remove('hidden');
                         if (dirObj.type === 3) {
                             typeSelector.classList.add('hidden');
+                            openModeSettingsGroup.classList.remove('hidden');
                         } else {
                             typeSelector.classList.remove('hidden');
                             const typeRadios = document.getElementsByName('itemType');
@@ -2554,6 +2679,7 @@
                         typeRadios[0].checked = true;
                         this.handleTypeChange(0);
                         publicToggleContainer.classList.remove('hidden');
+                        openModeSettingsGroup.classList.remove('hidden');
                     }
                 }
 
@@ -2637,6 +2763,9 @@
                 }
                 const viewRadios = document.getElementsByName('dirViewMode');
                 for(let i=0; i<viewRadios.length; i++) { viewRadios[i].checked = (viewRadios[i].value === viewToSelect); }
+                const openModeToSelect = (dirObj && dirObj.open_mode === 'preview') ? 'preview' : 'fullscreen';
+                const openModeRadios = document.getElementsByName('dirOpenMode');
+                for(let i=0; i<openModeRadios.length; i++) { openModeRadios[i].checked = (openModeRadios[i].value === openModeToSelect); }
                 
                 const modal = document.getElementById('dirModal');
                 const content = document.getElementById('dirModalContent');
@@ -2699,6 +2828,9 @@
                 let selectedPos = 'end';
                 const posRadios = document.getElementsByName('dirItemPosition');
                 for(let i=0; i<posRadios.length; i++) { if(posRadios[i].checked) selectedPos = posRadios[i].value; }
+                let selectedOpenMode = 'fullscreen';
+                const openModeRadios = document.getElementsByName('dirOpenMode');
+                for(let i=0; i<openModeRadios.length; i++) { if(openModeRadios[i].checked) selectedOpenMode = openModeRadios[i].value; }
 
                 let selectedType = id ? Number(this.state.directoryCache.get(Number(id))?.type ?? 0) : 0;
                 const typeRadios = document.getElementsByName('itemType');
@@ -2761,6 +2893,7 @@
                         type: selectedType,
                         name: document.getElementById('dirName').value.trim(),
                         view: selectedView,
+                        open_mode: selectedOpenMode,
                         new_item_position: selectedPos,
                         parent_new_item_position: parentNewItemPosition,
                         cover_url: document.getElementById('dirCoverBase64').value,

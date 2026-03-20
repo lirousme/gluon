@@ -32,6 +32,8 @@
                 hasPersistedTagFilter: false,
                 pendingStartDate: null,
                 pendingEndDate: null,
+                isEmbeddedPreview: false,
+                previewModalOpen: false,
                 availableIcons: [
                     'fa-folder', 'fa-folder-open', 'fa-check-circle', 'fa-file-code', 'fa-calendar-days', 'fa-door-open', 'fa-clock', 'fa-file-lines', 'fa-file-image', 'fa-file-pdf', 'fa-star', 'fa-heart', 'fa-image', 'fa-music', 'fa-video', 
                     'fa-code', 'fa-terminal', 'fa-database', 'fa-server', 'fa-lock', 'fa-vault', 'fa-book', 'fa-briefcase', 'fa-globe', 'fa-list-check',
@@ -222,15 +224,72 @@
                 return from ? decodeURIComponent(from) : '/dashboard';
             },
 
-            buildViewUrl(view, id) {
+            buildViewUrl(view, id, extraParams = {}) {
                 const from = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
-                return `/${view}?id=${id}&from=${from}`;
+                const params = new URLSearchParams({ id: String(id), from });
+                Object.entries(extraParams || {}).forEach(([key, value]) => {
+                    if (value !== null && value !== undefined && value !== '') {
+                        params.set(key, String(value));
+                    }
+                });
+                return `/${view}?${params.toString()}`;
             },
 
-            navigateToItemView(type, id) {
+            resolveOpenMode(item) {
+                return item && item.open_mode === 'preview' ? 'preview' : 'fullscreen';
+            },
+
+            openItemPreviewModal(item, forcedView = null, forcedId = null) {
+                const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 7: 'plano' };
+                const targetType = forcedView ? null : Number(item?.type);
+                const targetView = forcedView || viewByType[targetType] || 'dashboard';
+                const targetId = forcedId || item?.id;
+                if (!targetId) return false;
+
+                const modal = document.getElementById('itemPreviewModal');
+                const content = document.getElementById('itemPreviewModalContent');
+                const frame = document.getElementById('itemPreviewFrame');
+                const title = document.getElementById('itemPreviewTitle');
+                if (!modal || !content || !frame) return false;
+
+                if (title) title.textContent = item?.name ? `Preview · ${item.name}` : 'Preview';
+                const previewUrl = targetView === 'dashboard'
+                    ? `/dashboard?id=${encodeURIComponent(targetId)}&embedded=1&preview=1`
+                    : this.buildViewUrl(targetView, targetId, { preview: '1', embedded: '1' });
+                frame.src = previewUrl;
+
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => {
+                    modal.classList.remove('opacity-0');
+                    content.classList.remove('scale-95');
+                }, 10);
+                this.state.previewModalOpen = true;
+                return true;
+            },
+
+            closeItemPreviewModal() {
+                const modal = document.getElementById('itemPreviewModal');
+                const content = document.getElementById('itemPreviewModalContent');
+                const frame = document.getElementById('itemPreviewFrame');
+                if (!modal || !content || !frame) return;
+                modal.classList.add('opacity-0');
+                content.classList.add('scale-95');
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                    frame.src = 'about:blank';
+                }, 250);
+                this.state.previewModalOpen = false;
+            },
+
+            navigateToItemView(type, id, openMode = 'fullscreen', item = null) {
                 const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 7: 'plano' };
                 const targetView = viewByType[type];
                 if (!targetView) return false;
+                if (openMode === 'preview') {
+                    return this.openItemPreviewModal(item || { id, type });
+                }
                 window.location.href = this.buildViewUrl(targetView, id);
                 return true;
             },
@@ -247,6 +306,15 @@
                 this.currentDateObj = new Date(); 
                 const urlParams = new URLSearchParams(window.location.search);
                 this.agendaId = urlParams.get('id');
+                this.state.isEmbeddedPreview = urlParams.get('embedded') === '1';
+
+                if (this.state.isEmbeddedPreview) {
+                    const navbar = document.getElementById('scheduleNavbar');
+                    const toolbar = document.getElementById('scheduleToolbar');
+                    if (navbar) navbar.classList.add('hidden');
+                    if (toolbar) toolbar.classList.add('hidden');
+                    document.body.classList.add('embedded-preview');
+                }
 
                 if (!this.agendaId) {
                     window.location.href = this.getMarkedBackRoute();
@@ -287,10 +355,19 @@
                 });
                 
                 document.addEventListener('click', (event) => {
+                    const previewModal = document.getElementById('itemPreviewModal');
+                    if (previewModal && this.state.previewModalOpen && event.target === previewModal) {
+                        this.closeItemPreviewModal();
+                    }
                     const menu = document.getElementById('mobileViewMenu');
                     const trigger = document.getElementById('btn-mobile-menu-trigger');
                     if (menu && !menu.classList.contains('hidden') && !menu.contains(event.target) && !trigger.contains(event.target)) {
                         menu.classList.add('hidden');
+                    }
+                });
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && this.state.previewModalOpen) {
+                        this.closeItemPreviewModal();
                     }
                 });
             },
@@ -1560,8 +1637,9 @@
             async enterDirectoryOrFile(id) {
                 const item = this.state.directoryCache.get(Number(id));
                 if(!item) return;
+                const openMode = this.resolveOpenMode(item);
 
-                if (this.navigateToItemView(item.type, id)) {
+                if (!this.state.isEmbeddedPreview && this.navigateToItemView(item.type, id, openMode, item)) {
                     return;
                 } else if (item.type === 3) {
                     if (!item.target_id) return this.showToast('Portal corrompido: Destino não encontrado.', 'error');
@@ -1571,7 +1649,8 @@
                     if(pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
                         const targetDir = pathRes.data[pathRes.data.length - 1];
                         
-                        if (this.navigateToItemView(targetDir.type, targetDir.id)) {
+                        const portalOpenMode = this.resolveOpenMode(item);
+                        if (!this.state.isEmbeddedPreview && this.navigateToItemView(targetDir.type, targetDir.id, portalOpenMode, { ...targetDir, name: item.name })) {
                             return;
                         }
 
@@ -2096,6 +2175,7 @@
                 const dirNameInput = document.getElementById('dirName');
                 const typeSelector = document.getElementById('typeSelectorContainer');
                 const folderSettings = document.getElementById('folderSettingsGroup');
+                const openModeSettingsGroup = document.getElementById('openModeSettingsGroup');
                 const nameLabel = document.getElementById('nameLabel');
                 const iconPickerContainer = document.getElementById('iconPickerContainer');
                 const btnRecor = document.getElementById('tab-btn-recor');
@@ -2125,6 +2205,7 @@
                     } else {
                         typeSelector.classList.add('hidden');
                     }
+                    openModeSettingsGroup.classList.remove('hidden');
 
                     btnRecor.classList.remove('hidden');
                     
@@ -2137,6 +2218,7 @@
                     typeSelector.classList.remove('hidden');
                     iconPickerContainer.style.display = 'block';
                     btnRecor.classList.remove('hidden');
+                    openModeSettingsGroup.classList.remove('hidden');
                     
                     const typeRadios = document.getElementsByName('itemType');
                     typeRadios[0].checked = true;
@@ -2221,6 +2303,9 @@
                 const viewToSelect = (dirObj && dirObj.view) ? dirObj.view : 'grid';
                 const viewRadios = document.getElementsByName('dirViewMode');
                 for(let i=0; i<viewRadios.length; i++) { viewRadios[i].checked = (viewRadios[i].value === viewToSelect); }
+                const openModeToSelect = (dirObj && dirObj.open_mode === 'preview') ? 'preview' : 'fullscreen';
+                const openModeRadios = document.getElementsByName('dirOpenMode');
+                for(let i=0; i<openModeRadios.length; i++) { openModeRadios[i].checked = (openModeRadios[i].value === openModeToSelect); }
                 
                 const modal = document.getElementById('dirModal');
                 const content = document.getElementById('dirModalContent');
@@ -2300,6 +2385,9 @@
                 let selectedPos = 'end';
                 const posRadios = document.getElementsByName('dirItemPosition');
                 for(let i=0; i<posRadios.length; i++) { if(posRadios[i].checked) selectedPos = posRadios[i].value; }
+                let selectedOpenMode = 'fullscreen';
+                const openModeRadios = document.getElementsByName('dirOpenMode');
+                for(let i=0; i<openModeRadios.length; i++) { if(openModeRadios[i].checked) selectedOpenMode = openModeRadios[i].value; }
 
                 let selectedType = id ? Number(this.state.directoryCache.get(Number(id))?.type ?? 0) : 0;
                 const typeRadios = document.getElementsByName('itemType');
@@ -2328,6 +2416,7 @@
                     type: selectedType,
                     name: document.getElementById('dirName').value.trim(),
                     view: selectedView,
+                    open_mode: selectedOpenMode,
                     new_item_position: selectedPos,
                     cover_url: document.getElementById('dirCoverBase64').value,
                     color_from: document.getElementById('dirColorFrom').value || '#3b82f6',
