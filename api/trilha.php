@@ -21,6 +21,7 @@ function ensureTrailTables(PDO $pdo): void {
         title VARCHAR(255) NOT NULL,
         objective TEXT DEFAULT NULL,
         questions_json LONGTEXT DEFAULT NULL,
+        prerequisite_positions_json LONGTEXT DEFAULT NULL,
         source VARCHAR(20) NOT NULL DEFAULT 'manual',
         is_published TINYINT(1) NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -37,6 +38,9 @@ function ensureTrailTables(PDO $pdo): void {
     } catch (Throwable $e) {}
     try {
         $pdo->exec("ALTER TABLE track_nodes ADD COLUMN published_at DATETIME DEFAULT NULL AFTER updated_at");
+    } catch (Throwable $e) {}
+    try {
+        $pdo->exec("ALTER TABLE track_nodes ADD COLUMN prerequisite_positions_json LONGTEXT DEFAULT NULL AFTER questions_json");
     } catch (Throwable $e) {}
     try {
         $pdo->exec("CREATE INDEX idx_track_publish ON track_nodes (track_directory_id, is_published, position_index)");
@@ -104,6 +108,31 @@ function decodeQuestions($raw): array {
     return is_array($arr) ? array_values(array_filter(array_map(fn($q) => trim((string)$q), $arr), fn($q) => $q !== '')) : [];
 }
 
+function decodePrerequisitePositions($raw): array {
+    $arr = json_decode((string)$raw, true);
+    if (!is_array($arr)) return [];
+    $set = [];
+    foreach ($arr as $pos) {
+        $n = (int)$pos;
+        if ($n > 0) $set[$n] = true;
+    }
+    $out = array_keys($set);
+    sort($out);
+    return $out;
+}
+
+function normalizeDependsOnPositions($raw, int $maxAllowed): array {
+    if (!is_array($raw)) return [];
+    $set = [];
+    foreach ($raw as $pos) {
+        $n = (int)$pos;
+        if ($n > 0 && $n <= $maxAllowed) $set[$n] = true;
+    }
+    $out = array_keys($set);
+    sort($out);
+    return $out;
+}
+
 function openaiJsonRequest(string $url, array $payload): array {
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -126,7 +155,8 @@ function buildFallbackItems(string $subject, int $startPosition): array {
         $num = $startPosition + $i;
         $items[] = [
             'title' => "{$subject} · Tópico {$num}",
-            'objective' => "Compreender o tópico {$num} com exemplos práticos."
+            'objective' => "Compreender o tópico {$num} com exemplos práticos.",
+            'depends_on' => $num > 1 ? [$num - 1] : []
         ];
     }
     return $items;
@@ -143,7 +173,7 @@ function generateItemsWithGPT(string $subject, array $existingTitles, int $start
         'response_format' => ['type' => 'json_object'],
         'messages' => [
             ['role' => 'system', 'content' => 'Você cria trilhas pedagógicas sequenciais evitando granularidade ruim. Gere exatamente 10 fases novas. Se um item estiver amplo, já quebre em fases menores. Você pode inserir pré-requisitos faltantes e reordenar para manter linearidade.'],
-            ['role' => 'user', 'content' => "Matéria: {$subject}.\nÚltimos itens já existentes:\n{$context}\n\nGere exatamente 10 novos itens sequenciais a partir da posição {$startPosition}.\nFormato JSON obrigatório: {\"items\":[{\"title\":\"\",\"objective\":\"\"}]}.\nIMPORTANTE: não gere perguntas, quiz, respostas ou conteúdo de slide. Aqui é só o índice/trilha de fases. Não repita itens existentes."]
+            ['role' => 'user', 'content' => "Matéria: {$subject}.\nÚltimos itens já existentes:\n{$context}\n\nGere exatamente 10 novos itens sequenciais a partir da posição {$startPosition}.\nFormato JSON obrigatório: {\"items\":[{\"title\":\"\",\"objective\":\"\",\"depends_on\":[1,2]}]}.\nRegra do campo depends_on: array de posições absolutas que devem ser concluídas antes desta fase. Só use posições anteriores.\nIMPORTANTE: não gere perguntas, quiz, respostas ou conteúdo de slide. Aqui é só o índice/trilha de fases. Não repita itens existentes."]
         ]
     ];
 
@@ -167,7 +197,8 @@ function generateItemsWithGPT(string $subject, array $existingTitles, int $start
             if ($title === '') continue;
             $items[] = [
                 'title' => $title,
-                'objective' => trim((string)($item['objective'] ?? ''))
+                'objective' => trim((string)($item['objective'] ?? '')),
+                'depends_on' => array_values((array)($item['depends_on'] ?? []))
             ];
         }
     }
@@ -182,30 +213,19 @@ function generateItemsWithGPT(string $subject, array $existingTitles, int $start
     return ['items' => $items, 'prompt' => $prompt, 'response' => $decoded, 'model' => 'gpt-5.4'];
 }
 
-function defaultDiagnosticQuestions(string $title, string $objective): array {
-    $topic = trim($title) !== '' ? $title : 'este tópico';
-    $objectiveHint = trim($objective);
-    return [
-        "Qual definição essencial de {$topic}?",
-        "Qual conhecimento prévio preciso dominar antes de {$topic}?",
-        "Como aplicar {$topic} em um exercício ou caso real?",
-        "Qual erro comum devo evitar em {$topic}?" . ($objectiveHint !== '' ? " (objetivo: {$objectiveHint})" : '')
-    ];
-}
-
-function buildFallbackSlides(string $subject, string $title, string $objective, array $questions): array {
+function buildFallbackSlides(string $subject, string $title, string $objective): array {
     return [
         ['type' => 'intro', 'title' => $title, 'body' => "Objetivo: {$objective}"],
         ['type' => 'conceito', 'title' => 'Definição essencial', 'body' => "Explique de forma simples o conceito central de {$title} em {$subject}."],
         ['type' => 'imagem', 'title' => 'Imagem de apoio', 'body' => "[INSIRA IMAGEM REPRESENTATIVA DE {$title} AQUI]"],
         ['type' => 'aplicacao', 'title' => 'Aplicação', 'body' => "Mostre um caso prático de {$title}."],
-        ['type' => 'check', 'title' => 'Perguntas de checagem', 'body' => implode("\n", array_map(fn($q) => "- {$q}", $questions))]
+        ['type' => 'check', 'title' => 'Checklist de domínio', 'body' => "- Consigo explicar {$title} com minhas próprias palavras?\n- Consigo resolver um exercício básico sem ajuda?\n- Sei qual pré-requisito revisar se eu travar?"]
     ];
 }
 
-function generateSlidesWithGPT(string $subject, string $title, string $objective, array $questions): array {
+function generateSlidesWithGPT(string $subject, string $title, string $objective): array {
     if (trim((string)OPENAI_API_KEY) === '') {
-        return ['slides' => buildFallbackSlides($subject, $title, $objective, $questions), 'model' => 'fallback'];
+        return ['slides' => buildFallbackSlides($subject, $title, $objective), 'model' => 'fallback'];
     }
 
     $prompt = [
@@ -213,13 +233,13 @@ function generateSlidesWithGPT(string $subject, string $title, string $objective
         'response_format' => ['type' => 'json_object'],
         'messages' => [
             ['role' => 'system', 'content' => 'Você cria conteúdo didático em slides curtos, sem consumir tokens demais. Não gere imagens reais, apenas placeholders [INSIRA IMAGEM ... AQUI].'],
-            ['role' => 'user', 'content' => "Matéria: {$subject}\nFase: {$title}\nObjetivo: {$objective}\nPerguntas diagnósticas:\n- " . implode("\n- ", $questions) . "\n\nRetorne JSON no formato: {\"slides\":[{\"type\":\"intro|conceito|imagem|aplicacao|check\",\"title\":\"\",\"body\":\"\"}]}. Gere de 5 a 8 slides curtos."]
+            ['role' => 'user', 'content' => "Matéria: {$subject}\nFase: {$title}\nObjetivo: {$objective}\n\nRetorne JSON no formato: {\"slides\":[{\"type\":\"intro|conceito|imagem|aplicacao|check\",\"title\":\"\",\"body\":\"\"}]}. Gere de 5 a 8 slides curtos."]
         ]
     ];
 
     [$code, $resp] = openaiJsonRequest('https://api.openai.com/v1/chat/completions', $prompt);
     if ($code !== 200 || !$resp) {
-        return ['slides' => buildFallbackSlides($subject, $title, $objective, $questions), 'model' => 'fallback'];
+        return ['slides' => buildFallbackSlides($subject, $title, $objective), 'model' => 'fallback'];
     }
 
     $decoded = json_decode($resp, true);
@@ -245,7 +265,7 @@ function generateSlidesWithGPT(string $subject, string $title, string $objective
     }
 
     if (!$slides) {
-        $slides = buildFallbackSlides($subject, $title, $objective, $questions);
+        $slides = buildFallbackSlides($subject, $title, $objective);
         return ['slides' => $slides, 'model' => 'fallback'];
     }
 
@@ -259,7 +279,7 @@ if ($action === 'fetch_admin') {
     $dir = verifyTrackOwnership($pdo, $directory_id, $user_id);
     if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Trilha não encontrada.']));
 
-    $stmt = $pdo->prepare("SELECT id, position_index, map_number, phase_number, title, objective, questions_json, source, is_published FROM track_nodes WHERE track_directory_id = ? ORDER BY position_index ASC");
+    $stmt = $pdo->prepare("SELECT id, position_index, map_number, phase_number, title, objective, questions_json, prerequisite_positions_json, source, is_published FROM track_nodes WHERE track_directory_id = ? ORDER BY position_index ASC");
     $stmt->execute([$directory_id]);
     $nodes = [];
     $pending = 0;
@@ -274,6 +294,7 @@ if ($action === 'fetch_admin') {
             'title' => $row['title'],
             'objective' => (string)($row['objective'] ?? ''),
             'questions' => decodeQuestions($row['questions_json']),
+            'depends_on_positions' => decodePrerequisitePositions($row['prerequisite_positions_json']),
             'source' => $row['source'],
             'is_published' => $published
         ];
@@ -297,13 +318,14 @@ elseif ($action === 'generate_batch') {
 
     $pdo->beginTransaction();
     try {
-        $stmtIns = $pdo->prepare("INSERT INTO track_nodes (track_directory_id, position_index, map_number, phase_number, title, objective, questions_json, source, is_published) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)");
+        $stmtIns = $pdo->prepare("INSERT INTO track_nodes (track_directory_id, position_index, map_number, phase_number, title, objective, questions_json, prerequisite_positions_json, source, is_published) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)");
         $inserted = [];
         foreach ($generated['items'] as $offset => $item) {
             $position = $startPosition + $offset;
             $map = (int)floor(($position - 1) / 10) + 1;
             $phase = (($position - 1) % 10) + 1;
-            $stmtIns->execute([$directory_id, $position, $map, $phase, trim((string)$item['title']), trim((string)($item['objective'] ?? '')), json_encode([], JSON_UNESCAPED_UNICODE), $generated['model'] === 'gpt-5.4' ? 'gpt' : 'fallback']);
+            $dependsOn = normalizeDependsOnPositions((array)($item['depends_on'] ?? []), $position - 1);
+            $stmtIns->execute([$directory_id, $position, $map, $phase, trim((string)$item['title']), trim((string)($item['objective'] ?? '')), json_encode([], JSON_UNESCAPED_UNICODE), json_encode($dependsOn, JSON_UNESCAPED_UNICODE), $generated['model'] === 'gpt-5.4' ? 'gpt' : 'fallback']);
             $inserted[] = [
                 'id' => (int)$pdo->lastInsertId(),
                 'position_index' => $position,
@@ -312,6 +334,7 @@ elseif ($action === 'generate_batch') {
                 'title' => trim((string)$item['title']),
                 'objective' => trim((string)($item['objective'] ?? '')),
                 'questions' => [],
+                'depends_on_positions' => $dependsOn,
                 'is_published' => false
             ];
         }
@@ -344,11 +367,12 @@ elseif ($action === 'upsert_node') {
     $title = trim((string)($input['title'] ?? ''));
     $objective = trim((string)($input['objective'] ?? ''));
     $questions = array_slice(array_values(array_filter(array_map(fn($q) => trim((string)$q), (array)($input['questions'] ?? [])), fn($q) => $q !== '')), 0, 10);
+    $dependsOnPositions = normalizeDependsOnPositions((array)($input['depends_on_positions'] ?? []), PHP_INT_MAX);
     if ($title === '') die(json_encode(['status' => 'error', 'message' => 'Título obrigatório.']));
 
     if ($node_id > 0) {
-        $stmt = $pdo->prepare("UPDATE track_nodes SET title = ?, objective = ?, questions_json = ?, source = 'manual', is_published = 0, published_at = NULL WHERE id = ? AND track_directory_id = ?");
-        $stmt->execute([$title, $objective, json_encode($questions, JSON_UNESCAPED_UNICODE), $node_id, $directory_id]);
+        $stmt = $pdo->prepare("UPDATE track_nodes SET title = ?, objective = ?, questions_json = ?, prerequisite_positions_json = ?, source = 'manual', is_published = 0, published_at = NULL WHERE id = ? AND track_directory_id = ?");
+        $stmt->execute([$title, $objective, json_encode($questions, JSON_UNESCAPED_UNICODE), json_encode($dependsOnPositions, JSON_UNESCAPED_UNICODE), $node_id, $directory_id]);
     }
 
     echo json_encode(['status' => 'success']);
@@ -401,13 +425,15 @@ elseif ($action === 'fetch_map') {
 
     $offsetStart = (($activeMap - 1) * 10) + 1;
     $offsetEnd = $offsetStart + 9;
-    $stmtNodes = $pdo->prepare("SELECT n.id, n.position_index, n.map_number, n.phase_number, n.title, n.objective, n.questions_json, (s.id IS NOT NULL) AS has_slide FROM track_nodes n LEFT JOIN track_node_slides s ON s.node_id = n.id WHERE n.track_directory_id = ? AND n.is_published = 1 AND n.position_index BETWEEN ? AND ? ORDER BY n.position_index ASC");
+    $stmtNodes = $pdo->prepare("SELECT n.id, n.position_index, n.map_number, n.phase_number, n.title, n.objective, n.questions_json, n.prerequisite_positions_json, (s.id IS NOT NULL) AS has_slide FROM track_nodes n LEFT JOIN track_node_slides s ON s.node_id = n.id WHERE n.track_directory_id = ? AND n.is_published = 1 AND n.position_index BETWEEN ? AND ? ORDER BY n.position_index ASC");
     $stmtNodes->execute([$directory_id, $offsetStart, $offsetEnd]);
 
     $nodes = [];
     foreach ($stmtNodes->fetchAll() as $row) {
         $pos = (int)$row['position_index'];
-        $state = isset($completedSet[$pos]) ? 'done' : ($pos === $currentPosition ? 'active' : ($pos < $currentPosition ? 'done' : 'locked'));
+        $dependsOn = decodePrerequisitePositions($row['prerequisite_positions_json']);
+        $missingDepends = array_values(array_filter($dependsOn, fn($dep) => !isset($completedSet[(int)$dep])));
+        $state = isset($completedSet[$pos]) ? 'done' : ($pos === $currentPosition && !$missingDepends ? 'active' : ($pos < $currentPosition && !$missingDepends ? 'active' : 'locked'));
         $nodes[] = [
             'id' => (int)$row['id'],
             'position_index' => $pos,
@@ -415,6 +441,8 @@ elseif ($action === 'fetch_map') {
             'title' => $row['title'],
             'objective' => (string)($row['objective'] ?? ''),
             'questions' => decodeQuestions($row['questions_json']),
+            'depends_on_positions' => $dependsOn,
+            'missing_depends_on_positions' => $missingDepends,
             'has_slide' => (int)$row['has_slide'] === 1,
             'state' => $state
         ];
@@ -436,7 +464,7 @@ elseif ($action === 'fetch_phase') {
     if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Trilha indisponível.']));
 
     $owner = (int)$dir['user_id'] === $user_id;
-    $stmt = $pdo->prepare("SELECT id, position_index, map_number, phase_number, title, objective, questions_json, is_published FROM track_nodes WHERE id = ? AND track_directory_id = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, position_index, map_number, phase_number, title, objective, questions_json, prerequisite_positions_json, is_published FROM track_nodes WHERE id = ? AND track_directory_id = ? LIMIT 1");
     $stmt->execute([$node_id, $directory_id]);
     $node = $stmt->fetch();
     if (!$node) die(json_encode(['status' => 'error', 'message' => 'Fase não encontrada.']));
@@ -459,6 +487,7 @@ elseif ($action === 'fetch_phase') {
             'title' => $node['title'],
             'objective' => (string)($node['objective'] ?? ''),
             'questions' => decodeQuestions($node['questions_json']),
+            'depends_on_positions' => decodePrerequisitePositions($node['prerequisite_positions_json']),
             'is_published' => (int)$node['is_published'] === 1
         ],
         'is_owner' => $owner,
@@ -471,17 +500,13 @@ elseif ($action === 'generate_phase_content') {
     $dir = verifyTrackOwnership($pdo, $directory_id, $user_id);
     if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Sem permissão para gerar conteúdo.']));
 
-    $stmt = $pdo->prepare("SELECT id, title, objective, questions_json FROM track_nodes WHERE id = ? AND track_directory_id = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, title, objective FROM track_nodes WHERE id = ? AND track_directory_id = ? LIMIT 1");
     $stmt->execute([$node_id, $directory_id]);
     $node = $stmt->fetch();
     if (!$node) die(json_encode(['status' => 'error', 'message' => 'Fase não encontrada.']));
 
     $subject = Security::decryptData($dir['name_encrypted']);
-    $questions = decodeQuestions($node['questions_json']);
-    if (!$questions) {
-        $questions = defaultDiagnosticQuestions((string)$node['title'], (string)($node['objective'] ?? ''));
-    }
-    $generated = generateSlidesWithGPT($subject, (string)$node['title'], (string)($node['objective'] ?? ''), $questions);
+    $generated = generateSlidesWithGPT($subject, (string)$node['title'], (string)($node['objective'] ?? ''));
 
     $upsert = $pdo->prepare("INSERT INTO track_node_slides (node_id, content_json, model, created_by) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE content_json = VALUES(content_json), model = VALUES(model), created_by = VALUES(created_by)");
     $upsert->execute([$node_id, json_encode($generated['slides'], JSON_UNESCAPED_UNICODE), $generated['model'], $user_id]);
@@ -519,9 +544,10 @@ elseif ($action === 'complete_phase') {
     $dir = verifyTrackAccess($pdo, $directory_id, $user_id);
     if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Trilha indisponível.']));
 
-    $stmtNode = $pdo->prepare("SELECT position_index FROM track_nodes WHERE id = ? AND track_directory_id = ? AND is_published = 1");
+    $stmtNode = $pdo->prepare("SELECT position_index, prerequisite_positions_json FROM track_nodes WHERE id = ? AND track_directory_id = ? AND is_published = 1");
     $stmtNode->execute([$node_id, $directory_id]);
-    $nodePos = (int)$stmtNode->fetchColumn();
+    $nodeRow = $stmtNode->fetch();
+    $nodePos = $nodeRow ? (int)$nodeRow['position_index'] : 0;
     if ($nodePos <= 0) die(json_encode(['status' => 'error', 'message' => 'Fase inválida.']));
 
     $pdo->beginTransaction();
@@ -538,6 +564,12 @@ elseif ($action === 'complete_phase') {
 
         if ($nodePos > $currentPosition) {
             throw new RuntimeException('Fase bloqueada.');
+        }
+        $dependsOn = decodePrerequisitePositions($nodeRow['prerequisite_positions_json'] ?? null);
+        foreach ($dependsOn as $depPos) {
+            if (!isset($completedSet[(int)$depPos])) {
+                throw new RuntimeException('Conclua os pré-requisitos desta fase antes de continuar.');
+            }
         }
 
         $completedSet[$nodePos] = true;
