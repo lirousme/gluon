@@ -2111,8 +2111,21 @@
 
                     if (dirObj.start_date) document.getElementById('dirStartDate').value = dirObj.start_date;
                     if (dirObj.end_date) document.getElementById('dirEndDate').value = dirObj.end_date;
-                    
-                    typeSelector.classList.add('hidden');
+
+                    typeSelector.classList.remove('hidden');
+                    const typeRadios = document.getElementsByName('itemType');
+                    let hasMatchingType = false;
+                    for (let i = 0; i < typeRadios.length; i++) {
+                        const matches = Number(typeRadios[i].value) === Number(dirObj.type);
+                        typeRadios[i].checked = matches;
+                        if (matches) hasMatchingType = true;
+                    }
+                    if (hasMatchingType) {
+                        this.handleTypeChange(Number(dirObj.type));
+                    } else {
+                        typeSelector.classList.add('hidden');
+                    }
+
                     btnRecor.classList.remove('hidden');
                     
                     if(dirObj.type === 0) { folderSettings.style.display = 'block'; nameLabel.innerText = 'Nome da Tarefa/Pasta'; iconPickerContainer.style.display = 'block'; } 
@@ -2288,7 +2301,7 @@
                 const posRadios = document.getElementsByName('dirItemPosition');
                 for(let i=0; i<posRadios.length; i++) { if(posRadios[i].checked) selectedPos = posRadios[i].value; }
 
-                let selectedType = 0;
+                let selectedType = id ? Number(this.state.directoryCache.get(Number(id))?.type ?? 0) : 0;
                 const typeRadios = document.getElementsByName('itemType');
                 for(let i=0; i<typeRadios.length; i++) { if(typeRadios[i].checked) selectedType = parseInt(typeRadios[i].value); }
 

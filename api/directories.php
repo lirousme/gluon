@@ -807,7 +807,8 @@ elseif ($action === 'update') {
     $stmtType = $pdo->prepare("SELECT type FROM directories WHERE id = ? AND user_id = ?");
     $stmtType->execute([$id, $user_id]);
     $currentType = (int)$stmtType->fetchColumn();
-    if ($currentType == 3) {
+    $type = isset($input['type']) ? (int)$input['type'] : $currentType;
+    if ($type === 3) {
         $icon = 'fa-door-open';
     }
 
@@ -823,25 +824,25 @@ elseif ($action === 'update') {
             
             $stmt = $pdo->prepare("
                 UPDATE directories SET 
-                    name_encrypted = ?, default_view = ?, new_item_position = ?, 
+                    type = ?, name_encrypted = ?, default_view = ?, new_item_position = ?, 
                     icon = ?, icon_color_from = ?, icon_color_to = ?, cover_url_encrypted = ?, 
                     start_date = ?, end_date = ?, is_recurring = ?, is_public = ?,
                     child_default_type = ?, child_default_view = ?,
                     deck_front_language = ?, deck_back_language = ?, deck_structure = ?
                 WHERE id = ? AND user_id = ?
             ");
-            $stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $start_date, $end_date, $is_recurring, $is_public, $child_default_type, $child_default_view, $deck_front_language, $deck_back_language, $deck_structure, $id, $user_id]);
+            $stmt->execute([$type, $name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $start_date, $end_date, $is_recurring, $is_public, $child_default_type, $child_default_view, $deck_front_language, $deck_back_language, $deck_structure, $id, $user_id]);
         } else {
             $stmt = $pdo->prepare("
                 UPDATE directories SET 
-                    name_encrypted = ?, default_view = ?, new_item_position = ?, 
+                    type = ?, name_encrypted = ?, default_view = ?, new_item_position = ?, 
                     icon = ?, icon_color_from = ?, icon_color_to = ?, cover_url_encrypted = ?, 
                     is_recurring = ?, is_public = ?,
                     child_default_type = ?, child_default_view = ?,
                     deck_front_language = ?, deck_back_language = ?, deck_structure = ?
                 WHERE id = ? AND user_id = ?
             ");
-            $stmt->execute([$name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $is_recurring, $is_public, $child_default_type, $child_default_view, $deck_front_language, $deck_back_language, $deck_structure, $id, $user_id]);
+            $stmt->execute([$type, $name_encrypted, $view, $new_item_position, $icon, $color_from, $color_to, $cover_url_encrypted, $is_recurring, $is_public, $child_default_type, $child_default_view, $deck_front_language, $deck_back_language, $deck_structure, $id, $user_id]);
         }
 
         // Se ativado, processa a recorrência salvando os dados
