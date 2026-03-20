@@ -254,7 +254,7 @@
 
                 if (title) title.textContent = item?.name ? `Preview · ${item.name}` : 'Preview';
                 const previewUrl = targetView === 'dashboard'
-                    ? `/dashboard?id=${encodeURIComponent(targetId)}&embedded=1&preview=1`
+                    ? this.buildViewUrl('dashboard', targetId, { preview: '1', embedded: '1' })
                     : this.buildViewUrl(targetView, targetId, { preview: '1', embedded: '1' });
                 frame.src = previewUrl;
 
@@ -309,8 +309,11 @@
                 this.state.isEmbeddedPreview = urlParams.get('embedded') === '1';
 
                 if (this.state.isEmbeddedPreview) {
+                    const previewHeader = document.getElementById('embeddedPreviewHeader');
                     const toolbar = document.getElementById('scheduleToolbar');
                     if (toolbar) toolbar.classList.add('hidden');
+                    if (previewHeader) previewHeader.classList.remove('hidden');
+                    if (previewHeader) previewHeader.classList.add('flex');
                     document.body.classList.add('embedded-preview');
                 }
 
