@@ -209,6 +209,10 @@
         body.embedded-preview {
             padding-bottom: 0 !important;
         }
+        body.embedded-preview #btn-header-search,
+        body.embedded-preview #btn-header-notes {
+            display: none !important;
+        }
 
         input[type="color"] {
             -webkit-appearance: none;
@@ -230,14 +234,14 @@
             
             <div class="flex items-center gap-2">
                 <!-- Botão de Busca Global (Substituindo o Logo antigo) -->
-                <button onclick="window.location.href='/buscar'" class="flex items-center gap-3 cursor-pointer group outline-none hover:bg-slate-800/50 p-1.5 -ml-1.5 rounded-xl transition-colors" title="Buscar Usuários na Rede">
+                <button id="btn-header-search" onclick="window.location.href='/buscar'" class="flex items-center gap-3 cursor-pointer group outline-none hover:bg-slate-800/50 p-1.5 -ml-1.5 rounded-xl transition-colors" title="Buscar Usuários na Rede">
                     <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-slate-800 border border-slate-600 flex items-center justify-center shadow-lg group-hover:border-gluon-primary/50 transition-colors">
                         <i class="fa-solid fa-magnifying-glass text-lg text-gluon-primary"></i>
                     </div>
                     <span class="font-bold text-lg sm:text-xl tracking-wide text-slate-300 group-hover:text-white transition-colors hidden sm:block">Buscar</span>
                 </button>
 
-                <button onclick="app.goToSourceDirectory()" class="flex items-center gap-3 cursor-pointer group outline-none hover:bg-slate-800/50 p-1.5 rounded-xl transition-colors" title="Abrir minhas Anotações">
+                <button id="btn-header-notes" onclick="app.goToSourceDirectory()" class="flex items-center gap-3 cursor-pointer group outline-none hover:bg-slate-800/50 p-1.5 rounded-xl transition-colors" title="Abrir minhas Anotações">
                     <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-slate-800 border border-slate-600 flex items-center justify-center shadow-lg group-hover:border-gluon-primary/50 transition-colors">
                         <i class="fa-solid fa-thumbtack text-lg text-gluon-primary"></i>
                     </div>
@@ -1074,11 +1078,9 @@
 
                 if (isEmbeddedPreview) {
                     document.body.classList.add('embedded-preview');
-                    const navbar = document.getElementById('dashboardNavbar');
                     const main = document.getElementById('dashboardMain');
                     const breadcrumbs = document.getElementById('breadcrumbs');
                     const profilePresentation = document.getElementById('profilePresentation');
-                    if (navbar) navbar.classList.add('hidden');
                     if (breadcrumbs) breadcrumbs.classList.add('hidden');
                     if (profilePresentation) profilePresentation.classList.add('hidden');
                     if (main) main.classList.remove('pt-6', 'sm:pt-8');
