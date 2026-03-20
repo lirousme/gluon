@@ -453,6 +453,12 @@
                                     <i class="fa-solid fa-code-branch block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Condicional</span>
                                 </div>
                             </label>
+                            <label class="cursor-pointer" onclick="app.handleTypeChange(7)">
+                                <input type="radio" name="itemType" value="7" class="peer hidden type-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-list-ol block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Plano</span>
+                                </div>
+                            </label>
                             <label class="cursor-pointer" onclick="app.handleTypeChange(8)">
                                 <input type="radio" name="itemType" value="8" class="peer hidden type-radio">
                                 <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
@@ -2507,7 +2513,24 @@
 
                         document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-gear text-gluon-primary"></i> <span>Configurar ${titleText}</span>`;
                         document.getElementById('dirNameContainer').classList.remove('hidden');
-                        typeSelector.classList.add('hidden');
+                        if (dirObj.type === 3) {
+                            typeSelector.classList.add('hidden');
+                        } else {
+                            typeSelector.classList.remove('hidden');
+                            const typeRadios = document.getElementsByName('itemType');
+                            let hasMatchingType = false;
+                            for (let i = 0; i < typeRadios.length; i++) {
+                                const matches = Number(typeRadios[i].value) === Number(dirObj.type);
+                                typeRadios[i].checked = matches;
+                                if (matches) hasMatchingType = true;
+                            }
+                            if (!hasMatchingType && typeRadios.length > 0) {
+                                typeRadios[0].checked = true;
+                                this.handleTypeChange(Number(typeRadios[0].value));
+                            } else {
+                                this.handleTypeChange(Number(dirObj.type));
+                            }
+                        }
                         
                         if(dirObj.type === 0) { folderSettings.style.display = 'block'; nameLabel.innerText = 'Nome da Pasta'; iconPickerContainer.style.display = 'block'; } 
                         else if(dirObj.type === 1) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Arquivo'; iconPickerContainer.style.display = 'block'; } 
@@ -2677,7 +2700,7 @@
                 const posRadios = document.getElementsByName('dirItemPosition');
                 for(let i=0; i<posRadios.length; i++) { if(posRadios[i].checked) selectedPos = posRadios[i].value; }
 
-                let selectedType = 0;
+                let selectedType = id ? Number(this.state.directoryCache.get(Number(id))?.type ?? 0) : 0;
                 const typeRadios = document.getElementsByName('itemType');
                 for(let i=0; i<typeRadios.length; i++) { if(typeRadios[i].checked) selectedType = parseInt(typeRadios[i].value); }
 
@@ -2761,8 +2784,7 @@
                     payload.child_default_type = childDefaultType;
                     payload.child_default_view = childDefaultView;
 
-                    const existingType = id ? Number(this.state.directoryCache.get(Number(id))?.type ?? 0) : null;
-                    const effectiveType = id ? existingType : selectedType;
+                    const effectiveType = selectedType;
                     if (effectiveType === 0) {
                         payload.deck_front_language = document.getElementById('deckPresetFrontLanguage').value;
                         payload.deck_back_language = document.getElementById('deckPresetBackLanguage').value;
