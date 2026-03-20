@@ -15,6 +15,12 @@
         </aside>
 
         <div class="flex-1 relative flex flex-col bg-gluon-dark overflow-hidden">
+            <div id="embeddedPreviewHeader" class="hidden p-3 border-b border-slate-700 bg-slate-800/90 backdrop-blur shrink-0 items-center">
+                <button type="button" onclick="scheduleApp.goBack()" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-600 text-slate-200 hover:text-white hover:border-gluon-primary transition-colors">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span class="font-semibold text-sm">Voltar</span>
+                </button>
+            </div>
             <div id="scheduleToolbar" class="p-3 sm:p-4 border-b border-slate-700 bg-slate-800/80 backdrop-blur shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 z-20">
                 <div class="flex items-center gap-2 w-full sm:w-auto">
                     <button onclick="scheduleApp.toggleSidebar()" id="btnToggleSidebarNav" class="px-3 py-1.5 rounded-md text-gluon-primary bg-slate-800 hover:text-white hover:bg-slate-700 transition-colors border border-slate-700 shadow-sm shrink-0" title="Alternar Backlog">
