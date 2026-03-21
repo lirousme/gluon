@@ -1608,7 +1608,24 @@
                 if (res) {
                     this.showToast(res.message, 'success');
                     this.closeModals();
-                    await this.loadDeck();
+                    if (editId) {
+                        const cardIndex = this.cards.findIndex(card => String(card.id) === String(editId));
+                        if (cardIndex !== -1) {
+                            this.cards[cardIndex] = {
+                                ...this.cards[cardIndex],
+                                front: frontVal,
+                                back: backVal,
+                                image_front: imageFront || null,
+                                image_back: imageBack || null
+                            };
+                            this.currentIndex = cardIndex;
+                            this.renderCurrentCard();
+                        } else {
+                            await this.loadDeck();
+                        }
+                    } else {
+                        await this.loadDeck();
+                    }
                 }
                 btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar'; btn.disabled = false;
             },
