@@ -205,6 +205,13 @@
                     <span class="absolute left-1 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4 peer-checked:bg-gluon-primary"></span>
                 </div>
             </label>
+            <label class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700" title="Virar verso e avançar automaticamente">
+                <i class="fa-solid fa-forward-step text-slate-400 text-xs" id="autoFlowIcon"></i>
+                <div class="relative inline-block w-8 h-4 rounded-full bg-slate-600">
+                    <input type="checkbox" id="autoFlowToggle" class="peer hidden" onchange="flashcardApp.toggleAutoFlow()">
+                    <span class="absolute left-1 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4 peer-checked:bg-emerald-400"></span>
+                </div>
+            </label>
 
             <button id="btnResetBookScore" onclick="flashcardApp.openResetBookScoreModal()" class="hidden flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700 text-amber-400 hover:text-amber-300" title="Zerar pontuação do deck">
                 <i class="fa-solid fa-rotate-left text-sm"></i>
@@ -562,7 +569,11 @@
             isRightPanelOpen: false,
             
             autoPlayEnabled: false,
+            autoFlowEnabled: false,
             currentAudioElement: null,
+            currentAudioEndedHandler: null,
+            autoFlowTimer: null,
+            autoFlowToken: 0,
 
             async init() {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -578,6 +589,12 @@
                     this.autoPlayEnabled = true;
                     document.getElementById('autoPlayToggle').checked = true;
                     document.getElementById('autoPlayIcon').classList.replace('text-slate-400', 'text-gluon-primary');
+                }
+                const savedAutoFlow = localStorage.getItem('gluon_auto_flow');
+                if(savedAutoFlow === 'true') {
+                    this.autoFlowEnabled = true;
+                    document.getElementById('autoFlowToggle').checked = true;
+                    document.getElementById('autoFlowIcon').classList.replace('text-slate-400', 'text-emerald-400');
                 }
 
                 this.setupKeyboardListeners();
@@ -656,6 +673,9 @@
             },
 
             async loadDeck() {
+                this.autoFlowToken++;
+                this.clearAutoFlowTimer();
+                this.stopAudio();
                 document.getElementById('loader').style.display = 'flex';
                 document.getElementById('emptyState').style.display = 'none';
                 document.getElementById('cardScene').style.display = 'none';
@@ -701,9 +721,7 @@
                         this.updateGlobalProgressUI();
                         this.renderCurrentCard();
                         
-                        if(this.autoPlayEnabled && this.cards[this.currentIndex].has_audio_front === 1) {
-                            this.playCardAudio(this.cards[this.currentIndex].id, 'front');
-                        }
+                        this.handleAutoPlaybackAndFlow();
                     }
                 }
             },
@@ -934,6 +952,8 @@
                 if (this.cards.length === 0) return;
                 
                 if (e && e.target && e.target.closest('button')) return;
+                this.autoFlowToken++;
+                this.clearAutoFlowTimer();
 
                 const card = this.cards[this.currentIndex];
                 const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
@@ -950,20 +970,17 @@
                     cardEl.classList.add('is-flipped');
                     if (this.deckMode === 'aleatorio') this.registerScore(card);
                     
-                    if (this.autoPlayEnabled && card.has_audio_back === 1) {
-                        this.playCardAudio(card.id, 'back');
-                    }
+                    this.handleAutoPlaybackAndFlow();
                 } else {
                     cardEl.classList.remove('is-flipped');
-                    
-                    if (this.autoPlayEnabled && card.has_audio_front === 1) {
-                        this.playCardAudio(card.id, 'front');
-                    }
+                    this.handleAutoPlaybackAndFlow();
                 }
             },
 
             async nextCard() {
                 if (this.cards.length === 0) return;
+                this.autoFlowToken++;
+                this.clearAutoFlowTimer();
 
                 const card = this.cards[this.currentIndex];
                 const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
@@ -991,9 +1008,7 @@
                     this.renderCurrentCard();
                     if (this.deckMode === 'livro') this.saveBookProgress();
                     
-                    if(this.autoPlayEnabled && this.cards[this.currentIndex].has_audio_front === 1) {
-                        this.playCardAudio(this.cards[this.currentIndex].id, 'front');
-                    }
+                    this.handleAutoPlaybackAndFlow();
                 } else if (this.deckMode === 'livro') {
                     this.incrementBookReadProgress();
                     await this.loadDeck();
@@ -1006,14 +1021,14 @@
 
             prevCard() {
                 if (this.currentIndex > 0) {
+                    this.autoFlowToken++;
+                    this.clearAutoFlowTimer();
                     this.stopAudio(); 
                     this.currentIndex--;
                     this.renderCurrentCard();
                     if (this.deckMode === 'livro') this.saveBookProgress();
                     
-                    if(this.autoPlayEnabled && this.cards[this.currentIndex].has_audio_front === 1) {
-                        this.playCardAudio(this.cards[this.currentIndex].id, 'front');
-                    }
+                    this.handleAutoPlaybackAndFlow();
                 }
             },
             
@@ -1161,30 +1176,96 @@
 
                 if (this.autoPlayEnabled) {
                     icon.classList.replace('text-slate-400', 'text-gluon-primary');
-                    
-                    const card = this.cards[this.currentIndex];
-                    const targetSide = this.isFlipped ? 'back' : 'front';
-                    
-                    if ((targetSide === 'back' && card.has_audio_back === 1) || (targetSide === 'front' && card.has_audio_front === 1)) {
-                        this.playCardAudio(card.id, targetSide);
-                    }
+                    this.handleAutoPlaybackAndFlow();
                 } else {
                     icon.classList.replace('text-gluon-primary', 'text-slate-400');
+                    if (!this.autoFlowEnabled) this.stopAudio();
+                }
+            },
+
+            toggleAutoFlow() {
+                this.autoFlowEnabled = document.getElementById('autoFlowToggle').checked;
+                const icon = document.getElementById('autoFlowIcon');
+                localStorage.setItem('gluon_auto_flow', this.autoFlowEnabled);
+
+                this.autoFlowToken++;
+                this.clearAutoFlowTimer();
+
+                if (this.autoFlowEnabled) {
+                    icon.classList.replace('text-slate-400', 'text-emerald-400');
+                    this.handleAutoPlaybackAndFlow();
+                } else {
+                    icon.classList.replace('text-emerald-400', 'text-slate-400');
                     this.stopAudio();
                 }
             },
 
-            playCardAudio(cardId, side) {
+            handleAutoPlaybackAndFlow() {
+                if (!this.cards.length) return;
+
+                this.autoFlowToken++;
+                const token = this.autoFlowToken;
+                this.clearAutoFlowTimer();
+
+                const card = this.cards[this.currentIndex];
+                if (!card) return;
+
+                const side = this.isFlipped ? 'back' : 'front';
+                const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
+                const hasAudio = side === 'back' ? card.has_audio_back === 1 : card.has_audio_front === 1;
+
+                const runAutoFlowStep = () => {
+                    if (!this.autoFlowEnabled || token !== this.autoFlowToken) return;
+                    if (side === 'front') {
+                        if (hasBack) this.flipCard();
+                        else this.nextCard();
+                    } else {
+                        this.nextCard();
+                    }
+                };
+
+                if (hasAudio && (this.autoPlayEnabled || this.autoFlowEnabled)) {
+                    if (this.autoFlowEnabled) {
+                        this.playCardAudio(card.id, side, () => {
+                            if (!this.autoFlowEnabled || token !== this.autoFlowToken) return;
+                            this.autoFlowTimer = setTimeout(runAutoFlowStep, 2000);
+                        });
+                    } else {
+                        this.playCardAudio(card.id, side);
+                    }
+                } else if (this.autoFlowEnabled) {
+                    this.autoFlowTimer = setTimeout(runAutoFlowStep, 2000);
+                }
+            },
+
+            clearAutoFlowTimer() {
+                if (this.autoFlowTimer) {
+                    clearTimeout(this.autoFlowTimer);
+                    this.autoFlowTimer = null;
+                }
+            },
+
+            playCardAudio(cardId, side, onEnded = null) {
                 this.stopAudio();
                 const ts = new Date().getTime(); // Bypassa o cache do navegador para ouvir o novo audio regerado
                 this.currentAudioElement = new Audio(`/api/flashcards?action=get_audio&card_id=${cardId}&side=${side}&t=${ts}`);
                 const sideLanguage = side === 'front' ? this.frontLanguage : this.backLanguage;
                 this.currentAudioElement.volume = sideLanguage === 'en-GB' ? 1 : 0.6;
+                if (typeof onEnded === 'function') {
+                    this.currentAudioEndedHandler = onEnded;
+                    this.currentAudioElement.addEventListener('ended', this.currentAudioEndedHandler, { once: true });
+                } else {
+                    this.currentAudioEndedHandler = null;
+                }
                 this.currentAudioElement.play().catch(e => console.error("Erro ao tocar áudio:", e));
             },
 
             stopAudio() {
                 if (this.currentAudioElement) {
+                    if (this.currentAudioEndedHandler) {
+                        this.currentAudioElement.removeEventListener('ended', this.currentAudioEndedHandler);
+                        this.currentAudioEndedHandler = null;
+                    }
                     this.currentAudioElement.pause();
                     this.currentAudioElement.currentTime = 0;
                     this.currentAudioElement = null;
@@ -1214,8 +1295,8 @@
                         
                         this.renderCurrentCard(); 
                         
-                        if(this.autoPlayEnabled) {
-                            this.playCardAudio(cardId, side);
+                        if(this.autoPlayEnabled || this.autoFlowEnabled) {
+                            this.handleAutoPlaybackAndFlow();
                         } else {
                             this.showToast(res.message, 'success');
                         }
