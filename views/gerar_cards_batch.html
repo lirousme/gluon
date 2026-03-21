@@ -75,8 +75,8 @@
                             Restaurar padrão
                         </button>
                     </div>
-                    <textarea id="basePromptInput" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm text-slate-100 min-h-[140px]" placeholder="O prompt padrão do deck aparecerá aqui e você pode editar antes de enviar."></textarea>
-                    <p class="mt-1 text-xs text-slate-500">Você pode ajustar instruções para fatos, perguntas, traduções ou paráfrases. O texto acima será usado como prompt base enviado para geração.</p>
+                    <textarea id="basePromptInput" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm text-slate-100 min-h-[140px]" placeholder="O prompt padrão do deck aparecerá aqui e você pode editar antes de enviar. Use $deck_name para inserir o assunto automaticamente."></textarea>
+                    <p class="mt-1 text-xs text-slate-500">Você pode ajustar instruções para fatos, perguntas, traduções ou paráfrases. Use <code>$deck_name</code> no texto para o assunto do campo acima ser inserido automaticamente no prompt enviado para geração.</p>
                 </div>
 
                 <div class="mt-4 rounded-lg border border-slate-700 bg-slate-950/40 p-3 sm:p-4 space-y-3">
