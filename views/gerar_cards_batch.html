@@ -66,7 +66,7 @@
                 </div>
                 <div class="mt-4">
                     <label for="topicInput" class="block text-xs text-slate-400 mb-1">Assunto (padrão: nome do deck)</label>
-                    <input id="topicInput" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm text-slate-100" placeholder="Digite o assunto para gerar os cards">
+                    <input id="topicInput" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm text-slate-100" placeholder="Digite o assunto uma única vez (campo usado no prompt com {{TOPIC}})">
                 </div>
                 <div class="mt-4">
                     <div class="flex items-center justify-between gap-2 mb-1">
@@ -76,7 +76,7 @@
                         </button>
                     </div>
                     <textarea id="basePromptInput" class="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm text-slate-100 min-h-[140px]" placeholder="O prompt padrão do deck aparecerá aqui e você pode editar antes de enviar."></textarea>
-                    <p class="mt-1 text-xs text-slate-500">Você pode ajustar instruções para fatos, perguntas, traduções ou paráfrases. O texto acima será usado como prompt base enviado para geração.</p>
+                    <p class="mt-1 text-xs text-slate-500">Você pode ajustar instruções para fatos, perguntas, traduções ou paráfrases. Use {{TOPIC}} (ou {{ASSUNTO}}) para inserir automaticamente o assunto digitado acima.</p>
                 </div>
 
                 <div class="mt-4 rounded-lg border border-slate-700 bg-slate-950/40 p-3 sm:p-4 space-y-3">
