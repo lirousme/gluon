@@ -260,6 +260,10 @@
             </div>
             
             <div class="flex items-center gap-2 sm:gap-4">
+                <button onclick="app.toggleReorderMode()" id="btn-reorder-desktop" class="hidden md:flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm py-1.5 px-3 rounded transition-all" title="Alterar ordem dos itens" aria-label="Alterar ordem dos itens">
+                    <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90"></i>
+                    <span class="font-medium">Alterar ordem</span>
+                </button>
                 <button onclick="app.toggleRightPanel()" id="btn-right-panel" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm py-1.5 px-3 rounded transition-all" title="Abrir menu lateral direito" aria-label="Abrir menu lateral direito">
                     <i class="fa-solid fa-sliders"></i>
                 </button>
@@ -319,7 +323,7 @@
 
                 <div class="h-px bg-slate-700/70 my-2"></div>
                 <div class="px-2 pb-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Organização</div>
-                <button onclick="app.toggleReorderMode()" id="btn-reorder-mobile" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white border border-transparent flex items-center gap-3 transition-colors">
+                <button onclick="app.toggleReorderMode()" id="btn-reorder-mobile" class="md:hidden w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white border border-transparent flex items-center gap-3 transition-colors">
                     <i class="fa-solid fa-arrow-right-arrow-left fa-rotate-90 w-5 text-center"></i><span class="font-medium">Alterar ordem</span>
                 </button>
                 <button onclick="app.toggleRelocateMode()" id="btn-relocate-mobile" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white border border-transparent flex items-center gap-3 transition-colors">
