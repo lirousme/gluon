@@ -1200,6 +1200,20 @@
                 }
             },
 
+            disableAutoFlowBecauseMissingAudio() {
+                if (!this.autoFlowEnabled) return;
+                const toggle = document.getElementById('autoFlowToggle');
+                if (toggle) toggle.checked = false;
+                this.autoFlowEnabled = false;
+                localStorage.setItem('gluon_auto_flow', 'false');
+                this.autoFlowToken++;
+                this.clearAutoFlowTimer();
+                this.stopAudio();
+                const icon = document.getElementById('autoFlowIcon');
+                if (icon) icon.classList.replace('text-emerald-400', 'text-slate-400');
+                this.showToast('Fluxo automático desligado: o card atual não possui áudio.', 'error');
+            },
+
             handleAutoPlaybackAndFlow() {
                 if (!this.cards.length) return;
 
@@ -1213,6 +1227,11 @@
                 const side = this.isFlipped ? 'back' : 'front';
                 const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
                 const hasAudio = side === 'back' ? card.has_audio_back === 1 : card.has_audio_front === 1;
+
+                if (this.autoFlowEnabled && !hasAudio) {
+                    this.disableAutoFlowBecauseMissingAudio();
+                    return;
+                }
 
                 const runAutoFlowStep = () => {
                     if (!this.autoFlowEnabled || token !== this.autoFlowToken) return;
@@ -1233,8 +1252,6 @@
                     } else {
                         this.playCardAudio(card.id, side);
                     }
-                } else if (this.autoFlowEnabled) {
-                    this.autoFlowTimer = setTimeout(runAutoFlowStep, 2000);
                 }
             },
 
