@@ -21,6 +21,7 @@
                 sidebarOpen: false,
                 directoryCache: new Map(),
                 copied_directory_id: null,
+                source_directory_id: null,
                 filterDrawerOpen: false,
                 filters: {
                     showFlashcardDueDirectories: true,
@@ -746,8 +747,26 @@
                 const response = await this.api('user', 'get_prefs');
                 if (response && response.data) {
                     this.state.copied_directory_id = response.data.copied_directory_id;
+                    this.state.source_directory_id = response.data.source_directory_id || null;
                     this.updateTopButtons();
                 }
+            },
+
+            async goToSourceDirectory() {
+                let sourceId = this.state.source_directory_id;
+
+                if (!sourceId) {
+                    const response = await this.api('user', 'get_source_directory');
+                    sourceId = response?.data?.source_directory_id || null;
+                    if (sourceId) this.state.source_directory_id = sourceId;
+                }
+
+                if (!sourceId) {
+                    this.showToast('Não foi possível localizar seu diretório obrigatório.', 'error');
+                    return;
+                }
+
+                window.location.href = this.buildViewUrl('editor', sourceId);
             },
 
             async fetchAgendaInfo() {

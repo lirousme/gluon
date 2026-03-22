@@ -11,6 +11,10 @@
         </div>
         
         <div class="flex items-center gap-3">
+            <button onclick="scheduleApp.goToSourceDirectory()" class="flex items-center gap-2 cursor-pointer group outline-none hover:bg-slate-800/50 p-1.5 rounded-xl transition-colors" title="Abrir minhas Anotações">
+                <i class="fa-solid fa-book-bookmark text-gluon-primary text-xl group-hover:scale-110 transition-transform"></i>
+                <span class="font-bold text-base tracking-wide text-slate-300 group-hover:text-white transition-colors hidden sm:block">Anotações</span>
+            </button>
             
             <div class="relative">
                 <button onclick="scheduleApp.toggleMobileViewMenu()" id="btn-mobile-menu-trigger" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors outline-none focus:ring-2 focus:ring-slate-700">
