@@ -766,7 +766,7 @@
                     return;
                 }
 
-                window.location.href = this.buildViewUrl('editor', sourceId);
+                this.openItemPreviewModal({ id: sourceId, name: 'Anotações' }, 'editor', sourceId);
             },
 
             async fetchAgendaInfo() {
