@@ -40,7 +40,7 @@
                     'fa-code', 'fa-terminal', 'fa-database', 'fa-server', 'fa-lock', 'fa-vault', 'fa-book', 'fa-briefcase', 'fa-globe', 'fa-list-check',
                     'fa-soap', 'fa-seedling', 'fa-ticket-simple', 'fa-location-dot', 'fa-thumbtack', 'fa-sack-dollar', 'fa-piggy-bank', 'fa-credit-card', 'fa-circle-dollar-to-slot',
                     'fa-carrot', 'fa-cookie-bite', 'fa-blender', 'fa-basket-shopping', 'fa-paw', 'fa-mug-hot', 'fa-utensils', 'fa-pizza-slice', 'fa-cheese', 'fa-burger',
-                    'fa-atom', 'fa-dna', 'fa-magnet', "fa-lightbulb", "fa-bolt-lightning", "fa-bolt", "fa-bolt", "fa-bolt", "fa-bolt", "fa-bolt"
+                    'fa-atom', 'fa-dna', 'fa-magnet', "fa-lightbulb", "fa-bolt-lightning", "fa-bolt", "fa-heart", "fa-camera", "fa-ghost", "fa-shirt", "fa-puzzle-piece", "fa-dice", "fa-gamepad", "fa-stethoscope", "fa-robot", "fa-ice-cream", "fa-graduation-cap", "fa-shower", "fa-rocket", "fa-hat-wizard", "fa-tags", "fa-spray-can-sparkles", "fa-hammer"
                 ]
             },
 
