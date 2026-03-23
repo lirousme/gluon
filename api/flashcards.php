@@ -1,1777 +1,1877 @@
-<!-- 
-  Arquivo: flashcards.html
-  Diretório: public_html/gluon/views/flashcards.html
-  Pilar: Bonito e Escalável.
-  Atualização: Alta resolução no Lightbox e Suporte nativo a GIFs animados.
--->
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-        <script src="/assets/zoom-lock.js" defer></script>
-    <title>Gluon - Flashcards</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer></script>
-    
-    <script>
-        tailwind.config = {
-            theme: { extend: { colors: { gluon: { dark: '#0f172a', primary: '#3b82f6', secondary: '#1e293b', accent: '#6366f1' } } } }
-        }
-    </script>
-    <style>
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
-        .scene {
-            perspective: 1000px;
-            width: 100%;
-            max-width: 600px;
-            height: 400px; 
-            margin: 0 auto;
-            flex-shrink: 0; 
-        }
+<?php
+// Arquivo: flashcards.php
+// Diretório: public_html/gluon/api/flashcards.php
 
-        .card-3d {
-            width: 100%;
-            height: 100%;
-            display: grid;
-            transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
-            transform-style: preserve-3d;
-            transform-origin: center center;
-        }
+/**
+ * MICRO-API DE FLASHCARDS
+ * Pilar: Seguro, Rápido e Escalável.
+ * Gerencia CRUD, Criptografia, Repetição Espaçada, Modos de Deck e Geração de Áudio (TTS).
+ * Atualização: Suporte para salvamento e deleção de imagens do Flashcard com criptografia.
+ */
 
-        .card-3d.is-flipped { transform: rotateY(180deg); }
+require_once __DIR__ . '/../config/database.php';
 
-        .card-face {
-            grid-area: 1 / 1 / 1 / 1;
-            width: 100%;
-            height: 100%;
-            backface-visibility: hidden;
-            -webkit-backface-visibility: hidden;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-            border-radius: 1rem;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
-            text-align: center;
-            overflow: hidden;
-        }
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
-        .card-front {
-            background: linear-gradient(145deg, #1e293b, #0f172a);
-            border: 1px solid #334155;
-            color: #f8fafc;
-            transform: rotateY(0deg); 
-            -webkit-transform: rotateY(0deg);
-            z-index: 2; 
-        }
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(401);
+    die(json_encode(['status' => 'error', 'message' => 'Não autorizado. Faça login.']));
+}
 
-        .card-back {
-            background: linear-gradient(145deg, #3b82f6, #1d4ed8);
-            border: 1px solid #60a5fa;
-            color: #ffffff;
-            transform: rotateY(180deg);
-            -webkit-transform: rotateY(180deg);
-            z-index: 1;
-        }
+$pdo = Database::getConnection();
+$user_id = $_SESSION['user_id'];
+$input = json_decode(file_get_contents('php://input'), true);
+$action = $input['action'] ?? ($_GET['action'] ?? '');
 
-        .card-text {
-            flex-grow: 1;
-            display: flex;
-            align-items: center;
-            font-size: 1.5rem;
-            line-height: 1.4;
-            white-space: pre-wrap;
-            word-break: break-word;
-            overflow-y: auto;
-            width: 100%;
-            justify-content: center;
-            padding: 1rem 0;
-        }
-        
-        .score-dots {
-            display: flex;
-            gap: 4px;
-            margin-top: auto;
-            padding-top: 1rem;
-        }
+// =========================================================================
+// FAIL-SAFE MIGRATION: Garante que as colunas de imagens existam sem stress
+// =========================================================================
+try {
+    $pdo->exec("ALTER TABLE flashcards ADD COLUMN image_front_encrypted LONGTEXT DEFAULT NULL AFTER back_encrypted");
+} catch (PDOException $e) {}
 
-        .score-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background-color: #334155; 
-            transition: all 0.3s ease;
-        }
+// Garante compatibilidade com cards "apenas verso": frente precisa aceitar NULL
+try {
+    $pdo->exec("ALTER TABLE flashcards MODIFY COLUMN front_encrypted TEXT DEFAULT NULL");
+} catch (PDOException $e) {}
 
-        .card-back .score-dot { background-color: #2563eb; }
-        
-        .score-dot.filled { background-color: #22c55e !important; box-shadow: 0 0 5px rgba(34, 197, 94, 0.5); }
-        .card-back .score-dot.filled { background-color: #10b981 !important; box-shadow: 0 0 5px rgba(16, 185, 129, 0.5); }
+try {
+    $pdo->exec("ALTER TABLE flashcards ADD COLUMN image_back_encrypted LONGTEXT DEFAULT NULL AFTER image_front_encrypted");
+} catch (PDOException $e) {}
 
-        .score-dot.half-filled { background: linear-gradient(to right, #22c55e 50%, #334155 50%) !important; box-shadow: 0 0 3px rgba(34, 197, 94, 0.3); }
-        .card-back .score-dot.half-filled { background: linear-gradient(to right, #10b981 50%, #2563eb 50%) !important; box-shadow: 0 0 3px rgba(16, 185, 129, 0.3); }
+try {
+    $pdo->exec("ALTER TABLE flashcards ADD COLUMN audio_front_encrypted LONGTEXT DEFAULT NULL AFTER image_back_encrypted");
+} catch (PDOException $e) {}
 
-        @media (max-width: 640px) {
-            .scene { height: 350px; }
-            .card-text { font-size: 1.25rem; }
-            .score-dot { width: 8px; height: 8px; }
-        }
-    </style>
-</head>
-<body class="bg-gluon-dark text-slate-200 h-[100dvh] flex flex-col font-sans overflow-hidden selection:bg-gluon-primary selection:text-white pb-[env(safe-area-inset-bottom)]">
-    
-    <!-- Navbar -->
-    <nav class="bg-gluon-secondary border-b border-slate-700/50 shrink-0 z-40 h-16 flex items-center justify-between px-4 sm:px-6 relative">
-        <div class="flex items-center gap-4">
-            <button onclick="goBackToMarkedRoute()" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg border border-slate-700 shadow-sm" title="Voltar">
-                <i class="fa-solid fa-arrow-left"></i>
-            </button>
-            <div class="h-6 w-px bg-slate-700 hidden sm:block"></div>
-            <div class="flex items-center gap-3">
-                
-                <div id="deckMasteryBadge" class="hidden items-center gap-1.5 bg-slate-800/80 border border-slate-600 px-2 py-1 rounded-md text-xs font-semibold shadow-inner">
-                </div>
-            </div>
-        </div>
-        
-        <div class="flex items-center gap-2 sm:gap-3">
-            <button onclick="flashcardApp.openSettingsModal()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 font-medium py-2 px-3 rounded-lg shadow transition-all flex items-center justify-center text-sm" title="Configurações do Deck">
-                <i class="fa-solid fa-gear"></i>
-            </button>
-            <button onclick="flashcardApp.openSingleModal()" class="text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 font-medium py-2 px-3 sm:px-4 rounded-lg shadow transition-all flex items-center gap-2 text-sm" title="Adicionar Card Unitário">
-                <i class="fa-solid fa-plus text-gluon-primary"></i> <span class="hidden sm:inline">Add</span>
-            </button>
-            <button onclick="flashcardApp.openBulkModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 px-3 sm:px-4 rounded-lg shadow-lg transition-all flex items-center gap-2 text-sm" title="Importar do Excel">
-                <i class="fa-solid fa-table"></i> <span class="hidden sm:inline">Importar Tabela</span>
-            </button>
-            <button onclick="flashcardApp.toggleRightPanel()" id="btnRightPanel" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm py-2 px-3 rounded-lg transition-all" title="Abrir menu lateral direito" aria-label="Abrir menu lateral direito">
-                <i class="fa-solid fa-sliders"></i>
-            </button>
-        </div>
-        
-        <!-- Barra de Progresso no fundo da Navbar -->
-        <div class="absolute bottom-0 left-0 h-0.5 bg-slate-700 w-full">
-            <div id="deckProgressBar" class="h-full bg-emerald-500 transition-all duration-700 ease-out" style="width: 0%;"></div>
-        </div>
-    </nav>
+try {
+    $pdo->exec("ALTER TABLE flashcards ADD COLUMN audio_back_encrypted LONGTEXT DEFAULT NULL AFTER audio_front_encrypted");
+} catch (PDOException $e) {}
 
-    <div id="rightPanelBackdrop" onclick="flashcardApp.closeRightPanel()" class="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-40 hidden"></div>
-    <aside id="rightPanel" class="fixed top-16 right-0 h-[calc(100dvh-4rem)] w-72 max-w-[85vw] bg-gluon-secondary border-l border-slate-700/70 shadow-2xl z-50 transform translate-x-full transition-transform duration-200">
-        <div class="p-4 space-y-4">
-            <div class="flex items-center justify-between">
-                <h2 class="text-sm font-semibold text-slate-200">Menu Rápido</h2>
-                <button onclick="flashcardApp.closeRightPanel()" class="text-slate-400 hover:text-white" title="Fechar menu" aria-label="Fechar menu lateral direito">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
+try {
+    $pdo->exec("ALTER TABLE directories ADD COLUMN deck_front_language VARCHAR(10) NOT NULL DEFAULT 'pt-BR' AFTER deck_mode");
+} catch (PDOException $e) {}
 
-            <button onclick="flashcardApp.openSettingsFromPanel()" class="w-full text-left text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm">
-                <i class="fa-solid fa-gear text-slate-400"></i>
-                <span>Configurações do Deck</span>
-            </button>
+try {
+    $pdo->exec("ALTER TABLE directories ADD COLUMN deck_back_language VARCHAR(10) NOT NULL DEFAULT 'en-GB' AFTER deck_front_language");
+} catch (PDOException $e) {}
 
-            <button onclick="flashcardApp.openSingleFromPanel()" class="w-full text-left text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm">
-                <i class="fa-solid fa-plus text-gluon-primary"></i>
-                <span>Adicionar Card</span>
-            </button>
+try {
+    $pdo->exec("ALTER TABLE directories ADD COLUMN deck_structure VARCHAR(20) NOT NULL DEFAULT 'fatos' AFTER deck_back_language");
+} catch (PDOException $e) {}
 
-            <button onclick="flashcardApp.openBulkFromPanel()" class="w-full text-left bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 px-3 rounded-lg shadow-lg transition-all flex items-center gap-2 text-sm">
-                <i class="fa-solid fa-table"></i>
-                <span>Importar Tabela</span>
-            </button>
-        </div>
-    </aside>
+try {
+    $pdo->exec("ALTER TABLE directories ADD COLUMN deck_generation_base_prompt TEXT DEFAULT NULL AFTER deck_structure");
+} catch (PDOException $e) {}
 
-    <!-- Main Content -->
-    <main class="flex-1 w-full flex flex-col items-center justify-center p-4 relative">
-        
-        <!-- Painel Central Superior (Contador + Auto Play Toggle + Export) -->
-        <span id="deckName" class="absolute top-1 left-4 right-4 text-center text-[14px] sm:text-xs font-normal text-slate-400 tracking-wide truncate z-10">Carregando...</span>
+try {
+    $pdo->exec("ALTER TABLE flashcard_book_progress ADD COLUMN completed_reads TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER current_index");
+} catch (PDOException $e) {}
 
-        <div class="absolute top-8 left-0 right-0 flex justify-center items-center gap-4 z-10" id="topControlPanel" style="display: none;">
-            <span id="cardCounter" class="bg-slate-800 text-slate-400 font-medium px-4 py-1.5 rounded-full text-sm border border-slate-700 shadow-sm">
-                0 / 0
-            </span>
-            
-            <label class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700" title="Reproduzir áudio automaticamente">
-                <i class="fa-solid fa-volume-high text-slate-400 text-xs" id="autoPlayIcon"></i>
-                <div class="relative inline-block w-8 h-4 rounded-full bg-slate-600">
-                    <input type="checkbox" id="autoPlayToggle" class="peer hidden" onchange="flashcardApp.toggleAutoPlay()">
-                    <span class="absolute left-1 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4 peer-checked:bg-gluon-primary"></span>
-                </div>
-            </label>
-            <label class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700" title="Virar verso e avançar automaticamente">
-                <i class="fa-solid fa-forward-step text-slate-400 text-xs" id="autoFlowIcon"></i>
-                <div class="relative inline-block w-8 h-4 rounded-full bg-slate-600">
-                    <input type="checkbox" id="autoFlowToggle" class="peer hidden" onchange="flashcardApp.toggleAutoFlow()">
-                    <span class="absolute left-1 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4 peer-checked:bg-emerald-400"></span>
-                </div>
-            </label>
+try {
+    $pdo->exec("ALTER TABLE flashcard_book_progress ADD COLUMN next_review_at DATETIME DEFAULT NULL AFTER completed_reads");
+} catch (PDOException $e) {}
 
-            <button id="btnResetBookScore" onclick="flashcardApp.openResetBookScoreModal()" class="hidden flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700 text-amber-400 hover:text-amber-300" title="Zerar pontuação do deck">
-                <i class="fa-solid fa-rotate-left text-sm"></i>
-            </button>
-            
-            <button id="btnGoToGenerateCards" onclick="flashcardApp.goToGenerateCardsView()" class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700 text-emerald-500 hover:text-emerald-400" title="Ir para gerar cards">
-                <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
-            </button>
-            <button id="btnGoToGenerateCardsBatch" onclick="flashcardApp.goToGenerateCardsBatchView()" class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700 text-orange-500 hover:text-orange-400" title="Ir para gerar cards (batch)">
-                <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
-            </button>
-        </div>
-
-        <!-- Cena 3D e Card -->
-        <div class="scene" id="cardScene" style="display: none;">
-            <div class="card-3d cursor-pointer" id="flashcard" onclick="flashcardApp.flipCard(event)">
-                
-                <!-- Frente -->
-                <div class="card-face card-front relative">
-                    <span id="frontLabel" class="absolute top-4 left-4 text-xs font-bold text-slate-500 tracking-wider uppercase">Frente</span>
-                    
-                    <div class="absolute top-4 right-4 z-30 flex items-center gap-3">
-                        <button onclick="event.stopPropagation(); flashcardApp.editCurrentCard()" class="text-slate-400 hover:text-white transition-colors" title="Editar"><i class="fa-solid fa-pen"></i></button>
-                        <button onclick="event.stopPropagation(); flashcardApp.deleteCurrentCard()" class="text-slate-500 hover:text-red-400 transition-colors" title="Excluir"><i class="fa-solid fa-trash"></i></button>
-                        <div class="w-px h-4 bg-slate-700 mx-1 hidden sm:block"></div>
-                        <i id="flipIconFront" class="fa-solid fa-rotate text-slate-600 opacity-50 hidden sm:block"></i>
-                    </div>
-                    
-                    <div class="absolute bottom-4 left-4 z-20" id="audioControlsFront"></div>
-                    <div class="card-text no-scrollbar" id="cardFrontText"></div>
-                    <div class="score-dots" id="frontScoreDots"></div>
-                </div>
-
-                <!-- Verso -->
-                <div class="card-face card-back relative">
-                    <span class="absolute top-4 left-4 text-xs font-bold text-blue-200 tracking-wider uppercase">Verso</span>
-                    
-                    <div class="absolute top-4 right-4 z-30 flex items-center gap-3">
-                        <button onclick="event.stopPropagation(); flashcardApp.editCurrentCard()" class="text-blue-300 hover:text-white transition-colors" title="Editar"><i class="fa-solid fa-pen"></i></button>
-                        <button onclick="event.stopPropagation(); flashcardApp.deleteCurrentCard()" class="text-blue-400 hover:text-red-300 transition-colors" title="Excluir"><i class="fa-solid fa-trash"></i></button>
-                        <div class="w-px h-4 bg-blue-500/50 mx-1 hidden sm:block"></div>
-                        <i id="flipIconBack" class="fa-solid fa-rotate text-blue-300 opacity-50 hidden sm:block"></i>
-                    </div>
-                    
-                    <div class="absolute bottom-4 left-4 z-20" id="audioControlsBack"></div>
-                    <div class="card-text no-scrollbar drop-shadow-md" id="cardBackText"></div>
-                    <div class="score-dots" id="backScoreDots"></div>
-                </div>
-
-            </div>
-        </div>
-
-        <!-- Tela Vazia -->
-        <div id="emptyState" class="flex flex-col items-center justify-center text-center max-w-sm mt-10" style="display: none;">
-            <i id="emptyStateIcon" class="fa-solid fa-clone text-6xl text-slate-600 mb-4 opacity-50"></i>
-            <h2 id="emptyStateTitle" class="text-xl font-bold text-slate-300 mb-2">Este deck está vazio</h2>
-            <p id="emptyStateDesc" class="text-slate-500 text-sm mb-6">Adicione seu primeiro card manualmente ou importe do Excel.</p>
-        </div>
-
-        <!-- Carregamento -->
-        <div id="loader" class="flex flex-col items-center justify-center">
-            <i class="fa-solid fa-circle-notch fa-spin text-4xl text-gluon-primary mb-3"></i>
-            <span class="text-slate-400" id="loadingText">Descriptografando dados...</span>
-        </div>
-
-        <!-- Controles Inferiores -->
-        <div class="absolute bottom-10 left-0 right-0 flex justify-center items-center gap-6 px-4 z-10" id="controls" style="display: none;">
-            <button onclick="flashcardApp.prevCard()" id="btnPrev" class="w-14 h-14 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center text-xl shadow-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed">
-                <i class="fa-solid fa-arrow-left"></i>
-            </button>
-            <span class="text-xs text-slate-500 font-medium hidden sm:block">Use setas Direita/Esquerda ou Espaço</span>
-            <button onclick="flashcardApp.nextCard()" id="btnNext" class="w-14 h-14 rounded-full bg-gluon-primary hover:bg-blue-600 text-white flex items-center justify-center text-xl shadow-lg shadow-blue-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
-                <i class="fa-solid fa-arrow-right"></i>
-            </button>
-        </div>
-    </main>
-
-    <!-- Modal: Configurações do Deck -->
-    <div id="settingsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
-        <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-0 transform scale-95 transition-transform duration-300 overflow-hidden" id="settingsModalContent">
-            <div class="p-5 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
-                <h3 class="text-lg font-semibold text-white flex items-center gap-2">
-                    <i class="fa-solid fa-gear text-slate-400"></i> Configurações do Deck
-                </h3>
-                <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <form onsubmit="flashcardApp.saveSettings(event)" class="p-6 space-y-6">
-                <div class="flex items-center gap-2 border-b border-slate-700 pb-4">
-                    <button type="button" data-settings-tab="general" onclick="flashcardApp.switchSettingsTab('general')" class="settings-tab-btn px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-700 text-white">Geral</button>
-                    <button type="button" data-settings-tab="structure" onclick="flashcardApp.switchSettingsTab('structure')" class="settings-tab-btn px-3 py-1.5 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800">Estrutura</button>
-                </div>
-
-                <div id="settingsTabGeneral" class="space-y-6">
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-3">Modo de Estudo / Comportamento</label>
-                    <div class="space-y-3">
-                        <label class="flex items-start gap-3 cursor-pointer p-3 border border-slate-600 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors">
-                            <input type="radio" name="deckMode" value="aleatorio" class="mt-1 text-gluon-primary bg-slate-900 border-slate-600 focus:ring-gluon-primary">
-                            <div>
-                                <div class="font-medium text-white mb-0.5"><i class="fa-solid fa-shuffle text-gluon-primary mr-1"></i> Aleatório (Repetição Espaçada)</div>
-                                <div class="text-xs text-slate-400">Exibe cartas vencidas aleatoriamente. Pontua ao virar a carta. Ideal para estudo ativo e memorização de longo prazo.</div>
-                            </div>
-                        </label>
-
-                        <label class="flex items-start gap-3 cursor-pointer p-3 border border-slate-600 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors">
-                            <input type="radio" name="deckMode" value="livro" class="mt-1 text-emerald-500 bg-slate-900 border-slate-600 focus:ring-emerald-500">
-                            <div>
-                                <div class="font-medium text-white mb-0.5"><i class="fa-solid fa-book-open text-emerald-500 mr-1"></i> Livro (Sequencial)</div>
-                                <div class="text-xs text-slate-400">Exibe cartas na ordem exata de criação. Salva a página onde você parou. Sem repetição espaçada.</div>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label for="deckFrontLanguage" class="block text-sm font-medium text-slate-300 mb-2">Idioma da Frente</label>
-                        <select id="deckFrontLanguage" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-gluon-primary">
-                            <option value="pt-BR">Português Brasileiro</option>
-                            <option value="en-US">Inglês Americano</option>
-                            <option value="en-GB">Inglês Britânico</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="deckBackLanguage" class="block text-sm font-medium text-slate-300 mb-2">Idioma do Verso</label>
-                        <select id="deckBackLanguage" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-gluon-primary">
-                            <option value="pt-BR">Português Brasileiro</option>
-                            <option value="en-US">Inglês Americano</option>
-                            <option value="en-GB">Inglês Britânico</option>
-                        </select>
-                    </div>
-                </div>
-                </div>
-
-                <div id="settingsTabStructure" class="space-y-4 hidden">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-300 mb-3">Estrutura</label>
-                        <div class="space-y-3">
-                            <label class="flex items-start gap-3 cursor-pointer p-3 border border-slate-600 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors">
-                                <input type="radio" name="deckStructure" value="fatos" class="mt-1 text-gluon-primary bg-slate-900 border-slate-600 focus:ring-gluon-primary">
-                                <div>
-                                    <div class="font-medium text-white mb-0.5">Fatos</div>
-                                    <div class="text-xs text-slate-400">Gera cards com afirmações curtas e progressivas sobre o tema do deck.</div>
-                                </div>
-                            </label>
-
-                            <label class="flex items-start gap-3 cursor-pointer p-3 border border-slate-600 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors">
-                                <input type="radio" name="deckStructure" value="perguntas" class="mt-1 text-gluon-primary bg-slate-900 border-slate-600 focus:ring-gluon-primary">
-                                <div>
-                                    <div class="font-medium text-white mb-0.5">Perguntas</div>
-                                    <div class="text-xs text-slate-400">Gera cards em formato pergunta e resposta para revisão ativa.</div>
-                                </div>
-                            </label>
-
-                            <label class="flex items-start gap-3 cursor-pointer p-3 border border-slate-600 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors">
-                                <input type="radio" name="deckStructure" value="traducoes" class="mt-1 text-gluon-primary bg-slate-900 border-slate-600 focus:ring-gluon-primary">
-                                <div>
-                                    <div class="font-medium text-white mb-0.5">Traduções</div>
-                                    <div class="text-xs text-slate-400">Gera cards com frases em português e inglês para prática contextual.</div>
-                                </div>
-                            </label>
+try {
+    $pdo->exec("ALTER TABLE users ADD COLUMN tts_provider VARCHAR(20) NOT NULL DEFAULT 'fishaudio' AFTER home_directory_id");
+} catch (PDOException $e) {}
 
 
-                            <label class="flex items-start gap-3 cursor-pointer p-3 border border-slate-600 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors">
-                                <input type="radio" name="deckStructure" value="parafrases" class="mt-1 text-gluon-primary bg-slate-900 border-slate-600 focus:ring-gluon-primary">
-                                <div>
-                                    <div class="font-medium text-white mb-0.5">Paráfrases</div>
-                                    <div class="text-xs text-slate-400">Gera 15 paráfrases do nome do deck sem considerar o histórico de cards existentes.</div>
-                                </div>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="flex justify-end pt-4 border-t border-slate-700 gap-3">
-                    <button type="button" onclick="flashcardApp.closeModals()" class="px-5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
-                    <button type="submit" id="btnSaveSettings" class="px-5 py-2.5 bg-gluon-primary hover:bg-blue-600 text-white rounded-lg shadow-lg font-medium transition-all flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-check"></i> Salvar
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS pronuncias (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        language VARCHAR(10) NOT NULL,
+        source_text VARCHAR(255) NOT NULL,
+        target_text VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_language_source (language, source_text),
+        INDEX idx_language (language)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
+// =========================================================================
 
-    <!-- Modal: Adicionar/Editar Card Unitário -->
-    <div id="singleModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
-        <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg p-0 transform scale-95 transition-transform duration-300 flex flex-col max-h-[95vh]" id="singleModalContent">
-            <div class="p-5 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center shrink-0">
-                <h3 class="text-lg font-semibold text-white flex items-center gap-2">
-                    <i class="fa-solid fa-plus text-gluon-primary"></i> <span id="modalTitleText">Adicionar Flashcard</span>
-                </h3>
-                <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            
-            <form onsubmit="flashcardApp.saveSingleCard(event)" class="p-6 overflow-y-auto flex-1 space-y-5">
-                <input type="hidden" id="editCardId" value="">
 
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-2">Frente (Obrigatório texto ou imagem)</label>
-                    <textarea id="singleFront" rows="2" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors resize-none"></textarea>
-                    
-                    <div class="mt-3 bg-slate-800/50 p-3 rounded-lg border border-slate-700">
-                        <label class="block text-xs font-medium text-slate-400 mb-2"><i class="fa-regular fa-image"></i> Imagem da Frente (Opcional, Máx: 4MB)</label>
-                        <input type="file" id="frontImageFile" accept="image/*" onchange="flashcardApp.handleCardImageUpload(event, 'front')" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer bg-slate-900 border border-slate-600 rounded">
-                        <input type="hidden" id="frontImageBase64">
-                        <div id="frontImagePreview" class="mt-2 hidden w-full h-32 rounded bg-contain bg-center bg-no-repeat border border-slate-600"></div>
-                        <button type="button" id="btnRemoveFrontImage" onclick="flashcardApp.removeCardImage('front')" class="hidden mt-2 text-xs text-red-400 hover:text-red-300 flex items-center gap-1"><i class="fa-solid fa-trash"></i> Remover Imagem</button>
-                    </div>
-                </div>
-                
-                <div class="pt-3 border-t border-slate-700">
-                    <label class="block text-sm font-medium text-blue-300 mb-2">Verso (Opcional)</label>
-                    <textarea id="singleBack" rows="2" class="w-full bg-slate-900 border border-blue-500/50 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors resize-none"></textarea>
-                    
-                    <div class="mt-3 bg-blue-900/10 p-3 rounded-lg border border-blue-900/50">
-                        <label class="block text-xs font-medium text-blue-400 mb-2"><i class="fa-regular fa-image"></i> Imagem do Verso (Opcional, Máx: 4MB)</label>
-                        <input type="file" id="backImageFile" accept="image/*" onchange="flashcardApp.handleCardImageUpload(event, 'back')" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-900 file:text-blue-200 hover:file:bg-blue-800 cursor-pointer bg-slate-900 border border-blue-900/50 rounded">
-                        <input type="hidden" id="backImageBase64">
-                        <div id="backImagePreview" class="mt-2 hidden w-full h-32 rounded bg-contain bg-center bg-no-repeat border border-blue-500/50"></div>
-                        <button type="button" id="btnRemoveBackImage" onclick="flashcardApp.removeCardImage('back')" class="hidden mt-2 text-xs text-red-400 hover:text-red-300 flex items-center gap-1"><i class="fa-solid fa-trash"></i> Remover Imagem</button>
-                    </div>
-                </div>
-                
-                <div class="flex flex-col sm:flex-row justify-between items-center pt-2 border-t border-slate-700 mt-6 gap-3 shrink-0">
-                    <button type="button" id="btnTranslate" onclick="flashcardApp.translateCard()" class="w-full sm:w-auto px-4 py-2.5 rounded-lg text-fuchsia-400 hover:bg-fuchsia-400/10 hover:text-fuchsia-300 transition-colors font-medium flex items-center justify-center gap-2 text-sm border border-fuchsia-400/20">
-                        <i class="fa-solid fa-language"></i> Traduzir via IA
-                    </button>
-                    
-                    <div class="flex gap-3 w-full sm:w-auto">
-                        <button type="button" onclick="flashcardApp.closeModals()" class="flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
-                        <button type="submit" id="btnSaveSingle" class="flex-1 sm:flex-none px-5 py-2.5 bg-gluon-primary hover:bg-blue-600 text-white rounded-lg shadow-lg font-medium transition-all flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-check"></i> Salvar
-                        </button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS flashcard_batch_jobs (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        user_id INT UNSIGNED NOT NULL,
+        directory_id INT UNSIGNED NOT NULL,
+        topic VARCHAR(200) DEFAULT NULL,
+        deck_structure VARCHAR(20) NOT NULL DEFAULT 'fatos',
+        openai_input_file_id VARCHAR(80) DEFAULT NULL,
+        openai_batch_id VARCHAR(80) DEFAULT NULL,
+        openai_output_file_id VARCHAR(80) DEFAULT NULL,
+        openai_error_file_id VARCHAR(80) DEFAULT NULL,
+        status VARCHAR(30) NOT NULL DEFAULT 'submitted',
+        error_message TEXT DEFAULT NULL,
+        result_cards_json LONGTEXT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        completed_at DATETIME DEFAULT NULL,
+        INDEX idx_user_deck (user_id, directory_id),
+        INDEX idx_openai_batch (openai_batch_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (directory_id) REFERENCES directories(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
 
-    <!-- Modal: Importar em Massa com Tabela Interativa -->
-    <div id="bulkModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4 py-6">
-        <div class="bg-gluon-secondary border border-emerald-900/50 rounded-xl shadow-2xl w-full max-w-4xl p-0 transform scale-95 transition-transform duration-300 overflow-hidden flex flex-col max-h-full" id="bulkModalContent">
-            <div class="p-5 border-b border-emerald-900/50 bg-emerald-900/20 flex justify-between items-center shrink-0">
-                <h3 class="text-lg font-semibold text-emerald-400 flex items-center gap-2">
-                    <i class="fa-solid fa-table"></i> Importar Lista
-                </h3>
-                <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            
-            <form onsubmit="flashcardApp.saveBulkCards(event)" class="p-5 flex flex-col flex-1 overflow-hidden min-h-0">
-                
-                <div class="mb-4 bg-slate-900/50 p-3 rounded-lg border border-slate-700 text-sm text-slate-300 shrink-0">
-                    <p class="font-medium text-white mb-1"><i class="fa-solid fa-circle-info text-gluon-primary mr-1"></i> Como usar:</p>
-                    <p>Dê um <strong>CTRL+C</strong> nas colunas do Excel/Planilha (Pergunta e Resposta) e dê <strong>CTRL+V</strong> na caixa abaixo. A tabela será gerada instantaneamente.</p>
-                </div>
-                
-                <div class="flex-1 flex flex-col relative gap-4 min-h-0">
-                    <!-- Área de Transferência Dinâmica -->
-                    <textarea id="bulkData" required placeholder="Cole os dados aqui (CTRL+V)..." class="shrink-0 w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-emerald-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors resize-none font-mono text-sm h-16 sm:h-20" onfocus="this.select()"></textarea>
-                    
-                    <!-- Container da Tabela Dinâmica -->
-                    <div id="bulkTableContainer" class="hidden flex-1 overflow-y-auto bg-slate-900/50 border border-slate-700 rounded-lg relative no-scrollbar">
-                        <table class="w-full text-left text-sm text-slate-300 border-collapse">
-                            <thead class="bg-slate-800 text-slate-400 sticky top-0 shadow-md z-10">
-                                <tr>
-                                    <th class="px-4 py-3 font-medium w-12 text-center border-b border-slate-700">#</th>
-                                    <th class="px-4 py-3 font-medium w-1/2 border-b border-l border-slate-700">Frente (Pergunta)</th>
-                                    <th class="px-4 py-3 font-medium w-1/2 border-b border-l border-slate-700">Verso (Resposta)</th>
-                                </tr>
-                            </thead>
-                            <tbody id="bulkTableBody" class="divide-y divide-slate-700/50">
-                                <!-- As linhas serão preenchidas via JS -->
-                            </tbody>
-                        </table>
-                    </div>
+// Função auxiliar para verificar se o usuário é dono do deck (Segurança IDOR)
+function verifyDeckOwnership($pdo, $deck_id, $user_id) {
+    $stmt = $pdo->prepare("SELECT id, name_encrypted, deck_mode, deck_front_language, deck_back_language, deck_structure, deck_generation_base_prompt FROM directories WHERE id = ? AND user_id = ? AND type = 4");
+    $stmt->execute([$deck_id, $user_id]);
+    return $stmt->fetch();
+}
 
-                    <!-- Estado Vazio da Tabela -->
-                    <div id="bulkEmptyState" class="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-700 rounded-lg bg-slate-900/20 text-slate-500 min-h-[150px]">
-                        <i class="fa-solid fa-table-cells-large text-5xl mb-4 opacity-30"></i>
-                        <p class="font-medium">Nenhum dado na área de transferência</p>
-                        <p class="text-xs mt-1 opacity-70">Cole o texto na caixa acima para visualizar a estrutura da tabela.</p>
-                    </div>
-                </div>
+function verifyDirectoryOwnership($pdo, $directory_id, $user_id) {
+    $stmt = $pdo->prepare("SELECT id, type FROM directories WHERE id = ? AND user_id = ?");
+    $stmt->execute([$directory_id, $user_id]);
+    return $stmt->fetch();
+}
 
-                <div class="flex justify-between items-center pt-5 border-t border-slate-700 mt-5 shrink-0">
-                    <span id="bulkCount" class="text-sm text-emerald-400 font-medium bg-emerald-900/20 px-3 py-1.5 rounded-md border border-emerald-900/50 shadow-inner">0 cards</span>
-                    <div class="flex gap-3">
-                        <button type="button" onclick="flashcardApp.closeModals()" class="px-4 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
-                        <button type="submit" id="btnSaveBulk" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow-lg font-medium transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                            <i class="fa-solid fa-cloud-arrow-up"></i> <span class="hidden sm:inline">Importar para o Deck</span><span class="sm:hidden">Importar</span>
-                        </button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
+function collectDecksFromDirectoryTree($pdo, $root_directory_id, $user_id) {
+    $decks = [];
+    $visited = [];
 
-    <!-- Modal: Visualizador de Imagem (Lightbox) -->
-    <div id="imageModal" class="fixed inset-0 bg-black/95 backdrop-blur-md hidden items-center justify-center z-[60] opacity-0 transition-opacity duration-300 p-2 sm:p-6" onclick="flashcardApp.closeImageModal()">
-        <button type="button" class="absolute top-4 right-4 sm:top-6 sm:right-6 text-slate-300 hover:text-white text-3xl z-[70] transition-colors bg-black/50 hover:bg-black/80 w-12 h-12 rounded-full flex items-center justify-center" title="Fechar (ESC)">
-            <i class="fa-solid fa-xmark"></i>
-        </button>
-        <img id="imageModalSrc" src="" class="w-auto h-auto max-w-[95vw] max-h-[95vh] sm:max-w-full sm:max-h-full object-contain rounded-lg shadow-2xl transform scale-95 transition-transform duration-300" onclick="event.stopPropagation()">
-    </div>
+    $stmtRoot = $pdo->prepare("SELECT id, type, deck_front_language, deck_back_language, deck_structure FROM directories WHERE id = ? AND user_id = ?");
+    $stmtRoot->execute([$root_directory_id, $user_id]);
+    $root = $stmtRoot->fetch();
+    if (!$root) {
+        return $decks;
+    }
 
-    <!-- Modal: Zerar Pontuação do Livro -->
-    <div id="resetBookScoreModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
-        <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-0 transform scale-95 transition-transform duration-300 overflow-hidden" id="resetBookScoreModalContent">
-            <div class="p-5 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
-                <h3 class="text-lg font-semibold text-white flex items-center gap-2">
-                    <i class="fa-solid fa-rotate-left text-amber-400"></i> Zerar pontuação
-                </h3>
-                <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div class="p-6 space-y-5">
-                <p id="resetScoreDescription" class="text-slate-300 text-sm leading-relaxed">Deseja realmente zerar sua pontuação neste deck?</p>
-                <div class="flex justify-end gap-3">
-                    <button type="button" onclick="flashcardApp.closeModals()" class="px-5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
-                    <button type="button" id="btnConfirmResetBookScore" onclick="flashcardApp.resetBookScore()" class="px-5 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold transition-colors">Zerar</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    $queue = [(int)$root['id']];
+    if ((int)$root['type'] === 4) {
+        $decks[] = $root;
+    }
 
-    <script>
-        function getMarkedBackRoute() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const from = urlParams.get('from');
-            return from ? decodeURIComponent(from) : '/dashboard';
-        }
-
-        function goBackToMarkedRoute() {
-            if (window.history.length > 1) {
-                window.history.back();
-                return;
+    while (!empty($queue)) {
+        $pending = [];
+        foreach ($queue as $directory_id) {
+            if (!isset($visited[$directory_id])) {
+                $visited[$directory_id] = true;
+                $pending[] = $directory_id;
             }
-            window.location.href = getMarkedBackRoute();
         }
 
-        const flashcardApp = {
-            deckId: null,
-            deckMode: 'aleatorio',
-            frontLanguage: 'pt-BR',
-            backLanguage: 'en-GB',
-            deckStructure: 'fatos',
-            deckPercentage: 0,
-            totalCardsInDeck: 0,
-            bookCompletedReads: 0,
-            bookCompletedReadsMax: 3,
-            bookNextReviewAt: null,
-            cards: [],
-            currentIndex: 0,
-            isFlipped: false,
-            scoredThisSession: new Set(),
-            isRightPanelOpen: false,
-            
-            autoPlayEnabled: false,
-            autoFlowEnabled: false,
-            currentAudioElement: null,
-            currentAudioEndedHandler: null,
-            autoFlowTimer: null,
-            autoFlowToken: 0,
+        if (empty($pending)) {
+            break;
+        }
 
-            async init() {
-                const urlParams = new URLSearchParams(window.location.search);
-                this.deckId = urlParams.get('id');
+        $placeholders = implode(',', array_fill(0, count($pending), '?'));
+        $params = array_merge([$user_id], $pending);
+        $stmtChildren = $pdo->prepare("SELECT id, type, deck_front_language, deck_back_language, deck_structure FROM directories WHERE user_id = ? AND parent_id IN ($placeholders)");
+        $stmtChildren->execute($params);
+        $children = $stmtChildren->fetchAll();
 
-                if (!this.deckId) {
-                    window.location.href = getMarkedBackRoute();
-                    return;
-                }
-                
-                const savedAutoPlay = localStorage.getItem('gluon_audio_autoplay');
-                if(savedAutoPlay === 'true') {
-                    this.autoPlayEnabled = true;
-                    document.getElementById('autoPlayToggle').checked = true;
-                    document.getElementById('autoPlayIcon').classList.replace('text-slate-400', 'text-gluon-primary');
-                }
-                const savedAutoFlow = localStorage.getItem('gluon_auto_flow');
-                if(savedAutoFlow === 'true') {
-                    this.autoFlowEnabled = true;
-                    document.getElementById('autoFlowToggle').checked = true;
-                    document.getElementById('autoFlowIcon').classList.replace('text-slate-400', 'text-emerald-400');
-                }
+        $queue = [];
+        foreach ($children as $child) {
+            $child_id = (int)$child['id'];
+            $queue[] = $child_id;
+            if ((int)$child['type'] === 4) {
+                $decks[] = $child;
+            }
+        }
+    }
 
-                this.setupKeyboardListeners();
-                this.setupBulkListener();
-                await this.loadDeck();
-            },
+    return $decks;
+}
 
-            showToast(message, type = 'success') {
-                let toast = document.getElementById('gluon-toast');
-                if (!toast) {
-                    toast = document.createElement('div');
-                    toast.id = 'gluon-toast';
-                    document.body.appendChild(toast);
-                }
-                const icon = type === 'success' ? '<i class="fa-solid fa-circle-check"></i>' : '<i class="fa-solid fa-circle-exclamation"></i>';
-                const bgClass = type === 'success' ? 'bg-green-600' : 'bg-red-600';
-                toast.className = `fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-xl text-white text-sm font-medium flex items-center gap-3 z-50 transition-all duration-300 transform translate-y-10 opacity-0 ${bgClass}`;
-                toast.innerHTML = `${icon} <span>${message}</span>`;
-                setTimeout(() => { toast.classList.remove('translate-y-10', 'opacity-0'); toast.classList.add('translate-y-0', 'opacity-100'); }, 10);
-                setTimeout(() => { toast.classList.remove('translate-y-0', 'opacity-100'); toast.classList.add('translate-y-10', 'opacity-0'); }, 3000);
-            },
+function countPendingAudiosForDeck($pdo, $deck_id) {
+    $pending = 0;
+    $stmtCards = $pdo->prepare("SELECT front_encrypted, back_encrypted, has_audio_front, has_audio_back FROM flashcards WHERE directory_id = ?");
+    $stmtCards->execute([$deck_id]);
+    $cards = $stmtCards->fetchAll();
 
-            renderMathInElement(element) {
-                if (!element || !window.MathJax?.typesetPromise) return;
-                window.MathJax.typesetClear([element]);
-                window.MathJax.typesetPromise([element]).catch(() => {});
-            },
+    foreach ($cards as $card) {
+        if ((int)$card['has_audio_front'] === 0) {
+            $front_text = !empty($card['front_encrypted']) ? trim(strip_tags(Security::decryptData($card['front_encrypted']))) : '';
+            if ($front_text !== '' && !cardTextContainsMathNotation($front_text)) {
+                $pending++;
+            }
+        }
 
-            toggleRightPanel() {
-                this.isRightPanelOpen = !this.isRightPanelOpen;
-                const panel = document.getElementById('rightPanel');
-                const backdrop = document.getElementById('rightPanelBackdrop');
-                panel.classList.toggle('translate-x-full', !this.isRightPanelOpen);
-                backdrop.classList.toggle('hidden', !this.isRightPanelOpen);
-            },
+        if ((int)$card['has_audio_back'] === 0) {
+            $back_text = !empty($card['back_encrypted']) ? trim(strip_tags(Security::decryptData($card['back_encrypted']))) : '';
+            if ($back_text !== '' && !cardTextContainsMathNotation($back_text)) {
+                $pending++;
+            }
+        }
+    }
 
-            closeRightPanel() {
-                this.isRightPanelOpen = false;
-                document.getElementById('rightPanel').classList.add('translate-x-full');
-                document.getElementById('rightPanelBackdrop').classList.add('hidden');
-            },
+    return $pending;
+}
 
-            openSettingsFromPanel() {
-                this.closeRightPanel();
-                this.openSettingsModal();
-            },
+function findNextPendingAudioJobForDeck($pdo, $deck_id, $front_language, $back_language) {
+    $stmtCards = $pdo->prepare("SELECT id, front_encrypted, back_encrypted, has_audio_front, has_audio_back FROM flashcards WHERE directory_id = ? AND (has_audio_front = 0 OR has_audio_back = 0) ORDER BY sort_order ASC, id ASC");
+    $stmtCards->execute([$deck_id]);
+    $cards = $stmtCards->fetchAll();
 
-            openSingleFromPanel() {
-                this.closeRightPanel();
-                this.openSingleModal();
-            },
-
-            openBulkFromPanel() {
-                this.closeRightPanel();
-                this.openBulkModal();
-            },
-
-            async api(action, payload = {}) {
-                payload.action = action;
-                try {
-                    const res = await fetch(`/api/flashcards`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    
-                    if (res.status === 401) {
-                        window.location.href = '/'; 
-                        return null;
-                    }
-                    
-                    const data = await res.json();
-                    if (data.status !== 'success') throw new Error(data.message);
-                    return data;
-                } catch (err) {
-                    console.error(err);
-                    this.showToast(err.message || 'Erro de conexão.', 'error');
-                    return null;
-                }
-            },
-
-            async loadDeck() {
-                this.autoFlowToken++;
-                this.clearAutoFlowTimer();
-                this.stopAudio();
-                document.getElementById('loader').style.display = 'flex';
-                document.getElementById('emptyState').style.display = 'none';
-                document.getElementById('cardScene').style.display = 'none';
-                document.getElementById('controls').style.display = 'none';
-                document.getElementById('topControlPanel').style.display = 'none';
-
-                const res = await this.api('fetch', { deck_id: this.deckId });
-                document.getElementById('loader').style.display = 'none';
-
-                if (res) {
-                    document.getElementById('deckName').innerText = res.deck_name || 'Flashcards';
-                    this.deckMode = res.deck_mode || 'aleatorio';
-                    this.frontLanguage = res.deck_front_language || 'pt-BR';
-                    this.backLanguage = res.deck_back_language || 'en-GB';
-                    this.deckStructure = res.deck_structure || 'fatos';
-                    this.cards = res.data || [];
-                    this.deckPercentage = res.deck_percentage || 0;
-                    this.totalCardsInDeck = res.total_cards || 0;
-                    this.bookCompletedReads = Math.max(0, Math.min(res.book_completed_reads || 0, 3));
-                    this.bookCompletedReadsMax = res.book_completed_reads_max || 3;
-                    this.bookNextReviewAt = res.book_next_review_at || null;
-                    this.currentIndex = res.current_index || 0;
-
-                    const resetBtn = document.getElementById('btnResetBookScore');
-                    if (resetBtn) {
-                        resetBtn.classList.remove('hidden');
-                        resetBtn.classList.add('flex');
-                    }
-                    
-                    if (this.cards.length === 0) {
-                        this.showEmptyState();
-                        document.getElementById('topControlPanel').style.display = 'flex';
-                        document.getElementById('cardCounter').style.display = 'none';
-                    } else {
-                        if (this.deckMode === 'aleatorio' || this.currentIndex >= this.cards.length) {
-                            this.currentIndex = 0;
-                        }
-                        document.getElementById('cardScene').style.display = 'block';
-                        document.getElementById('controls').style.display = 'flex';
-                        document.getElementById('topControlPanel').style.display = 'flex';
-                        document.getElementById('cardCounter').style.display = 'block';
-                        
-                        this.updateGlobalProgressUI();
-                        this.renderCurrentCard();
-                        
-                        this.handleAutoPlaybackAndFlow();
-                    }
-                }
-            },
-
-            showEmptyState() {
-                document.getElementById('emptyState').style.display = 'flex';
-                document.getElementById('deckMasteryBadge').classList.add('hidden');
-                document.getElementById('deckProgressBar').style.width = '0%';
-                
-                if (this.deckMode === 'aleatorio' && this.totalCardsInDeck > 0) {
-                    document.getElementById('emptyStateIcon').className = "fa-solid fa-mug-hot text-6xl text-emerald-600 mb-4 opacity-70";
-                    document.getElementById('emptyStateTitle').innerText = "Você está em dia!";
-                    document.getElementById('emptyStateDesc').innerText = "Não há cartas vencidas para revisão hoje. Relaxe e volte amanhã!";
-                } else if (this.deckMode === 'livro' && this.totalCardsInDeck > 0 && this.bookNextReviewAt) {
-                    document.getElementById('emptyStateIcon').className = "fa-solid fa-book-open-reader text-6xl text-emerald-500 mb-4 opacity-70";
-                    document.getElementById('emptyStateTitle').innerText = "Leitura concluída por agora";
-                    document.getElementById('emptyStateDesc').innerText = `Próxima revisão do livro disponível em ${this.formatDateTime(this.bookNextReviewAt)}.`;
-                } else {
-                    document.getElementById('emptyStateIcon').className = "fa-solid fa-clone text-6xl text-slate-600 mb-4 opacity-50";
-                    document.getElementById('emptyStateTitle').innerText = "Este deck está vazio";
-                    document.getElementById('emptyStateDesc').innerText = "Adicione seu primeiro card manualmente ou importe do Excel.";
-                }
-            },
-
-            formatDateTime(dateStr) {
-                const date = new Date(dateStr.replace(' ', 'T'));
-                if (Number.isNaN(date.getTime())) return 'breve';
-                return date.toLocaleString('pt-BR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-            },
-
-            escapeHTML(str) {
-                if (!str) return '';
-                return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
-            },
-
-
-            getDeckScoreColor(percentage = 0) {
-                const p = Math.max(0, Math.min(100, Number(percentage) || 0));
-                const stops = [
-                    [239, 68, 68],
-                    [249, 115, 22],
-                    [250, 204, 21],
-                    [34, 197, 94]
+    foreach ($cards as $card) {
+        if ((int)$card['has_audio_front'] === 0) {
+            $front_text = !empty($card['front_encrypted']) ? trim(strip_tags(Security::decryptData($card['front_encrypted']))) : '';
+            if ($front_text !== '' && !cardTextContainsMathNotation($front_text)) {
+                return [
+                    'card_id' => (int)$card['id'],
+                    'side' => 'front',
+                    'text' => $front_text,
+                    'language' => $front_language
                 ];
-                const segment = 100 / (stops.length - 1);
-                const idx = Math.min(stops.length - 2, Math.floor(p / segment));
-                const localStart = idx * segment;
-                const t = segment === 0 ? 0 : (p - localStart) / segment;
-                const [r1, g1, b1] = stops[idx];
-                const [r2, g2, b2] = stops[idx + 1];
-                const r = Math.round(r1 + (r2 - r1) * t);
-                const g = Math.round(g1 + (g2 - g1) * t);
-                const b = Math.round(b1 + (b2 - b1) * t);
-                return `rgb(${r}, ${g}, ${b})`;
-            },
+            }
+        }
 
-            updateGlobalProgressUI() {
-                const badge = document.getElementById('deckMasteryBadge');
-                badge.classList.remove('hidden');
-                badge.classList.add('flex');
-                
-                if (this.deckMode === 'livro') {
-                    const progress = this.cards.length > 0 ? Math.round(((this.currentIndex + 1) / this.cards.length) * 100) : 0;
-                    const scoreColor = this.getDeckScoreColor(this.deckPercentage);
-                    badge.className = 'flex items-center gap-1.5 bg-slate-800/80 border border-slate-600 px-2 py-1 rounded-md text-xs font-semibold text-emerald-400 shadow-inner';
-                    badge.innerHTML = `<i class="fa-solid fa-book-open"></i> <span>${progress}% • ${this.bookCompletedReads}/${this.bookCompletedReadsMax}</span>`;
-                    const progressBar = document.getElementById('deckProgressBar');
-                    progressBar.className = "h-full transition-all duration-700 ease-out";
-                    progressBar.style.backgroundColor = scoreColor;
-                    progressBar.style.width = `${this.deckPercentage}%`;
+        if ((int)$card['has_audio_back'] === 0) {
+            $back_text = !empty($card['back_encrypted']) ? trim(strip_tags(Security::decryptData($card['back_encrypted']))) : '';
+            if ($back_text !== '' && !cardTextContainsMathNotation($back_text)) {
+                return [
+                    'card_id' => (int)$card['id'],
+                    'side' => 'back',
+                    'text' => $back_text,
+                    'language' => $back_language
+                ];
+            }
+        }
+    }
+
+    return null;
+}
+
+// Função auxiliar para verificar a propriedade de um card unitário
+function verifyCardOwnership($pdo, $card_id, $user_id) {
+    $stmt = $pdo->prepare("SELECT f.id, f.directory_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND d.user_id = ?");
+    $stmt->execute([$card_id, $user_id]);
+    return $stmt->fetch();
+}
+
+/**
+ * Função para ajustar a pronúncia do TTS (Text-to-Speech).
+ * Substitui siglas e palavras estrangeiras pela sua fonética correspondente em português.
+ * Pilar: Fácil Manutenção (Basta adicionar novas siglas no array $replacements).
+ */
+function normalizeDeckLanguage($value, $default = 'pt-BR') {
+    $allowed = ['pt-BR', 'en-US', 'en-GB'];
+    return in_array($value, $allowed, true) ? $value : $default;
+}
+
+function normalizeDeckStructure($value, $default = 'fatos') {
+    $allowed = ['fatos', 'perguntas', 'traducoes', 'parafrases'];
+    return in_array($value, $allowed, true) ? $value : $default;
+}
+
+function getFishReferenceIdByLanguage($language) {
+    switch ($language) {
+        case 'pt-BR': return FISH_REFERENCE_ID_PT_BR;
+        case 'en-US': return FISH_REFERENCE_ID_EN_US;
+        case 'en-GB': return FISH_REFERENCE_ID_EN_GB;
+        default: return FISH_REFERENCE_ID_BACK;
+    }
+}
+
+function getGoogleTtsVoiceByLanguage($language) {
+    switch ($language) {
+        case 'pt-BR': return 'pt-BR-Chirp3-HD-Algenib';
+        case 'en-US': return 'en-US-Chirp3-HD-Fenrir';
+        case 'en-GB': return 'en-GB-Chirp3-HD-Enceladus';
+        default: return 'en-US-Chirp3-HD-Fenrir';
+    }
+}
+
+function getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $front_language, $back_language) {
+    $normalized_structure = normalizeDeckStructure($deck_structure, 'fatos');
+    $normalized_front = normalizeDeckLanguage($front_language, 'pt-BR');
+    $normalized_back = normalizeDeckLanguage($back_language, 'en-GB');
+
+    if (
+        $normalized_structure === 'perguntas'
+        && $normalized_front === 'pt-BR'
+        && $normalized_back === 'pt-BR'
+    ) {
+        if ($side === 'front') {
+            return 'pt-BR-Chirp3-HD-Zubenelgenubi'; //pt-BR-Chirp3-HD-Rasalgethi
+        }
+
+        if ($side === 'back') {
+            return 'pt-BR-Chirp3-HD-Rasalgethi';//pt-BR-Chirp3-HD-Algenib //pt-BR-Chirp3-HD-Zubenelgenubi
+        }
+    }
+
+    return getGoogleTtsVoiceByLanguage($language);
+}
+
+function getLanguageLabel($language) {
+    $map = [
+        'pt-BR' => 'Português Brasileiro',
+        'en-US' => 'Inglês Americano',
+        'en-GB' => 'Inglês Britânico'
+    ];
+    return $map[$language] ?? $language;
+}
+
+function adjustPronunciationForTTS($pdo, $text, $language) {
+    $allowed = ['pt-BR', 'en-US', 'en-GB'];
+    if (!in_array($language, $allowed, true)) {
+        return $text;
+    }
+
+    $stmt = $pdo->prepare("SELECT source_text, target_text FROM pronuncias WHERE language = ? ORDER BY CHAR_LENGTH(source_text) DESC");
+    $stmt->execute([$language]);
+    $replacements = $stmt->fetchAll();
+
+    if (!$replacements) {
+        return $text;
+    }
+
+    foreach ($replacements as $item) {
+        $source = trim((string)$item['source_text']);
+        $target = (string)$item['target_text'];
+        if ($source === '') {
+            continue;
+        }
+
+        $pattern = '/\\b' . preg_quote($source, '/') . '\\b/iu';
+        $text = preg_replace($pattern, $target, $text);
+    }
+
+    return $text;
+}
+
+function cardTextContainsMathNotation($text) {
+    $value = trim((string)$text);
+    if ($value === '') {
+        return false;
+    }
+
+    $patterns = [
+        '/\\\\\(|\\\\\)|\\\\\[|\\\\\]/u',
+        '/\$\$[^$]+\$\$|\$[^$]+\$/u',
+        '/\\\\(frac|sqrt|sum|int|prod|lim|cdot|times|pm|mp|neq|leq|geq|left|right|alpha|beta|gamma|delta|theta|lambda|mu|pi|sigma|omega)\b/iu',
+        '/[∑∫√≈≠≤≥∞πΔθλμ±÷×]/u',
+        '/[²³¹⁰⁴⁵⁶⁷⁸⁹⁻⁺₀₁₂₃₄₅₆₇₈₉]/u',
+        '/[A-Za-z0-9\)\]]\s*=\s*[A-Za-z0-9\(\[\\-]/u',
+        '/\d+\s*[+\-*/^]\s*\d+/u',
+    ];
+
+    foreach ($patterns as $pattern) {
+        if (preg_match($pattern, $value) === 1) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function decodeTtsAudioBinaryFromJsonPayload($payload) {
+    if (!is_array($payload)) {
+        return null;
+    }
+
+    $candidateKeys = ['audio', 'audio_base64', 'audioContent', 'base64', 'data', 'result'];
+
+    foreach ($candidateKeys as $key) {
+        if (!array_key_exists($key, $payload)) {
+            continue;
+        }
+
+        $value = $payload[$key];
+        if (is_array($value)) {
+            $nested = decodeTtsAudioBinaryFromJsonPayload($value);
+            if ($nested !== null) {
+                return $nested;
+            }
+            continue;
+        }
+
+        if (!is_string($value)) {
+            continue;
+        }
+
+        $raw = trim($value);
+        if ($raw === '') {
+            continue;
+        }
+
+        if (preg_match('#^data:audio/[^;]+;base64,#i', $raw) === 1) {
+            $parts = explode(',', $raw, 2);
+            $raw = $parts[1] ?? '';
+        }
+
+        $decoded = base64_decode($raw, true);
+        if ($decoded !== false && $decoded !== '') {
+            return $decoded;
+        }
+    }
+
+    return null;
+}
+
+function normalizeStoredAudioToBinary($audioValue) {
+    if (!is_string($audioValue) || $audioValue === '') {
+        return null;
+    }
+
+    $raw = trim($audioValue);
+    if (preg_match('#^data:audio/[^;]+;base64,#i', $raw) === 1) {
+        $parts = explode(',', $raw, 2);
+        $raw = $parts[1] ?? '';
+    }
+
+    $decoded = base64_decode($raw, true);
+    if ($decoded !== false && $decoded !== '') {
+        return $decoded;
+    }
+
+    return $audioValue;
+}
+
+function normalizeTtsProvider($value, $default = 'fishaudio') {
+    $allowed = ['fishaudio', 'openai', 'google'];
+    return in_array($value, $allowed, true) ? $value : $default;
+}
+
+function getUserTtsProvider($pdo, $user_id) {
+    $stmt = $pdo->prepare("SELECT tts_provider FROM users WHERE id = ? LIMIT 1");
+    $stmt->execute([$user_id]);
+    $provider = $stmt->fetchColumn();
+    return normalizeTtsProvider((string)$provider, 'fishaudio');
+}
+
+function buildTtsProviderErrorDetails($provider, $httpcode, $curlError, $responseBody = null) {
+    $providerLabel = strtoupper((string)$provider);
+    $parts = ["Provider {$providerLabel}"];
+
+    if ($httpcode > 0) {
+        $parts[] = "HTTP {$httpcode}";
+    }
+
+    if (is_string($curlError) && trim($curlError) !== '') {
+        $parts[] = 'cURL: ' . trim($curlError);
+    }
+
+    if (is_string($responseBody) && trim($responseBody) !== '') {
+        $decoded = json_decode($responseBody, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+            $apiMessage = null;
+            if (isset($decoded['error']['message']) && is_string($decoded['error']['message'])) {
+                $apiMessage = $decoded['error']['message'];
+            } elseif (isset($decoded['message']) && is_string($decoded['message'])) {
+                $apiMessage = $decoded['message'];
+            }
+
+            if ($apiMessage !== null && trim($apiMessage) !== '') {
+                $parts[] = 'API: ' . trim($apiMessage);
+            }
+        }
+    }
+
+    return implode(' | ', $parts);
+}
+
+function requestFishAudioTts($text_to_speech, $language, &$error_details = null) {
+    if (trim((string)FISH_API_KEY) === '') {
+        $error_details = 'Chave FISH_API_KEY não configurada.';
+        return null;
+    }
+
+    $reference_id = getFishReferenceIdByLanguage($language);
+    $ch = curl_init('https://api.fish.audio/v1/tts');
+    $payload = json_encode([
+        "text" => $text_to_speech,
+        "reference_id" => $reference_id,
+        "format" => "mp3"
+    ]);
+
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        "Authorization: Bearer " . FISH_API_KEY,
+        "Content-Type: application/json",
+        "model: s2"
+    ]);
+
+    $response = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($httpcode !== 200 || !$response) {
+        $error_details = buildTtsProviderErrorDetails('fishaudio', (int)$httpcode, $curlError, is_string($response) ? $response : null);
+        return null;
+    }
+
+    $audio_binary = null;
+    $decodedResponse = json_decode($response, true);
+    if (json_last_error() === JSON_ERROR_NONE && is_array($decodedResponse)) {
+        $audio_binary = decodeTtsAudioBinaryFromJsonPayload($decodedResponse);
+    }
+
+    if ($audio_binary === null) {
+        $audio_binary = $response;
+    }
+
+    $error_details = null;
+
+    return is_string($audio_binary) && $audio_binary !== '' ? $audio_binary : null;
+}
+
+function requestOpenAITts($text_to_speech, &$error_details = null) {
+    if (trim((string)OPENAI_API_KEY) === '') {
+        $error_details = 'Chave OPENAI_API_KEY não configurada.';
+        return null;
+    }
+
+    $ch = curl_init('https://api.openai.com/v1/audio/speech');
+    $payload = json_encode([
+        'model' => 'gpt-5.4',
+        'voice' => 'alloy',
+        'input' => $text_to_speech,
+        'format' => 'mp3'
+    ]);
+
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . OPENAI_API_KEY,
+        'Content-Type: application/json'
+    ]);
+
+    $response = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($httpcode !== 200 || !$response) {
+        $error_details = buildTtsProviderErrorDetails('openai', (int)$httpcode, $curlError, is_string($response) ? $response : null);
+        return null;
+    }
+
+    $error_details = null;
+
+    return is_string($response) && $response !== '' ? $response : null;
+}
+
+
+function requestGoogleCloudTts($text_to_speech, $language, $side = null, $deck_structure = 'fatos', $front_language = 'pt-BR', $back_language = 'en-GB', &$error_details = null) {
+    if (trim((string)GOOGLE_CLOUD_API_KEY) === '') {
+        $error_details = 'Chave GOOGLE_CLOUD_API_KEY não configurada.';
+        return null;
+    }
+
+    $voice_name = getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $front_language, $back_language);
+    $ch = curl_init('https://texttospeech.googleapis.com/v1/text:synthesize?key=' . rawurlencode(GOOGLE_CLOUD_API_KEY));
+    $payload = json_encode([
+        'input' => ['text' => $text_to_speech],
+        'voice' => [
+            'languageCode' => $language,
+            'name' => $voice_name
+        ],
+        'audioConfig' => [
+            'audioEncoding' => 'MP3'
+        ]
+    ]);
+
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json'
+    ]);
+
+    $response = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($httpcode !== 200 || !$response) {
+        $error_details = buildTtsProviderErrorDetails('google', (int)$httpcode, $curlError, is_string($response) ? $response : null);
+        return null;
+    }
+
+    $decodedResponse = json_decode($response, true);
+    if (json_last_error() !== JSON_ERROR_NONE || !is_array($decodedResponse)) {
+        $error_details = 'Provider GOOGLE | resposta inválida ao decodificar JSON.';
+        return null;
+    }
+
+    $audio_binary = decodeTtsAudioBinaryFromJsonPayload($decodedResponse);
+    if (!is_string($audio_binary) || $audio_binary === '') {
+        $error_details = buildTtsProviderErrorDetails('google', (int)$httpcode, '', $response);
+        return null;
+    }
+
+    $error_details = null;
+    return is_string($audio_binary) && $audio_binary !== '' ? $audio_binary : null;
+}
+
+
+
+function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $language, $deck_structure = 'fatos', $front_language = 'pt-BR', $back_language = 'en-GB', &$error_details = null) {
+    $text_to_speech = adjustPronunciationForTTS($pdo, $text, $language);
+    $provider = getUserTtsProvider($pdo, (int)$user_id);
+    $provider_error = null;
+
+    if ($provider === 'openai') {
+        $audio_binary = requestOpenAITts($text_to_speech, $provider_error);
+    } elseif ($provider === 'google') {
+        $audio_binary = requestGoogleCloudTts($text_to_speech, $language, $side, $deck_structure, $front_language, $back_language, $provider_error);
+    } else {
+        $audio_binary = requestFishAudioTts($text_to_speech, $language, $provider_error);
+    }
+
+    if (!is_string($audio_binary) || $audio_binary === '') {
+        $error_details = $provider_error ?: ('Falha ao gerar áudio com o provider ' . strtoupper($provider) . '.');
+        return false;
+    }
+
+    $audio_b64 = base64_encode($audio_binary);
+    $audio_encrypted = Security::encryptData($audio_b64);
+
+    $audioCol = $side === 'front' ? 'audio_front_encrypted' : 'audio_back_encrypted';
+    $col = $side === 'front' ? 'has_audio_front' : 'has_audio_back';
+    $stmt = $pdo->prepare("UPDATE flashcards SET $col = 1, $audioCol = ? WHERE id = ?");
+    $stmt->execute([$audio_encrypted, $card_id]);
+
+    $error_details = null;
+
+    return true;
+}
+
+function buildDefaultBasePromptByStructure($deck_name, $deck_structure) {
+    $basePrompt = '';
+    if ($deck_structure === 'fatos') {
+        $basePrompt = 'Me dê informações sobre o assunto "$deck_name", em uma tabela de uma única coluna, onde cada linha é uma informação. As informações devem ser de fácil compreensão. As informações devem ser óbvias evidentes e de rápida assimilação e de preferência curtas. Nenhuma informação pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. A ideia é conseguir vencer o paradoxo de Mênon, conseguir saber tudo sobre esse assunto, do nível para leigos ao nível expert. Caso não tenha muitas perguntas anteriores, vá pelo nível para leigos, e só aumente o nível se as perguntas anteriores já tiverem abrangido todo nível de conhecimento para leigos no assunto. Frases curtas.';
+    } elseif ($deck_structure === 'perguntas') {
+        $basePrompt = 'Me dê perguntas que induzam conhecimento fundamental, elementar, essencial, indispensável sobre o assunto "$deck_name" coisas elementares e ontológicas sobre, hermenêutica, em uma tabela de duas colunas, onde cada linha é uma pergunta, a primeira coluna é a pergunta, e a segunda é a resposta. As perguntas e respostas devem ser óbvias evidentes e de rápida assimilação. Use linguagem simples e de fácil assimilação para pessoas de qualquer nível intelectual. As pessoas devem conseguir decodificar a informação codificada nas perguntas e respostas de forma assustadoramente fácil. As perguntas devem ser simples e de preferência curtas. Nenhuma pergunta pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. O objetivo é construir aprendizado progressivo sem redundância. Público alvo são crianças de 10 à 17 anos.';
+    } elseif ($deck_structure === 'parafrases') {
+        $basePrompt = 'gere 15 paráfrases dessa: "$deck_name" (Num tom de escrita épico com hipérboles, com palavras de fácil compreensão, elucidando a mensagem abstrata codificada na frase original, mantendo os sujeitos e os objetos simples e compostos, alterando apenas advérbios, verbos e adjetivos, etc.)';
+    } else {
+        $basePrompt = 'Crie frases ordinárias que tenha dentro da usa estrutura sintática o termo "$deck_name". Quero variações em diferentes tempos verbais, diferentes sujeitos, com o termo em diferentes posições de estrutura sintáticas, afirmações, negações, perguntas positivas, perguntas negativas, optativas, condicionais, voz ativa, voz passiva, voz reflexiva, faça frases com e abreviações das palavras, flexões nominais, de gênero, número e grau, variações de tempo, modo, lugar, oposição, entre outros, use e forme verbos frasais, verbos modais, entre outros tipos. Nenhuma frase pode ser igual as frases anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. Tanto a língua do verso quanto a língua da frente devem ser estruturadas com palavras ordinárias. Faça frases com o termo "$deck_name" em sua forma pura original e flexionando ele também, quando for possível. As vezes um mesmo termo pode ser traduzido termos com significados muito ou ligeiramente diferentes, crie frases para todas esses significados diferentes, isso aqui é muito importante, use sinônimos do português, para as frases em português não ficarem todas com a mesma tradução do termo. Primeira coluna na língua da frente do deck, segunda coluna na língua do verso. Sem repetições e sem conteúdo de interface.';
+    }
+    return $basePrompt;
+}
+
+function applyGenerationPromptTemplateVariables($prompt, $deck_name) {
+    $normalizedPrompt = (string)$prompt;
+    $normalizedDeckName = trim((string)$deck_name);
+    return str_replace('$deck_name', $normalizedDeckName, $normalizedPrompt);
+}
+
+function normalizeGenerationBasePromptInput($value) {
+    $text = trim((string)$value);
+    if ($text === '') {
+        return '';
+    }
+    return function_exists('mb_substr') ? mb_substr($text, 0, 5000) : substr($text, 0, 5000);
+}
+
+function buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, $model = 'gpt-5.4', $customBasePrompt = '') {
+    $basePrompt = normalizeGenerationBasePromptInput($customBasePrompt);
+    if ($basePrompt === '') {
+        $basePrompt = buildDefaultBasePromptByStructure($deck_name, $deck_structure);
+    }
+    $basePrompt = applyGenerationPromptTemplateVariables($basePrompt, $deck_name);
+
+    $systemPrompt = 'Você é um gerador de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estruturas fatos e parafrases, deixe back vazio. Preserve exatamente caracteres Unicode.';
+
+    $userPrompt = $basePrompt
+        . "
+
+REGRAS DE LIMPEZA DE SAÍDA:
+Nunca inclua menus, botões, placeholders, atalhos de teclado, termos de interface ou listas de símbolos soltas. Retorne apenas conteúdo pedagógico dos cards.";
+
+    if ($deck_structure === 'parafrases') {
+        $userPrompt .= "
+
+Não considere cards anteriores deste deck para gerar a resposta.";
+    } else {
+        $userPrompt .= "
+
+CARDS JÁ EXISTENTES NESTE DECK:
+" . $historyText
+            . "
+
+Gere 15 novos cards sem repetição de conteúdo com o histórico.";
+    }
+
+    $requiresBack = in_array($deck_structure, ['perguntas', 'traducoes'], true);
+    $backSchema = $requiresBack ? ['type' => 'string', 'minLength' => 1] : ['type' => 'string'];
+
+    return [
+        'model' => $model,
+        'messages' => [
+            ['role' => 'system', 'content' => $systemPrompt],
+            ['role' => 'user', 'content' => $userPrompt]
+        ],
+        'response_format' => [
+            'type' => 'json_schema',
+            'json_schema' => [
+                'name' => 'cards_preview_response',
+                'strict' => true,
+                'schema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'cards' => [
+                            'type' => 'array',
+                            'minItems' => 1,
+                            'items' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'front' => ['type' => 'string', 'minLength' => 1],
+                                    'back' => $backSchema
+                                ],
+                                'required' => ['front', 'back'],
+                                'additionalProperties' => false
+                            ]
+                        ]
+                    ],
+                    'required' => ['cards'],
+                    'additionalProperties' => false
+                ]
+            ]
+        ]
+    ];
+}
+
+function sanitizeGeneratedCards($rawContent, $deck_structure) {
+    $raw = trim((string)$rawContent);
+    if ($raw !== '' && str_starts_with($raw, '```')) {
+        $raw = preg_replace('/^```(?:json)?\s*/i', '', $raw);
+        $raw = preg_replace('/\s*```$/', '', $raw);
+        $raw = trim((string)$raw);
+    }
+    $json = json_decode($raw, true);
+    if (!is_array($json) || !isset($json['cards']) || !is_array($json['cards'])) {
+        return [];
+    }
+
+    $cards = [];
+    foreach ($json['cards'] as $card) {
+        $front = trim((string)($card['front'] ?? ''));
+        $back = trim((string)($card['back'] ?? ''));
+        if ($front === '') continue;
+        if (in_array($deck_structure, ['fatos', 'parafrases'], true)) {
+            $back = '';
+        } elseif ($back === '') {
+            continue;
+        }
+        $cards[] = ['front' => $front, 'back' => $back];
+    }
+    return $cards;
+}
+
+function openaiJsonRequest($url, $payload) {
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . OPENAI_API_KEY
+    ]);
+    $response = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+    return [$httpcode, $response, $curlError];
+}
+
+function openaiGetRequest($url) {
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPGET, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . OPENAI_API_KEY
+    ]);
+    $response = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+    return [$httpcode, $response, $curlError];
+}
+
+function syncBatchJobWithOpenAI($pdo, $job) {
+    $openaiBatchId = trim((string)($job['openai_batch_id'] ?? ''));
+    if ($openaiBatchId === '') {
+        return ['ok' => false, 'error' => 'Job sem batch_id da OpenAI.', 'job' => null];
+    }
+
+    list($statusCode, $statusResponse, $statusErr) = openaiGetRequest('https://api.openai.com/v1/batches/' . rawurlencode($openaiBatchId));
+    if ($statusCode !== 200 || !$statusResponse) {
+        $details = trim($statusErr);
+        $decodedErr = json_decode((string)$statusResponse, true);
+        if (!$details && is_array($decodedErr)) $details = (string)($decodedErr['error']['message'] ?? '');
+        return ['ok' => false, 'error' => 'Falha ao consultar status na OpenAI.' . ($details ? (' Detalhes: ' . $details) : ''), 'job' => null];
+    }
+
+    $statusDecoded = json_decode($statusResponse, true);
+    $newStatus = trim((string)($statusDecoded['status'] ?? $job['status']));
+    $outputFileId = trim((string)($statusDecoded['output_file_id'] ?? ''));
+    $errorFileId = trim((string)($statusDecoded['error_file_id'] ?? ''));
+
+    $cardsJsonToStore = $job['result_cards_json'];
+    $errorMessage = $job['error_message'];
+    $completedAt = $job['completed_at'];
+
+    if ($newStatus === 'completed' && $outputFileId !== '') {
+        list($fileCode, $fileContent, $fileErr) = openaiGetRequest('https://api.openai.com/v1/files/' . rawurlencode($outputFileId) . '/content');
+        if ($fileCode === 200 && $fileContent) {
+            $cards = [];
+            $lines = preg_split('/\r\n|\r|\n/', (string)$fileContent);
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if ($line === '') continue;
+                $lineDecoded = json_decode($line, true);
+                $content = (string)($lineDecoded['response']['body']['choices'][0]['message']['content'] ?? '');
+                if ($content === '') continue;
+                $cards = sanitizeGeneratedCards($content, $job['deck_structure']);
+                if (!empty($cards)) break;
+            }
+            if (!empty($cards)) {
+                $cardsJsonToStore = json_encode($cards, JSON_UNESCAPED_UNICODE);
+                $errorMessage = null;
+            } else {
+                $errorMessage = 'Batch concluído, mas o conteúdo retornou vazio ou fora do formato esperado.';
+            }
+            $completedAt = date('Y-m-d H:i:s');
+        } else {
+            $errorMessage = 'Batch concluído, porém não foi possível baixar o arquivo de saída.' . ($fileErr ? (' Detalhes: ' . $fileErr) : '');
+        }
+    } elseif (in_array($newStatus, ['failed', 'cancelled', 'expired'], true)) {
+        $errorMessage = 'O batch terminou com status: ' . $newStatus;
+        $completedAt = date('Y-m-d H:i:s');
+    }
+
+    $upd = $pdo->prepare("UPDATE flashcard_batch_jobs SET status = ?, openai_output_file_id = ?, openai_error_file_id = ?, error_message = ?, result_cards_json = ?, completed_at = ? WHERE id = ?");
+    $upd->execute([$newStatus, $outputFileId !== '' ? $outputFileId : null, $errorFileId !== '' ? $errorFileId : null, $errorMessage, $cardsJsonToStore, $completedAt, (int)$job['id']]);
+
+    return [
+        'ok' => true,
+        'error' => null,
+        'job' => [
+            'id' => (int)$job['id'],
+            'openai_batch_id' => $openaiBatchId,
+            'status' => $newStatus,
+            'openai_output_file_id' => $outputFileId,
+            'has_result' => !empty($cardsJsonToStore),
+            'error_message' => $errorMessage
+        ]
+    ];
+}
+
+function fetchDeckHistoryText($pdo, $deck_id) {
+    $stmt = $pdo->prepare("SELECT front_encrypted, back_encrypted FROM flashcards WHERE directory_id = ? ORDER BY sort_order ASC, id ASC");
+    $stmt->execute([$deck_id]);
+    $existing_cards = $stmt->fetchAll();
+
+    $history_lines = [];
+    foreach ($existing_cards as $c) {
+        $front = trim(!empty($c['front_encrypted']) ? Security::decryptData($c['front_encrypted']) : '');
+        $back = trim(!empty($c['back_encrypted']) ? Security::decryptData($c['back_encrypted']) : '');
+        if ($front === '' && $back === '') continue;
+        $history_lines[] = "Frente: {$front} | Verso: {$back}";
+    }
+    return !empty($history_lines) ? implode("
+", $history_lines) : 'Sem cards prévios no deck.';
+}
+
+if ($action === 'fetch') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
+
+    $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
+    if (!$deck) {
+        die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+    }
+
+    $deck_mode = $deck['deck_mode'] ?? 'aleatorio';
+    $current_index = 0;
+    $book_completed_reads = 0;
+
+    $book_next_review_at = null;
+
+    if ($deck_mode === 'aleatorio') {
+        $stmt = $pdo->prepare("
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score 
+            FROM flashcards f
+            LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
+            WHERE f.directory_id = ? AND (fs.next_review_at IS NULL OR fs.next_review_at <= NOW())
+            ORDER BY RAND()
+        ");
+        $stmt->execute([$user_id, $deck_id]);
+    } else {
+        $stmt = $pdo->prepare("
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, 0 as score 
+            FROM flashcards f
+            WHERE f.directory_id = ? 
+            ORDER BY f.sort_order ASC, f.id ASC
+        ");
+        $stmt->execute([$deck_id]);
+
+        $stmtProg = $pdo->prepare("SELECT current_index, completed_reads, next_review_at FROM flashcard_book_progress WHERE user_id = ? AND directory_id = ?");
+        $stmtProg->execute([$user_id, $deck_id]);
+        $progressData = $stmtProg->fetch();
+        if ($progressData) {
+            $current_index = (int)($progressData['current_index'] ?? 0);
+            $book_completed_reads = min(3, (int)($progressData['completed_reads'] ?? 0));
+            $book_next_review_at = $progressData['next_review_at'] ?? null;
+        }
+    }
+    
+    $cards = $stmt->fetchAll();
+
+    if ($deck_mode === 'livro' && !empty($book_next_review_at) && strtotime($book_next_review_at) > time()) {
+        $cards = [];
+        $current_index = 0;
+    }
+
+    $stmtTotal = $pdo->prepare("SELECT COUNT(id) FROM flashcards WHERE directory_id = ?");
+    $stmtTotal->execute([$deck_id]);
+    $total_cards_in_deck = (int)$stmtTotal->fetchColumn();
+
+    if ($deck_mode === 'livro') {
+        $deck_percentage = (int)round(($book_completed_reads / 3) * 100);
+    } else {
+        $stmtScore = $pdo->prepare("
+            SELECT SUM(score) FROM flashcard_scores fs 
+            JOIN flashcards f ON fs.flashcard_id = f.id 
+            WHERE f.directory_id = ? AND fs.user_id = ?
+        ");
+        $stmtScore->execute([$deck_id, $user_id]);
+        $total_score_deck = (int)$stmtScore->fetchColumn();
+
+        $max_possible_score = $total_cards_in_deck * 20;
+        $deck_percentage = $max_possible_score > 0 ? round(($total_score_deck / $max_possible_score) * 100) : 0;
+    }
+
+    $response = [];
+    foreach ($cards as $card) {
+        $response[] = [
+            'id' => $card['id'],
+            'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
+            'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
+            'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
+            'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
+            'has_audio_front' => (int)$card['has_audio_front'],
+            'has_audio_back' => (int)$card['has_audio_back'],
+            'score' => (int)$card['score']
+        ];
+    }
+
+    $stored_base_prompt = trim((string)($deck['deck_generation_base_prompt'] ?? ''));
+    if ($stored_base_prompt === '') {
+        $stored_base_prompt = buildDefaultBasePromptByStructure(
+            Security::decryptData($deck['name_encrypted']),
+            normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos')
+        );
+    }
+
+    echo json_encode([
+        'status' => 'success', 
+        'deck_name' => Security::decryptData($deck['name_encrypted']),
+        'deck_mode' => $deck_mode,
+        'deck_front_language' => normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR'),
+        'deck_back_language' => normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB'),
+        'deck_structure' => normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos'),
+        'generation_base_prompt_default' => $stored_base_prompt,
+        'deck_percentage' => $deck_percentage,
+        'book_completed_reads' => $book_completed_reads,
+        'book_completed_reads_max' => 3,
+        'book_next_review_at' => $book_next_review_at,
+        'total_cards' => $total_cards_in_deck,
+        'current_index' => $current_index,
+        'data' => $response
+    ]);
+}
+
+// ==== Streaming de áudio do card via conteúdo criptografado no banco ====
+elseif ($action === 'get_audio') {
+    $card_id = (int)($_GET['card_id'] ?? 0);
+    $side = ($_GET['side'] ?? '') === 'back' ? 'back' : 'front';
+
+    if ($card_id === 0) {
+        http_response_code(400);
+        die('Card inválido');
+    }
+
+    if (!verifyCardOwnership($pdo, $card_id, $user_id)) {
+        http_response_code(403);
+        die('Acesso negado');
+    }
+
+    $audioCol = $side === 'front' ? 'audio_front_encrypted' : 'audio_back_encrypted';
+    $hasAudioCol = $side === 'front' ? 'has_audio_front' : 'has_audio_back';
+    $stmt = $pdo->prepare("SELECT $audioCol AS audio_encrypted, $hasAudioCol AS has_audio FROM flashcards WHERE id = ? LIMIT 1");
+    $stmt->execute([$card_id]);
+    $card = $stmt->fetch();
+
+    if (!$card || (int)$card['has_audio'] !== 1 || empty($card['audio_encrypted'])) {
+        http_response_code(404);
+        die('Áudio não encontrado');
+    }
+
+    $audio_decrypted = Security::decryptData($card['audio_encrypted']);
+    $audio_binary = normalizeStoredAudioToBinary($audio_decrypted);
+
+    if ($audio_binary === null || $audio_binary === '') {
+        http_response_code(500);
+        die('Falha ao ler áudio');
+    }
+
+    header('Content-Type: audio/mpeg');
+    header('Content-Length: ' . strlen($audio_binary));
+    echo $audio_binary;
+    exit;
+}
+
+// ==== Exportar todos os cards para Excel/CSV ====
+elseif ($action === 'get_all_cards') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
+
+    // Verifica posse do deck usando a sua função de segurança
+    $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
+    if (!$deck) {
+        die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+    }
+
+    // Busca ABSOLUTAMENTE TODOS os cards do deck
+    $stmt = $pdo->prepare("
+        SELECT id, front_encrypted, back_encrypted 
+        FROM flashcards 
+        WHERE directory_id = ? 
+        ORDER BY sort_order ASC, id ASC
+    ");
+    $stmt->execute([$deck_id]);
+    
+    $cards = $stmt->fetchAll();
+    $response = [];
+    
+    foreach ($cards as $card) {
+        $response[] = [
+            'id' => $card['id'],
+            'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
+            'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : ''
+        ];
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'data' => $response
+    ]);
+}
+
+elseif ($action === 'generate_audio') {
+    $card_id = (int)($input['card_id'] ?? 0);
+    $side = $input['side'] ?? 'back'; // 'front' ou 'back'
+
+    if ($card_id === 0 || !in_array($side, ['front', 'back'])) {
+        die(json_encode(['status' => 'error', 'message' => 'Parâmetros inválidos.']));
+    }
+
+    $stmt = $pdo->prepare("SELECT f.front_encrypted, f.back_encrypted, d.user_id, d.deck_front_language, d.deck_back_language, d.deck_structure FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ?");
+    $stmt->execute([$card_id]);
+    $card = $stmt->fetch();
+
+    if (!$card || $card['user_id'] != $user_id) {
+        die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
+    }
+
+    $text_encrypted = $side === 'front' ? $card['front_encrypted'] : $card['back_encrypted'];
+    $clean_text = trim(strip_tags(Security::decryptData($text_encrypted)));
+
+    if (empty($clean_text)) {
+        die(json_encode(['status' => 'error', 'message' => 'O lado selecionado deste card não possui texto.']));
+    }
+
+    if (cardTextContainsMathNotation($clean_text)) {
+        die(json_encode(['status' => 'error', 'message' => 'Este conteúdo possui notação matemática e não pode ter áudio gerado.']));
+    }
+
+    $front_language = normalizeDeckLanguage($card['deck_front_language'] ?? 'pt-BR', 'pt-BR');
+    $back_language = normalizeDeckLanguage($card['deck_back_language'] ?? 'en-GB', 'en-GB');
+    $deck_structure = normalizeDeckStructure($card['deck_structure'] ?? 'fatos', 'fatos');
+    $side_language = $side === 'front' ? $front_language : $back_language;
+
+    $tts_error_details = null;
+    $ok = generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $clean_text, $side_language, $deck_structure, $front_language, $back_language, $tts_error_details);
+    if (!$ok) {
+        die(json_encode([
+            'status' => 'error',
+            'message' => 'Erro ao comunicar com a API de voz. O serviço pode estar indisponível.',
+            'details' => $tts_error_details ?: 'Sem detalhes adicionais retornados pelo provider.'
+        ]));
+    }
+
+    echo json_encode(['status' => 'success', 'message' => 'Áudio gerado e salvo com sucesso!']);
+}
+
+elseif ($action === 'generate_missing_audios_from_directory') {
+    $directory_id = (int)($input['directory_id'] ?? 0);
+    if ($directory_id === 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID do diretório inválido.']));
+    }
+
+    $directory = verifyDirectoryOwnership($pdo, $directory_id, $user_id);
+    if (!$directory) {
+        die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+    }
+
+    $decks = collectDecksFromDirectoryTree($pdo, $directory_id, $user_id);
+
+    $generated_count = 0;
+    $skipped_count = 0;
+    $failed_count = 0;
+
+    $stmtCards = $pdo->prepare("SELECT id, front_encrypted, back_encrypted, has_audio_front, has_audio_back FROM flashcards WHERE directory_id = ? ORDER BY sort_order ASC, id ASC");
+    foreach ($decks as $deck) {
+        $deck_id = (int)$deck['id'];
+        $front_language = normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR');
+        $back_language = normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB');
+        $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
+
+        $stmtCards->execute([$deck_id]);
+        $cards = $stmtCards->fetchAll();
+
+        foreach ($cards as $card) {
+            $front_text = !empty($card['front_encrypted']) ? trim(strip_tags(Security::decryptData($card['front_encrypted']))) : '';
+            $back_text = !empty($card['back_encrypted']) ? trim(strip_tags(Security::decryptData($card['back_encrypted']))) : '';
+
+            $jobs = [
+                [
+                    'side' => 'front',
+                    'has_audio' => (int)$card['has_audio_front'] === 1,
+                    'text' => $front_text,
+                    'language' => $front_language
+                ],
+                [
+                    'side' => 'back',
+                    'has_audio' => (int)$card['has_audio_back'] === 1,
+                    'text' => $back_text,
+                    'language' => $back_language
+                ]
+            ];
+
+            foreach ($jobs as $job) {
+                if ($job['has_audio']) {
+                    $skipped_count++;
+                    continue;
+                }
+
+                if ($job['text'] === '') {
+                    $skipped_count++;
+                    continue;
+                }
+
+                if (cardTextContainsMathNotation($job['text'])) {
+                    $skipped_count++;
+                    continue;
+                }
+
+                $ok = generateAndPersistCardAudio($pdo, $user_id, (int)$card['id'], $job['side'], $job['text'], $job['language'], $deck_structure, $front_language, $back_language);
+                if ($ok) {
+                    $generated_count++;
                 } else {
-                    const scoreColor = this.getDeckScoreColor(this.deckPercentage);
-                    badge.className = 'flex items-center gap-1.5 bg-slate-800/80 border border-slate-600 px-2 py-1 rounded-md text-xs font-semibold shadow-inner';
-                    badge.innerHTML = `<i class="fa-solid fa-ranking-star" style="color:${scoreColor}"></i> <span id="deckPercentage" style="color:${scoreColor}">${this.deckPercentage}%</span>`;
-                    const progressBar = document.getElementById('deckProgressBar');
-                    progressBar.className = "h-full transition-all duration-700 ease-out";
-                    progressBar.style.backgroundColor = scoreColor;
-                    progressBar.style.width = `${this.deckPercentage}%`;
-                }
-            },
-
-            renderCurrentCard() {
-                if (this.cards.length === 0) return;
-                
-                const card = this.cards[this.currentIndex];
-                const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
-                const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
-                const isBackOnlyCard = !hasFront && hasBack;
-
-                const frontImageHtml = card.image_front ? `<img src="${card.image_front}" onclick="event.stopPropagation(); flashcardApp.openImageModal('${card.image_front}')" class="max-h-40 max-w-full object-contain cursor-zoom-in ${card.front ? 'mb-4' : ''} rounded-lg shadow-md border border-slate-600/50 hover:opacity-90 transition-opacity" title="Clique para ampliar">` : '';
-                document.getElementById('cardFrontText').innerHTML = `
-                    <div class="flex flex-col items-center justify-center w-full h-full">
-                        ${frontImageHtml}
-                        ${card.front ? `<div class="text-center w-full">${this.escapeHTML(card.front)}</div>` : ''}
-                    </div>
-                `;
-                this.renderMathInElement(document.getElementById('cardFrontText'));
-
-                const backImageHtml = card.image_back ? `<img src="${card.image_back}" onclick="event.stopPropagation(); flashcardApp.openImageModal('${card.image_back}')" class="max-h-40 max-w-full object-contain cursor-zoom-in ${card.back ? 'mb-4' : ''} rounded-lg shadow-md border border-blue-500/50 hover:opacity-90 transition-opacity" title="Clique para ampliar">` : '';
-                document.getElementById('cardBackText').innerHTML = `
-                    <div class="flex flex-col items-center justify-center w-full h-full">
-                        ${backImageHtml}
-                        ${card.back ? `<div class="text-center w-full">${this.escapeHTML(card.back)}</div>` : ''}
-                    </div>
-                `;
-                this.renderMathInElement(document.getElementById('cardBackText'));
-                
-                document.getElementById('cardCounter').innerText = `${this.currentIndex + 1} / ${this.cards.length}`;
-                
-                const cardEl = document.getElementById('flashcard');
-                
-                const audioFront = document.getElementById('audioControlsFront');
-                if (card.has_audio_front === 1) {
-                    audioFront.innerHTML = `
-                        <div class="flex items-center gap-2">
-                            <button onclick="event.stopPropagation(); flashcardApp.playCardAudio(${card.id}, 'front')" class="text-xs bg-slate-800/80 hover:bg-slate-700 border border-slate-600 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-slate-300">
-                                <i class="fa-solid fa-play"></i> Ouvir
-                            </button>
-                            <button id="btnGenAudio_front_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'front')" class="text-xs bg-slate-800/80 hover:bg-slate-700 border border-slate-600 w-7 h-7 flex items-center justify-center rounded-lg transition-colors text-slate-400" title="Gerar novo áudio">
-                                <i class="fa-solid fa-rotate-right"></i>
-                            </button>
-                        </div>
-                    `;
-                } else if(card.front && card.front.trim() !== '') {
-                    audioFront.innerHTML = `
-                        <button id="btnGenAudio_front_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'front')" class="text-xs bg-slate-800/50 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-slate-400">
-                            <i class="fa-solid fa-wand-magic-sparkles"></i> Gerar Áudio
-                        </button>
-                    `;
-                } else {
-                    audioFront.innerHTML = '';
-                }
-
-                const audioBack = document.getElementById('audioControlsBack');
-                if (!hasBack || isBackOnlyCard) {
-                    document.getElementById('frontLabel').innerText = this.deckMode === 'livro' ? 'Página' : 'Card Único';
-                    document.getElementById('flipIconFront').style.display = 'none';
-                    cardEl.style.cursor = 'default';
-                    if (!hasBack) {
-                        audioBack.innerHTML = '';
-                    } else if (card.has_audio_back === 1) {
-                        audioBack.innerHTML = `
-                            <div class="flex items-center gap-2">
-                                <button onclick="event.stopPropagation(); flashcardApp.playCardAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-blue-200">
-                                    <i class="fa-solid fa-play"></i> Ouvir
-                                </button>
-                                <button id="btnGenAudio_back_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 w-7 h-7 flex items-center justify-center rounded-lg transition-colors text-blue-300" title="Gerar novo áudio">
-                                    <i class="fa-solid fa-rotate-right"></i>
-                                </button>
-                            </div>
-                        `;
-                    } else if(card.back && card.back.trim() !== '') {
-                        audioBack.innerHTML = `
-                            <button id="btnGenAudio_back_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'back')" class="text-xs bg-blue-900/50 hover:bg-blue-800 border border-blue-500/50 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-blue-300">
-                                <i class="fa-solid fa-wand-magic-sparkles"></i> Gerar Áudio
-                            </button>
-                        `;
-                    } else {
-                        audioBack.innerHTML = '';
-                    }
-                } else {
-                    document.getElementById('frontLabel').innerText = 'Frente';
-                    document.getElementById('flipIconFront').style.display = 'block';
-                    cardEl.style.cursor = 'pointer';
-
-                    if (card.has_audio_back === 1) {
-                        audioBack.innerHTML = `
-                            <div class="flex items-center gap-2">
-                                <button onclick="event.stopPropagation(); flashcardApp.playCardAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-blue-200">
-                                    <i class="fa-solid fa-play"></i> Ouvir
-                                </button>
-                                <button id="btnGenAudio_back_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 w-7 h-7 flex items-center justify-center rounded-lg transition-colors text-blue-300" title="Gerar novo áudio">
-                                    <i class="fa-solid fa-rotate-right"></i>
-                                </button>
-                            </div>
-                        `;
-                    } else if(card.back && card.back.trim() !== '') {
-                        audioBack.innerHTML = `
-                            <button id="btnGenAudio_back_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'back')" class="text-xs bg-blue-900/50 hover:bg-blue-800 border border-blue-500/50 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-blue-300">
-                                <i class="fa-solid fa-wand-magic-sparkles"></i> Gerar Áudio
-                            </button>
-                        `;
-                    } else {
-                        audioBack.innerHTML = '';
-                    }
-                }
-
-                if (this.deckMode === 'aleatorio') {
-                    let dotsHtml = '';
-                    for (let i = 0; i < 10; i++) {
-                        let fillClass = card.score >= (i + 1) * 2 ? 'filled' : (card.score === (i * 2) + 1 ? 'half-filled' : '');
-                        dotsHtml += `<div class="score-dot ${fillClass}"></div>`;
-                    }
-                    document.getElementById('frontScoreDots').innerHTML = dotsHtml;
-                    document.getElementById('backScoreDots').innerHTML = dotsHtml;
-                } else {
-                    document.getElementById('frontScoreDots').innerHTML = '';
-                    document.getElementById('backScoreDots').innerHTML = '';
-                }
-
-                if (isBackOnlyCard) {
-                    this.isFlipped = true;
-                    cardEl.classList.add('is-flipped');
-                } else if (this.isFlipped) {
-                    this.isFlipped = false;
-                    cardEl.classList.remove('is-flipped');
-                }
-
-                document.getElementById('btnPrev').disabled = this.currentIndex === 0;
-                document.getElementById('btnNext').disabled = this.deckMode !== 'livro' && this.deckMode !== 'aleatorio' && this.currentIndex === this.cards.length - 1;
-            },
-
-            incrementBookReadProgress() {
-                if (this.deckMode !== 'livro' || this.bookCompletedReads >= this.bookCompletedReadsMax) return;
-
-                this.bookCompletedReads = Math.min(this.bookCompletedReads + 1, this.bookCompletedReadsMax);
-                this.deckPercentage = Math.round((this.bookCompletedReads / this.bookCompletedReadsMax) * 100);
-                this.api('increment_book_score', { deck_id: this.deckId }).catch(e => console.error(e));
-            },
-
-            flipCard(e) {
-                if (this.cards.length === 0) return;
-                
-                if (e && e.target && e.target.closest('button')) return;
-                this.autoFlowToken++;
-                this.clearAutoFlowTimer();
-
-                const card = this.cards[this.currentIndex];
-                const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
-                const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
-
-                if (!hasFront || !hasBack) return;
-
-                this.isFlipped = !this.isFlipped;
-                const cardEl = document.getElementById('flashcard');
-                
-                this.stopAudio(); 
-
-                if (this.isFlipped) {
-                    cardEl.classList.add('is-flipped');
-                    if (this.deckMode === 'aleatorio') this.registerScore(card);
-                    
-                    this.handleAutoPlaybackAndFlow();
-                } else {
-                    cardEl.classList.remove('is-flipped');
-                    this.handleAutoPlaybackAndFlow();
-                }
-            },
-
-            async nextCard() {
-                if (this.cards.length === 0) return;
-                this.autoFlowToken++;
-                this.clearAutoFlowTimer();
-
-                const card = this.cards[this.currentIndex];
-                const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
-                const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
-                const hasTwoSides = hasFront && hasBack;
-
-                if (hasTwoSides && !this.isFlipped) {
-                    this.flipCard();
-                    return;
-                }
-                
-                this.stopAudio(); 
-                
-                if (this.deckMode === 'aleatorio' && !(hasTwoSides && this.isFlipped)) await this.registerScore(card);
-
-                if (this.deckMode === 'livro' && this.cards.length === 1) {
-                    this.incrementBookReadProgress();
-                    await this.loadDeck();
-                    return;
-                }
-
-                if (this.currentIndex < this.cards.length - 1) {
-                    this.currentIndex++;
-
-                    this.renderCurrentCard();
-                    if (this.deckMode === 'livro') this.saveBookProgress();
-                    
-                    this.handleAutoPlaybackAndFlow();
-                } else if (this.deckMode === 'livro') {
-                    this.incrementBookReadProgress();
-                    await this.loadDeck();
-                } else if (this.deckMode === 'aleatorio') {
-                    // Último card da revisão do dia: recarrega para refletir as cartas vencidas restantes.
-                    // Se não houver mais cartas, o loadDeck mostra o estado "Você está em dia".
-                    await this.loadDeck();
-                }
-            },
-
-            prevCard() {
-                if (this.currentIndex > 0) {
-                    this.autoFlowToken++;
-                    this.clearAutoFlowTimer();
-                    this.stopAudio(); 
-                    this.currentIndex--;
-                    this.renderCurrentCard();
-                    if (this.deckMode === 'livro') this.saveBookProgress();
-                    
-                    this.handleAutoPlaybackAndFlow();
-                }
-            },
-            
-            handleCardImageUpload(e, side) {
-                const file = e.target.files[0];
-                if (!file) return;
-
-                // Limite de 4MB no lado do cliente para evitar sobrecarregar o PHP (pois vira Base64)
-                if (file.size > 4 * 1024 * 1024) {
-                    this.showToast('A imagem/GIF é muito pesada! O limite é de 4MB.', 'error');
-                    e.target.value = ''; // Limpa o input
-                    return;
-                }
-
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const result = event.target.result;
-
-                    // Se for GIF animado, salva cru (sem passar pelo canvas para não congelar a animação)
-                    if (file.type === 'image/gif') {
-                        this.setBase64ImagePreview(side, result);
-                        return;
-                    }
-
-                    // Se não for GIF, converte/redimensiona no canvas
-                    const img = new Image();
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        // Aumentado para 1200px para excelente qualidade de zoom no Lightbox
-                        const MAX_WIDTH = 1200; 
-                        const MAX_HEIGHT = 1200; 
-                        let width = img.width; 
-                        let height = img.height;
-                        
-                        if (width > height) { 
-                            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } 
-                        } else { 
-                            if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } 
-                        }
-                        
-                        canvas.width = width; canvas.height = height;
-                        const ctx = canvas.getContext('2d'); 
-                        ctx.drawImage(img, 0, 0, width, height);
-                        
-                        // Mantém PNG como PNG (para fundo transparente), converte o resto pra JPEG
-                        const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-                        const quality = mimeType === 'image/jpeg' ? 0.8 : undefined;
-                        
-                        const base64 = canvas.toDataURL(mimeType, quality);
-                        this.setBase64ImagePreview(side, base64);
-                    }
-                    img.src = result;
-                }
-                reader.readAsDataURL(file);
-            },
-
-            setBase64ImagePreview(side, base64) {
-                document.getElementById(`${side}ImageBase64`).value = base64;
-                const preview = document.getElementById(`${side}ImagePreview`);
-                preview.style.backgroundImage = `url('${base64}')`;
-                preview.classList.remove('hidden');
-                document.getElementById(`btnRemove${side.charAt(0).toUpperCase() + side.slice(1)}Image`).classList.remove('hidden');
-            },
-
-            removeCardImage(side) {
-                const fileInput = document.getElementById(`${side}ImageFile`);
-                if(fileInput) fileInput.value = ''; 
-                document.getElementById(`${side}ImageBase64`).value = '';
-                const preview = document.getElementById(`${side}ImagePreview`);
-                if (preview) { preview.classList.add('hidden'); preview.style.backgroundImage = 'none'; }
-                const btn = document.getElementById(`btnRemove${side.charAt(0).toUpperCase() + side.slice(1)}Image`); 
-                if (btn) btn.classList.add('hidden');
-            },
-
-            editCurrentCard() {
-                const card = this.cards[this.currentIndex];
-                if (!card) return;
-                
-                document.getElementById('editCardId').value = card.id;
-                document.getElementById('singleFront').value = card.front;
-                document.getElementById('singleBack').value = card.back;
-                document.getElementById('modalTitleText').innerText = 'Editar Flashcard';
-                
-                this.removeCardImage('front');
-                if (card.image_front) {
-                    document.getElementById('frontImageBase64').value = card.image_front;
-                    document.getElementById('frontImagePreview').style.backgroundImage = `url('${card.image_front}')`;
-                    document.getElementById('frontImagePreview').classList.remove('hidden');
-                    document.getElementById('btnRemoveFrontImage').classList.remove('hidden');
-                }
-                
-                this.removeCardImage('back');
-                if (card.image_back) {
-                    document.getElementById('backImageBase64').value = card.image_back;
-                    document.getElementById('backImagePreview').style.backgroundImage = `url('${card.image_back}')`;
-                    document.getElementById('backImagePreview').classList.remove('hidden');
-                    document.getElementById('btnRemoveBackImage').classList.remove('hidden');
-                }
-                
-                const modal = document.getElementById('singleModal');
-                const content = document.getElementById('singleModalContent');
-                modal.classList.remove('hidden'); modal.classList.add('flex');
-                
-                setTimeout(() => { 
-                    modal.classList.remove('opacity-0'); 
-                    content.classList.remove('scale-95'); 
-                    document.getElementById('singleFront').focus(); 
-                }, 20);
-            },
-
-            async deleteCurrentCard() {
-                const card = this.cards[this.currentIndex];
-                if (!card) return;
-
-                if (confirm('Atenção: Tem certeza que deseja excluir permanentemente este card?')) {
-                    this.stopAudio();
-                    const res = await this.api('delete_card', { card_id: card.id });
-                    
-                    if (res) {
-                        this.showToast(res.message, 'success');
-                        this.cards.splice(this.currentIndex, 1);
-                        this.totalCardsInDeck--;
-                        
-                        if (this.currentIndex >= this.cards.length && this.currentIndex > 0) {
-                            this.currentIndex--;
-                        }
-
-                        if (this.cards.length === 0) {
-                            document.getElementById('cardScene').style.display = 'none';
-                            document.getElementById('controls').style.display = 'none';
-                            document.getElementById('cardCounter').style.display = 'none';
-                            this.showEmptyState();
-                        } else {
-                            this.updateGlobalProgressUI();
-                            this.renderCurrentCard();
-                        }
-                    }
-                }
-            },
-
-            toggleAutoPlay() {
-                this.autoPlayEnabled = document.getElementById('autoPlayToggle').checked;
-                const icon = document.getElementById('autoPlayIcon');
-                localStorage.setItem('gluon_audio_autoplay', this.autoPlayEnabled);
-
-                if (this.autoPlayEnabled) {
-                    icon.classList.replace('text-slate-400', 'text-gluon-primary');
-                    this.handleAutoPlaybackAndFlow();
-                } else {
-                    icon.classList.replace('text-gluon-primary', 'text-slate-400');
-                    if (!this.autoFlowEnabled) this.stopAudio();
-                }
-            },
-
-            toggleAutoFlow() {
-                this.autoFlowEnabled = document.getElementById('autoFlowToggle').checked;
-                const icon = document.getElementById('autoFlowIcon');
-                localStorage.setItem('gluon_auto_flow', this.autoFlowEnabled);
-
-                this.autoFlowToken++;
-                this.clearAutoFlowTimer();
-
-                if (this.autoFlowEnabled) {
-                    icon.classList.replace('text-slate-400', 'text-emerald-400');
-                    this.handleAutoPlaybackAndFlow();
-                } else {
-                    icon.classList.replace('text-emerald-400', 'text-slate-400');
-                    this.stopAudio();
-                }
-            },
-
-            disableAutoFlowBecauseMissingAudio() {
-                if (!this.autoFlowEnabled) return;
-                const toggle = document.getElementById('autoFlowToggle');
-                if (toggle) toggle.checked = false;
-                this.autoFlowEnabled = false;
-                localStorage.setItem('gluon_auto_flow', 'false');
-                this.autoFlowToken++;
-                this.clearAutoFlowTimer();
-                this.stopAudio();
-                const icon = document.getElementById('autoFlowIcon');
-                if (icon) icon.classList.replace('text-emerald-400', 'text-slate-400');
-                this.showToast('Fluxo automático desligado: o card atual não possui áudio.', 'error');
-            },
-
-            handleAutoPlaybackAndFlow() {
-                if (!this.cards.length) return;
-
-                this.autoFlowToken++;
-                const token = this.autoFlowToken;
-                this.clearAutoFlowTimer();
-
-                const card = this.cards[this.currentIndex];
-                if (!card) return;
-
-                const side = this.isFlipped ? 'back' : 'front';
-                const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
-                const hasAudio = side === 'back' ? card.has_audio_back === 1 : card.has_audio_front === 1;
-
-                if (this.autoFlowEnabled && !hasAudio) {
-                    this.disableAutoFlowBecauseMissingAudio();
-                    return;
-                }
-
-                const runAutoFlowStep = () => {
-                    if (!this.autoFlowEnabled || token !== this.autoFlowToken) return;
-                    if (side === 'front') {
-                        if (hasBack) this.flipCard();
-                        else this.nextCard();
-                    } else {
-                        this.nextCard();
-                    }
-                };
-
-                if (hasAudio && (this.autoPlayEnabled || this.autoFlowEnabled)) {
-                    if (this.autoFlowEnabled) {
-                        this.playCardAudio(card.id, side, () => {
-                            if (!this.autoFlowEnabled || token !== this.autoFlowToken) return;
-                            this.autoFlowTimer = setTimeout(runAutoFlowStep, 500);
-                        });
-                    } else {
-                        this.playCardAudio(card.id, side);
-                    }
-                }
-            },
-
-            clearAutoFlowTimer() {
-                if (this.autoFlowTimer) {
-                    clearTimeout(this.autoFlowTimer);
-                    this.autoFlowTimer = null;
-                }
-            },
-
-            playCardAudio(cardId, side, onEnded = null) {
-                this.stopAudio();
-                const ts = new Date().getTime(); // Bypassa o cache do navegador para ouvir o novo audio regerado
-                this.currentAudioElement = new Audio(`/api/flashcards?action=get_audio&card_id=${cardId}&side=${side}&t=${ts}`);
-                const sideLanguage = side === 'front' ? this.frontLanguage : this.backLanguage;
-                this.currentAudioElement.volume = sideLanguage === 'en-GB' ? 1 : 0.6;
-                if (typeof onEnded === 'function') {
-                    this.currentAudioEndedHandler = onEnded;
-                    this.currentAudioElement.addEventListener('ended', this.currentAudioEndedHandler, { once: true });
-                } else {
-                    this.currentAudioEndedHandler = null;
-                }
-                this.currentAudioElement.play().catch(e => console.error("Erro ao tocar áudio:", e));
-            },
-
-            stopAudio() {
-                if (this.currentAudioElement) {
-                    if (this.currentAudioEndedHandler) {
-                        this.currentAudioElement.removeEventListener('ended', this.currentAudioEndedHandler);
-                        this.currentAudioEndedHandler = null;
-                    }
-                    this.currentAudioElement.pause();
-                    this.currentAudioElement.currentTime = 0;
-                    this.currentAudioElement = null;
-                }
-            },
-
-            async generateAudio(cardId, side) {
-                const btn = document.getElementById(`btnGenAudio_${side}_${cardId}`);
-                if (!btn) return;
-                
-                const originalHtml = btn.innerHTML;
-                const isRegen = btn.classList.contains('w-7'); 
-                
-                btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i>`;
-                if (!isRegen) {
-                    btn.innerHTML += ` Gerando...`;
-                }
-                btn.disabled = true;
-
-                const res = await this.api('generate_audio', { card_id: cardId, side: side });
-                
-                if (res) {
-                    const cardIndex = this.cards.findIndex(c => c.id === cardId);
-                    if (cardIndex !== -1) {
-                        if (side === 'front') this.cards[cardIndex].has_audio_front = 1;
-                        if (side === 'back') this.cards[cardIndex].has_audio_back = 1;
-                        
-                        this.renderCurrentCard(); 
-                        
-                        if(this.autoPlayEnabled || this.autoFlowEnabled) {
-                            this.handleAutoPlaybackAndFlow();
-                        } else {
-                            this.showToast(res.message, 'success');
-                        }
-                    }
-                } else {
-                    btn.innerHTML = originalHtml;
-                    btn.disabled = false;
-                }
-            },
-
-            registerScore(card) {
-                if (card.score >= 20 || this.scoredThisSession.has(card.id)) return Promise.resolve();
-                
-                const expireTime = localStorage.getItem(`gluon_card_expire_${card.id}`);
-                const now = new Date().getTime();
-                
-                if (expireTime && now < parseInt(expireTime)) {
-                    this.scoredThisSession.add(card.id);
-                    return Promise.resolve(); 
-                }
-                
-                this.scoredThisSession.add(card.id);
-                
-                const nextScore = Math.min(card.score + 1, 20);
-                const nextExpire = now + (nextScore * 24 * 60 * 60 * 1000);
-                localStorage.setItem(`gluon_card_expire_${card.id}`, nextExpire.toString());
-                
-                card.score = nextScore;
-                
-                const maxPossible = this.totalCardsInDeck * 20;
-                let currentTotal = this.cards.reduce((sum, c) => sum + c.score, 0);
-                this.deckPercentage = maxPossible > 0 ? Math.round((currentTotal / maxPossible) * 100) : 0;
-                this.updateGlobalProgressUI();
-
-                if (this.deckMode === 'aleatorio') {
-                    let dotsHtml = '';
-                    for (let i = 0; i < 10; i++) {
-                        let fillClass = card.score >= (i + 1) * 2 ? 'filled' : (card.score === (i * 2) + 1 ? 'half-filled' : '');
-                        dotsHtml += `<div class="score-dot ${fillClass}"></div>`;
-                    }
-                    const frontDots = document.getElementById('frontScoreDots');
-                    const backDots = document.getElementById('backScoreDots');
-                    if (frontDots) frontDots.innerHTML = dotsHtml;
-                    if (backDots) backDots.innerHTML = dotsHtml;
-                }
-
-                return this.api('update_score', { card_id: card.id }).catch(e => console.error(e));
-            },
-
-            saveBookProgress() {
-                this.updateGlobalProgressUI(); 
-                this.api('update_progress', { deck_id: this.deckId, index: this.currentIndex }).catch(e => console.error(e));
-            },
-
-            setupKeyboardListeners() {
-                document.addEventListener('keydown', (e) => {
-                    const imageModalOpen = !document.getElementById('imageModal').classList.contains('hidden');
-                    
-                    if (e.code === 'Escape') {
-                        this.closeImageModal();
-                        this.closeModals();
-                        this.closeRightPanel();
-                        return;
-                    }
-
-                    if (imageModalOpen) return; // Não vira carta se imagem tá grande
-
-                    const modalsOpen = document.querySelectorAll('.fixed:not(.hidden):not(#imageModal)').length > 0;
-                    if (modalsOpen || this.cards.length === 0) return;
-
-                    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'ArrowDown') {
-                        e.preventDefault();
-                        this.flipCard();
-                    } else if (e.code === 'ArrowRight') {
-                        this.nextCard();
-                    } else if (e.code === 'ArrowLeft') {
-                        this.prevCard();
-                    }
-                });
-            },
-
-            setupBulkListener() {
-                const textarea = document.getElementById('bulkData');
-                textarea.addEventListener('input', () => {
-                    const text = textarea.value;
-                    const parsed = this.parseExcelData(text);
-                    const countEl = document.getElementById('bulkCount');
-                    const btnSave = document.getElementById('btnSaveBulk');
-                    const tableContainer = document.getElementById('bulkTableContainer');
-                    const emptyState = document.getElementById('bulkEmptyState');
-                    const tbody = document.getElementById('bulkTableBody');
-
-                    countEl.innerText = `${parsed.length} card${parsed.length === 1 ? '' : 's'}`;
-                    
-                    if (parsed.length > 0) {
-                        countEl.classList.remove('text-slate-400', 'border-emerald-900/50', 'bg-emerald-900/20');
-                        countEl.classList.add('text-emerald-400', 'border-emerald-500/50', 'bg-emerald-500/20');
-                        btnSave.disabled = false;
-                        
-                        tbody.innerHTML = parsed.map((card, index) => `
-                            <tr class="hover:bg-slate-800/50 transition-colors">
-                                <td class="px-4 py-2 text-center text-slate-500 font-medium">${index + 1}</td>
-                                <td class="px-4 py-2 border-l border-slate-700">
-                                    <div class="truncate w-full max-w-[120px] sm:max-w-[250px] md:max-w-[350px]" title="${this.escapeHTML(card.front)}">
-                                        ${this.escapeHTML(card.front)}
-                                    </div>
-                                </td>
-                                <td class="px-4 py-2 border-l border-slate-700">
-                                    <div class="truncate w-full max-w-[120px] sm:max-w-[250px] md:max-w-[350px]" title="${this.escapeHTML(card.back)}">
-                                        ${this.escapeHTML(card.back)}
-                                    </div>
-                                </td>
-                            </tr>
-                        `).join('');
-                        
-                        tableContainer.classList.remove('hidden');
-                        emptyState.classList.add('hidden');
-                    } else {
-                        countEl.classList.add('text-slate-400', 'border-emerald-900/50', 'bg-emerald-900/20');
-                        countEl.classList.remove('text-emerald-400', 'border-emerald-500/50', 'bg-emerald-500/20');
-                        btnSave.disabled = true;
-                        
-                        tableContainer.classList.add('hidden');
-                        emptyState.classList.remove('hidden');
-                    }
-                });
-            },
-
-            parseExcelData(text) {
-                if (!text.trim()) return [];
-                const lines = text.split('\n');
-                const result = [];
-                for (let i = 0; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if (!line) continue;
-                    const columns = line.split('\t');
-                    if (columns.length >= 1 && columns[0].trim() !== '') { 
-                        result.push({ 
-                            front: columns[0].trim(), 
-                            back: columns[1] ? columns[1].trim() : '' 
-                        });
-                    }
-                }
-                return result;
-            },
-
-            goToGenerateCardsView() {
-                const from = encodeURIComponent(window.location.pathname + window.location.search);
-                window.location.href = `/gerar_cards?id=${encodeURIComponent(this.deckId)}&from=${from}`;
-            },
-
-            goToGenerateCardsBatchView() {
-                const from = encodeURIComponent(window.location.pathname + window.location.search);
-                window.location.href = `/gerar_cards_batch?id=${encodeURIComponent(this.deckId)}&from=${from}`;
-            },
-
-            // --- Funções de Imagem (Lightbox) ---
-            openImageModal(src) {
-                const modal = document.getElementById('imageModal');
-                const img = document.getElementById('imageModalSrc');
-                img.src = src;
-                
-                modal.classList.remove('hidden');
-                modal.classList.add('flex');
-                
-                setTimeout(() => {
-                    modal.classList.remove('opacity-0');
-                    img.classList.remove('scale-95');
-                }, 20);
-            },
-
-            closeImageModal() {
-                const modal = document.getElementById('imageModal');
-                const img = document.getElementById('imageModalSrc');
-                
-                if (modal.classList.contains('hidden')) return;
-
-                modal.classList.add('opacity-0');
-                img.classList.add('scale-95');
-                
-                setTimeout(() => {
-                    modal.classList.add('hidden');
-                    modal.classList.remove('flex');
-                    img.src = '';
-                }, 300);
-            },
-
-
-            switchSettingsTab(tab) {
-                const general = document.getElementById('settingsTabGeneral');
-                const structure = document.getElementById('settingsTabStructure');
-                const buttons = document.querySelectorAll('.settings-tab-btn');
-
-                general.classList.toggle('hidden', tab !== 'general');
-                structure.classList.toggle('hidden', tab !== 'structure');
-
-                buttons.forEach(btn => {
-                    const active = btn.dataset.settingsTab === tab;
-                    btn.classList.toggle('bg-slate-700', active);
-                    btn.classList.toggle('text-white', active);
-                    btn.classList.toggle('text-slate-300', !active);
-                    btn.classList.toggle('hover:bg-slate-800', !active);
-                });
-            },
-
-            // --- Modais ---
-            openSettingsModal() {
-                const radios = document.getElementsByName('deckMode');
-                for(let i=0; i<radios.length; i++){
-                    radios[i].checked = (radios[i].value === this.deckMode);
-                }
-                document.getElementById('deckFrontLanguage').value = this.frontLanguage;
-                document.getElementById('deckBackLanguage').value = this.backLanguage;
-                const structureRadios = document.getElementsByName('deckStructure');
-                for (let i = 0; i < structureRadios.length; i++) {
-                    structureRadios[i].checked = (structureRadios[i].value === this.deckStructure);
-                }
-                this.switchSettingsTab('general');
-                const modal = document.getElementById('settingsModal');
-                const content = document.getElementById('settingsModalContent');
-                modal.classList.remove('hidden'); modal.classList.add('flex');
-                setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); }, 20);
-            },
-
-            openSingleModal() {
-                document.getElementById('editCardId').value = '';
-                document.getElementById('singleFront').value = '';
-                document.getElementById('singleBack').value = '';
-                document.getElementById('modalTitleText').innerText = 'Adicionar Flashcard';
-                
-                this.removeCardImage('front');
-                this.removeCardImage('back');
-                
-                const modal = document.getElementById('singleModal');
-                const content = document.getElementById('singleModalContent');
-                modal.classList.remove('hidden'); modal.classList.add('flex');
-                setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); document.getElementById('singleFront').focus(); }, 20);
-            },
-
-            openBulkModal() {
-                document.getElementById('bulkData').value = '';
-                document.getElementById('bulkCount').innerText = '0 cards';
-                document.getElementById('btnSaveBulk').disabled = true;
-                
-                document.getElementById('bulkTableContainer').classList.add('hidden');
-                document.getElementById('bulkEmptyState').classList.remove('hidden');
-
-                const modal = document.getElementById('bulkModal');
-                const content = document.getElementById('bulkModalContent');
-                modal.classList.remove('hidden'); modal.classList.add('flex');
-                setTimeout(() => { 
-                    modal.classList.remove('opacity-0'); 
-                    content.classList.remove('scale-95'); 
-                    document.getElementById('bulkData').focus(); 
-                }, 20);
-            },
-
-            closeModals() {
-                ['settings', 'single', 'bulk', 'resetBookScore'].forEach(prefix => {
-                    const modal = document.getElementById(`${prefix}Modal`);
-                    const content = document.getElementById(`${prefix}ModalContent`);
-                    if(modal && !modal.classList.contains('hidden')) {
-                        modal.classList.add('opacity-0'); content.classList.add('scale-95');
-                        setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
-                    }
-                });
-            },
-
-            openResetBookScoreModal() {
-                const desc = document.getElementById('resetScoreDescription');
-                if (desc) {
-                    desc.innerText = this.deckMode === 'livro'
-                        ? 'Deseja realmente zerar sua pontuação de leitura completa neste deck de livro?'
-                        : 'Deseja realmente zerar sua pontuação neste deck?';
-                }
-                const modal = document.getElementById('resetBookScoreModal');
-                const content = document.getElementById('resetBookScoreModalContent');
-                modal.classList.remove('hidden'); modal.classList.add('flex');
-                setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); }, 20);
-            },
-
-            async resetBookScore() {
-                const btn = document.getElementById('btnConfirmResetBookScore');
-                const originalText = btn.innerHTML;
-                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
-                btn.disabled = true;
-
-                const res = await this.api('reset_book_score', { deck_id: this.deckId });
-                if (res) {
-                    if (this.deckMode === 'livro') this.bookCompletedReads = 0;
-                    this.deckPercentage = 0;
-                    this.updateGlobalProgressUI();
-                    this.showToast(res.message || 'Pontuação zerada com sucesso!', 'success');
-                    this.closeModals();
-                }
-
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            },
-
-            async saveSettings(e) {
-                e.preventDefault();
-                const radios = document.getElementsByName('deckMode');
-                let selectedMode = 'aleatorio';
-                for(let i=0; i<radios.length; i++){ if(radios[i].checked) selectedMode = radios[i].value; }
-
-                const frontLanguage = document.getElementById('deckFrontLanguage').value;
-                const backLanguage = document.getElementById('deckBackLanguage').value;
-                const structureRadios = document.getElementsByName('deckStructure');
-                let deckStructure = 'fatos';
-                for (let i = 0; i < structureRadios.length; i++) { if (structureRadios[i].checked) deckStructure = structureRadios[i].value; }
-
-                const btn = document.getElementById('btnSaveSettings');
-                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
-                btn.disabled = true;
-
-                const res = await this.api('update_settings', {
-                    deck_id: this.deckId,
-                    deck_mode: selectedMode,
-                    deck_front_language: frontLanguage,
-                    deck_back_language: backLanguage,
-                    deck_structure: deckStructure
-                });
-                if (res) {
-                    this.showToast(res.message, 'success');
-                    this.closeModals();
-                    await this.loadDeck(); 
-                }
-                btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar';
-                btn.disabled = false;
-            },
-
-            async translateCard() {
-                const frontEl = document.getElementById('singleFront');
-                const backEl = document.getElementById('singleBack');
-                const frontText = frontEl.value.trim();
-                const backText = backEl.value.trim();
-
-                if (frontText && backText) return this.showToast("Um dos campos deve estar vazio para poder traduzir para ele.", "error");
-                if (!frontText && !backText) return this.showToast("Preencha um dos campos primeiro para ser traduzido.", "error");
-
-                const textToTranslate = frontText || backText;
-                const targetEl = frontText ? backEl : frontEl;
-                const sourceLanguage = frontText ? this.frontLanguage : this.backLanguage;
-                const targetLanguage = frontText ? this.backLanguage : this.frontLanguage;
-
-                const btn = document.getElementById('btnTranslate');
-                const originalHtml = btn.innerHTML;
-                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
-                btn.disabled = true;
-
-                try {
-                    const res = await this.api('translate_text', { text: textToTranslate, source_language: sourceLanguage, target_language: targetLanguage });
-                    if (!res || !res.translation) throw new Error('A API não retornou uma tradução válida.');
-
-                    targetEl.value = res.translation;
-                    this.showToast("Tradução concluída!", "success");
-                } catch (error) {
-                    this.showToast("Falha ao traduzir: " + error.message, "error");
-                } finally {
-                    btn.innerHTML = originalHtml;
-                    btn.disabled = false;
-                }
-            },
-
-            async saveSingleCard(e) {
-                e.preventDefault();
-                const editId = document.getElementById('editCardId').value;
-                const frontVal = document.getElementById('singleFront').value.trim();
-                const backVal = document.getElementById('singleBack').value.trim();
-                const imageFront = document.getElementById('frontImageBase64').value;
-                const imageBack = document.getElementById('backImageBase64').value;
-                
-                if (!frontVal && !backVal && !imageFront && !imageBack) return this.showToast('Preencha pelo menos um lado do card com texto ou imagem.', 'error');
-                
-                const btn = document.getElementById('btnSaveSingle');
-                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>'; btn.disabled = true;
-
-                const actionName = editId ? 'update_card' : 'add_single';
-                const payload = { 
-                    deck_id: this.deckId, 
-                    front: frontVal, 
-                    back: backVal,
-                    image_front: imageFront,
-                    image_back: imageBack
-                };
-                if (editId) payload.card_id = editId;
-
-                const res = await this.api(actionName, payload);
-                if (res) {
-                    this.showToast(res.message, 'success');
-                    this.closeModals();
-                    if (editId) {
-                        const cardIndex = this.cards.findIndex(card => String(card.id) === String(editId));
-                        if (cardIndex !== -1) {
-                            this.cards[cardIndex] = {
-                                ...this.cards[cardIndex],
-                                front: frontVal,
-                                back: backVal,
-                                image_front: imageFront || null,
-                                image_back: imageBack || null
-                            };
-                            this.currentIndex = cardIndex;
-                            this.renderCurrentCard();
-                        } else {
-                            await this.loadDeck();
-                        }
-                    } else {
-                        await this.loadDeck();
-                    }
-                }
-                btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar'; btn.disabled = false;
-            },
-
-            async saveBulkCards(e) {
-                e.preventDefault();
-                const text = document.getElementById('bulkData').value;
-                const parsedCards = this.parseExcelData(text);
-                
-                if (parsedCards.length === 0) return;
-
-                const btn = document.getElementById('btnSaveBulk');
-                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Importando...'; 
-                btn.disabled = true;
-
-                const res = await this.api('add_bulk', { deck_id: this.deckId, cards: parsedCards });
-                if (res) {
-                    this.showToast(res.message, 'success');
-                    this.closeModals();
-                    await this.loadDeck();
-                } else {
-                    btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> <span class="hidden sm:inline">Importar para o Deck</span><span class="sm:hidden">Importar</span>'; 
-                    btn.disabled = false;
+                    $failed_count++;
                 }
             }
-        };
+        }
+    }
 
-        document.addEventListener('DOMContentLoaded', () => flashcardApp.init());
+    $baseMessage = 'Geração em fila concluída.';
+    if ($generated_count === 0 && $failed_count === 0) {
+        $baseMessage = 'Nenhum áudio pendente com texto encontrado neste diretório e subdiretórios.';
+    } elseif ($failed_count > 0) {
+        $baseMessage = 'Processo concluído com falhas em alguns cards.';
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'message' => $baseMessage,
+        'data' => [
+            'generated_count' => $generated_count,
+            'skipped_count' => $skipped_count,
+            'failed_count' => $failed_count
+        ]
+    ]);
+}
+
+elseif ($action === 'count_missing_audios_from_directory') {
+    $directory_id = (int)($input['directory_id'] ?? 0);
+    if ($directory_id === 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID do diretório inválido.']));
+    }
+
+    $directory = verifyDirectoryOwnership($pdo, $directory_id, $user_id);
+    if (!$directory) {
+        die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+    }
+
+    $decks = collectDecksFromDirectoryTree($pdo, $directory_id, $user_id);
+    $total_pending = 0;
+
+    foreach ($decks as $deck) {
+        $total_pending += countPendingAudiosForDeck($pdo, (int)$deck['id']);
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'message' => $total_pending > 0 ? 'Áudios pendentes encontrados.' : 'Nenhum áudio pendente encontrado.',
+        'data' => [
+            'total_pending' => $total_pending
+        ]
+    ]);
+}
+
+elseif ($action === 'generate_next_missing_audio_from_directory') {
+    $directory_id = (int)($input['directory_id'] ?? 0);
+    if ($directory_id === 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID do diretório inválido.']));
+    }
+
+    $directory = verifyDirectoryOwnership($pdo, $directory_id, $user_id);
+    if (!$directory) {
+        die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+    }
+
+    $decks = collectDecksFromDirectoryTree($pdo, $directory_id, $user_id);
+    $next_job = null;
+
+    foreach ($decks as $deck) {
+        $front_language = normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR');
+        $back_language = normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB');
+        $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
+        $next_job = findNextPendingAudioJobForDeck($pdo, (int)$deck['id'], $front_language, $back_language);
+        if ($next_job) {
+            $next_job['deck_structure'] = $deck_structure;
+            $next_job['front_language'] = $front_language;
+            $next_job['back_language'] = $back_language;
+            break;
+        }
+    }
+
+    if (!$next_job) {
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Nenhum áudio pendente restante.',
+            'data' => [
+                'done' => true,
+                'generated_count' => 0,
+                'failed_count' => 0,
+                'remaining_pending' => 0
+            ]
+        ]);
+        exit;
+    }
+
+    $ok = generateAndPersistCardAudio(
+        $pdo,
+        $user_id,
+        $next_job['card_id'],
+        $next_job['side'],
+        $next_job['text'],
+        $next_job['language'],
+        $next_job['deck_structure'] ?? 'fatos',
+        $next_job['front_language'] ?? 'pt-BR',
+        $next_job['back_language'] ?? 'en-GB'
+    );
+    $remaining_pending = 0;
+    foreach ($decks as $deck) {
+        $remaining_pending += countPendingAudiosForDeck($pdo, (int)$deck['id']);
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'message' => $ok ? 'Áudio gerado com sucesso.' : 'Falha ao gerar áudio do card atual.',
+        'data' => [
+            'done' => $remaining_pending === 0,
+            'generated_count' => $ok ? 1 : 0,
+            'failed_count' => $ok ? 0 : 1,
+            'remaining_pending' => $remaining_pending,
+            'card_id' => $next_job['card_id'],
+            'side' => $next_job['side']
+        ]
+    ]);
+}
+
+elseif ($action === 'translate_text') {
+    $text = trim($input['text'] ?? '');
+    $source_language = normalizeDeckLanguage($input['source_language'] ?? 'pt-BR', 'pt-BR');
+    $target_language = normalizeDeckLanguage($input['target_language'] ?? 'en-GB', 'en-GB');
+
+    if ($text === '') {
+        die(json_encode(['status' => 'error', 'message' => 'Texto inválido para tradução.']));
+    }
+
+    if ($source_language === $target_language) {
+        echo json_encode(['status' => 'success', 'translation' => $text]);
+        exit;
+    }
+
+    if (OPENAI_API_KEY === '') {
+        die(json_encode(['status' => 'error', 'message' => 'OPENAI_API_KEY não configurada no .env.']));
+    }
+
+    $systemPrompt = sprintf(
+        'Você é um tradutor automático direto e focado. Traduza de %s para %s e retorne EXCLUSIVAMENTE a tradução.',
+        getLanguageLabel($source_language),
+        getLanguageLabel($target_language)
+    );
+
+    $payload = json_encode([
+        'model' => 'gpt-5.4',
+        'messages' => [
+            ['role' => 'system', 'content' => $systemPrompt],
+            ['role' => 'user', 'content' => $text]
+        ],
+        'temperature' => 0.3
+    ]);
+
+    $ch = curl_init('https://api.openai.com/v1/chat/completions');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . OPENAI_API_KEY
+    ]);
+
+    $response = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpcode !== 200 || !$response) {
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao traduzir com a OpenAI.']));
+    }
+
+    $decoded = json_decode($response, true);
+    $translation = trim($decoded['choices'][0]['message']['content'] ?? '');
+
+    if ($translation === '') {
+        die(json_encode(['status' => 'error', 'message' => 'A API não retornou tradução válida.']));
+    }
+
+    echo json_encode(['status' => 'success', 'translation' => $translation]);
+}
+
+
+elseif ($action === 'update_score') {
+    $card_id = (int)($input['card_id'] ?? 0);
+    if ($card_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do card inválido.']));
+
+    if (!verifyCardOwnership($pdo, $card_id, $user_id)) {
+        die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
+    }
+
+    $stmt = $pdo->prepare("
+        INSERT INTO flashcard_scores (user_id, flashcard_id, score, next_review_at) 
+        VALUES (?, ?, 1, DATE_ADD(NOW(), INTERVAL 24 HOUR)) 
+        ON DUPLICATE KEY UPDATE 
+            score = IF(next_review_at IS NULL OR next_review_at <= NOW(), LEAST(score + 1, 20), score), 
+            last_reviewed_at = IF(next_review_at IS NULL OR next_review_at <= NOW(), CURRENT_TIMESTAMP, last_reviewed_at),
+            next_review_at = IF(next_review_at IS NULL OR next_review_at <= NOW(), DATE_ADD(NOW(), INTERVAL (LEAST(score + 1, 20) * 24) HOUR), next_review_at)
+    ");
+    
+    if ($stmt->execute([$user_id, $card_id])) echo json_encode(['status' => 'success']);
+    else echo json_encode(['status' => 'error']);
+}
+
+elseif ($action === 'update_progress') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    $index = (int)($input['index'] ?? 0);
+
+    $stmt = $pdo->prepare("
+        INSERT INTO flashcard_book_progress (user_id, directory_id, current_index) 
+        VALUES (?, ?, ?) 
+        ON DUPLICATE KEY UPDATE current_index = ?
+    ");
+    $stmt->execute([$user_id, $deck_id, $index, $index]);
+    echo json_encode(['status' => 'success']);
+}
+
+elseif ($action === 'increment_book_score') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
+
+    $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
+    if (!$deck || ($deck['deck_mode'] ?? 'aleatorio') !== 'livro') {
+        die(json_encode(['status' => 'error', 'message' => 'Pontuação disponível apenas para decks no modo livro.']));
+    }
+
+    $stmt = $pdo->prepare("
+        INSERT INTO flashcard_book_progress (user_id, directory_id, current_index, completed_reads, next_review_at) 
+        VALUES (?, ?, 0, 1, DATE_ADD(NOW(), INTERVAL 24 HOUR)) 
+        ON DUPLICATE KEY UPDATE
+            current_index = 0,
+            completed_reads = LEAST(completed_reads + 1, 3),
+            next_review_at = DATE_ADD(NOW(), INTERVAL (LEAST(completed_reads + 1, 20) * 24) HOUR)
+    ");
+    $stmt->execute([$user_id, $deck_id]);
+    echo json_encode(['status' => 'success']);
+}
+
+elseif ($action === 'reset_book_score') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
+
+    $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
+    if (!$deck) {
+        die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
+    }
+
+    $isBookMode = ($deck['deck_mode'] ?? 'aleatorio') === 'livro';
+
+    if ($isBookMode) {
+        $stmt = $pdo->prepare("
+            INSERT INTO flashcard_book_progress (user_id, directory_id, current_index, completed_reads, next_review_at) 
+            VALUES (?, ?, 0, 0, NULL) 
+            ON DUPLICATE KEY UPDATE current_index = 0, completed_reads = 0, next_review_at = NULL
+        ");
+        $stmt->execute([$user_id, $deck_id]);
+        echo json_encode(['status' => 'success', 'message' => 'Pontuação do livro zerada.']);
+    } else {
+        $stmt = $pdo->prepare("
+            DELETE fs FROM flashcard_scores fs
+            INNER JOIN flashcards f ON f.id = fs.flashcard_id
+            WHERE fs.user_id = ? AND f.directory_id = ?
+        ");
+        $stmt->execute([$user_id, $deck_id]);
+        echo json_encode(['status' => 'success', 'message' => 'Pontuação do deck zerada.']);
+    }
+}
+
+elseif ($action === 'update_settings') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    $mode = $input['deck_mode'] === 'livro' ? 'livro' : 'aleatorio';
+    $front_language = normalizeDeckLanguage($input['deck_front_language'] ?? 'pt-BR', 'pt-BR');
+    $back_language = normalizeDeckLanguage($input['deck_back_language'] ?? 'en-GB', 'en-GB');
+    $deck_structure = normalizeDeckStructure($input['deck_structure'] ?? 'fatos', 'fatos');
+
+    if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
+
+    $stmt = $pdo->prepare("UPDATE directories SET deck_mode = ?, deck_front_language = ?, deck_back_language = ?, deck_structure = ? WHERE id = ?");
+    if ($stmt->execute([$mode, $front_language, $back_language, $deck_structure, $deck_id])) echo json_encode(['status' => 'success', 'message' => 'Configurações atualizadas.']);
+    else echo json_encode(['status' => 'error', 'message' => 'Erro ao salvar.']);
+}
+
+// ==== Adicionar Novo Card ====
+elseif ($action === 'add_single') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    $front = trim($input['front'] ?? '');
+    $back = trim($input['back'] ?? '');
+    $image_front = $input['image_front'] ?? null;
+    $image_back = $input['image_back'] ?? null; 
+
+    $has_front = !empty($front) || !empty($image_front);
+    $has_back = !empty($back) || !empty($image_back);
+
+    if ($deck_id === 0 || (!$has_front && !$has_back)) {
+        die(json_encode(['status' => 'error', 'message' => 'Preencha pelo menos um lado do card com texto ou imagem.']));
+    }
+    if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) {
+        die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
+    }
+
+    $front_enc = !empty($front) ? Security::encryptData($front) : null;
+    $back_enc = !empty($back) ? Security::encryptData($back) : null;
+    $img_front_enc = !empty($image_front) ? Security::encryptData($image_front) : null;
+    $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
+
+    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, 0, 0)");
+    
+    if ($stmt->execute([$deck_id, $front_enc, $back_enc, $img_front_enc, $img_back_enc])) {
+        echo json_encode(['status' => 'success', 'message' => 'Card adicionado.']);
+    } else {
+        echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
+    }
+}
+
+// ==== Editar Card Existente ====
+elseif ($action === 'update_card') {
+    $card_id = (int)($input['card_id'] ?? 0);
+    $front = trim($input['front'] ?? '');
+    $back = trim($input['back'] ?? '');
+    $image_front = $input['image_front'] ?? null;
+    $image_back = $input['image_back'] ?? null;
+
+    $has_front = !empty($front) || !empty($image_front);
+    $has_back = !empty($back) || !empty($image_back);
+
+    if ($card_id === 0 || (!$has_front && !$has_back)) {
+        die(json_encode(['status' => 'error', 'message' => 'Dados inválidos. Preencha pelo menos um lado do card com texto ou imagem.']));
+    }
+
+    if (!verifyCardOwnership($pdo, $card_id, $user_id)) {
+        die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
+    }
+
+    $front_enc = !empty($front) ? Security::encryptData($front) : null;
+    $back_enc = !empty($back) ? Security::encryptData($back) : null;
+    $img_front_enc = !empty($image_front) ? Security::encryptData($image_front) : null;
+    $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
+
+    // Mantém os áudios existentes. Eles só devem ser alterados quando o usuário solicitar nova geração.
+    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ? WHERE id = ?");
+    
+    if ($stmt->execute([$front_enc, $back_enc, $img_front_enc, $img_back_enc, $card_id])) {
+        echo json_encode(['status' => 'success', 'message' => 'Card atualizado.']);
+    } else {
+        echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar card.']);
+    }
+}
+
+// ==== Deletar Card ====
+elseif ($action === 'delete_card') {
+    $card_id = (int)($input['card_id'] ?? 0);
+
+    if ($card_id === 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID do card inválido.']));
+    }
+
+    if (!verifyCardOwnership($pdo, $card_id, $user_id)) {
+        die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
+    }
+
+    $stmt = $pdo->prepare("DELETE FROM flashcards WHERE id = ?");
+    
+    if ($stmt->execute([$card_id])) {
+        echo json_encode(['status' => 'success', 'message' => 'Card excluído com sucesso.']);
+    } else {
+        echo json_encode(['status' => 'error', 'message' => 'Erro interno ao excluir card.']);
+    }
+}
+
+
+elseif ($action === 'create_batch_generation') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
+
+    $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
+    if (!$deck) die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+    if (OPENAI_API_KEY === '') die(json_encode(['status' => 'error', 'message' => 'OPENAI_API_KEY não configurada no .env.']));
+
+    $deck_name = Security::decryptData($deck['name_encrypted']);
+    $topic_input = trim((string)($input['topic'] ?? ''));
+    if ($topic_input !== '') {
+        $deck_name = function_exists('mb_substr') ? mb_substr($topic_input, 0, 200) : substr($topic_input, 0, 200);
+    }
+    $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
+    $custom_base_prompt = normalizeGenerationBasePromptInput($input['base_prompt'] ?? '');
+    if ($custom_base_prompt !== '') {
+        $savePromptStmt = $pdo->prepare("UPDATE directories SET deck_generation_base_prompt = ? WHERE id = ? AND user_id = ? LIMIT 1");
+        $savePromptStmt->execute([$custom_base_prompt, $deck_id, $user_id]);
+    }
+    $historyText = fetchDeckHistoryText($pdo, $deck_id);
+    $chatPayload = buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, 'gpt-5.4', $custom_base_prompt);
+
+    $jsonlLine = json_encode([
+        'custom_id' => 'deck_' . $deck_id . '_user_' . $user_id . '_' . time(),
+        'method' => 'POST',
+        'url' => '/v1/chat/completions',
+        'body' => $chatPayload
+    ], JSON_UNESCAPED_UNICODE);
+
+    if ($jsonlLine === false) {
+        die(json_encode(['status' => 'error', 'message' => 'Falha ao montar payload JSONL.']));
+    }
+
+    $tmpFile = tempnam(sys_get_temp_dir(), 'gluon_batch_');
+    file_put_contents($tmpFile, $jsonlLine . "
+");
+
+    $ch = curl_init('https://api.openai.com/v1/files');
+    $postFields = [
+        'purpose' => 'batch',
+        'file' => new CURLFile($tmpFile, 'application/jsonl', 'flashcards_batch.jsonl')
+    ];
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $postFields);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Bearer ' . OPENAI_API_KEY]);
+    $uploadResponse = curl_exec($ch);
+    $uploadCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $uploadErr = curl_error($ch);
+    curl_close($ch);
+    @unlink($tmpFile);
+
+    if ($uploadCode !== 200 || !$uploadResponse) {
+        $details = trim($uploadErr);
+        $decodedErr = json_decode((string)$uploadResponse, true);
+        if (!$details && is_array($decodedErr)) $details = (string)($decodedErr['error']['message'] ?? '');
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao enviar arquivo batch para OpenAI.' . ($details ? (' Detalhes: ' . $details) : '')]));
+    }
+
+    $uploadDecoded = json_decode($uploadResponse, true);
+    $inputFileId = trim((string)($uploadDecoded['id'] ?? ''));
+    if ($inputFileId === '') die(json_encode(['status' => 'error', 'message' => 'OpenAI não retornou input_file_id.']));
+
+    list($batchCode, $batchResponse, $batchErr) = openaiJsonRequest('https://api.openai.com/v1/batches', [
+        'input_file_id' => $inputFileId,
+        'endpoint' => '/v1/chat/completions',
+        'completion_window' => '24h',
+        'metadata' => [
+            'app' => 'gluon',
+            'feature' => 'flashcards_batch',
+            'user_id' => (string)$user_id,
+            'deck_id' => (string)$deck_id
+        ]
+    ]);
+
+    if ($batchCode !== 200 || !$batchResponse) {
+        $details = trim($batchErr);
+        $decodedErr = json_decode((string)$batchResponse, true);
+        if (!$details && is_array($decodedErr)) $details = (string)($decodedErr['error']['message'] ?? '');
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao criar job batch na OpenAI.' . ($details ? (' Detalhes: ' . $details) : '')]));
+    }
+
+    $batchDecoded = json_decode($batchResponse, true);
+    $openaiBatchId = trim((string)($batchDecoded['id'] ?? ''));
+    $status = trim((string)($batchDecoded['status'] ?? 'submitted'));
+    if ($openaiBatchId === '') die(json_encode(['status' => 'error', 'message' => 'OpenAI não retornou batch_id.']));
+
+    $stmt = $pdo->prepare("INSERT INTO flashcard_batch_jobs (user_id, directory_id, topic, deck_structure, openai_input_file_id, openai_batch_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$user_id, $deck_id, $topic_input !== '' ? $topic_input : null, $deck_structure, $inputFileId, $openaiBatchId, $status]);
+    $jobId = (int)$pdo->lastInsertId();
+
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'Batch enviado com sucesso para OpenAI.',
+        'job' => [
+            'id' => $jobId,
+            'openai_batch_id' => $openaiBatchId,
+            'openai_input_file_id' => $inputFileId,
+            'status' => $status
+        ]
+    ]);
+}
+
+elseif ($action === 'list_batch_generations') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
+    if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+
+    $stmt = $pdo->prepare("SELECT id, topic, deck_structure, openai_batch_id, openai_input_file_id, openai_output_file_id, status, error_message, result_cards_json, created_at, updated_at, completed_at FROM flashcard_batch_jobs WHERE user_id = ? AND directory_id = ? ORDER BY id DESC LIMIT 30");
+    $stmt->execute([$user_id, $deck_id]);
+    $rows = $stmt->fetchAll();
+
+    if (OPENAI_API_KEY !== '') {
+        foreach ($rows as $idx => $row) {
+            if (!in_array($row['status'], ['submitted', 'validating', 'in_progress', 'finalizing'], true)) continue;
+            $synced = syncBatchJobWithOpenAI($pdo, $row);
+            if (!$synced['ok'] || empty($synced['job'])) continue;
+
+            $rows[$idx]['status'] = $synced['job']['status'];
+            $rows[$idx]['openai_output_file_id'] = $synced['job']['openai_output_file_id'] ?: null;
+            $rows[$idx]['error_message'] = $synced['job']['error_message'];
+            if ($synced['job']['has_result']) {
+                $rows[$idx]['result_cards_json'] = '__HAS_RESULT__';
+            }
+        }
+    }
+
+    $jobs = [];
+    foreach ($rows as $r) {
+        $jobs[] = [
+            'id' => (int)$r['id'],
+            'topic' => $r['topic'] ?? '',
+            'deck_structure' => $r['deck_structure'],
+            'openai_batch_id' => $r['openai_batch_id'],
+            'openai_input_file_id' => $r['openai_input_file_id'],
+            'openai_output_file_id' => $r['openai_output_file_id'],
+            'status' => $r['status'],
+            'error_message' => $r['error_message'],
+            'has_result' => !empty($r['result_cards_json']),
+            'created_at' => $r['created_at'],
+            'updated_at' => $r['updated_at'],
+            'completed_at' => $r['completed_at']
+        ];
+    }
+
+    echo json_encode(['status' => 'success', 'jobs' => $jobs]);
+}
+
+elseif ($action === 'delete_batch_generation') {
+    $job_id = (int)($input['job_id'] ?? 0);
+    if ($job_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do job inválido.']));
+
+    $stmt = $pdo->prepare("SELECT j.id, j.directory_id, d.user_id as owner_id FROM flashcard_batch_jobs j JOIN directories d ON d.id = j.directory_id WHERE j.id = ? LIMIT 1");
+    $stmt->execute([$job_id]);
+    $job = $stmt->fetch();
+    if (!$job || (int)$job['owner_id'] !== (int)$user_id) die(json_encode(['status' => 'error', 'message' => 'Job não encontrado ou sem permissão.']));
+
+    $deleteStmt = $pdo->prepare("DELETE FROM flashcard_batch_jobs WHERE id = ? LIMIT 1");
+    if (!$deleteStmt->execute([$job_id])) {
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao excluir batch.']));
+    }
+
+    echo json_encode(['status' => 'success', 'message' => 'Batch excluído do histórico com sucesso.']);
+}
+
+elseif ($action === 'refresh_batch_generation') {
+    $job_id = (int)($input['job_id'] ?? 0);
+    if ($job_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do job inválido.']));
+    if (OPENAI_API_KEY === '') die(json_encode(['status' => 'error', 'message' => 'OPENAI_API_KEY não configurada no .env.']));
+
+    $stmt = $pdo->prepare("SELECT j.*, d.user_id as owner_id FROM flashcard_batch_jobs j JOIN directories d ON d.id = j.directory_id WHERE j.id = ? LIMIT 1");
+    $stmt->execute([$job_id]);
+    $job = $stmt->fetch();
+    if (!$job || (int)$job['owner_id'] !== (int)$user_id) die(json_encode(['status' => 'error', 'message' => 'Job não encontrado ou sem permissão.']));
+
+    $synced = syncBatchJobWithOpenAI($pdo, $job);
+    if (!$synced['ok']) {
+        die(json_encode(['status' => 'error', 'message' => $synced['error'] ?: 'Falha ao sincronizar batch.']));
+    }
+
+    echo json_encode(['status' => 'success', 'job' => $synced['job']]);
+}
+
+elseif ($action === 'get_batch_generation_result') {
+    $job_id = (int)($input['job_id'] ?? 0);
+    if ($job_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do job inválido.']));
+
+    $stmt = $pdo->prepare("SELECT j.result_cards_json, j.status, j.error_message, d.user_id as owner_id FROM flashcard_batch_jobs j JOIN directories d ON d.id = j.directory_id WHERE j.id = ? LIMIT 1");
+    $stmt->execute([$job_id]);
+    $job = $stmt->fetch();
+    if (!$job || (int)$job['owner_id'] !== (int)$user_id) die(json_encode(['status' => 'error', 'message' => 'Job não encontrado ou sem permissão.']));
+
+    $cards = json_decode((string)($job['result_cards_json'] ?? ''), true);
+    if (!is_array($cards) || empty($cards)) {
+        die(json_encode(['status' => 'error', 'message' => 'Este job ainda não possui resultado pronto. Status atual: ' . ($job['status'] ?? 'desconhecido')]));
+    }
+
+    echo json_encode(['status' => 'success', 'cards' => $cards]);
+}
+
+elseif ($action === 'generate_cards_preview') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
+
+    $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
+    if (!$deck) die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+    if (OPENAI_API_KEY === '') die(json_encode(['status' => 'error', 'message' => 'OPENAI_API_KEY não configurada no .env.']));
+
+    $deck_name = Security::decryptData($deck['name_encrypted']);
+    $topic_input = trim((string)($input['topic'] ?? ''));
+    if ($topic_input !== '') {
+        $deck_name = function_exists('mb_substr') ? mb_substr($topic_input, 0, 200) : substr($topic_input, 0, 200);
+    }
+    $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
+    $custom_base_prompt = normalizeGenerationBasePromptInput($input['base_prompt'] ?? '');
+
+    $historyText = fetchDeckHistoryText($pdo, $deck_id);
+    $payloadBase = buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, 'gpt-5.4', $custom_base_prompt);
+
+    $cards = [];
+    $openai_debug_response = null;
+    $lastErrorMessage = '';
+
+    for ($attempt = 1; $attempt <= 3; $attempt++) {
+        $payloadData = $payloadBase;
+        if ($attempt > 1) {
+            $payloadData['messages'][] = [
+                'role' => 'user',
+                'content' => 'Sua resposta anterior não seguiu o formato esperado. Regere e valide internamente antes de responder. Nunca deixe campos vazios que sejam obrigatórios para esta estrutura.'
+            ];
+        }
+
+        list($httpcode, $response, $curlError) = openaiJsonRequest('https://api.openai.com/v1/chat/completions', $payloadData);
+
+        if ($httpcode !== 200 || !$response) {
+            $apiError = '';
+            if (!empty($response)) {
+                $errorDecoded = json_decode($response, true);
+                $apiError = trim((string)($errorDecoded['error']['message'] ?? ''));
+            }
+            $details = trim($apiError !== '' ? $apiError : $curlError);
+            $lastErrorMessage = 'Erro ao gerar cards com a OpenAI.' . ($details !== '' ? (' Detalhes: ' . $details) : '');
+            continue;
+        }
+
+        $decoded = json_decode($response, true);
+        $openai_debug_response = $decoded;
+        $raw = (string)($decoded['choices'][0]['message']['content'] ?? '');
+        $cards = sanitizeGeneratedCards($raw, $deck_structure);
+        if (!empty($cards)) break;
+        $lastErrorMessage = 'A API retornou cards sem preenchimento obrigatório.';
+    }
+
+    if (empty($cards)) {
+        $message = $lastErrorMessage !== '' ? $lastErrorMessage : 'Não foi possível gerar cards válidos no formato esperado.';
+        die(json_encode(['status' => 'error', 'message' => $message]));
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'mode' => 'realtime',
+        'cards' => $cards,
+        'debug_openai_response' => $openai_debug_response
+    ]);
+}
+
+elseif ($action === 'create_generated_cards') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    $cards = $input['cards'] ?? [];
+    $batch_job_id = (int)($input['batch_job_id'] ?? 0);
+
+    if ($deck_id === 0 || !is_array($cards) || count($cards) === 0) die(json_encode(['status' => 'error', 'message' => 'Dados inválidos.']));
+    if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
+
+    try {
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted, has_audio_front, has_audio_back) VALUES (?, ?, ?, 0, 0)");
+        $count = 0;
+        foreach ($cards as $card) {
+            $front = trim((string)($card['front'] ?? ''));
+            $back = trim((string)($card['back'] ?? ''));
+            if ($front === '') continue;
+            $stmt->execute([$deck_id, Security::encryptData($front), $back !== '' ? Security::encryptData($back) : null]);
+            $count++;
+        }
+
+        if ($batch_job_id > 0) {
+            $delStmt = $pdo->prepare("DELETE FROM flashcard_batch_jobs WHERE id = ? AND user_id = ? AND directory_id = ? AND result_cards_json IS NOT NULL");
+            $delStmt->execute([$batch_job_id, $user_id, $deck_id]);
+        }
+
+        $pdo->commit();
+        echo json_encode(['status' => 'success', 'message' => "$count cards criados com sucesso!"]);
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        echo json_encode(['status' => 'error', 'message' => 'Erro interno ao criar cards.']);
+    }
+}
+
+elseif ($action === 'add_bulk') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    $cards = $input['cards'] ?? [];
+
+    if ($deck_id === 0 || !is_array($cards) || count($cards) === 0) die(json_encode(['status' => 'error', 'message' => 'Dados inválidos.']));
+    if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
+
+    try {
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted, has_audio_front, has_audio_back) VALUES (?, ?, ?, 0, 0)");
         
-////////////////////////////////////////
-//FORÇA A PROIBIÇÃO DE ZOOM PARA IPHONE
-// Impede o zoom de pinça (multi-touch)
-document.addEventListener('touchstart', function (event) {
-  if (event.touches.length > 1) {
-    event.preventDefault();
-  }
-}, { passive: false });
-
-// Impede o zoom de clique duplo (apenas no root do document, não nos botões)
-let lastTouchEndGlobal = 0;
-document.addEventListener('touchend', function (event) {
-  const now = (new Date()).getTime();
-  if (now - lastTouchEndGlobal <= 300 && !event.target.closest('.message-wrapper')) {
-    event.preventDefault();
-  }
-  lastTouchEndGlobal = now;
-}, false);
-////////////////////////////////////////
-    </script>
-</body>
-</html>
+        $count = 0;
+        foreach ($cards as $card) {
+            $front = trim($card['front'] ?? '');
+            $back = trim($card['back'] ?? '');
+            
+            if (!empty($front)) {
+                $front_enc = Security::encryptData($front);
+                $back_enc = !empty($back) ? Security::encryptData($back) : null;
+                $stmt->execute([$deck_id, $front_enc, $back_enc]);
+                $count++;
+            }
+        }
+        
+        $pdo->commit();
+        echo json_encode(['status' => 'success', 'message' => "$count cards importados!"]);
+        
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        echo json_encode(['status' => 'error', 'message' => 'Erro interno ao importar cards.']);
+    }
+}
+?>
