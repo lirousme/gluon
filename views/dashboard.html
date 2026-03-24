@@ -387,6 +387,9 @@
             <button id="primaryActionBtn" onclick="app.handlePrimaryAction()" class="w-full sm:w-auto bg-gluon-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 font-medium">
                 <i class="fa-solid fa-plus"></i> Novo Item
             </button>
+            <button id="trailGameBtn" onclick="app.openCurrentTrailGame()" class="hidden w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-lg shadow-emerald-500/20 transition-all items-center justify-center gap-2 font-medium">
+                <i class="fa-solid fa-gamepad"></i> Jogar trilha
+            </button>
         </div>
 
         <div id="loader" class="hidden flex-1 flex flex-col items-center justify-center text-slate-500 gap-3">
@@ -484,6 +487,18 @@
                                 <input type="radio" name="itemType" value="8" class="peer hidden type-radio">
                                 <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
                                     <i class="fa-solid fa-map-location-dot block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Trilha</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer" onclick="app.handleTypeChange(9)">
+                                <input type="radio" name="itemType" value="9" class="peer hidden type-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-map block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Mapa</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer" onclick="app.handleTypeChange(10)">
+                                <input type="radio" name="itemType" value="10" class="peer hidden type-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-layer-group block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Fase</span>
                                 </div>
                             </label>
                         </div>
@@ -606,6 +621,8 @@
                             <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="5" class="peer hidden"><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-list-check block text-lg mb-1"></i><span class="text-xs">Controle</span></div></label>
                             <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="6" class="peer hidden"><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-code-branch block text-lg mb-1"></i><span class="text-xs">Condicional</span></div></label>
                             <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="8" class="peer hidden"><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-map-location-dot block text-lg mb-1"></i><span class="text-xs">Trilha</span></div></label>
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="9" class="peer hidden"><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-map block text-lg mb-1"></i><span class="text-xs">Mapa</span></div></label>
+                            <label class="cursor-pointer"><input type="radio" name="dirPresetType" value="10" class="peer hidden"><div class="border border-slate-600 bg-slate-800 text-slate-300 rounded-lg p-2 text-center transition-all hover:bg-slate-700 peer-checked:border-gluon-primary peer-checked:bg-blue-500/20"><i class="fa-solid fa-layer-group block text-lg mb-1"></i><span class="text-xs">Fase</span></div></label>
                         </div>
                     </div>
 
@@ -1000,7 +1017,7 @@
             },
 
             openItemPreviewModal(item, forcedView = null, forcedId = null) {
-                const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 6: 'sistema_de_condicionais', 7: 'plano', 8: 'map' };
+                const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 6: 'sistema_de_condicionais', 7: 'plano', 10: 'flashcards' };
                 const targetType = forcedView ? null : Number(item?.type);
                 const targetView = forcedView || viewByType[targetType] || 'dashboard';
                 const targetId = forcedId || item?.id;
@@ -1047,7 +1064,7 @@
             },
 
             navigateToItemView(type, id, openMode = 'fullscreen', item = null) {
-                const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 6: 'sistema_de_condicionais', 7: 'plano', 8: 'map' };
+                const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 6: 'sistema_de_condicionais', 7: 'plano', 10: 'flashcards' };
                 if (openMode === 'preview') {
                     return this.openItemPreviewModal(item || { id, type });
                 }
@@ -1242,6 +1259,14 @@
                     folderSettings.style.display = 'none';
                     nameLabel.innerText = 'Nome da Matéria (Ex: Física, Matemática)';
                     this.autoChangeIcon('fa-map-location-dot');
+                } else if (typeValue === 9) {
+                    folderSettings.style.display = 'none';
+                    nameLabel.innerText = 'Nome do Mapa';
+                    this.autoChangeIcon('fa-map');
+                } else if (typeValue === 10) {
+                    folderSettings.style.display = 'none';
+                    nameLabel.innerText = 'Nome da Fase';
+                    this.autoChangeIcon('fa-layer-group');
                 }
             },
 
@@ -1676,6 +1701,39 @@
             getCurrentParentId() { return this.state.path[this.state.path.length - 1].id; },
             getCurrentView() { return this.state.path[this.state.path.length - 1].view; },
             getCurrentDirectoryType() { return this.state.path[this.state.path.length - 1].type; },
+            getCurrentDirectoryObject() {
+                const currentId = this.getCurrentParentId();
+                if (currentId === null) return null;
+                return this.state.directoryCache.get(Number(currentId)) || null;
+            },
+
+            getAllowedChildTypesForParent(parentType) {
+                if (Number(parentType) === 8) return [9];
+                if (Number(parentType) === 9) return [10];
+                return null;
+            },
+
+            applyTypeSelectorRestrictions(parentType) {
+                const allowedTypes = this.getAllowedChildTypesForParent(parentType);
+                const typeRadios = document.getElementsByName('itemType');
+                let firstEnabled = null;
+                for (let i = 0; i < typeRadios.length; i++) {
+                    const radio = typeRadios[i];
+                    const label = radio.closest('label');
+                    const typeValue = Number(radio.value);
+                    const enabled = !Array.isArray(allowedTypes) || allowedTypes.includes(typeValue);
+                    radio.disabled = !enabled;
+                    if (label) label.style.display = enabled ? '' : 'none';
+                    if (enabled && firstEnabled === null) firstEnabled = typeValue;
+                }
+                return firstEnabled;
+            },
+
+            openCurrentTrailGame() {
+                const currentDir = this.getCurrentDirectoryObject();
+                if (!currentDir || Number(currentDir.type) !== 8) return;
+                window.location.href = this.buildViewUrl('map', currentDir.id);
+            },
 
             isRecurrenceContext() {
                 return this.getCurrentDirectoryType() === 2;
@@ -2414,6 +2472,9 @@
                 });
 
                 const primaryBtn = document.getElementById('primaryActionBtn');
+                const trailGameBtn = document.getElementById('trailGameBtn');
+                const currentDir = this.getCurrentDirectoryObject();
+                const shouldShowTrailGame = !!(currentDir && Number(currentDir.type) === 8);
                 if (primaryBtn) {
                     const isReadOnlyDir = this.isCurrentDirectoryReadOnly();
                     if (!isVisitor && !isReadOnlyDir) {
@@ -2427,6 +2488,15 @@
                         const saved = this.state.isCurrentDirectorySaved;
                         primaryBtn.className = `w-full sm:w-auto shrink-0 px-4 py-2 rounded-lg transition-all flex items-center justify-center gap-2 font-medium ${saved ? 'bg-slate-600 text-slate-200' : 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-500/20'}`;
                         primaryBtn.innerHTML = `<i class="fa-solid fa-bookmark"></i> ${saved ? 'Salvo' : 'Salvar'}`;
+                    }
+                }
+                if (trailGameBtn) {
+                    if (shouldShowTrailGame) {
+                        trailGameBtn.classList.remove('hidden');
+                        trailGameBtn.classList.add('flex');
+                    } else {
+                        trailGameBtn.classList.add('hidden');
+                        trailGameBtn.classList.remove('flex');
                     }
                 }
 
@@ -2642,6 +2712,7 @@
                     openModeSettingsGroup.classList.remove('hidden');
                     
                     if (id) {
+                        this.applyTypeSelectorRestrictions(null);
                         const numericId = Number(id);
                         dirObj = this.state.directoryCache.get(numericId)
                             || this.state.path.find(p => Number(p.id) === numericId)
@@ -2659,6 +2730,9 @@
                         if(dirObj.type === 4) titleText = 'Flashcards';
                         if(dirObj.type === 6) titleText = 'Sistema de Condicional';
                         if(dirObj.type === 7) titleText = 'Plano';
+                        if(dirObj.type === 8) titleText = 'Trilha';
+                        if(dirObj.type === 9) titleText = 'Mapa';
+                        if(dirObj.type === 10) titleText = 'Fase';
 
                         document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-gear text-gluon-primary"></i> <span>Configurar ${titleText}</span>`;
                         document.getElementById('dirNameContainer').classList.remove('hidden');
@@ -2689,6 +2763,9 @@
                         else if(dirObj.type === 4) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Deck'; iconPickerContainer.style.display = 'block'; }
                         else if(dirObj.type === 6) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Sistema de Condicional'; iconPickerContainer.style.display = 'block'; }
                         else if(dirObj.type === 7) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Plano'; iconPickerContainer.style.display = 'block'; }
+                        else if(dirObj.type === 8) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome da Trilha'; iconPickerContainer.style.display = 'block'; }
+                        else if(dirObj.type === 9) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Mapa'; iconPickerContainer.style.display = 'block'; }
+                        else if(dirObj.type === 10) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome da Fase'; iconPickerContainer.style.display = 'block'; }
 
                         if (dirObj.type === 0) {
                             btnPreset.classList.remove('hidden');
@@ -2700,9 +2777,16 @@
                         typeSelector.classList.remove('hidden');
                         iconPickerContainer.style.display = 'block';
                         
-                        const typeRadios = document.getElementsByName('itemType');
-                        typeRadios[0].checked = true;
-                        this.handleTypeChange(0);
+                        const resolvedParentId = targetParentId !== null ? Number(targetParentId) : this.getCurrentParentId();
+                        const parentObj = resolvedParentId === null ? null : this.state.directoryCache.get(Number(resolvedParentId));
+                        const firstEnabledType = this.applyTypeSelectorRestrictions(parentObj ? Number(parentObj.type) : null);
+                        if (firstEnabledType !== null) {
+                            const typeRadios = document.getElementsByName('itemType');
+                            for (let i = 0; i < typeRadios.length; i++) {
+                                typeRadios[i].checked = Number(typeRadios[i].value) === Number(firstEnabledType);
+                            }
+                            this.handleTypeChange(Number(firstEnabledType));
+                        }
                         publicToggleContainer.classList.remove('hidden');
                         openModeSettingsGroup.classList.remove('hidden');
                     }
@@ -2742,7 +2826,7 @@
                 document.getElementById('dirColorFrom').value = (dirObj && dirObj.color_from) ? dirObj.color_from : '#3b82f6';
                 document.getElementById('dirColorTo').value = (dirObj && dirObj.color_to) ? dirObj.color_to : '#6366f1';
                 
-                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (isRootSettings ? 'fa-folder' : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : (dirObj?.type === 3 ? 'fa-door-open' : (dirObj?.type === 4 ? 'fa-layer-group' : (dirObj?.type === 6 ? 'fa-code-branch' : (dirObj?.type === 7 ? 'fa-list-ol' : 'fa-folder'))))))); 
+                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (isRootSettings ? 'fa-folder' : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : (dirObj?.type === 3 ? 'fa-door-open' : (dirObj?.type === 4 ? 'fa-layer-group' : (dirObj?.type === 6 ? 'fa-code-branch' : (dirObj?.type === 7 ? 'fa-list-ol' : (dirObj?.type === 8 ? 'fa-map-location-dot' : (dirObj?.type === 9 ? 'fa-map' : (dirObj?.type === 10 ? 'fa-layer-group' : 'fa-folder')))))))))); 
                 this.autoChangeIcon(iconToSelect);
 
                 document.getElementById('dirIsPublic').checked = !id || id === 'root' ? true : !!(dirObj && dirObj.is_public === 1);
@@ -2769,17 +2853,22 @@
                 if (!id) {
                     const resolvedParentId = targetParentId !== null ? Number(targetParentId) : this.getCurrentParentId();
                     const parentPreset = this.resolveParentCreationPreset(resolvedParentId);
+                    const parentObj = resolvedParentId === null ? null : this.state.directoryCache.get(Number(resolvedParentId));
+                    const allowedTypes = this.getAllowedChildTypesForParent(parentObj ? Number(parentObj.type) : null);
                     viewToSelect = parentPreset.view;
 
                     const typeRadios = document.getElementsByName('itemType');
+                    const targetType = Array.isArray(allowedTypes) && !allowedTypes.includes(Number(parentPreset.type))
+                        ? Number(allowedTypes[0])
+                        : Number(parentPreset.type);
                     for (let i = 0; i < typeRadios.length; i++) {
-                        typeRadios[i].checked = Number(typeRadios[i].value) === parentPreset.type;
+                        typeRadios[i].checked = Number(typeRadios[i].value) === targetType;
                     }
-                    this.handleTypeChange(parentPreset.type);
+                    this.handleTypeChange(targetType);
 
                     const dirPresetTypeRadios = document.getElementsByName('dirPresetType');
                     for (let i = 0; i < dirPresetTypeRadios.length; i++) {
-                        dirPresetTypeRadios[i].checked = Number(dirPresetTypeRadios[i].value) === parentPreset.type;
+                        dirPresetTypeRadios[i].checked = Number(dirPresetTypeRadios[i].value) === targetType;
                     }
                     const dirPresetViewRadios = document.getElementsByName('dirPresetView');
                     for (let i = 0; i < dirPresetViewRadios.length; i++) {
