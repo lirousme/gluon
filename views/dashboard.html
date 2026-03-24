@@ -1732,7 +1732,7 @@
             openCurrentTrailGame() {
                 const currentDir = this.getCurrentDirectoryObject();
                 if (!currentDir || Number(currentDir.type) !== 8) return;
-                window.location.href = this.buildViewUrl('map', currentDir.id);
+                window.location.href = this.buildViewUrl('map', currentDir.id, { name: currentDir.name || 'Trilha' });
             },
 
             isRecurrenceContext() {
