@@ -20,7 +20,6 @@
         .pager button { border:0; border-radius:.7rem; padding:.45rem .65rem; cursor:pointer; font-weight:700; }
         .pager button:disabled { opacity:.4; cursor:not-allowed; }
         .map-board { position:relative; border-radius:1.2rem; overflow:hidden; background:#1f2937 center/cover no-repeat; }
-        .map-board::after { content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(14,18,30,.1), rgba(14,18,30,.35)); pointer-events:none; }
         .nodes { position:absolute; inset:2.5rem 2rem 1.7rem; z-index:2; }
         .level-btn { --size:2.6rem; position:absolute; width:var(--size); height:var(--size); border-radius:50%; border:0; display:grid; place-items:center; color:#fff; font-weight:800; background:linear-gradient(180deg,#ffb44f,#dc7c14); cursor:pointer; box-shadow:0 .2rem .5rem rgba(0,0,0,.35); }
         .legend { position:absolute; left:50%; transform:translateX(-50%); bottom:.8rem; background:rgba(13,32,53,.58); border-radius:999px; padding:.3rem .65rem; font-size:.72rem; z-index:2; }
@@ -74,10 +73,10 @@ async function apiDirectories(action, payload = {}) {
 }
 
 function setMapBackground(mapNumber){
-    const fallback = "linear-gradient(180deg, rgba(14,18,30,.15), rgba(14,18,30,.35)), url('../assets/map-bg-candy.svg') center/cover no-repeat";
+    const fallback = "url('../assets/map-bg-candy.svg') center/cover no-repeat";
     const img = new Image();
     img.onload = () => {
-        mapBoard.style.background = `linear-gradient(180deg, rgba(14,18,30,.1), rgba(14,18,30,.3)), url('../assets/mapa-${mapNumber}.jpg') center/cover no-repeat`;
+        mapBoard.style.background = `url('../assets/mapa-${mapNumber}.jpg') center/cover no-repeat`;
     };
     img.onerror = () => {
         mapBoard.style.background = fallback;
