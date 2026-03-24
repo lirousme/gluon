@@ -459,10 +459,10 @@ else if ($action === 'complete_task') {
         }
 
         $isRecurring = ((int)($task['is_recurring'] ?? 0) === 1);
-        $hasContext = !empty($contextStart);
 
-        if ($isRecurring && $hasContext) {
-            $exceptionValue = normalizeExceptionValue((string)($task['rec_type'] ?? ''), $contextStart);
+        if ($isRecurring) {
+            $effectiveContextStart = $contextStart ?: ($task['start_date'] ?? null);
+            $exceptionValue = normalizeExceptionValue((string)($task['rec_type'] ?? ''), $effectiveContextStart);
             if ($exceptionValue) {
                 appendRecurrenceException($pdo, $id, $exceptionValue);
                 $pdo->commit();
