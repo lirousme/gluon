@@ -118,8 +118,13 @@ try {
 } catch (PDOException $e) {}
 
 // Função auxiliar para verificar se o usuário é dono do deck (Segurança IDOR)
+function isFlashcardDeckDirectoryType($type): bool {
+    $type = (int)$type;
+    return $type === 4 || $type === 10; // Deck tradicional ou Fase (deck de fase)
+}
+
 function verifyDeckOwnership($pdo, $deck_id, $user_id) {
-    $stmt = $pdo->prepare("SELECT id, name_encrypted, deck_mode, deck_front_language, deck_back_language, deck_structure, deck_generation_base_prompt FROM directories WHERE id = ? AND user_id = ? AND type = 4");
+    $stmt = $pdo->prepare("SELECT id, type, name_encrypted, deck_mode, deck_front_language, deck_back_language, deck_structure, deck_generation_base_prompt FROM directories WHERE id = ? AND user_id = ? AND type IN (4, 10)");
     $stmt->execute([$deck_id, $user_id]);
     return $stmt->fetch();
 }
@@ -142,7 +147,7 @@ function collectDecksFromDirectoryTree($pdo, $root_directory_id, $user_id) {
     }
 
     $queue = [(int)$root['id']];
-    if ((int)$root['type'] === 4) {
+    if (isFlashcardDeckDirectoryType($root['type'])) {
         $decks[] = $root;
     }
 
@@ -169,7 +174,7 @@ function collectDecksFromDirectoryTree($pdo, $root_directory_id, $user_id) {
         foreach ($children as $child) {
             $child_id = (int)$child['id'];
             $queue[] = $child_id;
-            if ((int)$child['type'] === 4) {
+            if (isFlashcardDeckDirectoryType($child['type'])) {
                 $decks[] = $child;
             }
         }
