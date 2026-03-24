@@ -88,7 +88,8 @@ function setMapBackground(mapNumber){
 function renderNodes(phases){
     nodesEl.innerHTML='';
     phases.forEach((phase, i) => {
-        const p = positions[i] || { l: 50, t: 50 };
+        const positionIndex = positions.length - 1 - i;
+        const p = positions[positionIndex] || { l: 50, t: 50 };
         const b = document.createElement('button');
         b.className = 'level-btn';
         b.style.left = `${p.l}%`;
