@@ -263,9 +263,52 @@ function normalizeDeckStructureForDirectory($value, $default = 'fatos') {
 }
 
 function normalizeChildDefaultType($value, $default = 0) {
-    $allowed = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+    $allowed = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
     $type = (int)$value;
     return in_array($type, $allowed, true) ? $type : (int)$default;
+}
+
+function getDirectoryTypeById(PDO $pdo, int $user_id, ?int $directory_id): ?int {
+    if ($directory_id === null) return null;
+    $stmt = $pdo->prepare("SELECT type FROM directories WHERE id = ? AND user_id = ? LIMIT 1");
+    $stmt->execute([$directory_id, $user_id]);
+    $row = $stmt->fetch();
+    if (!$row) return null;
+    return (int)$row['type'];
+}
+
+function getAllowedChildTypesForParentType(?int $parentType): ?array {
+    // null = sem restrição adicional
+    if ($parentType === null) return null;
+    if ($parentType === 8) return [9];   // Trilha só aceita Mapa
+    if ($parentType === 9) return [10];  // Mapa só aceita Fase
+    return null;
+}
+
+function validateDirectoryHierarchy(PDO $pdo, int $user_id, ?int $parent_id, int $type): ?string {
+    $parentType = getDirectoryTypeById($pdo, $user_id, $parent_id);
+    if ($parent_id !== null && $parentType === null) {
+        return 'Diretório pai inválido.';
+    }
+
+    // Mapa só pode ser criado dentro de Trilha
+    if ($type === 9 && $parentType !== 8) {
+        return 'Diretórios do tipo Mapa só podem ser criados dentro de uma Trilha.';
+    }
+
+    // Fase só pode ser criada dentro de Mapa
+    if ($type === 10 && $parentType !== 9) {
+        return 'Diretórios do tipo Fase só podem ser criados dentro de um Mapa.';
+    }
+
+    // Trilha e Mapa possuem restrição rígida de filhos
+    $allowedChildren = getAllowedChildTypesForParentType($parentType);
+    if (is_array($allowedChildren) && !in_array($type, $allowedChildren, true)) {
+        if ($parentType === 8) return 'Dentro de uma Trilha só é permitido criar diretórios do tipo Mapa.';
+        if ($parentType === 9) return 'Dentro de um Mapa só é permitido criar diretórios do tipo Fase.';
+    }
+
+    return null;
 }
 
 function normalizeChildDefaultView($value, $default = 'grid') {
@@ -616,6 +659,8 @@ elseif ($action === 'create') {
     if($type === 5) $default_icon = 'fa-list-check';
     if($type === 6) $default_icon = 'fa-code-branch';
     if($type === 8) $default_icon = 'fa-map-location-dot';
+    if($type === 9) $default_icon = 'fa-map';
+    if($type === 10) $default_icon = 'fa-layer-group';
 
     $icon = preg_match('/^fa-[a-z0-9-]+$/', $input['icon'] ?? '') ? $input['icon'] : $default_icon;
     $color_from = preg_match('/^#[a-fA-F0-9]{6}$/', $input['color_from'] ?? '') ? $input['color_from'] : '#3b82f6';
@@ -643,6 +688,11 @@ elseif ($action === 'create') {
 
     if (empty($name)) {
         die(json_encode(['status' => 'error', 'message' => 'O nome não pode ser vazio.']));
+    }
+
+    $hierarchyError = validateDirectoryHierarchy($pdo, $user_id, $parent_id, $type);
+    if ($hierarchyError !== null) {
+        die(json_encode(['status' => 'error', 'message' => $hierarchyError]));
     }
 
     $name_encrypted = Security::encryptData($name);
@@ -815,6 +865,15 @@ elseif ($action === 'update') {
     $type = isset($input['type']) ? (int)$input['type'] : $currentType;
     if ($type === 3) {
         $icon = 'fa-door-open';
+    }
+
+    $stmtParent = $pdo->prepare("SELECT parent_id FROM directories WHERE id = ? AND user_id = ?");
+    $stmtParent->execute([$id, $user_id]);
+    $currentParentIdRaw = $stmtParent->fetchColumn();
+    $currentParentId = $currentParentIdRaw !== false && $currentParentIdRaw !== null ? (int)$currentParentIdRaw : null;
+    $hierarchyError = validateDirectoryHierarchy($pdo, $user_id, $currentParentId, $type);
+    if ($hierarchyError !== null) {
+        die(json_encode(['status' => 'error', 'message' => $hierarchyError]));
     }
 
     $name_encrypted = Security::encryptData($name);

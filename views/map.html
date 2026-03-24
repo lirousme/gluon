@@ -50,7 +50,7 @@
                 <button data-theme="farm" aria-pressed="false">Fazenda</button>
                 <button data-theme="eclipse" aria-pressed="false">Eclipse</button>
             </div>
-            <a id="adminLink" href="#" style="color:#fff;font-size:.82rem;text-decoration:none;">Administrar</a>
+            <span style="color:#fff;font-size:.82rem;opacity:.85;">Modo jogo</span>
         </div>
         <div class="map-board">
             <div class="msg" id="mapMsg"></div>
@@ -108,7 +108,6 @@ async function loadMap(mapNumber = 1){
     document.getElementById('mapMeta').textContent = `Mapa ${activeMap} de ${totalMaps} · 10 fases por mapa`;
     const hue = (activeMap * 37) % 360;
     document.documentElement.style.setProperty('--hud', `hsla(${hue},55%,20%,0.6)`);
-    document.getElementById('adminLink').href = `/map_admin?id=${trackId}`;
     renderNodes(data.nodes);
 }
 
