@@ -8,30 +8,27 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@500;700&display=swap" rel="stylesheet" />
     <style>
-        :root { --body-bg:#f6afc6; --board-image:url("../assets/map-bg-candy.svg"); --hud:rgba(17,29,47,.6); }
+        :root { --hud:rgba(17,29,47,.65); }
         * { box-sizing:border-box; margin:0; padding:0; }
-        body { min-height:100vh; background:var(--body-bg); color:#fff; font-family:"Nunito",sans-serif; overflow:hidden; }
-        body.season-farm { --body-bg:#95bf6f; --board-image:url("../assets/map-bg-farm.svg"); }
-        body.season-eclipse { --body-bg:#2a1b34; --board-image:url("../assets/map-bg-volcano.svg"); }
+        body { min-height:100vh; background:linear-gradient(180deg,#0f172a,#1e293b); color:#fff; font-family:"Nunito",sans-serif; overflow:hidden; }
         .page { min-height:100vh; display:grid; place-items:center; padding:1rem; }
         .map-shell { width:min(100%,31rem); height:min(95vh,58rem); border-radius:2rem; border:.14rem solid rgba(255,255,255,.45); background:rgba(255,255,255,.08); padding:1rem; display:grid; grid-template-rows:auto 1fr; gap:.8rem; }
         .hud { display:flex; align-items:center; justify-content:space-between; gap:.6rem; background:var(--hud); border-radius:1rem; padding:.6rem .75rem; }
         .hud h1 { font-family:"Baloo 2",cursive; font-size:1rem; line-height:1.2; }
         .hud small { display:block; font-size:.78rem; opacity:.9; }
-        .theme-switch button,.pager button { border:0; border-radius:.7rem; padding:.4rem .6rem; cursor:pointer; font-weight:700; }
-        .theme-switch button[aria-pressed="true"] { box-shadow:0 .3rem .8rem rgba(255,255,255,.35); }
-        .map-board { position:relative; border-radius:1.2rem; overflow:hidden; background:linear-gradient(180deg, rgba(14,18,30,.15), rgba(14,18,30,.25)), var(--board-image) center/cover no-repeat; }
-        .nodes { position:absolute; inset:2.5rem 2rem 1.7rem; }
-        .level-btn { --size:2.6rem; position:absolute; width:var(--size); height:var(--size); border-radius:50%; border:0; display:grid; place-items:center; color:#fff; font-weight:800; background:linear-gradient(180deg,#ff7676,#d92f2f); cursor:pointer; }
-        .level-btn.done { background:linear-gradient(180deg,#57dc8d,#1f9b58); }
-        .level-btn.locked { background:linear-gradient(180deg,#dce4ef,#9eacbf); cursor:not-allowed; }
-        .legend { position:absolute; left:50%; transform:translateX(-50%); bottom:.8rem; background:rgba(13,32,53,.58); border-radius:999px; padding:.3rem .65rem; font-size:.72rem; }
-        .msg { position:absolute; top:1rem; left:50%; transform:translateX(-50%); background:rgba(18,41,66,.75); border-radius:.7rem; padding:.5rem .8rem; opacity:0; transition:opacity .2s; z-index:5; }
-        .msg.show { opacity:1; }
         .pager { display:flex; align-items:center; gap:.45rem; }
+        .pager button { border:0; border-radius:.7rem; padding:.45rem .65rem; cursor:pointer; font-weight:700; }
+        .pager button:disabled { opacity:.4; cursor:not-allowed; }
+        .map-board { position:relative; border-radius:1.2rem; overflow:hidden; background:#1f2937 center/cover no-repeat; }
+        .map-board::after { content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(14,18,30,.1), rgba(14,18,30,.35)); pointer-events:none; }
+        .nodes { position:absolute; inset:2.5rem 2rem 1.7rem; z-index:2; }
+        .level-btn { --size:2.6rem; position:absolute; width:var(--size); height:var(--size); border-radius:50%; border:0; display:grid; place-items:center; color:#fff; font-weight:800; background:linear-gradient(180deg,#ffb44f,#dc7c14); cursor:pointer; box-shadow:0 .2rem .5rem rgba(0,0,0,.35); }
+        .legend { position:absolute; left:50%; transform:translateX(-50%); bottom:.8rem; background:rgba(13,32,53,.58); border-radius:999px; padding:.3rem .65rem; font-size:.72rem; z-index:2; }
+        .msg { position:absolute; top:1rem; left:50%; transform:translateX(-50%); background:rgba(18,41,66,.8); border-radius:.7rem; padding:.5rem .8rem; opacity:0; transition:opacity .2s; z-index:5; }
+        .msg.show { opacity:1; }
     </style>
 </head>
-<body class="season-summer">
+<body>
 <main class="page">
     <section class="map-shell">
         <header class="hud">
@@ -44,18 +41,10 @@
                 <button id="btnNext">▶</button>
             </div>
         </header>
-        <div class="hud" style="padding:.5rem .75rem;">
-            <div class="theme-switch" role="group" aria-label="Tema do mapa">
-                <button data-theme="summer" aria-pressed="true">Doce</button>
-                <button data-theme="farm" aria-pressed="false">Fazenda</button>
-                <button data-theme="eclipse" aria-pressed="false">Eclipse</button>
-            </div>
-            <span style="color:#fff;font-size:.82rem;opacity:.85;">Modo jogo</span>
-        </div>
-        <div class="map-board">
+        <div class="map-board" id="mapBoard">
             <div class="msg" id="mapMsg"></div>
             <div class="nodes" id="nodes"></div>
-            <div class="legend">✔ concluída · 🔓 atual · 🔒 bloqueada</div>
+            <div class="legend">Fases do mapa atual</div>
         </div>
     </section>
 </main>
@@ -64,67 +53,105 @@ const qs = new URLSearchParams(location.search);
 const trackId = Number(qs.get('id') || 0);
 const nodesEl = document.getElementById('nodes');
 const msg = document.getElementById('mapMsg');
-let activeMap = 1; let totalMaps = 1;
+const mapBoard = document.getElementById('mapBoard');
+let activeMap = 1;
+let mapDirectories = [];
 
 const positions = [
     {l:47,t:3},{l:68,t:12},{l:34,t:19},{l:50,t:28},{l:72,t:37},
     {l:42,t:46},{l:25,t:55},{l:58,t:64},{l:70,t:73},{l:48,t:82}
 ];
 
-function toast(text){ msg.textContent=text; msg.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>msg.classList.remove('show'),1800); }
+function toast(text){ msg.textContent=text; msg.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>msg.classList.remove('show'),2000); }
 
-async function api(action, payload={}) {
-    const res = await fetch('/api/trilha', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action, ...payload}) });
+async function apiDirectories(action, payload = {}) {
+    const res = await fetch('/api/directories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ...payload })
+    });
     return res.json();
 }
 
-function renderNodes(nodes){
+function setMapBackground(mapNumber){
+    const fallback = "linear-gradient(180deg, rgba(14,18,30,.15), rgba(14,18,30,.35)), url('../assets/map-bg-candy.svg') center/cover no-repeat";
+    const img = new Image();
+    img.onload = () => {
+        mapBoard.style.background = `linear-gradient(180deg, rgba(14,18,30,.1), rgba(14,18,30,.3)), url('../assets/mapa-${mapNumber}.jpg') center/cover no-repeat`;
+    };
+    img.onerror = () => {
+        mapBoard.style.background = fallback;
+    };
+    img.src = `../assets/mapa-${mapNumber}.jpg`;
+}
+
+function renderNodes(phases){
     nodesEl.innerHTML='';
-    nodes.forEach((node, i) => {
-        const p = positions[i] || {l:50,t:50};
+    phases.forEach((phase, i) => {
+        const p = positions[i] || { l: 50, t: 50 };
         const b = document.createElement('button');
-        b.className = `level-btn ${node.state === 'done' ? 'done' : (node.state === 'locked' ? 'locked':'')}`;
-        b.style.left = `${p.l}%`; b.style.top = `${p.t}%`;
-        b.textContent = String(node.phase_number);
-        b.title = `${node.title}`;
-        b.onclick = async () => {
-            if (node.state === 'locked') {
-                if (Array.isArray(node.missing_depends_on_positions) && node.missing_depends_on_positions.length) {
-                    return toast(`Fase bloqueada. Pré-requisitos: ${node.missing_depends_on_positions.join(', ')}`);
-                }
-                return toast('Fase bloqueada.');
-            }
-            window.location.href = `/phase?id=${trackId}&node=${node.id}`;
+        b.className = 'level-btn';
+        b.style.left = `${p.l}%`;
+        b.style.top = `${p.t}%`;
+        b.textContent = String(i + 1);
+        b.title = phase.name || `Fase ${i + 1}`;
+        b.onclick = () => {
+            window.location.href = `/flashcards?id=${phase.id}&from=${encodeURIComponent(location.pathname + location.search)}`;
         };
         nodesEl.appendChild(b);
     });
 }
 
-async function loadMap(mapNumber = 1){
-    const data = await api('fetch_map', {directory_id: trackId, map_number: mapNumber});
-    if (data.status !== 'success') { toast(data.message || 'Erro ao carregar mapa.'); return; }
-    activeMap = data.map_number; totalMaps = data.total_maps;
-    document.getElementById('trackTitle').textContent = `🗺️ ${data.track.name}`;
-    document.getElementById('mapMeta').textContent = `Mapa ${activeMap} de ${totalMaps} · 10 fases por mapa`;
-    const hue = (activeMap * 37) % 360;
-    document.documentElement.style.setProperty('--hud', `hsla(${hue},55%,20%,0.6)`);
-    renderNodes(data.nodes);
+async function loadMaps(){
+    const data = await apiDirectories('fetch', { parent_id: trackId });
+    if (data.status !== 'success') {
+        toast(data.message || 'Erro ao carregar trilha.');
+        return;
+    }
+
+    mapDirectories = (Array.isArray(data.data) ? data.data : [])
+        .filter(item => Number(item.type) === 9)
+        .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || Number(a.id) - Number(b.id));
+
+    if (!mapDirectories.length) {
+        document.getElementById('trackTitle').textContent = '🗺️ Trilha sem mapas';
+        document.getElementById('mapMeta').textContent = 'Crie diretórios do tipo Mapa dentro da trilha';
+        renderNodes([]);
+        return;
+    }
+
+    const trailName = qs.get('name') || 'Trilha';
+    document.getElementById('trackTitle').textContent = `🗺️ ${trailName}`;
+    loadMap(1);
 }
 
-document.getElementById('btnPrev').onclick = () => loadMap(Math.max(1, activeMap - 1));
-document.getElementById('btnNext').onclick = () => loadMap(Math.min(totalMaps, activeMap + 1));
+async function loadMap(mapIndex){
+    if (!mapDirectories.length) return;
+    activeMap = Math.max(1, Math.min(mapDirectories.length, mapIndex));
+    const mapDir = mapDirectories[activeMap - 1];
 
-document.querySelectorAll('[data-theme]').forEach((btn)=>{
-    btn.addEventListener('click', ()=>{
-        const th = btn.dataset.theme;
-        document.body.classList.remove('season-summer','season-farm','season-eclipse');
-        document.body.classList.add(`season-${th}`);
-        document.querySelectorAll('[data-theme]').forEach(b=>b.setAttribute('aria-pressed', String(b===btn)));
-    });
-});
+    const data = await apiDirectories('fetch', { parent_id: mapDir.id });
+    if (data.status !== 'success') {
+        toast(data.message || 'Erro ao carregar fases do mapa.');
+        return;
+    }
+
+    const phases = (Array.isArray(data.data) ? data.data : [])
+        .filter(item => Number(item.type) === 10)
+        .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || Number(a.id) - Number(b.id));
+
+    setMapBackground(activeMap);
+    document.getElementById('mapMeta').textContent = `Mapa ${activeMap} de ${mapDirectories.length} · ${phases.length} fases`;
+    document.getElementById('btnPrev').disabled = activeMap <= 1;
+    document.getElementById('btnNext').disabled = activeMap >= mapDirectories.length;
+    renderNodes(phases);
+}
+
+document.getElementById('btnPrev').onclick = () => loadMap(activeMap - 1);
+document.getElementById('btnNext').onclick = () => loadMap(activeMap + 1);
 
 if (!trackId) toast('Informe o id da trilha na URL.');
-else loadMap(1);
+else loadMaps();
 </script>
 </body>
 </html>
