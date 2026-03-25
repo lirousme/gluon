@@ -183,6 +183,15 @@ INDEX idx_user_card (user_id, flashcard_id),
 INDEX idx_flashcard_user_next_review (flashcard_id, user_id, next_review_at, score)
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+======================================================================
+
+REGRA DE PROGRESSÃO DE FASE (TRILHA/MAPA/FASE)
+- Tipo 8 (Trilha) aceita apenas filhos do tipo 9 (Mapa).
+- Tipo 9 (Mapa) aceita apenas filhos do tipo 10 (Fase).
+- Tipo 10 (Fase) funciona como deck de flashcards jogável no mapa.
+- Desbloqueio: a fase N+1 só libera quando a fase N tiver pelo menos 1 flashcard e `deck_due_cards = 0` para o usuário.
+- Navegação entre mapas é permitida, mas fases bloqueadas continuam inacessíveis até cumprir a revisão da fase anterior.
+
 
 ======================================================================
 
