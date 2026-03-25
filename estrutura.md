@@ -35,7 +35,6 @@ public_html/gluon/
 │   ├── sistema_de_condicionais.html # NOVO: Fluxo de tarefas condicionais
 │   ├── plano.html           # NOVO: Planejamento em 5 fases com acordeon
 │   ├── map.html             # ATUALIZADO: Mapa jogável dinâmico (fases vindas do banco)
-│   ├── map_admin.html       # ATUALIZADO: Administração da trilha (gerar/editar/excluir/confirmar publicação)
 │   ├── phase.html           # NOVO: Tela da fase com slides (jogador + edição do criador)
 │   └── errors/
 │
@@ -77,7 +76,7 @@ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 user_id INT UNSIGNED NOT NULL,
 parent_id INT UNSIGNED DEFAULT NULL, -- NULL significa que está na Raiz
 target_id INT UNSIGNED DEFAULT NULL, -- NOVO: ID do diretório alvo (Apenas para Portais)
-type TINYINT DEFAULT 0,              -- 0 = Pasta, 1 = Arquivo de Código, 2 = Agenda, 3 = Portal, 4 = Deck de Flashcards, 5 = Controle, 6 = Sistema de Condicional, 7 = Plano, 8 = Trilha
+type TINYINT DEFAULT 0,              -- 0 = Pasta, 1 = Arquivo de Código, 2 = Agenda, 3 = Portal, 4 = Deck de Flashcards, 5 = Controle, 6 = Sistema de Condicional, 7 = Plano, 8 = Trilha, 9 = Mapa, 10 = Fase
 deck_mode VARCHAR(20) DEFAULT 'aleatorio';
 deck_front_language VARCHAR(10) NOT NULL DEFAULT 'pt-BR', -- Idioma da frente do card (pt-BR | en-US | en-GB)
 deck_back_language VARCHAR(10) NOT NULL DEFAULT 'en-GB', -- Idioma do verso do card (pt-BR | en-US | en-GB)
@@ -321,6 +320,7 @@ user_id INT UNSIGNED NOT NULL,
 directory_id INT UNSIGNED NOT NULL,
 current_index INT UNSIGNED DEFAULT 0,
 completed_reads TINYINT UNSIGNED DEFAULT 0 COMMENT 'Leituras completas do deck livro (max 3)',
+next_review_at DATETIME DEFAULT NULL,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
 UNIQUE KEY unique_user_deck (user_id, directory_id),
