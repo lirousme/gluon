@@ -117,7 +117,7 @@ function renderNodes(phases){
 function isPhaseCleared(phase){
     const total = Number(phase.deck_total_cards || 0);
     const due = Number(phase.deck_due_cards || 0);
-    if (total <= 0) return true;
+    if (total <= 0) return false;
     return due <= 0;
 }
 
@@ -133,7 +133,8 @@ function rebuildUnlockState(allMapsWithPhases){
             return;
         }
         const prev = ordered[index - 1];
-        unlockByPhaseId.set(Number(phase.id), isPhaseCleared(prev));
+        const prevUnlocked = !!unlockByPhaseId.get(Number(prev.id));
+        unlockByPhaseId.set(Number(phase.id), prevUnlocked && isPhaseCleared(prev));
     });
 }
 

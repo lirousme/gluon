@@ -171,7 +171,10 @@ function validatePhaseDeckUnlock($pdo, $deck_id, $user_id): ?string {
 
     $totalCards = (int)($stats['total_cards'] ?? 0);
     $dueCards = (int)($stats['due_cards'] ?? 0);
-    if ($totalCards > 0 && $dueCards > 0) {
+    if ($totalCards <= 0) {
+        return 'Esta fase está bloqueada. A fase anterior ainda não possui flashcards para revisão.';
+    }
+    if ($dueCards > 0) {
         return 'Esta fase está bloqueada. Revise todos os flashcards da fase anterior para desbloquear.';
     }
     return null;
