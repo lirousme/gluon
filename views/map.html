@@ -22,6 +22,8 @@
         .map-board { position:relative; border-radius:1.2rem; overflow:hidden; background:#1f2937 center/cover no-repeat; }
         .nodes { position:absolute; inset:2.5rem 2rem 1.7rem; z-index:2; }
         .level-btn { --size:2.6rem; position:absolute; width:var(--size); height:var(--size); border-radius:50%; border:0; display:grid; place-items:center; color:#fff; font-weight:800; background:linear-gradient(180deg,#ffb44f,#dc7c14); cursor:pointer; box-shadow:0 .2rem .5rem rgba(0,0,0,.35); }
+        .level-btn.locked { background:linear-gradient(180deg,#64748b,#334155); opacity:.85; cursor:not-allowed; }
+        .level-btn.locked::after { content:'🔒'; position:absolute; right:-.3rem; top:-.35rem; font-size:.8rem; }
         .legend { position:absolute; left:50%; transform:translateX(-50%); bottom:.8rem; background:rgba(13,32,53,.58); border-radius:999px; padding:.3rem .65rem; font-size:.72rem; z-index:2; }
         .msg { position:absolute; top:1rem; left:50%; transform:translateX(-50%); background:rgba(18,41,66,.8); border-radius:.7rem; padding:.5rem .8rem; opacity:0; transition:opacity .2s; z-index:5; }
         .msg.show { opacity:1; }
@@ -55,6 +57,7 @@ const msg = document.getElementById('mapMsg');
 const mapBoard = document.getElementById('mapBoard');
 let activeMap = 1;
 let mapDirectories = [];
+let unlockByPhaseId = new Map();
 
 const positions = [
     {l:47,t:3},{l:68,t:12},{l:34,t:19},{l:50,t:28},{l:72,t:37},
@@ -95,10 +98,42 @@ function renderNodes(phases){
         b.style.top = `${p.t}%`;
         b.textContent = String(i + 1);
         b.title = phase.name || `Fase ${i + 1}`;
+        const unlocked = !!unlockByPhaseId.get(Number(phase.id));
+        if (!unlocked) {
+            b.classList.add('locked');
+            b.title = `${b.title} (bloqueada)`;
+        }
         b.onclick = () => {
+            if (!unlocked) {
+                toast('Fase bloqueada: revise todos os flashcards da fase anterior.');
+                return;
+            }
             window.location.href = `/flashcards?id=${phase.id}&from=${encodeURIComponent(location.pathname + location.search)}`;
         };
         nodesEl.appendChild(b);
+    });
+}
+
+function isPhaseCleared(phase){
+    const total = Number(phase.deck_total_cards || 0);
+    const due = Number(phase.deck_due_cards || 0);
+    if (total <= 0) return true;
+    return due <= 0;
+}
+
+function rebuildUnlockState(allMapsWithPhases){
+    unlockByPhaseId = new Map();
+    const ordered = [];
+    allMapsWithPhases.forEach(map => {
+        map.phases.forEach(phase => ordered.push(phase));
+    });
+    ordered.forEach((phase, index) => {
+        if (index === 0) {
+            unlockByPhaseId.set(Number(phase.id), true);
+            return;
+        }
+        const prev = ordered[index - 1];
+        unlockByPhaseId.set(Number(phase.id), isPhaseCleared(prev));
     });
 }
 
@@ -119,6 +154,19 @@ async function loadMaps(){
         renderNodes([]);
         return;
     }
+
+    const mapsWithPhases = await Promise.all(
+        mapDirectories.map(async (mapDir) => {
+            const mapData = await apiDirectories('fetch', { parent_id: mapDir.id });
+            const phases = mapData.status === 'success' && Array.isArray(mapData.data)
+                ? mapData.data
+                    .filter(item => Number(item.type) === 10)
+                    .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || Number(a.id) - Number(b.id))
+                : [];
+            return { mapDir, phases };
+        })
+    );
+    rebuildUnlockState(mapsWithPhases);
 
     const trailName = qs.get('name') || 'Trilha';
     document.getElementById('trackTitle').textContent = `🗺️ ${trailName}`;

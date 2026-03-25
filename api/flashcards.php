@@ -129,6 +129,54 @@ function verifyDeckOwnership($pdo, $deck_id, $user_id) {
     return $stmt->fetch();
 }
 
+function validatePhaseDeckUnlock($pdo, $deck_id, $user_id): ?string {
+    $stmtPhase = $pdo->prepare("
+        SELECT p.id AS phase_id, p.parent_id AS map_id, m.parent_id AS track_id
+        FROM directories p
+        INNER JOIN directories m ON m.id = p.parent_id AND m.user_id = p.user_id
+        WHERE p.id = ? AND p.user_id = ? AND p.type = 10 AND m.type = 9
+        LIMIT 1
+    ");
+    $stmtPhase->execute([$deck_id, $user_id]);
+    $phase = $stmtPhase->fetch();
+    if (!$phase) return null;
+
+    $track_id = isset($phase['track_id']) ? (int)$phase['track_id'] : 0;
+    if ($track_id <= 0) return null;
+
+    $stmtOrderedPhases = $pdo->prepare("
+        SELECT p.id
+        FROM directories m
+        INNER JOIN directories p ON p.parent_id = m.id AND p.user_id = m.user_id AND p.type = 10
+        WHERE m.user_id = ? AND m.type = 9 AND m.parent_id = ?
+        ORDER BY m.sort_order ASC, m.id ASC, p.sort_order ASC, p.id ASC
+    ");
+    $stmtOrderedPhases->execute([$user_id, $track_id]);
+    $orderedPhaseIds = array_map('intval', $stmtOrderedPhases->fetchAll(PDO::FETCH_COLUMN));
+
+    $currentIndex = array_search((int)$deck_id, $orderedPhaseIds, true);
+    if ($currentIndex === false || $currentIndex === 0) return null;
+
+    $previousPhaseId = (int)$orderedPhaseIds[$currentIndex - 1];
+    $stmtPrevStats = $pdo->prepare("
+        SELECT
+            COUNT(f.id) AS total_cards,
+            COALESCE(SUM(CASE WHEN fs.next_review_at IS NULL OR fs.next_review_at <= NOW() THEN 1 ELSE 0 END), 0) AS due_cards
+        FROM flashcards f
+        LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
+        WHERE f.directory_id = ?
+    ");
+    $stmtPrevStats->execute([$user_id, $previousPhaseId]);
+    $stats = $stmtPrevStats->fetch();
+
+    $totalCards = (int)($stats['total_cards'] ?? 0);
+    $dueCards = (int)($stats['due_cards'] ?? 0);
+    if ($totalCards > 0 && $dueCards > 0) {
+        return 'Esta fase está bloqueada. Revise todos os flashcards da fase anterior para desbloquear.';
+    }
+    return null;
+}
+
 function verifyDirectoryOwnership($pdo, $directory_id, $user_id) {
     $stmt = $pdo->prepare("SELECT id, type FROM directories WHERE id = ? AND user_id = ?");
     $stmt->execute([$directory_id, $user_id]);
@@ -889,6 +937,10 @@ if ($action === 'fetch') {
     if (!$deck) {
         die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
     }
+    $unlockError = validatePhaseDeckUnlock($pdo, $deck_id, $user_id);
+    if ($unlockError !== null) {
+        die(json_encode(['status' => 'error', 'message' => $unlockError]));
+    }
 
     $deck_mode = $deck['deck_mode'] ?? 'aleatorio';
     $current_index = 0;
@@ -1039,6 +1091,10 @@ elseif ($action === 'get_all_cards') {
     $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
     if (!$deck) {
         die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+    }
+    $unlockError = validatePhaseDeckUnlock($pdo, $deck_id, $user_id);
+    if ($unlockError !== null) {
+        die(json_encode(['status' => 'error', 'message' => $unlockError]));
     }
 
     // Busca ABSOLUTAMENTE TODOS os cards do deck
