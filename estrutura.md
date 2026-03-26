@@ -19,16 +19,16 @@ public_html/gluon/
 │   └── pronuncias.php       # NOVO: CRUD administrativo para ajustes de pronúncia TTS
 │   └── sistema_de_condicionais.php # NOVO: Micro-API para tarefas com dependência condicional
 │   └── plano.php            # NOVO: Micro-API para diretórios do tipo Plano
-│   └── trilha.php           # NOVO: Micro-API para trilhas dinâmicas de estudo (mapas/fases/GPT)
-│   └── topicos.php          # NOVO: CRUD de matérias + sub-matérias com geração GPT, inserção de 5 por vez, retorno da lista completa reordenada e persistência de ordem
+│   └── trilha.php           # NOVO: Micro-API de trilha legada (track_nodes/slides)
+│   └── topicos.php          # ATUALIZADO: Matérias=Trilhas (type 8) e Sub-matérias=Fases/Decks (type 10), com geração GPT e reordenação global
 │
 ├── views/                    # Front-end (Vanilla JS + Tailwind)
 │   ├── login.html
 │   ├── dashboard.html        # ATUALIZADO: Atalho no cabeçalho para o diretório obrigatório de Anotações
 │   ├── adm.php               # NOVO: Painel administrativo (restrito ao usuário 1)
 │   ├── configuracao-tts.php  # NOVO: CRUD mobile para tabela pronuncias
-│   ├── topicos.php           # NOVO: Lista administrativa de matérias
-│   ├── materia.php           # NOVO: Tela de sub-matérias com geração GPT e alteração de ordem
+│   ├── topicos.php           # ATUALIZADO: Lista administrativa de matérias (trilhas)
+│   ├── materia.php           # ATUALIZADO: Tela de sub-matérias (fases/decks) com geração GPT e alteração de ordem
 │   ├── settings.html
 │   ├── editor.html           # Interface do editor de código
 │   ├── schedule.html         # NOVO: Interface da Linha do Tempo / Agenda
@@ -79,7 +79,7 @@ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 user_id INT UNSIGNED NOT NULL,
 parent_id INT UNSIGNED DEFAULT NULL, -- NULL significa que está na Raiz
 target_id INT UNSIGNED DEFAULT NULL, -- NOVO: ID do diretório alvo (Apenas para Portais)
-type TINYINT DEFAULT 0,              -- 0 = Pasta, 1 = Arquivo de Código, 2 = Agenda, 3 = Portal, 4 = Deck de Flashcards, 5 = Controle, 6 = Sistema de Condicional, 7 = Plano, 8 = Trilha, 9 = Mapa, 10 = Fase
+type TINYINT DEFAULT 0,              -- 0 = Pasta, 1 = Arquivo de Código, 2 = Agenda, 3 = Portal, 4 = Deck de Flashcards, 5 = Controle, 6 = Sistema de Condicional, 7 = Plano, 8 = Trilha/Matéria, 9 = Mapa (legado), 10 = Fase/Sub-matéria (deck)
 deck_mode VARCHAR(20) DEFAULT 'aleatorio';
 deck_front_language VARCHAR(10) NOT NULL DEFAULT 'pt-BR', -- Idioma da frente do card (pt-BR | en-US | en-GB)
 deck_back_language VARCHAR(10) NOT NULL DEFAULT 'en-GB', -- Idioma do verso do card (pt-BR | en-US | en-GB)
@@ -188,12 +188,13 @@ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================
 
-REGRA DE PROGRESSÃO DE FASE (TRILHA/MAPA/FASE)
-- Tipo 8 (Trilha) aceita apenas filhos do tipo 9 (Mapa).
-- Tipo 9 (Mapa) aceita apenas filhos do tipo 10 (Fase).
+REGRA DE PROGRESSÃO DE FASE (TRILHA/Fase)
+- Tipo 8 (Trilha = Matéria) aceita apenas filhos do tipo 10 (Fase = Sub-matéria).
+- Tipo 9 (Mapa) ficou legado; novos mapas não são mais criados manualmente.
+- O `views/map` cria mapas automaticamente em páginas de 10 fases (1..10 = mapa 1, 11..20 = mapa 2, etc.).
 - Tipo 10 (Fase) funciona como deck de flashcards jogável no mapa.
 - Desbloqueio: a fase N+1 só libera quando a fase N tiver pelo menos 1 flashcard e `deck_due_cards = 0` para o usuário.
-- Navegação entre mapas é permitida, mas fases bloqueadas continuam inacessíveis até cumprir a revisão da fase anterior.
+- Navegação entre mapas automáticos é permitida, mas fases bloqueadas continuam inacessíveis até cumprir a revisão da fase anterior.
 
 
 ======================================================================
@@ -432,28 +433,9 @@ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================
 
-TABELA: materias
-id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-nome VARCHAR(255) NOT NULL,
-created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+TABELAS REMOVIDAS (legado topicos):
+- materias
+- materia_subtopicos
+- O fluxo atual usa `directories` (type 8 e type 10).
 
-UNIQUE KEY uniq_materia_nome (nome)
-ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-======================================================================
-
-TABELA: materia_subtopicos
-id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-materia_id INT UNSIGNED NOT NULL,
-titulo VARCHAR(255) NOT NULL,
-sort_order INT UNSIGNED NOT NULL DEFAULT 1,
-parent_subtopico_id BIGINT UNSIGNED DEFAULT NULL, -- referência opcional ao item usado para expandir
-created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-
-INDEX idx_materia_sort (materia_id, sort_order),
-INDEX idx_materia_parent (materia_id, parent_subtopico_id),
-FOREIGN KEY (materia_id) REFERENCES materias(id) ON DELETE CASCADE,
-FOREIGN KEY (parent_subtopico_id) REFERENCES materia_subtopicos(id) ON DELETE SET NULL
-ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

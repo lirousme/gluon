@@ -1261,7 +1261,7 @@
                     this.autoChangeIcon('fa-map-location-dot');
                 } else if (typeValue === 9) {
                     folderSettings.style.display = 'none';
-                    nameLabel.innerText = 'Nome do Mapa';
+                    nameLabel.innerText = 'Nome do Mapa (legado)';
                     this.autoChangeIcon('fa-map');
                 } else if (typeValue === 10) {
                     folderSettings.style.display = 'none';
@@ -1708,7 +1708,7 @@
             },
 
             getAllowedChildTypesForParent(parentType) {
-                if (Number(parentType) === 8) return [9];
+                if (Number(parentType) === 8) return [10];
                 if (Number(parentType) === 9) return [10];
                 return null;
             },
@@ -2764,7 +2764,7 @@
                         else if(dirObj.type === 6) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Sistema de Condicional'; iconPickerContainer.style.display = 'block'; }
                         else if(dirObj.type === 7) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Plano'; iconPickerContainer.style.display = 'block'; }
                         else if(dirObj.type === 8) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome da Trilha'; iconPickerContainer.style.display = 'block'; }
-                        else if(dirObj.type === 9) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Mapa'; iconPickerContainer.style.display = 'block'; }
+                        else if(dirObj.type === 9) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Mapa (legado)'; iconPickerContainer.style.display = 'block'; }
                         else if(dirObj.type === 10) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome da Fase'; iconPickerContainer.style.display = 'block'; }
 
                         if (dirObj.type === 0) {

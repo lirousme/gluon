@@ -14,13 +14,13 @@ if ((int)$_SESSION['user_id'] !== 1) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-    <title>Matérias</title>
+    <title>Matérias (Trilhas)</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen">
     <main class="max-w-3xl mx-auto px-4 py-8 space-y-6">
         <a href="/adm" class="text-blue-400 text-sm">&larr; Voltar ao ADM</a>
-        <h1 class="text-3xl font-bold">Matérias</h1>
+        <h1 class="text-3xl font-bold">Matérias (Trilhas)</h1>
 
         <section class="bg-slate-900 border border-slate-700 rounded-xl p-4 flex gap-2">
             <input id="materiaInput" class="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2" placeholder="Nome da matéria">
@@ -47,7 +47,7 @@ const state = { materias: [] };
 function renderMaterias() {
     const ul = document.getElementById('listaMaterias');
     if (!state.materias.length) {
-        ul.innerHTML = '<li class="text-slate-400">Nenhuma matéria cadastrada.</li>';
+        ul.innerHTML = '<li class="text-slate-400">Nenhuma matéria/trilha cadastrada.</li>';
         return;
     }
 

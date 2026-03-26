@@ -280,8 +280,8 @@ function getDirectoryTypeById(PDO $pdo, int $user_id, ?int $directory_id): ?int 
 function getAllowedChildTypesForParentType(?int $parentType): ?array {
     // null = sem restrição adicional
     if ($parentType === null) return null;
-    if ($parentType === 8) return [9];   // Trilha só aceita Mapa
-    if ($parentType === 9) return [10];  // Mapa só aceita Fase
+    if ($parentType === 8) return [10];  // Trilha (matéria) aceita apenas Fase (sub-matéria)
+    if ($parentType === 9) return [10];  // Compat legado: Mapa antigo ainda aceita Fase
     return null;
 }
 
@@ -291,20 +291,20 @@ function validateDirectoryHierarchy(PDO $pdo, int $user_id, ?int $parent_id, int
         return 'Diretório pai inválido.';
     }
 
-    // Mapa só pode ser criado dentro de Trilha
-    if ($type === 9 && $parentType !== 8) {
-        return 'Diretórios do tipo Mapa só podem ser criados dentro de uma Trilha.';
+    // Mapa não é mais criado manualmente pelo usuário.
+    if ($type === 9) {
+        return 'Mapas são automáticos no modo jogo e não podem mais ser criados manualmente.';
     }
 
-    // Fase só pode ser criada dentro de Mapa
-    if ($type === 10 && $parentType !== 9) {
-        return 'Diretórios do tipo Fase só podem ser criados dentro de um Mapa.';
+    // Fase só pode ser criada dentro de Trilha (novo) ou Mapa (legado).
+    if ($type === 10 && !in_array($parentType, [8, 9], true)) {
+        return 'Diretórios do tipo Fase só podem ser criados dentro de uma Trilha.';
     }
 
     // Trilha e Mapa possuem restrição rígida de filhos
     $allowedChildren = getAllowedChildTypesForParentType($parentType);
     if (is_array($allowedChildren) && !in_array($type, $allowedChildren, true)) {
-        if ($parentType === 8) return 'Dentro de uma Trilha só é permitido criar diretórios do tipo Mapa.';
+        if ($parentType === 8) return 'Dentro de uma Trilha só é permitido criar diretórios do tipo Fase.';
         if ($parentType === 9) return 'Dentro de um Mapa só é permitido criar diretórios do tipo Fase.';
     }
 
