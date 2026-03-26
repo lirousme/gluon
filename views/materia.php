@@ -44,7 +44,7 @@ if ((int)$_SESSION['user_id'] !== 1) {
 const materiaId = Number(new URLSearchParams(window.location.search).get('materia_id') || 0);
 if (!materiaId) window.location.href = '/topicos';
 
-const state = { materia: null, subtopicos: [], reorderMode: false, sortable: null };
+const state = { materia: null, subtopicos: [], reorderMode: false, sortable: null, manualInputTouched: false };
 
 const api = async (action, data = {}) => {
     const res = await fetch('/api/topicos', {
@@ -87,12 +87,19 @@ function render() {
     }
 }
 
+function prefillManualInput() {
+    const input = document.getElementById('subInput');
+    if (state.manualInputTouched || input.value.trim() || !state.materia?.nome) return;
+    input.value = state.materia.nome;
+}
+
 async function loadData() {
     const r = await api('list_subtopicos', { materia_id: materiaId });
     if (r.status !== 'success') return alert(r.message || 'Erro');
     state.materia = r.materia;
     state.subtopicos = r.subtopicos || [];
     render();
+    prefillManualInput();
 }
 
 async function salvarOrdem() {
@@ -144,6 +151,9 @@ function toggleReorder() {
     render();
 }
 
+document.getElementById('subInput').addEventListener('input', () => {
+    state.manualInputTouched = true;
+});
 document.getElementById('btnCriarSub').addEventListener('click', gerarRaiz);
 document.getElementById('btnReorder').addEventListener('click', toggleReorder);
 loadData();
