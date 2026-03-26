@@ -86,7 +86,7 @@ if ($route === '') {
 // Segurança: Impede manipulação de caminhos na inclusão das views
 $route = str_replace(['../', '..\\'], '', $route);
 
-$admin_routes = ['adm', 'configuracao-tts'];
+$admin_routes = ['adm', 'configuracao-tts', 'topicos', 'materia'];
 if (in_array($route, $admin_routes, true) && (!isset($_SESSION['user_id']) || (int)$_SESSION['user_id'] !== 1)) {
     http_response_code(403);
     echo '<h1>403 - Acesso restrito ao administrador</h1>';
