@@ -28,6 +28,12 @@ if ((int)$_SESSION['user_id'] !== 1) {
                 Configuração de TTS
             </a>
         </div>
+
+        <div class="mt-3">
+            <a href="/topicos" class="inline-flex items-center justify-center w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 transition-colors px-4 py-3 font-semibold">
+                Matérias e Sub-matérias
+            </a>
+        </div>
     </main>
 </body>
 </html>

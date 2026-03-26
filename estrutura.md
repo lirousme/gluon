@@ -20,12 +20,15 @@ public_html/gluon/
 │   └── sistema_de_condicionais.php # NOVO: Micro-API para tarefas com dependência condicional
 │   └── plano.php            # NOVO: Micro-API para diretórios do tipo Plano
 │   └── trilha.php           # NOVO: Micro-API para trilhas dinâmicas de estudo (mapas/fases/GPT)
+│   └── topicos.php          # NOVO: CRUD de matérias + sub-matérias com geração GPT e reordenação
 │
 ├── views/                    # Front-end (Vanilla JS + Tailwind)
 │   ├── login.html
 │   ├── dashboard.html        # ATUALIZADO: Atalho no cabeçalho para o diretório obrigatório de Anotações
 │   ├── adm.php               # NOVO: Painel administrativo (restrito ao usuário 1)
 │   ├── configuracao-tts.php  # NOVO: CRUD mobile para tabela pronuncias
+│   ├── topicos.php           # NOVO: Lista administrativa de matérias
+│   ├── materia.php           # NOVO: Tela de sub-matérias com geração GPT e alteração de ordem
 │   ├── settings.html
 │   ├── editor.html           # Interface do editor de código
 │   ├── schedule.html         # NOVO: Interface da Linha do Tempo / Agenda
@@ -425,4 +428,32 @@ updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 UNIQUE KEY uniq_node_slide (node_id),
 FOREIGN KEY (node_id) REFERENCES track_nodes(id) ON DELETE CASCADE,
 FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+======================================================================
+
+TABELA: materias
+id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+nome VARCHAR(255) NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+UNIQUE KEY uniq_materia_nome (nome)
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+======================================================================
+
+TABELA: materia_subtopicos
+id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+materia_id INT UNSIGNED NOT NULL,
+titulo VARCHAR(255) NOT NULL,
+sort_order INT UNSIGNED NOT NULL DEFAULT 1,
+parent_subtopico_id BIGINT UNSIGNED DEFAULT NULL, -- referência opcional ao item usado para expandir
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+INDEX idx_materia_sort (materia_id, sort_order),
+INDEX idx_materia_parent (materia_id, parent_subtopico_id),
+FOREIGN KEY (materia_id) REFERENCES materias(id) ON DELETE CASCADE,
+FOREIGN KEY (parent_subtopico_id) REFERENCES materia_subtopicos(id) ON DELETE SET NULL
 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
