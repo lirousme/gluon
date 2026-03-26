@@ -74,17 +74,84 @@ function normalizeSubtopics(array $items, string $fallbackBase): array {
     return array_slice($out, 0, 5);
 }
 
+function cleanGeneratedTitle(string $title): string {
+    $title = trim($title);
+    $title = preg_replace('/^\d+[\)\.\-\:]\s*/u', '', $title);
+    $title = trim($title, " \t\n\r\0\x0B\"'`");
+    $title = preg_replace('/\s+/u', ' ', $title);
+    return trim((string)$title);
+}
+
+function hasAtomicTitleFormat(string $title): bool {
+    if ($title === '') return false;
+    if (mb_strlen($title) < 4 || mb_strlen($title) > 90) return false;
+    if (preg_match('/[,;:\/\|\(\)]/u', $title)) return false;
+    if (preg_match('/\s+e\s+/iu', $title)) return false;
+    return true;
+}
+
+function buildUniqueAtomicTitles(
+    array $candidateTitles,
+    array $existingOrderedTitles,
+    string $contextTitle,
+    int $count = 5
+): array {
+    $existingMap = [];
+    foreach ($existingOrderedTitles as $existing) {
+        $k = mb_strtolower(cleanGeneratedTitle((string)$existing));
+        if ($k !== '') $existingMap[$k] = true;
+    }
+
+    $out = [];
+    $seen = [];
+    foreach ($candidateTitles as $candidate) {
+        $clean = cleanGeneratedTitle((string)$candidate);
+        if (!hasAtomicTitleFormat($clean)) continue;
+
+        $k = mb_strtolower($clean);
+        if (isset($existingMap[$k]) || isset($seen[$k])) continue;
+        $seen[$k] = true;
+        $out[] = $clean;
+        if (count($out) >= $count) break;
+    }
+
+    if (count($out) < $count) {
+        $fallbackSuffixes = ['Fundamentos', 'Conceitos essenciais', 'Métodos', 'Prática guiada', 'Aprofundamento'];
+        foreach ($fallbackSuffixes as $suffix) {
+            $candidate = cleanGeneratedTitle($contextTitle . ' - ' . $suffix);
+            $k = mb_strtolower($candidate);
+            if (!hasAtomicTitleFormat($candidate)) continue;
+            if (isset($existingMap[$k]) || isset($seen[$k])) continue;
+            $seen[$k] = true;
+            $out[] = $candidate;
+            if (count($out) >= $count) break;
+        }
+    }
+
+    return array_slice($out, 0, $count);
+}
+
 function generateSubtopics(string $materia, array $orderedList, int $insertAfterPosition, string $contextTitle): array {
     $orderedText = [];
     foreach ($orderedList as $idx => $name) {
         $orderedText[] = ($idx + 1) . '. ' . $name;
     }
+    $plannedPositions = [
+        $insertAfterPosition + 1,
+        $insertAfterPosition + 2,
+        $insertAfterPosition + 3,
+        $insertAfterPosition + 4,
+        $insertAfterPosition + 5
+    ];
+    $orderedListText = implode("\n", $orderedText);
+    $positionsText = implode(', ', $plannedPositions);
+
     $prompt = [
         'model' => 'gpt-5.4',
         'response_format' => ['type' => 'json_object'],
         'messages' => [
-            ['role' => 'system', 'content' => 'Você é um arquiteto curricular. Gere conteúdo progressivo sem repetição. Retorne JSON válido.'],
-            ['role' => 'user', 'content' => "Matéria principal: {$materia}\nObjetivo: criar o curso mais detalhado do mundo sobre essa matéria principal, porém em lotes de 5 itens por vez para revisão humana.\n\nLista atual completa e ordenada:\n" . implode("\n", $orderedText) . "\n\nVou inserir 5 novos itens imediatamente após a posição {$insertAfterPosition}.\nContexto do nó pai clicado: {$contextTitle}\nAs novas posições serão: " . ($insertAfterPosition + 1) . ', ' . ($insertAfterPosition + 2) . ', ' . ($insertAfterPosition + 3) . ', ' . ($insertAfterPosition + 4) . ', ' . ($insertAfterPosition + 5) . ".\n\nRegras: não repetir itens já existentes, manter sequência lógica e granularidade fina.\nRetorne SOMENTE JSON no formato: {\"subtopicos\":[{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"}]}"
+            ['role' => 'system', 'content' => 'Você é um arquiteto curricular especialista em decomposição progressiva de conhecimento. Sempre retorna JSON válido e sem texto extra.'],
+            ['role' => 'user', 'content' => "Matéria principal: {$materia}\nObjetivo: criar o curso mais detalhado do mundo sobre a matéria principal. Como o usuário precisa revisar, a expansão deve ocorrer em lotes de 5 por vez.\n\nLista atual completa e ordenada:\n{$orderedListText}\n\nContexto clicado para expansão: {$contextTitle}\nInserção obrigatória após a posição {$insertAfterPosition}.\nAs novas posições serão EXATAMENTE: {$positionsText}.\n\nRegras obrigatórias para cada novo título:\n1) Um único tópico por linha (nada de juntar 2 ou 3 assuntos no mesmo título).\n2) Não usar vírgula, ponto e vírgula, dois pontos, barra, parênteses nem a conjunção ' e '.\n3) Não repetir nenhum item da lista atual.\n4) Título curto e específico, de 4 a 90 caracteres.\n5) Manter progressão lógica para aprofundar o curso.\n\nRetorne SOMENTE JSON no formato:\n{\"subtopicos\":[{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"}]}"
             ]
         ]
     ];
@@ -117,7 +184,17 @@ function generateSubtopics(string $materia, array $orderedList, int $insertAfter
         ];
     }
 
-    return normalizeSubtopics($json['subtopicos'], $contextTitle);
+    $rawTitles = [];
+    foreach ($json['subtopicos'] as $item) {
+        $rawTitles[] = (string)($item['titulo'] ?? $item['title'] ?? $item['nome'] ?? '');
+    }
+
+    $uniqueAtomic = buildUniqueAtomicTitles($rawTitles, $orderedList, $contextTitle, 5);
+    if (count($uniqueAtomic) < 5) {
+        return normalizeSubtopics($json['subtopicos'], $contextTitle);
+    }
+
+    return $uniqueAtomic;
 }
 
 if ($action === 'list_materias') {
