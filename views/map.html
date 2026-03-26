@@ -56,7 +56,7 @@ const nodesEl = document.getElementById('nodes');
 const msg = document.getElementById('mapMsg');
 const mapBoard = document.getElementById('mapBoard');
 let activeMap = 1;
-let mapDirectories = [];
+let phasesByMap = [];
 let unlockByPhaseId = new Map();
 
 const positions = [
@@ -87,6 +87,34 @@ function setMapBackground(mapNumber){
     img.src = `../assets/mapa-${mapNumber}.jpg`;
 }
 
+function isPhaseCleared(phase){
+    const total = Number(phase.deck_total_cards || 0);
+    const due = Number(phase.deck_due_cards || 0);
+    if (total <= 0) return false;
+    return due <= 0;
+}
+
+function rebuildUnlockState(flatPhases){
+    unlockByPhaseId = new Map();
+    flatPhases.forEach((phase, index) => {
+        if (index === 0) {
+            unlockByPhaseId.set(Number(phase.id), true);
+            return;
+        }
+        const prev = flatPhases[index - 1];
+        const prevUnlocked = !!unlockByPhaseId.get(Number(prev.id));
+        unlockByPhaseId.set(Number(phase.id), prevUnlocked && isPhaseCleared(prev));
+    });
+}
+
+function splitIntoMaps(flatPhases) {
+    const maps = [];
+    for (let i = 0; i < flatPhases.length; i += 10) {
+        maps.push(flatPhases.slice(i, i + 10));
+    }
+    return maps;
+}
+
 function renderNodes(phases){
     nodesEl.innerHTML='';
     phases.forEach((phase, i) => {
@@ -114,28 +142,16 @@ function renderNodes(phases){
     });
 }
 
-function isPhaseCleared(phase){
-    const total = Number(phase.deck_total_cards || 0);
-    const due = Number(phase.deck_due_cards || 0);
-    if (total <= 0) return false;
-    return due <= 0;
-}
+function loadMap(mapIndex){
+    if (!phasesByMap.length) return;
+    activeMap = Math.max(1, Math.min(phasesByMap.length, mapIndex));
+    const phases = phasesByMap[activeMap - 1] || [];
 
-function rebuildUnlockState(allMapsWithPhases){
-    unlockByPhaseId = new Map();
-    const ordered = [];
-    allMapsWithPhases.forEach(map => {
-        map.phases.forEach(phase => ordered.push(phase));
-    });
-    ordered.forEach((phase, index) => {
-        if (index === 0) {
-            unlockByPhaseId.set(Number(phase.id), true);
-            return;
-        }
-        const prev = ordered[index - 1];
-        const prevUnlocked = !!unlockByPhaseId.get(Number(prev.id));
-        unlockByPhaseId.set(Number(phase.id), prevUnlocked && isPhaseCleared(prev));
-    });
+    setMapBackground(activeMap);
+    document.getElementById('mapMeta').textContent = `Mapa ${activeMap} de ${phasesByMap.length} · ${phases.length} fases`;
+    document.getElementById('btnPrev').disabled = activeMap <= 1;
+    document.getElementById('btnNext').disabled = activeMap >= phasesByMap.length;
+    renderNodes(phases);
 }
 
 async function loadMaps(){
@@ -145,55 +161,23 @@ async function loadMaps(){
         return;
     }
 
-    mapDirectories = (Array.isArray(data.data) ? data.data : [])
-        .filter(item => Number(item.type) === 9)
+    const flatPhases = (Array.isArray(data.data) ? data.data : [])
+        .filter(item => Number(item.type) === 10)
         .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || Number(a.id) - Number(b.id));
 
-    if (!mapDirectories.length) {
-        document.getElementById('trackTitle').textContent = '🗺️ Trilha sem mapas';
-        document.getElementById('mapMeta').textContent = 'Crie diretórios do tipo Mapa dentro da trilha';
+    if (!flatPhases.length) {
+        document.getElementById('trackTitle').textContent = '🗺️ Trilha sem fases';
+        document.getElementById('mapMeta').textContent = 'Crie fases diretamente dentro da trilha';
         renderNodes([]);
         return;
     }
 
-    const mapsWithPhases = await Promise.all(
-        mapDirectories.map(async (mapDir) => {
-            const mapData = await apiDirectories('fetch', { parent_id: mapDir.id });
-            const phases = mapData.status === 'success' && Array.isArray(mapData.data)
-                ? mapData.data
-                    .filter(item => Number(item.type) === 10)
-                    .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || Number(a.id) - Number(b.id))
-                : [];
-            return { mapDir, phases };
-        })
-    );
-    rebuildUnlockState(mapsWithPhases);
+    phasesByMap = splitIntoMaps(flatPhases);
+    rebuildUnlockState(flatPhases);
 
     const trailName = qs.get('name') || 'Trilha';
     document.getElementById('trackTitle').textContent = `🗺️ ${trailName}`;
     loadMap(1);
-}
-
-async function loadMap(mapIndex){
-    if (!mapDirectories.length) return;
-    activeMap = Math.max(1, Math.min(mapDirectories.length, mapIndex));
-    const mapDir = mapDirectories[activeMap - 1];
-
-    const data = await apiDirectories('fetch', { parent_id: mapDir.id });
-    if (data.status !== 'success') {
-        toast(data.message || 'Erro ao carregar fases do mapa.');
-        return;
-    }
-
-    const phases = (Array.isArray(data.data) ? data.data : [])
-        .filter(item => Number(item.type) === 10)
-        .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || Number(a.id) - Number(b.id));
-
-    setMapBackground(activeMap);
-    document.getElementById('mapMeta').textContent = `Mapa ${activeMap} de ${mapDirectories.length} · ${phases.length} fases`;
-    document.getElementById('btnPrev').disabled = activeMap <= 1;
-    document.getElementById('btnNext').disabled = activeMap >= mapDirectories.length;
-    renderNodes(phases);
 }
 
 document.getElementById('btnPrev').onclick = () => loadMap(activeMap - 1);

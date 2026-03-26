@@ -13,34 +13,13 @@ if ((int)$_SESSION['user_id'] !== 1) {
 }
 
 $pdo = Database::getConnection();
+$user_id = (int)$_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true) ?: [];
 $action = (string)($input['action'] ?? '');
 
-$pdo->exec("CREATE TABLE IF NOT EXISTS materias (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    nome VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uniq_materia_nome (nome)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
-$pdo->exec("CREATE TABLE IF NOT EXISTS materia_subtopicos (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    materia_id INT UNSIGNED NOT NULL,
-    titulo VARCHAR(255) NOT NULL,
-    sort_order INT UNSIGNED NOT NULL DEFAULT 1,
-    parent_subtopico_id BIGINT UNSIGNED DEFAULT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (materia_id) REFERENCES materias(id) ON DELETE CASCADE,
-    FOREIGN KEY (parent_subtopico_id) REFERENCES materia_subtopicos(id) ON DELETE SET NULL,
-    INDEX idx_materia_sort (materia_id, sort_order),
-    INDEX idx_materia_parent (materia_id, parent_subtopico_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
-try { $pdo->exec("ALTER TABLE materia_subtopicos ADD COLUMN parent_subtopico_id BIGINT UNSIGNED DEFAULT NULL AFTER sort_order"); } catch (Throwable $e) {}
-try { $pdo->exec("ALTER TABLE materia_subtopicos ADD CONSTRAINT fk_materia_subtopicos_parent FOREIGN KEY (parent_subtopico_id) REFERENCES materia_subtopicos(id) ON DELETE SET NULL"); } catch (Throwable $e) {}
-try { $pdo->exec("CREATE INDEX idx_materia_parent ON materia_subtopicos (materia_id, parent_subtopico_id)"); } catch (Throwable $e) {}
+function decryptDirectoryName(array $row): string {
+    return Security::decryptData((string)$row['name_encrypted']);
+}
 
 function openaiRequest(array $payload): ?array {
     if (trim((string)OPENAI_API_KEY) === '') return null;
@@ -59,21 +38,6 @@ function openaiRequest(array $payload): ?array {
     return json_decode($resp, true);
 }
 
-function normalizeSubtopics(array $items, string $fallbackBase): array {
-    $out = [];
-    foreach ($items as $item) {
-        $title = trim((string)($item['titulo'] ?? $item['title'] ?? $item['nome'] ?? ''));
-        if ($title === '') continue;
-        $out[] = $title;
-    }
-    if (count($out) < 5) {
-        for ($i = count($out) + 1; $i <= 5; $i++) {
-            $out[] = $fallbackBase . ' · Sub-matéria ' . $i;
-        }
-    }
-    return array_slice($out, 0, 5);
-}
-
 function cleanGeneratedTitle(string $title): string {
     $title = trim($title);
     $title = preg_replace('/^\d+[\)\.\-\:]\s*/u', '', $title);
@@ -88,6 +52,21 @@ function hasAtomicTitleFormat(string $title): bool {
     if (preg_match('/[,;:\/\|\(\)]/u', $title)) return false;
     if (preg_match('/\s+e\s+/iu', $title)) return false;
     return true;
+}
+
+function normalizeSubtopics(array $items, string $fallbackBase): array {
+    $out = [];
+    foreach ($items as $item) {
+        $title = trim((string)($item['titulo'] ?? $item['title'] ?? $item['nome'] ?? ''));
+        if ($title === '') continue;
+        $out[] = $title;
+    }
+    if (count($out) < 5) {
+        for ($i = count($out) + 1; $i <= 5; $i++) {
+            $out[] = $fallbackBase . ' · Sub-matéria ' . $i;
+        }
+    }
+    return array_slice($out, 0, 5);
 }
 
 function buildUniqueAtomicTitles(
@@ -230,16 +209,9 @@ function generateSubtopics(string $materia, array $orderedList, int $insertAfter
     }
     $json = json_decode($raw, true);
     if (!is_array($json)) {
-        $baseFallback = [
-            "{$contextTitle} · Base 1",
-            "{$contextTitle} · Base 2",
-            "{$contextTitle} · Base 3",
-            "{$contextTitle} · Base 4",
-            "{$contextTitle} · Base 5"
-        ];
         return [
-            'new_titles' => $baseFallback,
-            'final_titles' => buildFinalListWithInsertion($orderedList, $baseFallback, $insertAfterPosition)
+            'new_titles' => $fallbackNew,
+            'final_titles' => buildFinalListWithInsertion($orderedList, $fallbackNew, $insertAfterPosition)
         ];
     }
 
@@ -249,9 +221,7 @@ function generateSubtopics(string $materia, array $orderedList, int $insertAfter
     }
 
     $uniqueAtomic = buildUniqueAtomicTitles($rawTitles, $orderedList, $contextTitle, 5);
-    if (count($uniqueAtomic) < 5 && isset($json['novos_subtopicos']) && is_array($json['novos_subtopicos'])) {
-        $uniqueAtomic = normalizeSubtopics($json['novos_subtopicos'], $contextTitle);
-    }
+    if (count($uniqueAtomic) < 5) $uniqueAtomic = normalizeSubtopics($json['novos_subtopicos'] ?? [], $contextTitle);
     if (count($uniqueAtomic) < 5) $uniqueAtomic = normalizeSubtopics($json['subtopicos'] ?? [], $contextTitle);
 
     $fallbackFinal = buildFinalListWithInsertion($orderedList, $uniqueAtomic, $insertAfterPosition);
@@ -278,11 +248,12 @@ function generateSubtopics(string $materia, array $orderedList, int $insertAfter
     }
 
     $finalAdjusted = $finalTitles;
+    $existingCounter = listToMap($orderedList);
     $replaced = 0;
     foreach ($finalAdjusted as $idx => $title) {
         $k = mb_strtolower(cleanGeneratedTitle((string)$title));
-        if (($existingMap[$k] ?? 0) > 0) {
-            $existingMap[$k]--;
+        if (($existingCounter[$k] ?? 0) > 0) {
+            $existingCounter[$k]--;
             continue;
         }
         if ($replaced < 5) {
@@ -292,6 +263,7 @@ function generateSubtopics(string $materia, array $orderedList, int $insertAfter
         }
         unset($finalAdjusted[$idx]);
     }
+
     if ($replaced !== 5) {
         return ['new_titles' => $uniqueAtomic, 'final_titles' => $fallbackFinal];
     }
@@ -299,17 +271,51 @@ function generateSubtopics(string $materia, array $orderedList, int $insertAfter
     return ['new_titles' => $validatedNew, 'final_titles' => array_values($finalAdjusted)];
 }
 
+function getTrailById(PDO $pdo, int $user_id, int $trail_id): ?array {
+    $stmt = $pdo->prepare('SELECT id, name_encrypted FROM directories WHERE id = ? AND user_id = ? AND type = 8 LIMIT 1');
+    $stmt->execute([$trail_id, $user_id]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+function listPhases(PDO $pdo, int $user_id, int $trail_id): array {
+    $stmt = $pdo->prepare('SELECT id, name_encrypted, sort_order FROM directories WHERE user_id = ? AND parent_id = ? AND type = 10 ORDER BY sort_order ASC, id ASC');
+    $stmt->execute([$user_id, $trail_id]);
+    return $stmt->fetchAll() ?: [];
+}
+
+function normalizePhaseSortOrder(PDO $pdo, int $user_id, int $trail_id): void {
+    $rows = listPhases($pdo, $user_id, $trail_id);
+    $upd = $pdo->prepare('UPDATE directories SET sort_order = ? WHERE id = ? AND user_id = ?');
+    foreach ($rows as $idx => $row) {
+        if ((int)$row['sort_order'] !== ($idx + 1)) {
+            $upd->execute([$idx + 1, (int)$row['id'], $user_id]);
+        }
+    }
+}
+
 if ($action === 'list_materias') {
-    $rows = $pdo->query('SELECT id, nome FROM materias ORDER BY id DESC')->fetchAll();
-    echo json_encode(['status' => 'success', 'materias' => $rows]);
+    $stmt = $pdo->prepare('SELECT id, name_encrypted FROM directories WHERE user_id = ? AND type = 8 ORDER BY sort_order ASC, id DESC');
+    $stmt->execute([$user_id]);
+    $materias = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $materias[] = ['id' => (int)$row['id'], 'nome' => decryptDirectoryName($row)];
+    }
+    echo json_encode(['status' => 'success', 'materias' => $materias]);
     exit;
 }
 
 if ($action === 'create_materia') {
     $nome = trim((string)($input['nome'] ?? ''));
     if ($nome === '') die(json_encode(['status' => 'error', 'message' => 'Nome obrigatório.']));
-    $stmt = $pdo->prepare('INSERT INTO materias (nome) VALUES (?)');
-    $stmt->execute([$nome]);
+
+    $stmtMax = $pdo->prepare('SELECT COALESCE(MAX(sort_order), 0) FROM directories WHERE user_id = ? AND parent_id IS NULL');
+    $stmtMax->execute([$user_id]);
+    $nextOrder = ((int)$stmtMax->fetchColumn()) + 1;
+
+    $stmt = $pdo->prepare('INSERT INTO directories (user_id, parent_id, type, name_encrypted, default_view, open_mode, new_item_position, sort_order, icon, icon_color_from, icon_color_to, child_default_type, child_default_view) VALUES (?, NULL, 8, ?, "grid", "fullscreen", "end", ?, "fa-map-location-dot", "#3b82f6", "#6366f1", 10, "grid")');
+    $stmt->execute([$user_id, Security::encryptData($nome), $nextOrder]);
+
     echo json_encode(['status' => 'success']);
     exit;
 }
@@ -318,8 +324,9 @@ if ($action === 'update_materia') {
     $id = (int)($input['id'] ?? 0);
     $nome = trim((string)($input['nome'] ?? ''));
     if ($id <= 0 || $nome === '') die(json_encode(['status' => 'error', 'message' => 'Dados inválidos.']));
-    $stmt = $pdo->prepare('UPDATE materias SET nome = ? WHERE id = ?');
-    $stmt->execute([$nome, $id]);
+
+    $stmt = $pdo->prepare('UPDATE directories SET name_encrypted = ? WHERE id = ? AND user_id = ? AND type = 8');
+    $stmt->execute([Security::encryptData($nome), $id, $user_id]);
     echo json_encode(['status' => 'success']);
     exit;
 }
@@ -327,8 +334,9 @@ if ($action === 'update_materia') {
 if ($action === 'delete_materia') {
     $id = (int)($input['id'] ?? 0);
     if ($id <= 0) die(json_encode(['status' => 'error', 'message' => 'ID inválido.']));
-    $stmt = $pdo->prepare('DELETE FROM materias WHERE id = ?');
-    $stmt->execute([$id]);
+
+    $stmt = $pdo->prepare('DELETE FROM directories WHERE id = ? AND user_id = ? AND type = 8');
+    $stmt->execute([$id, $user_id]);
     echo json_encode(['status' => 'success']);
     exit;
 }
@@ -337,14 +345,25 @@ if ($action === 'list_subtopicos') {
     $materia_id = (int)($input['materia_id'] ?? 0);
     if ($materia_id <= 0) die(json_encode(['status' => 'error', 'message' => 'Matéria inválida.']));
 
-    $m = $pdo->prepare('SELECT id, nome FROM materias WHERE id = ?');
-    $m->execute([$materia_id]);
-    $materia = $m->fetch();
+    $materia = getTrailById($pdo, $user_id, $materia_id);
     if (!$materia) die(json_encode(['status' => 'error', 'message' => 'Matéria não encontrada.']));
 
-    $stmt = $pdo->prepare('SELECT id, titulo, sort_order, parent_subtopico_id FROM materia_subtopicos WHERE materia_id = ? ORDER BY sort_order ASC, id ASC');
-    $stmt->execute([$materia_id]);
-    echo json_encode(['status' => 'success', 'materia' => $materia, 'subtopicos' => $stmt->fetchAll()]);
+    normalizePhaseSortOrder($pdo, $user_id, $materia_id);
+    $phases = listPhases($pdo, $user_id, $materia_id);
+    $subtopicos = [];
+    foreach ($phases as $row) {
+        $subtopicos[] = [
+            'id' => (int)$row['id'],
+            'titulo' => decryptDirectoryName($row),
+            'sort_order' => (int)$row['sort_order']
+        ];
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'materia' => ['id' => (int)$materia['id'], 'nome' => decryptDirectoryName($materia)],
+        'subtopicos' => $subtopicos
+    ]);
     exit;
 }
 
@@ -354,13 +373,29 @@ if ($action === 'reorder_subtopicos') {
     if ($materia_id <= 0 || !is_array($order) || count($order) === 0) {
         die(json_encode(['status' => 'error', 'message' => 'Dados inválidos.']));
     }
+
+    $materia = getTrailById($pdo, $user_id, $materia_id);
+    if (!$materia) die(json_encode(['status' => 'error', 'message' => 'Matéria inválida.']));
+
+    $rows = listPhases($pdo, $user_id, $materia_id);
+    if (count($rows) !== count($order)) {
+        die(json_encode(['status' => 'error', 'message' => 'Lista incompleta para reordenação.']));
+    }
+
+    $validIds = array_map(fn($r) => (int)$r['id'], $rows);
+    $orderIds = array_map(fn($id) => (int)$id, $order);
+    sort($validIds);
+    $orderSorted = $orderIds;
+    sort($orderSorted);
+    if ($validIds !== $orderSorted) {
+        die(json_encode(['status' => 'error', 'message' => 'Ordem inválida.']));
+    }
+
     $pdo->beginTransaction();
     try {
-        $upd = $pdo->prepare('UPDATE materia_subtopicos SET sort_order = ? WHERE id = ? AND materia_id = ?');
-        $pos = 1;
-        foreach ($order as $id) {
-            $upd->execute([$pos, (int)$id, $materia_id]);
-            $pos++;
+        $upd = $pdo->prepare('UPDATE directories SET sort_order = ? WHERE id = ? AND user_id = ? AND parent_id = ? AND type = 10');
+        foreach ($orderIds as $idx => $id) {
+            $upd->execute([$idx + 1, $id, $user_id, $materia_id]);
         }
         $pdo->commit();
         echo json_encode(['status' => 'success']);
@@ -377,29 +412,26 @@ if ($action === 'generate_subtopicos') {
     $manual_seed = trim((string)($input['manual_seed'] ?? ''));
     if ($materia_id <= 0) die(json_encode(['status' => 'error', 'message' => 'Matéria inválida.']));
 
-    $m = $pdo->prepare('SELECT id, nome FROM materias WHERE id = ?');
-    $m->execute([$materia_id]);
-    $materia = $m->fetch();
+    $materia = getTrailById($pdo, $user_id, $materia_id);
     if (!$materia) die(json_encode(['status' => 'error', 'message' => 'Matéria não encontrada.']));
 
-    $stmt = $pdo->prepare('SELECT id, titulo, sort_order FROM materia_subtopicos WHERE materia_id = ? ORDER BY sort_order ASC, id ASC');
-    $stmt->execute([$materia_id]);
-    $all = $stmt->fetchAll();
-    $orderedTitles = array_map(fn($r) => (string)$r['titulo'], $all);
+    normalizePhaseSortOrder($pdo, $user_id, $materia_id);
+    $all = listPhases($pdo, $user_id, $materia_id);
+    $orderedTitles = array_map(fn($r) => decryptDirectoryName($r), $all);
 
     $insertAfterPos = count($all);
-    $contextTitle = $manual_seed !== '' ? $manual_seed : (string)$materia['nome'];
+    $contextTitle = $manual_seed !== '' ? $manual_seed : decryptDirectoryName($materia);
     if ($parent_subtopico_id) {
-        foreach ($all as $row) {
+        foreach ($all as $idx => $row) {
             if ((int)$row['id'] === $parent_subtopico_id) {
-                $insertAfterPos = (int)$row['sort_order'];
-                $contextTitle = (string)$row['titulo'];
+                $insertAfterPos = $idx + 1;
+                $contextTitle = decryptDirectoryName($row);
                 break;
             }
         }
     }
 
-    $generated = generateSubtopics((string)$materia['nome'], $orderedTitles, $insertAfterPos, $contextTitle);
+    $generated = generateSubtopics(decryptDirectoryName($materia), $orderedTitles, $insertAfterPos, $contextTitle);
     $newTitles = $generated['new_titles'] ?? [];
     $finalTitles = $generated['final_titles'] ?? [];
     if (count($newTitles) !== 5 || count($finalTitles) !== count($orderedTitles) + 5) {
@@ -408,18 +440,16 @@ if ($action === 'generate_subtopicos') {
 
     $pdo->beginTransaction();
     try {
-        $ins = $pdo->prepare('INSERT INTO materia_subtopicos (materia_id, titulo, sort_order, parent_subtopico_id) VALUES (?, ?, 0, ?)');
+        $ins = $pdo->prepare('INSERT INTO directories (user_id, parent_id, type, name_encrypted, default_view, open_mode, new_item_position, sort_order, icon, icon_color_from, icon_color_to) VALUES (?, ?, 10, ?, "grid", "fullscreen", "end", 0, "fa-layer-group", "#f59e0b", "#d97706")');
         for ($i = 0; $i < 5; $i++) {
-            $ins->execute([$materia_id, $newTitles[$i], $parent_subtopico_id]);
+            $ins->execute([$user_id, $materia_id, Security::encryptData($newTitles[$i])]);
         }
 
-        $rowsStmt = $pdo->prepare('SELECT id, titulo FROM materia_subtopicos WHERE materia_id = ? ORDER BY sort_order ASC, id ASC');
-        $rowsStmt->execute([$materia_id]);
-        $rows = $rowsStmt->fetchAll();
-
+        $rows = listPhases($pdo, $user_id, $materia_id);
         $remainingByTitle = [];
         foreach ($rows as $row) {
-            $k = mb_strtolower(cleanGeneratedTitle((string)$row['titulo']));
+            $decoded = decryptDirectoryName($row);
+            $k = mb_strtolower(cleanGeneratedTitle($decoded));
             if (!isset($remainingByTitle[$k])) $remainingByTitle[$k] = [];
             $remainingByTitle[$k][] = (int)$row['id'];
         }
@@ -437,13 +467,12 @@ if ($action === 'generate_subtopicos') {
             throw new RuntimeException('Final order incompleta.');
         }
 
-        $upd = $pdo->prepare('UPDATE materia_subtopicos SET sort_order = ? WHERE id = ? AND materia_id = ?');
+        $upd = $pdo->prepare('UPDATE directories SET sort_order = ? WHERE id = ? AND user_id = ? AND parent_id = ? AND type = 10');
         foreach ($resolvedIds as $idx => $id) {
-            $upd->execute([$idx + 1, $id, $materia_id]);
+            $upd->execute([$idx + 1, $id, $user_id, $materia_id]);
         }
 
         $pdo->commit();
-
         echo json_encode(['status' => 'success']);
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
@@ -456,8 +485,9 @@ if ($action === 'update_subtopico') {
     $id = (int)($input['id'] ?? 0);
     $titulo = trim((string)($input['titulo'] ?? ''));
     if ($id <= 0 || $titulo === '') die(json_encode(['status' => 'error', 'message' => 'Dados inválidos.']));
-    $stmt = $pdo->prepare('UPDATE materia_subtopicos SET titulo = ? WHERE id = ?');
-    $stmt->execute([$titulo, $id]);
+
+    $stmt = $pdo->prepare('UPDATE directories SET name_encrypted = ? WHERE id = ? AND user_id = ? AND type = 10');
+    $stmt->execute([Security::encryptData($titulo), $id, $user_id]);
     echo json_encode(['status' => 'success']);
     exit;
 }
@@ -466,17 +496,14 @@ if ($action === 'delete_subtopico') {
     $id = (int)($input['id'] ?? 0);
     $materia_id = (int)($input['materia_id'] ?? 0);
     if ($id <= 0 || $materia_id <= 0) die(json_encode(['status' => 'error', 'message' => 'Dados inválidos.']));
+
+    $materia = getTrailById($pdo, $user_id, $materia_id);
+    if (!$materia) die(json_encode(['status' => 'error', 'message' => 'Matéria inválida.']));
+
     $pdo->beginTransaction();
     try {
-        $posStmt = $pdo->prepare('SELECT sort_order FROM materia_subtopicos WHERE id = ? AND materia_id = ?');
-        $posStmt->execute([$id, $materia_id]);
-        $row = $posStmt->fetch();
-        if (!$row) throw new RuntimeException('Not found');
-        $pos = (int)$row['sort_order'];
-
-        $pdo->prepare('DELETE FROM materia_subtopicos WHERE id = ? AND materia_id = ?')->execute([$id, $materia_id]);
-        $pdo->prepare('UPDATE materia_subtopicos SET sort_order = sort_order - 1 WHERE materia_id = ? AND sort_order > ?')->execute([$materia_id, $pos]);
-
+        $pdo->prepare('DELETE FROM directories WHERE id = ? AND user_id = ? AND parent_id = ? AND type = 10')->execute([$id, $user_id, $materia_id]);
+        normalizePhaseSortOrder($pdo, $user_id, $materia_id);
         $pdo->commit();
         echo json_encode(['status' => 'success']);
     } catch (Throwable $e) {
