@@ -20,7 +20,7 @@ public_html/gluon/
 │   └── sistema_de_condicionais.php # NOVO: Micro-API para tarefas com dependência condicional
 │   └── plano.php            # NOVO: Micro-API para diretórios do tipo Plano
 │   └── trilha.php           # NOVO: Micro-API para trilhas dinâmicas de estudo (mapas/fases/GPT)
-│   └── topicos.php          # NOVO: CRUD de matérias + sub-matérias com geração GPT, validação anti-duplicação/anti-itens compostos e reordenação
+│   └── topicos.php          # NOVO: CRUD de matérias + sub-matérias com geração GPT, inserção de 5 por vez, retorno da lista completa reordenada e persistência de ordem
 │
 ├── views/                    # Front-end (Vanilla JS + Tailwind)
 │   ├── login.html

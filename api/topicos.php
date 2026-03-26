@@ -131,6 +131,59 @@ function buildUniqueAtomicTitles(
     return array_slice($out, 0, $count);
 }
 
+function listToMap(array $titles): array {
+    $map = [];
+    foreach ($titles as $title) {
+        $k = mb_strtolower(cleanGeneratedTitle((string)$title));
+        if ($k === '') continue;
+        $map[$k] = ($map[$k] ?? 0) + 1;
+    }
+    return $map;
+}
+
+function canPreserveAllExisting(array $existingMap, array $finalMap): bool {
+    foreach ($existingMap as $k => $count) {
+        if (($finalMap[$k] ?? 0) < $count) return false;
+    }
+    return true;
+}
+
+function computeNewTitlesFromFinalList(array $existingTitles, array $finalTitles): array {
+    $existingCount = listToMap($existingTitles);
+    $newTitles = [];
+
+    foreach ($finalTitles as $title) {
+        $clean = cleanGeneratedTitle((string)$title);
+        if ($clean === '') continue;
+        $k = mb_strtolower($clean);
+        if (($existingCount[$k] ?? 0) > 0) {
+            $existingCount[$k]--;
+            continue;
+        }
+        $newTitles[] = $clean;
+    }
+
+    return $newTitles;
+}
+
+function buildFinalListWithInsertion(array $orderedList, array $newTitles, int $insertAfterPosition): array {
+    $before = array_slice($orderedList, 0, $insertAfterPosition);
+    $after = array_slice($orderedList, $insertAfterPosition);
+    return array_values(array_merge($before, $newTitles, $after));
+}
+
+function normalizeTitleListFromJson(array $items): array {
+    $out = [];
+    foreach ($items as $item) {
+        if (is_array($item)) {
+            $out[] = (string)($item['titulo'] ?? $item['title'] ?? $item['nome'] ?? '');
+            continue;
+        }
+        $out[] = (string)$item;
+    }
+    return array_map(fn($t) => cleanGeneratedTitle((string)$t), $out);
+}
+
 function generateSubtopics(string $materia, array $orderedList, int $insertAfterPosition, string $contextTitle): array {
     $orderedText = [];
     foreach ($orderedList as $idx => $name) {
@@ -151,21 +204,23 @@ function generateSubtopics(string $materia, array $orderedList, int $insertAfter
         'response_format' => ['type' => 'json_object'],
         'messages' => [
             ['role' => 'system', 'content' => 'Você é um arquiteto curricular especialista em decomposição progressiva de conhecimento. Sempre retorna JSON válido e sem texto extra.'],
-            ['role' => 'user', 'content' => "Matéria principal: {$materia}\nObjetivo: criar o curso mais detalhado do mundo sobre a matéria principal. Como o usuário precisa revisar, a expansão deve ocorrer em lotes de 5 por vez.\n\nLista atual completa e ordenada:\n{$orderedListText}\n\nContexto clicado para expansão: {$contextTitle}\nInserção obrigatória após a posição {$insertAfterPosition}.\nAs novas posições serão EXATAMENTE: {$positionsText}.\n\nRegras obrigatórias para cada novo título:\n1) Um único tópico por linha (nada de juntar 2 ou 3 assuntos no mesmo título).\n2) Não usar vírgula, ponto e vírgula, dois pontos, barra, parênteses nem a conjunção ' e '.\n3) Não repetir nenhum item da lista atual.\n4) Título curto e específico, de 4 a 90 caracteres.\n5) Manter progressão lógica para aprofundar o curso.\n\nRetorne SOMENTE JSON no formato:\n{\"subtopicos\":[{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"}]}"
+            ['role' => 'user', 'content' => "Matéria principal: {$materia}\nObjetivo: criar o curso mais detalhado do mundo sobre a matéria principal. Como o usuário precisa revisar, a expansão deve ocorrer em lotes de 5 por vez.\n\nLista atual completa e ordenada:\n{$orderedListText}\n\nContexto clicado para expansão: {$contextTitle}\nInserção de novos itens logo após a posição {$insertAfterPosition}.\nPosições-alvo inicialmente reservadas para os novos itens: {$positionsText}.\n\nRegras obrigatórias:\n1) Você nunca pode excluir itens já existentes.\n2) Você deve criar exatamente 5 novos títulos.\n3) Você pode reordenar a lista completa para melhorar a progressão lógica.\n4) Títulos atômicos: um assunto por título.\n5) Não usar vírgula, ponto e vírgula, dois pontos, barra, parênteses nem a conjunção ' e '.\n6) Não repetir títulos existentes nem repetir entre os novos.\n7) Cada título precisa ter de 4 a 90 caracteres.\n\nRetorne SOMENTE JSON no formato:\n{\"novos_subtopicos\":[{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"}],\"lista_final\":[{\"titulo\":\"...\"}]}\n\n\"lista_final\" deve conter TODOS os tópicos antigos + 5 novos, em ordem final."
             ]
         ]
     ];
 
     $resp = openaiRequest($prompt);
-    if (!$resp) {
-        return [
-            "{$contextTitle} · Fundamentos",
-            "{$contextTitle} · Conceitos-chave",
-            "{$contextTitle} · Aplicações práticas",
-            "{$contextTitle} · Casos avançados",
-            "{$contextTitle} · Revisão e domínio"
-        ];
-    }
+    $fallbackNew = [
+        "{$contextTitle} · Fundamentos",
+        "{$contextTitle} · Conceitos-chave",
+        "{$contextTitle} · Aplicações práticas",
+        "{$contextTitle} · Casos avançados",
+        "{$contextTitle} · Revisão e domínio"
+    ];
+    if (!$resp) return [
+        'new_titles' => $fallbackNew,
+        'final_titles' => buildFinalListWithInsertion($orderedList, $fallbackNew, $insertAfterPosition)
+    ];
 
     $raw = trim((string)($resp['choices'][0]['message']['content'] ?? ''));
     if (str_starts_with($raw, '```')) {
@@ -174,27 +229,74 @@ function generateSubtopics(string $materia, array $orderedList, int $insertAfter
         $raw = trim($raw);
     }
     $json = json_decode($raw, true);
-    if (!is_array($json) || !isset($json['subtopicos']) || !is_array($json['subtopicos'])) {
-        return [
+    if (!is_array($json)) {
+        $baseFallback = [
             "{$contextTitle} · Base 1",
             "{$contextTitle} · Base 2",
             "{$contextTitle} · Base 3",
             "{$contextTitle} · Base 4",
             "{$contextTitle} · Base 5"
         ];
+        return [
+            'new_titles' => $baseFallback,
+            'final_titles' => buildFinalListWithInsertion($orderedList, $baseFallback, $insertAfterPosition)
+        ];
     }
 
     $rawTitles = [];
-    foreach ($json['subtopicos'] as $item) {
+    foreach (($json['novos_subtopicos'] ?? $json['subtopicos'] ?? []) as $item) {
         $rawTitles[] = (string)($item['titulo'] ?? $item['title'] ?? $item['nome'] ?? '');
     }
 
     $uniqueAtomic = buildUniqueAtomicTitles($rawTitles, $orderedList, $contextTitle, 5);
-    if (count($uniqueAtomic) < 5) {
-        return normalizeSubtopics($json['subtopicos'], $contextTitle);
+    if (count($uniqueAtomic) < 5 && isset($json['novos_subtopicos']) && is_array($json['novos_subtopicos'])) {
+        $uniqueAtomic = normalizeSubtopics($json['novos_subtopicos'], $contextTitle);
+    }
+    if (count($uniqueAtomic) < 5) $uniqueAtomic = normalizeSubtopics($json['subtopicos'] ?? [], $contextTitle);
+
+    $fallbackFinal = buildFinalListWithInsertion($orderedList, $uniqueAtomic, $insertAfterPosition);
+
+    if (!isset($json['lista_final']) || !is_array($json['lista_final'])) {
+        return ['new_titles' => $uniqueAtomic, 'final_titles' => $fallbackFinal];
     }
 
-    return $uniqueAtomic;
+    $finalTitles = array_values(array_filter(normalizeTitleListFromJson($json['lista_final']), fn($t) => $t !== ''));
+    if (count($finalTitles) !== count($orderedList) + 5) {
+        return ['new_titles' => $uniqueAtomic, 'final_titles' => $fallbackFinal];
+    }
+
+    $existingMap = listToMap($orderedList);
+    $finalMap = listToMap($finalTitles);
+    if (!canPreserveAllExisting($existingMap, $finalMap)) {
+        return ['new_titles' => $uniqueAtomic, 'final_titles' => $fallbackFinal];
+    }
+
+    $newFromFinal = computeNewTitlesFromFinalList($orderedList, $finalTitles);
+    $validatedNew = buildUniqueAtomicTitles($newFromFinal, $orderedList, $contextTitle, 5);
+    if (count($validatedNew) < 5) {
+        return ['new_titles' => $uniqueAtomic, 'final_titles' => $fallbackFinal];
+    }
+
+    $finalAdjusted = $finalTitles;
+    $replaced = 0;
+    foreach ($finalAdjusted as $idx => $title) {
+        $k = mb_strtolower(cleanGeneratedTitle((string)$title));
+        if (($existingMap[$k] ?? 0) > 0) {
+            $existingMap[$k]--;
+            continue;
+        }
+        if ($replaced < 5) {
+            $finalAdjusted[$idx] = $validatedNew[$replaced];
+            $replaced++;
+            continue;
+        }
+        unset($finalAdjusted[$idx]);
+    }
+    if ($replaced !== 5) {
+        return ['new_titles' => $uniqueAtomic, 'final_titles' => $fallbackFinal];
+    }
+
+    return ['new_titles' => $validatedNew, 'final_titles' => array_values($finalAdjusted)];
 }
 
 if ($action === 'list_materias') {
@@ -297,19 +399,49 @@ if ($action === 'generate_subtopicos') {
         }
     }
 
-    $newTitles = generateSubtopics((string)$materia['nome'], $orderedTitles, $insertAfterPos, $contextTitle);
+    $generated = generateSubtopics((string)$materia['nome'], $orderedTitles, $insertAfterPos, $contextTitle);
+    $newTitles = $generated['new_titles'] ?? [];
+    $finalTitles = $generated['final_titles'] ?? [];
+    if (count($newTitles) !== 5 || count($finalTitles) !== count($orderedTitles) + 5) {
+        die(json_encode(['status' => 'error', 'message' => 'Falha ao montar novas sub-matérias.']));
+    }
 
     $pdo->beginTransaction();
     try {
-        if ($insertAfterPos < count($all)) {
-            $shift = $pdo->prepare('UPDATE materia_subtopicos SET sort_order = sort_order + 5 WHERE materia_id = ? AND sort_order > ?');
-            $shift->execute([$materia_id, $insertAfterPos]);
+        $ins = $pdo->prepare('INSERT INTO materia_subtopicos (materia_id, titulo, sort_order, parent_subtopico_id) VALUES (?, ?, 0, ?)');
+        for ($i = 0; $i < 5; $i++) {
+            $ins->execute([$materia_id, $newTitles[$i], $parent_subtopico_id]);
         }
 
-        $ins = $pdo->prepare('INSERT INTO materia_subtopicos (materia_id, titulo, sort_order, parent_subtopico_id) VALUES (?, ?, ?, ?)');
-        for ($i = 0; $i < 5; $i++) {
-            $ins->execute([$materia_id, $newTitles[$i], $insertAfterPos + $i + 1, $parent_subtopico_id]);
+        $rowsStmt = $pdo->prepare('SELECT id, titulo FROM materia_subtopicos WHERE materia_id = ? ORDER BY sort_order ASC, id ASC');
+        $rowsStmt->execute([$materia_id]);
+        $rows = $rowsStmt->fetchAll();
+
+        $remainingByTitle = [];
+        foreach ($rows as $row) {
+            $k = mb_strtolower(cleanGeneratedTitle((string)$row['titulo']));
+            if (!isset($remainingByTitle[$k])) $remainingByTitle[$k] = [];
+            $remainingByTitle[$k][] = (int)$row['id'];
         }
+
+        $resolvedIds = [];
+        foreach ($finalTitles as $title) {
+            $k = mb_strtolower(cleanGeneratedTitle((string)$title));
+            if (!isset($remainingByTitle[$k]) || count($remainingByTitle[$k]) === 0) {
+                throw new RuntimeException('Final order inválida.');
+            }
+            $resolvedIds[] = array_shift($remainingByTitle[$k]);
+        }
+
+        if (count($resolvedIds) !== count($rows)) {
+            throw new RuntimeException('Final order incompleta.');
+        }
+
+        $upd = $pdo->prepare('UPDATE materia_subtopicos SET sort_order = ? WHERE id = ? AND materia_id = ?');
+        foreach ($resolvedIds as $idx => $id) {
+            $upd->execute([$idx + 1, $id, $materia_id]);
+        }
+
         $pdo->commit();
 
         echo json_encode(['status' => 'success']);
