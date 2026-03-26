@@ -697,7 +697,7 @@ function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $la
 function buildDefaultBasePromptByStructure($deck_name, $deck_structure) {
     $basePrompt = '';
     if ($deck_structure === 'fatos') {
-        $basePrompt = 'Me dê informações sobre o assunto "$deck_name", em uma tabela de uma única coluna, onde cada linha é uma informação. As informações devem ser de fácil compreensão. As informações devem ser óbvias evidentes e de rápida assimilação e de preferência curtas. Nenhuma informação pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. A ideia é conseguir vencer o paradoxo de Mênon, conseguir saber tudo sobre esse assunto, do nível para leigos ao nível expert. Caso não tenha muitas perguntas anteriores, vá pelo nível para leigos, e só aumente o nível se as perguntas anteriores já tiverem abrangido todo nível de conhecimento para leigos no assunto. Frases curtas.';
+        $basePrompt = 'Me dê informações sobre o assunto "$deck_name", em uma tabela de uma única coluna, onde cada linha é uma informação. As informações devem ser de fácil compreensão. As informações devem ser óbvias evidentes e de rápida assimilação e de preferência curtas. As informações devem ser sequenciais, uma sendo continuação da outra, igual em um livro, em um texto grande. Dê exemplo ou faça analogias, quando cabível, para o aluno sair um pouco da abstração e conseguir entender tanto a parte abstrata quanto enxergar o abstrato no mundo concreto.';
     } elseif ($deck_structure === 'perguntas') {
         $basePrompt = 'Me dê perguntas que induzam conhecimento fundamental, elementar, essencial, indispensável sobre o assunto "$deck_name" coisas elementares e ontológicas sobre, hermenêutica, em uma tabela de duas colunas, onde cada linha é uma pergunta, a primeira coluna é a pergunta, e a segunda é a resposta. As perguntas e respostas devem ser óbvias evidentes e de rápida assimilação. Use linguagem simples e de fácil assimilação para pessoas de qualquer nível intelectual. As pessoas devem conseguir decodificar a informação codificada nas perguntas e respostas de forma assustadoramente fácil. As perguntas devem ser simples e de preferência curtas. Nenhuma pergunta pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. O objetivo é construir aprendizado progressivo sem redundância. Público alvo são crianças de 10 à 17 anos.';
     } elseif ($deck_structure === 'parafrases') {
@@ -748,7 +748,7 @@ CARDS JÁ EXISTENTES NESTE DECK:
 " . $historyText
             . "
 
-Gere 15 novos cards sem repetição de conteúdo com o histórico.";
+Gere de 5 à 50 novos cards sem repetição de conteúdo com o histórico.";
     }
 
     $requiresBack = in_array($deck_structure, ['perguntas', 'traducoes'], true);
