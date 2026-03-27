@@ -1238,14 +1238,48 @@
                 return !!this.getItemScheduleWindow(item);
             },
 
+            getRecurringFallbackStart(item) {
+                if (Number(item?.is_recurring) !== 1) return null;
+                if (item?.rec_type !== 'custom') return null;
+
+                let customDates = [];
+                try {
+                    customDates = Array.isArray(item.rec_custom) ? item.rec_custom : JSON.parse(item.rec_custom || '[]');
+                } catch (e) {
+                    customDates = [];
+                }
+
+                if (!Array.isArray(customDates) || customDates.length === 0) return null;
+
+                const todayStr = this.getLocalYYYYMMDD(new Date());
+                const normalized = customDates
+                    .map((value) => String(value || '').trim())
+                    .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))
+                    .sort();
+
+                if (normalized.length === 0) return null;
+
+                const pickedDate = normalized.find((date) => date >= todayStr) || normalized[0];
+                const recTimeStart = String(item?.rec_time_start || '').slice(0, 5);
+                const fallbackTime = /^\d{2}:\d{2}$/.test(recTimeStart) ? recTimeStart : '09:00';
+                const fallbackStart = new Date(`${pickedDate}T${fallbackTime}:00`);
+                return Number.isNaN(fallbackStart.getTime()) ? null : fallbackStart;
+            },
+
             getItemScheduleWindow(item) {
                 const startRaw = item?.start_date;
                 const endRaw = item?.end_date;
+                let parsedStart = null;
 
-                if (!startRaw || this.isMySQLZeroDate(startRaw)) return null;
+                if (startRaw && !this.isMySQLZeroDate(startRaw)) {
+                    parsedStart = new Date(String(startRaw).replace(' ', 'T'));
+                    if (Number.isNaN(parsedStart.getTime())) parsedStart = null;
+                }
 
-                const parsedStart = new Date(String(startRaw).replace(' ', 'T'));
-                if (Number.isNaN(parsedStart.getTime())) return null;
+                if (!parsedStart) {
+                    parsedStart = this.getRecurringFallbackStart(item);
+                }
+                if (!parsedStart) return null;
 
                 let parsedEnd = null;
                 if (endRaw && !this.isMySQLZeroDate(endRaw)) {
@@ -1322,9 +1356,9 @@
                     })
                     : allItems;
 
-                const isSchedulableTask = (item) => Number(item?.type) === 0;
-                let backlogItems = filteredItems.filter((item) => !isSchedulableTask(item) || !this.hasScheduleWindow(item));
-                let scheduledItems = filteredItems.filter((item) => isSchedulableTask(item) && this.hasScheduleWindow(item));
+                const hasValidSchedule = (item) => this.hasScheduleWindow(item);
+                let backlogItems = filteredItems.filter((item) => !hasValidSchedule(item));
+                let scheduledItems = filteredItems.filter((item) => hasValidSchedule(item));
 
                 if (isOverdueOnly) {
                     const now = new Date();
