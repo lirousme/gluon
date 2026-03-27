@@ -131,6 +131,9 @@
             <button onclick="goBackToMarkedRoute()" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg border border-slate-700 shadow-sm" title="Voltar">
                 <i class="fa-solid fa-arrow-left"></i>
             </button>
+            <button onclick="flashcardApp.toggleLeftPanel()" id="btnLeftPanel" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm py-2 px-3 rounded-lg transition-all" title="Abrir menu lateral esquerdo" aria-label="Abrir menu lateral esquerdo">
+                <i class="fa-solid fa-volume-high"></i>
+            </button>
             <div class="h-6 w-px bg-slate-700 hidden sm:block"></div>
             <div class="flex items-center gap-3">
                 
@@ -160,6 +163,26 @@
         </div>
     </nav>
 
+    <div id="leftPanelBackdrop" onclick="flashcardApp.closeLeftPanel()" class="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-40 hidden"></div>
+    <aside id="leftPanel" class="fixed top-16 left-0 h-[calc(100dvh-4rem)] w-72 max-w-[85vw] bg-gluon-secondary border-r border-slate-700/70 shadow-2xl z-50 transform -translate-x-full transition-transform duration-200">
+        <div class="p-4 space-y-4">
+            <div class="flex items-center justify-between">
+                <h2 class="text-sm font-semibold text-slate-200">Áudios do Deck</h2>
+                <button onclick="flashcardApp.closeLeftPanel()" class="text-slate-400 hover:text-white" title="Fechar menu" aria-label="Fechar menu lateral esquerdo">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <button id="btnGenerateMissingAudiosFromDeckLeft" onclick="flashcardApp.generateMissingAudiosFromDeckFromLeftPanel()" class="w-full text-left bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-200 border border-cyan-500/40 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm">
+                <i class="fa-solid fa-volume-high"></i>
+                <span>Gerar áudios pendentes</span>
+            </button>
+            <p class="text-xs text-slate-400">
+                Gera áudio para os cards do deck aberto que ainda não possuem áudio.
+            </p>
+        </div>
+    </aside>
+
     <div id="rightPanelBackdrop" onclick="flashcardApp.closeRightPanel()" class="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-40 hidden"></div>
     <aside id="rightPanel" class="fixed top-16 right-0 h-[calc(100dvh-4rem)] w-72 max-w-[85vw] bg-gluon-secondary border-l border-slate-700/70 shadow-2xl z-50 transform translate-x-full transition-transform duration-200">
         <div class="p-4 space-y-4">
@@ -185,12 +208,54 @@
                 <span>Importar Tabela</span>
             </button>
 
-            <button id="btnGenerateMissingAudiosFromDeck" onclick="flashcardApp.generateMissingAudiosFromDeckFromPanel()" class="w-full text-left bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-200 border border-cyan-500/40 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm">
-                <i class="fa-solid fa-volume-high"></i>
-                <span>Gerar áudios pendentes</span>
-            </button>
         </div>
     </aside>
+
+    <!-- Modal de Progresso da Geração de Áudios -->
+    <div id="audioGenerationModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-[70] opacity-0 transition-opacity duration-300 px-4">
+        <div id="audioGenerationModalContent" class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg transform scale-95 transition-transform duration-300 overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-700/80 flex items-center justify-between gap-3">
+                <h3 class="text-base font-semibold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-volume-high text-cyan-300"></i>
+                    <span>Gerando áudios pendentes</span>
+                </h3>
+                <span id="audioGenerationStatusBadge" class="text-xs px-2.5 py-1 rounded-full bg-slate-700 text-slate-200">Preparando...</span>
+            </div>
+            <div class="p-5 space-y-4">
+                <p id="audioGenerationModalMessage" class="text-sm text-slate-300">Iniciando contagem de áudios pendentes...</p>
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between text-xs text-slate-300">
+                        <span>Progresso</span>
+                        <span id="audioGenerationProgressLabel">0 / 0</span>
+                    </div>
+                    <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
+                        <div id="audioGenerationProgressBar" class="h-full w-0 bg-cyan-400 transition-all duration-300"></div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-3 text-center">
+                    <div class="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2">
+                        <div class="text-xs uppercase tracking-wide text-slate-400">Gerados</div>
+                        <div id="audioGeneratedCount" class="text-xl font-semibold text-emerald-300">0</div>
+                    </div>
+                    <div class="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2">
+                        <div class="text-xs uppercase tracking-wide text-slate-400">Pendentes</div>
+                        <div id="audioRemainingCount" class="text-xl font-semibold text-amber-300">0</div>
+                    </div>
+                    <div class="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2">
+                        <div class="text-xs uppercase tracking-wide text-slate-400">Falhas</div>
+                        <div id="audioFailedCount" class="text-xl font-semibold text-rose-300">0</div>
+                    </div>
+                </div>
+                <div id="audioGenerationLog" class="max-h-48 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900/50 p-3 space-y-2 text-xs text-slate-300"></div>
+            </div>
+            <div class="px-5 py-4 border-t border-slate-700/80 flex items-center justify-end gap-3 bg-slate-900/30">
+                <button id="audioGenerationStopBtn" type="button" onclick="flashcardApp.stopAudioGeneration()" class="px-4 py-2 rounded-lg bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/40 text-sm font-medium">
+                    Interromper
+                </button>
+                <button id="audioGenerationCloseBtn" type="button" onclick="flashcardApp.closeAudioGenerationModal()" class="hidden px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 text-sm font-medium">Fechar</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Content -->
     <main class="flex-1 w-full flex flex-col items-center justify-center p-4 relative">
@@ -571,6 +636,7 @@
             currentIndex: 0,
             isFlipped: false,
             scoredThisSession: new Set(),
+            isLeftPanelOpen: false,
             isRightPanelOpen: false,
             
             autoPlayEnabled: false,
@@ -581,6 +647,14 @@
             autoFlowToken: 0,
             autoFlowTransitionDelayMs: 250,
             isGeneratingMissingAudios: false,
+            audioGeneration: {
+                running: false,
+                stopRequested: false,
+                total: 0,
+                generated: 0,
+                failed: 0,
+                remaining: 0,
+            },
 
             async init() {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -638,6 +712,20 @@
                 backdrop.classList.toggle('hidden', !this.isRightPanelOpen);
             },
 
+            toggleLeftPanel() {
+                this.isLeftPanelOpen = !this.isLeftPanelOpen;
+                const panel = document.getElementById('leftPanel');
+                const backdrop = document.getElementById('leftPanelBackdrop');
+                panel.classList.toggle('-translate-x-full', !this.isLeftPanelOpen);
+                backdrop.classList.toggle('hidden', !this.isLeftPanelOpen);
+            },
+
+            closeLeftPanel() {
+                this.isLeftPanelOpen = false;
+                document.getElementById('leftPanel').classList.add('-translate-x-full');
+                document.getElementById('leftPanelBackdrop').classList.add('hidden');
+            },
+
             closeRightPanel() {
                 this.isRightPanelOpen = false;
                 document.getElementById('rightPanel').classList.add('translate-x-full');
@@ -661,6 +749,11 @@
 
             async generateMissingAudiosFromDeckFromPanel() {
                 this.closeRightPanel();
+                await this.generateMissingAudiosFromCurrentDeck();
+            },
+
+            async generateMissingAudiosFromDeckFromLeftPanel() {
+                this.closeLeftPanel();
                 await this.generateMissingAudiosFromCurrentDeck();
             },
 
@@ -1346,7 +1439,7 @@
                     return;
                 }
 
-                const button = document.getElementById('btnGenerateMissingAudiosFromDeck');
+                const button = document.getElementById('btnGenerateMissingAudiosFromDeckLeft');
                 const originalHtml = button ? button.innerHTML : '';
                 this.isGeneratingMissingAudios = true;
 
@@ -1361,28 +1454,38 @@
                     if (!countResponse) return;
 
                     const totalPending = Number(countResponse?.data?.total_pending || 0);
+                    this.openAudioGenerationModal({ totalPending });
                     if (totalPending === 0) {
-                        this.showToast('Nenhum áudio pendente encontrado neste deck.', 'success');
+                        this.finishAudioGeneration(true);
                         return;
                     }
 
-                    let generated = 0;
-                    let failed = 0;
-                    let remaining = totalPending;
                     let guard = 0;
 
-                    while (remaining > 0 && guard < (totalPending + 20)) {
+                    while (this.audioGeneration.running && !this.audioGeneration.stopRequested) {
                         const response = await this.api('generate_next_missing_audio_from_deck', { deck_id: this.deckId });
                         if (!response) {
-                            failed += 1;
-                            break;
+                            this.appendAudioGenerationLog('Falha de comunicação ao gerar áudio.', 'error');
+                            this.audioGeneration.failed += 1;
+                            this.audioGeneration.remaining = Math.max(0, this.audioGeneration.remaining - 1);
+                            this.updateAudioGenerationModalUI('Falha ao gerar o item atual, tentando próximo...');
+                            guard++;
+                            if (guard > (totalPending + 20)) break;
+                            continue;
                         }
 
                         const data = response.data || {};
-                        generated += Number(data.generated_count || 0);
-                        failed += Number(data.failed_count || 0);
-                        remaining = Number(data.remaining_pending || 0);
+                        this.audioGeneration.generated += Number(data.generated_count || 0);
+                        this.audioGeneration.failed += Number(data.failed_count || 0);
+                        this.audioGeneration.remaining = Number(data.remaining_pending || 0);
                         guard++;
+
+                        if (Number(data.generated_count || 0) > 0) {
+                            this.appendAudioGenerationLog(`Card #${data.card_id || '-'} (${data.side || '-'}) gerado com sucesso.`, 'success');
+                        } else if (Number(data.failed_count || 0) > 0) {
+                            this.appendAudioGenerationLog(`Card #${data.card_id || '-'} (${data.side || '-'}) falhou.`, 'error');
+                        }
+                        this.updateAudioGenerationModalUI(response.message || 'Processando...');
 
                         if (Number(data.generated_count || 0) > 0) {
                             const cardIndex = this.cards.findIndex(c => c.id === data.card_id);
@@ -1392,7 +1495,7 @@
                             }
                         }
 
-                        if (data.done === true) {
+                        if (data.done === true || this.audioGeneration.remaining === 0 || guard > (totalPending + 20)) {
                             break;
                         }
                     }
@@ -1400,7 +1503,8 @@
                     if (this.cards[this.currentIndex]) {
                         this.renderCurrentCard();
                     }
-                    this.showToast(`Geração concluída: ${generated} gerado(s), ${failed} falha(s), ${remaining} pendente(s).`, failed > 0 ? 'error' : 'success');
+                    const wasStopped = this.audioGeneration.stopRequested;
+                    this.finishAudioGeneration(!wasStopped);
                 } finally {
                     this.isGeneratingMissingAudios = false;
                     if (button) {
@@ -1409,6 +1513,153 @@
                         button.innerHTML = originalHtml;
                     }
                 }
+            },
+
+            openAudioGenerationModal({ totalPending }) {
+                this.audioGeneration = {
+                    running: true,
+                    stopRequested: false,
+                    total: totalPending,
+                    generated: 0,
+                    failed: 0,
+                    remaining: totalPending,
+                };
+
+                const modal = document.getElementById('audioGenerationModal');
+                const content = document.getElementById('audioGenerationModalContent');
+                const closeBtn = document.getElementById('audioGenerationCloseBtn');
+                const stopBtn = document.getElementById('audioGenerationStopBtn');
+                const log = document.getElementById('audioGenerationLog');
+
+                if (!modal || !content) return;
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                closeBtn?.classList.add('hidden');
+                stopBtn?.classList.remove('hidden');
+                stopBtn?.removeAttribute('disabled');
+                stopBtn?.classList.remove('opacity-60', 'cursor-not-allowed');
+                if (log) log.innerHTML = '';
+
+                requestAnimationFrame(() => {
+                    modal.classList.remove('opacity-0');
+                    content.classList.remove('scale-95');
+                });
+
+                this.appendAudioGenerationLog(`Iniciado. Total pendente: ${totalPending}.`, 'info');
+                this.updateAudioGenerationModalUI(totalPending > 0 ? 'Gerando áudios pendentes...' : 'Nenhum áudio pendente encontrado neste deck.');
+            },
+
+            updateAudioGenerationModalUI(message = '') {
+                const state = this.audioGeneration;
+                const total = Math.max(state.total, 0);
+                const generated = Math.max(state.generated, 0);
+                const failed = Math.max(state.failed, 0);
+                const remaining = Math.max(state.remaining, 0);
+                const processed = Math.min(total, generated + failed);
+                const progress = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 100;
+
+                const generatedEl = document.getElementById('audioGeneratedCount');
+                const remainingEl = document.getElementById('audioRemainingCount');
+                const failedEl = document.getElementById('audioFailedCount');
+                const progressLabel = document.getElementById('audioGenerationProgressLabel');
+                const progressBar = document.getElementById('audioGenerationProgressBar');
+                const msgEl = document.getElementById('audioGenerationModalMessage');
+                const badge = document.getElementById('audioGenerationStatusBadge');
+
+                if (generatedEl) generatedEl.textContent = `${generated}`;
+                if (remainingEl) remainingEl.textContent = `${remaining}`;
+                if (failedEl) failedEl.textContent = `${failed}`;
+                if (progressLabel) progressLabel.textContent = `${processed} / ${total}`;
+                if (progressBar) progressBar.style.width = `${progress}%`;
+                if (message && msgEl) msgEl.textContent = message;
+
+                if (badge) {
+                    if (state.running && !state.stopRequested) {
+                        badge.textContent = 'Processando...';
+                        badge.className = 'text-xs px-2.5 py-1 rounded-full bg-cyan-500/20 text-cyan-200';
+                    } else if (state.stopRequested) {
+                        badge.textContent = 'Interrompido';
+                        badge.className = 'text-xs px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-200';
+                    } else if (failed > 0) {
+                        badge.textContent = 'Concluído com falhas';
+                        badge.className = 'text-xs px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-200';
+                    } else {
+                        badge.textContent = 'Concluído';
+                        badge.className = 'text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-200';
+                    }
+                }
+            },
+
+            appendAudioGenerationLog(message, level = 'info') {
+                const log = document.getElementById('audioGenerationLog');
+                if (!log) return;
+
+                const levelClasses = {
+                    success: 'border-emerald-500/50 text-emerald-200 bg-emerald-500/10',
+                    error: 'border-rose-500/50 text-rose-200 bg-rose-500/10',
+                    info: 'border-slate-600 text-slate-200 bg-slate-800/70',
+                };
+
+                const item = document.createElement('div');
+                item.className = `rounded-md border px-2.5 py-2 ${levelClasses[level] || levelClasses.info}`;
+                const timestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                item.textContent = `[${timestamp}] ${message}`;
+                log.appendChild(item);
+                log.scrollTop = log.scrollHeight;
+            },
+
+            stopAudioGeneration() {
+                if (!this.audioGeneration.running) return;
+                this.audioGeneration.stopRequested = true;
+                this.appendAudioGenerationLog('Interrupção solicitada pelo usuário.', 'info');
+                this.updateAudioGenerationModalUI('Interrompendo geração...');
+                const stopBtn = document.getElementById('audioGenerationStopBtn');
+                if (stopBtn) {
+                    stopBtn.setAttribute('disabled', 'disabled');
+                    stopBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                }
+            },
+
+            finishAudioGeneration(completedNaturally = true) {
+                const state = this.audioGeneration;
+                state.running = false;
+
+                let message = '';
+                if (!completedNaturally || state.stopRequested) {
+                    message = `Geração interrompida. Você ainda tem ${state.remaining} áudio(s) pendente(s).`;
+                } else if (state.total === 0) {
+                    message = 'Nenhum áudio pendente com texto encontrado neste deck.';
+                } else {
+                    message = `Geração concluída: ${state.generated} gerado(s), ${state.failed} falha(s), ${state.remaining} pendente(s).`;
+                }
+
+                this.appendAudioGenerationLog(message, (!completedNaturally || state.stopRequested || state.failed > 0) ? 'error' : 'success');
+                this.updateAudioGenerationModalUI(message);
+                this.showToast(message, (!completedNaturally || state.stopRequested || state.failed > 0) ? 'error' : 'success');
+
+                const closeBtn = document.getElementById('audioGenerationCloseBtn');
+                const stopBtn = document.getElementById('audioGenerationStopBtn');
+                closeBtn?.classList.remove('hidden');
+                stopBtn?.classList.add('hidden');
+            },
+
+            closeAudioGenerationModal() {
+                const modal = document.getElementById('audioGenerationModal');
+                const content = document.getElementById('audioGenerationModalContent');
+                const stopBtn = document.getElementById('audioGenerationStopBtn');
+                const closeBtn = document.getElementById('audioGenerationCloseBtn');
+                if (!modal || !content) return;
+                if (this.audioGeneration.running) return;
+
+                modal.classList.add('opacity-0');
+                content.classList.add('scale-95');
+
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                    stopBtn?.classList.remove('hidden');
+                    closeBtn?.classList.add('hidden');
+                }, 200);
             },
 
             registerScore(card) {
