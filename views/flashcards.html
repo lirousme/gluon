@@ -173,12 +173,8 @@
                 </button>
             </div>
 
-            <button id="btnGenerateMissingAudiosFromDeckLeft" onclick="flashcardApp.generateMissingAudiosFromDeckFromLeftPanel()" class="w-full text-left bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-200 border border-cyan-500/40 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm">
-                <i class="fa-solid fa-volume-high"></i>
-                <span>Gerar áudios pendentes</span>
-            </button>
             <p class="text-xs text-slate-400">
-                Gera áudio para os cards do deck aberto que ainda não possuem áudio.
+                Use o menu lateral direito para gerar os áudios pendentes do deck aberto.
             </p>
         </div>
     </aside>
@@ -192,6 +188,14 @@
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
+
+            <button id="btnGenerateMissingAudiosFromDeck" onclick="flashcardApp.generateMissingAudiosFromDeckFromPanel()" class="w-full text-left bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-200 border border-cyan-500/40 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm">
+                <i class="fa-solid fa-volume-high"></i>
+                <span>Gerar áudios pendentes</span>
+            </button>
+            <p class="text-xs text-slate-400 -mt-2">
+                Gera áudio para os cards do deck aberto que ainda não possuem áudio.
+            </p>
 
             <button onclick="flashcardApp.openSettingsFromPanel()" class="w-full text-left text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm">
                 <i class="fa-solid fa-gear text-slate-400"></i>
@@ -749,11 +753,6 @@
 
             async generateMissingAudiosFromDeckFromPanel() {
                 this.closeRightPanel();
-                await this.generateMissingAudiosFromCurrentDeck();
-            },
-
-            async generateMissingAudiosFromDeckFromLeftPanel() {
-                this.closeLeftPanel();
                 await this.generateMissingAudiosFromCurrentDeck();
             },
 
@@ -1439,7 +1438,7 @@
                     return;
                 }
 
-                const button = document.getElementById('btnGenerateMissingAudiosFromDeckLeft');
+                const button = document.getElementById('btnGenerateMissingAudiosFromDeck');
                 const originalHtml = button ? button.innerHTML : '';
                 this.isGeneratingMissingAudios = true;
 
