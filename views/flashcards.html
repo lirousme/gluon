@@ -184,6 +184,11 @@
                 <i class="fa-solid fa-table"></i>
                 <span>Importar Tabela</span>
             </button>
+
+            <button id="btnGenerateMissingAudiosFromDeck" onclick="flashcardApp.generateMissingAudiosFromDeckFromPanel()" class="w-full text-left bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-200 border border-cyan-500/40 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm">
+                <i class="fa-solid fa-volume-high"></i>
+                <span>Gerar áudios pendentes</span>
+            </button>
         </div>
     </aside>
 
@@ -575,6 +580,7 @@
             autoFlowTimer: null,
             autoFlowToken: 0,
             autoFlowTransitionDelayMs: 250,
+            isGeneratingMissingAudios: false,
 
             async init() {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -651,6 +657,11 @@
             openBulkFromPanel() {
                 this.closeRightPanel();
                 this.openBulkModal();
+            },
+
+            async generateMissingAudiosFromDeckFromPanel() {
+                this.closeRightPanel();
+                await this.generateMissingAudiosFromCurrentDeck();
             },
 
             async api(action, payload = {}) {
@@ -1322,6 +1333,81 @@
                 } else {
                     btn.innerHTML = originalHtml;
                     btn.disabled = false;
+                }
+            },
+
+            async generateMissingAudiosFromCurrentDeck() {
+                if (!this.deckId) {
+                    this.showToast('Deck inválido para gerar áudios.', 'error');
+                    return;
+                }
+                if (this.isGeneratingMissingAudios) {
+                    this.showToast('A geração de áudios já está em andamento.', 'error');
+                    return;
+                }
+
+                const button = document.getElementById('btnGenerateMissingAudiosFromDeck');
+                const originalHtml = button ? button.innerHTML : '';
+                this.isGeneratingMissingAudios = true;
+
+                if (button) {
+                    button.disabled = true;
+                    button.classList.add('opacity-70', 'cursor-not-allowed');
+                    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>Gerando áudios...</span>';
+                }
+
+                try {
+                    const countResponse = await this.api('count_missing_audios_from_deck', { deck_id: this.deckId });
+                    if (!countResponse) return;
+
+                    const totalPending = Number(countResponse?.data?.total_pending || 0);
+                    if (totalPending === 0) {
+                        this.showToast('Nenhum áudio pendente encontrado neste deck.', 'success');
+                        return;
+                    }
+
+                    let generated = 0;
+                    let failed = 0;
+                    let remaining = totalPending;
+                    let guard = 0;
+
+                    while (remaining > 0 && guard < (totalPending + 20)) {
+                        const response = await this.api('generate_next_missing_audio_from_deck', { deck_id: this.deckId });
+                        if (!response) {
+                            failed += 1;
+                            break;
+                        }
+
+                        const data = response.data || {};
+                        generated += Number(data.generated_count || 0);
+                        failed += Number(data.failed_count || 0);
+                        remaining = Number(data.remaining_pending || 0);
+                        guard++;
+
+                        if (Number(data.generated_count || 0) > 0) {
+                            const cardIndex = this.cards.findIndex(c => c.id === data.card_id);
+                            if (cardIndex !== -1) {
+                                if (data.side === 'front') this.cards[cardIndex].has_audio_front = 1;
+                                if (data.side === 'back') this.cards[cardIndex].has_audio_back = 1;
+                            }
+                        }
+
+                        if (data.done === true) {
+                            break;
+                        }
+                    }
+
+                    if (this.cards[this.currentIndex]) {
+                        this.renderCurrentCard();
+                    }
+                    this.showToast(`Geração concluída: ${generated} gerado(s), ${failed} falha(s), ${remaining} pendente(s).`, failed > 0 ? 'error' : 'success');
+                } finally {
+                    this.isGeneratingMissingAudios = false;
+                    if (button) {
+                        button.disabled = false;
+                        button.classList.remove('opacity-70', 'cursor-not-allowed');
+                        button.innerHTML = originalHtml;
+                    }
                 }
             },
 

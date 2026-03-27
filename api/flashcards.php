@@ -1288,6 +1288,33 @@ elseif ($action === 'count_missing_audios_from_directory') {
     ]);
 }
 
+elseif ($action === 'count_missing_audios_from_deck') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    if ($deck_id === 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
+    }
+
+    $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
+    if (!$deck) {
+        die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+    }
+
+    $unlockError = validatePhaseDeckUnlock($pdo, $deck_id, $user_id);
+    if ($unlockError !== null) {
+        die(json_encode(['status' => 'error', 'message' => $unlockError]));
+    }
+
+    $total_pending = countPendingAudiosForDeck($pdo, $deck_id);
+
+    echo json_encode([
+        'status' => 'success',
+        'message' => $total_pending > 0 ? 'Áudios pendentes encontrados.' : 'Nenhum áudio pendente encontrado.',
+        'data' => [
+            'total_pending' => $total_pending
+        ]
+    ]);
+}
+
 elseif ($action === 'generate_next_missing_audio_from_directory') {
     $directory_id = (int)($input['directory_id'] ?? 0);
     if ($directory_id === 0) {
@@ -1344,6 +1371,69 @@ elseif ($action === 'generate_next_missing_audio_from_directory') {
     foreach ($decks as $deck) {
         $remaining_pending += countPendingAudiosForDeck($pdo, (int)$deck['id']);
     }
+
+    echo json_encode([
+        'status' => 'success',
+        'message' => $ok ? 'Áudio gerado com sucesso.' : 'Falha ao gerar áudio do card atual.',
+        'data' => [
+            'done' => $remaining_pending === 0,
+            'generated_count' => $ok ? 1 : 0,
+            'failed_count' => $ok ? 0 : 1,
+            'remaining_pending' => $remaining_pending,
+            'card_id' => $next_job['card_id'],
+            'side' => $next_job['side']
+        ]
+    ]);
+}
+
+elseif ($action === 'generate_next_missing_audio_from_deck') {
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    if ($deck_id === 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
+    }
+
+    $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
+    if (!$deck) {
+        die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
+    }
+
+    $unlockError = validatePhaseDeckUnlock($pdo, $deck_id, $user_id);
+    if ($unlockError !== null) {
+        die(json_encode(['status' => 'error', 'message' => $unlockError]));
+    }
+
+    $front_language = normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR');
+    $back_language = normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB');
+    $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
+
+    $next_job = findNextPendingAudioJobForDeck($pdo, $deck_id, $front_language, $back_language);
+    if (!$next_job) {
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Nenhum áudio pendente restante.',
+            'data' => [
+                'done' => true,
+                'generated_count' => 0,
+                'failed_count' => 0,
+                'remaining_pending' => 0
+            ]
+        ]);
+        exit;
+    }
+
+    $ok = generateAndPersistCardAudio(
+        $pdo,
+        $user_id,
+        $next_job['card_id'],
+        $next_job['side'],
+        $next_job['text'],
+        $next_job['language'],
+        $deck_structure,
+        $front_language,
+        $back_language
+    );
+
+    $remaining_pending = countPendingAudiosForDeck($pdo, $deck_id);
 
     echo json_encode([
         'status' => 'success',
