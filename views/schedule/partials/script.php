@@ -330,19 +330,9 @@
                 this.syncFilterUI();
                 
                 const savedSidebar = localStorage.getItem('gluon_agenda_sidebar');
-                if (savedSidebar === 'false') {
-                    this.state.sidebarOpen = false;
-                    const sidebar = document.getElementById('backlogSidebar');
-                    if (sidebar) {
-                        sidebar.classList.add('w-0', 'border-r-0', 'opacity-0');
-                        sidebar.classList.remove('w-64', 'sm:w-80', 'border-r');
-                    }
-                    const btnNav = document.getElementById('btnToggleSidebarNav');
-                    if(btnNav) {
-                        btnNav.classList.remove('text-slate-400');
-                        btnNav.classList.add('text-gluon-primary', 'bg-slate-800');
-                    }
-                }
+                const isDesktop = window.innerWidth >= 768;
+                this.state.sidebarOpen = savedSidebar === null ? isDesktop : savedSidebar === 'true';
+                this.applySidebarState();
 
                 await this.fetchUserPrefs();
                 await this.fetchAgendaInfo();
@@ -592,8 +582,14 @@
 
             toggleSidebar() {
                 this.state.sidebarOpen = !this.state.sidebarOpen;
+                this.applySidebarState();
+                localStorage.setItem('gluon_agenda_sidebar', this.state.sidebarOpen);
+            },
+
+            applySidebarState() {
                 const sidebar = document.getElementById('backlogSidebar');
                 const btnNav = document.getElementById('btnToggleSidebarNav');
+                if (!sidebar) return;
                 
                 if (this.state.sidebarOpen) {
                     sidebar.classList.remove('w-0', 'border-r-0', 'opacity-0');
@@ -610,7 +606,6 @@
                         btnNav.classList.add('text-gluon-primary', 'bg-slate-800');
                     }
                 }
-                localStorage.setItem('gluon_agenda_sidebar', this.state.sidebarOpen);
             },
 
             toggleMobileViewMenu() { 
