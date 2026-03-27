@@ -1322,9 +1322,9 @@
                     })
                     : allItems;
 
-                const isSchedulableTask = (item) => Number(item?.type) === 0;
-                let backlogItems = filteredItems.filter((item) => !isSchedulableTask(item) || !this.hasScheduleWindow(item));
-                let scheduledItems = filteredItems.filter((item) => isSchedulableTask(item) && this.hasScheduleWindow(item));
+                const hasScheduledWindow = (item) => this.hasScheduleWindow(item);
+                let backlogItems = filteredItems.filter((item) => !hasScheduledWindow(item));
+                let scheduledItems = filteredItems.filter((item) => hasScheduledWindow(item));
 
                 if (isOverdueOnly) {
                     const now = new Date();
