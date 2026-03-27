@@ -1343,7 +1343,7 @@
                     if (timeA === timeB) {
                         return (a.name || '').localeCompare(b.name || '');
                     }
-                    return timeA.localeCompare(timeB);
+                    return timeA - timeB;
                 });
 
                 backlogItems.forEach(item => {
