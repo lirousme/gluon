@@ -912,9 +912,11 @@
                 const instances = [];
                 const baseDateStr = item.start_date.split(' ')[0];
                 const isBaseDate = baseDateStr === targetDateStr;
-                
-                const origStart = new Date(item.start_date.replace(' ', 'T'));
-                const origEnd = new Date(item.end_date.replace(' ', 'T'));
+                const scheduleWindow = this.getItemScheduleWindow(item);
+                if (!scheduleWindow) return [];
+
+                const origStart = scheduleWindow.start;
+                const origEnd = scheduleWindow.end;
                 const durationMs = origEnd.getTime() - origStart.getTime();
 
                 // Extrair exceções para filtrar blocos de horários específicos (em Hourly)
@@ -1233,15 +1235,29 @@
             },
 
             hasScheduleWindow(item) {
-                const start = item?.start_date;
-                const end = item?.end_date;
+                return !!this.getItemScheduleWindow(item);
+            },
 
-                if (!start || !end) return false;
-                if (this.isMySQLZeroDate(start) || this.isMySQLZeroDate(end)) return false;
+            getItemScheduleWindow(item) {
+                const startRaw = item?.start_date;
+                const endRaw = item?.end_date;
 
-                const parsedStart = new Date(String(start).replace(' ', 'T'));
-                const parsedEnd = new Date(String(end).replace(' ', 'T'));
-                return !Number.isNaN(parsedStart.getTime()) && !Number.isNaN(parsedEnd.getTime());
+                if (!startRaw || this.isMySQLZeroDate(startRaw)) return null;
+
+                const parsedStart = new Date(String(startRaw).replace(' ', 'T'));
+                if (Number.isNaN(parsedStart.getTime())) return null;
+
+                let parsedEnd = null;
+                if (endRaw && !this.isMySQLZeroDate(endRaw)) {
+                    parsedEnd = new Date(String(endRaw).replace(' ', 'T'));
+                    if (Number.isNaN(parsedEnd.getTime())) parsedEnd = null;
+                }
+
+                if (!parsedEnd || parsedEnd <= parsedStart) {
+                    parsedEnd = new Date(parsedStart.getTime() + (60 * 60 * 1000));
+                }
+
+                return { start: parsedStart, end: parsedEnd };
             },
 
             render() {
@@ -1288,7 +1304,10 @@
                     });
                 }
                 const showCompletedTasks = !!this.state.filters.showCompletedTasks;
-                const allItems = Array.from(allItemsMap.values()).filter((item) => showCompletedTasks || Number(item.is_completed || 0) !== 1);
+                const allItems = Array.from(allItemsMap.values()).filter((item) => {
+                    if (Number(item?.type) !== 0) return true;
+                    return showCompletedTasks || Number(item.is_completed || 0) !== 1;
+                });
 
                 const selectedTagIds = Array.isArray(this.state.filters.selectedTagIds) ? this.state.filters.selectedTagIds : [];
                 const selectedTagSet = new Set(selectedTagIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0));
@@ -1311,14 +1330,16 @@
                     const now = new Date();
                     backlogItems = [];
                     scheduledItems = scheduledItems.filter((item) => {
-                        const itemEnd = new Date(String(item.end_date).replace(' ', 'T'));
-                        return itemEnd < now;
+                        const window = this.getItemScheduleWindow(item);
+                        return window && window.end < now;
                     });
                 }
 
                 scheduledItems.sort((a, b) => {
-                    const timeA = a.start_date ? a.start_date.split(' ')[1] : '00:00:00';
-                    const timeB = b.start_date ? b.start_date.split(' ')[1] : '00:00:00';
+                    const windowA = this.getItemScheduleWindow(a);
+                    const windowB = this.getItemScheduleWindow(b);
+                    const timeA = windowA ? windowA.start.toTimeString().slice(0, 8) : '00:00:00';
+                    const timeB = windowB ? windowB.start.toTimeString().slice(0, 8) : '00:00:00';
                     if (timeA === timeB) {
                         return (a.name || '').localeCompare(b.name || '');
                     }
