@@ -131,9 +131,6 @@
             <button onclick="goBackToMarkedRoute()" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-lg border border-slate-700 shadow-sm" title="Voltar">
                 <i class="fa-solid fa-arrow-left"></i>
             </button>
-            <button onclick="flashcardApp.toggleLeftPanel()" id="btnLeftPanel" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm py-2 px-3 rounded-lg transition-all" title="Abrir menu lateral esquerdo" aria-label="Abrir menu lateral esquerdo">
-                <i class="fa-solid fa-volume-high"></i>
-            </button>
             <div class="h-6 w-px bg-slate-700 hidden sm:block"></div>
             <div class="flex items-center gap-3">
                 
@@ -162,22 +159,6 @@
             <div id="deckProgressBar" class="h-full bg-emerald-500 transition-all duration-700 ease-out" style="width: 0%;"></div>
         </div>
     </nav>
-
-    <div id="leftPanelBackdrop" onclick="flashcardApp.closeLeftPanel()" class="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-40 hidden"></div>
-    <aside id="leftPanel" class="fixed top-16 left-0 h-[calc(100dvh-4rem)] w-72 max-w-[85vw] bg-gluon-secondary border-r border-slate-700/70 shadow-2xl z-50 transform -translate-x-full transition-transform duration-200">
-        <div class="p-4 space-y-4">
-            <div class="flex items-center justify-between">
-                <h2 class="text-sm font-semibold text-slate-200">Áudios do Deck</h2>
-                <button onclick="flashcardApp.closeLeftPanel()" class="text-slate-400 hover:text-white" title="Fechar menu" aria-label="Fechar menu lateral esquerdo">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <p class="text-xs text-slate-400">
-                Use o menu lateral direito para gerar os áudios pendentes do deck aberto.
-            </p>
-        </div>
-    </aside>
 
     <div id="rightPanelBackdrop" onclick="flashcardApp.closeRightPanel()" class="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-40 hidden"></div>
     <aside id="rightPanel" class="fixed top-16 right-0 h-[calc(100dvh-4rem)] w-72 max-w-[85vw] bg-gluon-secondary border-l border-slate-700/70 shadow-2xl z-50 transform translate-x-full transition-transform duration-200">
@@ -640,7 +621,6 @@
             currentIndex: 0,
             isFlipped: false,
             scoredThisSession: new Set(),
-            isLeftPanelOpen: false,
             isRightPanelOpen: false,
             
             autoPlayEnabled: false,
@@ -714,20 +694,6 @@
                 const backdrop = document.getElementById('rightPanelBackdrop');
                 panel.classList.toggle('translate-x-full', !this.isRightPanelOpen);
                 backdrop.classList.toggle('hidden', !this.isRightPanelOpen);
-            },
-
-            toggleLeftPanel() {
-                this.isLeftPanelOpen = !this.isLeftPanelOpen;
-                const panel = document.getElementById('leftPanel');
-                const backdrop = document.getElementById('leftPanelBackdrop');
-                panel.classList.toggle('-translate-x-full', !this.isLeftPanelOpen);
-                backdrop.classList.toggle('hidden', !this.isLeftPanelOpen);
-            },
-
-            closeLeftPanel() {
-                this.isLeftPanelOpen = false;
-                document.getElementById('leftPanel').classList.add('-translate-x-full');
-                document.getElementById('leftPanelBackdrop').classList.add('hidden');
             },
 
             closeRightPanel() {
