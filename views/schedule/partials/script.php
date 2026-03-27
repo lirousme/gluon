@@ -912,12 +912,11 @@
                 const instances = [];
                 const baseDateStr = item.start_date.split(' ')[0];
                 const isBaseDate = baseDateStr === targetDateStr;
-                
-                const scheduleRange = this.getScheduleRange(item);
-                if (!scheduleRange) return [];
+                const scheduleWindow = this.getItemScheduleWindow(item);
+                if (!scheduleWindow) return [];
 
-                const origStart = scheduleRange.start;
-                const origEnd = scheduleRange.end;
+                const origStart = scheduleWindow.start;
+                const origEnd = scheduleWindow.end;
                 const durationMs = origEnd.getTime() - origStart.getTime();
 
                 // Extrair exceções para filtrar blocos de horários específicos (em Hourly)
@@ -1235,32 +1234,30 @@
                 return normalized === '0000-00-00 00:00:00' || normalized === '0000-00-00';
             },
 
-            getScheduleRange(item) {
-                const rawStart = item?.start_date;
-                const rawEnd = item?.end_date;
-
-                if (!rawStart || this.isMySQLZeroDate(rawStart)) return null;
-
-                const start = new Date(String(rawStart).replace(' ', 'T'));
-                if (Number.isNaN(start.getTime())) return null;
-
-                let end = null;
-                if (rawEnd && !this.isMySQLZeroDate(rawEnd)) {
-                    const parsedEnd = new Date(String(rawEnd).replace(' ', 'T'));
-                    if (!Number.isNaN(parsedEnd.getTime())) {
-                        end = parsedEnd;
-                    }
-                }
-
-                if (!end || end <= start) {
-                    end = new Date(start.getTime() + (60 * 60000));
-                }
-
-                return { start, end };
+            hasScheduleWindow(item) {
+                return !!this.getItemScheduleWindow(item);
             },
 
-            hasScheduleWindow(item) {
-                return !!this.getScheduleRange(item);
+            getItemScheduleWindow(item) {
+                const startRaw = item?.start_date;
+                const endRaw = item?.end_date;
+
+                if (!startRaw || this.isMySQLZeroDate(startRaw)) return null;
+
+                const parsedStart = new Date(String(startRaw).replace(' ', 'T'));
+                if (Number.isNaN(parsedStart.getTime())) return null;
+
+                let parsedEnd = null;
+                if (endRaw && !this.isMySQLZeroDate(endRaw)) {
+                    parsedEnd = new Date(String(endRaw).replace(' ', 'T'));
+                    if (Number.isNaN(parsedEnd.getTime())) parsedEnd = null;
+                }
+
+                if (!parsedEnd || parsedEnd <= parsedStart) {
+                    parsedEnd = new Date(parsedStart.getTime() + (60 * 60 * 1000));
+                }
+
+                return { start: parsedStart, end: parsedEnd };
             },
 
             render() {
@@ -1307,7 +1304,10 @@
                     });
                 }
                 const showCompletedTasks = !!this.state.filters.showCompletedTasks;
-                const allItems = Array.from(allItemsMap.values()).filter((item) => showCompletedTasks || Number(item.is_completed || 0) !== 1);
+                const allItems = Array.from(allItemsMap.values()).filter((item) => {
+                    if (Number(item?.type) !== 0) return true;
+                    return showCompletedTasks || Number(item.is_completed || 0) !== 1;
+                });
 
                 const selectedTagIds = Array.isArray(this.state.filters.selectedTagIds) ? this.state.filters.selectedTagIds : [];
                 const selectedTagSet = new Set(selectedTagIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0));
@@ -1330,17 +1330,16 @@
                     const now = new Date();
                     backlogItems = [];
                     scheduledItems = scheduledItems.filter((item) => {
-                        const scheduleRange = this.getScheduleRange(item);
-                        if (!scheduleRange) return false;
-                        return scheduleRange.end < now;
+                        const window = this.getItemScheduleWindow(item);
+                        return window && window.end < now;
                     });
                 }
 
                 scheduledItems.sort((a, b) => {
-                    const rangeA = this.getScheduleRange(a);
-                    const rangeB = this.getScheduleRange(b);
-                    const timeA = rangeA ? rangeA.start.getTime() : 0;
-                    const timeB = rangeB ? rangeB.start.getTime() : 0;
+                    const windowA = this.getItemScheduleWindow(a);
+                    const windowB = this.getItemScheduleWindow(b);
+                    const timeA = windowA ? windowA.start.toTimeString().slice(0, 8) : '00:00:00';
+                    const timeB = windowB ? windowB.start.toTimeString().slice(0, 8) : '00:00:00';
                     if (timeA === timeB) {
                         return (a.name || '').localeCompare(b.name || '');
                     }
