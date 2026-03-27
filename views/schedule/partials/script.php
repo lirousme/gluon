@@ -1231,6 +1231,24 @@
                 });
             },
 
+            isMySQLZeroDate(value) {
+                if (!value) return false;
+                const normalized = String(value).trim();
+                return normalized === '0000-00-00 00:00:00' || normalized === '0000-00-00';
+            },
+
+            hasScheduleWindow(item) {
+                const start = item?.start_date;
+                const end = item?.end_date;
+
+                if (!start || !end) return false;
+                if (this.isMySQLZeroDate(start) || this.isMySQLZeroDate(end)) return false;
+
+                const parsedStart = new Date(String(start).replace(' ', 'T'));
+                const parsedEnd = new Date(String(end).replace(' ', 'T'));
+                return !Number.isNaN(parsedStart.getTime()) && !Number.isNaN(parsedEnd.getTime());
+            },
+
             render() {
                 if (this.state.view !== 'kanban') this.customScroll.destroy();
 
@@ -1290,8 +1308,8 @@
                     })
                     : allItems;
 
-                let backlogItems = filteredItems.filter(item => !item.start_date || !item.end_date);
-                let scheduledItems = filteredItems.filter(item => item.start_date && item.end_date);
+                let backlogItems = filteredItems.filter((item) => !this.hasScheduleWindow(item));
+                let scheduledItems = filteredItems.filter((item) => this.hasScheduleWindow(item));
 
                 if (isOverdueOnly) {
                     const now = new Date();
