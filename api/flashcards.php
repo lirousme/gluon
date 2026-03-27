@@ -326,7 +326,7 @@ function getFishReferenceIdByLanguage($language) {
 
 function getGoogleTtsVoiceByLanguage($language) {
     switch ($language) {
-        case 'pt-BR': return 'pt-BR-Chirp3-HD-Algenib';
+        case 'pt-BR': return 'pt-BR-Chirp3-HD-Enceladus'; //Algenib* //Charon //Enceladus** //Fenrir** //Iapetus //Vindemiatrix*FEMME //Pulcherrima*FEMME
         case 'en-US': return 'en-US-Chirp3-HD-Fenrir';
         case 'en-GB': return 'en-GB-Chirp3-HD-Enceladus';
         default: return 'en-US-Chirp3-HD-Fenrir';
@@ -344,11 +344,11 @@ function getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $fro
         && $normalized_back === 'pt-BR'
     ) {
         if ($side === 'front') {
-            return 'pt-BR-Chirp3-HD-Zubenelgenubi'; //pt-BR-Chirp3-HD-Rasalgethi
+            return 'pt-BR-Chirp3-HD-Enceladus'; //pt-BR-Chirp3-HD-Rasalgethi
         }
 
         if ($side === 'back') {
-            return 'pt-BR-Chirp3-HD-Rasalgethi';//pt-BR-Chirp3-HD-Algenib //pt-BR-Chirp3-HD-Zubenelgenubi
+            return 'pt-BR-Chirp3-HD-Fenrir';//pt-BR-Chirp3-HD-Algenib //pt-BR-Chirp3-HD-Zubenelgenubi
         }
     }
 
