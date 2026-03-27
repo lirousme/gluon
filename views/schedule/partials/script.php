@@ -866,8 +866,8 @@
                     mergedMap.set(Number(item.id), {
                         ...existing,
                         ...item,
-                        native_start_date: existing.native_start_date ?? existing.start_date ?? item.flashcard_native_start_date ?? null,
-                        native_end_date: existing.native_end_date ?? existing.end_date ?? item.flashcard_native_end_date ?? null
+                        native_start_date: existing.native_start_date ?? item.flashcard_native_start_date ?? existing.start_date ?? null,
+                        native_end_date: existing.native_end_date ?? item.flashcard_native_end_date ?? existing.end_date ?? null
                     });
                 });
 
@@ -1260,10 +1260,15 @@
 
             getNativeItemScheduleWindow(item) {
                 if (!item) return null;
+                const isFlashcardDueDirectory = Number(item.is_flashcard_due_directory || 0) === 1;
                 const normalizedItem = {
                     ...item,
-                    start_date: item.native_start_date ?? item.start_date,
-                    end_date: item.native_end_date ?? item.end_date
+                    start_date: item.native_start_date
+                        ?? item.flashcard_native_start_date
+                        ?? (isFlashcardDueDirectory ? null : item.start_date),
+                    end_date: item.native_end_date
+                        ?? item.flashcard_native_end_date
+                        ?? (isFlashcardDueDirectory ? null : item.end_date)
                 };
                 return this.getItemScheduleWindow(normalizedItem);
             },
