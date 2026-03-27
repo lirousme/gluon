@@ -913,8 +913,11 @@
                 const baseDateStr = item.start_date.split(' ')[0];
                 const isBaseDate = baseDateStr === targetDateStr;
                 
-                const origStart = new Date(item.start_date.replace(' ', 'T'));
-                const origEnd = new Date(item.end_date.replace(' ', 'T'));
+                const scheduleRange = this.getScheduleRange(item);
+                if (!scheduleRange) return [];
+
+                const origStart = scheduleRange.start;
+                const origEnd = scheduleRange.end;
                 const durationMs = origEnd.getTime() - origStart.getTime();
 
                 // Extrair exceções para filtrar blocos de horários específicos (em Hourly)
@@ -1232,16 +1235,32 @@
                 return normalized === '0000-00-00 00:00:00' || normalized === '0000-00-00';
             },
 
+            getScheduleRange(item) {
+                const rawStart = item?.start_date;
+                const rawEnd = item?.end_date;
+
+                if (!rawStart || this.isMySQLZeroDate(rawStart)) return null;
+
+                const start = new Date(String(rawStart).replace(' ', 'T'));
+                if (Number.isNaN(start.getTime())) return null;
+
+                let end = null;
+                if (rawEnd && !this.isMySQLZeroDate(rawEnd)) {
+                    const parsedEnd = new Date(String(rawEnd).replace(' ', 'T'));
+                    if (!Number.isNaN(parsedEnd.getTime())) {
+                        end = parsedEnd;
+                    }
+                }
+
+                if (!end || end <= start) {
+                    end = new Date(start.getTime() + (60 * 60000));
+                }
+
+                return { start, end };
+            },
+
             hasScheduleWindow(item) {
-                const start = item?.start_date;
-                const end = item?.end_date;
-
-                if (!start || !end) return false;
-                if (this.isMySQLZeroDate(start) || this.isMySQLZeroDate(end)) return false;
-
-                const parsedStart = new Date(String(start).replace(' ', 'T'));
-                const parsedEnd = new Date(String(end).replace(' ', 'T'));
-                return !Number.isNaN(parsedStart.getTime()) && !Number.isNaN(parsedEnd.getTime());
+                return !!this.getScheduleRange(item);
             },
 
             render() {
@@ -1311,18 +1330,21 @@
                     const now = new Date();
                     backlogItems = [];
                     scheduledItems = scheduledItems.filter((item) => {
-                        const itemEnd = new Date(String(item.end_date).replace(' ', 'T'));
-                        return itemEnd < now;
+                        const scheduleRange = this.getScheduleRange(item);
+                        if (!scheduleRange) return false;
+                        return scheduleRange.end < now;
                     });
                 }
 
                 scheduledItems.sort((a, b) => {
-                    const timeA = a.start_date ? a.start_date.split(' ')[1] : '00:00:00';
-                    const timeB = b.start_date ? b.start_date.split(' ')[1] : '00:00:00';
+                    const rangeA = this.getScheduleRange(a);
+                    const rangeB = this.getScheduleRange(b);
+                    const timeA = rangeA ? rangeA.start.getTime() : 0;
+                    const timeB = rangeB ? rangeB.start.getTime() : 0;
                     if (timeA === timeB) {
                         return (a.name || '').localeCompare(b.name || '');
                     }
-                    return timeA.localeCompare(timeB);
+                    return timeA - timeB;
                 });
 
                 backlogItems.forEach(item => {
