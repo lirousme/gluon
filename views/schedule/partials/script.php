@@ -1303,7 +1303,7 @@
                     })
                     : allItems;
 
-                const isSchedulableTask = (item) => Number(item?.type ?? 0) === 0;
+                const isSchedulableTask = (item) => Number(item?.type) === 0;
                 let backlogItems = filteredItems.filter((item) => !isSchedulableTask(item) || !this.hasScheduleWindow(item));
                 let scheduledItems = filteredItems.filter((item) => isSchedulableTask(item) && this.hasScheduleWindow(item));
 
