@@ -829,7 +829,13 @@
 
                 if (!res) return;
 
-                this.items = res.data;
+                this.items = Array.isArray(res.data)
+                    ? res.data.map((item) => ({
+                        ...item,
+                        native_start_date: item.start_date ?? null,
+                        native_end_date: item.end_date ?? null
+                    }))
+                    : [];
                 this.flashcardDueItems = (flashcardRes && Array.isArray(flashcardRes.data))
                     ? flashcardRes.data.map((deck) => {
                         const startDate = deck.oldest_review_at;
@@ -837,6 +843,8 @@
                         const endObj = new Date(startObj.getTime() + (60 * 60000));
                         return {
                             ...deck,
+                            flashcard_native_start_date: deck.start_date ?? null,
+                            flashcard_native_end_date: deck.end_date ?? null,
                             start_date: this.toMySQLFormat(startObj),
                             end_date: this.toMySQLFormat(endObj),
                             due_cards: Number(deck.due_cards || 0),
@@ -853,7 +861,15 @@
 
                 const mergedMap = new Map();
                 this.items.forEach((item) => mergedMap.set(Number(item.id), item));
-                this.flashcardDueItems.forEach((item) => mergedMap.set(Number(item.id), { ...mergedMap.get(Number(item.id)), ...item }));
+                this.flashcardDueItems.forEach((item) => {
+                    const existing = mergedMap.get(Number(item.id)) || {};
+                    mergedMap.set(Number(item.id), {
+                        ...existing,
+                        ...item,
+                        native_start_date: existing.native_start_date ?? existing.start_date ?? item.flashcard_native_start_date ?? null,
+                        native_end_date: existing.native_end_date ?? existing.end_date ?? item.flashcard_native_end_date ?? null
+                    });
+                });
 
                 mergedMap.forEach((item) => this.state.directoryCache.set(Number(item.id), item));
                 this.render();
@@ -1238,6 +1254,20 @@
                 return !!this.getItemScheduleWindow(item);
             },
 
+            hasNativeScheduleWindow(item) {
+                return !!this.getNativeItemScheduleWindow(item);
+            },
+
+            getNativeItemScheduleWindow(item) {
+                if (!item) return null;
+                const normalizedItem = {
+                    ...item,
+                    start_date: item.native_start_date ?? item.start_date,
+                    end_date: item.native_end_date ?? item.end_date
+                };
+                return this.getItemScheduleWindow(normalizedItem);
+            },
+
             getItemScheduleWindow(item) {
                 const startRaw = item?.start_date;
                 const endRaw = item?.end_date;
@@ -1323,7 +1353,8 @@
                     : allItems;
 
                 const hasScheduledWindow = (item) => this.hasScheduleWindow(item);
-                let backlogItems = filteredItems.filter((item) => !hasScheduledWindow(item));
+                const hasNativeScheduledWindow = (item) => this.hasNativeScheduleWindow(item);
+                let backlogItems = filteredItems.filter((item) => !hasNativeScheduledWindow(item));
                 let scheduledItems = filteredItems.filter((item) => hasScheduledWindow(item));
 
                 if (isOverdueOnly) {
