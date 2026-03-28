@@ -1716,7 +1716,7 @@ elseif ($action === 'create_batch_generation') {
         $savePromptStmt = $pdo->prepare("UPDATE directories SET deck_generation_base_prompt = ? WHERE id = ? AND user_id = ? LIMIT 1");
         $savePromptStmt->execute([$custom_base_prompt, $deck_id, $user_id]);
     }
-    $historyText = fetchDeckHistoryText($pdo, $deck_id);
+    $historyText = $deck_structure === 'parafrases' ? '' : fetchDeckHistoryText($pdo, $deck_id);
     $chatPayload = buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, 'gpt-5.4', $custom_base_prompt);
 
     $jsonlLine = json_encode([
@@ -1913,7 +1913,7 @@ elseif ($action === 'generate_cards_preview') {
     $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
     $custom_base_prompt = normalizeGenerationBasePromptInput($input['base_prompt'] ?? '');
 
-    $historyText = fetchDeckHistoryText($pdo, $deck_id);
+    $historyText = $deck_structure === 'parafrases' ? '' : fetchDeckHistoryText($pdo, $deck_id);
     $payloadBase = buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, 'gpt-5.4', $custom_base_prompt);
 
     $cards = [];
