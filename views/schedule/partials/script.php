@@ -1674,12 +1674,10 @@
                 let contextDate = null;
                 if (contextStart && contextEnd) {
                     const startValue = String(contextStart).replace('T', ' ');
-                    const endValue = String(contextEnd).replace('T', ' ');
                     const datePart = startValue.split(' ')[0] || '';
-                    const startTime = (startValue.split(' ')[1] || '').slice(0, 5);
-                    const endTime = (endValue.split(' ')[1] || '').slice(0, 5);
-                    if (datePart && startTime && endTime) {
-                        contextDate = `${datePart} ${startTime}-${endTime}`;
+                    const startTime = (startValue.split(' ')[1] || '').slice(0, 8);
+                    if (datePart && startTime) {
+                        contextDate = `${datePart} ${startTime}`;
                     }
                 }
 
