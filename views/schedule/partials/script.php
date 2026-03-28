@@ -1451,7 +1451,7 @@
                 const isReadOnly = this.isReadOnlyScheduleItem(item);
                 const readOnlyClass = isReadOnly ? 'readonly-schedule-item cursor-default' : 'cursor-grab';
                 const settingsButton = isReadOnly ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20"><i class="fa-solid fa-cog"></i></button>`;
-                const completeButton = (!isReadOnly && Number(item.type) === 0)
+                const completeButton = !isReadOnly
                     ? `<button type="button" onclick="event.stopPropagation(); scheduleApp.completeTask(${item.id})" class="pointer-events-auto text-slate-400 hover:text-emerald-300 transition-colors" title="Concluir tarefa"><i class="fa-solid fa-circle-check text-sm"></i></button>`
                     : '';
                 return `
@@ -1514,7 +1514,7 @@
                     const resizeHTML = (inst.isProjection || isReadOnly) ? '' : `<div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>`;
                     const contextStart = this.toMySQLFormat(inst.start);
                     const contextEnd = this.toMySQLFormat(inst.end);
-                    const completeButton = (!isReadOnly && Number(item.type) === 0)
+                    const completeButton = !isReadOnly
                         ? `<button type="button" onclick="event.stopPropagation(); scheduleApp.completeTask(${item.id}, '${contextStart}', '${contextEnd}')" class="pointer-events-auto text-white/80 hover:text-emerald-200 transition-colors" title="Concluir tarefa"><i class="fa-solid fa-circle-check text-xs"></i></button>`
                         : '';
 
@@ -1598,7 +1598,7 @@
                 const handleHTML = `<i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>`;
                 const contextStart = this.toMySQLFormat(inst.start);
                 const contextEnd = this.toMySQLFormat(inst.end);
-                const completeButton = (!isReadOnly && Number(item.type) === 0)
+                const completeButton = !isReadOnly
                     ? `<button type="button" onclick="event.stopPropagation(); scheduleApp.completeTask(${item.id}, '${contextStart}', '${contextEnd}')" class="text-slate-300 hover:text-emerald-300 transition-colors" title="Concluir tarefa"><i class="fa-solid fa-circle-check text-xs"></i></button>`
                     : '';
 
