@@ -2545,9 +2545,11 @@
                     this.showToast('Este diretório de revisão vencida não pode ser excluído pela Agenda.', 'error');
                     return;
                 }
-                const isRecurring = document.getElementById('is_recurring').checked;
-                
-                if(!id) return;
+
+                if (!id) return;
+
+                const cachedItem = this.state.directoryCache.get(Number(id));
+                const isRecurring = Number(cachedItem?.is_recurring) === 1;
 
                 if (isRecurring) {
                     const modal = document.getElementById('deleteRecurrenceModal');
@@ -2590,8 +2592,11 @@
 
             confirmSimpleDelete() {
                 const id = document.getElementById('dirId').value;
+                const targetDate = document.getElementById('dirContextDate').value;
+                const cachedItem = this.state.directoryCache.get(Number(id));
+                const shouldDeleteSingleOccurrence = Number(cachedItem?.is_recurring) === 1 && Boolean(targetDate);
                 this.closeDeleteConfirmModal();
-                this.executeDelete(id, 'all');
+                this.executeDelete(id, shouldDeleteSingleOccurrence ? 'single' : 'all');
             },
 
             closeDeleteRecurrenceModal() {
