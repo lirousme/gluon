@@ -311,7 +311,7 @@ function normalizeDeckLanguage($value, $default = 'pt-BR') {
 }
 
 function normalizeDeckStructure($value, $default = 'fatos') {
-    $allowed = ['fatos', 'perguntas', 'traducoes', 'parafrases'];
+    $allowed = ['fatos', 'perguntas', 'traducoes', 'parafrases', 'ingles'];
     return in_array($value, $allowed, true) ? $value : $default;
 }
 
@@ -702,6 +702,8 @@ function buildDefaultBasePromptByStructure($deck_name, $deck_structure) {
         $basePrompt = 'Me dê perguntas que induzam conhecimento fundamental, elementar, essencial, indispensável sobre o assunto "$deck_name" coisas elementares e ontológicas sobre, hermenêutica, em uma tabela de duas colunas, onde cada linha é uma pergunta, a primeira coluna é a pergunta, e a segunda é a resposta. As perguntas e respostas devem ser óbvias evidentes e de rápida assimilação. Use linguagem simples e de fácil assimilação para pessoas de qualquer nível intelectual. As pessoas devem conseguir decodificar a informação codificada nas perguntas e respostas de forma assustadoramente fácil. As perguntas devem ser simples e de preferência curtas. Nenhuma pergunta pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. O objetivo é construir aprendizado progressivo sem redundância. Público alvo são crianças de 10 à 17 anos.';
     } elseif ($deck_structure === 'parafrases') {
         $basePrompt = 'gere 10 paráfrases dessa: "$deck_name" (FOCANDO NO RACIOCÍNIO LÓGICO)';
+    } elseif ($deck_structure === 'ingles') {
+        $basePrompt = 'O nome do deck "$deck_name" é sempre uma palavra ou expressão em inglês e deve aparecer em todos os cards. Gere cards para estudo de inglês seguindo rigorosamente: na frente (front), explique em português a função da expressão dentro de uma frase de exemplo (ex.: papel gramatical, nuance de sentido, uso pragmático); no verso (back), coloque somente uma frase em inglês, sem tradução, sem rótulo e sem texto extra. Distribua os exemplos pelos 12 tempos verbais fundamentais do inglês, cobrindo ao menos 1 card por tempo verbal, e inclua muitos phrasal verbs naturais. Varie sujeitos, polaridade (afirmativa/negativa/interrogativa), voz e contexto. Não repita frases.';
     } else {
         $basePrompt = 'Crie frases ordinárias que tenha dentro da usa estrutura sintática o termo "$deck_name". Quero variações em diferentes tempos verbais, diferentes sujeitos, com o termo em diferentes posições de estrutura sintáticas, afirmações, negações, perguntas positivas, perguntas negativas, optativas, condicionais, voz ativa, voz passiva, voz reflexiva, faça frases com e abreviações das palavras, flexões nominais, de gênero, número e grau, variações de tempo, modo, lugar, oposição, entre outros, use e forme verbos frasais, verbos modais, entre outros tipos. Nenhuma frase pode ser igual as frases anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. Tanto a língua do verso quanto a língua da frente devem ser estruturadas com palavras ordinárias. Faça frases com o termo "$deck_name" em sua forma pura original e flexionando ele também, quando for possível. As vezes um mesmo termo pode ser traduzido termos com significados muito ou ligeiramente diferentes, crie frases para todas esses significados diferentes, isso aqui é muito importante, use sinônimos do português, para as frases em português não ficarem todas com a mesma tradução do termo. Primeira coluna na língua da frente do deck, segunda coluna na língua do verso. Sem repetições e sem conteúdo de interface.';
     }
@@ -729,7 +731,7 @@ function buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyT
     }
     $basePrompt = applyGenerationPromptTemplateVariables($basePrompt, $deck_name);
 
-    $systemPrompt = 'Você é um gerador de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas e traducoes, nunca deixe "back" vazio. Para estruturas fatos e parafrases, deixe back vazio. Preserve exatamente caracteres Unicode.';
+    $systemPrompt = 'Você é um gerador de flashcards para estudo. Retorne APENAS JSON válido no formato {"cards":[{"front":"...","back":"..."}]}. Não use markdown. Nunca deixe "front" vazio. Para estruturas perguntas, traducoes e ingles, nunca deixe "back" vazio. Para estruturas fatos e parafrases, deixe back vazio. Preserve exatamente caracteres Unicode.';
 
     $userPrompt = $basePrompt
         . "
@@ -751,7 +753,7 @@ CARDS JÁ EXISTENTES NESTE DECK:
 Gere de 5 à 50 novos cards sem repetição de conteúdo com o histórico.";
     }
 
-    $requiresBack = in_array($deck_structure, ['perguntas', 'traducoes'], true);
+    $requiresBack = in_array($deck_structure, ['perguntas', 'traducoes', 'ingles'], true);
     $backSchema = $requiresBack ? ['type' => 'string', 'minLength' => 1] : ['type' => 'string'];
 
     return [
