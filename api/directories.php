@@ -1017,24 +1017,43 @@ elseif ($action === 'delete') {
             die(json_encode(['status' => 'error', 'message' => 'Data alvo para exclusão não foi informada.']));
         }
 
-        $stmt = $pdo->prepare("SELECT exceptions, type FROM directory_recurrences WHERE directory_id = ?");
-        $stmt->execute([$id]);
+        $stmt = $pdo->prepare(
+            "SELECT dr.exceptions, dr.type
+             FROM directory_recurrences dr
+             INNER JOIN directories d ON d.id = dr.directory_id
+             WHERE dr.directory_id = ?
+               AND d.user_id = ?
+             LIMIT 1"
+        );
+        $stmt->execute([$id, $user_id]);
         $rec = $stmt->fetch();
         
         if ($rec !== false) {
             $exceptions = !empty($rec['exceptions']) ? json_decode($rec['exceptions'], true) : [];
+            if (!is_array($exceptions)) $exceptions = [];
             
             // Regra especial: Se for repetição por hora, a exclusão é do bloco específico (Data + Hora)
             // Se for diária/semanal, exclui o dia todo (Y-m-d).
             if (in_array($rec['type'], ['hourly', 'minutely'], true)) {
-                $exception_value = (new DateTime($target_date_str))->format('Y-m-d H:i:s');
+                $parsedTarget = DateTime::createFromFormat('Y-m-d H:i:s', $target_date_str)
+                    ?: DateTime::createFromFormat('Y-m-d H:i', $target_date_str);
+                if (!$parsedTarget) {
+                    die(json_encode(['status' => 'error', 'message' => 'Data alvo inválida para ocorrência recorrente.']));
+                }
+                $exception_value = $parsedTarget->format('Y-m-d H:i:s');
                 $msg_date = date('d/m/Y H:i', strtotime($exception_value));
             } else {
-                $exception_value = (new DateTime($target_date_str))->format('Y-m-d');
+                $parsedTarget = DateTime::createFromFormat('Y-m-d', $target_date_str)
+                    ?: DateTime::createFromFormat('Y-m-d H:i:s', $target_date_str)
+                    ?: DateTime::createFromFormat('Y-m-d H:i', $target_date_str);
+                if (!$parsedTarget) {
+                    die(json_encode(['status' => 'error', 'message' => 'Data alvo inválida para exclusão desta ocorrência.']));
+                }
+                $exception_value = $parsedTarget->format('Y-m-d');
                 $msg_date = date('d/m/Y', strtotime($exception_value));
             }
             
-            if (!in_array($exception_value, $exceptions)) {
+            if (!in_array($exception_value, $exceptions, true)) {
                 $exceptions[] = $exception_value;
                 $pdo->prepare("UPDATE directory_recurrences SET exceptions = ? WHERE directory_id = ?")->execute([json_encode($exceptions), $id]);
             }
