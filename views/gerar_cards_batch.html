@@ -381,6 +381,18 @@
                 this.renderList();
             },
 
+            syncGeneratedCardsFromInputs() {
+                this.generatedCards = this.generatedCards.map((card, index) => {
+                    const frontEl = document.querySelector(`textarea[data-field="front"][data-index="${index}"]`);
+                    const backEl = document.querySelector(`textarea[data-field="back"][data-index="${index}"]`);
+                    return {
+                        ...card,
+                        front: (frontEl?.value || card.front || '').trim(),
+                        back: (backEl?.value || card.back || '').trim()
+                    };
+                });
+            },
+
             async generate() {
                 const btn = document.getElementById('btnGenerate');
                 const old = btn.innerHTML;
@@ -406,6 +418,7 @@
 
             async createCards() {
                 if (!this.generatedCards.length) return;
+                this.syncGeneratedCardsFromInputs();
                 const btn = document.getElementById('btnCreateCards');
                 const old = btn.innerHTML;
                 btn.disabled = true;
