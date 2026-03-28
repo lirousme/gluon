@@ -236,6 +236,10 @@
                 return `/${view}?${params.toString()}`;
             },
 
+            isReadOnlyScheduleItem(item) {
+                return Number(item?.is_schedule_read_only || 0) === 1;
+            },
+
             resolveOpenMode(item) {
                 return item && item.open_mode === 'preview' ? 'preview' : 'fullscreen';
             },
@@ -1444,9 +1448,10 @@
                 const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
                 const flashcardBadge = item.is_flashcard_due_directory ? `<span class="text-[10px] text-amber-300 ml-2"><i class="fa-solid fa-bolt"></i> Revisão vencida</span>` : '';
                 const tagsHTML = this.getTagBadgesHTML(item.tags);
-                const readOnlyClass = item.is_schedule_read_only ? 'readonly-schedule-item cursor-default' : 'cursor-grab';
-                const settingsButton = item.is_schedule_read_only ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20"><i class="fa-solid fa-cog"></i></button>`;
-                const completeButton = (!item.is_schedule_read_only && Number(item.type) === 0)
+                const isReadOnly = this.isReadOnlyScheduleItem(item);
+                const readOnlyClass = isReadOnly ? 'readonly-schedule-item cursor-default' : 'cursor-grab';
+                const settingsButton = isReadOnly ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id})" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20"><i class="fa-solid fa-cog"></i></button>`;
+                const completeButton = (!isReadOnly && Number(item.type) === 0)
                     ? `<button type="button" onclick="event.stopPropagation(); scheduleApp.completeTask(${item.id})" class="pointer-events-auto text-slate-400 hover:text-emerald-300 transition-colors" title="Concluir tarefa"><i class="fa-solid fa-circle-check text-sm"></i></button>`
                     : '';
                 return `
@@ -1503,12 +1508,13 @@
                     const tagsHTML = this.getTagBadgesHTML(item.tags);
                     const isCurrentTime = this.isInstanceInCurrentTime(inst, now);
                     const projClass = inst.isProjection ? 'virtual-task opacity-80' : '';
-                    const readOnlyClass = item.is_schedule_read_only ? 'readonly-schedule-item' : '';
+                    const isReadOnly = this.isReadOnlyScheduleItem(item);
+                    const readOnlyClass = isReadOnly ? 'readonly-schedule-item' : '';
                     const currentTimeClass = isCurrentTime ? 'current-time-item' : '';
-                    const resizeHTML = (inst.isProjection || item.is_schedule_read_only) ? '' : `<div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>`;
+                    const resizeHTML = (inst.isProjection || isReadOnly) ? '' : `<div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>`;
                     const contextStart = this.toMySQLFormat(inst.start);
                     const contextEnd = this.toMySQLFormat(inst.end);
-                    const completeButton = (!item.is_schedule_read_only && Number(item.type) === 0)
+                    const completeButton = (!isReadOnly && Number(item.type) === 0)
                         ? `<button type="button" onclick="event.stopPropagation(); scheduleApp.completeTask(${item.id}, '${contextStart}', '${contextEnd}')" class="pointer-events-auto text-white/80 hover:text-emerald-200 transition-colors" title="Concluir tarefa"><i class="fa-solid fa-circle-check text-xs"></i></button>`
                         : '';
 
@@ -1526,7 +1532,7 @@
                             ${tagsHTML ? `<div class="mt-1 pointer-events-none z-10 relative flex flex-wrap gap-1">${tagsHTML}</div>` : ''}
                             <div class="text-[10px] opacity-70 pointer-events-none z-10 relative font-medium">${inst.start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${inst.end.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                             
-                            ${item.is_schedule_read_only ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="absolute top-1 right-1 text-white/70 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 z-20 bg-black/40 rounded shadow-md"><i class="fa-solid fa-cog text-xs"></i></button>`}
+                            ${isReadOnly ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="absolute top-1 right-1 text-white/70 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 z-20 bg-black/40 rounded shadow-md"><i class="fa-solid fa-cog text-xs"></i></button>`}
 
                             ${resizeHTML}
                         </div>
@@ -1585,13 +1591,14 @@
                 const tagsHTML = this.getTagBadgesHTML(item.tags);
                 const isCurrentTime = this.isInstanceInCurrentTime(inst);
 
-                const projectionClass = `${inst.isProjection ? 'virtual-task' : ''} ${item.is_schedule_read_only ? 'readonly-schedule-item cursor-default' : 'cursor-grab'}`;
+                const isReadOnly = this.isReadOnlyScheduleItem(item);
+                const projectionClass = `${inst.isProjection ? 'virtual-task' : ''} ${isReadOnly ? 'readonly-schedule-item cursor-default' : 'cursor-grab'}`;
                 const currentTimeClass = isCurrentTime ? 'current-time-item' : '';
                 const borderStyle = `border-left: 4px solid ${fromColor};`;
                 const handleHTML = `<i class="fa-solid fa-grip-vertical text-slate-400 handle hidden sortable-handle text-xs"></i>`;
                 const contextStart = this.toMySQLFormat(inst.start);
                 const contextEnd = this.toMySQLFormat(inst.end);
-                const completeButton = (!item.is_schedule_read_only && Number(item.type) === 0)
+                const completeButton = (!isReadOnly && Number(item.type) === 0)
                     ? `<button type="button" onclick="event.stopPropagation(); scheduleApp.completeTask(${item.id}, '${contextStart}', '${contextEnd}')" class="text-slate-300 hover:text-emerald-300 transition-colors" title="Concluir tarefa"><i class="fa-solid fa-circle-check text-xs"></i></button>`
                     : '';
 
@@ -1613,7 +1620,7 @@
                         <div class="text-[10px] text-slate-400 mt-1 z-10 relative font-medium"><i class="fa-regular fa-clock"></i> ${timeStr}</div>
                         ${tagsHTML ? `<div class="mt-1 z-10 relative flex flex-wrap gap-1">${tagsHTML}</div>` : ''}
                         
-                        ${item.is_schedule_read_only ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="absolute top-1.5 right-1.5 text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20 bg-slate-800/80 rounded border border-slate-600"><i class="fa-solid fa-cog text-xs"></i></button>`}
+                        ${isReadOnly ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="absolute top-1.5 right-1.5 text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 z-20 bg-slate-800/80 rounded border border-slate-600"><i class="fa-solid fa-cog text-xs"></i></button>`}
                     </div>`;
                 } else {
                     return `
@@ -1632,7 +1639,7 @@
                                 ${tagsHTML ? `<div class="mt-1 flex flex-wrap gap-1">${tagsHTML}</div>` : ''}
                             </div>
                         </div>
-                        ${item.is_schedule_read_only ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-2 z-20 shrink-0 bg-slate-800 rounded shadow"><i class="fa-solid fa-cog"></i></button>`}
+                        ${isReadOnly ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="text-slate-400 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-2 z-20 shrink-0 bg-slate-800 rounded shadow"><i class="fa-solid fa-cog"></i></button>`}
                     </div>`;
                 }
             },
@@ -1720,7 +1727,7 @@
 
             isItemScheduleReadOnly(id) {
                 const item = this.state.directoryCache.get(Number(id));
-                return !!(item && item.is_schedule_read_only);
+                return this.isReadOnlyScheduleItem(item);
             },
 
             async enterDirectoryOrFile(id) {
@@ -1861,7 +1868,7 @@
                     const el = orderedItems[idx];
                     const id = Number(el.getAttribute('data-id'));
                     const item = this.state.directoryCache.get(id);
-                    if (!item || item.is_schedule_read_only) continue;
+                    if (!item || this.isReadOnlyScheduleItem(item)) continue;
 
                     const isVirtual = el.classList.contains('virtual-task');
                     const elContextStart = el.getAttribute('data-context-start') || null;
@@ -2273,7 +2280,7 @@
                 if (id) {
                     dirObj = this.state.directoryCache.get(Number(id));
                     if (!dirObj) return;
-                    if (dirObj.is_schedule_read_only) {
+                    if (this.isReadOnlyScheduleItem(dirObj)) {
                         this.showToast('Este diretório é apenas leitura na Agenda. Abra no Flashcards para editar.', 'error');
                         return;
                     }
