@@ -109,7 +109,7 @@
                 this.topic = (res.deck_name || 'Deck sem nome').trim();
                 document.getElementById('topicInput').value = this.topic;
                 this.deckStructure = res.deck_structure || 'fatos';
-                const labels = { fatos: 'Fatos', perguntas: 'Perguntas', traducoes: 'Traduções' };
+                const labels = { fatos: 'Fatos', perguntas: 'Perguntas', traducoes: 'Traduções', parafrases: 'Paráfrases', ingles: 'Inglês' };
                 document.getElementById('deckStructureLabel').innerText = labels[this.deckStructure] || 'Fatos';
             },
 
