@@ -446,8 +446,7 @@ else if ($action === 'complete_task') {
              LEFT JOIN directory_recurrences dr ON dr.directory_id = d.id
              WHERE d.id = ?
                AND d.user_id = ?
-               AND d.type = 0
-             FOR UPDATE"
+               FOR UPDATE"
         );
         $stmtTask->execute([$id, $user_id]);
         $task = $stmtTask->fetch(PDO::FETCH_ASSOC);
@@ -476,8 +475,7 @@ else if ($action === 'complete_task') {
              SET is_completed = 1,
                  end_date = COALESCE(end_date, NOW())
              WHERE id = ?
-               AND user_id = ?
-               AND type = 0"
+               AND user_id = ?"
         );
         $stmt->execute([$id, $user_id]);
 
