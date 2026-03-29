@@ -827,7 +827,7 @@
 
             async loadData() {
                 const [res, flashcardRes] = await Promise.all([
-                    this.api('directories', 'fetch', { parent_id: this.agendaId }),
+                    this.api('schedule', 'get_schedule_items', { id: this.agendaId }),
                     this.api('schedule', 'get_flashcard_due_directories', { id: this.agendaId })
                 ]);
 

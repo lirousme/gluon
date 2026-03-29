@@ -265,6 +265,37 @@ function ensureScheduleTagTables(PDO $pdo): void {
     );
 }
 
+function ensureSchedulePerformanceIndexes(PDO $pdo): void {
+    $indexes = [
+        'directories' => [
+            'idx_directories_user_parent_dates' => "CREATE INDEX idx_directories_user_parent_dates ON directories (user_id, parent_id, start_date, end_date)",
+            'idx_directories_parent_recurrence' => "CREATE INDEX idx_directories_parent_recurrence ON directories (parent_id, is_recurring, is_completed)"
+        ],
+        'flashcard_scores' => [
+            'idx_flashcard_scores_user_due' => "CREATE INDEX idx_flashcard_scores_user_due ON flashcard_scores (user_id, next_review_at, flashcard_id)"
+        ],
+        'flashcards' => [
+            'idx_flashcards_directory_id' => "CREATE INDEX idx_flashcards_directory_id ON flashcards (directory_id)"
+        ]
+    ];
+
+    foreach ($indexes as $table => $tableIndexes) {
+        $stmt = $pdo->prepare("SHOW INDEX FROM {$table}");
+        $stmt->execute();
+        $existing = array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'Key_name');
+
+        foreach ($tableIndexes as $indexName => $ddl) {
+            if (!in_array($indexName, $existing, true)) {
+                try {
+                    $pdo->exec($ddl);
+                } catch (Throwable $e) {
+                    // Ignora erro de índice duplicado/conflito para não interromper a API em produção.
+                }
+            }
+        }
+    }
+}
+
 
 
 function ensureDirectoriesCompletionColumn(PDO $pdo): void {
@@ -525,6 +556,92 @@ else if ($action === 'get_flashcard_due_directories') {
             'open_mode' => in_array($row['open_mode'] ?? '', ['fullscreen', 'preview'], true) ? $row['open_mode'] : 'fullscreen',
             'oldest_review_at' => $row['oldest_review_at'],
             'due_cards' => (int)$row['due_cards']
+        ];
+    }, $rows);
+
+    echo json_encode(['status' => 'success', 'data' => $response]);
+}
+else if ($action === 'get_schedule_items') {
+    ensureScheduleTagTables($pdo);
+    ensureDirectoriesCompletionColumn($pdo);
+    ensureSchedulePerformanceIndexes($pdo);
+
+    $agenda_id = (int)($input['id'] ?? 0);
+    if ($agenda_id <= 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID de agenda inválido.']));
+    }
+
+    $stmtAgenda = $pdo->prepare("SELECT id FROM directories WHERE id = ? AND user_id = ? AND type = 2");
+    $stmtAgenda->execute([$agenda_id, $user_id]);
+    if (!$stmtAgenda->fetchColumn()) {
+        die(json_encode(['status' => 'error', 'message' => 'Agenda não encontrada.']));
+    }
+
+    $stmt = $pdo->prepare(
+        "SELECT d.id, d.type, d.target_id, d.parent_id, d.name_encrypted, d.icon, d.icon_color_from, d.icon_color_to,
+                d.cover_url_encrypted, d.open_mode, d.start_date, d.end_date, d.is_recurring, d.is_completed,
+                dr.type as rec_type, dr.interval_value as rec_interval, dr.days_of_week as rec_days,
+                dr.custom_dates as rec_custom, dr.exceptions as rec_exceptions, dr.time_start as rec_time_start,
+                dr.time_end as rec_time_end, dr.end_date as rec_end
+         FROM directories d
+         LEFT JOIN directory_recurrences dr ON dr.directory_id = d.id
+         WHERE d.user_id = ?
+           AND d.parent_id = ?
+         ORDER BY COALESCE(d.start_date, d.end_date) ASC, d.id ASC"
+    );
+    $stmt->execute([$user_id, $agenda_id]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $directoryIds = array_map(static fn($row) => (int)$row['id'], $rows);
+    $tagsByDirectory = [];
+    if (!empty($directoryIds)) {
+        $placeholders = implode(',', array_fill(0, count($directoryIds), '?'));
+        $stmtTags = $pdo->prepare(
+            "SELECT dtl.directory_id, st.id, st.name, st.color
+             FROM directory_tag_links dtl
+             INNER JOIN schedule_tags st ON st.id = dtl.tag_id
+             WHERE st.user_id = ? AND dtl.directory_id IN ($placeholders)
+             ORDER BY st.name ASC"
+        );
+        $stmtTags->execute(array_merge([$user_id], $directoryIds));
+
+        foreach ($stmtTags->fetchAll(PDO::FETCH_ASSOC) as $tagRow) {
+            $dirId = (int)$tagRow['directory_id'];
+            if (!isset($tagsByDirectory[$dirId])) $tagsByDirectory[$dirId] = [];
+            $tagsByDirectory[$dirId][] = [
+                'id' => (int)$tagRow['id'],
+                'name' => $tagRow['name'],
+                'color' => $tagRow['color']
+            ];
+        }
+    }
+
+    $response = array_map(static function ($row) use ($tagsByDirectory) {
+        $dirId = (int)$row['id'];
+        return [
+            'id' => $dirId,
+            'type' => (int)($row['type'] ?? 0),
+            'target_id' => $row['target_id'],
+            'parent_id' => $row['parent_id'],
+            'name' => Security::decryptData($row['name_encrypted']),
+            'icon' => $row['icon'] ?? 'fa-folder',
+            'color_from' => $row['icon_color_from'] ?? '#3b82f6',
+            'color_to' => $row['icon_color_to'] ?? '#6366f1',
+            'cover_url' => !empty($row['cover_url_encrypted']) ? Security::decryptData($row['cover_url_encrypted']) : '',
+            'open_mode' => in_array($row['open_mode'] ?? '', ['fullscreen', 'preview'], true) ? $row['open_mode'] : 'fullscreen',
+            'start_date' => $row['start_date'],
+            'end_date' => $row['end_date'],
+            'is_recurring' => (int)($row['is_recurring'] ?? 0),
+            'is_completed' => (int)($row['is_completed'] ?? 0),
+            'rec_type' => $row['rec_type'],
+            'rec_interval' => $row['rec_interval'],
+            'rec_days' => $row['rec_days'],
+            'rec_custom' => $row['rec_custom'],
+            'rec_exceptions' => $row['rec_exceptions'],
+            'rec_time_start' => $row['rec_time_start'],
+            'rec_time_end' => $row['rec_time_end'],
+            'rec_end' => $row['rec_end'],
+            'tags' => $tagsByDirectory[$dirId] ?? []
         ];
     }, $rows);
 
