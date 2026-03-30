@@ -525,6 +525,17 @@ else if ($action === 'complete_task') {
 }
 
 else if ($action === 'get_flashcard_due_directories') {
+    $agenda_id = (int)($input['id'] ?? 0);
+    if ($agenda_id <= 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID de agenda inválido.']));
+    }
+
+    $stmtAgenda = $pdo->prepare("SELECT id FROM directories WHERE id = ? AND user_id = ? AND type = 2");
+    $stmtAgenda->execute([$agenda_id, $user_id]);
+    if (!$stmtAgenda->fetchColumn()) {
+        die(json_encode(['status' => 'error', 'message' => 'Agenda não encontrada.']));
+    }
+
     $stmt = $pdo->prepare(
         "SELECT d.id, d.type, d.name_encrypted, d.icon, d.icon_color_from, d.icon_color_to, d.cover_url_encrypted, d.open_mode,
                 MIN(fs.next_review_at) AS oldest_review_at,
@@ -533,6 +544,7 @@ else if ($action === 'get_flashcard_due_directories') {
          INNER JOIN flashcards f ON f.directory_id = d.id
          INNER JOIN flashcard_scores fs ON fs.flashcard_id = f.id
          WHERE d.user_id = ?
+           AND d.parent_id = ?
            AND d.type = 4
            AND fs.user_id = ?
            AND fs.next_review_at IS NOT NULL
@@ -541,7 +553,7 @@ else if ($action === 'get_flashcard_due_directories') {
          HAVING due_cards > 0
          ORDER BY oldest_review_at ASC"
     );
-    $stmt->execute([$user_id, $user_id]);
+    $stmt->execute([$user_id, $agenda_id, $user_id]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $response = array_map(function ($row) {
