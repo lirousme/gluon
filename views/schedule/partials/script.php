@@ -2214,6 +2214,10 @@
                     folderSettings.style.display = 'none';
                     nameLabel.innerText = 'Nome da Agenda / Cronograma';
                     this.autoChangeIcon('fa-calendar-days');
+                } else if (typeValue === 4) {
+                    folderSettings.style.display = 'none';
+                    nameLabel.innerText = 'Nome do Deck de Flashcards';
+                    this.autoChangeIcon('fa-layer-group');
                 } else if (typeValue === 7) {
                     folderSettings.style.display = 'none';
                     nameLabel.innerText = 'Nome do Plano';
@@ -2308,6 +2312,7 @@
                     if(dirObj.type === 0) { folderSettings.style.display = 'block'; nameLabel.innerText = 'Nome da Tarefa/Pasta'; iconPickerContainer.style.display = 'block'; } 
                     else if(dirObj.type === 1) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Arquivo'; iconPickerContainer.style.display = 'block'; } 
                     else if(dirObj.type === 2) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome da Agenda'; iconPickerContainer.style.display = 'block'; }
+                    else if(dirObj.type === 4) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Deck de Flashcards'; iconPickerContainer.style.display = 'block'; }
                     else if(dirObj.type === 3) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Portal'; iconPickerContainer.style.display = 'none'; btnRecor.classList.add('hidden');}
                     else if(dirObj.type === 7) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Plano'; iconPickerContainer.style.display = 'block'; }
                 } else {
@@ -2343,7 +2348,7 @@
                 document.getElementById('dirColorFrom').value = (dirObj && dirObj.color_from) ? dirObj.color_from : '#3b82f6';
                 document.getElementById('dirColorTo').value = (dirObj && dirObj.color_to) ? dirObj.color_to : '#6366f1';
                 
-                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : (dirObj?.type === 3 ? 'fa-door-open' : (dirObj?.type === 7 ? 'fa-list-ol' : 'fa-check-circle')))); 
+                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : (dirObj?.type === 3 ? 'fa-door-open' : (dirObj?.type === 4 ? 'fa-layer-group' : (dirObj?.type === 7 ? 'fa-list-ol' : 'fa-check-circle'))))); 
                 this.autoChangeIcon(iconToSelect);
 
                 const posToSelect = (dirObj && dirObj.new_item_position) ? dirObj.new_item_position : 'end';
