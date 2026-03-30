@@ -1658,7 +1658,8 @@ elseif ($action === 'add_single') {
     if ($deck_id === 0 || (!$has_front && !$has_back)) {
         die(json_encode(['status' => 'error', 'message' => 'Preencha pelo menos um lado do card com texto ou imagem.']));
     }
-    if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) {
+    $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
+    if (!$deck) {
         die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
     }
 
@@ -1670,7 +1671,68 @@ elseif ($action === 'add_single') {
     $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, 0, 0)");
     
     if ($stmt->execute([$deck_id, $front_enc, $back_enc, $img_front_enc, $img_back_enc])) {
-        echo json_encode(['status' => 'success', 'message' => 'Card adicionado.']);
+        $new_card_id = (int)$pdo->lastInsertId();
+        $front_language = normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR');
+        $back_language = normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB');
+        $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
+
+        $generated_sides = [];
+        $failed_sides = [];
+
+        $front_clean = trim(strip_tags($front));
+        if ($front_clean !== '' && !cardTextContainsMathNotation($front_clean)) {
+            $tts_error_details = null;
+            $ok_front = generateAndPersistCardAudio(
+                $pdo,
+                $user_id,
+                $new_card_id,
+                'front',
+                $front_clean,
+                $front_language,
+                $deck_structure,
+                $front_language,
+                $back_language,
+                $tts_error_details
+            );
+            if ($ok_front) $generated_sides[] = 'front';
+            else $failed_sides[] = 'front';
+        }
+
+        $back_clean = trim(strip_tags($back));
+        if ($back_clean !== '' && !cardTextContainsMathNotation($back_clean)) {
+            $tts_error_details = null;
+            $ok_back = generateAndPersistCardAudio(
+                $pdo,
+                $user_id,
+                $new_card_id,
+                'back',
+                $back_clean,
+                $back_language,
+                $deck_structure,
+                $front_language,
+                $back_language,
+                $tts_error_details
+            );
+            if ($ok_back) $generated_sides[] = 'back';
+            else $failed_sides[] = 'back';
+        }
+
+        $message = 'Card adicionado.';
+        if (!empty($generated_sides) && empty($failed_sides)) {
+            $message .= ' Áudio gerado automaticamente.';
+        } elseif (!empty($generated_sides) && !empty($failed_sides)) {
+            $message .= ' Áudio parcial gerado automaticamente.';
+        } elseif (empty($generated_sides) && !empty($failed_sides)) {
+            $message .= ' Não foi possível gerar o áudio automaticamente.';
+        }
+
+        echo json_encode([
+            'status' => 'success',
+            'message' => $message,
+            'card_id' => $new_card_id,
+            'audio_generated_sides' => $generated_sides,
+            'audio_failed_sides' => $failed_sides
+        ]);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
     }
