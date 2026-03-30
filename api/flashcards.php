@@ -333,6 +333,15 @@ function getGoogleTtsVoiceByLanguage($language) {
     }
 }
 
+function getGoogleTtsAlternateVoiceByLanguage($language) {
+    switch ($language) {
+        case 'pt-BR': return 'pt-BR-Chirp3-HD-Fenrir';
+        case 'en-US': return 'en-US-Chirp3-HD-Enceladus';
+        case 'en-GB': return 'en-GB-Chirp3-HD-Fenrir';
+        default: return 'en-US-Chirp3-HD-Enceladus';
+    }
+}
+
 function getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $front_language, $back_language) {
     $normalized_structure = normalizeDeckStructure($deck_structure, 'fatos');
     $normalized_front = normalizeDeckLanguage($front_language, 'pt-BR');
@@ -352,7 +361,18 @@ function getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $fro
         }
     }
 
-    return getGoogleTtsVoiceByLanguage($language);
+    if ($side === 'back') {
+        $front_default_voice = getGoogleTtsVoiceByLanguage($normalized_front);
+        $back_default_voice = getGoogleTtsVoiceByLanguage($normalized_back);
+
+        if ($front_default_voice === $back_default_voice) {
+            return getGoogleTtsAlternateVoiceByLanguage($normalized_back);
+        }
+
+        return $back_default_voice;
+    }
+
+    return getGoogleTtsVoiceByLanguage($normalized_front);
 }
 
 function getLanguageLabel($language) {
