@@ -115,17 +115,18 @@ function splitIntoMaps(flatPhases) {
     return maps;
 }
 
-function renderNodes(phases){
+function renderNodes(phases, startIndex = 0){
     nodesEl.innerHTML='';
     phases.forEach((phase, i) => {
         const positionIndex = positions.length - 1 - i;
         const p = positions[positionIndex] || { l: 50, t: 50 };
+        const phaseNumber = startIndex + i + 1;
         const b = document.createElement('button');
         b.className = 'level-btn';
         b.style.left = `${p.l}%`;
         b.style.top = `${p.t}%`;
-        b.textContent = String(i + 1);
-        b.title = phase.name || `Fase ${i + 1}`;
+        b.textContent = String(phaseNumber);
+        b.title = phase.name || `Fase ${phaseNumber}`;
         const unlocked = !!unlockByPhaseId.get(Number(phase.id));
         if (!unlocked) {
             b.classList.add('locked');
@@ -151,7 +152,7 @@ function loadMap(mapIndex){
     document.getElementById('mapMeta').textContent = `Mapa ${activeMap} de ${phasesByMap.length} · ${phases.length} fases`;
     document.getElementById('btnPrev').disabled = activeMap <= 1;
     document.getElementById('btnNext').disabled = activeMap >= phasesByMap.length;
-    renderNodes(phases);
+    renderNodes(phases, (activeMap - 1) * 10);
 }
 
 async function loadMaps(){
