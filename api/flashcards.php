@@ -701,29 +701,22 @@ function buildDefaultBasePromptByStructure($deck_name, $deck_structure) {
     } elseif ($deck_structure === 'perguntas') {
         $basePrompt = 'Me dê perguntas que induzam conhecimento fundamental, elementar, essencial, indispensável sobre o assunto "$deck_name" coisas elementares e ontológicas sobre, hermenêutica, em uma tabela de duas colunas, onde cada linha é uma pergunta, a primeira coluna é a pergunta, e a segunda é a resposta. As perguntas e respostas devem ser óbvias evidentes e de rápida assimilação. Use linguagem simples e de fácil assimilação para pessoas de qualquer nível intelectual. As pessoas devem conseguir decodificar a informação codificada nas perguntas e respostas de forma assustadoramente fácil. As perguntas devem ser simples e de preferência curtas. Nenhuma pergunta pode ser igual as informações anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. O objetivo é construir aprendizado progressivo sem redundância. Público alvo são crianças de 10 à 17 anos.';
     } elseif ($deck_structure === 'parafrases') {
-        $basePrompt = 'gere 10 paráfrases dessa: "$deck_name" (FOCANDO NO RACIOCÍNIO LÓGICO)';
+        $basePrompt = 'gere 5 paráfrases dessa: "$deck_name".';
     } elseif ($deck_structure === 'ingles') {
         $basePrompt = '
-        Para o termo "$deck_name" gere cards para estudo de inglês seguindo rigorosamente: na frente (front), explique usando linguagem assustadoramente simples, na explicação fale qual a melhor tradução daquele termo naquela frase, e ele está sendo usado para indicar o quê? Por favor, na explicação não faça algo desse tipo usar "Running" quando na frase de exemplo você usou "ran", o termo da explicação deve seguir rigorosamente de acordo com a flexão usada na frase de exemplo.
-        Lembrando que o aluno não sabe nada de inglês, então fale da tradução toda da frase, porque o aluno também não sabe o significado das outras palavras da frase; no verso (back), coloque a frase de exemplo em inglês, sem tradução, sem rótulo e sem texto extra.
-        Um TTS irá fazer a leitura da sua explicação, então não use caractéres simbólicos como barras ou sinal de igual, mas pode usar aspas, pontos finais e vírgulas normalmente.
-        Cubra os 12 tempos verbais fundamentais do inglês (ao menos 1 frase por tempo) e gere frases adicionais para cobrir TODOS os significados e traduções relevantes do termo quando houver polissemia; portanto o total pode e deve ser extremamnete maior que 12 cards nesses casos, pois deve englobar flexões vebais de todos os tempos e em todos os verbos frasais também.
-        Nas explicações o termo de referência deve condizer com a forma do termo usado na frase de exemplo, se for verbo frasal ele deve ser referenciado na explicação, e se tiver flexão verbal, na explicação referenciar ele flexionado, por exemplo se na frase de exemplo você usou "said" não referencie "saing" na explicação, pois você não usou "saing", mas "said". Use muitos phrasal verbs naturais, mas também inclua usos não-phrasal do termo de forma a ter exemplo do uso desse termos em todas variações possíveis dele. Nos casos de verbos use todas as flexões verbais de todos os tempos verbais, se tiver flexões verbais de todos os tempos verbais para verbos frasais também gere frases de exemplo para elas. Também faça variações para locuções nominais e expressões idiomáticas quando cabível. Quando houver contrações como em will, not, had e is, etc. a frase de exemplo deve ser com contração, e na explicação deve mostrar o que está sendo contraído. A contração é regra absoluta. Varie sujeitos, polaridade (afirmativa/negativa/interrogativa), voz e contexto. Não repita frases.
-        Exemplo perfeito:
-            Termo: breaking
-            Front: “A corda terá quebrado até lá”. Aqui, “will have broken” tem a melhor tradução como “terá quebrado”, indicando algo que provavelmente vai acontecer. A frase inteira indica que até algum momento do futuro a corda terá arrebentado.
-            Verso: The rope will have broken by then.
-            
-        Outro exemplo com contração:
-            Termo:breaking
-            Front: “Nós vamos invadir o sistema”. Aqui, “we\'ll break into” tem a melhor tradução como “nós vamos invadir”, indicando entrar sem permissão. "We\'ll" é "we will" contraído. A frase inteira quer dizer que nós vamos entrar no sistema de modo ilegal ou forçado.
-            Verso: We\'ll break into the system.
-            
-        Outro exemplo com contração:
-            Termo: breaking
-            Front: “Nós já tínhamos quebrado a promessa antes da reunião”. Aqui, “we\'d broken” tem a melhor tradução como “nós já tínhamos quebrado”, indicando que a promessa foi desrespeitada antes de outro momento no passado. "We\'d" é "we had" contraído. A frase inteira quer dizer que, antes da reunião acontecer, nós já não tínhamos cumprido a promessa.
-            Verso: We\'ll break into the system.
-                ';
+        Explique o termo/expressão "$deck_name" e quais todas as formas de usar ele em frases em inglês, semânticamente, morfologicamente, sintática e pragmática.
+        Perguntas assustadoramente simples de entender e respostas também. Qualquer leigo deve ter extrema facilidade assustadora de compreender o texto da pergunta e da resposta.
+        Quando cabível apenas: Abranja todas as polissemias, homonímias, flexões de gênero, flexões de número, flexões de grau, flexões para adequar a pronomes, flexões de tempo, flexões de modo.
+        Quando cabível apenas: Abranja também verbos frasais.
+        Quando não cabível e não houver variação morfológica no termo, não precisa perguntas sobre essa flexão, só faça perguntas de flexão, quando houver variação morfológica no termo.
+        Também faça perguntas sobre se pode usar esse termo em determinada posição na fase ou não.
+        Caso a expressão seja um verbo, faça perguntas sobre a morfologia e semântica adequada para cada pessoa e para cada tempo. Explique a semântica de acordo com o tempo, não precisa falar o nome do tempo, quando for fala de flexões temporais de um verbo, referencie essa flexão pela semântica dela e não pelo nome do tempo verbal.
+        Lembre-se, o aluno não é professor de gramática, então ele não sabe o significado do glossário gramatical que coloquei nesse prompt, logo, não use ele.
+        Finalize todas as explicações com exemplo e tradução.
+        Caso o termo for verbo, lembre-se das flexões de tempo nos 12 tempos verbais.
+        Caso o termo for verbo, lembre-se das variações em verbos frasais.
+        Os textos serão lidos por TTS, então evite sinais e setas, pode usar vígulas, aspas, pontos finais e de interrogação.
+        Gere 100 cards.';
     } else {
         $basePrompt = 'Crie frases ordinárias que tenha dentro da usa estrutura sintática o termo "$deck_name". Quero variações em diferentes tempos verbais, diferentes sujeitos, com o termo em diferentes posições de estrutura sintáticas, afirmações, negações, perguntas positivas, perguntas negativas, optativas, condicionais, voz ativa, voz passiva, voz reflexiva, faça frases com e abreviações das palavras, flexões nominais, de gênero, número e grau, variações de tempo, modo, lugar, oposição, entre outros, use e forme verbos frasais, verbos modais, entre outros tipos. Nenhuma frase pode ser igual as frases anteriores (salvo em paráfrases, uso de sinônimos e oposição ex. frase negativa e frase afirmativa) que já fiz. Tanto a língua do verso quanto a língua da frente devem ser estruturadas com palavras ordinárias. Faça frases com o termo "$deck_name" em sua forma pura original e flexionando ele também, quando for possível. As vezes um mesmo termo pode ser traduzido termos com significados muito ou ligeiramente diferentes, crie frases para todas esses significados diferentes, isso aqui é muito importante, use sinônimos do português, para as frases em português não ficarem todas com a mesma tradução do termo. Primeira coluna na língua da frente do deck, segunda coluna na língua do verso. Sem repetições e sem conteúdo de interface.';
     }
@@ -770,7 +763,7 @@ CARDS JÁ EXISTENTES NESTE DECK:
 " . $historyText
             . "
 
-Gere de 5 à 50 novos cards sem repetição de conteúdo com o histórico.";
+Gere de 5 à 100 novos cards sem repetição de conteúdo com o histórico.";
     }
 
     $requiresBack = in_array($deck_structure, ['perguntas', 'traducoes', 'ingles'], true);
