@@ -56,7 +56,7 @@
         <span class="pill" id="cacheInfo">Sem cache</span>
         <button id="buscarBtn">Atualizar dados da API (1 requisição)</button>
         <button id="gerenciarBtn" class="secondary">Gerenciar empresas</button>
-        <button id="resetarBtn" class="secondary">Restaurar lista padrão</button>
+        <button id="resetarBtn" class="secondary">Recarregar lista do sistema</button>
     </div>
 
     <h3>Empresas</h3>
@@ -87,8 +87,7 @@
 
 <script>
     const MAX_EMPRESAS = 20;
-    const STORAGE_LISTA = 'brapi_empresas_lista_v2';
-    const STORAGE_CACHE = 'brapi_cache_unico_v1';
+    const STORAGE_CACHE = 'brapi_cache_unico_v2';
 
     const listaEl = document.getElementById('lista');
     const outputEl = document.getElementById('output');
@@ -124,53 +123,43 @@
         return [...map.values()].slice(0, MAX_EMPRESAS);
     }
 
-    function saveLista(arr) {
-        localStorage.setItem(STORAGE_LISTA, JSON.stringify(sanitizeLista(arr)));
-    }
-
-    function readListaStorage() {
-        try {
-            return JSON.parse(localStorage.getItem(STORAGE_LISTA) || 'null');
-        } catch {
-            return null;
-        }
-    }
-
     function readCache() {
         try {
-            return JSON.parse(sessionStorage.getItem(STORAGE_CACHE) || 'null');
+            return JSON.parse(localStorage.getItem(STORAGE_CACHE) || 'null');
         } catch {
             return null;
         }
     }
 
     function saveCache(data) {
-        sessionStorage.setItem(STORAGE_CACHE, JSON.stringify(data));
+        localStorage.setItem(STORAGE_CACHE, JSON.stringify(data));
+    }
+
+    async function salvarEmpresasNoServidor(lista) {
+        const resp = await fetch('../api/empresas.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ empresas: sanitizeLista(lista) })
+        });
+        const data = await resp.json();
+        if (!resp.ok || data?.status !== 'ok') {
+            throw new Error(data?.message || `Falha ao salvar lista (HTTP ${resp.status})`);
+        }
+        return sanitizeLista(data.empresas || []);
     }
 
     async function carregarListaBase() {
-        const resp = await fetch('./empresas.json');
-        if (!resp.ok) throw new Error(`Falha ao carregar empresas.json (HTTP ${resp.status})`);
-        const base = await resp.json();
-        baseEmpresas = sanitizeLista(base);
-        if ((base || []).length > MAX_EMPRESAS) {
-            statusEl.textContent = `empresas.json possui ${(base || []).length} itens; foram carregados apenas os primeiros ${MAX_EMPRESAS}.`;
+        const resp = await fetch('../api/empresas.php', { cache: 'no-store' });
+        const data = await resp.json();
+        if (!resp.ok || data?.status !== 'ok') {
+            throw new Error(data?.message || `Falha ao carregar empresas (HTTP ${resp.status})`);
         }
+        baseEmpresas = sanitizeLista(data.empresas || []);
     }
 
     async function loadEmpresas() {
         await carregarListaBase();
-        const listaStorage = readListaStorage();
-
-        if (!Array.isArray(listaStorage) || !listaStorage.length) {
-            empresas = [...baseEmpresas];
-            saveLista(empresas);
-        } else {
-            empresas = sanitizeLista(listaStorage);
-            saveLista(empresas);
-        }
-
-        empresas.sort((a, b) => a.ticker.localeCompare(b.ticker));
+        empresas = [...baseEmpresas].sort((a, b) => a.ticker.localeCompare(b.ticker));
         totaisEl.textContent = `Empresas: ${empresas.length}/${MAX_EMPRESAS}`;
         modalHintEl.textContent = `Máximo de ${MAX_EMPRESAS} empresas na lista. (${empresas.length}/${MAX_EMPRESAS})`;
     }
@@ -230,12 +219,19 @@
             rmBtn.textContent = 'Remover';
             rmBtn.addEventListener('click', () => {
                 empresas = empresas.filter((i) => i.ticker !== emp.ticker);
-                saveLista(empresas);
-                loadEmpresas().then(() => {
-                    renderLista();
-                    renderModalLista();
-                    statusEl.textContent = `Ticker ${emp.ticker} removido da lista.`;
-                });
+                salvarEmpresasNoServidor(empresas)
+                    .then((lista) => {
+                        empresas = lista;
+                        return loadEmpresas();
+                    })
+                    .then(() => {
+                        renderLista();
+                        renderModalLista();
+                        statusEl.textContent = `Ticker ${emp.ticker} removido da lista.`;
+                    })
+                    .catch((err) => {
+                        statusEl.textContent = `Erro ao salvar lista: ${err.message}`;
+                    });
             });
 
             row.appendChild(rmBtn);
@@ -265,7 +261,7 @@
         outputEl.textContent = 'Aguarde...';
         try {
             const query = new URLSearchParams({ tickers: tickers.join(','), all_data: '1' });
-            const resp = await fetch(`../api/brapi_quotes.php?${query.toString()}`);
+            const resp = await fetch(`../api/brapi_quotes.php?${query.toString()}`, { cache: 'no-store' });
             const data = await resp.json();
 
             const results = data?.brapi?.results || [];
@@ -276,7 +272,7 @@
             });
 
             cache = {
-                fetchedAt: new Date().toISOString(),
+                fetchedAt: data?.requestedAt || new Date().toISOString(),
                 tickers,
                 requestMeta: {
                     status: resp.status,
@@ -317,15 +313,22 @@
         }
 
         empresas.push({ ticker, nome: nome || ticker });
-        saveLista(empresas);
         novoTickerEl.value = '';
         novoNomeEl.value = '';
 
-        loadEmpresas().then(() => {
-            renderLista();
-            renderModalLista();
-            statusEl.textContent = `Ticker ${ticker} adicionado. Clique em "Atualizar dados" para incluir na consulta única.`;
-        });
+        salvarEmpresasNoServidor(empresas)
+            .then((lista) => {
+                empresas = lista;
+                return loadEmpresas();
+            })
+            .then(() => {
+                renderLista();
+                renderModalLista();
+                statusEl.textContent = `Ticker ${ticker} adicionado. Clique em "Atualizar dados" para incluir na consulta única.`;
+            })
+            .catch((err) => {
+                statusEl.textContent = `Erro ao salvar lista: ${err.message}`;
+            });
     });
 
     gerenciarBtn.addEventListener('click', openModal);
@@ -335,12 +338,15 @@
     });
 
     resetarBtn.addEventListener('click', () => {
-        localStorage.removeItem(STORAGE_LISTA);
-        loadEmpresas().then(() => {
-            renderLista();
-            renderModalLista();
-            statusEl.textContent = 'Lista restaurada a partir do arquivo empresas.json.';
-        });
+        loadEmpresas()
+            .then(() => {
+                renderLista();
+                renderModalLista();
+                statusEl.textContent = 'Lista recarregada do arquivo empresas.json no servidor.';
+            })
+            .catch((err) => {
+                statusEl.textContent = `Erro ao recarregar lista: ${err.message}`;
+            });
     });
 
     buscarBtn.addEventListener('click', buscarApiUnica);
