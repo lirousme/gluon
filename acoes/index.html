@@ -6,35 +6,36 @@
     <title>Tabela de Ações - Análise de Curto Prazo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Estilos para garantir que a barra de rolagem horizontal fique sempre visível e bonita */
-        .custom-scrollbar {
-            overflow-x: auto;
-            padding-bottom: 12px; /* Espaço para a barra não sobrepor o conteúdo */
-        }
         .custom-scrollbar::-webkit-scrollbar {
-            height: 10px;
+            height: 12px; /* Um pouco mais grossa para facilitar o clique */
             width: 10px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
-            background: #f1f5f9; 
+            background: #f8fafc; 
             border-radius: 6px;
-            border: 1px solid #e2e8f0;
+            border-top: 1px solid #e2e8f0;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
             background: #94a3b8; 
             border-radius: 6px;
+            border: 2px solid #f8fafc; /* Cria um efeito de padding */
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
             background: #64748b; 
         }
+        
+        /* Garante que as bordas da tabela fiquem perfeitas com o sticky */
+        table { border-collapse: separate; border-spacing: 0; }
+        th, td { border-bottom: 1px solid #f3f4f6; }
+        thead th { border-bottom: 2px solid #e5e7eb; }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen p-4 md:p-8 text-gray-800 font-sans">
-    <div class="max-w-7xl mx-auto">
-        <div class="bg-white p-6 rounded-t-xl shadow-sm border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="max-w-7xl mx-auto h-[calc(100vh-4rem)] flex flex-col">
+        <div class="bg-white p-6 rounded-t-xl shadow-sm border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
             <div>
                 <h1 class="text-2xl font-bold text-gray-800">Meus Ativos - Gatilhos de Curto Prazo</h1>
-                <p class="text-sm text-gray-500 mt-1">Navegue na horizontal para ver Preço Atual e Preço Teto.</p>
+                <p class="text-sm text-gray-500 mt-1">A barra de rolagem horizontal agora fica sempre visível na tela.</p>
             </div>
             
             <div class="flex-shrink-0">
@@ -46,64 +47,66 @@
             </div>
         </div>
 
-        <div class="bg-white rounded-b-xl shadow-sm overflow-hidden border-t-0">
-            <div class="custom-scrollbar relative">
-                <table class="min-w-full text-left border-collapse whitespace-nowrap">
+        <div class="bg-white rounded-b-xl shadow-sm border border-t-0 border-gray-100 flex-1 overflow-hidden flex flex-col">
+            <div class="custom-scrollbar overflow-auto flex-1 relative">
+                <table class="min-w-full text-left whitespace-nowrap">
                     <thead>
-                        <tr class="bg-gray-50 text-gray-600 text-sm uppercase tracking-wider border-b border-gray-200 select-none">
-                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group sticky left-0 bg-gray-50 z-10" onclick="sortTable('nome')">
+                        <tr class="text-gray-600 text-sm uppercase tracking-wider select-none">
+                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group sticky top-0 left-0 z-30 bg-gray-100 shadow-[1px_0_0_0_#e5e7eb]" onclick="sortTable('nome')">
                                 <div class="flex items-center">
                                     Empresa <span id="icon-nome" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
                                 </div>
                             </th>
-                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group" onclick="sortTable('sigla')">
+                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group sticky top-0 z-20 bg-gray-50" onclick="sortTable('sigla')">
                                 <div class="flex items-center">
                                     Sigla <span id="icon-sigla" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
                                 </div>
                             </th>
-                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-center" onclick="sortTable('mdi')">
+                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-center sticky top-0 z-20 bg-gray-50" onclick="sortTable('mdi')">
                                 <div class="flex items-center justify-center">
                                     Meses (MDI) <span id="icon-mdi" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
                                 </div>
                             </th>
-                            <th scope="col" class="py-4 px-6 font-semibold text-center">
+                            <th scope="col" class="py-4 px-6 font-semibold text-center sticky top-0 z-20 bg-gray-50">
                                 Status Curto Prazo
                             </th>
-                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right" onclick="sortTable('margem_seguranca')">
+                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right sticky top-0 z-20 bg-gray-50" onclick="sortTable('margem_seguranca')">
                                 <div class="flex items-center justify-end">
                                     Margem Seg. <span id="icon-margem_seguranca" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
                                 </div>
                             </th>
-                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right" onclick="sortTable('dy')">
+                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right sticky top-0 z-20 bg-gray-50" onclick="sortTable('dy')">
                                 <div class="flex items-center justify-end">
                                     DY (%) <span id="icon-dy" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
                                 </div>
                             </th>
-                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right" onclick="sortTable('cotacao_variation_percent')">
+                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right sticky top-0 z-20 bg-gray-50" onclick="sortTable('cotacao_variation_percent')">
                                 <div class="flex items-center justify-end">
                                     Variação <span id="icon-cotacao_variation_percent" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
                                 </div>
                             </th>
-                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right border-l border-gray-200 bg-gray-50" onclick="sortTable('cotacao')">
+                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right border-l border-gray-200 sticky top-0 z-20 bg-gray-100" onclick="sortTable('cotacao')">
                                 <div class="flex items-center justify-end">
                                     Preço Atual <span id="icon-cotacao" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
                                 </div>
                             </th>
-                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right bg-gray-50" onclick="sortTable('preco_teto')">
+                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right sticky top-0 z-20 bg-gray-100" onclick="sortTable('preco_teto')">
                                 <div class="flex items-center justify-end">
                                     Preço Teto <span id="icon-preco_teto" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
                                 </div>
                             </th>
                         </tr>
                     </thead>
-                    <tbody id="tableBody" class="divide-y divide-gray-100 text-sm">
+                    <tbody id="tableBody" class="text-sm">
                         <tr id="loadingState">
-                            <td colspan="9" class="py-8 px-6 text-center text-gray-500 flex justify-center items-center gap-2">
-                                <svg class="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Carregando dados padrão...
+                            <td colspan="9" class="py-8 px-6 text-center text-gray-500">
+                                <div class="flex justify-center items-center gap-2">
+                                    <svg class="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Carregando dados padrão...
+                                </div>
                             </td>
                         </tr>
                     </tbody>
@@ -118,7 +121,6 @@
         
         const sortableColumns = ['nome', 'sigla', 'mdi', 'margem_seguranca', 'dy', 'cotacao_variation_percent', 'cotacao', 'preco_teto'];
 
-        // Dicionário para converter números em nomes de meses
         const nomesMeses = {
             "01": "Jan", "02": "Fev", "03": "Mar", "04": "Abr",
             "05": "Mai", "06": "Jun", "07": "Jul", "08": "Ago",
@@ -175,7 +177,6 @@
                 const nome = item.nome || '-';
                 const sigla = item.sigla || '-';
                 
-                // Formatação de Novas Colunas
                 const margemSeguranca = formatarPercentual(item.margem_seguranca);
                 const dy = formatarPercentual(item.dy);
                 const variacao = formatarPercentual(item.cotacao_variation_percent);
@@ -183,12 +184,10 @@
                 const precoAtual = formatarMoeda(item.cotacao);
                 const precoTeto = formatarMoeda(item.preco_teto);
 
-                // Converter "02", "08" para "Fev, Ago"
                 const mdiFormatado = Array.isArray(item.mdi) 
                     ? item.mdi.map(m => nomesMeses[m] || m).join(', ') 
                     : '-';
 
-                // Lógica de Gatilho
                 let isGatilho = false;
                 if (Array.isArray(item.mdi)) {
                     isGatilho = (item.mdi.includes(mesAtual) || item.mdi.includes(mesQueVem)) && (item.margem_seguranca > 0);
@@ -199,7 +198,7 @@
                     : `<span class="bg-gray-100 text-gray-500 text-xs font-medium px-2.5 py-1 rounded border border-gray-200">Aguardar</span>`;
 
                 tr.innerHTML = `
-                    <td class="py-4 px-6 font-medium text-gray-900 group-hover:text-blue-700 transition-colors sticky left-0 bg-white group-hover:bg-blue-50/50 z-10">${nome}</td>
+                    <td class="py-4 px-6 font-medium text-gray-900 group-hover:text-blue-700 transition-colors sticky left-0 bg-white group-hover:bg-blue-50 z-10 shadow-[1px_0_0_0_#f3f4f6]">${nome}</td>
                     <td class="py-4 px-6">
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-gray-100 text-gray-700 uppercase border border-gray-200">${sigla}</span>
                     </td>
