@@ -49,11 +49,11 @@
 <body>
 <div class="card">
     <h1>BRAPI com requisição única</h1>
-    <p class="hint">A lista inicial vem de <code>./empresas.json</code>. Você pode gerenciar a lista no modal (máximo de 20 empresas). O sistema fará 1 requisição para todos os tickers.</p>
+    <p class="hint">A lista inicial vem de <code>./empresas.json</code>. Você pode gerenciar a lista no modal (máximo de 20 empresas). O sistema faz 1 requisição para todos os tickers e salva o snapshot em SQLite.</p>
 
     <div class="row">
         <span class="pill" id="totais">Empresas: 0/20</span>
-        <span class="pill" id="cacheInfo">Sem dados salvos</span>
+        <span class="pill" id="cacheInfo">Sem snapshot salvo</span>
         <button id="buscarBtn">Atualizar dados da API (1 requisição)</button>
         <button id="gerenciarBtn" class="secondary">Gerenciar empresas</button>
         <button id="resetarBtn" class="secondary">Recarregar lista do sistema</button>
@@ -292,9 +292,9 @@
             };
             await saveApiSnapshot(cache);
 
-            statusEl.textContent = `Atualizado: HTTP ${resp.status} • ${Object.keys(resultsByTicker).length}/${tickers.length} empresas com dados (1 JSON por empresa no servidor).`;
+            statusEl.textContent = `Atualizado: HTTP ${resp.status} • ${Object.keys(resultsByTicker).length}/${tickers.length} empresas com dados (snapshot único salvo em SQLite).`;
             outputEl.textContent = JSON.stringify(data, null, 2);
-            cacheInfoEl.textContent = `JSON API: ${new Date(cache.fetchedAt).toLocaleString('pt-BR')}`;
+            cacheInfoEl.textContent = `SQLite API: ${new Date(cache.fetchedAt).toLocaleString('pt-BR')}`;
             renderLista();
         } catch (err) {
             statusEl.textContent = 'Erro ao consultar API.';
@@ -364,9 +364,9 @@
             await loadEmpresas();
             cache = await loadApiSnapshot();
             if (cache?.fetchedAt) {
-                cacheInfoEl.textContent = `JSON API: ${new Date(cache.fetchedAt).toLocaleString('pt-BR')}`;
+                cacheInfoEl.textContent = `SQLite API: ${new Date(cache.fetchedAt).toLocaleString('pt-BR')}`;
                 outputEl.textContent = JSON.stringify(cache.raw, null, 2);
-                statusEl.textContent = 'Lista carregada com dados existentes (salvos em JSON por empresa). Você pode atualizar para buscar dados novos.';
+                statusEl.textContent = 'Lista carregada com dados existentes (salvos em SQLite). Você pode atualizar para buscar dados novos.';
             } else {
                 statusEl.textContent = 'Lista carregada. Clique em "Atualizar dados" para fazer a requisição única.';
             }
