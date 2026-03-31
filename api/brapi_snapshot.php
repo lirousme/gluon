@@ -41,7 +41,7 @@ function ensureStore(string $baseDir, string $dbPath): PDO
                 fetched_at TEXT NOT NULL,
                 request_meta_json TEXT,
                 raw_json TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime("now"))
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )'
         );
 
@@ -66,7 +66,7 @@ function ensureStore(string $baseDir, string $dbPath): PDO
                 price_earnings REAL,
                 earnings_per_share REAL,
                 payload_json TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT (datetime("now")),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(snapshot_id, ticker),
                 FOREIGN KEY(snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE
             )'
