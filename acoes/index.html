@@ -171,6 +171,7 @@
             { key: 'is_previdenciaria', label: 'Previdenciária', type: 'boolean-number' },
             { key: 'mdi', label: 'Meses (MDI)', type: 'mdi' },
             { key: 'margem_seguranca', label: 'Margem Seg. (%)', type: 'percent' },
+            { key: 'qualidade_renda', label: 'QR', type: 'number', helper: 'DY * (Margem de Segurança / 100)' },
             { key: 'dy', label: 'DY (%)', type: 'percent' },
             { key: 'cotacao', label: 'Cotação', type: 'currency' },
             { key: 'cotacao_variation_percent', label: 'Variação (%)', type: 'percent' },
@@ -272,6 +273,7 @@
 
         function enhanceRow(item) {
             const normalized = { ...item };
+            normalized.qualidade_renda = (Number(normalized.dy) || 0) * ((Number(normalized.margem_seguranca) || 0) / 100);
             normalized.short_term_signal = isGatilhoCurtoPrazo(normalized) ? 'Data com próxima' : 'Aguardar';
             normalized.short_term_score = calcularScoreCurtoPrazo(normalized);
             return normalized;
