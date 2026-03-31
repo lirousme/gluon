@@ -103,6 +103,7 @@ if (!is_array($data)) {
 http_response_code($httpCode > 0 ? $httpCode : 200);
 echo json_encode([
     'status' => $httpCode >= 400 ? 'error' : 'ok',
+    'requestedAt' => gmdate('c'),
     'request_count' => 1,
     'tickers_requested' => $tickers,
     'all_data' => $allDataEnabled,
