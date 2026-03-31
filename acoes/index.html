@@ -6,20 +6,26 @@
     <title>Tabela de Ações - Análise de Curto Prazo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* Estilos para garantir que a barra de rolagem horizontal fique sempre visível e bonita */
+        .custom-scrollbar {
+            overflow-x: auto;
+            padding-bottom: 12px; /* Espaço para a barra não sobrepor o conteúdo */
+        }
         .custom-scrollbar::-webkit-scrollbar {
-            height: 8px;
-            width: 8px;
+            height: 10px;
+            width: 10px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
             background: #f1f5f9; 
-            border-radius: 4px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #cbd5e1; 
-            border-radius: 4px;
+            background: #94a3b8; 
+            border-radius: 6px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8; 
+            background: #64748b; 
         }
     </style>
 </head>
@@ -28,7 +34,7 @@
         <div class="bg-white p-6 rounded-t-xl shadow-sm border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
                 <h1 class="text-2xl font-bold text-gray-800">Meus Ativos - Gatilhos de Curto Prazo</h1>
-                <p class="text-sm text-gray-500 mt-1">Análise de dividendos iminentes (MDI vs Mês Atual), margem de segurança e DY.</p>
+                <p class="text-sm text-gray-500 mt-1">Navegue na horizontal para ver Preço Atual e Preço Teto.</p>
             </div>
             
             <div class="flex-shrink-0">
@@ -41,11 +47,11 @@
         </div>
 
         <div class="bg-white rounded-b-xl shadow-sm overflow-hidden border-t-0">
-            <div class="overflow-x-auto custom-scrollbar">
+            <div class="custom-scrollbar relative">
                 <table class="min-w-full text-left border-collapse whitespace-nowrap">
                     <thead>
                         <tr class="bg-gray-50 text-gray-600 text-sm uppercase tracking-wider border-b border-gray-200 select-none">
-                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group" onclick="sortTable('nome')">
+                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group sticky left-0 bg-gray-50 z-10" onclick="sortTable('nome')">
                                 <div class="flex items-center">
                                     Empresa <span id="icon-nome" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
                                 </div>
@@ -57,7 +63,7 @@
                             </th>
                             <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-center" onclick="sortTable('mdi')">
                                 <div class="flex items-center justify-center">
-                                    MDI <span id="icon-mdi" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
+                                    Meses (MDI) <span id="icon-mdi" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
                                 </div>
                             </th>
                             <th scope="col" class="py-4 px-6 font-semibold text-center">
@@ -78,12 +84,12 @@
                                     Variação <span id="icon-cotacao_variation_percent" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
                                 </div>
                             </th>
-                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right" onclick="sortTable('cotacao')">
+                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right border-l border-gray-200 bg-gray-50" onclick="sortTable('cotacao')">
                                 <div class="flex items-center justify-end">
                                     Preço Atual <span id="icon-cotacao" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
                                 </div>
                             </th>
-                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right" onclick="sortTable('preco_teto')">
+                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right bg-gray-50" onclick="sortTable('preco_teto')">
                                 <div class="flex items-center justify-end">
                                     Preço Teto <span id="icon-preco_teto" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
                                 </div>
@@ -110,10 +116,15 @@
         let tableData = [];
         let currentSort = { column: null, direction: 'asc' };
         
-        // Colunas disponíveis para ordenação
         const sortableColumns = ['nome', 'sigla', 'mdi', 'margem_seguranca', 'dy', 'cotacao_variation_percent', 'cotacao', 'preco_teto'];
 
-        // Lógica de Datas para o Gatilho
+        // Dicionário para converter números em nomes de meses
+        const nomesMeses = {
+            "01": "Jan", "02": "Fev", "03": "Mar", "04": "Abr",
+            "05": "Mai", "06": "Jun", "07": "Jul", "08": "Ago",
+            "09": "Set", "10": "Out", "11": "Nov", "12": "Dez"
+        };
+
         const hoje = new Date();
         const mesAtual = String(hoje.getMonth() + 1).padStart(2, '0');
         const mesQueVem = String((hoje.getMonth() + 1) % 12 + 1).padStart(2, '0');
@@ -163,38 +174,42 @@
                 
                 const nome = item.nome || '-';
                 const sigla = item.sigla || '-';
-                const precoAtual = formatarMoeda(item.cotacao);
-                const precoTeto = formatarMoeda(item.preco_teto);
                 
-                // Novos Campos
+                // Formatação de Novas Colunas
                 const margemSeguranca = formatarPercentual(item.margem_seguranca);
                 const dy = formatarPercentual(item.dy);
                 const variacao = formatarPercentual(item.cotacao_variation_percent);
                 const variacaoColor = item.cotacao_variation_percent < 0 ? 'text-red-500 font-semibold' : 'text-green-500 font-semibold';
-                const mdiFormatado = Array.isArray(item.mdi) ? item.mdi.join(', ') : '-';
+                const precoAtual = formatarMoeda(item.cotacao);
+                const precoTeto = formatarMoeda(item.preco_teto);
 
-                // Lógica do Gatilho: Se o MDI contém o mês atual ou o mês que vem e a margem de segurança for positiva (> 0)
+                // Converter "02", "08" para "Fev, Ago"
+                const mdiFormatado = Array.isArray(item.mdi) 
+                    ? item.mdi.map(m => nomesMeses[m] || m).join(', ') 
+                    : '-';
+
+                // Lógica de Gatilho
                 let isGatilho = false;
                 if (Array.isArray(item.mdi)) {
                     isGatilho = (item.mdi.includes(mesAtual) || item.mdi.includes(mesQueVem)) && (item.margem_seguranca > 0);
                 }
 
                 const badgeGatilho = isGatilho 
-                    ? `<span class="bg-green-100 text-green-800 text-xs font-bold px-2.5 py-1 rounded border border-green-300 shadow-sm animate-pulse">Comprar (Data Com Próxima)</span>`
-                    : `<span class="bg-gray-100 text-gray-500 text-xs font-medium px-2.5 py-1 rounded border border-gray-200">Aguardar / Manter</span>`;
+                    ? `<span class="bg-green-100 text-green-800 text-xs font-bold px-2.5 py-1 rounded border border-green-300 shadow-sm animate-pulse">Data Com Próxima</span>`
+                    : `<span class="bg-gray-100 text-gray-500 text-xs font-medium px-2.5 py-1 rounded border border-gray-200">Aguardar</span>`;
 
                 tr.innerHTML = `
-                    <td class="py-4 px-6 font-medium text-gray-900 group-hover:text-blue-700 transition-colors">${nome}</td>
+                    <td class="py-4 px-6 font-medium text-gray-900 group-hover:text-blue-700 transition-colors sticky left-0 bg-white group-hover:bg-blue-50/50 z-10">${nome}</td>
                     <td class="py-4 px-6">
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-gray-100 text-gray-700 uppercase border border-gray-200">${sigla}</span>
                     </td>
-                    <td class="py-4 px-6 text-center font-mono text-gray-600">${mdiFormatado}</td>
+                    <td class="py-4 px-6 text-center font-medium text-blue-800 bg-blue-50/30">${mdiFormatado}</td>
                     <td class="py-4 px-6 text-center">${badgeGatilho}</td>
                     <td class="py-4 px-6 text-right ${item.margem_seguranca > 0 ? 'text-green-600 font-semibold' : 'text-red-600'}">${margemSeguranca}</td>
                     <td class="py-4 px-6 text-right text-gray-700 font-medium">${dy}</td>
                     <td class="py-4 px-6 text-right ${variacaoColor}">${variacao}</td>
-                    <td class="py-4 px-6 text-right text-gray-700 font-medium">${precoAtual}</td>
-                    <td class="py-4 px-6 text-right text-gray-700 font-medium">${precoTeto}</td>
+                    <td class="py-4 px-6 text-right text-gray-900 font-bold border-l border-gray-100 bg-gray-50/50">${precoAtual}</td>
+                    <td class="py-4 px-6 text-right text-gray-900 font-bold bg-gray-50/50">${precoTeto}</td>
                 `;
                 tableBody.appendChild(tr);
             });
@@ -210,7 +225,6 @@
                 currentSort.direction = 'asc';
             }
 
-            // Atualiza ícones
             sortableColumns.forEach(col => {
                 const el = document.getElementById(`icon-${col}`);
                 if(el) el.innerHTML = '';
@@ -218,12 +232,10 @@
             const iconHtml = currentSort.direction === 'asc' ? '↑' : '↓';
             document.getElementById(`icon-${column}`).innerHTML = iconHtml;
 
-            // Ordenação
             tableData.sort((a, b) => {
                 let valA = a[column];
                 let valB = b[column];
 
-                // Tratamento especial para MDI (arrays) - usa o primeiro mês para ordenar
                 if (column === 'mdi') {
                     valA = Array.isArray(a.mdi) && a.mdi.length > 0 ? a.mdi[0] : '99';
                     valB = Array.isArray(b.mdi) && b.mdi.length > 0 ? b.mdi[0] : '99';
