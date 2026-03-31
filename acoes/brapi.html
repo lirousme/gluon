@@ -8,13 +8,13 @@
         body { margin: 0; font-family: Arial, sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; }
         .card { max-width: 1100px; margin: 0 auto; background: #111827; border: 1px solid #334155; border-radius: 12px; padding: 16px; }
         .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-        input, textarea {
+        input {
             width: 100%; border-radius: 8px; border: 1px solid #475569; background: #020617; color: #e2e8f0;
             padding: 10px; box-sizing: border-box;
         }
-        textarea { min-height: 90px; margin-top: 6px; }
         button { background: #2563eb; border: none; color: #fff; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; }
         button.secondary { background: #334155; }
+        button.danger { background: #dc2626; }
         .hint { color: #94a3b8; font-size: 14px; }
         .pill { display:inline-block; background:#0b1220; border:1px solid #334155; border-radius:999px; padding:4px 10px; font-size: 12px; color:#cbd5e1; }
         .list { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 12px; }
@@ -28,27 +28,35 @@
         .chg-up { color: #22c55e; font-weight: 700; }
         .chg-down { color: #ef4444; font-weight: 700; }
         pre { white-space: pre-wrap; background:#020617; border:1px solid #334155; border-radius:8px; padding: 12px; min-height: 180px; overflow-x:auto; }
+
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(2, 6, 23, .8); display: none;
+            align-items: center; justify-content: center; z-index: 1000; padding: 16px;
+        }
+        .modal {
+            width: min(760px, 100%); max-height: 90vh; overflow: auto;
+            background: #111827; border: 1px solid #334155; border-radius: 12px; padding: 16px;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+        .modal-list { display: grid; gap: 8px; margin-top: 12px; }
+        .modal-item {
+            background: #0b1220; border: 1px solid #334155; border-radius: 8px;
+            padding: 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px;
+        }
+        .muted { color: #94a3b8; font-size: 13px; }
     </style>
 </head>
 <body>
 <div class="card">
     <h1>BRAPI com requisição única</h1>
-    <p class="hint">A lista base vem de <code>./empresas.json</code>. Novos tickers adicionados aqui ficam salvos no navegador e participam da próxima consulta única.</p>
+    <p class="hint">A lista inicial vem de <code>./empresas.json</code>. Você pode gerenciar a lista no modal (máximo de 20 empresas). O sistema fará 1 requisição para todos os tickers.</p>
 
     <div class="row">
-        <span class="pill" id="totais">Empresas: 0</span>
+        <span class="pill" id="totais">Empresas: 0/20</span>
         <span class="pill" id="cacheInfo">Sem cache</span>
         <button id="buscarBtn">Atualizar dados da API (1 requisição)</button>
-        <button id="limparLocalBtn" class="secondary">Limpar empresas locais</button>
-    </div>
-
-    <div style="margin-top:14px;">
-        <label for="novoTicker">Adicionar empresa na lista JSON local (ticker)</label>
-        <div class="row" style="margin-top:6px;">
-            <input id="novoTicker" type="text" placeholder="Ex.: PETR4">
-            <button id="addBtn">Adicionar</button>
-        </div>
-        <p class="hint">Dica: o sistema mantém a lista padrão do arquivo + extras salvos em <code>localStorage</code>.</p>
+        <button id="gerenciarBtn" class="secondary">Gerenciar empresas</button>
+        <button id="resetarBtn" class="secondary">Restaurar lista padrão</button>
     </div>
 
     <h3>Empresas</h3>
@@ -59,8 +67,27 @@
     <pre id="output">-</pre>
 </div>
 
+<div id="modalOverlay" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-header">
+            <h2 id="modalTitle" style="margin:0;">Empresas da carteira</h2>
+            <button id="fecharModalBtn" class="secondary">Fechar</button>
+        </div>
+
+        <div class="row">
+            <input id="novoTicker" type="text" placeholder="Ticker (ex.: PETR4)">
+            <input id="novoNome" type="text" placeholder="Nome (opcional)">
+            <button id="addBtn">Adicionar</button>
+        </div>
+        <p id="modalHint" class="hint">Máximo de 20 empresas na lista.</p>
+
+        <div id="modalLista" class="modal-list"></div>
+    </div>
+</div>
+
 <script>
-    const STORAGE_EXTRA = 'brapi_empresas_extra_v1';
+    const MAX_EMPRESAS = 20;
+    const STORAGE_LISTA = 'brapi_empresas_lista_v2';
     const STORAGE_CACHE = 'brapi_cache_unico_v1';
 
     const listaEl = document.getElementById('lista');
@@ -69,25 +96,44 @@
     const totaisEl = document.getElementById('totais');
     const cacheInfoEl = document.getElementById('cacheInfo');
     const buscarBtn = document.getElementById('buscarBtn');
+    const gerenciarBtn = document.getElementById('gerenciarBtn');
+    const resetarBtn = document.getElementById('resetarBtn');
+
+    const modalOverlay = document.getElementById('modalOverlay');
+    const fecharModalBtn = document.getElementById('fecharModalBtn');
     const addBtn = document.getElementById('addBtn');
     const novoTickerEl = document.getElementById('novoTicker');
-    const limparLocalBtn = document.getElementById('limparLocalBtn');
+    const novoNomeEl = document.getElementById('novoNome');
+    const modalListaEl = document.getElementById('modalLista');
+    const modalHintEl = document.getElementById('modalHint');
 
     let empresas = [];
     let cache = null;
+    let baseEmpresas = [];
 
     const normTicker = (t) => (t || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-    function readExtras() {
-        try {
-            return JSON.parse(localStorage.getItem(STORAGE_EXTRA) || '[]');
-        } catch {
-            return [];
-        }
+    function sanitizeLista(arr) {
+        const map = new Map();
+        (arr || []).forEach((item) => {
+            const ticker = normTicker(item?.ticker);
+            if (!ticker) return;
+            const nome = (item?.nome || '').trim();
+            if (!map.has(ticker)) map.set(ticker, { ticker, nome });
+        });
+        return [...map.values()].slice(0, MAX_EMPRESAS);
     }
 
-    function saveExtras(arr) {
-        localStorage.setItem(STORAGE_EXTRA, JSON.stringify(arr));
+    function saveLista(arr) {
+        localStorage.setItem(STORAGE_LISTA, JSON.stringify(sanitizeLista(arr)));
+    }
+
+    function readListaStorage() {
+        try {
+            return JSON.parse(localStorage.getItem(STORAGE_LISTA) || 'null');
+        } catch {
+            return null;
+        }
     }
 
     function readCache() {
@@ -102,16 +148,31 @@
         sessionStorage.setItem(STORAGE_CACHE, JSON.stringify(data));
     }
 
-    async function loadEmpresas() {
+    async function carregarListaBase() {
         const resp = await fetch('./empresas.json');
         if (!resp.ok) throw new Error(`Falha ao carregar empresas.json (HTTP ${resp.status})`);
         const base = await resp.json();
-        const extras = readExtras();
-        const all = [...base, ...extras].map(i => ({ ...i, ticker: normTicker(i.ticker), nome: i.nome || '' }));
-        const map = new Map();
-        all.forEach(i => { if (i.ticker) map.set(i.ticker, i); });
-        empresas = [...map.values()].sort((a, b) => a.ticker.localeCompare(b.ticker));
-        totaisEl.textContent = `Empresas: ${empresas.length}`;
+        baseEmpresas = sanitizeLista(base);
+        if ((base || []).length > MAX_EMPRESAS) {
+            statusEl.textContent = `empresas.json possui ${(base || []).length} itens; foram carregados apenas os primeiros ${MAX_EMPRESAS}.`;
+        }
+    }
+
+    async function loadEmpresas() {
+        await carregarListaBase();
+        const listaStorage = readListaStorage();
+
+        if (!Array.isArray(listaStorage) || !listaStorage.length) {
+            empresas = [...baseEmpresas];
+            saveLista(empresas);
+        } else {
+            empresas = sanitizeLista(listaStorage);
+            saveLista(empresas);
+        }
+
+        empresas.sort((a, b) => a.ticker.localeCompare(b.ticker));
+        totaisEl.textContent = `Empresas: ${empresas.length}/${MAX_EMPRESAS}`;
+        modalHintEl.textContent = `Máximo de ${MAX_EMPRESAS} empresas na lista. (${empresas.length}/${MAX_EMPRESAS})`;
     }
 
     function getTickerData(ticker) {
@@ -145,6 +206,52 @@
             });
             listaEl.appendChild(div);
         });
+    }
+
+    function renderModalLista() {
+        modalListaEl.innerHTML = '';
+        if (!empresas.length) {
+            modalListaEl.innerHTML = '<div class="muted">Nenhuma empresa na lista.</div>';
+            return;
+        }
+
+        empresas.forEach((emp) => {
+            const row = document.createElement('div');
+            row.className = 'modal-item';
+            row.innerHTML = `
+                <div>
+                    <div class="ticker">${emp.ticker}</div>
+                    <div class="muted">${emp.nome || '-'}</div>
+                </div>
+            `;
+
+            const rmBtn = document.createElement('button');
+            rmBtn.className = 'danger';
+            rmBtn.textContent = 'Remover';
+            rmBtn.addEventListener('click', () => {
+                empresas = empresas.filter((i) => i.ticker !== emp.ticker);
+                saveLista(empresas);
+                loadEmpresas().then(() => {
+                    renderLista();
+                    renderModalLista();
+                    statusEl.textContent = `Ticker ${emp.ticker} removido da lista.`;
+                });
+            });
+
+            row.appendChild(rmBtn);
+            modalListaEl.appendChild(row);
+        });
+    }
+
+    function openModal() {
+        renderModalLista();
+        modalOverlay.style.display = 'flex';
+        modalOverlay.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeModal() {
+        modalOverlay.style.display = 'none';
+        modalOverlay.setAttribute('aria-hidden', 'true');
     }
 
     async function buscarApiUnica() {
@@ -193,26 +300,47 @@
 
     addBtn.addEventListener('click', () => {
         const ticker = normTicker(novoTickerEl.value);
-        if (!ticker) return;
+        const nome = (novoNomeEl.value || '').trim();
+
+        if (!ticker) {
+            statusEl.textContent = 'Informe um ticker válido.';
+            return;
+        }
+        if (empresas.length >= MAX_EMPRESAS) {
+            statusEl.textContent = `Limite atingido: máximo de ${MAX_EMPRESAS} empresas.`;
+            return;
+        }
         const exists = empresas.some(e => e.ticker === ticker);
         if (exists) {
             statusEl.textContent = `Ticker ${ticker} já está na lista.`;
             return;
         }
-        const extras = readExtras();
-        extras.push({ ticker, nome: ticker });
-        saveExtras(extras);
+
+        empresas.push({ ticker, nome: nome || ticker });
+        saveLista(empresas);
         novoTickerEl.value = '';
+        novoNomeEl.value = '';
+
         loadEmpresas().then(() => {
             renderLista();
+            renderModalLista();
             statusEl.textContent = `Ticker ${ticker} adicionado. Clique em "Atualizar dados" para incluir na consulta única.`;
         });
     });
 
-    limparLocalBtn.addEventListener('click', () => {
-        localStorage.removeItem(STORAGE_EXTRA);
-        statusEl.textContent = 'Empresas locais removidas. Mantida apenas a lista do arquivo empresas.json.';
-        loadEmpresas().then(renderLista);
+    gerenciarBtn.addEventListener('click', openModal);
+    fecharModalBtn.addEventListener('click', closeModal);
+    modalOverlay.addEventListener('click', (ev) => {
+        if (ev.target === modalOverlay) closeModal();
+    });
+
+    resetarBtn.addEventListener('click', () => {
+        localStorage.removeItem(STORAGE_LISTA);
+        loadEmpresas().then(() => {
+            renderLista();
+            renderModalLista();
+            statusEl.textContent = 'Lista restaurada a partir do arquivo empresas.json.';
+        });
     });
 
     buscarBtn.addEventListener('click', buscarApiUnica);
