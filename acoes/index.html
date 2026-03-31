@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tabela de Ações</title>
+    <title>Tabela de Ações - Análise de Curto Prazo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Estilos adicionais para scrollbar suave */
         .custom-scrollbar::-webkit-scrollbar {
             height: 8px;
             width: 8px;
@@ -25,15 +24,13 @@
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen p-4 md:p-8 text-gray-800 font-sans">
-    <div class="max-w-5xl mx-auto">
-        <!-- Cabeçalho -->
+    <div class="max-w-7xl mx-auto">
         <div class="bg-white p-6 rounded-t-xl shadow-sm border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold text-gray-800">Meus Ativos</h1>
-                <p class="text-sm text-gray-500 mt-1">Visualize o preço atual e o preço teto das suas empresas.</p>
+                <h1 class="text-2xl font-bold text-gray-800">Meus Ativos - Gatilhos de Curto Prazo</h1>
+                <p class="text-sm text-gray-500 mt-1">Análise de dividendos iminentes (MDI vs Mês Atual), margem de segurança e DY.</p>
             </div>
             
-            <!-- Input de Arquivo -->
             <div class="flex-shrink-0">
                 <label for="jsonFileInput" class="cursor-pointer inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
@@ -43,47 +40,64 @@
             </div>
         </div>
 
-        <!-- Tabela -->
         <div class="bg-white rounded-b-xl shadow-sm overflow-hidden border-t-0">
             <div class="overflow-x-auto custom-scrollbar">
-                <table class="min-w-full text-left border-collapse">
+                <table class="min-w-full text-left border-collapse whitespace-nowrap">
                     <thead>
                         <tr class="bg-gray-50 text-gray-600 text-sm uppercase tracking-wider border-b border-gray-200 select-none">
                             <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group" onclick="sortTable('nome')">
                                 <div class="flex items-center">
-                                    Nome da Empresa
-                                    <span id="icon-nome" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
+                                    Empresa <span id="icon-nome" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
                                 </div>
                             </th>
                             <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group" onclick="sortTable('sigla')">
                                 <div class="flex items-center">
-                                    Sigla da Ação
-                                    <span id="icon-sigla" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
+                                    Sigla <span id="icon-sigla" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
+                                </div>
+                            </th>
+                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-center" onclick="sortTable('mdi')">
+                                <div class="flex items-center justify-center">
+                                    MDI <span id="icon-mdi" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
+                                </div>
+                            </th>
+                            <th scope="col" class="py-4 px-6 font-semibold text-center">
+                                Status Curto Prazo
+                            </th>
+                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right" onclick="sortTable('margem_seguranca')">
+                                <div class="flex items-center justify-end">
+                                    Margem Seg. <span id="icon-margem_seguranca" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
+                                </div>
+                            </th>
+                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right" onclick="sortTable('dy')">
+                                <div class="flex items-center justify-end">
+                                    DY (%) <span id="icon-dy" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
+                                </div>
+                            </th>
+                            <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right" onclick="sortTable('cotacao_variation_percent')">
+                                <div class="flex items-center justify-end">
+                                    Variação <span id="icon-cotacao_variation_percent" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
                                 </div>
                             </th>
                             <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right" onclick="sortTable('cotacao')">
                                 <div class="flex items-center justify-end">
-                                    Preço Atual
-                                    <span id="icon-cotacao" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
+                                    Preço Atual <span id="icon-cotacao" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
                                 </div>
                             </th>
                             <th scope="col" class="py-4 px-6 font-semibold cursor-pointer hover:bg-gray-200 transition-colors group text-right" onclick="sortTable('preco_teto')">
                                 <div class="flex items-center justify-end">
-                                    Preço Teto
-                                    <span id="icon-preco_teto" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
+                                    Preço Teto <span id="icon-preco_teto" class="ml-1 text-gray-400 group-hover:text-gray-600 font-bold"></span>
                                 </div>
                             </th>
                         </tr>
                     </thead>
                     <tbody id="tableBody" class="divide-y divide-gray-100 text-sm">
-                        <!-- Estado de Carregamento Inicial -->
                         <tr id="loadingState">
-                            <td colspan="4" class="py-8 px-6 text-center text-gray-500 flex justify-center items-center gap-2">
+                            <td colspan="9" class="py-8 px-6 text-center text-gray-500 flex justify-center items-center gap-2">
                                 <svg class="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
-                                Carregando dados padrão (acoes.json)...
+                                Carregando dados padrão...
                             </td>
                         </tr>
                     </tbody>
@@ -93,56 +107,53 @@
     </div>
 
     <script>
-        // Variáveis globais para armazenar os dados e o estado da ordenação
         let tableData = [];
         let currentSort = { column: null, direction: 'asc' };
+        
+        // Colunas disponíveis para ordenação
+        const sortableColumns = ['nome', 'sigla', 'mdi', 'margem_seguranca', 'dy', 'cotacao_variation_percent', 'cotacao', 'preco_teto'];
 
-        // Tenta carregar o arquivo padrão ao iniciar a página
+        // Lógica de Datas para o Gatilho
+        const hoje = new Date();
+        const mesAtual = String(hoje.getMonth() + 1).padStart(2, '0');
+        const mesQueVem = String((hoje.getMonth() + 1) % 12 + 1).padStart(2, '0');
+
         document.addEventListener('DOMContentLoaded', () => {
             fetch('acoes.json')
                 .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Arquivo padrão não encontrado.');
-                    }
+                    if (!response.ok) throw new Error('Arquivo padrão não encontrado.');
                     return response.json();
                 })
                 .then(json => {
-                    tableData = json.dados || [];
+                    tableData = json.dados || json || [];
                     renderTable(tableData);
                 })
                 .catch(error => {
-                    console.warn(error);
-                    const tableBody = document.getElementById('tableBody');
-                    tableBody.innerHTML = `
+                    document.getElementById('tableBody').innerHTML = `
                         <tr>
-                            <td colspan="4" class="py-8 px-6 text-center text-gray-400 italic">
-                                Arquivo padrão "acoes.json" não encontrado. Utilize o botão acima para carregar o seu arquivo JSON.
+                            <td colspan="9" class="py-8 px-6 text-center text-gray-400 italic">
+                                Arquivo não encontrado. Utilize o botão acima para carregar o seu JSON.
                             </td>
                         </tr>`;
                 });
         });
 
-        // Função para formatar valores monetários
         function formatarMoeda(valor) {
             if (valor === null || valor === undefined || isNaN(valor)) return '-';
-            return new Intl.NumberFormat('pt-BR', { 
-                style: 'currency', 
-                currency: 'BRL' 
-            }).format(valor);
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
         }
 
-        // Função para renderizar a tabela com base no array
+        function formatarPercentual(valor) {
+            if (valor === null || valor === undefined || isNaN(valor)) return '-';
+            return parseFloat(valor).toFixed(2) + '%';
+        }
+
         function renderTable(dados) {
             const tableBody = document.getElementById('tableBody');
             tableBody.innerHTML = '';
 
             if (dados.length === 0) {
-                tableBody.innerHTML = `
-                    <tr>
-                        <td colspan="4" class="py-8 px-6 text-center text-gray-500">
-                            Nenhum dado encontrado no arquivo.
-                        </td>
-                    </tr>`;
+                tableBody.innerHTML = `<tr><td colspan="9" class="py-8 px-6 text-center text-gray-500">Nenhum dado encontrado.</td></tr>`;
                 return;
             }
 
@@ -154,32 +165,44 @@
                 const sigla = item.sigla || '-';
                 const precoAtual = formatarMoeda(item.cotacao);
                 const precoTeto = formatarMoeda(item.preco_teto);
+                
+                // Novos Campos
+                const margemSeguranca = formatarPercentual(item.margem_seguranca);
+                const dy = formatarPercentual(item.dy);
+                const variacao = formatarPercentual(item.cotacao_variation_percent);
+                const variacaoColor = item.cotacao_variation_percent < 0 ? 'text-red-500 font-semibold' : 'text-green-500 font-semibold';
+                const mdiFormatado = Array.isArray(item.mdi) ? item.mdi.join(', ') : '-';
+
+                // Lógica do Gatilho: Se o MDI contém o mês atual ou o mês que vem e a margem de segurança for positiva (> 0)
+                let isGatilho = false;
+                if (Array.isArray(item.mdi)) {
+                    isGatilho = (item.mdi.includes(mesAtual) || item.mdi.includes(mesQueVem)) && (item.margem_seguranca > 0);
+                }
+
+                const badgeGatilho = isGatilho 
+                    ? `<span class="bg-green-100 text-green-800 text-xs font-bold px-2.5 py-1 rounded border border-green-300 shadow-sm animate-pulse">Comprar (Data Com Próxima)</span>`
+                    : `<span class="bg-gray-100 text-gray-500 text-xs font-medium px-2.5 py-1 rounded border border-gray-200">Aguardar / Manter</span>`;
 
                 tr.innerHTML = `
-                    <td class="py-4 px-6 font-medium text-gray-900 group-hover:text-blue-700 transition-colors">
-                        ${nome}
-                    </td>
+                    <td class="py-4 px-6 font-medium text-gray-900 group-hover:text-blue-700 transition-colors">${nome}</td>
                     <td class="py-4 px-6">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-gray-100 text-gray-700 uppercase border border-gray-200">
-                            ${sigla}
-                        </span>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-gray-100 text-gray-700 uppercase border border-gray-200">${sigla}</span>
                     </td>
-                    <td class="py-4 px-6 text-right text-gray-700 font-medium">
-                        ${precoAtual}
-                    </td>
-                    <td class="py-4 px-6 text-right text-gray-700 font-medium">
-                        ${precoTeto}
-                    </td>
+                    <td class="py-4 px-6 text-center font-mono text-gray-600">${mdiFormatado}</td>
+                    <td class="py-4 px-6 text-center">${badgeGatilho}</td>
+                    <td class="py-4 px-6 text-right ${item.margem_seguranca > 0 ? 'text-green-600 font-semibold' : 'text-red-600'}">${margemSeguranca}</td>
+                    <td class="py-4 px-6 text-right text-gray-700 font-medium">${dy}</td>
+                    <td class="py-4 px-6 text-right ${variacaoColor}">${variacao}</td>
+                    <td class="py-4 px-6 text-right text-gray-700 font-medium">${precoAtual}</td>
+                    <td class="py-4 px-6 text-right text-gray-700 font-medium">${precoTeto}</td>
                 `;
                 tableBody.appendChild(tr);
             });
         }
 
-        // Função de ordenação
         function sortTable(column) {
             if (tableData.length === 0) return;
 
-            // Inverte a direção se for a mesma coluna, senão default é 'asc'
             if (currentSort.column === column) {
                 currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
             } else {
@@ -187,23 +210,28 @@
                 currentSort.direction = 'asc';
             }
 
-            // Atualiza visual dos ícones nas colunas (setas)
-            ['nome', 'sigla', 'cotacao', 'preco_teto'].forEach(col => {
-                document.getElementById(`icon-${col}`).innerHTML = '';
+            // Atualiza ícones
+            sortableColumns.forEach(col => {
+                const el = document.getElementById(`icon-${col}`);
+                if(el) el.innerHTML = '';
             });
             const iconHtml = currentSort.direction === 'asc' ? '↑' : '↓';
             document.getElementById(`icon-${column}`).innerHTML = iconHtml;
 
-            // Lógica de ordenação do array em memória
+            // Ordenação
             tableData.sort((a, b) => {
                 let valA = a[column];
                 let valB = b[column];
 
-                // Tratamento para nulos (ficam no final)
+                // Tratamento especial para MDI (arrays) - usa o primeiro mês para ordenar
+                if (column === 'mdi') {
+                    valA = Array.isArray(a.mdi) && a.mdi.length > 0 ? a.mdi[0] : '99';
+                    valB = Array.isArray(b.mdi) && b.mdi.length > 0 ? b.mdi[0] : '99';
+                }
+
                 if (valA === null || valA === undefined) valA = currentSort.direction === 'asc' ? Infinity : -Infinity;
                 if (valB === null || valB === undefined) valB = currentSort.direction === 'asc' ? Infinity : -Infinity;
 
-                // Força minúsculo para strings (ordem alfabética)
                 if (typeof valA === 'string') valA = valA.toLowerCase();
                 if (typeof valB === 'string') valB = valB.toLowerCase();
 
@@ -212,39 +240,32 @@
                 return 0;
             });
 
-            // Re-renderiza a tabela ordenada
             renderTable(tableData);
         }
 
-        // Event listener para o carregamento do arquivo via input
         document.getElementById('jsonFileInput').addEventListener('change', function(event) {
             const file = event.target.files[0];
             if (!file) return;
 
             const reader = new FileReader();
-            
             reader.onload = function(e) {
                 try {
                     const json = JSON.parse(e.target.result);
-                    tableData = json.dados || [];
+                    tableData = json.dados || json || [];
                     
-                    // Reseta os estados de ordenação visual ao carregar novo arquivo
                     currentSort = { column: null, direction: 'asc' };
-                    ['nome', 'sigla', 'cotacao', 'preco_teto'].forEach(col => {
+                    sortableColumns.forEach(col => {
                         const iconEl = document.getElementById(`icon-${col}`);
                         if(iconEl) iconEl.innerHTML = '';
                     });
 
                     renderTable(tableData);
                 } catch (error) {
-                    alert('Erro ao processar o arquivo. Certifique-se de que é um JSON válido e possui a mesma estrutura esperada.');
+                    alert('Erro ao processar o arquivo. Verifique o console.');
                     console.error('Erro de parsing:', error);
                 }
             };
-
             reader.readAsText(file);
-            
-            // Resetar o input
             event.target.value = '';
         });
     </script>
