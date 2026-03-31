@@ -42,9 +42,12 @@
       </div>
     </section>
 
-    <section id="editorBox" class="hidden bg-slate-900 border border-slate-700 rounded-xl p-4">
-      <label class="text-sm text-slate-300">Edição rápida JSON (array de slides):</label>
-      <textarea id="slidesJson" class="w-full h-64 mt-2 p-3 rounded bg-slate-800 border border-slate-600 text-xs"></textarea>
+    <section id="editorBox" class="hidden bg-slate-900 border border-slate-700 rounded-xl p-4 space-y-3">
+      <p class="text-sm text-slate-300">Editor do slide atual (sem JSON bruto na tela).</p>
+      <label class="block text-xs text-slate-400" for="slideTitleInput">Título</label>
+      <input id="slideTitleInput" class="w-full p-2 rounded bg-slate-800 border border-slate-600 text-sm" type="text" />
+      <label class="block text-xs text-slate-400" for="slideBodyInput">Conteúdo</label>
+      <textarea id="slideBodyInput" class="w-full h-44 p-3 rounded bg-slate-800 border border-slate-600 text-sm"></textarea>
     </section>
   </main>
 
@@ -70,6 +73,10 @@ function renderSlide() {
     document.getElementById('slideTitle').textContent = 'Sem conteúdo de slide ainda';
     document.getElementById('slideBody').textContent = 'Se você for o criador da trilha, use "Gerar slides com GPT".';
     document.getElementById('slideCounter').textContent = '0/0';
+    if (isOwner) {
+      document.getElementById('slideTitleInput').value = '';
+      document.getElementById('slideBodyInput').value = '';
+    }
     return;
   }
   idx = Math.max(0, Math.min(idx, slides.length - 1));
@@ -78,7 +85,8 @@ function renderSlide() {
   document.getElementById('slideBody').textContent = `${s.body}`;
   document.getElementById('slideCounter').textContent = `${idx + 1}/${slides.length}`;
   if (isOwner) {
-    document.getElementById('slidesJson').value = JSON.stringify(slides, null, 2);
+    document.getElementById('slideTitleInput').value = s.title || '';
+    document.getElementById('slideBodyInput').value = s.body || '';
   }
 }
 
@@ -126,15 +134,18 @@ document.getElementById('btnGenerateSlides').onclick = async () => {
 
 document.getElementById('btnSaveSlides').onclick = async () => {
   if (!isOwner) return;
-  let parsed;
-  try {
-    parsed = JSON.parse(document.getElementById('slidesJson').value || '[]');
-  } catch {
-    return alert('JSON inválido.');
+  if (!slides.length) {
+    return alert('Não há slides para salvar.');
   }
-  const res = await api('save_phase_content', { directory_id: trackId, node_id: nodeId, slides: parsed });
+
+  slides[idx] = {
+    ...slides[idx],
+    title: document.getElementById('slideTitleInput').value.trim(),
+    body: document.getElementById('slideBodyInput').value.trim()
+  };
+
+  const res = await api('save_phase_content', { directory_id: trackId, node_id: nodeId, slides });
   if (res.status !== 'success') return alert(res.message || 'Erro ao salvar slides.');
-  slides = parsed;
   idx = 0;
   renderSlide();
   alert('Slides salvos.');
