@@ -137,8 +137,6 @@
             { key: 'nome', label: 'Empresa', type: 'string', sticky: true },
             { key: 'short_term_score', label: 'Score CP', type: 'number', helper: 'Indicador calculado para curto prazo' },
             { key: 'short_term_signal', label: 'Status Curto Prazo', type: 'string' },
-            { key: 'id', label: 'ID', type: 'number' },
-            { key: 'imagem', label: 'Imagem', type: 'image' },
             { key: 'sigla', label: 'Sigla', type: 'string' },
             { key: 'setor', label: 'Setor', type: 'string' },
             { key: 'is_previdenciaria', label: 'Previdenciária', type: 'boolean-number' },
@@ -331,7 +329,7 @@
 
                 tr.innerHTML = columnConfig.map((col, idx) => {
                     const rawValue = item[col.key];
-                    const formatted = formatValue(rawValue, col.type, item);
+                    const formatted = formatValue(rawValue, col.type, item, col.key);
                     const textAlign = idx > 1 ? 'text-right' : '';
                     const sticky = col.sticky ? 'sticky left-0 z-10 bg-white group-hover:bg-blue-50 shadow-[1px_0_0_0_#f3f4f6]' : '';
                     const emphasis = col.key === 'short_term_score' ? 'font-bold text-indigo-700' : '';
@@ -344,7 +342,7 @@
             updateFixedScrollbarWidth();
         }
 
-        function formatValue(value, type, item) {
+        function formatValue(value, type, item, key) {
             if (value === null || value === undefined || value === '') return '-';
 
             if (type === 'currency') {
@@ -356,6 +354,9 @@
             }
 
             if (type === 'number') {
+                if (key === 'short_term_score') {
+                    return formatarScore(value);
+                }
                 return Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 4 });
             }
 
@@ -380,6 +381,22 @@
             }
 
             return String(value);
+        }
+
+        function formatarScore(valor) {
+            const textoOriginal = String(valor);
+            const apenasDigitos = textoOriginal.replace(/\D/g, '');
+
+            if (apenasDigitos.length > 6) {
+                return `${apenasDigitos.slice(0, 6)}...`;
+            }
+
+            const numero = Number(valor);
+            if (!Number.isFinite(numero)) {
+                return textoOriginal;
+            }
+
+            return numero.toLocaleString('pt-BR', { maximumFractionDigits: 4 });
         }
 
         function formatarMoeda(valor) {
