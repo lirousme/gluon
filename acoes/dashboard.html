@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard de Análise da Ação (cache BRAPI)</title>
+    <title>Dashboard de Análise da Ação (snapshot BRAPI)</title>
     <style>
         :root {
             --bg: #0b1220;
@@ -168,7 +168,7 @@
                 <h1 id="nomeAcao" class="title">Carregando...</h1>
                 <p id="setorIndustria" class="sub">Aguardando dados da consulta única feita em brapi.html</p>
             </div>
-            <div id="atualizadoEm" class="badge">Fonte: cache da requisição única</div>
+            <div id="atualizadoEm" class="badge">Fonte: JSON da requisição única</div>
         </section>
 
         <section class="card">
@@ -307,12 +307,13 @@
             return (qs.get('ticker') || '').trim().toUpperCase();
         }
 
-        function readCache() {
-            try {
-                return JSON.parse(localStorage.getItem('brapi_cache_unico_v2') || 'null');
-            } catch {
-                return null;
+        async function readCache() {
+            const resp = await fetch('../api/brapi_snapshot.php', { cache: 'no-store' });
+            const data = await resp.json();
+            if (!resp.ok || data?.status !== 'ok') {
+                throw new Error(data?.message || `Falha ao carregar snapshot (HTTP ${resp.status})`);
             }
+            return data.snapshot || null;
         }
 
         async function init() {
@@ -321,8 +322,8 @@
                 const ticker = tickerFromUrl();
                 if (!ticker) throw new Error('Ticker ausente na URL. Volte para brapi.html e clique em uma empresa.');
 
-                const cache = readCache();
-                if (!cache?.resultsByTicker) throw new Error('Cache da requisição única não encontrado. Abra brapi.html e clique em "Atualizar dados da API".');
+                const cache = await readCache();
+                if (!cache?.resultsByTicker) throw new Error('Snapshot da requisição única não encontrado. Abra brapi.html e clique em "Atualizar dados da API".');
 
                 const acao = cache.resultsByTicker[ticker];
                 if (!acao) throw new Error(`Ticker ${ticker} não está no cache atual. Atualize os dados em brapi.html.`);
