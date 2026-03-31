@@ -3,121 +3,236 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Consulta BRAPI (única requisição)</title>
+    <title>Carteira BRAPI (requisição única)</title>
     <style>
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background: #0f172a;
-            color: #e2e8f0;
-            padding: 24px;
+        body { margin: 0; font-family: Arial, sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; }
+        .card { max-width: 1100px; margin: 0 auto; background: #111827; border: 1px solid #334155; border-radius: 12px; padding: 16px; }
+        .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+        input, textarea {
+            width: 100%; border-radius: 8px; border: 1px solid #475569; background: #020617; color: #e2e8f0;
+            padding: 10px; box-sizing: border-box;
         }
-        .card {
-            max-width: 1000px;
-            margin: 0 auto;
-            background: #111827;
-            border: 1px solid #334155;
-            border-radius: 12px;
-            padding: 16px;
+        textarea { min-height: 90px; margin-top: 6px; }
+        button { background: #2563eb; border: none; color: #fff; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        button.secondary { background: #334155; }
+        .hint { color: #94a3b8; font-size: 14px; }
+        .pill { display:inline-block; background:#0b1220; border:1px solid #334155; border-radius:999px; padding:4px 10px; font-size: 12px; color:#cbd5e1; }
+        .list { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 12px; }
+        .item {
+            background: #0b1220; border: 1px solid #334155; border-radius: 10px; padding: 12px; cursor: pointer;
+            display:flex; justify-content:space-between; align-items:center;
         }
-        textarea {
-            width: 100%;
-            min-height: 90px;
-            border-radius: 8px;
-            border: 1px solid #475569;
-            background: #020617;
-            color: #e2e8f0;
-            padding: 10px;
-            box-sizing: border-box;
-            margin: 8px 0;
-        }
-        button {
-            background: #2563eb;
-            border: none;
-            color: #fff;
-            padding: 10px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-        pre {
-            white-space: pre-wrap;
-            background: #020617;
-            border: 1px solid #334155;
-            border-radius: 8px;
-            padding: 12px;
-            overflow-x: auto;
-            min-height: 240px;
-        }
-        .hint {
-            color: #94a3b8;
-            font-size: 14px;
-        }
-        .check-wrap {
-            margin: 10px 0;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
+        .item:hover { border-color: #60a5fa; }
+        .ticker { font-weight: 700; }
+        .name { color: #94a3b8; font-size: 13px; margin-top: 2px; }
+        .chg-up { color: #22c55e; font-weight: 700; }
+        .chg-down { color: #ef4444; font-weight: 700; }
+        pre { white-space: pre-wrap; background:#020617; border:1px solid #334155; border-radius:8px; padding: 12px; min-height: 180px; overflow-x:auto; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h1>BRAPI em única requisição</h1>
-        <p class="hint">Esta página usa <code>../api/brapi_quotes.php</code>, que lê <code>TOKEN_BRAPI</code> do seu <code>.env</code> no servidor. O token não fica exposto no navegador.</p>
+<div class="card">
+    <h1>BRAPI com requisição única</h1>
+    <p class="hint">A lista base vem de <code>./empresas.json</code>. Novos tickers adicionados aqui ficam salvos no navegador e participam da próxima consulta única.</p>
 
-        <label for="tickers">Tickers (separados por vírgula):</label>
-        <textarea id="tickers">LEVE3,BBSE3,BRAP3,ITSA3,ITSA4,WIZC3,BRSR6,BRAP4,SANB11,ITUB3,ITUB4,TAEE3,TAEE11,ODPV3,TAEE4,TIMS3,BBDC3,VIVT3,CPFE3,BRSR3,B3SA3,ABCB4,BRSR5,CXSE3,BBDC4,FLRY3,VALE3,ISAE4,CMIG4,PSSA3,ABEV3,CPLE11,ISAE3,SANB4,UNIP6,UNIP3,HYPE3,KLBN11,BBAS3,UNIP5,SANB3,BMEB3,SAPR11,MYPK3,TUPY3,SLCE3,BMEB4,KLBN3,KLBN4,EGIE3,SAPR4,CMIG3,BPAC5,ALUP11,UGPA3,AURE3,SAPR3,BPAC11,VBBR3,ALUP4,NEOE3,SBSP3,ALUP3,ENGI11,CSMG3,ENGI4,EQTL3,ENGI3,MEGA3,BPAC3,AESB3,SRNA3,CCRO3,FESA3,FESA4,CLSC3,CPLE3,ROMI3,CGAS3,CGAS5,CLSC4,BRIV3,BRIV4</textarea>
-
-        <label class="check-wrap" for="allData">
-            <input id="allData" type="checkbox" checked>
-            Trazer tudo (cotação + fundamental + dividendos + módulos avançados)
-        </label>
-
-        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-            <button id="buscarBtn">Buscar em 1 requisição</button>
-            <a href="./dashboard.html" style="display:inline-block; background:#0ea5e9; color:#fff; text-decoration:none; padding:10px 16px; border-radius:8px; font-weight:600;">Abrir dashboard local (JSON teste)</a>
-        </div>
-        <p class="hint" id="status">Pronto para consultar.</p>
-
-        <pre id="output">Clique em "Buscar em 1 requisição" para ver o retorno da API em texto.</pre>
+    <div class="row">
+        <span class="pill" id="totais">Empresas: 0</span>
+        <span class="pill" id="cacheInfo">Sem cache</span>
+        <button id="buscarBtn">Atualizar dados da API (1 requisição)</button>
+        <button id="limparLocalBtn" class="secondary">Limpar empresas locais</button>
     </div>
 
-    <script>
-        const buscarBtn = document.getElementById('buscarBtn');
-        const tickersEl = document.getElementById('tickers');
-        const allDataEl = document.getElementById('allData');
-        const outputEl = document.getElementById('output');
-        const statusEl = document.getElementById('status');
+    <div style="margin-top:14px;">
+        <label for="novoTicker">Adicionar empresa na lista JSON local (ticker)</label>
+        <div class="row" style="margin-top:6px;">
+            <input id="novoTicker" type="text" placeholder="Ex.: PETR4">
+            <button id="addBtn">Adicionar</button>
+        </div>
+        <p class="hint">Dica: o sistema mantém a lista padrão do arquivo + extras salvos em <code>localStorage</code>.</p>
+    </div>
 
-        async function buscar() {
-            const tickers = tickersEl.value.trim();
-            if (!tickers) {
-                statusEl.textContent = 'Informe os tickers.';
-                return;
-            }
+    <h3>Empresas</h3>
+    <div id="lista" class="list"></div>
 
-            statusEl.textContent = 'Consultando...';
-            outputEl.textContent = 'Aguarde...';
+    <h3>Retorno da última consulta</h3>
+    <p class="hint" id="status">Carregando lista inicial...</p>
+    <pre id="output">-</pre>
+</div>
 
-            try {
-                const query = new URLSearchParams({
-                    tickers,
-                    all_data: allDataEl.checked ? '1' : '0'
-                });
+<script>
+    const STORAGE_EXTRA = 'brapi_empresas_extra_v1';
+    const STORAGE_CACHE = 'brapi_cache_unico_v1';
 
-                const resp = await fetch(`../api/brapi_quotes.php?${query.toString()}`);
-                const data = await resp.json();
+    const listaEl = document.getElementById('lista');
+    const outputEl = document.getElementById('output');
+    const statusEl = document.getElementById('status');
+    const totaisEl = document.getElementById('totais');
+    const cacheInfoEl = document.getElementById('cacheInfo');
+    const buscarBtn = document.getElementById('buscarBtn');
+    const addBtn = document.getElementById('addBtn');
+    const novoTickerEl = document.getElementById('novoTicker');
+    const limparLocalBtn = document.getElementById('limparLocalBtn');
 
-                statusEl.textContent = `HTTP ${resp.status} | Tickers enviados: ${(data.tickers_requested || []).length} | Requisições usadas: ${data.request_count || 0} | Tudo ativo: ${data.all_data ? 'sim' : 'não'}`;
-                outputEl.textContent = JSON.stringify(data, null, 2);
-            } catch (err) {
-                statusEl.textContent = 'Erro ao consultar a API.';
-                outputEl.textContent = String(err);
-            }
+    let empresas = [];
+    let cache = null;
+
+    const normTicker = (t) => (t || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+    function readExtras() {
+        try {
+            return JSON.parse(localStorage.getItem(STORAGE_EXTRA) || '[]');
+        } catch {
+            return [];
+        }
+    }
+
+    function saveExtras(arr) {
+        localStorage.setItem(STORAGE_EXTRA, JSON.stringify(arr));
+    }
+
+    function readCache() {
+        try {
+            return JSON.parse(sessionStorage.getItem(STORAGE_CACHE) || 'null');
+        } catch {
+            return null;
+        }
+    }
+
+    function saveCache(data) {
+        sessionStorage.setItem(STORAGE_CACHE, JSON.stringify(data));
+    }
+
+    async function loadEmpresas() {
+        const resp = await fetch('./empresas.json');
+        if (!resp.ok) throw new Error(`Falha ao carregar empresas.json (HTTP ${resp.status})`);
+        const base = await resp.json();
+        const extras = readExtras();
+        const all = [...base, ...extras].map(i => ({ ...i, ticker: normTicker(i.ticker), nome: i.nome || '' }));
+        const map = new Map();
+        all.forEach(i => { if (i.ticker) map.set(i.ticker, i); });
+        empresas = [...map.values()].sort((a, b) => a.ticker.localeCompare(b.ticker));
+        totaisEl.textContent = `Empresas: ${empresas.length}`;
+    }
+
+    function getTickerData(ticker) {
+        return cache?.resultsByTicker?.[ticker] || null;
+    }
+
+    function renderLista() {
+        listaEl.innerHTML = '';
+        if (!empresas.length) {
+            listaEl.innerHTML = '<div class="hint">Nenhuma empresa cadastrada.</div>';
+            return;
         }
 
-        buscarBtn.addEventListener('click', buscar);
-    </script>
+        empresas.forEach(emp => {
+            const result = getTickerData(emp.ticker);
+            const chg = Number(result?.regularMarketChangePercent || 0);
+            const cls = chg >= 0 ? 'chg-up' : 'chg-down';
+            const label = result ? `${chg.toFixed(2)}%` : 'sem cotação';
+
+            const div = document.createElement('div');
+            div.className = 'item';
+            div.innerHTML = `
+                <div>
+                    <div class="ticker">${emp.ticker}</div>
+                    <div class="name">${emp.nome || (result?.shortName || result?.longName || 'Sem nome')}</div>
+                </div>
+                <div class="${cls}">${label}</div>
+            `;
+            div.addEventListener('click', () => {
+                window.location.href = `./dashboard.html?ticker=${encodeURIComponent(emp.ticker)}`;
+            });
+            listaEl.appendChild(div);
+        });
+    }
+
+    async function buscarApiUnica() {
+        const tickers = empresas.map(e => e.ticker).filter(Boolean);
+        if (!tickers.length) {
+            statusEl.textContent = 'Cadastre ao menos um ticker.';
+            return;
+        }
+
+        statusEl.textContent = 'Consultando API...';
+        outputEl.textContent = 'Aguarde...';
+        try {
+            const query = new URLSearchParams({ tickers: tickers.join(','), all_data: '1' });
+            const resp = await fetch(`../api/brapi_quotes.php?${query.toString()}`);
+            const data = await resp.json();
+
+            const results = data?.brapi?.results || [];
+            const resultsByTicker = {};
+            results.forEach(item => {
+                const t = normTicker(item?.symbol);
+                if (t) resultsByTicker[t] = item;
+            });
+
+            cache = {
+                fetchedAt: new Date().toISOString(),
+                tickers,
+                requestMeta: {
+                    status: resp.status,
+                    requestCount: data?.request_count || 0,
+                    allData: Boolean(data?.all_data)
+                },
+                raw: data,
+                resultsByTicker
+            };
+            saveCache(cache);
+
+            statusEl.textContent = `Atualizado: HTTP ${resp.status} • ${Object.keys(resultsByTicker).length}/${tickers.length} empresas com dados.`;
+            outputEl.textContent = JSON.stringify(data, null, 2);
+            cacheInfoEl.textContent = `Cache: ${new Date(cache.fetchedAt).toLocaleString('pt-BR')}`;
+            renderLista();
+        } catch (err) {
+            statusEl.textContent = 'Erro ao consultar API.';
+            outputEl.textContent = String(err);
+        }
+    }
+
+    addBtn.addEventListener('click', () => {
+        const ticker = normTicker(novoTickerEl.value);
+        if (!ticker) return;
+        const exists = empresas.some(e => e.ticker === ticker);
+        if (exists) {
+            statusEl.textContent = `Ticker ${ticker} já está na lista.`;
+            return;
+        }
+        const extras = readExtras();
+        extras.push({ ticker, nome: ticker });
+        saveExtras(extras);
+        novoTickerEl.value = '';
+        loadEmpresas().then(() => {
+            renderLista();
+            statusEl.textContent = `Ticker ${ticker} adicionado. Clique em "Atualizar dados" para incluir na consulta única.`;
+        });
+    });
+
+    limparLocalBtn.addEventListener('click', () => {
+        localStorage.removeItem(STORAGE_EXTRA);
+        statusEl.textContent = 'Empresas locais removidas. Mantida apenas a lista do arquivo empresas.json.';
+        loadEmpresas().then(renderLista);
+    });
+
+    buscarBtn.addEventListener('click', buscarApiUnica);
+
+    (async function init() {
+        try {
+            await loadEmpresas();
+            cache = readCache();
+            if (cache?.fetchedAt) {
+                cacheInfoEl.textContent = `Cache: ${new Date(cache.fetchedAt).toLocaleString('pt-BR')}`;
+                outputEl.textContent = JSON.stringify(cache.raw, null, 2);
+                statusEl.textContent = 'Lista carregada com cache existente. Você pode atualizar para buscar dados novos.';
+            } else {
+                statusEl.textContent = 'Lista carregada. Clique em "Atualizar dados" para fazer a requisição única.';
+            }
+            renderLista();
+        } catch (e) {
+            statusEl.textContent = `Erro inicial: ${e.message}`;
+        }
+    })();
+</script>
 </body>
 </html>
