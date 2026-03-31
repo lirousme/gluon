@@ -279,6 +279,11 @@
             tbody.appendChild(row);
         }
 
+        function statusTag(text, kind) {
+            const color = kind === 'ok' ? '#22c55e' : kind === 'warn' ? '#f59e0b' : '#ef4444';
+            return `<span style="color:${color};font-weight:600">${text}</span>`;
+        }
+
         function addBar(containerId, label, percent, valueLabel) {
             const container = document.getElementById(containerId);
             const row = document.createElement('div');
@@ -350,6 +355,10 @@
                 const inventory = num(balanceNow.inventory);
                 const netIncome = num(incomeNow.netIncome);
                 const operatingCashFlow = num(cashNow.operatingCashFlow || fin.operatingCashflow);
+                const netReceivables = num(balanceNow.netReceivables);
+                const shareholdersEquity = num(balanceNow.totalStockholderEquity || balanceNow.shareholderEquity);
+                const totalLiabPrev = num(balancePrev.totalLiab);
+                const equityPrev = num(balancePrev.totalStockholderEquity || balancePrev.shareholderEquity);
                 const sharesOutstanding = num(stats.impliedSharesOutstanding || divide(marketCap, priceNow));
                 const high52 = num(acao.fiftyTwoWeekHigh);
                 const volume = num(acao.regularMarketVolume);
@@ -372,6 +381,61 @@
                 const qualidadeLucro = divide(operatingCashFlow, netIncome);
                 const valorGerado = divide(marketCap, totalAssetsNow);
                 const scoreFinal = oportunidade * 0.4 + qualidadeBarata * 0.3 + scoreEstabilidade * 0.3;
+
+                const liquidezCorrente = divide(totalCurrentAssets, currentLiabilities);
+                const liquidezSeca = divide(cash + shortTermInvestments + netReceivables, currentLiabilities);
+                const dividaTotalRatio = divide(totalLiab, totalAssetsNow);
+                const debtToEquity = divide(totalLiab, shareholdersEquity);
+                const qualidadeAtivo = divide(cash + netReceivables, totalAssetsNow);
+                const pesoEstoque = divide(inventory, totalAssetsNow);
+                const pressaoCurtoPrazo = divide(currentLiabilities, totalLiab);
+                const cashToDebt = divide(cash, totalLiab);
+                const growthDebt = divide(totalLiab - totalLiabPrev, totalLiabPrev);
+                const growthEquity = divide(shareholdersEquity - equityPrev, equityPrev);
+                const melhoraReal = crescimentoAtivos - growthDebt;
+
+                let scoreChecklist = 0;
+                if (liquidezCorrente > 1.5) scoreChecklist += 1;
+                if (liquidezSeca > 1) scoreChecklist += 1;
+                if (dividaTotalRatio < 0.6) scoreChecklist += 1;
+                if (debtToEquity < 1.5) scoreChecklist += 1;
+                if (cashToDebt > 0.2) scoreChecklist += 1;
+                if (growthDebt < growthEquity) scoreChecklist += 1;
+                if (qualidadeAtivo > 0.3) scoreChecklist += 1;
+
+                const scoreChecklistTxt = scoreChecklist >= 6
+                    ? `${scoreChecklist}/7 • ${statusTag('Empresa saudável', 'ok')}`
+                    : scoreChecklist >= 4
+                        ? `${scoreChecklist}/7 • ${statusTag('OK, analisar melhor', 'warn')}`
+                        : `${scoreChecklist}/7 • ${statusTag('Risco alto', 'bad')}`;
+                const liquidezCorrenteTxt = liquidezCorrente > 1.5
+                    ? `${fmtRatio(liquidezCorrente)} • ${statusTag('saudável', 'ok')}`
+                    : liquidezCorrente >= 1
+                        ? `${fmtRatio(liquidezCorrente)} • ${statusTag('atenção', 'warn')}`
+                        : `${fmtRatio(liquidezCorrente)} • ${statusTag('risco', 'bad')}`;
+                const alavancagemTxt = dividaTotalRatio < 0.5
+                    ? `${fmtRatio(dividaTotalRatio)} • ${statusTag('conservadora', 'ok')}`
+                    : dividaTotalRatio <= 0.7
+                        ? `${fmtRatio(dividaTotalRatio)} • ${statusTag('ok', 'warn')}`
+                        : `${fmtRatio(dividaTotalRatio)} • ${statusTag('alavancada', 'bad')}`;
+                const cashDebtTxt = cashToDebt > 0.3
+                    ? `${fmtRatio(cashToDebt)} • ${statusTag('confortável', 'ok')}`
+                    : cashToDebt < 0.1
+                        ? `${fmtRatio(cashToDebt)} • ${statusTag('perigoso', 'bad')}`
+                        : `${fmtRatio(cashToDebt)} • ${statusTag('intermediário', 'warn')}`;
+
+                addAdvancedRow('🔹 Liquidez corrente', 'ativo circulante / passivo circulante', liquidezCorrenteTxt);
+                addAdvancedRow('🔹 Liquidez seca', '(caixa + aplicações CP + recebíveis) / passivo circulante', fmtRatio(liquidezSeca));
+                addAdvancedRow('🔹 Alavancagem total', 'passivo total / ativos totais', alavancagemTxt);
+                addAdvancedRow('🔹 Dívida vs patrimônio', 'passivo total / patrimônio líquido', fmtRatio(debtToEquity));
+                addAdvancedRow('🔹 Qualidade do ativo', '(caixa + recebíveis) / ativos totais', fmtRatio(qualidadeAtivo));
+                addAdvancedRow('🔹 Peso do estoque', 'estoque / ativos totais', fmtRatio(pesoEstoque));
+                addAdvancedRow('🔹 Pressão de curto prazo', 'passivo circulante / passivo total', fmtRatio(pressaoCurtoPrazo));
+                addAdvancedRow('🔹 Cobertura de caixa da dívida', 'caixa / passivo total', cashDebtTxt);
+                addAdvancedRow('🔹 Crescimento da dívida', '(dívida_t / dívida_t-1) - 1', fmtPct(growthDebt * 100));
+                addAdvancedRow('🔹 Evolução do patrimônio', '(patrimônio_t / patrimônio_t-1) - 1', fmtPct(growthEquity * 100));
+                addAdvancedRow('🔹 Qualidade da melhora', 'crescimento_ativo - crescimento_dívida', fmtPct(melhoraReal * 100));
+                addAdvancedRow('⭐ Score checklist (0-7)', '7 critérios fundamentais de saúde financeira', scoreChecklistTxt);
 
                 addAdvancedRow('1) Qualidade barata', '(EPS/preço) × (ativos/passivos)', fmtRatio(qualidadeBarata));
                 addAdvancedRow('2) Liquidez real ajustada', '(caixa + aplicações CP) / passivo circulante', fmtRatio(liquidezReal));
