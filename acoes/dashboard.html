@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard de Análise da Ação (BRAPI_EXEMPLO)</title>
+    <title>Dashboard de Análise da Ação (cache BRAPI)</title>
     <style>
         :root {
             --bg: #0b1220;
@@ -166,9 +166,9 @@
         <section class="card header">
             <div>
                 <h1 id="nomeAcao" class="title">Carregando...</h1>
-                <p id="setorIndustria" class="sub">Aguardando dados do arquivo BRAPI_EXEMPLO.json</p>
+                <p id="setorIndustria" class="sub">Aguardando dados da consulta única feita em brapi.html</p>
             </div>
-            <div id="atualizadoEm" class="badge">Fonte local: BRAPI_EXEMPLO.json</div>
+            <div id="atualizadoEm" class="badge">Fonte: cache da requisição única</div>
         </section>
 
         <section class="card">
@@ -302,15 +302,30 @@
             container.appendChild(row);
         }
 
+        function tickerFromUrl() {
+            const qs = new URLSearchParams(window.location.search);
+            return (qs.get('ticker') || '').trim().toUpperCase();
+        }
+
+        function readCache() {
+            try {
+                return JSON.parse(sessionStorage.getItem('brapi_cache_unico_v1') || 'null');
+            } catch {
+                return null;
+            }
+        }
+
         async function init() {
             const erro = document.getElementById('erro');
             try {
-                const resp = await fetch('./BRAPI_EXEMPLO.json');
-                if (!resp.ok) throw new Error(`Falha ao carregar JSON local (HTTP ${resp.status})`);
-                const data = await resp.json();
-                const acao = data?.brapi?.results?.[0];
+                const ticker = tickerFromUrl();
+                if (!ticker) throw new Error('Ticker ausente na URL. Volte para brapi.html e clique em uma empresa.');
 
-                if (!acao) throw new Error('Estrutura inválida: não encontrei brapi.results[0].');
+                const cache = readCache();
+                if (!cache?.resultsByTicker) throw new Error('Cache da requisição única não encontrado. Abra brapi.html e clique em "Atualizar dados da API".');
+
+                const acao = cache.resultsByTicker[ticker];
+                if (!acao) throw new Error(`Ticker ${ticker} não está no cache atual. Atualize os dados em brapi.html.`);
 
                 const profile = acao.summaryProfile || {};
                 const fin = acao.financialData || {};
@@ -326,7 +341,7 @@
 
                 document.getElementById('nomeAcao').textContent = `${acao.symbol} — ${acao.longName || acao.shortName || ''}`;
                 document.getElementById('setorIndustria').textContent = `${profile.sector || '-'} • ${profile.industry || '-'} • ${profile.city || '-'} / ${profile.state || '-'}`;
-                document.getElementById('atualizadoEm').textContent = `Atualizado em: ${safeDate(acao.regularMarketTime)} (arquivo local)`;
+                document.getElementById('atualizadoEm').textContent = `Atualizado em: ${safeDate(cache.fetchedAt || acao.regularMarketTime)} (requisição única)`;
 
                 const changeClass = Number(acao.regularMarketChangePercent || 0) >= 0 ? 'up' : 'down';
                 addMetric('Preço atual', fmtBRL.format(acao.regularMarketPrice || 0));
@@ -525,7 +540,7 @@
 
                 const tbodyDiv = document.getElementById('tabelaDividendos');
                 if (dividends.length === 0) {
-                    tbodyDiv.innerHTML = '<tr><td colspan="4">Sem dividendos no arquivo de teste.</td></tr>';
+                    tbodyDiv.innerHTML = '<tr><td colspan="4">Sem dividendos disponíveis para este ticker.</td></tr>';
                 } else {
                     dividends.forEach(item => {
                         const tr = document.createElement('tr');
@@ -552,7 +567,7 @@
                     });
                 }
 
-                document.getElementById('descricao').textContent = profile.longBusinessSummary || 'Sem descrição no arquivo de teste.';
+                document.getElementById('descricao').textContent = profile.longBusinessSummary || 'Sem descrição disponível para este ticker.';
             } catch (e) {
                 erro.style.display = 'block';
                 erro.textContent = `Erro ao montar dashboard: ${e.message}`;
