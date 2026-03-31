@@ -1,37 +1,82 @@
 [
-  { "ticker": "LEVE3", "nome": "Metal Leve" },
-  { "ticker": "BBSE3", "nome": "BB Seguridade" },
-  { "ticker": "BRAP3", "nome": "Bradespar" },
-  { "ticker": "ITSA3", "nome": "Itaúsa" },
-  { "ticker": "ITSA4", "nome": "Itaúsa" },
-  { "ticker": "WIZC3", "nome": "Wiz" },
-  { "ticker": "BRSR6", "nome": "Banrisul" },
-  { "ticker": "BRAP4", "nome": "Bradespar" },
-  { "ticker": "SANB11", "nome": "Santander" },
-  { "ticker": "ITUB3", "nome": "Itaú Unibanco" },
-  { "ticker": "ITUB4", "nome": "Itaú Unibanco" },
-  { "ticker": "TAEE3", "nome": "Taesa" },
-  { "ticker": "TAEE11", "nome": "Taesa" },
-  { "ticker": "ODPV3", "nome": "Odontoprev" },
-  { "ticker": "TAEE4", "nome": "Taesa" },
-  { "ticker": "TIMS3", "nome": "TIM" },
-  { "ticker": "BBDC3", "nome": "Bradesco" },
-  { "ticker": "VIVT3", "nome": "Vivo" },
-  { "ticker": "CPFE3", "nome": "CPFL" },
-  { "ticker": "B3SA3", "nome": "B3" },
-  { "ticker": "ABCB4", "nome": "ABC Brasil" },
-  { "ticker": "BBDC4", "nome": "Bradesco" },
-  { "ticker": "FLRY3", "nome": "Fleury" },
-  { "ticker": "VALE3", "nome": "Vale" },
-  { "ticker": "CMIG4", "nome": "Cemig" },
-  { "ticker": "PSSA3", "nome": "Porto" },
-  { "ticker": "ABEV3", "nome": "Ambev" },
-  { "ticker": "KLBN11", "nome": "Klabin" },
-  { "ticker": "BBAS3", "nome": "Banco do Brasil" },
-  { "ticker": "EGIE3", "nome": "Engie Brasil" },
-  { "ticker": "BPAC11", "nome": "BTG Pactual" },
-  { "ticker": "UGPA3", "nome": "Ultrapar" },
-  { "ticker": "SBSP3", "nome": "Sabesp" },
-  { "ticker": "EQTL3", "nome": "Equatorial" },
-  { "ticker": "CCRO3", "nome": "CCR" }
+  {
+    "ticker": "LEVE3",
+    "nome": "Metal Leve"
+  },
+  {
+    "ticker": "BBSE3",
+    "nome": "BB Seguridade"
+  },
+  {
+    "ticker": "BRAP3",
+    "nome": "Bradespar"
+  },
+  {
+    "ticker": "ITSA3",
+    "nome": "Itaúsa"
+  },
+  {
+    "ticker": "ITSA4",
+    "nome": "Itaúsa"
+  },
+  {
+    "ticker": "WIZC3",
+    "nome": "Wiz"
+  },
+  {
+    "ticker": "BRSR6",
+    "nome": "Banrisul"
+  },
+  {
+    "ticker": "BRAP4",
+    "nome": "Bradespar"
+  },
+  {
+    "ticker": "SANB11",
+    "nome": "Santander"
+  },
+  {
+    "ticker": "ITUB3",
+    "nome": "Itaú Unibanco"
+  },
+  {
+    "ticker": "ITUB4",
+    "nome": "Itaú Unibanco"
+  },
+  {
+    "ticker": "TAEE3",
+    "nome": "Taesa"
+  },
+  {
+    "ticker": "TAEE11",
+    "nome": "Taesa"
+  },
+  {
+    "ticker": "ODPV3",
+    "nome": "Odontoprev"
+  },
+  {
+    "ticker": "TAEE4",
+    "nome": "Taesa"
+  },
+  {
+    "ticker": "TIMS3",
+    "nome": "TIM"
+  },
+  {
+    "ticker": "BBDC3",
+    "nome": "Bradesco"
+  },
+  {
+    "ticker": "VIVT3",
+    "nome": "Vivo"
+  },
+  {
+    "ticker": "CPFE3",
+    "nome": "CPFL"
+  },
+  {
+    "ticker": "B3SA3",
+    "nome": "B3"
+  }
 ]
