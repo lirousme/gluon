@@ -190,6 +190,20 @@
             </article>
         </section>
 
+        <section class="card">
+            <h2>Indicadores avançados (eficiência + valuation)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Indicador</th>
+                        <th>Fórmula aplicada</th>
+                        <th>Resultado</th>
+                    </tr>
+                </thead>
+                <tbody id="tabelaAvancada"></tbody>
+            </table>
+        </section>
+
         <section class="cols-2">
             <article class="card">
                 <h2>Últimos Dividendos</h2>
@@ -224,6 +238,13 @@
         const fmtBRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
         const fmtNum = new Intl.NumberFormat('pt-BR');
         const fmtPct = (n) => `${Number(n || 0).toFixed(2)}%`;
+        const fmtRatio = (n, d = 3) => Number(n || 0).toFixed(d);
+        const num = (v) => Number(v || 0);
+        const divide = (a, b) => {
+            const bn = num(b);
+            if (!Number.isFinite(bn) || bn === 0) return 0;
+            return num(a) / bn;
+        };
 
         function safeDate(date) {
             if (!date) return '-';
@@ -251,6 +272,13 @@
             tbody.appendChild(row);
         }
 
+        function addAdvancedRow(label, formula, value) {
+            const tbody = document.getElementById('tabelaAvancada');
+            const row = document.createElement('tr');
+            row.innerHTML = `<td>${label}</td><td>${formula}</td><td>${value}</td>`;
+            tbody.appendChild(row);
+        }
+
         function addBar(containerId, label, percent, valueLabel) {
             const container = document.getElementById(containerId);
             const row = document.createElement('div');
@@ -275,8 +303,13 @@
 
                 const profile = acao.summaryProfile || {};
                 const fin = acao.financialData || {};
+                const stats = acao.defaultKeyStatistics || {};
                 const dividends = (acao.dividendsData?.cashDividends || []).slice(0, 8);
                 const income = (acao.incomeStatementHistory || []).slice(0, 6).reverse();
+                const incomeNow = acao.incomeStatementHistory?.[0] || {};
+                const balanceNow = acao.balanceSheetHistory?.[0] || {};
+                const balancePrev = acao.balanceSheetHistory?.[1] || {};
+                const cashNow = acao.cashflowHistory?.[0] || {};
 
                 document.getElementById('nomeAcao').textContent = `${acao.symbol} — ${acao.longName || acao.shortName || ''}`;
                 document.getElementById('setorIndustria').textContent = `${profile.sector || '-'} • ${profile.industry || '-'} • ${profile.city || '-'} / ${profile.state || '-'}`;
@@ -300,6 +333,62 @@
                 addSummaryRow('Margem líquida', fmtPct(fin.profitMargins || 0));
                 addSummaryRow('Margem operacional', fmtPct(fin.operatingMargins || 0));
                 addSummaryRow('Receita total', fmtBRL.format(fin.totalRevenue || 0));
+
+                const eps = num(acao.earningsPerShare);
+                const priceNow = num(acao.regularMarketPrice);
+                const marketCap = num(acao.marketCap);
+                const regularMarketChangePercent = num(acao.regularMarketChangePercent);
+                const earningsYield = divide(eps, priceNow);
+                const totalAssetsNow = num(balanceNow.totalAssets);
+                const totalAssetsPrev = num(balancePrev.totalAssets);
+                const totalLiab = num(balanceNow.totalLiab);
+                const cash = num(balanceNow.cash);
+                const shortTermInvestments = num(balanceNow.shortTermInvestments);
+                const currentLiabilities = num(balanceNow.currentLiabilities || balanceNow.totalCurrentLiabilities);
+                const totalCurrentAssets = num(balanceNow.totalCurrentAssets);
+                const revenue = num(incomeNow.totalRevenue || fin.totalRevenue);
+                const inventory = num(balanceNow.inventory);
+                const netIncome = num(incomeNow.netIncome);
+                const operatingCashFlow = num(cashNow.operatingCashFlow || fin.operatingCashflow);
+                const sharesOutstanding = num(stats.impliedSharesOutstanding || divide(marketCap, priceNow));
+                const high52 = num(acao.fiftyTwoWeekHigh);
+                const volume = num(acao.regularMarketVolume);
+
+                const qualidadeBarata = earningsYield * divide(totalAssetsNow, totalLiab);
+                const liquidezReal = divide(cash + shortTermInvestments, currentLiabilities);
+                const crescimentoAtivos = divide(totalAssetsNow - totalAssetsPrev, totalAssetsPrev);
+                const roaAproximado = divide(eps, divide(totalAssetsNow, sharesOutstanding));
+                const alavancagem = divide(totalLiab, totalAssetsNow);
+                const dividaQualificada = divide(alavancagem, earningsYield);
+                const giroEstoque = divide(revenue, inventory);
+                const margemEstrutural = divide(high52 - priceNow, high52);
+                const geracaoCaixa = divide(operatingCashFlow, marketCap);
+                const scoreEstabilidade = liquidezReal * (1 - alavancagem) * divide(cash, totalAssetsNow);
+                const oportunidade = earningsYield * (1 - alavancagem) * crescimentoAtivos * liquidezReal;
+                const reversaoPotencial = divide(high52 - priceNow, high52) * divide(regularMarketChangePercent, 100);
+                const pressao = volume * Math.abs(regularMarketChangePercent);
+                const capitalGiro = totalCurrentAssets - currentLiabilities;
+                const eficienciaCg = divide(capitalGiro, totalAssetsNow);
+                const qualidadeLucro = divide(operatingCashFlow, netIncome);
+                const valorGerado = divide(marketCap, totalAssetsNow);
+                const scoreFinal = oportunidade * 0.4 + qualidadeBarata * 0.3 + scoreEstabilidade * 0.3;
+
+                addAdvancedRow('1) Qualidade barata', '(EPS/preço) × (ativos/passivos)', fmtRatio(qualidadeBarata));
+                addAdvancedRow('2) Liquidez real ajustada', '(caixa + aplicações CP) / passivo circulante', fmtRatio(liquidezReal));
+                addAdvancedRow('3) Crescimento patrimonial', '(ativos atual - anterior) / ativos anterior', fmtPct(crescimentoAtivos * 100));
+                addAdvancedRow('4) Eficiência do capital (ROA aprox.)', 'EPS / (ativos / nº ações)', fmtPct(roaAproximado * 100));
+                addAdvancedRow('5) Dívida qualificada', 'alavancagem / earnings yield', fmtRatio(dividaQualificada));
+                addAdvancedRow('6) Giro de estoque', 'receita / estoque', fmtRatio(giroEstoque));
+                addAdvancedRow('7) Margem de segurança estrutural', '(máx. 52s - preço) / máx. 52s', fmtPct(margemEstrutural * 100));
+                addAdvancedRow('8) Geração de caixa implícita', 'operating cash flow / market cap', fmtPct(geracaoCaixa * 100));
+                addAdvancedRow('9) Score de estabilidade', 'liquidez × (1-alav.) × (caixa/ativos)', fmtRatio(scoreEstabilidade, 4));
+                addAdvancedRow('10) Score de oportunidade', 'yield × (1-alav.) × crescimento × liquidez', fmtRatio(oportunidade, 4));
+                addAdvancedRow('11) Reversão potencial', 'distância do topo × variação atual', fmtPct(reversaoPotencial * 100));
+                addAdvancedRow('12) Pressão de curto prazo', 'volume × |variação %|', fmtNum.format(pressao));
+                addAdvancedRow('13) Eficiência capital de giro', '(AC - PC) / ativos', fmtPct(eficienciaCg * 100));
+                addAdvancedRow('14) Qualidade de lucro', 'operating cash flow / lucro líquido', fmtRatio(qualidadeLucro));
+                addAdvancedRow('15) Multiplicador de valor', 'market cap / ativos', fmtRatio(valorGerado));
+                addAdvancedRow('Score final (40/30/30)', '0.4 oportunidade + 0.3 qualidade + 0.3 estabilidade', fmtRatio(scoreFinal, 4));
 
                 const low = Number(acao.fiftyTwoWeekLow || 0);
                 const high = Number(acao.fiftyTwoWeekHigh || 0);
