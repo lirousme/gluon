@@ -74,7 +74,10 @@
             Trazer tudo (cotação + fundamental + dividendos + módulos avançados)
         </label>
 
-        <button id="buscarBtn">Buscar em 1 requisição</button>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <button id="buscarBtn">Buscar em 1 requisição</button>
+            <a href="./dashboard.html" style="display:inline-block; background:#0ea5e9; color:#fff; text-decoration:none; padding:10px 16px; border-radius:8px; font-weight:600;">Abrir dashboard local (JSON teste)</a>
+        </div>
         <p class="hint" id="status">Pronto para consultar.</p>
 
         <pre id="output">Clique em "Buscar em 1 requisição" para ver o retorno da API em texto.</pre>

@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Análise da Ação (BRAPI_EXEMPLO)</title>
+    <style>
+        :root {
+            --bg: #0b1220;
+            --card: #111a2c;
+            --border: #22304a;
+            --text: #e5ecf8;
+            --muted: #9eb0d0;
+            --ok: #22c55e;
+            --bad: #ef4444;
+            --warn: #f59e0b;
+            --accent: #60a5fa;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+            background: linear-gradient(180deg, #08101d 0%, var(--bg) 100%);
+            color: var(--text);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            gap: 16px;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .title {
+            margin: 0;
+            font-size: 1.35rem;
+        }
+
+        .sub {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 0.92rem;
+        }
+
+        .badge {
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-size: 0.84rem;
+            border: 1px solid var(--border);
+            color: var(--muted);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+        }
+
+        .metric {
+            background: #0c1527;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+        }
+
+        .metric .label {
+            color: var(--muted);
+            font-size: 0.8rem;
+            margin-bottom: 6px;
+        }
+
+        .metric .value {
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .up { color: var(--ok); }
+        .down { color: var(--bad); }
+
+        .cols-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        @media (max-width: 900px) {
+            .cols-2 { grid-template-columns: 1fr; }
+        }
+
+        h2 {
+            margin: 0 0 12px;
+            font-size: 1.05rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            border-bottom: 1px solid var(--border);
+            padding: 8px 6px;
+            text-align: left;
+        }
+
+        th { color: var(--muted); font-weight: 600; }
+
+        .bar-wrap {
+            display: grid;
+            gap: 8px;
+        }
+
+        .bar-row {
+            display: grid;
+            grid-template-columns: 95px 1fr 72px;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.86rem;
+            color: var(--muted);
+        }
+
+        .bar {
+            height: 10px;
+            background: #0a1323;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .bar > span {
+            display: block;
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #93c5fd);
+        }
+
+        .error {
+            color: #fecaca;
+            background: #450a0a;
+            border: 1px solid #7f1d1d;
+            padding: 12px;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <section class="card header">
+            <div>
+                <h1 id="nomeAcao" class="title">Carregando...</h1>
+                <p id="setorIndustria" class="sub">Aguardando dados do arquivo BRAPI_EXEMPLO.json</p>
+            </div>
+            <div id="atualizadoEm" class="badge">Fonte local: BRAPI_EXEMPLO.json</div>
+        </section>
+
+        <section class="card">
+            <div class="grid" id="metricas"></div>
+        </section>
+
+        <section class="cols-2">
+            <article class="card">
+                <h2>Resumo operacional</h2>
+                <table>
+                    <tbody id="tabelaResumo"></tbody>
+                </table>
+            </article>
+
+            <article class="card">
+                <h2>Posição no range de 52 semanas</h2>
+                <div class="bar-wrap" id="range52"></div>
+                <p id="rangeInfo" class="sub" style="margin-top:10px"></p>
+            </article>
+        </section>
+
+        <section class="cols-2">
+            <article class="card">
+                <h2>Últimos Dividendos</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Tipo</th>
+                            <th>Valor</th>
+                            <th>Yield</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaDividendos"></tbody>
+                </table>
+            </article>
+
+            <article class="card">
+                <h2>Evolução de Receita x Lucro Líquido</h2>
+                <div class="bar-wrap" id="barrasResultados"></div>
+            </article>
+        </section>
+
+        <section class="card">
+            <h2>Sobre a empresa</h2>
+            <p id="descricao" class="sub" style="white-space: pre-line;"></p>
+        </section>
+
+        <section id="erro" class="error" style="display:none"></section>
+    </div>
+
+    <script>
+        const fmtBRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+        const fmtNum = new Intl.NumberFormat('pt-BR');
+        const fmtPct = (n) => `${Number(n || 0).toFixed(2)}%`;
+
+        function safeDate(date) {
+            if (!date) return '-';
+            const d = new Date(date);
+            if (Number.isNaN(d.getTime())) return date;
+            return d.toLocaleString('pt-BR');
+        }
+
+        function toB(value) {
+            return Number(value || 0) / 1_000_000_000;
+        }
+
+        function addMetric(label, value, trendClass = '') {
+            const metricas = document.getElementById('metricas');
+            const el = document.createElement('div');
+            el.className = 'metric';
+            el.innerHTML = `<div class="label">${label}</div><div class="value ${trendClass}">${value}</div>`;
+            metricas.appendChild(el);
+        }
+
+        function addSummaryRow(label, value) {
+            const tbody = document.getElementById('tabelaResumo');
+            const row = document.createElement('tr');
+            row.innerHTML = `<td>${label}</td><td>${value}</td>`;
+            tbody.appendChild(row);
+        }
+
+        function addBar(containerId, label, percent, valueLabel) {
+            const container = document.getElementById(containerId);
+            const row = document.createElement('div');
+            row.className = 'bar-row';
+            row.innerHTML = `
+                <strong>${label}</strong>
+                <div class="bar"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
+                <span>${valueLabel}</span>
+            `;
+            container.appendChild(row);
+        }
+
+        async function init() {
+            const erro = document.getElementById('erro');
+            try {
+                const resp = await fetch('./BRAPI_EXEMPLO.json');
+                if (!resp.ok) throw new Error(`Falha ao carregar JSON local (HTTP ${resp.status})`);
+                const data = await resp.json();
+                const acao = data?.brapi?.results?.[0];
+
+                if (!acao) throw new Error('Estrutura inválida: não encontrei brapi.results[0].');
+
+                const profile = acao.summaryProfile || {};
+                const fin = acao.financialData || {};
+                const dividends = (acao.dividendsData?.cashDividends || []).slice(0, 8);
+                const income = (acao.incomeStatementHistory || []).slice(0, 6).reverse();
+
+                document.getElementById('nomeAcao').textContent = `${acao.symbol} — ${acao.longName || acao.shortName || ''}`;
+                document.getElementById('setorIndustria').textContent = `${profile.sector || '-'} • ${profile.industry || '-'} • ${profile.city || '-'} / ${profile.state || '-'}`;
+                document.getElementById('atualizadoEm').textContent = `Atualizado em: ${safeDate(acao.regularMarketTime)} (arquivo local)`;
+
+                const changeClass = Number(acao.regularMarketChangePercent || 0) >= 0 ? 'up' : 'down';
+                addMetric('Preço atual', fmtBRL.format(acao.regularMarketPrice || 0));
+                addMetric('Variação do dia', `${fmtPct(acao.regularMarketChangePercent)} (${fmtBRL.format(acao.regularMarketChange || 0)})`, changeClass);
+                addMetric('Abertura / Fech. ant.', `${fmtBRL.format(acao.regularMarketOpen || 0)} / ${fmtBRL.format(acao.regularMarketPreviousClose || 0)}`);
+                addMetric('Volume', fmtNum.format(acao.regularMarketVolume || 0));
+                addMetric('Valor de mercado', fmtBRL.format(acao.marketCap || 0));
+                addMetric('P/L', (acao.priceEarnings || 0).toFixed(2));
+                addMetric('LPA (EPS)', (acao.earningsPerShare || 0).toFixed(2));
+                addMetric('ROE', fmtPct(fin.returnOnEquity || 0));
+
+                addSummaryRow('Site', profile.website || '-');
+                addSummaryRow('Moeda', acao.currency || '-');
+                addSummaryRow('Funcionários', profile.fullTimeEmployees ? fmtNum.format(profile.fullTimeEmployees) : '-');
+                addSummaryRow('Caixa total', fmtBRL.format(fin.totalCash || 0));
+                addSummaryRow('Dívida total', fmtBRL.format(fin.totalDebt || 0));
+                addSummaryRow('Margem líquida', fmtPct(fin.profitMargins || 0));
+                addSummaryRow('Margem operacional', fmtPct(fin.operatingMargins || 0));
+                addSummaryRow('Receita total', fmtBRL.format(fin.totalRevenue || 0));
+
+                const low = Number(acao.fiftyTwoWeekLow || 0);
+                const high = Number(acao.fiftyTwoWeekHigh || 0);
+                const price = Number(acao.regularMarketPrice || 0);
+                const pos = high > low ? ((price - low) / (high - low)) * 100 : 0;
+                addBar('range52', 'Mínimo', 100, fmtBRL.format(low));
+                addBar('range52', 'Preço Atual', pos, fmtBRL.format(price));
+                addBar('range52', 'Máximo', 100, fmtBRL.format(high));
+                document.getElementById('rangeInfo').textContent = `O preço atual está em ${fmtPct(pos)} do caminho entre a mínima e máxima das últimas 52 semanas.`;
+
+                const tbodyDiv = document.getElementById('tabelaDividendos');
+                if (dividends.length === 0) {
+                    tbodyDiv.innerHTML = '<tr><td colspan="4">Sem dividendos no arquivo de teste.</td></tr>';
+                } else {
+                    dividends.forEach(item => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${safeDate(item.paymentDate).split(' ')[0]}</td>
+                            <td>${item.type || '-'}</td>
+                            <td>${fmtBRL.format(item.rate || 0)}</td>
+                            <td>${fmtPct(item.yield || 0)}</td>
+                        `;
+                        tbodyDiv.appendChild(tr);
+                    });
+                }
+
+                if (income.length === 0) {
+                    addBar('barrasResultados', 'Sem dados', 0, '-');
+                } else {
+                    const maxRevenue = Math.max(...income.map(i => Number(i.totalRevenue || 0)), 1);
+                    const maxNet = Math.max(...income.map(i => Math.abs(Number(i.netIncome || 0))), 1);
+
+                    income.forEach(item => {
+                        const y = item.endDate ? String(item.endDate).slice(0, 4) : 'Ano';
+                        addBar('barrasResultados', `${y} Receita`, (Number(item.totalRevenue || 0) / maxRevenue) * 100, `${toB(item.totalRevenue).toFixed(2)} bi`);
+                        addBar('barrasResultados', `${y} Lucro`, (Math.abs(Number(item.netIncome || 0)) / maxNet) * 100, `${toB(item.netIncome).toFixed(2)} bi`);
+                    });
+                }
+
+                document.getElementById('descricao').textContent = profile.longBusinessSummary || 'Sem descrição no arquivo de teste.';
+            } catch (e) {
+                erro.style.display = 'block';
+                erro.textContent = `Erro ao montar dashboard: ${e.message}`;
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
