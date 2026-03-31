@@ -55,12 +55,15 @@
                     <p class="text-sm text-gray-500 mt-1">Inclui score de curto prazo, filtros rápidos e barra horizontal fixa na largura total da tela.</p>
                 </div>
 
-                <div class="flex-shrink-0">
+                <div class="flex-shrink-0 flex items-center gap-2">
                     <label for="jsonFileInput" class="cursor-pointer inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm">
                         <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                         Carregar arquivo JSON
                     </label>
                     <input type="file" id="jsonFileInput" accept=".json" class="hidden">
+                    <button id="copySiglasFiltradas" type="button" class="inline-flex items-center px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors shadow-sm">
+                        Copy
+                    </button>
                 </div>
             </div>
 
@@ -265,6 +268,34 @@
                 reader.readAsText(file);
                 event.target.value = '';
             });
+
+            document.getElementById('copySiglasFiltradas').addEventListener('click', copiarSiglasFiltradas);
+        }
+
+        async function copiarSiglasFiltradas() {
+            const siglas = filteredData
+                .map(item => (item.sigla || '').toString().trim())
+                .filter(Boolean);
+
+            if (siglas.length === 0) {
+                alert('Não há siglas nas ações filtradas para copiar.');
+                return;
+            }
+
+            const conteudo = siglas.join(',');
+
+            if (!navigator.clipboard || !navigator.clipboard.writeText) {
+                alert('Seu navegador não permite copiar automaticamente para a área de transferência.');
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(conteudo);
+                alert(`Copiado! ${siglas.length} sigla(s) foram enviadas para a área de transferência.`);
+            } catch (error) {
+                console.error('Erro ao copiar siglas:', error);
+                alert('Não foi possível copiar as siglas. Tente novamente.');
+            }
         }
 
         function enhanceRow(item) {
