@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta BRAPI (única requisição)</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 24px;
+        }
+        .card {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: #111827;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 16px;
+        }
+        textarea {
+            width: 100%;
+            min-height: 90px;
+            border-radius: 8px;
+            border: 1px solid #475569;
+            background: #020617;
+            color: #e2e8f0;
+            padding: 10px;
+            box-sizing: border-box;
+            margin: 8px 0;
+        }
+        button {
+            background: #2563eb;
+            border: none;
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        pre {
+            white-space: pre-wrap;
+            background: #020617;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 12px;
+            overflow-x: auto;
+            min-height: 240px;
+        }
+        .hint {
+            color: #94a3b8;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>BRAPI em única requisição</h1>
+        <p class="hint">Esta página usa <code>../api/brapi_quotes.php</code>, que lê <code>TOKEN_BRAPI</code> do seu <code>.env</code> no servidor. O token não fica exposto no navegador.</p>
+
+        <label for="tickers">Tickers (separados por vírgula):</label>
+        <textarea id="tickers">LEVE3,BBSE3,BRAP3,ITSA3,ITSA4,WIZC3,BRSR6,BRAP4,SANB11,ITUB3,ITUB4,TAEE3,TAEE11,ODPV3,TAEE4,TIMS3,BBDC3,VIVT3,CPFE3,BRSR3,B3SA3,ABCB4,BRSR5,CXSE3,BBDC4,FLRY3,VALE3,ISAE4,CMIG4,PSSA3,ABEV3,CPLE11,ISAE3,SANB4,UNIP6,UNIP3,HYPE3,KLBN11,BBAS3,UNIP5,SANB3,BMEB3,SAPR11,MYPK3,TUPY3,SLCE3,BMEB4,KLBN3,KLBN4,EGIE3,SAPR4,CMIG3,BPAC5,ALUP11,UGPA3,AURE3,SAPR3,BPAC11,VBBR3,ALUP4,NEOE3,SBSP3,ALUP3,ENGI11,CSMG3,ENGI4,EQTL3,ENGI3,MEGA3,BPAC3,AESB3,SRNA3,CCRO3,FESA3,FESA4,CLSC3,CPLE3,ROMI3,CGAS3,CGAS5,CLSC4,BRIV3,BRIV4</textarea>
+
+        <button id="buscarBtn">Buscar em 1 requisição</button>
+        <p class="hint" id="status">Pronto para consultar.</p>
+
+        <pre id="output">Clique em "Buscar em 1 requisição" para ver o retorno da API em texto.</pre>
+    </div>
+
+    <script>
+        const buscarBtn = document.getElementById('buscarBtn');
+        const tickersEl = document.getElementById('tickers');
+        const outputEl = document.getElementById('output');
+        const statusEl = document.getElementById('status');
+
+        async function buscar() {
+            const tickers = tickersEl.value.trim();
+            if (!tickers) {
+                statusEl.textContent = 'Informe os tickers.';
+                return;
+            }
+
+            statusEl.textContent = 'Consultando...';
+            outputEl.textContent = 'Aguarde...';
+
+            try {
+                const resp = await fetch(`../api/brapi_quotes.php?tickers=${encodeURIComponent(tickers)}`);
+                const data = await resp.json();
+
+                statusEl.textContent = `HTTP ${resp.status} | Tickers enviados: ${(data.tickers_requested || []).length} | Requisições usadas: ${data.request_count || 0}`;
+                outputEl.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                statusEl.textContent = 'Erro ao consultar a API.';
+                outputEl.textContent = String(err);
+            }
+        }
+
+        buscarBtn.addEventListener('click', buscar);
+    </script>
+</body>
+</html>
