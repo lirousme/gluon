@@ -40,6 +40,10 @@
         thead th {
             border-bottom: 2px solid #e5e7eb;
         }
+
+        .modal-backdrop {
+            background: rgba(15, 23, 42, 0.45);
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen p-4 md:p-8 text-gray-800 font-sans pb-20">
@@ -62,10 +66,13 @@
 
             <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm">
                 <div>
-                    <label for="filtroSetor" class="block text-gray-600 mb-1 font-medium">Setor</label>
-                    <select id="filtroSetor" class="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white">
-                        <option value="">Todos os setores</option>
-                    </select>
+                    <label class="block text-gray-600 mb-1 font-medium">Setores</label>
+                    <div class="flex items-center gap-2">
+                        <button id="abrirModalSetores" type="button" class="inline-flex items-center px-3 py-2 border border-gray-300 bg-white rounded-lg hover:bg-gray-50">
+                            Selecionar setores
+                        </button>
+                        <span id="resumoSetoresSelecionados" class="text-xs text-gray-500">Todos os setores</span>
+                    </div>
                 </div>
                 <div>
                     <label for="filtroMdi" class="block text-gray-600 mb-1 font-medium">MDI (mês)</label>
@@ -119,10 +126,32 @@
         <div id="fixedScrollbarContent" class="h-6"></div>
     </div>
 
+    <div id="modalSetores" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+        <div id="modalBackdropSetores" class="absolute inset-0 modal-backdrop"></div>
+        <div class="relative bg-white w-full max-w-2xl rounded-xl border border-gray-200 shadow-xl">
+            <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h2 class="text-lg font-semibold text-gray-800">Escolha os setores</h2>
+                <button id="fecharModalSetores" type="button" class="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="px-5 py-4">
+                <p class="text-sm text-gray-500 mb-3">Clique para alternar: <span class="font-medium text-red-600">vermelho</span> (não selecionado) / <span class="font-medium text-green-600">verde</span> (selecionado).</p>
+                <div id="listaSetoresModal" class="flex flex-wrap gap-2 max-h-72 overflow-auto pr-1"></div>
+            </div>
+            <div class="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
+                <button id="selecionarTodosSetores" type="button" class="text-sm px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50">Selecionar todos</button>
+                <button id="aplicarModalSetores" type="button" class="text-sm px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white">Aplicar</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let rawData = [];
         let filteredData = [];
         let currentSort = { column: null, direction: 'desc' };
+        let setoresDisponiveis = [];
+        let setoresSelecionados = [];
+        let setoresSelecionadosTemp = [];
+        const STORAGE_KEY_SETORES = 'acoes_setores_selecionados_v1';
 
         const nomesMeses = {
             '01': 'Jan', '02': 'Fev', '03': 'Mar', '04': 'Abr', '05': 'Mai', '06': 'Jun',
@@ -193,17 +222,28 @@
         }
 
         function setupFilterEvents() {
-            ['filtroSetor', 'filtroMdi', 'filtroMargemMin', 'filtroDyMin', 'filtroCarteira', 'filtroPrevidenciaria', 'filtroGatilho']
+            ['filtroMdi', 'filtroMargemMin', 'filtroDyMin', 'filtroCarteira', 'filtroPrevidenciaria', 'filtroGatilho']
                 .forEach(id => document.getElementById(id).addEventListener('input', aplicarFiltros));
 
+            document.getElementById('abrirModalSetores').addEventListener('click', abrirModalSetores);
+            document.getElementById('fecharModalSetores').addEventListener('click', fecharModalSetores);
+            document.getElementById('modalBackdropSetores').addEventListener('click', fecharModalSetores);
+            document.getElementById('aplicarModalSetores').addEventListener('click', aplicarSelecaoSetoresDoModal);
+            document.getElementById('selecionarTodosSetores').addEventListener('click', () => {
+                setoresSelecionadosTemp = [...setoresDisponiveis];
+                renderizarTagsSetoresModal();
+            });
+
             document.getElementById('limparFiltros').addEventListener('click', () => {
-                document.getElementById('filtroSetor').value = '';
                 document.getElementById('filtroMdi').value = '';
                 document.getElementById('filtroMargemMin').value = '';
                 document.getElementById('filtroDyMin').value = '';
                 document.getElementById('filtroCarteira').checked = false;
                 document.getElementById('filtroPrevidenciaria').checked = false;
                 document.getElementById('filtroGatilho').checked = true;
+                setoresSelecionados = [...setoresDisponiveis];
+                salvarSetoresSelecionados();
+                atualizarResumoSetoresSelecionados();
                 aplicarFiltros();
             });
 
@@ -253,14 +293,11 @@
         }
 
         function popularFiltrosBase(dados) {
-            const setores = [...new Set(dados.map(item => item.setor).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+            setoresDisponiveis = [...new Set(dados.map(item => item.setor).filter(Boolean))].sort((a, b) => a.localeCompare(b));
             const mdiValores = [...new Set(dados.flatMap(item => Array.isArray(item.mdi) ? item.mdi : []))].sort();
-
-            const setorSelect = document.getElementById('filtroSetor');
-            const setorAtual = setorSelect.value;
-            setorSelect.innerHTML = '<option value="">Todos os setores</option>';
-            setores.forEach(setor => setorSelect.innerHTML += `<option value="${setor}">${setor}</option>`);
-            setorSelect.value = setores.includes(setorAtual) ? setorAtual : '';
+            restaurarSetoresSelecionados();
+            atualizarResumoSetoresSelecionados();
+            renderizarTagsSetoresModal();
 
             const mdiSelect = document.getElementById('filtroMdi');
             const mdiAtual = mdiSelect.value;
@@ -270,7 +307,6 @@
         }
 
         function aplicarFiltros() {
-            const setor = document.getElementById('filtroSetor').value;
             const mdi = document.getElementById('filtroMdi').value;
             const margemMin = parseFloat(document.getElementById('filtroMargemMin').value);
             const dyMin = parseFloat(document.getElementById('filtroDyMin').value);
@@ -279,7 +315,7 @@
             const somenteGatilho = document.getElementById('filtroGatilho').checked;
 
             filteredData = rawData.filter(item => {
-                if (setor && item.setor !== setor) return false;
+                if (setoresDisponiveis.length > 0 && !setoresSelecionados.includes(item.setor)) return false;
                 if (mdi && (!Array.isArray(item.mdi) || !item.mdi.includes(mdi))) return false;
                 if (!isNaN(margemMin) && Number(item.margem_seguranca) < margemMin) return false;
                 if (!isNaN(dyMin) && Number(item.dy) < dyMin) return false;
@@ -471,6 +507,88 @@
             const table = document.getElementById('acoesTable');
             const fixedContent = document.getElementById('fixedScrollbarContent');
             fixedContent.style.width = `${table.scrollWidth}px`;
+        }
+
+        function abrirModalSetores() {
+            setoresSelecionadosTemp = [...setoresSelecionados];
+            renderizarTagsSetoresModal();
+            const modal = document.getElementById('modalSetores');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function fecharModalSetores() {
+            const modal = document.getElementById('modalSetores');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function renderizarTagsSetoresModal() {
+            const container = document.getElementById('listaSetoresModal');
+            container.innerHTML = '';
+
+            if (setoresDisponiveis.length === 0) {
+                container.innerHTML = '<span class="text-sm text-gray-500">Nenhum setor disponível.</span>';
+                return;
+            }
+
+            setoresDisponiveis.forEach(setor => {
+                const selecionado = setoresSelecionadosTemp.includes(setor);
+                const tag = document.createElement('button');
+                tag.type = 'button';
+                tag.textContent = setor;
+                tag.className = `px-3 py-1.5 rounded-full text-sm border transition-colors ${selecionado ? 'bg-green-100 text-green-800 border-green-400' : 'bg-red-100 text-red-700 border-red-400'}`;
+                tag.onclick = () => {
+                    if (setoresSelecionadosTemp.includes(setor)) {
+                        setoresSelecionadosTemp = setoresSelecionadosTemp.filter(item => item !== setor);
+                    } else {
+                        setoresSelecionadosTemp.push(setor);
+                    }
+                    renderizarTagsSetoresModal();
+                };
+                container.appendChild(tag);
+            });
+        }
+
+        function aplicarSelecaoSetoresDoModal() {
+            setoresSelecionados = [...setoresSelecionadosTemp];
+            salvarSetoresSelecionados();
+            atualizarResumoSetoresSelecionados();
+            fecharModalSetores();
+            aplicarFiltros();
+        }
+
+        function atualizarResumoSetoresSelecionados() {
+            const resumo = document.getElementById('resumoSetoresSelecionados');
+            if (setoresDisponiveis.length === 0 || setoresSelecionados.length === setoresDisponiveis.length) {
+                resumo.textContent = 'Todos os setores';
+                return;
+            }
+            if (setoresSelecionados.length === 0) {
+                resumo.textContent = 'Nenhum setor selecionado';
+                return;
+            }
+            resumo.textContent = `${setoresSelecionados.length} setor(es) selecionado(s)`;
+        }
+
+        function salvarSetoresSelecionados() {
+            localStorage.setItem(STORAGE_KEY_SETORES, JSON.stringify(setoresSelecionados));
+        }
+
+        function restaurarSetoresSelecionados() {
+            const salvo = localStorage.getItem(STORAGE_KEY_SETORES);
+            if (!salvo) {
+                setoresSelecionados = [...setoresDisponiveis];
+                return;
+            }
+
+            try {
+                const parsed = JSON.parse(salvo);
+                if (!Array.isArray(parsed)) throw new Error('Formato inválido');
+                setoresSelecionados = setoresDisponiveis.filter(setor => parsed.includes(setor));
+            } catch (_) {
+                setoresSelecionados = [...setoresDisponiveis];
+            }
         }
     </script>
 </body>
