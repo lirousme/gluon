@@ -1,6 +1,6 @@
-# BRAPI por empresa
+# Snapshot BRAPI (SQLite)
 
-Esta pasta recebe os JSONs gerados por `api/brapi_snapshot.php`.
+Esta pasta guarda o banco SQLite usado por `api/brapi_snapshot.php`.
 
-- `meta.json`: metadados da última atualização em lote.
-- `<TICKER>.json`: dados completos da empresa retornados pela BRAPI.
+- `brapi_snapshot.sqlite`: snapshot da última atualização em lote (com histórico curto).
+- A lista de empresas continua em `acoes/empresas.json`.
