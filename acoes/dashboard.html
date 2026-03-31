@@ -168,7 +168,7 @@
                 <h1 id="nomeAcao" class="title">Carregando...</h1>
                 <p id="setorIndustria" class="sub">Aguardando dados da consulta única feita em brapi.html</p>
             </div>
-            <div id="atualizadoEm" class="badge">Fonte: JSON da requisição única</div>
+            <div id="atualizadoEm" class="badge">Fonte: JSON da requisição única (1 arquivo por empresa)</div>
         </section>
 
         <section class="card">
@@ -307,8 +307,9 @@
             return (qs.get('ticker') || '').trim().toUpperCase();
         }
 
-        async function readCache() {
-            const resp = await fetch('../api/brapi_snapshot.php', { cache: 'no-store' });
+        async function readCache(ticker) {
+            const query = ticker ? `?ticker=${encodeURIComponent(ticker)}` : '';
+            const resp = await fetch(`../api/brapi_snapshot.php${query}`, { cache: 'no-store' });
             const data = await resp.json();
             if (!resp.ok || data?.status !== 'ok') {
                 throw new Error(data?.message || `Falha ao carregar snapshot (HTTP ${resp.status})`);
@@ -322,7 +323,7 @@
                 const ticker = tickerFromUrl();
                 if (!ticker) throw new Error('Ticker ausente na URL. Volte para brapi.html e clique em uma empresa.');
 
-                const cache = await readCache();
+                const cache = await readCache(ticker);
                 if (!cache?.resultsByTicker) throw new Error('Snapshot da requisição única não encontrado. Abra brapi.html e clique em "Atualizar dados da API".');
 
                 const acao = cache.resultsByTicker[ticker];

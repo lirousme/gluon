@@ -53,7 +53,7 @@
 
     <div class="row">
         <span class="pill" id="totais">Empresas: 0/20</span>
-        <span class="pill" id="cacheInfo">Sem cache</span>
+        <span class="pill" id="cacheInfo">Sem dados salvos</span>
         <button id="buscarBtn">Atualizar dados da API (1 requisição)</button>
         <button id="gerenciarBtn" class="secondary">Gerenciar empresas</button>
         <button id="resetarBtn" class="secondary">Recarregar lista do sistema</button>
@@ -292,9 +292,9 @@
             };
             await saveApiSnapshot(cache);
 
-            statusEl.textContent = `Atualizado: HTTP ${resp.status} • ${Object.keys(resultsByTicker).length}/${tickers.length} empresas com dados (salvo em JSON no servidor).`;
+            statusEl.textContent = `Atualizado: HTTP ${resp.status} • ${Object.keys(resultsByTicker).length}/${tickers.length} empresas com dados (1 JSON por empresa no servidor).`;
             outputEl.textContent = JSON.stringify(data, null, 2);
-            cacheInfoEl.textContent = `Cache: ${new Date(cache.fetchedAt).toLocaleString('pt-BR')}`;
+            cacheInfoEl.textContent = `JSON API: ${new Date(cache.fetchedAt).toLocaleString('pt-BR')}`;
             renderLista();
         } catch (err) {
             statusEl.textContent = 'Erro ao consultar API.';
@@ -366,7 +366,7 @@
             if (cache?.fetchedAt) {
                 cacheInfoEl.textContent = `JSON API: ${new Date(cache.fetchedAt).toLocaleString('pt-BR')}`;
                 outputEl.textContent = JSON.stringify(cache.raw, null, 2);
-                statusEl.textContent = 'Lista carregada com dados existentes do JSON no servidor. Você pode atualizar para buscar dados novos.';
+                statusEl.textContent = 'Lista carregada com dados existentes (salvos em JSON por empresa). Você pode atualizar para buscar dados novos.';
             } else {
                 statusEl.textContent = 'Lista carregada. Clique em "Atualizar dados" para fazer a requisição única.';
             }
