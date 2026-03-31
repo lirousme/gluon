@@ -385,15 +385,18 @@
 
         function formatarScore(valor) {
             const textoOriginal = String(valor);
-            const apenasDigitos = textoOriginal.replace(/\D/g, '');
-
-            if (apenasDigitos.length > 6) {
-                return `${apenasDigitos.slice(0, 6)}...`;
-            }
-
             const numero = Number(valor);
+
             if (!Number.isFinite(numero)) {
                 return textoOriginal;
+            }
+
+            const negativo = numero < 0 ? '-' : '';
+            const [parteInteira] = Math.abs(numero).toString().split('.');
+
+            if (parteInteira.length > 6) {
+                const inteiroTruncado = Number(parteInteira.slice(0, 6));
+                return `${negativo}${inteiroTruncado.toLocaleString('pt-BR')}...`;
             }
 
             return numero.toLocaleString('pt-BR', { maximumFractionDigits: 4 });
