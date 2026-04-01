@@ -243,6 +243,63 @@
             gap: 5px;
             height: 140px;
         }
+
+        .checklist-item {
+            cursor: pointer;
+            transition: transform 0.15s ease, border-color 0.15s ease;
+        }
+
+        .checklist-item:hover {
+            transform: translateY(-2px);
+            border-color: #3b82f6;
+        }
+
+        .status-approved { color: var(--ok); }
+        .status-reproved { color: var(--bad); }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.84);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            padding: 16px;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        .modal-card {
+            width: min(720px, 100%);
+            background: #0d1729;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .modal-close {
+            border: 1px solid var(--border);
+            background: #111a2c;
+            color: var(--text);
+            border-radius: 8px;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+
+        .modal-body code {
+            color: #bfdbfe;
+        }
     </style>
 </head>
 <body>
@@ -324,6 +381,12 @@
             <div class="grid" id="mediasPrecos"></div>
         </section>
 
+        <section id="card-score-checklist" class="card">
+            <h2>⭐ Score checklist (0-12)</h2>
+            <p class="sub">Clique em cada indicador para ver atributos, fórmula e valores usados.</p>
+            <div class="grid" id="scoreChecklistGrid"></div>
+        </section>
+
         <section id="card-metricas" class="card">
             <div class="grid" id="metricas"></div>
         </section>
@@ -385,6 +448,16 @@
         </section>
 
         <section id="erro" class="error" style="display:none"></section>
+    </div>
+
+    <div id="checklistModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="checklistModalTitle">
+        <article class="modal-card">
+            <header class="modal-header">
+                <h3 id="checklistModalTitle" style="margin:0">Detalhes do indicador</h3>
+                <button id="checklistModalClose" class="modal-close" type="button">Fechar</button>
+            </header>
+            <div id="checklistModalBody" class="modal-body"></div>
+        </article>
     </div>
 
     <script>
@@ -580,6 +653,60 @@
         function statusTag(text, kind) {
             const color = kind === 'ok' ? '#22c55e' : kind === 'warn' ? '#f59e0b' : '#ef4444';
             return `<span style="color:${color};font-weight:600">${text}</span>`;
+        }
+
+        function createChecklistModal() {
+            const modal = document.getElementById('checklistModal');
+            const closeBtn = document.getElementById('checklistModalClose');
+
+            const closeModal = () => modal?.classList.remove('open');
+            closeBtn?.addEventListener('click', closeModal);
+            modal?.addEventListener('click', (event) => {
+                if (event.target === modal) closeModal();
+            });
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') closeModal();
+            });
+
+            return {
+                open: (criteria) => {
+                    const body = document.getElementById('checklistModalBody');
+                    if (!body || !modal) return;
+                    const values = Object.entries(criteria.values || {})
+                        .map(([attr, value]) => `<li><code>${attr}</code>: <strong>${value}</strong></li>`)
+                        .join('');
+                    body.innerHTML = `
+                        <p><strong>Nome:</strong> ${criteria.nome}</p>
+                        <p><strong>Regra:</strong> <code>${criteria.regra}</code></p>
+                        <p><strong>Status:</strong> <span class="${criteria.approved ? 'status-approved' : 'status-reproved'}">${criteria.approved ? 'APROVADO' : 'REPROVADO'}</span></p>
+                        <p><strong>Conclusão:</strong> ${criteria.approved ? criteria.aprovadoTxt : criteria.reprovadoTxt}</p>
+                        <p><strong>Atributos e valores:</strong></p>
+                        <ul>${values || '<li>Sem atributos disponíveis.</li>'}</ul>
+                    `;
+                    modal.classList.add('open');
+                }
+            };
+        }
+
+        function renderChecklistScoreCard(criteriaList, scoreChecklist) {
+            const container = document.getElementById('scoreChecklistGrid');
+            if (!container) return;
+            container.innerHTML = '';
+            const modal = createChecklistModal();
+
+            addMetric('Total aprovado', `${scoreChecklist}/12`, scoreChecklist >= 9 ? 'up' : 'down', 'scoreChecklistGrid');
+
+            criteriaList.forEach((criteria, index) => {
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'metric checklist-item';
+                item.innerHTML = `
+                    <div class="label">${index + 1}. ${criteria.title}</div>
+                    <div class="value ${criteria.approved ? 'status-approved' : 'status-reproved'}">${criteria.approved ? 'Aprovado' : 'Reprovado'}</div>
+                `;
+                item.addEventListener('click', () => modal.open(criteria));
+                container.appendChild(item);
+            });
         }
 
         function classifyRange(value, goodMin, warnMin = null) {
@@ -1137,6 +1264,124 @@
                 if (conversaoCaixa > 0.9) scoreChecklist += 1;
                 if (fcfDivida > 0.15) scoreChecklist += 1;
                 if (growthCaixa >= growthLucro) scoreChecklist += 1;
+
+                const checklistCriteria = [
+                    {
+                        title: 'Liquidez Corrente',
+                        nome: 'liquidez_corrente_saudavel',
+                        regra: 'liquidezCorrente > 1.5',
+                        approved: liquidezCorrente > 1.5,
+                        aprovadoTxt: 'empresa consegue pagar obrigações de curto prazo com folga',
+                        reprovadoTxt: 'risco de aperto de caixa no curto prazo',
+                        values: { liquidezCorrente: fmtRatio(liquidezCorrente) }
+                    },
+                    {
+                        title: 'Liquidez Seca',
+                        nome: 'liquidez_seca_adequada',
+                        regra: 'liquidezSeca > 1',
+                        approved: liquidezSeca > 1,
+                        aprovadoTxt: 'não depende de estoque para pagar dívidas',
+                        reprovadoTxt: 'dependência operacional para liquidez',
+                        values: { liquidezSeca: fmtRatio(liquidezSeca) }
+                    },
+                    {
+                        title: 'Endividamento Total',
+                        nome: 'alavancagem_controlada',
+                        regra: 'dividaTotalRatio < 0.6',
+                        approved: dividaTotalRatio < 0.6,
+                        aprovadoTxt: 'estrutura de capital conservadora',
+                        reprovadoTxt: 'empresa muito alavancada',
+                        values: { dividaTotalRatio: fmtRatio(dividaTotalRatio) }
+                    },
+                    {
+                        title: 'Dívida / Patrimônio',
+                        nome: 'estrutura_capital_equilibrada',
+                        regra: 'debtToEquity < 1.5',
+                        approved: debtToEquity < 1.5,
+                        aprovadoTxt: 'uso saudável de capital de terceiros',
+                        reprovadoTxt: 'dependência excessiva de dívida',
+                        values: { debtToEquity: fmtRatio(debtToEquity) }
+                    },
+                    {
+                        title: 'Caixa vs Dívida',
+                        nome: 'cobertura_caixa_divida',
+                        regra: 'cashToDebt > 0.2',
+                        approved: cashToDebt > 0.2,
+                        aprovadoTxt: 'boa capacidade de amortização',
+                        reprovadoTxt: 'baixa proteção de liquidez',
+                        values: { cashToDebt: fmtRatio(cashToDebt) }
+                    },
+                    {
+                        title: 'Crescimento da Dívida vs Patrimônio',
+                        nome: 'crescimento_endividamento_sustentavel',
+                        regra: 'growthDebt < growthEquity',
+                        approved: growthDebt < growthEquity,
+                        aprovadoTxt: 'crescimento financiado com capital próprio',
+                        reprovadoTxt: 'crescimento puxado por dívida',
+                        values: {
+                            growthDebt: fmtPct(growthDebt * 100),
+                            growthEquity: fmtPct(growthEquity * 100)
+                        }
+                    },
+                    {
+                        title: 'Qualidade dos Ativos',
+                        nome: 'qualidade_ativos_operacionais',
+                        regra: 'qualidadeAtivo > 0.3',
+                        approved: qualidadeAtivo > 0.3,
+                        aprovadoTxt: 'ativos geradores de valor',
+                        reprovadoTxt: 'ativos de baixa eficiência',
+                        values: { qualidadeAtivo: fmtRatio(qualidadeAtivo) }
+                    },
+                    {
+                        title: 'Dívida / EBITDA',
+                        nome: 'alavancagem_operacional_saudavel',
+                        regra: 'dividaEbitda > 0 && dividaEbitda < 2',
+                        approved: dividaEbitda > 0 && dividaEbitda < 2,
+                        aprovadoTxt: 'dívida pagável com geração operacional',
+                        reprovadoTxt: 'risco de insolvência operacional',
+                        values: { dividaEbitda: fmtRatio(dividaEbitda) }
+                    },
+                    {
+                        title: 'FCF Yield',
+                        nome: 'retorno_fluxo_caixa_livre',
+                        regra: 'fcfYield > 0.08',
+                        approved: fcfYield > 0.08,
+                        aprovadoTxt: 'empresa gera caixa atrativo vs preço',
+                        reprovadoTxt: 'valuation esticado ou baixa geração',
+                        values: { fcfYield: fmtPct(fcfYield * 100) }
+                    },
+                    {
+                        title: 'Conversão de Caixa',
+                        nome: 'eficiencia_conversao_caixa',
+                        regra: 'conversaoCaixa > 0.9',
+                        approved: conversaoCaixa > 0.9,
+                        aprovadoTxt: 'lucro vira caixa de verdade',
+                        reprovadoTxt: 'lucro “contábil”, não caixa',
+                        values: { conversaoCaixa: fmtRatio(conversaoCaixa) }
+                    },
+                    {
+                        title: 'FCF / Dívida',
+                        nome: 'capacidade_amortizacao_divida',
+                        regra: 'fcfDivida > 0.15',
+                        approved: fcfDivida > 0.15,
+                        aprovadoTxt: 'consegue reduzir dívida com operação',
+                        reprovadoTxt: 'dependente de rolagem de dívida',
+                        values: { fcfDivida: fmtRatio(fcfDivida) }
+                    },
+                    {
+                        title: 'Crescimento Caixa vs Lucro',
+                        nome: 'qualidade_crescimento_lucro',
+                        regra: 'growthCaixa >= growthLucro',
+                        approved: growthCaixa >= growthLucro,
+                        aprovadoTxt: 'crescimento saudável (lucro com caixa)',
+                        reprovadoTxt: 'lucro crescendo sem caixa (alerta forte)',
+                        values: {
+                            growthCaixa: fmtPct(growthCaixa * 100),
+                            growthLucro: fmtPct(growthLucro * 100)
+                        }
+                    }
+                ];
+                renderChecklistScoreCard(checklistCriteria, scoreChecklist);
 
                 const scoreChecklistTxt = scoreChecklist >= 10
                     ? `${scoreChecklist}/12 • ${statusTag('Empresa saudável', 'ok')}`
