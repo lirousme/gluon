@@ -171,6 +171,11 @@
             <div id="atualizadoEm" class="badge">Fonte: SQLite da requisição única</div>
         </section>
 
+        <section id="card-tendencia" class="card">
+            <h2>Tendência de volume (histórico local)</h2>
+            <div class="grid" id="tendencias"></div>
+        </section>
+
         <section id="card-metricas" class="card">
             <div class="grid" id="metricas"></div>
         </section>
@@ -257,12 +262,92 @@
             return Number(value || 0) / 1_000_000_000;
         }
 
-        function addMetric(label, value, trendClass = '') {
-            const metricas = document.getElementById('metricas');
+        function addMetric(label, value, trendClass = '', containerId = 'metricas') {
+            const container = document.getElementById(containerId);
+            if (!container) return;
             const el = document.createElement('div');
             el.className = 'metric';
             el.innerHTML = `<div class="label">${label}</div><div class="value ${trendClass}">${value}</div>`;
-            metricas.appendChild(el);
+            container.appendChild(el);
+        }
+
+        function toTimestamp(value) {
+            if (value === null || value === undefined || value === '') return null;
+            if (typeof value === 'number') {
+                return value < 1_000_000_000_000 ? value * 1000 : value;
+            }
+            const asNum = Number(value);
+            if (Number.isFinite(asNum) && value !== '') {
+                return asNum < 1_000_000_000_000 ? asNum * 1000 : asNum;
+            }
+            const parsed = new Date(value).getTime();
+            return Number.isNaN(parsed) ? null : parsed;
+        }
+
+        function readVolumeHistory() {
+            try {
+                const raw = localStorage.getItem('volumeHistoryByTickerV1');
+                const parsed = raw ? JSON.parse(raw) : {};
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch {
+                return {};
+            }
+        }
+
+        function saveVolumeHistory(history) {
+            localStorage.setItem('volumeHistoryByTickerV1', JSON.stringify(history));
+        }
+
+        function registerVolumePoint(ticker, regularMarketVolume, regularMarketTime) {
+            const timestamp = toTimestamp(regularMarketTime);
+            const volume = num(regularMarketVolume);
+            if (!ticker || !timestamp || !Number.isFinite(volume) || volume <= 0) return [];
+
+            const history = readVolumeHistory();
+            const tickerHistory = Array.isArray(history[ticker]) ? history[ticker] : [];
+            const hasSamePoint = tickerHistory.some((point) => Number(point.timestamp) === timestamp && num(point.volume) === volume);
+
+            if (!hasSamePoint) {
+                tickerHistory.push({ timestamp, volume });
+            }
+
+            tickerHistory.sort((a, b) => Number(a.timestamp) - Number(b.timestamp));
+            history[ticker] = tickerHistory.slice(-5000);
+            saveVolumeHistory(history);
+            return history[ticker];
+        }
+
+        function renderTrends(history, currentVolume, currentTimestamp) {
+            const now = toTimestamp(currentTimestamp) || Date.now();
+            const periods = [
+                { label: 'Dia', ms: 24 * 60 * 60 * 1000 },
+                { label: 'Semana', ms: 7 * 24 * 60 * 60 * 1000 },
+                { label: 'Quinzenal', ms: 15 * 24 * 60 * 60 * 1000 },
+                { label: 'Mês', ms: 30 * 24 * 60 * 60 * 1000 },
+                { label: 'Bimestre', ms: 60 * 24 * 60 * 60 * 1000 },
+                { label: 'Trimestre', ms: 90 * 24 * 60 * 60 * 1000 },
+                { label: 'Semestre', ms: 180 * 24 * 60 * 60 * 1000 },
+                { label: 'Ano', ms: 365 * 24 * 60 * 60 * 1000 }
+            ];
+
+            periods.forEach(({ label, ms }) => {
+                const windowPoints = history.filter((point) => now - Number(point.timestamp) <= ms);
+                if (windowPoints.length < 2) {
+                    addMetric(`${label} (mín. 2 registros)`, 'Dados insuficientes', '', 'tendencias');
+                    return;
+                }
+
+                const avg = windowPoints.reduce((acc, point) => acc + num(point.volume), 0) / windowPoints.length;
+                const deltaPct = avg > 0 ? ((currentVolume - avg) / avg) * 100 : 0;
+
+                if (currentVolume > avg) {
+                    addMetric(`${label} • Venda`, `Atual ${fmtNum.format(currentVolume)} | Média ${fmtNum.format(Math.round(avg))} (${fmtPct(deltaPct)})`, 'up', 'tendencias');
+                } else if (currentVolume < avg) {
+                    addMetric(`${label} • Compra`, `Atual ${fmtNum.format(currentVolume)} | Média ${fmtNum.format(Math.round(avg))} (${fmtPct(deltaPct)})`, 'down', 'tendencias');
+                } else {
+                    addMetric(`${label} • Neutro`, `Atual ${fmtNum.format(currentVolume)} | Média ${fmtNum.format(Math.round(avg))} (${fmtPct(deltaPct)})`, '', 'tendencias');
+                }
+            });
         }
 
         function addSummaryRow(label, value) {
@@ -344,6 +429,9 @@
                 document.getElementById('nomeAcao').textContent = `${acao.symbol} — ${acao.longName || acao.shortName || ''}`;
                 document.getElementById('setorIndustria').textContent = `${profile.sector || '-'} • ${profile.industry || '-'} • ${profile.city || '-'} / ${profile.state || '-'}`;
                 document.getElementById('atualizadoEm').textContent = `Atualizado em: ${safeDate(cache.fetchedAt || acao.regularMarketTime)} (requisição única)`;
+
+                const volumeHistory = registerVolumePoint(ticker, acao.regularMarketVolume, acao.regularMarketTime || cache.fetchedAt);
+                renderTrends(volumeHistory, num(acao.regularMarketVolume), acao.regularMarketTime || cache.fetchedAt);
 
                 const changeClass = Number(acao.regularMarketChangePercent || 0) >= 0 ? 'up' : 'down';
                 addMetric('Preço atual', fmtBRL.format(acao.regularMarketPrice || 0));
