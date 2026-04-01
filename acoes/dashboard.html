@@ -163,7 +163,7 @@
 </head>
 <body>
     <div class="container">
-        <section class="card header">
+        <section id="card-cabecalho" class="card header">
             <div>
                 <h1 id="nomeAcao" class="title">Carregando...</h1>
                 <p id="setorIndustria" class="sub">Aguardando dados da consulta única feita em brapi.html</p>
@@ -171,26 +171,26 @@
             <div id="atualizadoEm" class="badge">Fonte: SQLite da requisição única</div>
         </section>
 
-        <section class="card">
+        <section id="card-metricas" class="card">
             <div class="grid" id="metricas"></div>
         </section>
 
         <section class="cols-2">
-            <article class="card">
+            <article id="card-resumo-operacional" class="card">
                 <h2>Resumo operacional</h2>
                 <table>
                     <tbody id="tabelaResumo"></tbody>
                 </table>
             </article>
 
-            <article class="card">
+            <article id="card-range-52-semanas" class="card">
                 <h2>Posição no range de 52 semanas</h2>
                 <div class="bar-wrap" id="range52"></div>
                 <p id="rangeInfo" class="sub" style="margin-top:10px"></p>
             </article>
         </section>
 
-        <section class="card">
+        <section id="card-indicadores-avancados" class="card">
             <h2>Indicadores avançados (eficiência + valuation)</h2>
             <table>
                 <thead>
@@ -205,7 +205,7 @@
         </section>
 
         <section class="cols-2">
-            <article class="card">
+            <article id="card-ultimos-dividendos" class="card">
                 <h2>Últimos Dividendos</h2>
                 <table>
                     <thead>
@@ -220,13 +220,13 @@
                 </table>
             </article>
 
-            <article class="card">
+            <article id="card-evolucao-receita-lucro" class="card">
                 <h2>Evolução de Receita x Lucro Líquido</h2>
                 <div class="bar-wrap" id="barrasResultados"></div>
             </article>
         </section>
 
-        <section class="card">
+        <section id="card-sobre-empresa" class="card">
             <h2>Sobre a empresa</h2>
             <p id="descricao" class="sub" style="white-space: pre-line;"></p>
         </section>
