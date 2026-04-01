@@ -1128,6 +1128,39 @@
             return data.snapshot || null;
         }
 
+        async function fetchFullTickerData(ticker) {
+            const query = new URLSearchParams({ tickers: ticker, all_data: '1' });
+            const resp = await fetch(`../api/brapi_quotes.php?${query.toString()}`, { cache: 'no-store' });
+            const data = await resp.json();
+            if (!resp.ok || data?.status !== 'ok') {
+                throw new Error(data?.message || `Falha ao consultar brapi completa (HTTP ${resp.status})`);
+            }
+            const results = data?.brapi?.results || [];
+            return results.find((item) => (item?.symbol || '').toUpperCase() === ticker) || null;
+        }
+
+        async function saveSnapshot(snapshot) {
+            const resp = await fetch('../api/brapi_snapshot.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ snapshot })
+            });
+            const payload = await resp.json();
+            if (!resp.ok || payload?.status !== 'ok') {
+                throw new Error(payload?.message || `Falha ao salvar snapshot (HTTP ${resp.status})`);
+            }
+        }
+
+        function hasFundamentals(data) {
+            if (!data || typeof data !== 'object') return false;
+            return Boolean(
+                data.summaryProfile?.longBusinessSummary ||
+                data.financialData?.totalRevenue ||
+                data.defaultKeyStatistics?.enterpriseValue ||
+                (Array.isArray(data.balanceSheetHistory) && data.balanceSheetHistory.length)
+            );
+        }
+
         async function init() {
             const erro = document.getElementById('erro');
             try {
@@ -1137,8 +1170,22 @@
                 const cache = await readCache(ticker);
                 if (!cache?.resultsByTicker) throw new Error('Snapshot da requisição única não encontrado. Abra brapi.html e clique em "Atualizar dados da API".');
 
-                const acao = cache.resultsByTicker[ticker];
+                let acao = cache.resultsByTicker[ticker];
                 if (!acao) throw new Error(`Ticker ${ticker} não está no cache atual. Atualize os dados em brapi.html.`);
+
+                if (!hasFundamentals(acao)) {
+                    const fullData = await fetchFullTickerData(ticker);
+                    if (fullData) {
+                        acao = fullData;
+                        cache.resultsByTicker[ticker] = fullData;
+                        cache.fetchedAt = new Date().toISOString();
+                        try {
+                            await saveSnapshot(cache);
+                        } catch (saveErr) {
+                            console.warn('Não foi possível persistir o snapshot completo:', saveErr);
+                        }
+                    }
+                }
 
                 const profile = acao.summaryProfile || {};
                 const fin = acao.financialData || {};
