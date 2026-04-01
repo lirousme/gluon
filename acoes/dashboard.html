@@ -230,6 +230,15 @@
             <div id="atualizadoEm" class="badge">Fonte: SQLite da requisição única</div>
         </section>
 
+        <section id="card-recebiveis-caixa" class="card">
+            <h2>Caixa x contas a receber</h2>
+            <div class="switch-wrap">
+                <button id="recebiveisAnualBtn" class="switch-btn active" type="button">Anual</button>
+                <button id="recebiveisTrimestralBtn" class="switch-btn" type="button">Trimestral</button>
+            </div>
+            <div class="grid" id="metricasRecebiveisCaixa"></div>
+        </section>
+
         <section id="card-tendencia" class="card">
             <h2>Tendência de volume (histórico no banco)</h2>
             <div class="grid" id="tendencias"></div>
@@ -668,6 +677,67 @@
             setMode('annual');
         }
 
+        function parseBalanceHistory(history, type = 'yearly') {
+            if (!Array.isArray(history) || history.length === 0) return [];
+            return history
+                .map((item) => {
+                    const cash = num(item?.cash);
+                    const netReceivables = num(item?.netReceivables);
+                    const longTermRealizableAssets = num(item?.longTermRealizableAssets);
+                    return {
+                        endDate: item?.endDate,
+                        label: formatPeriodLabel(item?.endDate, type),
+                        cash,
+                        netReceivables,
+                        longTermRealizableAssets,
+                        netReceivablesPctCash: divide(netReceivables, cash) * 100,
+                        longTermRealizableAssetsPctCash: divide(longTermRealizableAssets, cash) * 100
+                    };
+                })
+                .sort((a, b) => new Date(b.endDate || 0) - new Date(a.endDate || 0));
+        }
+
+        function renderRecebiveisCaixaCard(point, modeLabel) {
+            const container = document.getElementById('metricasRecebiveisCaixa');
+            if (!container) return;
+            container.innerHTML = '';
+
+            if (!point) {
+                addMetric(`Caixa imediato (${modeLabel})`, 'Sem dados disponíveis', '', 'metricasRecebiveisCaixa');
+                addMetric(`Contas a receber CP (${modeLabel})`, 'Sem dados disponíveis', '', 'metricasRecebiveisCaixa');
+                addMetric(`Realizável LP (${modeLabel})`, 'Sem dados disponíveis', '', 'metricasRecebiveisCaixa');
+                addMetric('% contas a receber vs caixa', '-', '', 'metricasRecebiveisCaixa');
+                addMetric('% realizável LP vs caixa', '-', '', 'metricasRecebiveisCaixa');
+                return;
+            }
+
+            const periodo = point.label ? ` (${point.label})` : '';
+            addMetric(`Caixa imediato${periodo}`, `${fmtBRL.format(point.cash)} • dinheiro disponível`, '', 'metricasRecebiveisCaixa');
+            addMetric(`Contas a receber médio CP${periodo}`, `${fmtBRL.format(point.netReceivables)} • clientes que ainda vão pagar`, '', 'metricasRecebiveisCaixa');
+            addMetric(`Valores a receber no longo prazo${periodo}`, fmtBRL.format(point.longTermRealizableAssets), '', 'metricasRecebiveisCaixa');
+            addMetric('% contas a receber vs caixa imediato', fmtPct(point.netReceivablesPctCash), '', 'metricasRecebiveisCaixa');
+            addMetric('% valores LP vs caixa imediato', fmtPct(point.longTermRealizableAssetsPctCash), '', 'metricasRecebiveisCaixa');
+        }
+
+        function setupRecebiveisCaixaSwitch(annualHistory, quarterlyHistory) {
+            const annualBtn = document.getElementById('recebiveisAnualBtn');
+            const quarterlyBtn = document.getElementById('recebiveisTrimestralBtn');
+            const annual = parseBalanceHistory(annualHistory, 'yearly');
+            const quarterly = parseBalanceHistory(quarterlyHistory, 'quarterly');
+
+            const setMode = (mode) => {
+                const isAnnual = mode === 'annual';
+                annualBtn.classList.toggle('active', isAnnual);
+                quarterlyBtn.classList.toggle('active', !isAnnual);
+                const selected = isAnnual ? annual : quarterly;
+                renderRecebiveisCaixaCard(selected[0], isAnnual ? 'Anual' : 'Trimestral');
+            };
+
+            annualBtn.addEventListener('click', () => setMode('annual'));
+            quarterlyBtn.addEventListener('click', () => setMode('quarterly'));
+            setMode('annual');
+        }
+
         function tickerFromUrl() {
             const qs = new URLSearchParams(window.location.search);
             return (qs.get('ticker') || '').trim().toUpperCase();
@@ -724,6 +794,10 @@
                 setupPLSwitch(
                     acao.defaultKeyStatisticsHistory || [],
                     acao.defaultKeyStatisticsHistoryQuarterly || []
+                );
+                setupRecebiveisCaixaSwitch(
+                    acao.balanceSheetHistory || [],
+                    acao.balanceSheetHistoryQuarterly || []
                 );
 
                 const fiftyTwoWeekRange = parseFiftyTwoWeekRange(acao.fiftyTwoWeekRange);
