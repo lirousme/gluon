@@ -189,6 +189,13 @@
         return cache?.resultsByTicker?.[ticker] || null;
     }
 
+    function parseFiftyTwoWeekRange(rangeValue) {
+        if (!rangeValue || typeof rangeValue !== 'string') return null;
+        const parts = rangeValue.split('-').map((part) => Number(String(part).trim().replace(',', '.')));
+        if (parts.length !== 2 || Number.isNaN(parts[0]) || Number.isNaN(parts[1])) return null;
+        return { min: parts[0], max: parts[1] };
+    }
+
     function renderLista() {
         listaEl.innerHTML = '';
         if (!empresas.length) {
@@ -198,9 +205,17 @@
 
         empresas.forEach(emp => {
             const result = getTickerData(emp.ticker);
-            const chg = Number(result?.regularMarketChangePercent || 0);
-            const cls = chg >= 0 ? 'chg-up' : 'chg-down';
-            const label = result ? `${chg.toFixed(2)}%` : 'sem cotação';
+            const currentPrice = Number(result?.regularMarketPrice);
+            const fiftyTwoWeekRange = parseFiftyTwoWeekRange(result?.fiftyTwoWeekRange);
+            const avg52 = fiftyTwoWeekRange ? (fiftyTwoWeekRange.min + fiftyTwoWeekRange.max) / 2 : null;
+
+            let cls = '';
+            let label = 'sem sinal';
+            if (result && Number.isFinite(currentPrice) && Number.isFinite(avg52)) {
+                const isCompra = currentPrice < avg52;
+                cls = isCompra ? 'chg-up' : 'chg-down';
+                label = isCompra ? 'Compra' : 'Venda';
+            }
 
             const div = document.createElement('div');
             div.className = 'item';
