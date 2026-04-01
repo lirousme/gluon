@@ -234,6 +234,15 @@
             width: 100%;
             border-radius: 4px 4px 0 0;
         }
+
+        .debt-bars {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(10px, 1fr));
+            align-items: end;
+            gap: 5px;
+            height: 140px;
+        }
     </style>
 </head>
 <body>
@@ -261,6 +270,18 @@
         <section id="card-tendencia" class="card">
             <h2>Tendência de volume (histórico no banco)</h2>
             <div class="grid" id="tendencias"></div>
+        </section>
+
+        <section id="card-dividas-caixa-imediato" class="card">
+            <h2>Dívidas x Caixa Imediado</h2>
+            <div class="switch-wrap">
+                <button id="dividasAnualBtn" class="switch-btn active" type="button">Anual</button>
+                <button id="dividasTrimestralBtn" class="switch-btn" type="button">Trimestral</button>
+            </div>
+            <div id="dividasCaixaChart" class="pl-chart"></div>
+            <p class="sub" style="margin-top:10px">
+                Total de dívidas = passivo de curto prazo + passivo de longo prazo. Comparação percentual contra o caixa imediato.
+            </p>
         </section>
 
         <section id="card-lucro-acao" class="card">
@@ -716,6 +737,86 @@
                 .sort((a, b) => new Date(b.endDate || 0) - new Date(a.endDate || 0));
         }
 
+        function debtVsCashColor(percentage) {
+            if (percentage > 100) return '#ef4444';
+            if (percentage > 50) return '#f97316';
+            if (percentage > 15) return '#facc15';
+            return '#22c55e';
+        }
+
+        function parseDebtVsCashHistory(history, type = 'yearly') {
+            if (!Array.isArray(history) || history.length === 0) return [];
+            return history
+                .map((item) => {
+                    const cash = num(item?.cash);
+                    const currentLiabilities = num(item?.currentLiabilities || item?.totalCurrentLiabilities);
+                    const nonCurrentLiabilities = num(item?.nonCurrentLiabilities || item?.totalNonCurrentLiabilities);
+                    const totalDebt = currentLiabilities + nonCurrentLiabilities;
+                    return {
+                        endDate: item?.endDate,
+                        label: formatPeriodLabel(item?.endDate, type),
+                        cash,
+                        totalDebt,
+                        debtVsCashPct: divide(totalDebt, cash) * 100
+                    };
+                })
+                .sort((a, b) => new Date(a.endDate || 0) - new Date(b.endDate || 0));
+        }
+
+        function renderDebtVsCashChart(points) {
+            const chart = document.getElementById('dividasCaixaChart');
+            if (!chart) return;
+            chart.innerHTML = '';
+
+            if (!points.length) {
+                chart.innerHTML = '<div class="sub">Sem dados suficientes para montar o gráfico de dívidas x caixa.</div>';
+                return;
+            }
+
+            const maxDebt = Math.max(...points.map((point) => point.totalDebt), 0.0001);
+            const maxCash = Math.max(...points.map((point) => point.cash), 0.0001);
+
+            points.forEach((point) => {
+                const pctColor = debtVsCashColor(point.debtVsCashPct);
+                const col = document.createElement('div');
+                col.className = 'pl-col';
+                col.innerHTML = `
+                    <div class="pl-value">
+                        Dívidas ${fmtBRL.format(point.totalDebt)}<br>
+                        Caixa ${fmtBRL.format(point.cash)}<br>
+                        <span style="color:${pctColor};font-weight:700">${fmtPct(point.debtVsCashPct)}</span>
+                    </div>
+                    <div class="debt-bars">
+                        <div class="rc-bar" style="height:${Math.max(2, (point.totalDebt / maxDebt) * 100)}%;background:#f97316" title="Total de dívidas"></div>
+                        <div class="rc-bar" style="height:${Math.max(2, (point.cash / maxCash) * 100)}%;background:#22d3ee" title="Caixa imediato"></div>
+                    </div>
+                    <div class="pl-label">${point.label}</div>
+                `;
+                chart.appendChild(col);
+            });
+        }
+
+        function setupDebtVsCashSwitch(annualHistory, quarterlyHistory) {
+            const annualBtn = document.getElementById('dividasAnualBtn');
+            const quarterlyBtn = document.getElementById('dividasTrimestralBtn');
+            if (!annualBtn || !quarterlyBtn) return;
+
+            const annual = parseDebtVsCashHistory(annualHistory, 'yearly');
+            const quarterly = parseDebtVsCashHistory(quarterlyHistory, 'quarterly');
+
+            const setMode = (mode) => {
+                const isAnnual = mode === 'annual';
+                annualBtn.classList.toggle('active', isAnnual);
+                quarterlyBtn.classList.toggle('active', !isAnnual);
+                const points = (isAnnual ? annual : quarterly).slice(-(isAnnual ? 16 : 12));
+                renderDebtVsCashChart(points);
+            };
+
+            annualBtn.addEventListener('click', () => setMode('annual'));
+            quarterlyBtn.addEventListener('click', () => setMode('quarterly'));
+            setMode('annual');
+        }
+
         function renderRecebiveisCaixaChart(points) {
             const chart = document.getElementById('recebiveisCaixaChart');
             if (!chart) return;
@@ -835,6 +936,10 @@
                     acao.defaultKeyStatisticsHistoryQuarterly || []
                 );
                 setupRecebiveisCaixaSwitch(
+                    acao.balanceSheetHistory || [],
+                    acao.balanceSheetHistoryQuarterly || []
+                );
+                setupDebtVsCashSwitch(
                     acao.balanceSheetHistory || [],
                     acao.balanceSheetHistoryQuarterly || []
                 );
