@@ -67,7 +67,7 @@ $chunks = array_chunk($tickers, 20);
 $results = [];
 $errors = [];
 $endpoints = [];
-$finalHttpCode = 200;
+$failedChunks = 0;
 
 foreach ($chunks as $index => $tickerChunk) {
     $endpoint = 'https://brapi.dev/api/quote/' . implode(',', $tickerChunk) . '?' . http_build_query($queryParams);
@@ -87,11 +87,8 @@ foreach ($chunks as $index => $tickerChunk) {
     $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    if ($httpCode >= 400 && $finalHttpCode < 400) {
-        $finalHttpCode = $httpCode;
-    }
-
     if ($body === false) {
+        $failedChunks++;
         $errors[] = [
             'chunk' => $index + 1,
             'message' => 'Falha ao conectar com a brapi.',
@@ -102,6 +99,7 @@ foreach ($chunks as $index => $tickerChunk) {
 
     $data = json_decode($body, true);
     if (!is_array($data)) {
+        $failedChunks++;
         $errors[] = [
             'chunk' => $index + 1,
             'message' => 'Resposta inválida da brapi.',
@@ -111,13 +109,29 @@ foreach ($chunks as $index => $tickerChunk) {
     }
 
     $chunkResults = $data['results'] ?? [];
+    if ($httpCode >= 400) {
+        $failedChunks++;
+        $errors[] = [
+            'chunk' => $index + 1,
+            'status' => $httpCode,
+            'message' => $data['message'] ?? 'A brapi retornou erro para este lote.'
+        ];
+    }
+
     if (is_array($chunkResults)) {
         $results = array_merge($results, $chunkResults);
     }
 }
 
 if (!empty($errors) && empty($results)) {
-    http_response_code($finalHttpCode >= 400 ? $finalHttpCode : 502);
+    $httpCode = 502;
+    foreach ($errors as $error) {
+        if (isset($error['status']) && (int) $error['status'] >= 400) {
+            $httpCode = (int) $error['status'];
+            break;
+        }
+    }
+    http_response_code($httpCode);
     echo json_encode([
         'status' => 'error',
         'message' => 'Falha ao consultar a brapi em todos os lotes.',
@@ -126,11 +140,12 @@ if (!empty($errors) && empty($results)) {
     exit;
 }
 
-http_response_code($finalHttpCode > 0 ? $finalHttpCode : 200);
+http_response_code(200);
 echo json_encode([
-    'status' => $finalHttpCode >= 400 ? 'error' : 'ok',
+    'status' => empty($errors) ? 'ok' : 'partial',
     'requestedAt' => gmdate('c'),
     'request_count' => count($chunks),
+    'failed_chunks' => $failedChunks,
     'tickers_requested' => $tickers,
     'all_data' => $allDataEnabled,
     'enabled_modules' => $allDataEnabled ? $allModules : [],

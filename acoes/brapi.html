@@ -304,6 +304,7 @@
             const resp = await fetch(`../api/brapi_quotes.php?${query.toString()}`, { cache: 'no-store' });
             const data = await resp.json();
             const requestCount = Number(data?.request_count || totalLotes);
+            const failedChunks = Number(data?.failed_chunks || 0);
             progressoConsulta = { concluidos: requestCount, total: requestCount };
             atualizarBotaoProgresso();
 
@@ -319,14 +320,19 @@
                 tickers,
                 requestMeta: {
                     status: resp.status,
+                    apiStatus: data?.status || 'ok',
                     requestCount,
+                    failedChunks,
                     allData: Boolean(data?.all_data)
                 },
                 resultsByTicker
             };
             await saveApiSnapshot(cache);
 
-            statusEl.textContent = `Atualizado: HTTP ${resp.status} • ${Object.keys(resultsByTicker).length}/${tickers.length} empresas com dados • ${requestCount} lotes BRAPI (dados salvos em SQLite).`;
+            const partialInfo = failedChunks > 0
+                ? ` • ${failedChunks} lote(s) com erro parcial`
+                : '';
+            statusEl.textContent = `Atualizado: HTTP ${resp.status} (${data?.status || 'ok'}) • ${Object.keys(resultsByTicker).length}/${tickers.length} empresas com dados • ${requestCount} lotes BRAPI${partialInfo} (dados salvos em SQLite).`;
             cacheInfoEl.textContent = `SQLite API: ${new Date(cache.fetchedAt).toLocaleString('pt-BR')}`;
             renderLista();
         } catch (err) {
