@@ -176,6 +176,11 @@
             <div class="grid" id="tendencias"></div>
         </section>
 
+        <section id="card-metricas-aleatorias" class="card">
+            <h2>Métricas aleatórias</h2>
+            <div class="grid" id="metricasAleatorias"></div>
+        </section>
+
         <section id="card-medias-precos" class="card">
             <h2>Médias de preços</h2>
             <div class="grid" id="mediasPrecos"></div>
@@ -338,6 +343,15 @@
                 .slice(-5000);
         }
 
+        function parseFiftyTwoWeekRange(rawRange) {
+            if (typeof rawRange !== 'string') return null;
+            const [minStr, maxStr] = rawRange.split('-').map((part) => part.trim());
+            const min = Number(minStr);
+            const max = Number(maxStr);
+            if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+            return { min, max };
+        }
+
         function renderTrends(history, currentVolume, currentTimestamp) {
             const validHistory = cleanVolumeHistory(history);
             const validCurrentVolume = Number.isFinite(currentVolume) && currentVolume > 0 ? currentVolume : null;
@@ -497,6 +511,16 @@
                 renderTrends(volumeHistory, num(acao.regularMarketVolume), acao.regularMarketTime || cache.fetchedAt);
                 const priceHistory = cache?.historyByTicker?.[ticker]?.price || [];
                 renderPriceAverages(priceHistory, acao.regularMarketTime || cache.fetchedAt);
+
+                const fiftyTwoWeekRange = parseFiftyTwoWeekRange(acao.fiftyTwoWeekRange);
+                if (fiftyTwoWeekRange) {
+                    const avg52 = (fiftyTwoWeekRange.min + fiftyTwoWeekRange.max) / 2;
+                    addMetric('fiftyTwoWeekRange • Menor', fmtBRL.format(fiftyTwoWeekRange.min), '', 'metricasAleatorias');
+                    addMetric('fiftyTwoWeekRange • Maior', fmtBRL.format(fiftyTwoWeekRange.max), '', 'metricasAleatorias');
+                    addMetric('fiftyTwoWeekRange • Média', fmtBRL.format(avg52), '', 'metricasAleatorias');
+                } else {
+                    addMetric('fiftyTwoWeekRange', 'Formato indisponível', '', 'metricasAleatorias');
+                }
 
                 const changeClass = Number(acao.regularMarketChangePercent || 0) >= 0 ? 'up' : 'down';
                 addMetric('Preço atual', fmtBRL.format(acao.regularMarketPrice || 0));
