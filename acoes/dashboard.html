@@ -1116,11 +1116,8 @@
             return (qs.get('ticker') || '').trim().toUpperCase();
         }
 
-        async function readCache(ticker) {
-            const query = ticker
-                ? `?ticker=${encodeURIComponent(ticker)}&includeHistory=1`
-                : '';
-            const resp = await fetch(`../api/brapi_snapshot.php${query}`, { cache: 'no-store' });
+        async function readCache() {
+            const resp = await fetch('../api/brapi_snapshot.php?includeHistory=1', { cache: 'no-store' });
             const data = await resp.json();
             if (!resp.ok || data?.status !== 'ok') {
                 throw new Error(data?.message || `Falha ao carregar snapshot (HTTP ${resp.status})`);
@@ -1167,11 +1164,25 @@
                 const ticker = tickerFromUrl();
                 if (!ticker) throw new Error('Ticker ausente na URL. Volte para brapi.html e clique em uma empresa.');
 
-                const cache = await readCache(ticker);
+                const cache = await readCache();
                 if (!cache?.resultsByTicker) throw new Error('Snapshot da requisição única não encontrado. Abra brapi.html e clique em "Atualizar dados da API".');
 
                 let acao = cache.resultsByTicker[ticker];
-                if (!acao) throw new Error(`Ticker ${ticker} não está no cache atual. Atualize os dados em brapi.html.`);
+                if (!acao) {
+                    const fullData = await fetchFullTickerData(ticker);
+                    if (!fullData) {
+                        throw new Error(`Ticker ${ticker} não está no cache atual e também não foi retornado pela API.`);
+                    }
+                    acao = fullData;
+                    cache.resultsByTicker[ticker] = fullData;
+                    cache.tickers = Array.from(new Set([...(cache.tickers || []), ticker]));
+                    cache.fetchedAt = new Date().toISOString();
+                    try {
+                        await saveSnapshot(cache);
+                    } catch (saveErr) {
+                        console.warn('Não foi possível persistir o ticker retornado pela API:', saveErr);
+                    }
+                }
 
                 if (!hasFundamentals(acao)) {
                     const fullData = await fetchFullTickerData(ticker);
