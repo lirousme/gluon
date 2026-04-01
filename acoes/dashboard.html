@@ -312,6 +312,12 @@
             <div id="atualizadoEm" class="badge">Fonte: SQLite da requisição única</div>
         </section>
 
+        <section id="card-indicadores-preco" class="card">
+            <h2>💰 Indicadores de preço (clique para detalhes)</h2>
+            <p class="sub">Faixas estimadas por múltiplos e fluxo de caixa com explicação da fórmula usada.</p>
+            <div class="grid" id="priceIndicatorsGrid"></div>
+        </section>
+
         <section id="card-recebiveis-caixa" class="card">
             <h2>Caixa x contas a receber — histórico</h2>
             <div class="switch-wrap">
@@ -675,11 +681,17 @@
                     const values = Object.entries(criteria.values || {})
                         .map(([attr, value]) => `<li><code>${attr}</code>: <strong>${value}</strong></li>`)
                         .join('');
+                    const title = criteria.modalTitle || criteria.nome || criteria.title || 'Indicador';
+                    const rule = criteria.regra || criteria.formula || '-';
+                    const hasApproved = typeof criteria.approved === 'boolean';
+                    const statusClass = criteria.statusClass || (hasApproved ? (criteria.approved ? 'status-approved' : 'status-reproved') : '');
+                    const statusText = criteria.statusText || (hasApproved ? (criteria.approved ? 'APROVADO' : 'REPROVADO') : '');
+                    const conclusion = criteria.conclusao || criteria.reason || (hasApproved ? (criteria.approved ? criteria.aprovadoTxt : criteria.reprovadoTxt) : '-');
                     body.innerHTML = `
-                        <p><strong>Nome:</strong> ${criteria.nome}</p>
-                        <p><strong>Regra:</strong> <code>${criteria.regra}</code></p>
-                        <p><strong>Status:</strong> <span class="${criteria.approved ? 'status-approved' : 'status-reproved'}">${criteria.approved ? 'APROVADO' : 'REPROVADO'}</span></p>
-                        <p><strong>Conclusão:</strong> ${criteria.approved ? criteria.aprovadoTxt : criteria.reprovadoTxt}</p>
+                        <p><strong>Nome:</strong> ${title}</p>
+                        <p><strong>Regra:</strong> <code>${rule}</code></p>
+                        ${statusText ? `<p><strong>Status:</strong> <span class="${statusClass}">${statusText}</span></p>` : ''}
+                        <p><strong>Conclusão:</strong> ${conclusion}</p>
                         <p><strong>Atributos e valores:</strong></p>
                         <ul>${values || '<li>Sem atributos disponíveis.</li>'}</ul>
                     `;
@@ -705,6 +717,25 @@
                     <div class="value ${criteria.approved ? 'status-approved' : 'status-reproved'}">${criteria.approved ? 'Aprovado' : 'Reprovado'}</div>
                 `;
                 item.addEventListener('click', () => modal.open(criteria));
+                container.appendChild(item);
+            });
+        }
+
+        function renderPriceIndicatorsCard(indicators) {
+            const container = document.getElementById('priceIndicatorsGrid');
+            if (!container) return;
+            container.innerHTML = '';
+            const modal = createChecklistModal();
+
+            indicators.forEach((indicator) => {
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'metric checklist-item';
+                item.innerHTML = `
+                    <div class="label">${indicator.label}</div>
+                    <div class="value ${indicator.valueClass || ''}">${indicator.value}</div>
+                `;
+                item.addEventListener('click', () => modal.open(indicator.details));
                 container.appendChild(item);
             });
         }
@@ -1423,6 +1454,120 @@
                         ? statusTag('lucro ↑ e caixa ↓ (alerta forte)', 'bad')
                         : statusTag('dinâmica mista', 'warn');
                 const maquinaDinheiro = (fcfYield > 0.1) && (dividaEbitda > 0 && dividaEbitda < 1.5) && (conversaoCaixa > 1);
+
+                const profileQuality = scoreChecklist >= 10 ? 'excelente' : scoreChecklist >= 7 ? 'mediana' : 'fraca';
+                const fairPL = scoreChecklist >= 10 ? 16 : scoreChecklist >= 7 ? 12 : 8;
+                const safetyMargin = scoreChecklist >= 10 ? 0.2 : scoreChecklist >= 7 ? 0.3 : 0.35;
+                const fairPvp = scoreChecklist >= 10 ? 2 : scoreChecklist >= 7 ? 1.3 : 0.9;
+                const fairFcfMultiple = scoreChecklist >= 10 ? 14 : scoreChecklist >= 7 ? 10 : 8;
+                const priceCeilingPL = eps > 0 ? eps * fairPL : 0;
+                const idealPricePL = priceCeilingPL > 0 ? priceCeilingPL * (1 - safetyMargin) : 0;
+                const vpa = sharesOutstanding > 0 ? divide(shareholdersEquity, sharesOutstanding) : 0;
+                const priceCeilingPvp = vpa > 0 ? vpa * fairPvp : 0;
+                const fcfEnterpriseValue = fcf > 0 ? fcf * fairFcfMultiple : 0;
+                const priceCeilingFcf = sharesOutstanding > 0 ? divide(fcfEnterpriseValue, sharesOutstanding) : 0;
+                const hybridCandidates = [priceCeilingPL, priceCeilingPvp, priceCeilingFcf].filter((value) => Number.isFinite(value) && value > 0);
+                const hybridPriceCeiling = hybridCandidates.length
+                    ? hybridCandidates.reduce((acc, value) => acc + value, 0) / hybridCandidates.length
+                    : 0;
+                const hybridIdealPrice = hybridPriceCeiling > 0 ? hybridPriceCeiling * 0.7 : 0;
+                const priceBiasClass = priceNow <= hybridIdealPrice && hybridIdealPrice > 0 ? 'up' : 'down';
+
+                renderPriceIndicatorsCard([
+                    {
+                        label: '1) Preço teto (P/L justo)',
+                        value: priceCeilingPL > 0 ? fmtBRL.format(priceCeilingPL) : 'Dados insuficientes',
+                        valueClass: priceCeilingPL > 0 && priceNow <= priceCeilingPL ? 'up' : 'down',
+                        details: {
+                            modalTitle: 'Preço teto (baseado em P/L justo)',
+                            formula: 'Preço teto = EPS × P/L justo',
+                            statusText: priceCeilingPL > 0 ? (priceNow <= priceCeilingPL ? 'ABAIXO DO TETO' : 'ACIMA DO TETO') : 'SEM DADOS',
+                            statusClass: priceCeilingPL > 0 && priceNow <= priceCeilingPL ? 'status-approved' : 'status-reproved',
+                            reason: `P/L justo ajustado pela qualidade (${profileQuality}): ${fairPL}.`,
+                            values: {
+                                eps: fmtRatio(eps, 2),
+                                fairPL,
+                                precoTetoPL: fmtBRL.format(priceCeilingPL),
+                                precoAtual: fmtBRL.format(priceNow)
+                            }
+                        }
+                    },
+                    {
+                        label: '2) Preço ideal (margem de segurança)',
+                        value: idealPricePL > 0 ? fmtBRL.format(idealPricePL) : 'Dados insuficientes',
+                        valueClass: idealPricePL > 0 && priceNow <= idealPricePL ? 'up' : 'down',
+                        details: {
+                            modalTitle: 'Preço ideal (com margem de segurança)',
+                            formula: 'Preço ideal = Preço teto × (1 - margem)',
+                            statusText: idealPricePL > 0 ? (priceNow <= idealPricePL ? 'ZONA DE COMPRA' : 'AGUARDAR MELHOR PREÇO') : 'SEM DADOS',
+                            statusClass: idealPricePL > 0 && priceNow <= idealPricePL ? 'status-approved' : 'status-reproved',
+                            reason: `Margem de segurança usada: ${fmtPct(safetyMargin * 100)} para perfil ${profileQuality}.`,
+                            values: {
+                                precoTetoPL: fmtBRL.format(priceCeilingPL),
+                                margemSeguranca: fmtPct(safetyMargin * 100),
+                                precoIdeal: fmtBRL.format(idealPricePL),
+                                precoAtual: fmtBRL.format(priceNow)
+                            }
+                        }
+                    },
+                    {
+                        label: '3) Preço teto via P/VP',
+                        value: priceCeilingPvp > 0 ? fmtBRL.format(priceCeilingPvp) : 'Dados insuficientes',
+                        valueClass: priceCeilingPvp > 0 && priceNow <= priceCeilingPvp ? 'up' : 'down',
+                        details: {
+                            modalTitle: 'Preço teto baseado em valor patrimonial (P/VP)',
+                            formula: 'VPA = Patrimônio líquido / Nº ações; Preço teto = VPA × P/VP justo',
+                            statusText: priceCeilingPvp > 0 ? (priceNow <= priceCeilingPvp ? 'ABAIXO DO TETO P/VP' : 'ACIMA DO TETO P/VP') : 'SEM DADOS',
+                            statusClass: priceCeilingPvp > 0 && priceNow <= priceCeilingPvp ? 'status-approved' : 'status-reproved',
+                            reason: `P/VP justo definido em ${fairPvp} com base no score ${scoreChecklist}/12.`,
+                            values: {
+                                patrimonioLiquido: fmtBRL.format(shareholdersEquity),
+                                sharesOutstanding: fmtNum.format(sharesOutstanding),
+                                vpa: fmtBRL.format(vpa),
+                                fairPvp,
+                                precoTetoPvp: fmtBRL.format(priceCeilingPvp)
+                            }
+                        }
+                    },
+                    {
+                        label: '4) Preço teto via FCF',
+                        value: priceCeilingFcf > 0 ? fmtBRL.format(priceCeilingFcf) : 'Dados insuficientes',
+                        valueClass: priceCeilingFcf > 0 && priceNow <= priceCeilingFcf ? 'up' : 'down',
+                        details: {
+                            modalTitle: 'Preço teto baseado em fluxo de caixa',
+                            formula: 'Valor da empresa ≈ FCF × múltiplo; Preço teto = Valor / Nº ações',
+                            statusText: priceCeilingFcf > 0 ? (priceNow <= priceCeilingFcf ? 'ABAIXO DO TETO FCF' : 'ACIMA DO TETO FCF') : 'SEM DADOS',
+                            statusClass: priceCeilingFcf > 0 && priceNow <= priceCeilingFcf ? 'status-approved' : 'status-reproved',
+                            reason: `Múltiplo de FCF usado: ${fairFcfMultiple}x para qualidade ${profileQuality}.`,
+                            values: {
+                                fcf: fmtBRL.format(fcf),
+                                multiploFcf: `${fairFcfMultiple}x`,
+                                valorEmpresa: fmtBRL.format(fcfEnterpriseValue),
+                                precoTetoFcf: fmtBRL.format(priceCeilingFcf)
+                            }
+                        }
+                    },
+                    {
+                        label: '5) Método híbrido (média)',
+                        value: hybridPriceCeiling > 0 ? `${fmtBRL.format(hybridPriceCeiling)} • ideal ${fmtBRL.format(hybridIdealPrice)}` : 'Dados insuficientes',
+                        valueClass: hybridPriceCeiling > 0 ? priceBiasClass : '',
+                        details: {
+                            modalTitle: 'Método híbrido (P/L + P/VP + FCF)',
+                            formula: 'Preço teto final = média dos preços teto válidos; Preço ideal = teto final × 0.7',
+                            statusText: hybridPriceCeiling > 0 ? (priceNow <= hybridIdealPrice ? 'ABAIXO DO IDEAL HÍBRIDO' : priceNow <= hybridPriceCeiling ? 'ABAIXO DO TETO HÍBRIDO' : 'ACIMA DO TETO HÍBRIDO') : 'SEM DADOS',
+                            statusClass: hybridPriceCeiling > 0 && priceNow <= hybridPriceCeiling ? 'status-approved' : 'status-reproved',
+                            reason: `Combinação de ${hybridCandidates.length} método(s) válidos para reduzir viés de um único indicador.`,
+                            values: {
+                                precoTetoPL: fmtBRL.format(priceCeilingPL),
+                                precoTetoPvp: fmtBRL.format(priceCeilingPvp),
+                                precoTetoFcf: fmtBRL.format(priceCeilingFcf),
+                                precoTetoHibrido: fmtBRL.format(hybridPriceCeiling),
+                                precoIdealHibrido: fmtBRL.format(hybridIdealPrice),
+                                precoAtual: fmtBRL.format(priceNow)
+                            }
+                        }
+                    }
+                ]);
 
                 addAdvancedRow('🔹 Liquidez corrente', 'ativo circulante / passivo circulante', liquidezCorrenteTxt);
                 addAdvancedRow('🔹 Liquidez seca', '(caixa + aplicações CP + recebíveis) / passivo circulante', fmtRatio(liquidezSeca));
