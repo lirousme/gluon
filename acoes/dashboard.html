@@ -313,7 +313,7 @@
         </section>
 
         <section id="card-indicadores-preco" class="card">
-            <h2 id="priceIndicatorsTitle">💰 Indicadores de preço (clique para detalhes)</h2>
+            <h2>💰 Indicadores de preço (clique para detalhes)</h2>
             <p class="sub">Faixas estimadas por múltiplos e fluxo de caixa com explicação da fórmula usada.</p>
             <div class="grid" id="priceIndicatorsGrid"></div>
         </section>
@@ -1238,8 +1238,6 @@
                 }
 
                 const changeClass = Number(acao.regularMarketChangePercent || 0) >= 0 ? 'up' : 'down';
-                document.getElementById('priceIndicatorsTitle').textContent =
-                    `💰 ${fmtBRL.format(acao.regularMarketPrice || 0)} • Indicadores de preço (clique para detalhes)`;
                 addMetric('Preço atual', fmtBRL.format(acao.regularMarketPrice || 0));
                 addMetric('Variação do dia', `${fmtPct(acao.regularMarketChangePercent)} (${fmtBRL.format(acao.regularMarketChange || 0)})`, changeClass);
                 addMetric('Abertura / Fech. ant.', `${fmtBRL.format(acao.regularMarketOpen || 0)} / ${fmtBRL.format(acao.regularMarketPreviousClose || 0)}`);
