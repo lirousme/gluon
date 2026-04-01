@@ -235,6 +235,15 @@
             <div class="grid" id="tendencias"></div>
         </section>
 
+        <section id="card-lucro-acao" class="card">
+            <h2>Lucro por ação (EPS) — Histórico</h2>
+            <div class="switch-wrap">
+                <button id="epsAnualBtn" class="switch-btn active" type="button">Anual</button>
+                <button id="epsTrimestralBtn" class="switch-btn" type="button">Trimestral</button>
+            </div>
+            <div id="epsChart" class="pl-chart"></div>
+        </section>
+
         <section id="card-pl-historico" class="card">
             <h2>P/L (EPS ÷ Preço) — Histórico</h2>
             <div class="switch-wrap">
@@ -559,6 +568,23 @@
                 .slice(type === 'quarterly' ? -12 : -16);
         }
 
+        function parseEPSHistory(history, type = 'yearly') {
+            if (!Array.isArray(history)) return [];
+            return history
+                .map((item) => {
+                    const eps = Number(item?.earningsPerShare);
+                    if (!Number.isFinite(eps)) return null;
+                    return {
+                        label: formatPeriodLabel(item.endDate, type),
+                        endDate: item.endDate,
+                        eps
+                    };
+                })
+                .filter(Boolean)
+                .sort((a, b) => new Date(a.endDate) - new Date(b.endDate))
+                .slice(type === 'quarterly' ? -12 : -16);
+        }
+
         function renderPLChart(points) {
             const chart = document.getElementById('plChart');
             chart.innerHTML = '';
@@ -581,6 +607,31 @@
             });
         }
 
+        function renderEPSChart(points) {
+            const chart = document.getElementById('epsChart');
+            chart.innerHTML = '';
+            if (!points.length) {
+                chart.innerHTML = '<div class="sub">Sem dados suficientes para montar o gráfico de EPS.</div>';
+                return;
+            }
+
+            const maxValue = Math.max(...points.map((point) => Math.abs(point.eps)), 0.0001);
+            points.forEach((point) => {
+                const col = document.createElement('div');
+                col.className = 'pl-col';
+                const percent = Math.max(2, (Math.abs(point.eps) / maxValue) * 100);
+                const barColor = point.eps >= 0
+                    ? 'linear-gradient(180deg, #34d399, #059669)'
+                    : 'linear-gradient(180deg, #f87171, #b91c1c)';
+                col.innerHTML = `
+                    <div class="pl-value">${fmtRatio(point.eps, 3)}</div>
+                    <div class="pl-bar" style="height:${percent}%;background:${barColor}"></div>
+                    <div class="pl-label">${point.label}</div>
+                `;
+                chart.appendChild(col);
+            });
+        }
+
         function setupPLSwitch(annualHistory, quarterlyHistory) {
             const annualBtn = document.getElementById('plAnualBtn');
             const quarterlyBtn = document.getElementById('plTrimestralBtn');
@@ -592,6 +643,24 @@
                 annualBtn.classList.toggle('active', isAnnual);
                 quarterlyBtn.classList.toggle('active', !isAnnual);
                 renderPLChart(isAnnual ? annual : quarterly);
+            };
+
+            annualBtn.addEventListener('click', () => setMode('annual'));
+            quarterlyBtn.addEventListener('click', () => setMode('quarterly'));
+            setMode('annual');
+        }
+
+        function setupEPSSwitch(annualHistory, quarterlyHistory) {
+            const annualBtn = document.getElementById('epsAnualBtn');
+            const quarterlyBtn = document.getElementById('epsTrimestralBtn');
+            const annual = parseEPSHistory(annualHistory, 'yearly');
+            const quarterly = parseEPSHistory(quarterlyHistory, 'quarterly');
+
+            const setMode = (mode) => {
+                const isAnnual = mode === 'annual';
+                annualBtn.classList.toggle('active', isAnnual);
+                quarterlyBtn.classList.toggle('active', !isAnnual);
+                renderEPSChart(isAnnual ? annual : quarterly);
             };
 
             annualBtn.addEventListener('click', () => setMode('annual'));
@@ -648,6 +717,10 @@
                 renderTrends(volumeHistory, num(acao.regularMarketVolume), acao.regularMarketTime || cache.fetchedAt);
                 const priceHistory = cache?.historyByTicker?.[ticker]?.price || [];
                 renderPriceAverages(priceHistory, acao.regularMarketTime || cache.fetchedAt);
+                setupEPSSwitch(
+                    acao.defaultKeyStatisticsHistory || [],
+                    acao.defaultKeyStatisticsHistoryQuarterly || []
+                );
                 setupPLSwitch(
                     acao.defaultKeyStatisticsHistory || [],
                     acao.defaultKeyStatisticsHistoryQuarterly || []
