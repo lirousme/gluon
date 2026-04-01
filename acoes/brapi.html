@@ -72,11 +72,11 @@
         </div>
 
         <div class="row">
-            <input id="novoTicker" type="text" placeholder="Ticker (ex.: PETR4)">
-            <input id="novoNome" type="text" placeholder="Nome (opcional)">
+            <input id="novoTicker" type="text" placeholder="Ticker(s) (ex.: PETR4 ou PETR4,VALE3,ITUB4)">
+            <input id="novoNome" type="text" placeholder="Nome (opcional, apenas para 1 ticker)">
             <button id="addBtn">Adicionar</button>
         </div>
-        <p id="modalHint" class="hint">Sem limite fixo de empresas na lista.</p>
+        <p id="modalHint" class="hint">Sem limite fixo de empresas na lista. Você pode inserir vários tickers separados por vírgula, sem espaço.</p>
 
         <div id="modalLista" class="modal-list"></div>
     </div>
@@ -106,6 +106,13 @@
     let progressoConsulta = null;
 
     const normTicker = (t) => (t || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+    function parseTickerInput(rawValue) {
+        return (rawValue || '')
+            .split(',')
+            .map((part) => normTicker(part))
+            .filter(Boolean);
+    }
 
     function sanitizeLista(arr) {
         const map = new Map();
@@ -315,20 +322,37 @@
     }
 
     addBtn.addEventListener('click', () => {
-        const ticker = normTicker(novoTickerEl.value);
+        const tickersInformados = parseTickerInput(novoTickerEl.value);
         const nome = (novoNomeEl.value || '').trim();
 
-        if (!ticker) {
-            statusEl.textContent = 'Informe um ticker válido.';
-            return;
-        }
-        const exists = empresas.some(e => e.ticker === ticker);
-        if (exists) {
-            statusEl.textContent = `Ticker ${ticker} já está na lista.`;
+        if (!tickersInformados.length) {
+            statusEl.textContent = 'Informe ao menos um ticker válido.';
             return;
         }
 
-        empresas.push({ ticker, nome: nome || ticker });
+        const tickersExistentes = new Set(empresas.map((e) => e.ticker));
+        const novosTickers = [];
+        const duplicados = [];
+
+        tickersInformados.forEach((ticker) => {
+            if (tickersExistentes.has(ticker)) {
+                duplicados.push(ticker);
+                return;
+            }
+            tickersExistentes.add(ticker);
+            novosTickers.push(ticker);
+        });
+
+        if (!novosTickers.length) {
+            statusEl.textContent = 'Nenhum ticker novo para adicionar. Todos já existem na lista.';
+            return;
+        }
+
+        const podeAplicarNome = novosTickers.length === 1 && nome;
+        novosTickers.forEach((ticker) => {
+            empresas.push({ ticker, nome: podeAplicarNome ? nome : ticker });
+        });
+
         novoTickerEl.value = '';
         novoNomeEl.value = '';
 
@@ -340,7 +364,10 @@
             .then(() => {
                 renderLista();
                 renderModalLista();
-                statusEl.textContent = `Ticker ${ticker} adicionado. Clique em "Atualizar dados" para incluir na consulta em lotes automáticos.`;
+                const msgDuplicados = duplicados.length
+                    ? ` Ignorados por já existirem: ${duplicados.join(', ')}.`
+                    : '';
+                statusEl.textContent = `${novosTickers.length} ticker(s) adicionado(s): ${novosTickers.join(', ')}.${msgDuplicados} Clique em "Atualizar dados" para incluir na consulta em lotes automáticos.`;
             })
             .catch((err) => {
                 statusEl.textContent = `Erro ao salvar lista: ${err.message}`;
