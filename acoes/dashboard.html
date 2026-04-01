@@ -219,6 +219,21 @@
             color: #bfdbfe;
             text-align: center;
         }
+
+        .rc-bars {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(5, minmax(8px, 1fr));
+            align-items: end;
+            gap: 3px;
+            height: 140px;
+        }
+
+        .rc-bar {
+            min-height: 2px;
+            width: 100%;
+            border-radius: 4px 4px 0 0;
+        }
     </style>
 </head>
 <body>
@@ -232,9 +247,15 @@
         </section>
 
         <section id="card-recebiveis-caixa" class="card">
-            <h2>Caixa x contas a receber</h2>
-            <div class="switch-wrap" id="recebiveisPeriodSwitch"></div>
-            <div class="grid" id="metricasRecebiveisCaixa"></div>
+            <h2>Caixa x contas a receber — histórico</h2>
+            <div class="switch-wrap">
+                <button id="recebiveisAnualBtn" class="switch-btn active" type="button">Anual</button>
+                <button id="recebiveisTrimestralBtn" class="switch-btn" type="button">Trimestral</button>
+            </div>
+            <div id="recebiveisCaixaChart" class="pl-chart"></div>
+            <p class="sub" style="margin-top:10px">
+                Séries: caixa imediato, contas a receber CP, realizável LP, % recebíveis vs caixa e % LP vs caixa.
+            </p>
         </section>
 
         <section id="card-tendencia" class="card">
@@ -695,100 +716,65 @@
                 .sort((a, b) => new Date(b.endDate || 0) - new Date(a.endDate || 0));
         }
 
-        function aggregateBalancePoints(points) {
-            if (!Array.isArray(points) || points.length === 0) return null;
-            const totals = points.reduce((acc, point) => {
-                acc.cash += num(point.cash);
-                acc.netReceivables += num(point.netReceivables);
-                acc.longTermRealizableAssets += num(point.longTermRealizableAssets);
-                return acc;
-            }, { cash: 0, netReceivables: 0, longTermRealizableAssets: 0 });
-            const size = points.length;
-            const cash = totals.cash / size;
-            const netReceivables = totals.netReceivables / size;
-            const longTermRealizableAssets = totals.longTermRealizableAssets / size;
-            return {
-                label: `${points[points.length - 1].label} → ${points[0].label}`,
-                cash,
-                netReceivables,
-                longTermRealizableAssets,
-                netReceivablesPctCash: divide(netReceivables, cash) * 100,
-                longTermRealizableAssetsPctCash: divide(longTermRealizableAssets, cash) * 100,
-                sampleSize: size
-            };
-        }
+        function renderRecebiveisCaixaChart(points) {
+            const chart = document.getElementById('recebiveisCaixaChart');
+            if (!chart) return;
+            chart.innerHTML = '';
 
-        function renderRecebiveisCaixaCard(point, modeLabel) {
-            const container = document.getElementById('metricasRecebiveisCaixa');
-            if (!container) return;
-            container.innerHTML = '';
-
-            if (!point) {
-                addMetric(`Caixa imediato (${modeLabel})`, 'Sem dados disponíveis', '', 'metricasRecebiveisCaixa');
-                addMetric(`Contas a receber CP (${modeLabel})`, 'Sem dados disponíveis', '', 'metricasRecebiveisCaixa');
-                addMetric(`Realizável LP (${modeLabel})`, 'Sem dados disponíveis', '', 'metricasRecebiveisCaixa');
-                addMetric('% contas a receber vs caixa', '-', '', 'metricasRecebiveisCaixa');
-                addMetric('% realizável LP vs caixa', '-', '', 'metricasRecebiveisCaixa');
+            if (!points.length) {
+                chart.innerHTML = '<div class="sub">Sem dados suficientes para montar o gráfico de recebíveis x caixa.</div>';
                 return;
             }
 
-            const periodo = point.label ? ` (${point.label})` : '';
-            const detalheAmostra = point.sampleSize > 1 ? ` • média de ${point.sampleSize} períodos` : '';
-            addMetric(`Caixa imediato${periodo}`, `${fmtBRL.format(point.cash)} • dinheiro disponível`, '', 'metricasRecebiveisCaixa');
-            addMetric(`Contas a receber médio CP${periodo}`, `${fmtBRL.format(point.netReceivables)} • clientes que ainda vão pagar`, '', 'metricasRecebiveisCaixa');
-            addMetric(`Valores a receber no longo prazo${periodo}`, `${fmtBRL.format(point.longTermRealizableAssets)}${detalheAmostra}`, '', 'metricasRecebiveisCaixa');
-            addMetric('% contas a receber vs caixa imediato', fmtPct(point.netReceivablesPctCash), '', 'metricasRecebiveisCaixa');
-            addMetric('% valores LP vs caixa imediato', fmtPct(point.longTermRealizableAssetsPctCash), '', 'metricasRecebiveisCaixa');
-            addMetric('Período selecionado', modeLabel, '', 'metricasRecebiveisCaixa');
+            const maxCash = Math.max(...points.map((point) => point.cash), 0.0001);
+            const maxReceivables = Math.max(...points.map((point) => point.netReceivables), 0.0001);
+            const maxLongTerm = Math.max(...points.map((point) => point.longTermRealizableAssets), 0.0001);
+            const maxReceivablesPct = Math.max(...points.map((point) => point.netReceivablesPctCash), 0.0001);
+            const maxLongTermPct = Math.max(...points.map((point) => point.longTermRealizableAssetsPctCash), 0.0001);
+
+            points.forEach((point) => {
+                const col = document.createElement('div');
+                col.className = 'pl-col';
+                col.innerHTML = `
+                    <div class="pl-value">
+                        Cx ${fmtBRL.format(point.cash)}<br>
+                        Rec ${fmtBRL.format(point.netReceivables)} (${fmtPct(point.netReceivablesPctCash)})<br>
+                        LP ${fmtBRL.format(point.longTermRealizableAssets)} (${fmtPct(point.longTermRealizableAssetsPctCash)})
+                    </div>
+                    <div class="rc-bars">
+                        <div class="rc-bar" style="height:${Math.max(2, (point.cash / maxCash) * 100)}%;background:#60a5fa" title="Caixa imediato"></div>
+                        <div class="rc-bar" style="height:${Math.max(2, (point.netReceivables / maxReceivables) * 100)}%;background:#34d399" title="Contas a receber CP"></div>
+                        <div class="rc-bar" style="height:${Math.max(2, (point.longTermRealizableAssets / maxLongTerm) * 100)}%;background:#f59e0b" title="Valores a receber LP"></div>
+                        <div class="rc-bar" style="height:${Math.max(2, (point.netReceivablesPctCash / maxReceivablesPct) * 100)}%;background:#a78bfa" title="% recebíveis vs caixa"></div>
+                        <div class="rc-bar" style="height:${Math.max(2, (point.longTermRealizableAssetsPctCash / maxLongTermPct) * 100)}%;background:#f472b6" title="% LP vs caixa"></div>
+                    </div>
+                    <div class="pl-label">${point.label}</div>
+                `;
+                chart.appendChild(col);
+            });
         }
 
         function setupRecebiveisCaixaSwitch(annualHistory, quarterlyHistory) {
-            const switchWrap = document.getElementById('recebiveisPeriodSwitch');
-            if (!switchWrap) return;
+            const annualBtn = document.getElementById('recebiveisAnualBtn');
+            const quarterlyBtn = document.getElementById('recebiveisTrimestralBtn');
+            if (!annualBtn || !quarterlyBtn) return;
             const annual = parseBalanceHistory(annualHistory, 'yearly');
             const quarterly = parseBalanceHistory(quarterlyHistory, 'quarterly');
 
-            const latest = (() => {
-                const latestAnnual = annual[0] || null;
-                const latestQuarterly = quarterly[0] || null;
-                if (!latestAnnual) return latestQuarterly;
-                if (!latestQuarterly) return latestAnnual;
-                return new Date(latestQuarterly.endDate || 0) >= new Date(latestAnnual.endDate || 0)
-                    ? latestQuarterly
-                    : latestAnnual;
-            })();
-
-            const options = [
-                { key: 'current', label: 'Atual', get: () => latest, modeLabel: 'Atual (registro mais recente)' },
-                { key: '7y', label: 'Últimos 7 anos', get: () => aggregateBalancePoints(annual.slice(0, 7)), modeLabel: 'Últimos sete anos (média anual)' },
-                { key: '5y', label: 'Últimos 5 anos', get: () => aggregateBalancePoints(annual.slice(0, 5)), modeLabel: 'Últimos cinco anos (média anual)' },
-                { key: '3y', label: 'Últimos 3 anos', get: () => aggregateBalancePoints(annual.slice(0, 3)), modeLabel: 'Últimos três anos (média anual)' },
-                { key: '1y', label: 'Último ano', get: () => annual[0] || null, modeLabel: 'Último ano' },
-                { key: '1q', label: 'Último trimestre', get: () => quarterly[0] || null, modeLabel: 'Último trimestre' },
-                { key: '2q', label: 'Último semestre', get: () => aggregateBalancePoints(quarterly.slice(0, 2)), modeLabel: 'Último semestre (média trimestral)' }
-            ];
-
-            const buttons = {};
-            options.forEach((option) => {
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'switch-btn';
-                btn.textContent = option.label;
-                btn.addEventListener('click', () => setMode(option.key));
-                switchWrap.appendChild(btn);
-                buttons[option.key] = btn;
-            });
-
             const setMode = (mode) => {
-                options.forEach((option) => {
-                    buttons[option.key]?.classList.toggle('active', option.key === mode);
-                });
-                const selectedOption = options.find((option) => option.key === mode) || options[0];
-                const point = selectedOption.get();
-                renderRecebiveisCaixaCard(point, selectedOption.modeLabel);
+                const isAnnual = mode === 'annual';
+                annualBtn.classList.toggle('active', isAnnual);
+                quarterlyBtn.classList.toggle('active', !isAnnual);
+                const points = (isAnnual ? annual : quarterly)
+                    .slice()
+                    .reverse()
+                    .slice(-(isAnnual ? 16 : 12));
+                renderRecebiveisCaixaChart(points);
             };
 
-            setMode('current');
+            annualBtn.addEventListener('click', () => setMode('annual'));
+            quarterlyBtn.addEventListener('click', () => setMode('quarterly'));
+            setMode('annual');
         }
 
         function tickerFromUrl() {
