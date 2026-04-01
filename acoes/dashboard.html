@@ -272,6 +272,18 @@
             <div class="grid" id="tendencias"></div>
         </section>
 
+        <section id="card-margens-lucro" class="card">
+            <h2>Margens de Lucro</h2>
+            <div class="switch-wrap">
+                <button id="margemAnualBtn" class="switch-btn active" type="button">Anual</button>
+                <button id="margemTrimestralBtn" class="switch-btn" type="button">Trimestral</button>
+            </div>
+            <div id="margemLucroChart" class="pl-chart"></div>
+            <p class="sub" style="margin-top:10px">
+                Série de <code>profitMargins</code> da BRAPI (lucro líquido / receita) por período.
+            </p>
+        </section>
+
         <section id="card-dividas-caixa-imediato" class="card">
             <h2>Dívidas x Caixa Imediado</h2>
             <div class="switch-wrap">
@@ -717,6 +729,69 @@
             setMode('annual');
         }
 
+        function parseProfitMarginsHistory(history, type = 'yearly') {
+            if (!Array.isArray(history)) return [];
+            return history
+                .map((item) => {
+                    const profitMargins = Number(item?.profitMargins);
+                    if (!Number.isFinite(profitMargins)) return null;
+                    return {
+                        label: formatPeriodLabel(item.endDate, type),
+                        endDate: item.endDate,
+                        profitMargins
+                    };
+                })
+                .filter(Boolean)
+                .sort((a, b) => new Date(a.endDate) - new Date(b.endDate))
+                .slice(type === 'quarterly' ? -12 : -16);
+        }
+
+        function renderProfitMarginsChart(points) {
+            const chart = document.getElementById('margemLucroChart');
+            if (!chart) return;
+            chart.innerHTML = '';
+            if (!points.length) {
+                chart.innerHTML = '<div class="sub">Sem dados suficientes para montar o gráfico de Margens de Lucro.</div>';
+                return;
+            }
+
+            const maxValue = Math.max(...points.map((point) => Math.abs(point.profitMargins)), 0.0001);
+            points.forEach((point) => {
+                const col = document.createElement('div');
+                col.className = 'pl-col';
+                const percent = Math.max(2, (Math.abs(point.profitMargins) / maxValue) * 100);
+                const barColor = point.profitMargins >= 0
+                    ? 'linear-gradient(180deg, #38bdf8, #2563eb)'
+                    : 'linear-gradient(180deg, #fb7185, #be123c)';
+                col.innerHTML = `
+                    <div class="pl-value">${fmtPct(point.profitMargins * 100)}</div>
+                    <div class="pl-bar" style="height:${percent}%;background:${barColor}"></div>
+                    <div class="pl-label">${point.label}</div>
+                `;
+                chart.appendChild(col);
+            });
+        }
+
+        function setupProfitMarginsSwitch(annualHistory, quarterlyHistory) {
+            const annualBtn = document.getElementById('margemAnualBtn');
+            const quarterlyBtn = document.getElementById('margemTrimestralBtn');
+            if (!annualBtn || !quarterlyBtn) return;
+
+            const annual = parseProfitMarginsHistory(annualHistory, 'yearly');
+            const quarterly = parseProfitMarginsHistory(quarterlyHistory, 'quarterly');
+
+            const setMode = (mode) => {
+                const isAnnual = mode === 'annual';
+                annualBtn.classList.toggle('active', isAnnual);
+                quarterlyBtn.classList.toggle('active', !isAnnual);
+                renderProfitMarginsChart(isAnnual ? annual : quarterly);
+            };
+
+            annualBtn.addEventListener('click', () => setMode('annual'));
+            quarterlyBtn.addEventListener('click', () => setMode('quarterly'));
+            setMode('annual');
+        }
+
         function parseBalanceHistory(history, type = 'yearly') {
             if (!Array.isArray(history) || history.length === 0) return [];
             return history
@@ -932,6 +1007,10 @@
                     acao.defaultKeyStatisticsHistoryQuarterly || []
                 );
                 setupPLSwitch(
+                    acao.defaultKeyStatisticsHistory || [],
+                    acao.defaultKeyStatisticsHistoryQuarterly || []
+                );
+                setupProfitMarginsSwitch(
                     acao.defaultKeyStatisticsHistory || [],
                     acao.defaultKeyStatisticsHistoryQuarterly || []
                 );
