@@ -215,6 +215,48 @@ function fetchLatestSnapshot(PDO $pdo): ?array
     ];
 }
 
+function isAssociativeArray(array $value): bool
+{
+    if ($value === []) {
+        return false;
+    }
+    return array_keys($value) !== range(0, count($value) - 1);
+}
+
+function isMissingValue($value): bool
+{
+    if ($value === null) {
+        return true;
+    }
+
+    if (is_string($value)) {
+        return trim($value) === '';
+    }
+
+    if (is_array($value)) {
+        return count($value) === 0;
+    }
+
+    return false;
+}
+
+function mergeTickerPayload(array $incoming, array $fallback): array
+{
+    $merged = $incoming;
+    foreach ($fallback as $key => $fallbackValue) {
+        if (!array_key_exists($key, $incoming) || isMissingValue($incoming[$key])) {
+            $merged[$key] = $fallbackValue;
+            continue;
+        }
+
+        $incomingValue = $incoming[$key];
+        if (is_array($incomingValue) && is_array($fallbackValue) && isAssociativeArray($incomingValue) && isAssociativeArray($fallbackValue)) {
+            $merged[$key] = mergeTickerPayload($incomingValue, $fallbackValue);
+        }
+    }
+    return $merged;
+}
+
 $pdo = ensureStore($baseDir, $dbPath);
 
 if ($method === 'GET') {
@@ -272,6 +314,28 @@ if ($method === 'POST') {
     if (empty($resultsByTicker)) {
         respondError(400, 'Nenhum resultado para salvar.');
     }
+
+    $latestSnapshot = fetchLatestSnapshot($pdo);
+    $previousByTicker = is_array($latestSnapshot['resultsByTicker'] ?? null) ? $latestSnapshot['resultsByTicker'] : [];
+
+    foreach ($resultsByTicker as $ticker => $empresaData) {
+        $tickerNorm = normTicker((string)$ticker);
+        if ($tickerNorm === '') {
+            continue;
+        }
+
+        $fallbackData = $previousByTicker[$tickerNorm] ?? null;
+        if (is_array($empresaData) && is_array($fallbackData)) {
+            $resultsByTicker[$ticker] = mergeTickerPayload($empresaData, $fallbackData);
+            continue;
+        }
+
+        if ((!is_array($empresaData) || empty($empresaData)) && is_array($fallbackData)) {
+            $resultsByTicker[$ticker] = $fallbackData;
+        }
+    }
+
+    $snapshot['resultsByTicker'] = $resultsByTicker;
 
     $fetchedAt = (string)($snapshot['fetchedAt'] ?? gmdate('c'));
     $requestMetaJson = json_encode(
