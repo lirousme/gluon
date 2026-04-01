@@ -257,6 +257,14 @@
 
         .status-approved { color: var(--ok); }
         .status-reproved { color: var(--bad); }
+        .short-up-list {
+            margin: 0;
+            padding-left: 18px;
+            display: grid;
+            gap: 6px;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
 
         .modal-overlay {
             position: fixed;
@@ -311,6 +319,13 @@
                 <p id="setorIndustria" class="sub">Aguardando dados da consulta única feita em brapi.html</p>
             </div>
             <div id="atualizadoEm" class="badge">Fonte: SQLite da requisição única</div>
+        </section>
+
+        <section id="card-tendencia-curto-prazo" class="card">
+            <h2>📈 Tendência a subir no curto prazo</h2>
+            <p class="sub">Sinais derivados apenas dos atributos disponíveis na fonte de referência + cruzamentos entre eles.</p>
+            <div class="grid" id="tendenciaCurtoPrazoGrid"></div>
+            <ul class="short-up-list" id="tendenciaCurtoPrazoLista"></ul>
         </section>
 
         <section id="card-indicadores-preco" class="card">
@@ -738,6 +753,32 @@
                 `;
                 item.addEventListener('click', () => modal.open(indicator.details));
                 container.appendChild(item);
+            });
+        }
+
+        function pushShortTermSignal(list, ok, title, detail) {
+            list.push({ ok, title, detail });
+        }
+
+        function renderShortTermUpCard(signals) {
+            const gridId = 'tendenciaCurtoPrazoGrid';
+            const listEl = document.getElementById('tendenciaCurtoPrazoLista');
+            if (!listEl) return;
+            listEl.innerHTML = '';
+
+            const positives = signals.filter((signal) => signal.ok).length;
+            const score = `${positives}/${signals.length}`;
+            const bias = positives >= 4 ? 'up' : positives >= 2 ? '' : 'down';
+            const biasText = positives >= 4 ? 'Viés positivo no curto prazo' : positives >= 2 ? 'Viés misto no curto prazo' : 'Viés fraco no curto prazo';
+
+            addMetric('Score de sinais', score, bias, gridId);
+            addMetric('Leitura', biasText, bias, gridId);
+
+            signals.forEach((signal, index) => {
+                const status = signal.ok ? '✅' : '⚠️';
+                const li = document.createElement('li');
+                li.innerHTML = `<strong>${index + 1}. ${status} ${signal.title}:</strong> ${signal.detail}`;
+                listEl.appendChild(li);
             });
         }
 
@@ -1281,6 +1322,7 @@
                 const equityPrev = num(balancePrev.totalStockholderEquity || balancePrev.shareholderEquity);
                 const sharesOutstanding = num(stats.impliedSharesOutstanding || divide(marketCap, priceNow));
                 const high52 = num(acao.fiftyTwoWeekHigh);
+                const low52 = num(acao.fiftyTwoWeekLow);
                 const volume = num(acao.regularMarketVolume);
                 const operatingIncome = num(incomeNow.operatingIncome || incomeNow.ebit || fin.ebitda);
                 const depreciation = num(incomeNow.depreciation || cashNow.depreciation || 0);
@@ -1328,6 +1370,53 @@
                 const coberturaJuros = divide(ebitda, interestExpense);
                 const growthLucro = divide(netIncome - netIncomePrev, netIncomePrev);
                 const growthCaixa = divide(operatingCashFlow - operatingCashFlowPrev, operatingCashFlowPrev);
+                const shortTermSignals = [];
+
+                const weekRecovery = divide(priceNow - low52, low52) * 100;
+                const dayMomentum = regularMarketChangePercent;
+                const dayRange = divide(num(acao.regularMarketDayHigh) - num(acao.regularMarketDayLow), num(acao.regularMarketDayLow)) * 100;
+                const volumeVsLiquidity = divide(volume, sharesOutstanding) * 100;
+                const fcfSupport = fcfYield;
+                const balanceProtection = divide(cash + shortTermInvestments + netReceivables, currentLiabilities);
+
+                pushShortTermSignal(
+                    shortTermSignals,
+                    dayMomentum > 0,
+                    'Momentum diário',
+                    `regularMarketChangePercent ${fmtPct(dayMomentum)} ${dayMomentum > 0 ? 'indica pressão compradora no pregão.' : 'não confirmou força compradora no pregão.'}`
+                );
+                pushShortTermSignal(
+                    shortTermSignals,
+                    weekRecovery > 8,
+                    'Recuperação no range de 52 semanas',
+                    `Preço está ${fmtPct(weekRecovery)} acima da mínima de 52 semanas (fiftyTwoWeekLow), sugerindo reação de curto prazo.`
+                );
+                pushShortTermSignal(
+                    shortTermSignals,
+                    volumeVsLiquidity > 0.08,
+                    'Volume negociado vs ações em circulação',
+                    `regularMarketVolume representa ${fmtPct(volumeVsLiquidity)} de impliedSharesOutstanding no dia.`
+                );
+                pushShortTermSignal(
+                    shortTermSignals,
+                    fcfSupport > 0.05,
+                    'Suporte fundamental de caixa',
+                    `FCF Yield (${fmtPct(fcfSupport * 100)}) acima de 5% ajuda a sustentar alta no curto prazo.`
+                );
+                pushShortTermSignal(
+                    shortTermSignals,
+                    balanceProtection > 1,
+                    'Proteção de liquidez imediata',
+                    `(caixa + aplicações + recebíveis) / passivo circulante = ${fmtRatio(balanceProtection)}.`
+                );
+                pushShortTermSignal(
+                    shortTermSignals,
+                    dayMomentum > 0 && dayRange > 1.2 && volumeVsLiquidity > 0.08,
+                    'Cruzamento: momentum + amplitude + giro',
+                    `Mudança diária ${fmtPct(dayMomentum)}, amplitude intradiária ${fmtPct(dayRange)} e giro ${fmtPct(volumeVsLiquidity)}.`
+                );
+
+                renderShortTermUpCard(shortTermSignals);
 
                 let scoreChecklist = 0;
                 if (liquidezCorrente > 1.5) scoreChecklist += 1;
