@@ -94,6 +94,7 @@
 
         .up { color: var(--ok); }
         .down { color: var(--bad); }
+        .neutral { color: var(--text); }
 
         .cols-2 {
             display: grid;
@@ -1520,6 +1521,21 @@
                 const priceBiasClass = priceNow <= hybridIdealPrice && hybridIdealPrice > 0 ? 'up' : 'down';
 
                 renderPriceIndicatorsCard([
+                    {
+                        label: '0) Preço atual',
+                        value: Number.isFinite(priceNow) && priceNow > 0 ? fmtBRL.format(priceNow) : 'Dados insuficientes',
+                        valueClass: 'neutral',
+                        details: {
+                            modalTitle: 'Preço atual da ação',
+                            formula: 'Preço atual = cotação mais recente retornada pela API',
+                            statusText: Number.isFinite(priceNow) && priceNow > 0 ? 'COTAÇÃO ATUAL' : 'SEM DADOS',
+                            statusClass: Number.isFinite(priceNow) && priceNow > 0 ? 'status-approved' : 'status-reproved',
+                            reason: 'Serve como referência base para comparar com os demais métodos de preço teto/ideal.',
+                            values: {
+                                precoAtual: Number.isFinite(priceNow) && priceNow > 0 ? fmtBRL.format(priceNow) : 'Dados insuficientes'
+                            }
+                        }
+                    },
                     {
                         label: '1) Preço teto (P/L justo)',
                         value: priceCeilingPL > 0 ? fmtBRL.format(priceCeilingPL) : 'Dados insuficientes',
