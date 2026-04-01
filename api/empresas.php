@@ -3,14 +3,13 @@ header('Content-Type: application/json; charset=utf-8');
 
 $filePath = __DIR__ . '/../acoes/empresas.json';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$maxEmpresas = 20;
 
 function normTicker(string $ticker): string
 {
     return preg_replace('/[^A-Z0-9]/', '', strtoupper(trim($ticker))) ?? '';
 }
 
-function sanitizeLista(array $lista, int $maxEmpresas): array
+function sanitizeLista(array $lista): array
 {
     $map = [];
     foreach ($lista as $item) {
@@ -31,7 +30,7 @@ function sanitizeLista(array $lista, int $maxEmpresas): array
 
     $result = array_values($map);
     usort($result, static fn(array $a, array $b): int => strcmp($a['ticker'], $b['ticker']));
-    return array_slice($result, 0, $maxEmpresas);
+    return $result;
 }
 
 if (!file_exists($filePath)) {
@@ -46,7 +45,7 @@ if ($method === 'GET') {
     }
     echo json_encode([
         'status' => 'ok',
-        'empresas' => sanitizeLista($data, $maxEmpresas),
+        'empresas' => sanitizeLista($data),
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
@@ -63,7 +62,7 @@ if ($method === 'POST') {
         exit;
     }
 
-    $lista = sanitizeLista($payload['empresas'] ?? [], $maxEmpresas);
+    $lista = sanitizeLista($payload['empresas'] ?? []);
     $saved = json_encode($lista, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if ($saved === false || file_put_contents($filePath, $saved . PHP_EOL, LOCK_EX) === false) {
         http_response_code(500);

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carteira BRAPI (requisição única otimizada)</title>
+    <title>Carteira BRAPI (lotes automáticos)</title>
     <style>
         body { margin: 0; font-family: Arial, sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; }
         .card { max-width: 1100px; margin: 0 auto; background: #111827; border: 1px solid #334155; border-radius: 12px; padding: 16px; }
@@ -46,13 +46,14 @@
 </head>
 <body>
 <div class="card">
-    <h1>BRAPI com requisição única otimizada</h1>
-    <p class="hint">A lista inicial vem de <code>./empresas.json</code>. Você pode gerenciar a lista no modal (máximo de 20 empresas). Esta tela consulta apenas dados essenciais (mais rápido) e salva o snapshot em SQLite.</p>
+    <h1>BRAPI com lotes automáticos</h1>
+    <p class="hint">A lista inicial vem de <code>./empresas.json</code>. Você pode gerenciar a lista no modal sem limite fixo. A BRAPI aceita até 20 tickers por requisição, então o backend divide em vários lotes automaticamente e salva o snapshot em SQLite.</p>
 
     <div class="row">
-        <span class="pill" id="totais">Empresas: 0/20</span>
+        <span class="pill" id="totais">Empresas: 0</span>
         <span class="pill" id="cacheInfo">Sem dados salvos no SQLite</span>
         <button id="buscarBtn">Atualizar dados da API (rápido)</button>
+        <button id="progressoBtn" class="secondary">Ver progresso da consulta</button>
         <button id="gerenciarBtn" class="secondary">Gerenciar empresas</button>
         <button id="resetarBtn" class="secondary">Recarregar lista do sistema</button>
     </div>
@@ -75,20 +76,19 @@
             <input id="novoNome" type="text" placeholder="Nome (opcional)">
             <button id="addBtn">Adicionar</button>
         </div>
-        <p id="modalHint" class="hint">Máximo de 20 empresas na lista.</p>
+        <p id="modalHint" class="hint">Sem limite fixo de empresas na lista.</p>
 
         <div id="modalLista" class="modal-list"></div>
     </div>
 </div>
 
 <script>
-    const MAX_EMPRESAS = 20;
-
     const listaEl = document.getElementById('lista');
     const statusEl = document.getElementById('status');
     const totaisEl = document.getElementById('totais');
     const cacheInfoEl = document.getElementById('cacheInfo');
     const buscarBtn = document.getElementById('buscarBtn');
+    const progressoBtn = document.getElementById('progressoBtn');
     const gerenciarBtn = document.getElementById('gerenciarBtn');
     const resetarBtn = document.getElementById('resetarBtn');
 
@@ -103,6 +103,7 @@
     let empresas = [];
     let cache = null;
     let baseEmpresas = [];
+    let progressoConsulta = null;
 
     const normTicker = (t) => (t || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 
@@ -114,7 +115,7 @@
             const nome = (item?.nome || '').trim();
             if (!map.has(ticker)) map.set(ticker, { ticker, nome });
         });
-        return [...map.values()].slice(0, MAX_EMPRESAS);
+        return [...map.values()];
     }
 
     async function loadApiSnapshot() {
@@ -163,8 +164,18 @@
     async function loadEmpresas() {
         await carregarListaBase();
         empresas = [...baseEmpresas].sort((a, b) => a.ticker.localeCompare(b.ticker));
-        totaisEl.textContent = `Empresas: ${empresas.length}/${MAX_EMPRESAS}`;
-        modalHintEl.textContent = `Máximo de ${MAX_EMPRESAS} empresas na lista. (${empresas.length}/${MAX_EMPRESAS})`;
+        totaisEl.textContent = `Empresas: ${empresas.length}`;
+        modalHintEl.textContent = `Sem limite fixo de empresas. Total atual: ${empresas.length}.`;
+    }
+
+    function atualizarBotaoProgresso() {
+        if (!progressoConsulta) {
+            progressoBtn.textContent = 'Ver progresso da consulta';
+            return;
+        }
+        const { concluidos, total } = progressoConsulta;
+        const faltam = Math.max(total - concluidos, 0);
+        progressoBtn.textContent = `Ver progresso (${concluidos}/${total} • faltam ${faltam})`;
     }
 
     function getTickerData(ticker) {
@@ -260,6 +271,9 @@
             return;
         }
 
+        const totalLotes = Math.ceil(tickers.length / 20);
+        progressoConsulta = { concluidos: 0, total: totalLotes };
+        atualizarBotaoProgresso();
         statusEl.textContent = 'Consultando API...';
         try {
             // Para a listagem da carteira usamos payload enxuto para reduzir latência.
@@ -267,6 +281,9 @@
             const query = new URLSearchParams({ tickers: tickers.join(','), all_data: '0' });
             const resp = await fetch(`../api/brapi_quotes.php?${query.toString()}`, { cache: 'no-store' });
             const data = await resp.json();
+            const requestCount = Number(data?.request_count || totalLotes);
+            progressoConsulta = { concluidos: requestCount, total: requestCount };
+            atualizarBotaoProgresso();
 
             const results = data?.brapi?.results || [];
             const resultsByTicker = {};
@@ -280,18 +297,20 @@
                 tickers,
                 requestMeta: {
                     status: resp.status,
-                    requestCount: data?.request_count || 0,
+                    requestCount,
                     allData: Boolean(data?.all_data)
                 },
                 resultsByTicker
             };
             await saveApiSnapshot(cache);
 
-            statusEl.textContent = `Atualizado: HTTP ${resp.status} • ${Object.keys(resultsByTicker).length}/${tickers.length} empresas com dados (dados salvos em SQLite).`;
+            statusEl.textContent = `Atualizado: HTTP ${resp.status} • ${Object.keys(resultsByTicker).length}/${tickers.length} empresas com dados • ${requestCount} lotes BRAPI (dados salvos em SQLite).`;
             cacheInfoEl.textContent = `SQLite API: ${new Date(cache.fetchedAt).toLocaleString('pt-BR')}`;
             renderLista();
         } catch (err) {
             statusEl.textContent = 'Erro ao consultar API.';
+            progressoConsulta = null;
+            atualizarBotaoProgresso();
         }
     }
 
@@ -301,10 +320,6 @@
 
         if (!ticker) {
             statusEl.textContent = 'Informe um ticker válido.';
-            return;
-        }
-        if (empresas.length >= MAX_EMPRESAS) {
-            statusEl.textContent = `Limite atingido: máximo de ${MAX_EMPRESAS} empresas.`;
             return;
         }
         const exists = empresas.some(e => e.ticker === ticker);
@@ -325,7 +340,7 @@
             .then(() => {
                 renderLista();
                 renderModalLista();
-                statusEl.textContent = `Ticker ${ticker} adicionado. Clique em "Atualizar dados" para incluir na consulta única.`;
+                statusEl.textContent = `Ticker ${ticker} adicionado. Clique em "Atualizar dados" para incluir na consulta em lotes automáticos.`;
             })
             .catch((err) => {
                 statusEl.textContent = `Erro ao salvar lista: ${err.message}`;
@@ -351,9 +366,19 @@
     });
 
     buscarBtn.addEventListener('click', buscarApiUnica);
+    progressoBtn.addEventListener('click', () => {
+        if (!progressoConsulta) {
+            statusEl.textContent = 'Nenhuma consulta em andamento/recente para mostrar progresso.';
+            return;
+        }
+        const { concluidos, total } = progressoConsulta;
+        const faltam = Math.max(total - concluidos, 0);
+        statusEl.textContent = `Progresso da consulta BRAPI: ${concluidos} lotes concluídos, ${faltam} lotes restantes.`;
+    });
 
     (async function init() {
         try {
+            atualizarBotaoProgresso();
             // Prioriza o "first render": mostra a lista o quanto antes.
             await loadEmpresas();
             renderLista();
@@ -365,7 +390,7 @@
                     cacheInfoEl.textContent = `SQLite API: ${new Date(cache.fetchedAt).toLocaleString('pt-BR')}`;
                     statusEl.textContent = 'Dados carregados do SQLite. Clique em "Atualizar dados da API" para buscar dados novos.';
                 } else {
-                    statusEl.textContent = 'Lista carregada. Clique em "Atualizar dados" para fazer a requisição única.';
+                    statusEl.textContent = 'Lista carregada. Clique em "Atualizar dados" para consultar a BRAPI em lotes automáticos.';
                 }
                 // Re-render apenas para enriquecer com cotações (caso existam no cache).
                 renderLista();

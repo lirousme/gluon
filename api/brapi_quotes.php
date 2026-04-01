@@ -63,51 +63,80 @@ if ($allDataEnabled) {
     $queryParams['modules'] = implode(',', $allModules);
 }
 
-$endpoint = 'https://brapi.dev/api/quote/' . implode(',', $tickers) . '?' . http_build_query($queryParams);
+$chunks = array_chunk($tickers, 20);
+$results = [];
+$errors = [];
+$endpoints = [];
+$finalHttpCode = 200;
 
-$ch = curl_init($endpoint);
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_TIMEOUT => 30,
-    CURLOPT_CONNECTTIMEOUT => 10,
-    CURLOPT_FOLLOWLOCATION => true,
-    CURLOPT_HTTPHEADER => ['Accept: application/json']
-]);
+foreach ($chunks as $index => $tickerChunk) {
+    $endpoint = 'https://brapi.dev/api/quote/' . implode(',', $tickerChunk) . '?' . http_build_query($queryParams);
+    $endpoints[] = $endpoint;
 
-$body = curl_exec($ch);
-$curlError = curl_error($ch);
-$httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
+    $ch = curl_init($endpoint);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTPHEADER => ['Accept: application/json']
+    ]);
 
-if ($body === false) {
-    http_response_code(502);
+    $body = curl_exec($ch);
+    $curlError = curl_error($ch);
+    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode >= 400 && $finalHttpCode < 400) {
+        $finalHttpCode = $httpCode;
+    }
+
+    if ($body === false) {
+        $errors[] = [
+            'chunk' => $index + 1,
+            'message' => 'Falha ao conectar com a brapi.',
+            'details' => $curlError
+        ];
+        continue;
+    }
+
+    $data = json_decode($body, true);
+    if (!is_array($data)) {
+        $errors[] = [
+            'chunk' => $index + 1,
+            'message' => 'Resposta inválida da brapi.',
+            'raw' => $body
+        ];
+        continue;
+    }
+
+    $chunkResults = $data['results'] ?? [];
+    if (is_array($chunkResults)) {
+        $results = array_merge($results, $chunkResults);
+    }
+}
+
+if (!empty($errors) && empty($results)) {
+    http_response_code($finalHttpCode >= 400 ? $finalHttpCode : 502);
     echo json_encode([
         'status' => 'error',
-        'message' => 'Falha ao conectar com a brapi.',
-        'details' => $curlError
-    ], JSON_UNESCAPED_UNICODE);
+        'message' => 'Falha ao consultar a brapi em todos os lotes.',
+        'errors' => $errors
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
-$data = json_decode($body, true);
-if (!is_array($data)) {
-    http_response_code(502);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Resposta inválida da brapi.',
-        'raw' => $body
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-http_response_code($httpCode > 0 ? $httpCode : 200);
+http_response_code($finalHttpCode > 0 ? $finalHttpCode : 200);
 echo json_encode([
-    'status' => $httpCode >= 400 ? 'error' : 'ok',
+    'status' => $finalHttpCode >= 400 ? 'error' : 'ok',
     'requestedAt' => gmdate('c'),
-    'request_count' => 1,
+    'request_count' => count($chunks),
     'tickers_requested' => $tickers,
     'all_data' => $allDataEnabled,
     'enabled_modules' => $allDataEnabled ? $allModules : [],
-    'endpoint' => $endpoint,
-    'brapi' => $data
+    'endpoints' => $endpoints,
+    'errors' => $errors,
+    'brapi' => [
+        'results' => $results
+    ]
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
