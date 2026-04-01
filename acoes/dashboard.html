@@ -323,7 +323,7 @@
 
         <section id="card-tendencia-trimestre" class="card">
             <h2>🧭 Tendência do mercado no trimestre atual (compra ou venda)</h2>
-            <p class="sub">Leitura do trimestre atual comparando volume com os demais trimestres do histórico.</p>
+            <p class="sub">Leitura baseada no histórico de volume apenas do trimestre corrente.</p>
             <div class="grid" id="tendenciaTrimestreGrid"></div>
         </section>
 
@@ -644,7 +644,6 @@
             const quarterStartTs = Date.UTC(refDate.getUTCFullYear(), quarterStartMonth, 1, 0, 0, 0, 0);
             const nextQuarterStartTs = Date.UTC(refDate.getUTCFullYear(), quarterStartMonth + 3, 1, 0, 0, 0, 0);
             const quarterLabel = `${refDate.getUTCFullYear()} T${Math.floor(refDate.getUTCMonth() / 3) + 1}`;
-            const currentQuarterKey = `${refDate.getUTCFullYear()}-${Math.floor(refDate.getUTCMonth() / 3) + 1}`;
 
             const quarterPoints = validHistory.filter((point) => {
                 const ts = Number(point.timestamp);
@@ -659,42 +658,6 @@
 
             const validCurrentVolume = Number.isFinite(currentVolume) && currentVolume > 0 ? currentVolume : quarterPoints[quarterPoints.length - 1].volume;
             const quarterAvg = quarterPoints.reduce((acc, point) => acc + num(point.volume), 0) / quarterPoints.length;
-            const quarterMap = new Map();
-            validHistory.forEach((point) => {
-                const date = new Date(Number(point.timestamp));
-                if (Number.isNaN(date.getTime())) return;
-                const quarter = Math.floor(date.getUTCMonth() / 3) + 1;
-                const key = `${date.getUTCFullYear()}-${quarter}`;
-                if (!quarterMap.has(key)) {
-                    quarterMap.set(key, {
-                        key,
-                        year: date.getUTCFullYear(),
-                        quarter,
-                        label: `${date.getUTCFullYear()} T${quarter}`,
-                        total: 0,
-                        count: 0
-                    });
-                }
-                const item = quarterMap.get(key);
-                item.total += num(point.volume);
-                item.count += 1;
-            });
-
-            const quarterSeries = Array.from(quarterMap.values())
-                .filter((item) => item.count > 0)
-                .map((item) => ({
-                    ...item,
-                    avg: item.total / item.count
-                }))
-                .sort((a, b) => (a.year - b.year) || (a.quarter - b.quarter));
-
-            const historicalQuarters = quarterSeries.filter((item) => item.key !== currentQuarterKey);
-            const historicalAvg = historicalQuarters.length
-                ? historicalQuarters.reduce((acc, item) => acc + item.avg, 0) / historicalQuarters.length
-                : 0;
-            const currentVsHistoryPct = historicalAvg > 0 ? ((quarterAvg - historicalAvg) / historicalAvg) * 100 : 0;
-            const currentRank = quarterSeries.findIndex((item) => item.key === currentQuarterKey) + 1;
-            const totalQuarters = quarterSeries.length;
             const midpoint = Math.floor(quarterPoints.length / 2);
             const firstHalf = quarterPoints.slice(0, midpoint);
             const secondHalf = quarterPoints.slice(midpoint);
@@ -705,19 +668,17 @@
 
             let direction = 'Neutro';
             let directionClass = '';
-            if (currentVsHistoryPct >= 10 || currentVsAvgPct >= 12 || accelerationPct >= 8) {
+            if (currentVsAvgPct >= 12 || accelerationPct >= 8) {
                 direction = 'Venda';
                 directionClass = 'up';
-            } else if (currentVsHistoryPct <= -10 || currentVsAvgPct <= -12 || accelerationPct <= -8) {
+            } else if (currentVsAvgPct <= -12 || accelerationPct <= -8) {
                 direction = 'Compra';
                 directionClass = 'down';
             }
 
             addMetric(`Direção de mercado (${quarterLabel})`, direction, directionClass, gridId);
             addMetric('Volume atual vs média trimestral', `${fmtPct(currentVsAvgPct)} (${fmtNum.format(Math.round(validCurrentVolume))} vs ${fmtNum.format(Math.round(quarterAvg))})`, directionClass, gridId);
-            addMetric('Média do trimestre vs outros trimestres', historicalQuarters.length ? `${fmtPct(currentVsHistoryPct)} (${fmtNum.format(Math.round(quarterAvg))} vs ${fmtNum.format(Math.round(historicalAvg))})` : 'Histórico insuficiente para comparação', currentVsHistoryPct > 0 ? 'up' : currentVsHistoryPct < 0 ? 'down' : '', gridId);
             addMetric('Aceleração do volume no trimestre', `${fmtPct(accelerationPct)} (2ª metade vs 1ª metade)`, accelerationPct > 0 ? 'up' : accelerationPct < 0 ? 'down' : '', gridId);
-            addMetric('Posição da série trimestral', `${currentRank}/${totalQuarters} trimestres no histórico`, '', gridId);
             addMetric('Cobertura da análise', `${fmtNum.format(quarterPoints.length)} registros no trimestre`, '', gridId);
         }
 
