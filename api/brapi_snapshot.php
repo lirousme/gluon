@@ -10,6 +10,31 @@ function normTicker(string $ticker): string
     return preg_replace('/[^A-Z0-9]/', '', strtoupper(trim($ticker))) ?? '';
 }
 
+function toTimestampMs($value): ?int
+{
+    if ($value === null || $value === '') {
+        return null;
+    }
+
+    if (is_numeric($value)) {
+        $numeric = (float)$value;
+        if ($numeric <= 0) {
+            return null;
+        }
+        return $numeric < 1000000000000 ? (int)round($numeric * 1000) : (int)round($numeric);
+    }
+
+    if (is_string($value)) {
+        $asTime = strtotime($value);
+        if ($asTime === false || $asTime <= 0) {
+            return null;
+        }
+        return (int)$asTime * 1000;
+    }
+
+    return null;
+}
+
 function respondError(int $status, string $message): void
 {
     http_response_code($status);
@@ -75,10 +100,80 @@ function ensureStore(string $baseDir, string $dbPath): PDO
         $pdo->exec('CREATE INDEX IF NOT EXISTS idx_quote_companies_snapshot_ticker ON quote_companies(snapshot_id, ticker)');
         $pdo->exec('CREATE INDEX IF NOT EXISTS idx_quote_companies_ticker ON quote_companies(ticker)');
 
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS quote_volume_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL,
+                regular_market_time INTEGER NOT NULL,
+                regular_market_volume INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(ticker, regular_market_time, regular_market_volume)
+            )'
+        );
+
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS quote_price_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL,
+                regular_market_time INTEGER NOT NULL,
+                regular_market_day_high REAL NOT NULL,
+                regular_market_day_low REAL NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(ticker, regular_market_time, regular_market_day_high, regular_market_day_low)
+            )'
+        );
+
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_quote_volume_history_ticker_time ON quote_volume_history(ticker, regular_market_time)');
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_quote_price_history_ticker_time ON quote_price_history(ticker, regular_market_time)');
+
         return $pdo;
     } catch (Throwable $e) {
         respondError(500, 'Falha ao inicializar SQLite: ' . $e->getMessage());
     }
+}
+
+function fetchTickerHistory(PDO $pdo, string $ticker): array
+{
+    $volumeStmt = $pdo->prepare(
+        'SELECT regular_market_time, regular_market_volume
+         FROM quote_volume_history
+         WHERE ticker = :ticker
+         ORDER BY regular_market_time ASC
+         LIMIT 5000'
+    );
+    $volumeStmt->execute([':ticker' => $ticker]);
+    $volumeHistory = [];
+    while ($row = $volumeStmt->fetch()) {
+        $volumeHistory[] = [
+            'timestamp' => (int)$row['regular_market_time'],
+            'volume' => (int)$row['regular_market_volume'],
+        ];
+    }
+
+    $priceStmt = $pdo->prepare(
+        'SELECT regular_market_time, regular_market_day_high, regular_market_day_low
+         FROM quote_price_history
+         WHERE ticker = :ticker
+         ORDER BY regular_market_time ASC
+         LIMIT 5000'
+    );
+    $priceStmt->execute([':ticker' => $ticker]);
+    $priceHistory = [];
+    while ($row = $priceStmt->fetch()) {
+        $high = (float)$row['regular_market_day_high'];
+        $low = (float)$row['regular_market_day_low'];
+        $priceHistory[] = [
+            'timestamp' => (int)$row['regular_market_time'],
+            'high' => $high,
+            'low' => $low,
+            'avg' => ($high + $low) / 2,
+        ];
+    }
+
+    return [
+        'volume' => $volumeHistory,
+        'price' => $priceHistory,
+    ];
 }
 
 function fetchLatestSnapshot(PDO $pdo): ?array
@@ -131,6 +226,7 @@ if ($method === 'GET') {
         }
 
         $tickerParam = normTicker((string)($_GET['ticker'] ?? ''));
+        $includeHistory = ($_GET['includeHistory'] ?? '') === '1';
         if ($tickerParam !== '') {
             if (!isset($snapshot['resultsByTicker'][$tickerParam])) {
                 respondError(404, "Ticker {$tickerParam} não encontrado no snapshot salvo.");
@@ -139,6 +235,14 @@ if ($method === 'GET') {
             $snapshot['resultsByTicker'] = [
                 $tickerParam => $snapshot['resultsByTicker'][$tickerParam],
             ];
+            $includeHistory = true;
+        }
+
+        if ($includeHistory) {
+            $snapshot['historyByTicker'] = [];
+            foreach ($snapshot['tickers'] as $ticker) {
+                $snapshot['historyByTicker'][$ticker] = fetchTickerHistory($pdo, (string)$ticker);
+            }
         }
 
         unset($snapshot['id']);
@@ -210,6 +314,14 @@ if ($method === 'POST') {
                 :price_earnings, :earnings_per_share, :payload_json
             )'
         );
+        $insVolume = $pdo->prepare(
+            'INSERT OR IGNORE INTO quote_volume_history (ticker, regular_market_time, regular_market_volume)
+             VALUES (:ticker, :regular_market_time, :regular_market_volume)'
+        );
+        $insPrice = $pdo->prepare(
+            'INSERT OR IGNORE INTO quote_price_history (ticker, regular_market_time, regular_market_day_high, regular_market_day_low)
+             VALUES (:ticker, :regular_market_time, :regular_market_day_high, :regular_market_day_low)'
+        );
 
         $savedTickers = [];
         foreach ($resultsByTicker as $ticker => $empresaData) {
@@ -243,6 +355,29 @@ if ($method === 'POST') {
                 ':earnings_per_share' => $empresaData['earningsPerShare'] ?? null,
                 ':payload_json' => $payloadJson,
             ]);
+
+            $marketTime = toTimestampMs($empresaData['regularMarketTime'] ?? null);
+            $volume = isset($empresaData['regularMarketVolume']) ? (int)$empresaData['regularMarketVolume'] : 0;
+            $high = isset($empresaData['regularMarketDayHigh']) ? (float)$empresaData['regularMarketDayHigh'] : 0;
+            $low = isset($empresaData['regularMarketDayLow']) ? (float)$empresaData['regularMarketDayLow'] : 0;
+
+            if ($marketTime !== null && $volume > 0) {
+                $insVolume->execute([
+                    ':ticker' => $tickerNorm,
+                    ':regular_market_time' => $marketTime,
+                    ':regular_market_volume' => $volume,
+                ]);
+            }
+
+            if ($marketTime !== null && $high > 0 && $low > 0) {
+                $insPrice->execute([
+                    ':ticker' => $tickerNorm,
+                    ':regular_market_time' => $marketTime,
+                    ':regular_market_day_high' => $high,
+                    ':regular_market_day_low' => $low,
+                ]);
+            }
+
             $savedTickers[] = $tickerNorm;
         }
 

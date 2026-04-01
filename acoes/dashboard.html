@@ -172,7 +172,7 @@
         </section>
 
         <section id="card-tendencia" class="card">
-            <h2>Tendência de volume (histórico local)</h2>
+            <h2>Tendência de volume (histórico no banco)</h2>
             <div class="grid" id="tendencias"></div>
         </section>
 
@@ -289,34 +289,6 @@
             return Number.isNaN(parsed) ? null : parsed;
         }
 
-        function readVolumeHistory() {
-            try {
-                const raw = localStorage.getItem('volumeHistoryByTickerV1');
-                const parsed = raw ? JSON.parse(raw) : {};
-                return parsed && typeof parsed === 'object' ? parsed : {};
-            } catch {
-                return {};
-            }
-        }
-
-        function saveVolumeHistory(history) {
-            localStorage.setItem('volumeHistoryByTickerV1', JSON.stringify(history));
-        }
-
-        function readPriceHistory() {
-            try {
-                const raw = localStorage.getItem('priceRangeHistoryByTickerV1');
-                const parsed = raw ? JSON.parse(raw) : {};
-                return parsed && typeof parsed === 'object' ? parsed : {};
-            } catch {
-                return {};
-            }
-        }
-
-        function savePriceHistory(history) {
-            localStorage.setItem('priceRangeHistoryByTickerV1', JSON.stringify(history));
-        }
-
         function isValidVolumePoint(point) {
             const timestamp = toTimestamp(point?.timestamp);
             const volume = num(point?.volume);
@@ -364,51 +336,6 @@
             return Array.from(unique.values())
                 .sort((a, b) => Number(a.timestamp) - Number(b.timestamp))
                 .slice(-5000);
-        }
-
-        function registerVolumePoint(ticker, regularMarketVolume, regularMarketTime) {
-            const timestamp = toTimestamp(regularMarketTime);
-            const volume = num(regularMarketVolume);
-            if (!ticker) return [];
-
-            const history = readVolumeHistory();
-            const tickerHistory = cleanVolumeHistory(history[ticker]);
-            const hasCurrentPoint = Number.isFinite(timestamp) && timestamp > 0 && Number.isFinite(volume) && volume > 0;
-            const hasSamePoint = tickerHistory.some((point) => Number(point.timestamp) === timestamp && num(point.volume) === volume);
-
-            if (hasCurrentPoint && !hasSamePoint) {
-                tickerHistory.push({ timestamp, volume });
-            }
-
-            history[ticker] = cleanVolumeHistory(tickerHistory);
-            saveVolumeHistory(history);
-            return history[ticker];
-        }
-
-        function registerPricePoint(ticker, regularMarketDayHigh, regularMarketDayLow, regularMarketTime) {
-            const timestamp = toTimestamp(regularMarketTime);
-            const high = num(regularMarketDayHigh);
-            const low = num(regularMarketDayLow);
-            if (!ticker) return [];
-
-            const history = readPriceHistory();
-            const tickerHistory = cleanPriceHistory(history[ticker]);
-            const hasCurrentPoint = Number.isFinite(timestamp) && timestamp > 0
-                && Number.isFinite(high) && high > 0
-                && Number.isFinite(low) && low > 0;
-            const hasSamePoint = tickerHistory.some((point) =>
-                Number(point.timestamp) === timestamp
-                && num(point.high) === high
-                && num(point.low) === low
-            );
-
-            if (hasCurrentPoint && !hasSamePoint) {
-                tickerHistory.push({ timestamp, high, low, avg: (high + low) / 2 });
-            }
-
-            history[ticker] = cleanPriceHistory(tickerHistory);
-            savePriceHistory(history);
-            return history[ticker];
         }
 
         function renderTrends(history, currentVolume, currentTimestamp) {
@@ -527,7 +454,9 @@
         }
 
         async function readCache(ticker) {
-            const query = ticker ? `?ticker=${encodeURIComponent(ticker)}` : '';
+            const query = ticker
+                ? `?ticker=${encodeURIComponent(ticker)}&includeHistory=1`
+                : '';
             const resp = await fetch(`../api/brapi_snapshot.php${query}`, { cache: 'no-store' });
             const data = await resp.json();
             if (!resp.ok || data?.status !== 'ok') {
@@ -564,9 +493,9 @@
                 document.getElementById('setorIndustria').textContent = `${profile.sector || '-'} • ${profile.industry || '-'} • ${profile.city || '-'} / ${profile.state || '-'}`;
                 document.getElementById('atualizadoEm').textContent = `Atualizado em: ${safeDate(cache.fetchedAt || acao.regularMarketTime)} (requisição única)`;
 
-                const volumeHistory = registerVolumePoint(ticker, acao.regularMarketVolume, acao.regularMarketTime || cache.fetchedAt);
+                const volumeHistory = cache?.historyByTicker?.[ticker]?.volume || [];
                 renderTrends(volumeHistory, num(acao.regularMarketVolume), acao.regularMarketTime || cache.fetchedAt);
-                const priceHistory = registerPricePoint(ticker, acao.regularMarketDayHigh, acao.regularMarketDayLow, acao.regularMarketTime || cache.fetchedAt);
+                const priceHistory = cache?.historyByTicker?.[ticker]?.price || [];
                 renderPriceAverages(priceHistory, acao.regularMarketTime || cache.fetchedAt);
 
                 const changeClass = Number(acao.regularMarketChangePercent || 0) >= 0 ? 'up' : 'down';
