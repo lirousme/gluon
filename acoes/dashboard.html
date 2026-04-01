@@ -176,6 +176,11 @@
             <div class="grid" id="tendencias"></div>
         </section>
 
+        <section id="card-medias-precos" class="card">
+            <h2>Médias de preços</h2>
+            <div class="grid" id="mediasPrecos"></div>
+        </section>
+
         <section id="card-metricas" class="card">
             <div class="grid" id="metricas"></div>
         </section>
@@ -298,6 +303,20 @@
             localStorage.setItem('volumeHistoryByTickerV1', JSON.stringify(history));
         }
 
+        function readPriceHistory() {
+            try {
+                const raw = localStorage.getItem('priceRangeHistoryByTickerV1');
+                const parsed = raw ? JSON.parse(raw) : {};
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch {
+                return {};
+            }
+        }
+
+        function savePriceHistory(history) {
+            localStorage.setItem('priceRangeHistoryByTickerV1', JSON.stringify(history));
+        }
+
         function isValidVolumePoint(point) {
             const timestamp = toTimestamp(point?.timestamp);
             const volume = num(point?.volume);
@@ -313,6 +332,33 @@
                 const timestamp = toTimestamp(point.timestamp);
                 const volume = num(point.volume);
                 unique.set(`${timestamp}-${volume}`, { timestamp, volume });
+            });
+
+            return Array.from(unique.values())
+                .sort((a, b) => Number(a.timestamp) - Number(b.timestamp))
+                .slice(-5000);
+        }
+
+        function isValidPricePoint(point) {
+            const timestamp = toTimestamp(point?.timestamp);
+            const high = num(point?.high);
+            const low = num(point?.low);
+            return Number.isFinite(timestamp) && timestamp > 0
+                && Number.isFinite(high) && high > 0
+                && Number.isFinite(low) && low > 0;
+        }
+
+        function cleanPriceHistory(points) {
+            if (!Array.isArray(points)) return [];
+            const unique = new Map();
+
+            points.forEach((point) => {
+                if (!isValidPricePoint(point)) return;
+                const timestamp = toTimestamp(point.timestamp);
+                const high = num(point.high);
+                const low = num(point.low);
+                const avg = (high + low) / 2;
+                unique.set(`${timestamp}-${high}-${low}`, { timestamp, high, low, avg });
             });
 
             return Array.from(unique.values())
@@ -336,6 +382,32 @@
 
             history[ticker] = cleanVolumeHistory(tickerHistory);
             saveVolumeHistory(history);
+            return history[ticker];
+        }
+
+        function registerPricePoint(ticker, regularMarketDayHigh, regularMarketDayLow, regularMarketTime) {
+            const timestamp = toTimestamp(regularMarketTime);
+            const high = num(regularMarketDayHigh);
+            const low = num(regularMarketDayLow);
+            if (!ticker) return [];
+
+            const history = readPriceHistory();
+            const tickerHistory = cleanPriceHistory(history[ticker]);
+            const hasCurrentPoint = Number.isFinite(timestamp) && timestamp > 0
+                && Number.isFinite(high) && high > 0
+                && Number.isFinite(low) && low > 0;
+            const hasSamePoint = tickerHistory.some((point) =>
+                Number(point.timestamp) === timestamp
+                && num(point.high) === high
+                && num(point.low) === low
+            );
+
+            if (hasCurrentPoint && !hasSamePoint) {
+                tickerHistory.push({ timestamp, high, low, avg: (high + low) / 2 });
+            }
+
+            history[ticker] = cleanPriceHistory(tickerHistory);
+            savePriceHistory(history);
             return history[ticker];
         }
 
@@ -376,6 +448,39 @@
                 } else {
                     addMetric(`${label} • Neutro`, `Atual ${fmtNum.format(validCurrentVolume)} | Média ${fmtNum.format(Math.round(avg))} (${fmtPct(deltaPct)})`, '', 'tendencias');
                 }
+            });
+        }
+
+        function renderPriceAverages(history, currentTimestamp) {
+            const validHistory = cleanPriceHistory(history);
+            const now = toTimestamp(currentTimestamp) || Date.now();
+            const periods = [
+                { label: 'Dia atual', ms: 24 * 60 * 60 * 1000 },
+                { label: 'Semana', ms: 7 * 24 * 60 * 60 * 1000 },
+                { label: 'Quinzenal', ms: 15 * 24 * 60 * 60 * 1000 },
+                { label: 'Mês', ms: 30 * 24 * 60 * 60 * 1000 },
+                { label: 'Bimestre', ms: 60 * 24 * 60 * 60 * 1000 },
+                { label: 'Trimestre', ms: 90 * 24 * 60 * 60 * 1000 },
+                { label: 'Semestre', ms: 180 * 24 * 60 * 60 * 1000 },
+                { label: 'Ano', ms: 365 * 24 * 60 * 60 * 1000 }
+            ];
+
+            periods.forEach(({ label, ms }) => {
+                const windowPoints = validHistory.filter((point) => now - Number(point.timestamp) <= ms);
+                if (windowPoints.length === 0) {
+                    addMetric(label, 'Dados insuficientes', '', 'mediasPrecos');
+                    return;
+                }
+
+                const avgPrice = windowPoints.reduce((acc, point) => acc + num(point.avg), 0) / windowPoints.length;
+                const avgHigh = windowPoints.reduce((acc, point) => acc + num(point.high), 0) / windowPoints.length;
+                const avgLow = windowPoints.reduce((acc, point) => acc + num(point.low), 0) / windowPoints.length;
+                addMetric(
+                    label,
+                    `Médio ${fmtBRL.format(avgPrice)} • High ${fmtBRL.format(avgHigh)} • Low ${fmtBRL.format(avgLow)}`,
+                    '',
+                    'mediasPrecos'
+                );
             });
         }
 
@@ -461,6 +566,8 @@
 
                 const volumeHistory = registerVolumePoint(ticker, acao.regularMarketVolume, acao.regularMarketTime || cache.fetchedAt);
                 renderTrends(volumeHistory, num(acao.regularMarketVolume), acao.regularMarketTime || cache.fetchedAt);
+                const priceHistory = registerPricePoint(ticker, acao.regularMarketDayHigh, acao.regularMarketDayLow, acao.regularMarketTime || cache.fetchedAt);
+                renderPriceAverages(priceHistory, acao.regularMarketTime || cache.fetchedAt);
 
                 const changeClass = Number(acao.regularMarketChangePercent || 0) >= 0 ? 'up' : 'down';
                 addMetric('Preço atual', fmtBRL.format(acao.regularMarketPrice || 0));
