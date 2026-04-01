@@ -321,6 +321,12 @@
             <div id="atualizadoEm" class="badge">Fonte: SQLite da requisição única</div>
         </section>
 
+        <section id="card-tendencia-trimestre" class="card">
+            <h2>🧭 Tendência do mercado no trimestre atual (compra ou venda)</h2>
+            <p class="sub">Leitura baseada no histórico de volume apenas do trimestre corrente.</p>
+            <div class="grid" id="tendenciaTrimestreGrid"></div>
+        </section>
+
         <section id="card-tendencia-curto-prazo" class="card">
             <h2>📈 Tendência a subir no curto prazo</h2>
             <p class="sub">Sinais derivados apenas dos atributos disponíveis na fonte de referência + cruzamentos entre eles.</p>
@@ -623,6 +629,57 @@
                     addMetric(`${label} • Neutro`, `Atual ${fmtNum.format(validCurrentVolume)} | Média ${fmtNum.format(Math.round(avg))} (${fmtPct(deltaPct)})`, '', 'tendencias');
                 }
             });
+        }
+
+        function renderCurrentQuarterMarketTrend(history, currentVolume, currentTimestamp) {
+            const gridId = 'tendenciaTrimestreGrid';
+            const container = document.getElementById(gridId);
+            if (!container) return;
+            container.innerHTML = '';
+
+            const validHistory = cleanVolumeHistory(history);
+            const now = toTimestamp(currentTimestamp) || Date.now();
+            const refDate = new Date(now);
+            const quarterStartMonth = Math.floor(refDate.getUTCMonth() / 3) * 3;
+            const quarterStartTs = Date.UTC(refDate.getUTCFullYear(), quarterStartMonth, 1, 0, 0, 0, 0);
+            const nextQuarterStartTs = Date.UTC(refDate.getUTCFullYear(), quarterStartMonth + 3, 1, 0, 0, 0, 0);
+            const quarterLabel = `${refDate.getUTCFullYear()} T${Math.floor(refDate.getUTCMonth() / 3) + 1}`;
+
+            const quarterPoints = validHistory.filter((point) => {
+                const ts = Number(point.timestamp);
+                return ts >= quarterStartTs && ts < nextQuarterStartTs;
+            });
+
+            if (quarterPoints.length < 4) {
+                addMetric(`Direção de mercado (${quarterLabel})`, 'Dados insuficientes no trimestre', '', gridId);
+                addMetric('Volume observado', `${fmtNum.format(quarterPoints.length)} registros válidos`, '', gridId);
+                return;
+            }
+
+            const validCurrentVolume = Number.isFinite(currentVolume) && currentVolume > 0 ? currentVolume : quarterPoints[quarterPoints.length - 1].volume;
+            const quarterAvg = quarterPoints.reduce((acc, point) => acc + num(point.volume), 0) / quarterPoints.length;
+            const midpoint = Math.floor(quarterPoints.length / 2);
+            const firstHalf = quarterPoints.slice(0, midpoint);
+            const secondHalf = quarterPoints.slice(midpoint);
+            const firstAvg = firstHalf.reduce((acc, point) => acc + num(point.volume), 0) / Math.max(firstHalf.length, 1);
+            const secondAvg = secondHalf.reduce((acc, point) => acc + num(point.volume), 0) / Math.max(secondHalf.length, 1);
+            const accelerationPct = firstAvg > 0 ? ((secondAvg - firstAvg) / firstAvg) * 100 : 0;
+            const currentVsAvgPct = quarterAvg > 0 ? ((validCurrentVolume - quarterAvg) / quarterAvg) * 100 : 0;
+
+            let direction = 'Neutro';
+            let directionClass = '';
+            if (currentVsAvgPct >= 12 || accelerationPct >= 8) {
+                direction = 'Venda';
+                directionClass = 'up';
+            } else if (currentVsAvgPct <= -12 || accelerationPct <= -8) {
+                direction = 'Compra';
+                directionClass = 'down';
+            }
+
+            addMetric(`Direção de mercado (${quarterLabel})`, direction, directionClass, gridId);
+            addMetric('Volume atual vs média trimestral', `${fmtPct(currentVsAvgPct)} (${fmtNum.format(Math.round(validCurrentVolume))} vs ${fmtNum.format(Math.round(quarterAvg))})`, directionClass, gridId);
+            addMetric('Aceleração do volume no trimestre', `${fmtPct(accelerationPct)} (2ª metade vs 1ª metade)`, accelerationPct > 0 ? 'up' : accelerationPct < 0 ? 'down' : '', gridId);
+            addMetric('Cobertura da análise', `${fmtNum.format(quarterPoints.length)} registros no trimestre`, '', gridId);
         }
 
         function renderPriceAverages(history, currentTimestamp) {
@@ -1245,6 +1302,7 @@
                 document.getElementById('atualizadoEm').textContent = `Atualizado em: ${safeDate(cache.fetchedAt || acao.regularMarketTime)} (requisição única)`;
 
                 const volumeHistory = cache?.historyByTicker?.[ticker]?.volume || [];
+                renderCurrentQuarterMarketTrend(volumeHistory, num(acao.regularMarketVolume), acao.regularMarketTime || cache.fetchedAt);
                 renderTrends(volumeHistory, num(acao.regularMarketVolume), acao.regularMarketTime || cache.fetchedAt);
                 const priceHistory = cache?.historyByTicker?.[ticker]?.price || [];
                 renderPriceAverages(priceHistory, acao.regularMarketTime || cache.fetchedAt);
