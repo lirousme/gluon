@@ -162,6 +162,7 @@
 
         .switch-wrap {
             display: flex;
+            flex-wrap: wrap;
             gap: 8px;
             margin-bottom: 12px;
         }
@@ -232,10 +233,7 @@
 
         <section id="card-recebiveis-caixa" class="card">
             <h2>Caixa x contas a receber</h2>
-            <div class="switch-wrap">
-                <button id="recebiveisAnualBtn" class="switch-btn active" type="button">Anual</button>
-                <button id="recebiveisTrimestralBtn" class="switch-btn" type="button">Trimestral</button>
-            </div>
+            <div class="switch-wrap" id="recebiveisPeriodSwitch"></div>
             <div class="grid" id="metricasRecebiveisCaixa"></div>
         </section>
 
@@ -697,6 +695,29 @@
                 .sort((a, b) => new Date(b.endDate || 0) - new Date(a.endDate || 0));
         }
 
+        function aggregateBalancePoints(points) {
+            if (!Array.isArray(points) || points.length === 0) return null;
+            const totals = points.reduce((acc, point) => {
+                acc.cash += num(point.cash);
+                acc.netReceivables += num(point.netReceivables);
+                acc.longTermRealizableAssets += num(point.longTermRealizableAssets);
+                return acc;
+            }, { cash: 0, netReceivables: 0, longTermRealizableAssets: 0 });
+            const size = points.length;
+            const cash = totals.cash / size;
+            const netReceivables = totals.netReceivables / size;
+            const longTermRealizableAssets = totals.longTermRealizableAssets / size;
+            return {
+                label: `${points[points.length - 1].label} → ${points[0].label}`,
+                cash,
+                netReceivables,
+                longTermRealizableAssets,
+                netReceivablesPctCash: divide(netReceivables, cash) * 100,
+                longTermRealizableAssetsPctCash: divide(longTermRealizableAssets, cash) * 100,
+                sampleSize: size
+            };
+        }
+
         function renderRecebiveisCaixaCard(point, modeLabel) {
             const container = document.getElementById('metricasRecebiveisCaixa');
             if (!container) return;
@@ -712,30 +733,62 @@
             }
 
             const periodo = point.label ? ` (${point.label})` : '';
+            const detalheAmostra = point.sampleSize > 1 ? ` • média de ${point.sampleSize} períodos` : '';
             addMetric(`Caixa imediato${periodo}`, `${fmtBRL.format(point.cash)} • dinheiro disponível`, '', 'metricasRecebiveisCaixa');
             addMetric(`Contas a receber médio CP${periodo}`, `${fmtBRL.format(point.netReceivables)} • clientes que ainda vão pagar`, '', 'metricasRecebiveisCaixa');
-            addMetric(`Valores a receber no longo prazo${periodo}`, fmtBRL.format(point.longTermRealizableAssets), '', 'metricasRecebiveisCaixa');
+            addMetric(`Valores a receber no longo prazo${periodo}`, `${fmtBRL.format(point.longTermRealizableAssets)}${detalheAmostra}`, '', 'metricasRecebiveisCaixa');
             addMetric('% contas a receber vs caixa imediato', fmtPct(point.netReceivablesPctCash), '', 'metricasRecebiveisCaixa');
             addMetric('% valores LP vs caixa imediato', fmtPct(point.longTermRealizableAssetsPctCash), '', 'metricasRecebiveisCaixa');
+            addMetric('Período selecionado', modeLabel, '', 'metricasRecebiveisCaixa');
         }
 
         function setupRecebiveisCaixaSwitch(annualHistory, quarterlyHistory) {
-            const annualBtn = document.getElementById('recebiveisAnualBtn');
-            const quarterlyBtn = document.getElementById('recebiveisTrimestralBtn');
+            const switchWrap = document.getElementById('recebiveisPeriodSwitch');
+            if (!switchWrap) return;
             const annual = parseBalanceHistory(annualHistory, 'yearly');
             const quarterly = parseBalanceHistory(quarterlyHistory, 'quarterly');
 
+            const latest = (() => {
+                const latestAnnual = annual[0] || null;
+                const latestQuarterly = quarterly[0] || null;
+                if (!latestAnnual) return latestQuarterly;
+                if (!latestQuarterly) return latestAnnual;
+                return new Date(latestQuarterly.endDate || 0) >= new Date(latestAnnual.endDate || 0)
+                    ? latestQuarterly
+                    : latestAnnual;
+            })();
+
+            const options = [
+                { key: 'current', label: 'Atual', get: () => latest, modeLabel: 'Atual (registro mais recente)' },
+                { key: '7y', label: 'Últimos 7 anos', get: () => aggregateBalancePoints(annual.slice(0, 7)), modeLabel: 'Últimos sete anos (média anual)' },
+                { key: '5y', label: 'Últimos 5 anos', get: () => aggregateBalancePoints(annual.slice(0, 5)), modeLabel: 'Últimos cinco anos (média anual)' },
+                { key: '3y', label: 'Últimos 3 anos', get: () => aggregateBalancePoints(annual.slice(0, 3)), modeLabel: 'Últimos três anos (média anual)' },
+                { key: '1y', label: 'Último ano', get: () => annual[0] || null, modeLabel: 'Último ano' },
+                { key: '1q', label: 'Último trimestre', get: () => quarterly[0] || null, modeLabel: 'Último trimestre' },
+                { key: '2q', label: 'Último semestre', get: () => aggregateBalancePoints(quarterly.slice(0, 2)), modeLabel: 'Último semestre (média trimestral)' }
+            ];
+
+            const buttons = {};
+            options.forEach((option) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'switch-btn';
+                btn.textContent = option.label;
+                btn.addEventListener('click', () => setMode(option.key));
+                switchWrap.appendChild(btn);
+                buttons[option.key] = btn;
+            });
+
             const setMode = (mode) => {
-                const isAnnual = mode === 'annual';
-                annualBtn.classList.toggle('active', isAnnual);
-                quarterlyBtn.classList.toggle('active', !isAnnual);
-                const selected = isAnnual ? annual : quarterly;
-                renderRecebiveisCaixaCard(selected[0], isAnnual ? 'Anual' : 'Trimestral');
+                options.forEach((option) => {
+                    buttons[option.key]?.classList.toggle('active', option.key === mode);
+                });
+                const selectedOption = options.find((option) => option.key === mode) || options[0];
+                const point = selectedOption.get();
+                renderRecebiveisCaixaCard(point, selectedOption.modeLabel);
             };
 
-            annualBtn.addEventListener('click', () => setMode('annual'));
-            quarterlyBtn.addEventListener('click', () => setMode('quarterly'));
-            setMode('annual');
+            setMode('current');
         }
 
         function tickerFromUrl() {
