@@ -8,28 +8,16 @@
     "nome": "BB Seguridade"
   },
   {
-    "ticker": "BRAP3",
-    "nome": "Bradespar"
-  },
-  {
-    "ticker": "ITSA3",
-    "nome": "Itaúsa"
-  },
-  {
-    "ticker": "ITSA4",
-    "nome": "Itaúsa"
-  },
-  {
     "ticker": "WIZC3",
     "nome": "Wiz"
   },
   {
-    "ticker": "BRSR6",
-    "nome": "Banrisul"
+    "ticker": "CXSE3",
+    "nome": "CXSE3"
   },
   {
-    "ticker": "BRAP4",
-    "nome": "Bradespar"
+    "ticker": "BRSR6",
+    "nome": "Banrisul"
   },
   {
     "ticker": "SANB11",
@@ -37,10 +25,6 @@
   },
   {
     "ticker": "ITUB3",
-    "nome": "Itaú Unibanco"
-  },
-  {
-    "ticker": "ITUB4",
     "nome": "Itaú Unibanco"
   },
   {
@@ -76,7 +60,275 @@
     "nome": "CPFL"
   },
   {
+    "ticker": "BRSR3",
+    "nome": "BRSR3"
+  },
+  {
+    "ticker": "BRAP3",
+    "nome": "Bradespar"
+  },
+  {
+    "ticker": "ITSA3",
+    "nome": "Itaúsa"
+  },
+  {
+    "ticker": "ITSA4",
+    "nome": "Itaúsa"
+  },
+  {
+    "ticker": "ABCB4",
+    "nome": "ABCB4"
+  },
+  {
+    "ticker": "BRSR5",
+    "nome": "BRSR5"
+  },
+  {
+    "ticker": "BBDC4",
+    "nome": "BBDC4"
+  },
+  {
+    "ticker": "BRAP4",
+    "nome": "Bradespar"
+  },
+  {
+    "ticker": "ITUB4",
+    "nome": "Itaú Unibanco"
+  },
+  {
+    "ticker": "FLRY3",
+    "nome": "FLRY3"
+  },
+  {
+    "ticker": "VALE3",
+    "nome": "VALE3"
+  },
+  {
     "ticker": "B3SA3",
     "nome": "B3"
+  },
+  {
+    "ticker": "ISAE4",
+    "nome": "ISAE4"
+  },
+  {
+    "ticker": "CMIG4",
+    "nome": "CMIG4"
+  },
+  {
+    "ticker": "PSSA3",
+    "nome": "PSSA3"
+  },
+  {
+    "ticker": "ABEV3",
+    "nome": "ABEV3"
+  },
+  {
+    "ticker": "CPLE11",
+    "nome": "CPLE11"
+  },
+  {
+    "ticker": "ISAE3",
+    "nome": "ISAE3"
+  },
+  {
+    "ticker": "SANB4",
+    "nome": "SANB4"
+  },
+  {
+    "ticker": "UNIP6",
+    "nome": "UNIP6"
+  },
+  {
+    "ticker": "UNIP3",
+    "nome": "UNIP3"
+  },
+  {
+    "ticker": "HYPE3",
+    "nome": "HYPE3"
+  },
+  {
+    "ticker": "KLBN11",
+    "nome": "KLBN11"
+  },
+  {
+    "ticker": "BBAS3",
+    "nome": "BBAS3"
+  },
+  {
+    "ticker": "UNIP5",
+    "nome": "UNIP5"
+  },
+  {
+    "ticker": "SANB3",
+    "nome": "SANB3"
+  },
+  {
+    "ticker": "BMEB3",
+    "nome": "BMEB3"
+  },
+  {
+    "ticker": "SAPR11",
+    "nome": "SAPR11"
+  },
+  {
+    "ticker": "MYPK3",
+    "nome": "MYPK3"
+  },
+  {
+    "ticker": "TUPY3",
+    "nome": "TUPY3"
+  },
+  {
+    "ticker": "SLCE3",
+    "nome": "SLCE3"
+  },
+  {
+    "ticker": "BMEB4",
+    "nome": "BMEB4"
+  },
+  {
+    "ticker": "KLBN3",
+    "nome": "KLBN3"
+  },
+  {
+    "ticker": "KLBN4",
+    "nome": "KLBN4"
+  },
+  {
+    "ticker": "EGIE3",
+    "nome": "EGIE3"
+  },
+  {
+    "ticker": "SAPR4",
+    "nome": "SAPR4"
+  },
+  {
+    "ticker": "CMIG3",
+    "nome": "CMIG3"
+  },
+  {
+    "ticker": "BPAC5",
+    "nome": "BPAC5"
+  },
+  {
+    "ticker": "ALUP11",
+    "nome": "ALUP11"
+  },
+  {
+    "ticker": "UGPA3",
+    "nome": "UGPA3"
+  },
+  {
+    "ticker": "AURE3",
+    "nome": "AURE3"
+  },
+  {
+    "ticker": "SAPR3",
+    "nome": "SAPR3"
+  },
+  {
+    "ticker": "BPAC11",
+    "nome": "BPAC11"
+  },
+  {
+    "ticker": "VBBR3",
+    "nome": "VBBR3"
+  },
+  {
+    "ticker": "ALUP4",
+    "nome": "ALUP4"
+  },
+  {
+    "ticker": "NEOE3",
+    "nome": "NEOE3"
+  },
+  {
+    "ticker": "SBSP3",
+    "nome": "SBSP3"
+  },
+  {
+    "ticker": "ALUP3",
+    "nome": "ALUP3"
+  },
+  {
+    "ticker": "ENGI11",
+    "nome": "ENGI11"
+  },
+  {
+    "ticker": "CSMG3",
+    "nome": "CSMG3"
+  },
+  {
+    "ticker": "ENGI4",
+    "nome": "ENGI4"
+  },
+  {
+    "ticker": "EQTL3",
+    "nome": "EQTL3"
+  },
+  {
+    "ticker": "ENGI3",
+    "nome": "ENGI3"
+  },
+  {
+    "ticker": "MEGA3",
+    "nome": "MEGA3"
+  },
+  {
+    "ticker": "BPAC3",
+    "nome": "BPAC3"
+  },
+  {
+    "ticker": "AESB3",
+    "nome": "AESB3"
+  },
+  {
+    "ticker": "SRNA3",
+    "nome": "SRNA3"
+  },
+  {
+    "ticker": "CCRO3",
+    "nome": "CCRO3"
+  },
+  {
+    "ticker": "FESA3",
+    "nome": "FESA3"
+  },
+  {
+    "ticker": "FESA4",
+    "nome": "FESA4"
+  },
+  {
+    "ticker": "CLSC3",
+    "nome": "CLSC3"
+  },
+  {
+    "ticker": "CPLE3",
+    "nome": "CPLE3"
+  },
+  {
+    "ticker": "ROMI3",
+    "nome": "ROMI3"
+  },
+  {
+    "ticker": "CGAS3",
+    "nome": "CGAS3"
+  },
+  {
+    "ticker": "CGAS5",
+    "nome": "CGAS5"
+  },
+  {
+    "ticker": "CLSC4",
+    "nome": "CLSC4"
+  },
+  {
+    "ticker": "BRIV3",
+    "nome": "BRIV3"
+  },
+  {
+    "ticker": "BRIV4",
+    "nome": "BRIV4"
   }
 ]
