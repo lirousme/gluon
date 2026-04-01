@@ -298,26 +298,50 @@
             localStorage.setItem('volumeHistoryByTickerV1', JSON.stringify(history));
         }
 
+        function isValidVolumePoint(point) {
+            const timestamp = toTimestamp(point?.timestamp);
+            const volume = num(point?.volume);
+            return Number.isFinite(timestamp) && timestamp > 0 && Number.isFinite(volume) && volume > 0;
+        }
+
+        function cleanVolumeHistory(points) {
+            if (!Array.isArray(points)) return [];
+            const unique = new Map();
+
+            points.forEach((point) => {
+                if (!isValidVolumePoint(point)) return;
+                const timestamp = toTimestamp(point.timestamp);
+                const volume = num(point.volume);
+                unique.set(`${timestamp}-${volume}`, { timestamp, volume });
+            });
+
+            return Array.from(unique.values())
+                .sort((a, b) => Number(a.timestamp) - Number(b.timestamp))
+                .slice(-5000);
+        }
+
         function registerVolumePoint(ticker, regularMarketVolume, regularMarketTime) {
             const timestamp = toTimestamp(regularMarketTime);
             const volume = num(regularMarketVolume);
-            if (!ticker || !timestamp || !Number.isFinite(volume) || volume <= 0) return [];
+            if (!ticker) return [];
 
             const history = readVolumeHistory();
-            const tickerHistory = Array.isArray(history[ticker]) ? history[ticker] : [];
+            const tickerHistory = cleanVolumeHistory(history[ticker]);
+            const hasCurrentPoint = Number.isFinite(timestamp) && timestamp > 0 && Number.isFinite(volume) && volume > 0;
             const hasSamePoint = tickerHistory.some((point) => Number(point.timestamp) === timestamp && num(point.volume) === volume);
 
-            if (!hasSamePoint) {
+            if (hasCurrentPoint && !hasSamePoint) {
                 tickerHistory.push({ timestamp, volume });
             }
 
-            tickerHistory.sort((a, b) => Number(a.timestamp) - Number(b.timestamp));
-            history[ticker] = tickerHistory.slice(-5000);
+            history[ticker] = cleanVolumeHistory(tickerHistory);
             saveVolumeHistory(history);
             return history[ticker];
         }
 
         function renderTrends(history, currentVolume, currentTimestamp) {
+            const validHistory = cleanVolumeHistory(history);
+            const validCurrentVolume = Number.isFinite(currentVolume) && currentVolume > 0 ? currentVolume : null;
             const now = toTimestamp(currentTimestamp) || Date.now();
             const periods = [
                 { label: 'Dia', ms: 24 * 60 * 60 * 1000 },
@@ -331,21 +355,26 @@
             ];
 
             periods.forEach(({ label, ms }) => {
-                const windowPoints = history.filter((point) => now - Number(point.timestamp) <= ms);
+                const windowPoints = validHistory.filter((point) => now - Number(point.timestamp) <= ms);
                 if (windowPoints.length < 2) {
                     addMetric(`${label} (mín. 2 registros)`, 'Dados insuficientes', '', 'tendencias');
                     return;
                 }
 
-                const avg = windowPoints.reduce((acc, point) => acc + num(point.volume), 0) / windowPoints.length;
-                const deltaPct = avg > 0 ? ((currentVolume - avg) / avg) * 100 : 0;
+                if (validCurrentVolume === null) {
+                    addMetric(`${label} (mercado fechado)`, 'Sem volume atual válido para comparar', '', 'tendencias');
+                    return;
+                }
 
-                if (currentVolume > avg) {
-                    addMetric(`${label} • Venda`, `Atual ${fmtNum.format(currentVolume)} | Média ${fmtNum.format(Math.round(avg))} (${fmtPct(deltaPct)})`, 'up', 'tendencias');
-                } else if (currentVolume < avg) {
-                    addMetric(`${label} • Compra`, `Atual ${fmtNum.format(currentVolume)} | Média ${fmtNum.format(Math.round(avg))} (${fmtPct(deltaPct)})`, 'down', 'tendencias');
+                const avg = windowPoints.reduce((acc, point) => acc + num(point.volume), 0) / windowPoints.length;
+                const deltaPct = avg > 0 ? ((validCurrentVolume - avg) / avg) * 100 : 0;
+
+                if (validCurrentVolume > avg) {
+                    addMetric(`${label} • Venda`, `Atual ${fmtNum.format(validCurrentVolume)} | Média ${fmtNum.format(Math.round(avg))} (${fmtPct(deltaPct)})`, 'up', 'tendencias');
+                } else if (validCurrentVolume < avg) {
+                    addMetric(`${label} • Compra`, `Atual ${fmtNum.format(validCurrentVolume)} | Média ${fmtNum.format(Math.round(avg))} (${fmtPct(deltaPct)})`, 'down', 'tendencias');
                 } else {
-                    addMetric(`${label} • Neutro`, `Atual ${fmtNum.format(currentVolume)} | Média ${fmtNum.format(Math.round(avg))} (${fmtPct(deltaPct)})`, '', 'tendencias');
+                    addMetric(`${label} • Neutro`, `Atual ${fmtNum.format(validCurrentVolume)} | Média ${fmtNum.format(Math.round(avg))} (${fmtPct(deltaPct)})`, '', 'tendencias');
                 }
             });
         }
