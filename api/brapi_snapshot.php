@@ -176,7 +176,7 @@ function fetchTickerHistory(PDO $pdo, string $ticker): array
     ];
 }
 
-function fetchLatestSnapshot(PDO $pdo): ?array
+function fetchLatestSnapshot(PDO $pdo, string $tickerFilter = ''): ?array
 {
     $snapshotStmt = $pdo->query('SELECT * FROM snapshots ORDER BY id DESC LIMIT 1');
     $snapshot = $snapshotStmt->fetch();
@@ -184,8 +184,31 @@ function fetchLatestSnapshot(PDO $pdo): ?array
         return null;
     }
 
-    $companyStmt = $pdo->prepare('SELECT ticker, payload_json FROM quote_companies WHERE snapshot_id = :snapshot_id ORDER BY ticker');
-    $companyStmt->execute([':snapshot_id' => $snapshot['id']]);
+    if ($tickerFilter !== '') {
+        $companyStmt = $pdo->prepare(
+            'SELECT qc.ticker, qc.payload_json
+             FROM quote_companies qc
+             WHERE qc.ticker = :ticker
+             AND qc.snapshot_id = (
+                 SELECT MAX(snapshot_id)
+                 FROM quote_companies
+                 WHERE ticker = :ticker
+             )
+             LIMIT 1'
+        );
+        $companyStmt->execute([':ticker' => $tickerFilter]);
+    } else {
+        $companyStmt = $pdo->query(
+            'SELECT qc.ticker, qc.payload_json
+             FROM quote_companies qc
+             INNER JOIN (
+                 SELECT ticker, MAX(snapshot_id) AS max_snapshot_id
+                 FROM quote_companies
+                 GROUP BY ticker
+             ) latest ON latest.ticker = qc.ticker AND latest.max_snapshot_id = qc.snapshot_id
+             ORDER BY qc.ticker'
+        );
+    }
 
     $resultsByTicker = [];
     $tickers = [];
@@ -261,13 +284,13 @@ $pdo = ensureStore($baseDir, $dbPath);
 
 if ($method === 'GET') {
     try {
-        $snapshot = fetchLatestSnapshot($pdo);
+        $tickerParam = normTicker((string)($_GET['ticker'] ?? ''));
+        $snapshot = fetchLatestSnapshot($pdo, $tickerParam);
         if ($snapshot === null) {
             echo json_encode(['status' => 'ok', 'snapshot' => null], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             exit;
         }
 
-        $tickerParam = normTicker((string)($_GET['ticker'] ?? ''));
         $includeHistory = ($_GET['includeHistory'] ?? '') === '1';
         if ($tickerParam !== '') {
             if (!isset($snapshot['resultsByTicker'][$tickerParam])) {
