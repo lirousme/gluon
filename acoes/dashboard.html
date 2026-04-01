@@ -159,6 +159,65 @@
             padding: 12px;
             border-radius: 10px;
         }
+
+        .switch-wrap {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .switch-btn {
+            border: 1px solid var(--border);
+            background: #0c1527;
+            color: var(--muted);
+            border-radius: 999px;
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+
+        .switch-btn.active {
+            background: #1d4ed8;
+            color: #dbeafe;
+            border-color: #1d4ed8;
+        }
+
+        .pl-chart {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(30px, 1fr));
+            gap: 8px;
+            align-items: end;
+            min-height: 220px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #0c1527;
+        }
+
+        .pl-col {
+            display: grid;
+            gap: 8px;
+            justify-items: center;
+        }
+
+        .pl-bar {
+            width: 100%;
+            min-height: 2px;
+            border-radius: 6px 6px 0 0;
+            background: linear-gradient(180deg, #60a5fa, #1d4ed8);
+        }
+
+        .pl-label {
+            color: var(--muted);
+            font-size: 0.72rem;
+            text-align: center;
+        }
+
+        .pl-value {
+            font-size: 0.72rem;
+            color: #bfdbfe;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -174,6 +233,15 @@
         <section id="card-tendencia" class="card">
             <h2>Tendência de volume (histórico no banco)</h2>
             <div class="grid" id="tendencias"></div>
+        </section>
+
+        <section id="card-pl-historico" class="card">
+            <h2>P/L (EPS ÷ Preço) — Histórico</h2>
+            <div class="switch-wrap">
+                <button id="plAnualBtn" class="switch-btn active" type="button">Anual</button>
+                <button id="plTrimestralBtn" class="switch-btn" type="button">Trimestral</button>
+            </div>
+            <div id="plChart" class="pl-chart"></div>
         </section>
 
         <section id="card-metricas-aleatorias" class="card">
@@ -462,6 +530,75 @@
             container.appendChild(row);
         }
 
+        function formatPeriodLabel(endDate, type = 'yearly') {
+            if (!endDate) return type === 'quarterly' ? 'Tri' : 'Ano';
+            const date = new Date(endDate);
+            if (Number.isNaN(date.getTime())) return String(endDate).slice(0, 7);
+            if (type === 'quarterly') {
+                const quarter = Math.floor(date.getUTCMonth() / 3) + 1;
+                return `${date.getUTCFullYear()} T${quarter}`;
+            }
+            return String(date.getUTCFullYear());
+        }
+
+        function parsePLHistory(history, type = 'yearly') {
+            if (!Array.isArray(history)) return [];
+            return history
+                .map((item) => {
+                    const eps = Number(item?.earningsPerShare);
+                    const price = Number(item?.price);
+                    if (!Number.isFinite(eps) || !Number.isFinite(price) || price === 0) return null;
+                    return {
+                        label: formatPeriodLabel(item.endDate, type),
+                        endDate: item.endDate,
+                        pl: eps / price
+                    };
+                })
+                .filter(Boolean)
+                .sort((a, b) => new Date(a.endDate) - new Date(b.endDate))
+                .slice(type === 'quarterly' ? -12 : -16);
+        }
+
+        function renderPLChart(points) {
+            const chart = document.getElementById('plChart');
+            chart.innerHTML = '';
+            if (!points.length) {
+                chart.innerHTML = '<div class="sub">Sem dados suficientes para montar o gráfico de P/L.</div>';
+                return;
+            }
+
+            const maxValue = Math.max(...points.map((point) => point.pl), 0.0001);
+            points.forEach((point) => {
+                const col = document.createElement('div');
+                col.className = 'pl-col';
+                const percent = Math.max(2, (point.pl / maxValue) * 100);
+                col.innerHTML = `
+                    <div class="pl-value">${fmtRatio(point.pl, 3)}</div>
+                    <div class="pl-bar" style="height:${percent}%"></div>
+                    <div class="pl-label">${point.label}</div>
+                `;
+                chart.appendChild(col);
+            });
+        }
+
+        function setupPLSwitch(annualHistory, quarterlyHistory) {
+            const annualBtn = document.getElementById('plAnualBtn');
+            const quarterlyBtn = document.getElementById('plTrimestralBtn');
+            const annual = parsePLHistory(annualHistory, 'yearly');
+            const quarterly = parsePLHistory(quarterlyHistory, 'quarterly');
+
+            const setMode = (mode) => {
+                const isAnnual = mode === 'annual';
+                annualBtn.classList.toggle('active', isAnnual);
+                quarterlyBtn.classList.toggle('active', !isAnnual);
+                renderPLChart(isAnnual ? annual : quarterly);
+            };
+
+            annualBtn.addEventListener('click', () => setMode('annual'));
+            quarterlyBtn.addEventListener('click', () => setMode('quarterly'));
+            setMode('annual');
+        }
+
         function tickerFromUrl() {
             const qs = new URLSearchParams(window.location.search);
             return (qs.get('ticker') || '').trim().toUpperCase();
@@ -511,6 +648,10 @@
                 renderTrends(volumeHistory, num(acao.regularMarketVolume), acao.regularMarketTime || cache.fetchedAt);
                 const priceHistory = cache?.historyByTicker?.[ticker]?.price || [];
                 renderPriceAverages(priceHistory, acao.regularMarketTime || cache.fetchedAt);
+                setupPLSwitch(
+                    acao.defaultKeyStatisticsHistory || [],
+                    acao.defaultKeyStatisticsHistoryQuarterly || []
+                );
 
                 const fiftyTwoWeekRange = parseFiftyTwoWeekRange(acao.fiftyTwoWeekRange);
                 if (fiftyTwoWeekRange) {
