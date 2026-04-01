@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carteira BRAPI (requisição única)</title>
+    <title>Carteira BRAPI (requisição única otimizada)</title>
     <style>
         body { margin: 0; font-family: Arial, sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; }
         .card { max-width: 1100px; margin: 0 auto; background: #111827; border: 1px solid #334155; border-radius: 12px; padding: 16px; }
@@ -46,13 +46,13 @@
 </head>
 <body>
 <div class="card">
-    <h1>BRAPI com requisição única</h1>
-    <p class="hint">A lista inicial vem de <code>./empresas.json</code>. Você pode gerenciar a lista no modal (máximo de 20 empresas). O sistema faz 1 requisição para todos os tickers e salva os dados em SQLite.</p>
+    <h1>BRAPI com requisição única otimizada</h1>
+    <p class="hint">A lista inicial vem de <code>./empresas.json</code>. Você pode gerenciar a lista no modal (máximo de 20 empresas). Esta tela consulta apenas dados essenciais (mais rápido) e salva o snapshot em SQLite.</p>
 
     <div class="row">
         <span class="pill" id="totais">Empresas: 0/20</span>
         <span class="pill" id="cacheInfo">Sem dados salvos no SQLite</span>
-        <button id="buscarBtn">Atualizar dados da API (1 requisição)</button>
+        <button id="buscarBtn">Atualizar dados da API (rápido)</button>
         <button id="gerenciarBtn" class="secondary">Gerenciar empresas</button>
         <button id="resetarBtn" class="secondary">Recarregar lista do sistema</button>
     </div>
@@ -262,7 +262,9 @@
 
         statusEl.textContent = 'Consultando API...';
         try {
-            const query = new URLSearchParams({ tickers: tickers.join(','), all_data: '1' });
+            // Para a listagem da carteira usamos payload enxuto para reduzir latência.
+            // Dados fundamentais completos continuam disponíveis quando necessário em telas específicas.
+            const query = new URLSearchParams({ tickers: tickers.join(','), all_data: '0' });
             const resp = await fetch(`../api/brapi_quotes.php?${query.toString()}`, { cache: 'no-store' });
             const data = await resp.json();
 
