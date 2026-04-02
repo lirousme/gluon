@@ -348,6 +348,20 @@ function getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $fro
     $normalized_back = normalizeDeckLanguage($back_language, 'en-GB');
 
     if (
+        $normalized_structure === 'traducoes'
+        && $normalized_front === 'pt-BR'
+        && $normalized_back === 'en-GB'
+    ) {
+        if ($side === 'front') {
+            return 'pt-BR-Chirp3-HD-Enceladus';
+        }
+
+        if ($side === 'back') {
+            return 'en-GB-Chirp3-HD-Fenrir';
+        }
+    }
+
+    if (
         $normalized_structure === 'perguntas'
         && $normalized_front === 'pt-BR'
         && $normalized_back === 'pt-BR'
