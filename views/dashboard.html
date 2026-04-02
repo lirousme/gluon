@@ -310,6 +310,9 @@
                 <button onclick="app.generateMissingAudiosFromDirectory(); app.closeRightPanel()" id="btn-generate-missing-audios" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-cyan-300 hover:bg-slate-700 hover:text-cyan-200 flex items-center gap-3 transition-colors hidden">
                     <i class="fa-solid fa-volume-high w-5 text-center"></i><span class="font-medium">Gerar áudios pendentes</span>
                 </button>
+                <button onclick="app.openDirectoryFlashcardsStudy(); app.closeRightPanel()" id="btn-study-directory-flashcards" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-amber-300 hover:bg-slate-700 hover:text-amber-200 flex items-center gap-3 transition-colors hidden">
+                    <i class="fa-solid fa-shuffle w-5 text-center"></i><span class="font-medium">Estudar flashcards da pasta</span>
+                </button>
                 <button onclick="app.setCurrentDirectoryAsHome(); app.closeRightPanel()" id="btn-set-home-directory" class="w-full text-left px-3 py-2.5 text-sm rounded-lg text-emerald-300 hover:bg-slate-700 hover:text-emerald-200 flex items-center gap-3 transition-colors hidden">
                     <i class="fa-solid fa-house-circle-check w-5 text-center"></i><span class="font-medium">Definir como página inicial</span>
                 </button>
@@ -1914,6 +1917,15 @@
                 this.openItemPreviewModal({ id: sourceId, name: 'Anotações' }, 'editor', sourceId);
             },
 
+            openDirectoryFlashcardsStudy() {
+                const directoryId = this.getCurrentParentId();
+                if (!directoryId) {
+                    this.showToast('Abra uma pasta para estudar os flashcards dos decks descendentes.', 'error');
+                    return;
+                }
+                window.location.href = this.buildViewUrl('flashcards', directoryId, { study_scope: 'directory_random' });
+            },
+
             async fetchDirectories() {
                 this.setLoading(true);
                 this.renderBreadcrumbs();
@@ -2510,7 +2522,7 @@
 
                 this.renderProfilePresentation();
 
-                const hideForVisitor = ['btn-copy-dir', 'btn-paste-dir', 'btn-move-dir', 'btn-create-portal', 'btn-set-home-directory', 'btn-reorder-desktop', 'btn-reorder-mobile', 'btn-relocate-desktop', 'btn-relocate-mobile', 'btn-profile-settings', 'btn-generate-missing-audios'];
+                const hideForVisitor = ['btn-copy-dir', 'btn-paste-dir', 'btn-move-dir', 'btn-create-portal', 'btn-set-home-directory', 'btn-reorder-desktop', 'btn-reorder-mobile', 'btn-relocate-desktop', 'btn-relocate-mobile', 'btn-profile-settings', 'btn-generate-missing-audios', 'btn-study-directory-flashcards'];
                 hideForVisitor.forEach(id => {
                     const el = document.getElementById(id);
                     if (!el) return;
@@ -2545,6 +2557,7 @@
                 const btnMove = document.getElementById('btn-move-dir');
                 const btnPortal = document.getElementById('btn-create-portal');
                 const btnGenerateAudio = document.getElementById('btn-generate-missing-audios');
+                const btnStudyDirectoryFlashcards = document.getElementById('btn-study-directory-flashcards');
 
                 if (btnGenerateAudio) {
                     if (this.getCurrentParentId() !== null) {
@@ -2553,6 +2566,15 @@
                     } else {
                         btnGenerateAudio.classList.add('hidden');
                         btnGenerateAudio.classList.remove('flex');
+                    }
+                }
+                if (btnStudyDirectoryFlashcards) {
+                    if (this.getCurrentParentId() !== null) {
+                        btnStudyDirectoryFlashcards.classList.remove('hidden');
+                        btnStudyDirectoryFlashcards.classList.add('flex');
+                    } else {
+                        btnStudyDirectoryFlashcards.classList.add('hidden');
+                        btnStudyDirectoryFlashcards.classList.remove('flex');
                     }
                 }
 

@@ -140,13 +140,13 @@
         </div>
         
         <div class="flex items-center gap-2 sm:gap-3">
-            <button onclick="flashcardApp.openSettingsModal()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 font-medium py-2 px-3 rounded-lg shadow transition-all flex items-center justify-center text-sm" title="Configurações do Deck">
+            <button id="btnDeckSettingsTop" onclick="flashcardApp.openSettingsModal()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 font-medium py-2 px-3 rounded-lg shadow transition-all flex items-center justify-center text-sm" title="Configurações do Deck">
                 <i class="fa-solid fa-gear"></i>
             </button>
-            <button onclick="flashcardApp.openSingleModal()" class="text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 font-medium py-2 px-3 sm:px-4 rounded-lg shadow transition-all flex items-center gap-2 text-sm" title="Adicionar Card Unitário">
+            <button id="btnAddSingleTop" onclick="flashcardApp.openSingleModal()" class="text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 font-medium py-2 px-3 sm:px-4 rounded-lg shadow transition-all flex items-center gap-2 text-sm" title="Adicionar Card Unitário">
                 <i class="fa-solid fa-plus text-gluon-primary"></i> <span class="hidden sm:inline">Add</span>
             </button>
-            <button onclick="flashcardApp.openBulkModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 px-3 sm:px-4 rounded-lg shadow-lg transition-all flex items-center gap-2 text-sm" title="Importar do Excel">
+            <button id="btnAddBulkTop" onclick="flashcardApp.openBulkModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 px-3 sm:px-4 rounded-lg shadow-lg transition-all flex items-center gap-2 text-sm" title="Importar do Excel">
                 <i class="fa-solid fa-table"></i> <span class="hidden sm:inline">Importar Tabela</span>
             </button>
             <button onclick="flashcardApp.toggleRightPanel()" id="btnRightPanel" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm py-2 px-3 rounded-lg transition-all" title="Abrir menu lateral direito" aria-label="Abrir menu lateral direito">
@@ -178,17 +178,17 @@
                 Gera áudio para os cards do deck aberto que ainda não possuem áudio.
             </p>
 
-            <button onclick="flashcardApp.openSettingsFromPanel()" class="w-full text-left text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm">
+            <button id="btnDeckSettingsPanel" onclick="flashcardApp.openSettingsFromPanel()" class="w-full text-left text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm">
                 <i class="fa-solid fa-gear text-slate-400"></i>
                 <span>Configurações do Deck</span>
             </button>
 
-            <button onclick="flashcardApp.openSingleFromPanel()" class="w-full text-left text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm">
+            <button id="btnAddSinglePanel" onclick="flashcardApp.openSingleFromPanel()" class="w-full text-left text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm">
                 <i class="fa-solid fa-plus text-gluon-primary"></i>
                 <span>Adicionar Card</span>
             </button>
 
-            <button onclick="flashcardApp.openBulkFromPanel()" class="w-full text-left bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 px-3 rounded-lg shadow-lg transition-all flex items-center gap-2 text-sm">
+            <button id="btnAddBulkPanel" onclick="flashcardApp.openBulkFromPanel()" class="w-full text-left bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 px-3 rounded-lg shadow-lg transition-all flex items-center gap-2 text-sm">
                 <i class="fa-solid fa-table"></i>
                 <span>Importar Tabela</span>
             </button>
@@ -616,6 +616,7 @@
 
         const flashcardApp = {
             deckId: null,
+            studyScope: 'deck',
             deckMode: 'aleatorio',
             frontLanguage: 'pt-BR',
             backLanguage: 'en-GB',
@@ -651,6 +652,7 @@
             async init() {
                 const urlParams = new URLSearchParams(window.location.search);
                 this.deckId = urlParams.get('id');
+                this.studyScope = urlParams.get('study_scope') === 'directory_random' ? 'directory_random' : 'deck';
 
                 if (!this.deckId) {
                     window.location.href = getMarkedBackRoute();
@@ -672,7 +674,36 @@
 
                 this.setupKeyboardListeners();
                 this.setupBulkListener();
+                this.applyStudyScopeUI();
                 await this.loadDeck();
+            },
+
+            isDirectoryRandomStudy() {
+                return this.studyScope === 'directory_random';
+            },
+
+            applyStudyScopeUI() {
+                const hideIfDirectoryStudy = [
+                    'btnDeckSettingsTop',
+                    'btnAddSingleTop',
+                    'btnAddBulkTop',
+                    'btnGenerateMissingAudiosFromDeck',
+                    'btnDeckSettingsPanel',
+                    'btnAddSinglePanel',
+                    'btnAddBulkPanel',
+                    'btnGoToGenerateCards',
+                    'btnGoToGenerateCardsBatch',
+                    'btnResetBookScore'
+                ];
+                hideIfDirectoryStudy.forEach((id) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    if (this.isDirectoryRandomStudy()) {
+                        el.classList.add('hidden');
+                    } else {
+                        el.classList.remove('hidden');
+                    }
+                });
             },
 
             showToast(message, type = 'success') {
@@ -760,7 +791,10 @@
                 document.getElementById('controls').style.display = 'none';
                 document.getElementById('topControlPanel').style.display = 'none';
 
-                const res = await this.api('fetch', { deck_id: this.deckId });
+                const fetchPayload = this.isDirectoryRandomStudy()
+                    ? { directory_id: this.deckId, study_scope: 'directory_random' }
+                    : { deck_id: this.deckId };
+                const res = await this.api('fetch', fetchPayload);
                 document.getElementById('loader').style.display = 'none';
 
                 if (res) {
@@ -1403,6 +1437,10 @@
             },
 
             async generateMissingAudiosFromCurrentDeck() {
+                if (this.isDirectoryRandomStudy()) {
+                    this.showToast('A geração de áudio em lote está disponível apenas no modo deck.', 'error');
+                    return;
+                }
                 if (!this.deckId) {
                     this.showToast('Deck inválido para gerar áudios.', 'error');
                     return;
@@ -1772,11 +1810,13 @@
             },
 
             goToGenerateCardsView() {
+                if (this.isDirectoryRandomStudy()) return;
                 const from = encodeURIComponent(window.location.pathname + window.location.search);
                 window.location.href = `/gerar_cards?id=${encodeURIComponent(this.deckId)}&from=${from}`;
             },
 
             goToGenerateCardsBatchView() {
+                if (this.isDirectoryRandomStudy()) return;
                 const from = encodeURIComponent(window.location.pathname + window.location.search);
                 window.location.href = `/gerar_cards_batch?id=${encodeURIComponent(this.deckId)}&from=${from}`;
             },
@@ -1832,6 +1872,10 @@
 
             // --- Modais ---
             openSettingsModal() {
+                if (this.isDirectoryRandomStudy()) {
+                    this.showToast('As configurações são editáveis apenas no modo deck.', 'error');
+                    return;
+                }
                 const radios = document.getElementsByName('deckMode');
                 for(let i=0; i<radios.length; i++){
                     radios[i].checked = (radios[i].value === this.deckMode);
@@ -1850,6 +1894,10 @@
             },
 
             openSingleModal() {
+                if (this.isDirectoryRandomStudy()) {
+                    this.showToast('A criação de cards está disponível apenas no modo deck.', 'error');
+                    return;
+                }
                 document.getElementById('editCardId').value = '';
                 document.getElementById('singleFront').value = '';
                 document.getElementById('singleBack').value = '';
@@ -1865,6 +1913,10 @@
             },
 
             openBulkModal() {
+                if (this.isDirectoryRandomStudy()) {
+                    this.showToast('A importação está disponível apenas no modo deck.', 'error');
+                    return;
+                }
                 document.getElementById('bulkData').value = '';
                 document.getElementById('bulkCount').innerText = '0 cards';
                 document.getElementById('btnSaveBulk').disabled = true;
