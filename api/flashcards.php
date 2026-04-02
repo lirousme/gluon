@@ -181,7 +181,7 @@ function validatePhaseDeckUnlock($pdo, $deck_id, $user_id): ?string {
 }
 
 function verifyDirectoryOwnership($pdo, $directory_id, $user_id) {
-    $stmt = $pdo->prepare("SELECT id, type FROM directories WHERE id = ? AND user_id = ?");
+    $stmt = $pdo->prepare("SELECT id, type, name_encrypted FROM directories WHERE id = ? AND user_id = ?");
     $stmt->execute([$directory_id, $user_id]);
     return $stmt->fetch();
 }
@@ -969,6 +969,103 @@ function fetchDeckHistoryText($pdo, $deck_id) {
 
 if ($action === 'fetch') {
     $deck_id = (int)($input['deck_id'] ?? 0);
+    $directory_id = (int)($input['directory_id'] ?? 0);
+    $study_scope = (string)($input['study_scope'] ?? '');
+
+    if ($study_scope === 'directory_random') {
+        if ($directory_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do diretório inválido.']));
+
+        $directory = verifyDirectoryOwnership($pdo, $directory_id, $user_id);
+        if (!$directory) {
+            die(json_encode(['status' => 'error', 'message' => 'Diretório não encontrado ou sem permissão.']));
+        }
+
+        $decks = collectDecksFromDirectoryTree($pdo, $directory_id, $user_id);
+        $deck_ids = [];
+        foreach ($decks as $deckEntry) {
+            $deck_ids[] = (int)$deckEntry['id'];
+        }
+
+        if (empty($deck_ids)) {
+            echo json_encode([
+                'status' => 'success',
+                'deck_name' => 'Revisão da Pasta • ' . Security::decryptData($directory['name_encrypted']),
+                'deck_mode' => 'aleatorio',
+                'deck_front_language' => 'pt-BR',
+                'deck_back_language' => 'en-GB',
+                'deck_structure' => 'traducoes',
+                'generation_base_prompt_default' => '',
+                'deck_percentage' => 0,
+                'book_completed_reads' => 0,
+                'book_completed_reads_max' => 3,
+                'book_next_review_at' => null,
+                'total_cards' => 0,
+                'current_index' => 0,
+                'data' => []
+            ]);
+            exit;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($deck_ids), '?'));
+
+        $stmtCards = $pdo->prepare("
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score
+            FROM flashcards f
+            LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
+            WHERE f.directory_id IN ($placeholders) AND (fs.next_review_at IS NULL OR fs.next_review_at <= NOW())
+            ORDER BY RAND()
+        ");
+        $stmtCards->execute(array_merge([$user_id], $deck_ids));
+        $cards = $stmtCards->fetchAll();
+
+        $stmtTotal = $pdo->prepare("SELECT COUNT(id) FROM flashcards WHERE directory_id IN ($placeholders)");
+        $stmtTotal->execute($deck_ids);
+        $total_cards_in_directory = (int)$stmtTotal->fetchColumn();
+
+        $stmtScore = $pdo->prepare("
+            SELECT COALESCE(SUM(fs.score), 0)
+            FROM flashcard_scores fs
+            JOIN flashcards f ON fs.flashcard_id = f.id
+            WHERE fs.user_id = ? AND f.directory_id IN ($placeholders)
+        ");
+        $stmtScore->execute(array_merge([$user_id], $deck_ids));
+        $total_score_directory = (int)$stmtScore->fetchColumn();
+        $max_possible_score = $total_cards_in_directory * 20;
+        $deck_percentage = $max_possible_score > 0 ? round(($total_score_directory / $max_possible_score) * 100) : 0;
+
+        $response = [];
+        foreach ($cards as $card) {
+            $response[] = [
+                'id' => $card['id'],
+                'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
+                'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
+                'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
+                'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
+                'has_audio_front' => (int)$card['has_audio_front'],
+                'has_audio_back' => (int)$card['has_audio_back'],
+                'score' => (int)$card['score']
+            ];
+        }
+
+        echo json_encode([
+            'status' => 'success',
+            'deck_name' => 'Revisão da Pasta • ' . Security::decryptData($directory['name_encrypted']),
+            'deck_mode' => 'aleatorio',
+            'deck_front_language' => 'pt-BR',
+            'deck_back_language' => 'en-GB',
+            'deck_structure' => 'traducoes',
+            'generation_base_prompt_default' => '',
+            'deck_percentage' => $deck_percentage,
+            'book_completed_reads' => 0,
+            'book_completed_reads_max' => 3,
+            'book_next_review_at' => null,
+            'total_cards' => $total_cards_in_directory,
+            'current_index' => 0,
+            'data' => $response
+        ]);
+        exit;
+    }
+
     if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
 
     $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
