@@ -58,7 +58,7 @@ try {
 } catch (PDOException $e) {}
 
 try {
-    $pdo->exec("ALTER TABLE directories ADD COLUMN deck_structure VARCHAR(20) NOT NULL DEFAULT 'fatos' AFTER deck_back_language");
+    $pdo->exec("ALTER TABLE directories ADD COLUMN deck_structure VARCHAR(20) NOT NULL DEFAULT 'traducoes' AFTER deck_back_language");
 } catch (PDOException $e) {}
 
 try {
@@ -99,7 +99,7 @@ try {
         user_id INT UNSIGNED NOT NULL,
         directory_id INT UNSIGNED NOT NULL,
         topic VARCHAR(200) DEFAULT NULL,
-        deck_structure VARCHAR(20) NOT NULL DEFAULT 'fatos',
+        deck_structure VARCHAR(20) NOT NULL DEFAULT 'traducoes',
         openai_input_file_id VARCHAR(80) DEFAULT NULL,
         openai_batch_id VARCHAR(80) DEFAULT NULL,
         openai_output_file_id VARCHAR(80) DEFAULT NULL,
@@ -310,7 +310,7 @@ function normalizeDeckLanguage($value, $default = 'pt-BR') {
     return in_array($value, $allowed, true) ? $value : $default;
 }
 
-function normalizeDeckStructure($value, $default = 'fatos') {
+function normalizeDeckStructure($value, $default = 'traducoes') {
     $allowed = ['fatos', 'perguntas', 'traducoes', 'parafrases', 'ingles'];
     return in_array($value, $allowed, true) ? $value : $default;
 }
@@ -343,7 +343,7 @@ function getGoogleTtsAlternateVoiceByLanguage($language) {
 }
 
 function getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $front_language, $back_language) {
-    $normalized_structure = normalizeDeckStructure($deck_structure, 'fatos');
+    $normalized_structure = normalizeDeckStructure($deck_structure, 'traducoes');
     $normalized_front = normalizeDeckLanguage($front_language, 'pt-BR');
     $normalized_back = normalizeDeckLanguage($back_language, 'en-GB');
 
@@ -629,7 +629,7 @@ function requestOpenAITts($text_to_speech, &$error_details = null) {
 }
 
 
-function requestGoogleCloudTts($text_to_speech, $language, $side = null, $deck_structure = 'fatos', $front_language = 'pt-BR', $back_language = 'en-GB', &$error_details = null) {
+function requestGoogleCloudTts($text_to_speech, $language, $side = null, $deck_structure = 'traducoes', $front_language = 'pt-BR', $back_language = 'en-GB', &$error_details = null) {
     if (trim((string)GOOGLE_CLOUD_API_KEY) === '') {
         $error_details = 'Chave GOOGLE_CLOUD_API_KEY não configurada.';
         return null;
@@ -683,7 +683,7 @@ function requestGoogleCloudTts($text_to_speech, $language, $side = null, $deck_s
 
 
 
-function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $language, $deck_structure = 'fatos', $front_language = 'pt-BR', $back_language = 'en-GB', &$error_details = null) {
+function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $language, $deck_structure = 'traducoes', $front_language = 'pt-BR', $back_language = 'en-GB', &$error_details = null) {
     $text_to_speech = adjustPronunciationForTTS($pdo, $text, $language);
     $provider = getUserTtsProvider($pdo, (int)$user_id);
     $provider_error = null;
@@ -1058,7 +1058,7 @@ if ($action === 'fetch') {
     if ($stored_base_prompt === '') {
         $stored_base_prompt = buildDefaultBasePromptByStructure(
             Security::decryptData($deck['name_encrypted']),
-            normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos')
+            normalizeDeckStructure($deck['deck_structure'] ?? 'traducoes', 'traducoes')
         );
     }
 
@@ -1068,7 +1068,7 @@ if ($action === 'fetch') {
         'deck_mode' => $deck_mode,
         'deck_front_language' => normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR'),
         'deck_back_language' => normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB'),
-        'deck_structure' => normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos'),
+        'deck_structure' => normalizeDeckStructure($deck['deck_structure'] ?? 'traducoes', 'traducoes'),
         'generation_base_prompt_default' => $stored_base_prompt,
         'deck_percentage' => $deck_percentage,
         'book_completed_reads' => $book_completed_reads,
@@ -1190,7 +1190,7 @@ elseif ($action === 'generate_audio') {
 
     $front_language = normalizeDeckLanguage($card['deck_front_language'] ?? 'pt-BR', 'pt-BR');
     $back_language = normalizeDeckLanguage($card['deck_back_language'] ?? 'en-GB', 'en-GB');
-    $deck_structure = normalizeDeckStructure($card['deck_structure'] ?? 'fatos', 'fatos');
+    $deck_structure = normalizeDeckStructure($card['deck_structure'] ?? 'traducoes', 'traducoes');
     $side_language = $side === 'front' ? $front_language : $back_language;
 
     $tts_error_details = null;
@@ -1228,7 +1228,7 @@ elseif ($action === 'generate_missing_audios_from_directory') {
         $deck_id = (int)$deck['id'];
         $front_language = normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR');
         $back_language = normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB');
-        $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
+        $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'traducoes', 'traducoes');
 
         $stmtCards->execute([$deck_id]);
         $cards = $stmtCards->fetchAll();
@@ -1367,7 +1367,7 @@ elseif ($action === 'generate_next_missing_audio_from_directory') {
     foreach ($decks as $deck) {
         $front_language = normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR');
         $back_language = normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB');
-        $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
+        $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'traducoes', 'traducoes');
         $next_job = findNextPendingAudioJobForDeck($pdo, (int)$deck['id'], $front_language, $back_language);
         if ($next_job) {
             $next_job['deck_structure'] = $deck_structure;
@@ -1398,7 +1398,7 @@ elseif ($action === 'generate_next_missing_audio_from_directory') {
         $next_job['side'],
         $next_job['text'],
         $next_job['language'],
-        $next_job['deck_structure'] ?? 'fatos',
+        $next_job['deck_structure'] ?? 'traducoes',
         $next_job['front_language'] ?? 'pt-BR',
         $next_job['back_language'] ?? 'en-GB'
     );
@@ -1439,7 +1439,7 @@ elseif ($action === 'generate_next_missing_audio_from_deck') {
 
     $front_language = normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR');
     $back_language = normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB');
-    $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
+    $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'traducoes', 'traducoes');
 
     $next_job = findNextPendingAudioJobForDeck($pdo, $deck_id, $front_language, $back_language);
     if (!$next_job) {
@@ -1635,7 +1635,7 @@ elseif ($action === 'update_settings') {
     $mode = $input['deck_mode'] === 'livro' ? 'livro' : 'aleatorio';
     $front_language = normalizeDeckLanguage($input['deck_front_language'] ?? 'pt-BR', 'pt-BR');
     $back_language = normalizeDeckLanguage($input['deck_back_language'] ?? 'en-GB', 'en-GB');
-    $deck_structure = normalizeDeckStructure($input['deck_structure'] ?? 'fatos', 'fatos');
+    $deck_structure = normalizeDeckStructure($input['deck_structure'] ?? 'traducoes', 'traducoes');
 
     if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
 
@@ -1674,7 +1674,7 @@ elseif ($action === 'add_single') {
         $new_card_id = (int)$pdo->lastInsertId();
         $front_language = normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR');
         $back_language = normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB');
-        $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
+        $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'traducoes', 'traducoes');
 
         $generated_sides = [];
         $failed_sides = [];
@@ -1807,7 +1807,7 @@ elseif ($action === 'create_batch_generation') {
     if ($topic_input !== '') {
         $deck_name = function_exists('mb_substr') ? mb_substr($topic_input, 0, 200) : substr($topic_input, 0, 200);
     }
-    $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
+    $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'traducoes', 'traducoes');
     $custom_base_prompt = normalizeGenerationBasePromptInput($input['base_prompt'] ?? '');
     if ($custom_base_prompt !== '') {
         $savePromptStmt = $pdo->prepare("UPDATE directories SET deck_generation_base_prompt = ? WHERE id = ? AND user_id = ? LIMIT 1");
@@ -2007,7 +2007,7 @@ elseif ($action === 'generate_cards_preview') {
     if ($topic_input !== '') {
         $deck_name = function_exists('mb_substr') ? mb_substr($topic_input, 0, 200) : substr($topic_input, 0, 200);
     }
-    $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'fatos', 'fatos');
+    $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'traducoes', 'traducoes');
     $custom_base_prompt = normalizeGenerationBasePromptInput($input['base_prompt'] ?? '');
 
     $historyText = $deck_structure === 'parafrases' ? '' : fetchDeckHistoryText($pdo, $deck_id);
