@@ -1923,11 +1923,6 @@
                     this.showToast('Abra uma pasta para estudar os flashcards dos decks descendentes.', 'error');
                     return;
                 }
-                const currentType = Number(this.getCurrentDirectoryType());
-                if (currentType !== 8) {
-                    this.showToast('Esse modo está disponível apenas dentro de uma Trilha.', 'error');
-                    return;
-                }
                 window.location.href = this.buildViewUrl('flashcards', directoryId, { study_scope: 'directory_random' });
             },
 
@@ -2576,7 +2571,7 @@
                     }
                 }
                 if (btnStudyDirectoryFlashcards) {
-                    if (this.getCurrentParentId() !== null && isTrailDirectory) {
+                    if (this.getCurrentParentId() !== null) {
                         btnStudyDirectoryFlashcards.classList.remove('hidden');
                         btnStudyDirectoryFlashcards.classList.add('flex');
                     } else {
