@@ -48,7 +48,7 @@ function cleanGeneratedTitle(string $title): string {
 
 function hasAtomicTitleFormat(string $title): bool {
     if ($title === '') return false;
-    if (mb_strlen($title) < 4 || mb_strlen($title) > 90) return false;
+    if (mb_strlen($title) < 2 || mb_strlen($title) > 90) return false;
     if (preg_match('/[,;:\/\|\(\)]/u', $title)) return false;
     if (preg_match('/\s+e\s+/iu', $title)) return false;
     return true;
@@ -95,7 +95,7 @@ function buildUniqueAtomicTitles(
     }
 
     if (count($out) < $count) {
-        $fallbackSuffixes = ['Pergunta para esmiuçar a explicação', 'Pergunta para elucidar', 'Pergunta para delinear a informação', 'Pergunta para particularizar a informação', 'Pergunta para avançar o assunto do curso'];
+        $fallbackSuffixes = ['base form', 'derived form', 'common collocation', 'phrasal verb', 'idiomatic use'];
         foreach ($fallbackSuffixes as $suffix) {
             $candidate = cleanGeneratedTitle($contextTitle . ' - ' . $suffix);
             $k = mb_strtolower($candidate);
@@ -182,19 +182,19 @@ function generateSubtopics(string $materia, array $orderedList, int $insertAfter
         'model' => 'gpt-5.4',
         'response_format' => ['type' => 'json_object'],
         'messages' => [
-            ['role' => 'system', 'content' => 'Você é um arquiteto curricular especialista em decomposição progressiva de conhecimento. Sempre retorna JSON válido e sem texto extra.'],
-            ['role' => 'user', 'content' => "Matéria principal: {$materia}\nObjetivo: criar o curso mais detalhado do mundo sobre a matéria principal. Como o usuário precisa revisar, a expansão deve ocorrer em lotes de 5 por vez.\n\nLista atual completa e ordenada:\n{$orderedListText}\n\nContexto clicado para expansão: {$contextTitle}\nInserção de novos itens logo após a posição {$insertAfterPosition}.\nPosições-alvo inicialmente reservadas para os novos itens: {$positionsText}.\n\nRegras obrigatórias:\n1) Você nunca pode excluir itens já existentes.\n2) Você deve criar exatamente 5 novos títulos.\n3) Você pode reordenar a lista completa para melhorar a progressão lógica.\n4) Títulos atômicos: um assunto por título.\n5) Não usar vírgula, ponto e vírgula, dois pontos, barra, parênteses nem a conjunção ' e '.\n6) Não repetir títulos existentes nem repetir entre os novos.\n7) Cada título deve ser uma pergunta, e as perguntas devem ser objetivas sobre informações que caem em vestibular e concursos.\n\nRetorne SOMENTE JSON no formato:\n{\"novos_subtopicos\":[{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"}],\"lista_final\":[{\"titulo\":\"...\"}]}\n\n\"lista_final\" deve conter TODOS os tópicos antigos + 5 novos, em ordem final."
+            ['role' => 'system', 'content' => 'Você é um especialista em vocabulário inglês para construir trilhas de estudo por variações lexicais. Sempre retorna JSON válido e sem texto extra.'],
+            ['role' => 'user', 'content' => "Matéria principal: {$materia}\nObjetivo: construir um dicionário progressivo com palavras, expressões, padrões de conjunções e phrasal verbs. A expansão deve ocorrer em lotes de 5 por vez.\n\nLista atual completa e ordenada:\n{$orderedListText}\n\nTermo base para expansão: {$contextTitle}\nInserção de novos itens logo após a posição {$insertAfterPosition}.\nPosições-alvo inicialmente reservadas para os novos itens: {$positionsText}.\n\nRegras obrigatórias:\n1) Você nunca pode excluir itens já existentes.\n2) Você deve criar exatamente 5 novos títulos.\n3) Você pode reordenar a lista completa para melhorar a progressão lógica.\n4) Cada título deve trazer apenas 1 variação lexical concreta.\n5) Priorize família do termo base: forma raiz, flexões, derivados, collocations e phrasal verbs comuns.\n6) Não usar vírgula, ponto e vírgula, dois pontos, barra, parênteses nem a conjunção ' e '.\n7) Não repetir títulos existentes nem repetir entre os novos.\n8) Título curto no formato de entrada de dicionário, sem pergunta e sem explicação.\n\nRetorne SOMENTE JSON no formato:\n{\"novos_subtopicos\":[{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"}],\"lista_final\":[{\"titulo\":\"...\"}]}\n\n\"lista_final\" deve conter TODOS os tópicos antigos + 5 novos, em ordem final."
             ]
         ]
     ];
 
     $resp = openaiRequest($prompt);
     $fallbackNew = [
-        "{$contextTitle} · Pergunta para esmiuçar a explicação",
-        "{$contextTitle} · Pergunta para elucidar",
-        "{$contextTitle} · Pergunta para delinear a informação",
-        "{$contextTitle} · Pergunta para particularizar a informação",
-        "{$contextTitle} · Pergunta para avançar o assunto do curso"
+        "{$contextTitle} base form",
+        "{$contextTitle} meaning",
+        "{$contextTitle} collocation",
+        "{$contextTitle} phrasal verb",
+        "{$contextTitle} idiomatic use"
     ];
     if (!$resp) return [
         'new_titles' => $fallbackNew,
