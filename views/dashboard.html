@@ -2494,7 +2494,9 @@
                 const primaryBtn = document.getElementById('primaryActionBtn');
                 const trailGameBtn = document.getElementById('trailGameBtn');
                 const currentDir = this.getCurrentDirectoryObject();
-                const shouldShowTrailGame = !!(currentDir && Number(currentDir.type) === 8);
+                const currentDirType = currentDir ? Number(currentDir.type) : Number(this.getCurrentDirectoryType());
+                const isTrailDirectory = currentDirType === 8;
+                const shouldShowTrailGame = isTrailDirectory;
                 if (primaryBtn) {
                     const isReadOnlyDir = this.isCurrentDirectoryReadOnly();
                     if (!isVisitor && !isReadOnlyDir) {
