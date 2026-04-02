@@ -440,7 +440,7 @@ if ($action === 'generate_subtopicos') {
 
     $pdo->beginTransaction();
     try {
-        $ins = $pdo->prepare('INSERT INTO directories (user_id, parent_id, type, name_encrypted, default_view, open_mode, new_item_position, sort_order, icon, icon_color_from, icon_color_to) VALUES (?, ?, 10, ?, "grid", "fullscreen", "end", 0, "fa-layer-group", "#f59e0b", "#d97706")');
+        $ins = $pdo->prepare('INSERT INTO directories (user_id, parent_id, type, name_encrypted, default_view, open_mode, new_item_position, sort_order, icon, icon_color_from, icon_color_to, deck_structure) VALUES (?, ?, 10, ?, "grid", "fullscreen", "end", 0, "fa-layer-group", "#f59e0b", "#d97706", "traducoes")');
         for ($i = 0; $i < 5; $i++) {
             $ins->execute([$user_id, $materia_id, Security::encryptData($newTitles[$i])]);
         }

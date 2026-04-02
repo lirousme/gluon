@@ -718,6 +718,10 @@ elseif ($action === 'create') {
             [$deck_front_language, $deck_back_language, $deck_structure] = getFolderDeckPresetForParentChain($pdo, $user_id, $parent_id);
         }
 
+        if ($type === 10) {
+            $deck_structure = 'traducoes';
+        }
+
         $newOrder = getSortOrderForNewSibling($pdo, $user_id, $parent_id, $parentPref);
 
         $stmt = $pdo->prepare("
