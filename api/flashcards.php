@@ -1109,8 +1109,21 @@ if ($action === 'fetch') {
             SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score
             FROM flashcards f
             LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
-            WHERE f.directory_id IN ($placeholders) AND (fs.next_review_at IS NULL OR fs.next_review_at <= NOW())
-            ORDER BY RAND()
+            WHERE f.directory_id IN ($placeholders)
+              AND f.has_audio_front = 1
+              AND f.has_audio_back = 1
+              AND (
+                (fs.id IS NOT NULL AND fs.next_review_at IS NOT NULL AND fs.next_review_at <= NOW())
+                OR fs.id IS NULL
+                OR COALESCE(fs.score, 0) = 0
+              )
+            ORDER BY
+                CASE
+                    WHEN fs.id IS NOT NULL AND fs.next_review_at IS NOT NULL AND fs.next_review_at <= NOW() THEN 0
+                    WHEN fs.id IS NULL OR COALESCE(fs.score, 0) = 0 THEN 1
+                    ELSE 2
+                END,
+                RAND()
         ");
         $stmtCards->execute(array_merge([$user_id], $deck_ids));
         $cards = $stmtCards->fetchAll();
