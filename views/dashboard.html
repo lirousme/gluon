@@ -3175,7 +3175,7 @@
                 return `rgb(${r}, ${g}, ${b})`;
             },
             getDeckDisplayData(dir) {
-                const isDeck = dir.type === 4;
+                const isDeck = dir.type === 4 || dir.type === 10;
                 const isBookDeck = isDeck && dir.deck_mode === 'livro';
                 const totalCards = Math.max(0, Number(dir.deck_total_cards) || 0);
                 const dueCards = Math.max(0, Number(dir.deck_due_cards) || 0);
@@ -3224,7 +3224,7 @@
                     } else if (dir.type === 2) {
                          container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60"><i class="fa-solid fa-calendar-days text-4xl mb-3" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i><span class="text-sm font-medium">Agenda</span><span class="text-xs mt-1 text-center px-4">Clique no topo para abrir</span></div>`;
                          return; 
-                    } else if (dir.type === 4) {
+                    } else if (dir.type === 4 || dir.type === 10) {
                          const deckData = this.getDeckDisplayData(dir);
                          const rankHtml = deckData.isBookDeck ? `<span class="text-xs mt-1">Rank: <span style="color:${deckData.color}">${deckData.rank}</span></span>` : '';
                          container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60"><i class="fa-solid ${deckData.iconClass} text-4xl mb-3" style="color:${deckData.color}"></i><span class="text-sm font-medium">${deckData.title} · <span style="color:${deckData.color}">${deckData.percentage}%</span></span><span class="text-[10px] text-slate-400 leading-none mt-1">${deckData.totalCards} ${deckData.totalCards === 1 ? 'card' : 'cards'}</span>${rankHtml}<span class="text-xs mt-1 text-center px-4">Clique no topo para abrir</span></div>`;
@@ -3262,7 +3262,7 @@
                             if(sub.type === 1) itemBorder = 'border-indigo-500/50';
                             if(sub.type === 2) itemBorder = 'border-emerald-500/50';
                             if(sub.type === 3) itemBorder = 'border-fuchsia-500/50';
-                            if(sub.type === 4) itemBorder = 'border-amber-500/50';
+                            if(sub.type === 4 || sub.type === 10) itemBorder = 'border-amber-500/50';
                             if(sub.type === 6) itemBorder = 'border-cyan-500/50';
                             if(sub.type === 7) itemBorder = 'border-violet-500/50';
                             
@@ -3275,10 +3275,10 @@
                                 <div class="flex items-center gap-2 truncate pr-2 relative z-10">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
                                     ${subScore.iconHtml.replace('></i>', ' text-sm></i>')}
-                                    <span data-dir-name class="text-sm text-slate-200 truncate font-medium">${this.escapeHTML(sub.name)} ${sub.type === 4 ? `${subScore.percentHtml}<span class="text-[10px] text-slate-400 ml-1">${subScore.totalCards} ${subScore.totalCards === 1 ? 'card' : 'cards'}</span>${subScore.isBookDeck ? `<span class="text-[10px] text-slate-400 ml-1">R:${subScore.rank}</span>` : ''}` : ''} ${repeatIcon}</span>
+                                    <span data-dir-name class="text-sm text-slate-200 truncate font-medium">${this.escapeHTML(sub.name)} ${(sub.type === 4 || sub.type === 10) ? `${subScore.percentHtml}<span class="text-[10px] text-slate-400 ml-1">${subScore.totalCards} ${subScore.totalCards === 1 ? 'card' : 'cards'}</span>${subScore.isBookDeck ? `<span class="text-[10px] text-slate-400 ml-1">R:${subScore.rank}</span>` : ''}` : ''} ${repeatIcon}</span>
                                 </div>
                                 ${canEditSub ? `<div class="flex items-center gap-1 sm:opacity-0 group-hover:opacity-100 transition-all cog-btn relative z-10">
-                                    ${sub.type === 4 ? `<button onclick="event.stopPropagation(); app.goToGenerateCardsBatchView(${sub.id})" class="text-orange-400 hover:text-orange-300 bg-slate-800 hover:bg-slate-500 rounded p-1 border border-slate-600" title="Ir para gerar cards (batch)"><i class="fa-solid fa-layer-group text-xs"></i></button>` : ''}
+                                    ${(sub.type === 4 || sub.type === 10) ? `<button onclick="event.stopPropagation(); app.goToGenerateCardsBatchView(${sub.id})" class="text-orange-400 hover:text-orange-300 bg-slate-800 hover:bg-slate-500 rounded p-1 border border-slate-600" title="Ir para gerar cards (batch)"><i class="fa-solid fa-layer-group text-xs"></i></button>` : ''}
                                     <button onclick="event.stopPropagation(); app.openModal(${sub.id})" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 border border-slate-600"><i class="fa-solid fa-cog text-xs"></i></button>
                                 </div>` : ''}
                             </div>`;
@@ -3321,7 +3321,7 @@
                         if(dir.type === 1) borderClass = 'border-indigo-600/50';
                         if(dir.type === 2) borderClass = 'border-emerald-600/50';
                         if(dir.type === 3) borderClass = 'border-fuchsia-600/50';
-                        if(dir.type === 4) borderClass = 'border-amber-600/50';
+                        if(dir.type === 4 || dir.type === 10) borderClass = 'border-amber-600/50';
                         if(dir.type === 6) borderClass = 'border-cyan-600/50';
                         if(dir.type === 7) borderClass = 'border-violet-600/50';
                         
@@ -3336,14 +3336,14 @@
                             <div class="absolute top-2 left-2 text-green-500 hidden grip-handle bg-slate-900/80 backdrop-blur rounded p-1 z-20"><i class="fa-solid fa-grip-vertical"></i></div>
                             ${repeatIcon}
                             ${canEdit ? `<div class="absolute top-2 right-2 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn z-20 flex gap-1">
-                                ${dir.type === 4 ? `<button onclick="event.stopPropagation(); app.goToGenerateCardsBatchView(${dir.id})" class="text-orange-400 hover:text-orange-300 bg-slate-900/80 backdrop-blur hover:bg-slate-700 rounded p-1.5 shadow-lg" title="Ir para gerar cards (batch)"><i class="fa-solid fa-layer-group"></i></button>` : ''}
+                                ${(dir.type === 4 || dir.type === 10) ? `<button onclick="event.stopPropagation(); app.goToGenerateCardsBatchView(${dir.id})" class="text-orange-400 hover:text-orange-300 bg-slate-900/80 backdrop-blur hover:bg-slate-700 rounded p-1.5 shadow-lg" title="Ir para gerar cards (batch)"><i class="fa-solid fa-layer-group"></i></button>` : ''}
                                 <button onclick="event.stopPropagation(); app.openModal(${dir.id})" class="text-slate-400 hover:text-white bg-slate-900/80 backdrop-blur hover:bg-slate-700 rounded p-1.5 shadow-lg"><i class="fa-solid fa-cog"></i></button>
                             </div>` : ''}
                             
                             <div class="dir-card-content relative z-10 flex flex-col items-center justify-center w-full h-full p-4 pt-6 transition-all duration-200">
                                 ${dirScore.iconHtml.replace('></i>', ' text-4xl sm:text-5xl mb-3 drop-shadow-md sm:group-hover:scale-110 transition-transform></i>')}
                                 <span data-dir-name class="text-xs sm:text-sm font-medium text-slate-200 w-full truncate px-1 drop-shadow-md">${this.escapeHTML(dir.name)}</span>
-                                ${dir.type === 4 ? `${dirScore.percentHtml}<span class=\"text-[10px] text-slate-400 leading-none mt-1\">${dirScore.totalCards} ${dirScore.totalCards === 1 ? 'card' : 'cards'}</span>${dirScore.isBookDeck ? `<span class=\"text-[11px] mt-1 text-slate-300\">Rank: <span style=\"color:${dirScore.color}\">${dirScore.rank}</span></span>` : ''}` : ''}
+                                ${(dir.type === 4 || dir.type === 10) ? `${dirScore.percentHtml}<span class=\"text-[10px] text-slate-400 leading-none mt-1\">${dirScore.totalCards} ${dirScore.totalCards === 1 ? 'card' : 'cards'}</span>${dirScore.isBookDeck ? `<span class=\"text-[11px] mt-1 text-slate-300\">Rank: <span style=\"color:${dirScore.color}\">${dirScore.rank}</span></span>` : ''}` : ''}
                             </div>
                         </div>`;
                     });
@@ -3357,7 +3357,7 @@
                         if(dir.type === 1) borderClass = 'border-l-indigo-500';
                         if(dir.type === 2) borderClass = 'border-l-emerald-500';
                         if(dir.type === 3) borderClass = 'border-l-fuchsia-500';
-                        if(dir.type === 4) borderClass = 'border-l-amber-500';
+                        if(dir.type === 4 || dir.type === 10) borderClass = 'border-l-amber-500';
                         if(dir.type === 6) borderClass = 'border-l-cyan-500';
                         if(dir.type === 7) borderClass = 'border-l-violet-500';
 
@@ -3369,12 +3369,12 @@
                         <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/50 transition-colors group cursor-pointer border-l-2 ${borderClass} relative overflow-hidden" onclick="app.enterDirectoryOrFile(${dir.id})">
                             <td class="px-2 py-3 text-center hidden grip-handle text-green-500 bg-slate-900/20"><i class="fa-solid fa-grip-vertical"></i></td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-center">
-                                ${dir.cover_url ? `<div class="w-8 h-8 rounded bg-cover bg-center border border-slate-600 inline-block shadow-sm" style="background-image: url('${dir.cover_url}')"></div>` : `<div class="flex flex-col items-center justify-center leading-tight">${dirScore.iconHtml.replace('></i>', ' text-xl></i>')}${dir.type === 4 ? `<span class=\"text-[11px] font-semibold\" style=\"color:${dirScore.color}\">${dirScore.percentage}%</span><span class=\"text-[10px] text-slate-400\">${dirScore.totalCards} ${dirScore.totalCards === 1 ? 'card' : 'cards'}</span>${dirScore.isBookDeck ? `<span class=\"text-[10px] text-slate-400\">R:${dirScore.rank}</span>` : ''}` : ''}</div>`}
+                                ${dir.cover_url ? `<div class="w-8 h-8 rounded bg-cover bg-center border border-slate-600 inline-block shadow-sm" style="background-image: url('${dir.cover_url}')"></div>` : `<div class="flex flex-col items-center justify-center leading-tight">${dirScore.iconHtml.replace('></i>', ' text-xl></i>')}${(dir.type === 4 || dir.type === 10) ? `<span class=\"text-[11px] font-semibold\" style=\"color:${dirScore.color}\">${dirScore.percentage}%</span><span class=\"text-[10px] text-slate-400\">${dirScore.totalCards} ${dirScore.totalCards === 1 ? 'card' : 'cards'}</span>${dirScore.isBookDeck ? `<span class=\"text-[10px] text-slate-400\">R:${dirScore.rank}</span>` : ''}` : ''}</div>`}
                             </td>
                             <td class="px-4 py-3 sm:py-4 font-medium text-slate-200"><span data-dir-name>${this.escapeHTML(dir.name)}</span> ${repeatIcon}</td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-right">
                                 ${canEdit ? `<div class="sm:opacity-0 group-hover:opacity-100 transition-opacity flex justify-end gap-2 cog-btn">
-                                    ${dir.type === 4 ? `<button onclick="event.stopPropagation(); app.goToGenerateCardsBatchView(${dir.id})" class="text-orange-400 hover:text-orange-300 bg-slate-800 hover:bg-slate-600 border border-slate-600 rounded p-2 text-xs sm:text-sm shadow" title="Ir para gerar cards (batch)"><i class="fa-solid fa-layer-group"></i> <span class="hidden sm:inline">Batch</span></button>` : ''}
+                                    ${(dir.type === 4 || dir.type === 10) ? `<button onclick="event.stopPropagation(); app.goToGenerateCardsBatchView(${dir.id})" class="text-orange-400 hover:text-orange-300 bg-slate-800 hover:bg-slate-600 border border-slate-600 rounded p-2 text-xs sm:text-sm shadow" title="Ir para gerar cards (batch)"><i class="fa-solid fa-layer-group"></i> <span class="hidden sm:inline">Batch</span></button>` : ''}
                                     <button onclick="event.stopPropagation(); app.openModal(${dir.id})" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-600 border border-slate-600 rounded p-2 text-xs sm:text-sm shadow"><i class="fa-solid fa-cog"></i> <span class="hidden sm:inline">Editar</span></button>
                                 </div>` : ''}
                             </td>
@@ -3390,7 +3390,7 @@
                         if(dir.type === 1) headerBorder = 'border-indigo-700';
                         if(dir.type === 2) headerBorder = 'border-emerald-700';
                         if(dir.type === 3) headerBorder = 'border-fuchsia-700';
-                        if(dir.type === 4) headerBorder = 'border-amber-700';
+                        if(dir.type === 4 || dir.type === 10) headerBorder = 'border-amber-700';
                         if(dir.type === 6) headerBorder = 'border-cyan-700';
                         if(dir.type === 7) headerBorder = 'border-violet-700';
 
@@ -3407,10 +3407,10 @@
                                 <div class="flex items-center gap-2 font-semibold text-slate-100 truncate w-full relative z-10 drop-shadow-md">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
                                     ${dirScore.iconHtml.replace('></i>', ' text-lg></i>')}
-                                    <span data-dir-name class="truncate text-sm sm:text-base">${this.escapeHTML(dir.name)} ${dir.type === 4 ? `${dirScore.percentHtml}${dirScore.isBookDeck ? `<span class=\"text-[11px] ml-1 text-slate-300\">Rank: <span style=\"color:${dirScore.color}\">${dirScore.rank}</span></span>` : ''}` : ''} ${repeatIcon}</span>
+                                    <span data-dir-name class="truncate text-sm sm:text-base">${this.escapeHTML(dir.name)} ${(dir.type === 4 || dir.type === 10) ? `${dirScore.percentHtml}${dirScore.isBookDeck ? `<span class=\"text-[11px] ml-1 text-slate-300\">Rank: <span style=\"color:${dirScore.color}\">${dirScore.rank}</span></span>` : ''}` : ''} ${repeatIcon}</span>
                                 </div>
                                 ${canEdit ? `<div class="flex gap-1 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn relative z-10">
-                                    ${dir.type === 4 ? `<button onclick="event.stopPropagation(); app.goToGenerateCardsBatchView(${dir.id})" class="text-orange-300 hover:text-orange-200 bg-slate-800/80 backdrop-blur hover:bg-slate-600 rounded p-1.5 shadow" title="Ir para gerar cards (batch)"><i class="fa-solid fa-layer-group text-xs"></i></button>` : ''}
+                                    ${(dir.type === 4 || dir.type === 10) ? `<button onclick="event.stopPropagation(); app.goToGenerateCardsBatchView(${dir.id})" class="text-orange-300 hover:text-orange-200 bg-slate-800/80 backdrop-blur hover:bg-slate-600 rounded p-1.5 shadow" title="Ir para gerar cards (batch)"><i class="fa-solid fa-layer-group text-xs"></i></button>` : ''}
                                     <button onclick="event.stopPropagation(); app.openModal(${dir.id})" class="text-slate-300 hover:text-white bg-slate-800/80 backdrop-blur hover:bg-slate-600 rounded p-1.5 shadow"><i class="fa-solid fa-cog text-xs"></i></button>
                                 </div>` : ''}
                             </div>
