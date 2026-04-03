@@ -896,6 +896,89 @@ function openaiGetRequest($url) {
     return [$httpcode, $response, $curlError];
 }
 
+
+function normalizeDictionaryToken($value) {
+    $text = trim(mb_strtolower((string)$value, 'UTF-8'));
+    if ($text === '') return '';
+    $text = preg_replace('/\s+/u', ' ', $text);
+    $text = preg_replace('/^[\p{P}\p{S}\s]+|[\p{P}\p{S}\s]+$/u', '', $text);
+    return trim((string)$text);
+}
+
+function extractDictionaryCandidatesFromGpt($text) {
+    $inputText = trim((string)$text);
+    if ($inputText === '') {
+        return ['ok' => false, 'error' => 'Texto vazio para análise.', 'candidates' => []];
+    }
+    if (OPENAI_API_KEY === '') {
+        return ['ok' => false, 'error' => 'OPENAI_API_KEY não configurada no .env.', 'candidates' => []];
+    }
+
+    $payload = [
+        'model' => 'gpt-5.4',
+        'temperature' => 0,
+        'response_format' => [
+            'type' => 'json_schema',
+            'json_schema' => [
+                'name' => 'dictionary_candidates',
+                'strict' => true,
+                'schema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'words' => ['type' => 'array', 'items' => ['type' => 'string']],
+                        'expressions' => ['type' => 'array', 'items' => ['type' => 'string']]
+                    ],
+                    'required' => ['words', 'expressions'],
+                    'additionalProperties' => false
+                ]
+            ]
+        ],
+        'messages' => [
+            [
+                'role' => 'system',
+                'content' => 'Você retorna apenas JSON válido seguindo o schema.'
+            ],
+            [
+                'role' => 'user',
+                'content' => 'split todas as palavras dessa frase, e depois separe novamente a mesma frase em expressões curtinhas. Retorne em JSON com as chaves words e expressions. Frase: "' . $inputText . '"' 
+            ]
+        ]
+    ];
+
+    list($httpcode, $response, $curlError) = openaiJsonRequest('https://api.openai.com/v1/chat/completions', $payload);
+    if ($httpcode !== 200 || !$response) {
+        $details = trim((string)$curlError);
+        $decodedErr = json_decode((string)$response, true);
+        if (!$details && is_array($decodedErr)) {
+            $details = (string)($decodedErr['error']['message'] ?? '');
+        }
+        return ['ok' => false, 'error' => 'Erro ao analisar frase com OpenAI.' . ($details !== '' ? (' Detalhes: ' . $details) : ''), 'candidates' => []];
+    }
+
+    $decoded = json_decode($response, true);
+    $content = trim((string)($decoded['choices'][0]['message']['content'] ?? ''));
+    if ($content === '') {
+        return ['ok' => false, 'error' => 'OpenAI não retornou conteúdo analisável.', 'candidates' => []];
+    }
+
+    $parsed = json_decode($content, true);
+    if (!is_array($parsed)) {
+        return ['ok' => false, 'error' => 'OpenAI retornou JSON inválido para candidatos.', 'candidates' => []];
+    }
+
+    $candidates = [];
+    foreach (['words', 'expressions'] as $bucket) {
+        foreach (($parsed[$bucket] ?? []) as $item) {
+            $token = normalizeDictionaryToken($item);
+            if ($token !== '') {
+                $candidates[$token] = true;
+            }
+        }
+    }
+
+    return ['ok' => true, 'error' => '', 'candidates' => array_keys($candidates)];
+}
+
 function syncBatchJobWithOpenAI($pdo, $job) {
     $openaiBatchId = trim((string)($job['openai_batch_id'] ?? ''));
     if ($openaiBatchId === '') {
@@ -1654,6 +1737,91 @@ elseif ($action === 'translate_text') {
 
     echo json_encode(['status' => 'success', 'translation' => $translation]);
 }
+
+
+elseif ($action === 'sync_back_phrase_dictionary') {
+    $text = trim((string)($input['text'] ?? ''));
+    $dictionary_parent_id = (int)($input['dictionary_parent_id'] ?? 1008);
+
+    if ($text === '') {
+        die(json_encode(['status' => 'error', 'message' => 'Texto do verso está vazio.']));
+    }
+
+    $stmtParent = $pdo->prepare("SELECT id FROM directories WHERE id = ? AND user_id = ? LIMIT 1");
+    $stmtParent->execute([$dictionary_parent_id, $user_id]);
+    if (!$stmtParent->fetch()) {
+        die(json_encode(['status' => 'error', 'message' => 'Diretório base do dicionário não encontrado para este usuário.']));
+    }
+
+    $analysis = extractDictionaryCandidatesFromGpt($text);
+    if (!$analysis['ok']) {
+        die(json_encode(['status' => 'error', 'message' => $analysis['error'] ?: 'Falha ao analisar frase.']));
+    }
+
+    $candidates = $analysis['candidates'];
+    if (empty($candidates)) {
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Nenhum candidato novo foi retornado pelo GPT.',
+            'candidate_count' => 0,
+            'created_count' => 0,
+            'skipped_count' => 0,
+            'created_items' => []
+        ]);
+        exit;
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $stmtChildren = $pdo->prepare("SELECT id, name_encrypted FROM directories WHERE user_id = ? AND parent_id = ?");
+        $stmtChildren->execute([$user_id, $dictionary_parent_id]);
+        $children = $stmtChildren->fetchAll();
+
+        $existingByName = [];
+        foreach ($children as $child) {
+            $name = normalizeDictionaryToken(Security::decryptData($child['name_encrypted'] ?? ''));
+            if ($name !== '') {
+                $existingByName[$name] = true;
+            }
+        }
+
+        $stmtSort = $pdo->prepare("SELECT COALESCE(MAX(sort_order), -1) FROM directories WHERE user_id = ? AND parent_id = ?");
+        $stmtSort->execute([$user_id, $dictionary_parent_id]);
+        $nextSort = (int)$stmtSort->fetchColumn() + 1;
+
+        $stmtInsert = $pdo->prepare("INSERT INTO directories (user_id, parent_id, type, name_encrypted, default_view, open_mode, new_item_position, sort_order, icon, icon_color_from, icon_color_to, deck_front_language, deck_back_language, deck_structure, child_default_type, child_default_view) VALUES (?, ?, 10, ?, 'grid', 'fullscreen', 'end', ?, 'fa-layer-group', '#3b82f6', '#6366f1', 'pt-BR', 'en-GB', 'traducoes', 0, 'grid')");
+
+        $createdItems = [];
+        $createdCount = 0;
+        foreach ($candidates as $candidate) {
+            if (isset($existingByName[$candidate])) {
+                continue;
+            }
+
+            $stmtInsert->execute([$user_id, $dictionary_parent_id, Security::encryptData($candidate), $nextSort]);
+            $nextSort++;
+            $createdCount++;
+            $createdItems[] = $candidate;
+            $existingByName[$candidate] = true;
+        }
+
+        $pdo->commit();
+
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Sincronização do dicionário concluída.',
+            'candidate_count' => count($candidates),
+            'created_count' => $createdCount,
+            'skipped_count' => count($candidates) - $createdCount,
+            'created_items' => $createdItems
+        ]);
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao sincronizar diretórios de dicionário.']));
+    }
+}
+
 
 
 elseif ($action === 'update_score') {
