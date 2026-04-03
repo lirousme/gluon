@@ -1085,6 +1085,11 @@
                 return true;
             },
 
+            goToGenerateCardsBatchView(deckId) {
+                if (!deckId) return;
+                window.location.href = this.buildViewUrl('gerar_cards_batch', deckId);
+            },
+
             updateHistoryState(id, portalId = null) {
                 const params = new URLSearchParams();
                 if (portalId) {
@@ -3272,7 +3277,10 @@
                                     ${subScore.iconHtml.replace('></i>', ' text-sm></i>')}
                                     <span data-dir-name class="text-sm text-slate-200 truncate font-medium">${this.escapeHTML(sub.name)} ${sub.type === 4 ? `${subScore.percentHtml}<span class="text-[10px] text-slate-400 ml-1">${subScore.totalCards} ${subScore.totalCards === 1 ? 'card' : 'cards'}</span>${subScore.isBookDeck ? `<span class="text-[10px] text-slate-400 ml-1">R:${subScore.rank}</span>` : ''}` : ''} ${repeatIcon}</span>
                                 </div>
-                                ${canEditSub ? `<button onclick="event.stopPropagation(); app.openModal(${sub.id})" class="relative z-10 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 sm:opacity-0 group-hover:opacity-100 transition-all border border-slate-600 cog-btn"><i class="fa-solid fa-cog text-xs"></i></button>` : ''}
+                                ${canEditSub ? `<div class="flex items-center gap-1 sm:opacity-0 group-hover:opacity-100 transition-all cog-btn relative z-10">
+                                    ${sub.type === 4 ? `<button onclick="event.stopPropagation(); app.goToGenerateCardsBatchView(${sub.id})" class="text-orange-400 hover:text-orange-300 bg-slate-800 hover:bg-slate-500 rounded p-1 border border-slate-600" title="Ir para gerar cards (batch)"><i class="fa-solid fa-layer-group text-xs"></i></button>` : ''}
+                                    <button onclick="event.stopPropagation(); app.openModal(${sub.id})" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-500 rounded p-1 border border-slate-600"><i class="fa-solid fa-cog text-xs"></i></button>
+                                </div>` : ''}
                             </div>`;
                         }).join('');
                     } else {
@@ -3327,7 +3335,8 @@
                             
                             <div class="absolute top-2 left-2 text-green-500 hidden grip-handle bg-slate-900/80 backdrop-blur rounded p-1 z-20"><i class="fa-solid fa-grip-vertical"></i></div>
                             ${repeatIcon}
-                            ${canEdit ? `<div class="absolute top-2 right-2 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn z-20">
+                            ${canEdit ? `<div class="absolute top-2 right-2 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn z-20 flex gap-1">
+                                ${dir.type === 4 ? `<button onclick="event.stopPropagation(); app.goToGenerateCardsBatchView(${dir.id})" class="text-orange-400 hover:text-orange-300 bg-slate-900/80 backdrop-blur hover:bg-slate-700 rounded p-1.5 shadow-lg" title="Ir para gerar cards (batch)"><i class="fa-solid fa-layer-group"></i></button>` : ''}
                                 <button onclick="event.stopPropagation(); app.openModal(${dir.id})" class="text-slate-400 hover:text-white bg-slate-900/80 backdrop-blur hover:bg-slate-700 rounded p-1.5 shadow-lg"><i class="fa-solid fa-cog"></i></button>
                             </div>` : ''}
                             
@@ -3365,6 +3374,7 @@
                             <td class="px-4 py-3 sm:py-4 font-medium text-slate-200"><span data-dir-name>${this.escapeHTML(dir.name)}</span> ${repeatIcon}</td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-right">
                                 ${canEdit ? `<div class="sm:opacity-0 group-hover:opacity-100 transition-opacity flex justify-end gap-2 cog-btn">
+                                    ${dir.type === 4 ? `<button onclick="event.stopPropagation(); app.goToGenerateCardsBatchView(${dir.id})" class="text-orange-400 hover:text-orange-300 bg-slate-800 hover:bg-slate-600 border border-slate-600 rounded p-2 text-xs sm:text-sm shadow" title="Ir para gerar cards (batch)"><i class="fa-solid fa-layer-group"></i> <span class="hidden sm:inline">Batch</span></button>` : ''}
                                     <button onclick="event.stopPropagation(); app.openModal(${dir.id})" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-600 border border-slate-600 rounded p-2 text-xs sm:text-sm shadow"><i class="fa-solid fa-cog"></i> <span class="hidden sm:inline">Editar</span></button>
                                 </div>` : ''}
                             </td>
@@ -3400,6 +3410,7 @@
                                     <span data-dir-name class="truncate text-sm sm:text-base">${this.escapeHTML(dir.name)} ${dir.type === 4 ? `${dirScore.percentHtml}${dirScore.isBookDeck ? `<span class=\"text-[11px] ml-1 text-slate-300\">Rank: <span style=\"color:${dirScore.color}\">${dirScore.rank}</span></span>` : ''}` : ''} ${repeatIcon}</span>
                                 </div>
                                 ${canEdit ? `<div class="flex gap-1 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn relative z-10">
+                                    ${dir.type === 4 ? `<button onclick="event.stopPropagation(); app.goToGenerateCardsBatchView(${dir.id})" class="text-orange-300 hover:text-orange-200 bg-slate-800/80 backdrop-blur hover:bg-slate-600 rounded p-1.5 shadow" title="Ir para gerar cards (batch)"><i class="fa-solid fa-layer-group text-xs"></i></button>` : ''}
                                     <button onclick="event.stopPropagation(); app.openModal(${dir.id})" class="text-slate-300 hover:text-white bg-slate-800/80 backdrop-blur hover:bg-slate-600 rounded p-1.5 shadow"><i class="fa-solid fa-cog text-xs"></i></button>
                                 </div>` : ''}
                             </div>
