@@ -333,14 +333,21 @@
         </div>
 
         <!-- Controles Inferiores -->
-        <div class="absolute bottom-10 left-0 right-0 flex justify-center items-center gap-6 px-4 z-10" id="controls" style="display: none;">
+        <div class="absolute bottom-10 left-0 right-0 flex justify-center items-center gap-4 px-4 z-10" id="controls" style="display: none;">
             <button onclick="flashcardApp.prevCard()" id="btnPrev" class="w-14 h-14 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center text-xl shadow-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed">
                 <i class="fa-solid fa-arrow-left"></i>
             </button>
-            <span class="text-xs text-slate-500 font-medium hidden sm:block">Use setas Direita/Esquerda ou Espaço</span>
+            <button onclick="flashcardApp.syncBackPhraseDictionary()" id="btnSyncBackDictionary" class="h-11 px-3 rounded-full bg-violet-600/90 hover:bg-violet-500 text-white border border-violet-300/40 shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-xs sm:text-sm font-medium" title="Enviar verso para o GPT e sincronizar o dicionário da pasta 1008">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span class="hidden sm:inline">Sincronizar Dicionário</span>
+                <span class="sm:hidden">Sync</span>
+            </button>
             <button onclick="flashcardApp.nextCard()" id="btnNext" class="w-14 h-14 rounded-full bg-gluon-primary hover:bg-blue-600 text-white flex items-center justify-center text-xl shadow-lg shadow-blue-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
                 <i class="fa-solid fa-arrow-right"></i>
             </button>
+        </div>
+        <div class="absolute bottom-3 left-0 right-0 text-center pointer-events-none">
+            <span class="text-xs text-slate-500 font-medium hidden sm:inline">Use setas Direita/Esquerda ou Espaço</span>
         </div>
     </main>
 
@@ -631,6 +638,7 @@
             isFlipped: false,
             scoredThisSession: new Set(),
             isRightPanelOpen: false,
+            isSyncingBackDictionary: false,
             
             autoPlayEnabled: false,
             autoFlowEnabled: false,
@@ -778,6 +786,44 @@
                     console.error(err);
                     this.showToast(err.message || 'Erro de conexão.', 'error');
                     return null;
+                }
+            },
+
+            async syncBackPhraseDictionary() {
+                if (this.isSyncingBackDictionary) return;
+                const card = this.cards[this.currentIndex] || null;
+                const backText = (card?.back || '').trim();
+
+                if (!backText) {
+                    this.showToast('Este card não possui texto no verso para sincronizar.', 'error');
+                    return;
+                }
+
+                const btn = document.getElementById('btnSyncBackDictionary');
+                this.isSyncingBackDictionary = true;
+                if (btn) {
+                    btn.disabled = true;
+                    btn.classList.add('opacity-60');
+                }
+
+                try {
+                    const res = await this.api('sync_back_phrase_dictionary', {
+                        text: backText,
+                        dictionary_parent_id: 1008
+                    });
+
+                    if (!res) return;
+
+                    const created = Number(res.created_count || 0);
+                    const total = Number(res.candidate_count || 0);
+                    const skipped = Number(res.skipped_count || 0);
+                    this.showToast(`Sync concluído: ${created} criados, ${skipped} já existiam (${total} candidatos).`, 'success');
+                } finally {
+                    this.isSyncingBackDictionary = false;
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-60');
+                    }
                 }
             },
 
