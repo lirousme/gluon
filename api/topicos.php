@@ -46,6 +46,29 @@ function cleanGeneratedTitle(string $title): string {
     return trim((string)$title);
 }
 
+function splitGeneratedTitleCandidates(string $raw): array {
+    $raw = trim($raw);
+    if ($raw === '') return [];
+
+    // Alguns modelos retornam vários itens dentro de um único campo separados por quebras de linha.
+    // Quebramos por separadores comuns para recuperar entradas atômicas.
+    $parts = preg_split('/[\r\n]+|[;|\/]+/u', $raw) ?: [];
+    $out = [];
+    foreach ($parts as $part) {
+        $clean = cleanGeneratedTitle((string)$part);
+        if ($clean === '') continue;
+        $out[] = $clean;
+    }
+
+    // Fallback: se nada foi separado, mantém o valor original.
+    if (count($out) === 0) {
+        $single = cleanGeneratedTitle($raw);
+        if ($single !== '') $out[] = $single;
+    }
+
+    return $out;
+}
+
 function hasAtomicTitleFormat(string $title): bool {
     if ($title === '') return false;
     if (mb_strlen($title) < 2 || mb_strlen($title) > 90) return false;
@@ -155,12 +178,12 @@ function normalizeTitleListFromJson(array $items): array {
     $out = [];
     foreach ($items as $item) {
         if (is_array($item)) {
-            $out[] = (string)($item['titulo'] ?? $item['title'] ?? $item['nome'] ?? '');
+            $out = array_merge($out, splitGeneratedTitleCandidates((string)($item['titulo'] ?? $item['title'] ?? $item['nome'] ?? '')));
             continue;
         }
-        $out[] = (string)$item;
+        $out = array_merge($out, splitGeneratedTitleCandidates((string)$item));
     }
-    return array_map(fn($t) => cleanGeneratedTitle((string)$t), $out);
+    return array_values(array_filter(array_map(fn($t) => cleanGeneratedTitle((string)$t), $out), fn($t) => $t !== ''));
 }
 
 function generateSubtopics(string $materia, array $orderedList, int $insertAfterPosition, string $contextTitle): array {
@@ -217,7 +240,7 @@ function generateSubtopics(string $materia, array $orderedList, int $insertAfter
 
     $rawTitles = [];
     foreach (($json['novos_subtopicos'] ?? $json['subtopicos'] ?? []) as $item) {
-        $rawTitles[] = (string)($item['titulo'] ?? $item['title'] ?? $item['nome'] ?? '');
+        $rawTitles = array_merge($rawTitles, splitGeneratedTitleCandidates((string)($item['titulo'] ?? $item['title'] ?? $item['nome'] ?? '')));
     }
 
     $uniqueAtomic = buildUniqueAtomicTitles($rawTitles, $orderedList, $contextTitle, 5);
