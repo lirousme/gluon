@@ -16,6 +16,7 @@ $pdo = Database::getConnection();
 $user_id = (int)$_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true) ?: [];
 $action = (string)($input['action'] ?? '');
+const SUBTOPIC_BATCH_SIZE = 25;
 
 function decryptDirectoryName(array $row): string {
     return Security::decryptData((string)$row['name_encrypted']);
@@ -84,19 +85,19 @@ function normalizeSubtopics(array $items, string $fallbackBase): array {
         if ($title === '') continue;
         $out[] = $title;
     }
-    if (count($out) < 5) {
-        for ($i = count($out) + 1; $i <= 5; $i++) {
+    if (count($out) < SUBTOPIC_BATCH_SIZE) {
+        for ($i = count($out) + 1; $i <= SUBTOPIC_BATCH_SIZE; $i++) {
             $out[] = $fallbackBase . ' · Sub-matéria ' . $i;
         }
     }
-    return array_slice($out, 0, 5);
+    return array_slice($out, 0, SUBTOPIC_BATCH_SIZE);
 }
 
 function buildUniqueAtomicTitles(
     array $candidateTitles,
     array $existingOrderedTitles,
     string $contextTitle,
-    int $count = 5
+    int $count = SUBTOPIC_BATCH_SIZE
 ): array {
     $existingMap = [];
     foreach ($existingOrderedTitles as $existing) {
@@ -118,7 +119,10 @@ function buildUniqueAtomicTitles(
     }
 
     if (count($out) < $count) {
-        $fallbackSuffixes = ['base form', 'derived form', 'common collocation', 'phrasal verb', 'idiomatic use'];
+        $fallbackSuffixes = [];
+        for ($i = 1; $i <= SUBTOPIC_BATCH_SIZE; $i++) {
+            $fallbackSuffixes[] = 'variation ' . $i;
+        }
         foreach ($fallbackSuffixes as $suffix) {
             $candidate = cleanGeneratedTitle($contextTitle . ' - ' . $suffix);
             $k = mb_strtolower($candidate);
@@ -191,13 +195,10 @@ function generateSubtopics(string $materia, array $orderedList, int $insertAfter
     foreach ($orderedList as $idx => $name) {
         $orderedText[] = ($idx + 1) . '. ' . $name;
     }
-    $plannedPositions = [
-        $insertAfterPosition + 1,
-        $insertAfterPosition + 2,
-        $insertAfterPosition + 3,
-        $insertAfterPosition + 4,
-        $insertAfterPosition + 5
-    ];
+    $plannedPositions = [];
+    for ($i = 1; $i <= SUBTOPIC_BATCH_SIZE; $i++) {
+        $plannedPositions[] = $insertAfterPosition + $i;
+    }
     $orderedListText = implode("\n", $orderedText);
     $positionsText = implode(', ', $plannedPositions);
 
@@ -206,19 +207,16 @@ function generateSubtopics(string $materia, array $orderedList, int $insertAfter
         'response_format' => ['type' => 'json_object'],
         'messages' => [
             ['role' => 'system', 'content' => 'Você é um especialista em vocabulário inglês para construir trilhas de estudo por variações lexicais. Sempre retorna JSON válido e sem texto extra.'],
-            ['role' => 'user', 'content' => "Matéria principal: {$materia}\nObjetivo: construir um dicionário progressivo com palavras, expressões, padrões de conjunções e phrasal verbs. A expansão deve ocorrer em lotes de 5 por vez.\n\nLista atual completa e ordenada:\n{$orderedListText}\n\nTermo base para expansão: {$contextTitle}\nInserção de novos itens logo após a posição {$insertAfterPosition}.\nPosições-alvo inicialmente reservadas para os novos itens: {$positionsText}.\n\nRegras obrigatórias:\n1) Você nunca pode excluir itens já existentes.\n2) Você deve criar exatamente 5 novos títulos.\n3) Você pode reordenar a lista completa para melhorar a progressão lógica.\n4) Cada título deve trazer apenas 1 variação lexical concreta.\n5) Priorize família do termo base: forma raiz, flexões, derivados, collocations e phrasal verbs comuns.\n6) Não usar vírgula, ponto e vírgula, dois pontos, barra, parênteses nem a conjunção ' e '.\n7) Não repetir títulos existentes nem repetir entre os novos.\n8) Título curto no formato de entrada de dicionário, sem pergunta e sem explicação.\n\nRetorne SOMENTE JSON no formato:\n{\"novos_subtopicos\":[{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"},{\"titulo\":\"...\"}],\"lista_final\":[{\"titulo\":\"...\"}]}\n\n\"lista_final\" deve conter TODOS os tópicos antigos + 5 novos, em ordem final."
+            ['role' => 'user', 'content' => "Matéria principal: {$materia}\nObjetivo: construir um dicionário progressivo com blocos lexicais e variações gramaticais em inglês. A expansão deve ocorrer em lotes de " . SUBTOPIC_BATCH_SIZE . " por vez.\n\nLista atual completa e ordenada:\n{$orderedListText}\n\nTermo base para expansão: {$contextTitle}\nInserção de novos itens logo após a posição {$insertAfterPosition}.\nPosições-alvo inicialmente reservadas para os novos itens: {$positionsText}.\n\nRegras obrigatórias:\n1) Você nunca pode excluir itens já existentes.\n2) Você deve criar exatamente " . SUBTOPIC_BATCH_SIZE . " novos títulos.\n3) Você pode reordenar a lista completa para melhorar a progressão lógica.\n4) Cada título deve trazer apenas 1 bloco lexical concreto e curto.\n5) Gere forte variedade de padrões com: contração e sem contração, tempos verbais distintos, pronomes diferentes, afirmativa positiva, afirmativa negativa, interrogativa positiva, interrogativa negativa, negativa com contração e negativa sem contração.\n6) Misture auxiliares e modais quando fizer sentido: be do have will can could should would etc.\n7) Não usar vírgula, ponto e vírgula, dois pontos, barra, parênteses nem a conjunção ' e '.\n8) Não repetir títulos existentes nem repetir entre os novos.\n9) Título no formato de bloco lexical estudável, podendo ser frase curta.\n\nRetorne SOMENTE JSON no formato:\n{\"novos_subtopicos\":[{\"titulo\":\"...\"}],\"lista_final\":[{\"titulo\":\"...\"}]}\n\n\"novos_subtopicos\" deve ter exatamente " . SUBTOPIC_BATCH_SIZE . " itens.\n\"lista_final\" deve conter TODOS os tópicos antigos + " . SUBTOPIC_BATCH_SIZE . " novos, em ordem final."
             ]
         ]
     ];
 
     $resp = openaiRequest($prompt);
-    $fallbackNew = [
-        "{$contextTitle} base form",
-        "{$contextTitle} meaning",
-        "{$contextTitle} collocation",
-        "{$contextTitle} phrasal verb",
-        "{$contextTitle} idiomatic use"
-    ];
+    $fallbackNew = [];
+    for ($i = 1; $i <= SUBTOPIC_BATCH_SIZE; $i++) {
+        $fallbackNew[] = "{$contextTitle} variation {$i}";
+    }
     if (!$resp) return [
         'new_titles' => $fallbackNew,
         'final_titles' => buildFinalListWithInsertion($orderedList, $fallbackNew, $insertAfterPosition)
@@ -243,9 +241,9 @@ function generateSubtopics(string $materia, array $orderedList, int $insertAfter
         $rawTitles = array_merge($rawTitles, splitGeneratedTitleCandidates((string)($item['titulo'] ?? $item['title'] ?? $item['nome'] ?? '')));
     }
 
-    $uniqueAtomic = buildUniqueAtomicTitles($rawTitles, $orderedList, $contextTitle, 5);
-    if (count($uniqueAtomic) < 5) $uniqueAtomic = normalizeSubtopics($json['novos_subtopicos'] ?? [], $contextTitle);
-    if (count($uniqueAtomic) < 5) $uniqueAtomic = normalizeSubtopics($json['subtopicos'] ?? [], $contextTitle);
+    $uniqueAtomic = buildUniqueAtomicTitles($rawTitles, $orderedList, $contextTitle, SUBTOPIC_BATCH_SIZE);
+    if (count($uniqueAtomic) < SUBTOPIC_BATCH_SIZE) $uniqueAtomic = normalizeSubtopics($json['novos_subtopicos'] ?? [], $contextTitle);
+    if (count($uniqueAtomic) < SUBTOPIC_BATCH_SIZE) $uniqueAtomic = normalizeSubtopics($json['subtopicos'] ?? [], $contextTitle);
 
     $fallbackFinal = buildFinalListWithInsertion($orderedList, $uniqueAtomic, $insertAfterPosition);
 
@@ -254,7 +252,7 @@ function generateSubtopics(string $materia, array $orderedList, int $insertAfter
     }
 
     $finalTitles = array_values(array_filter(normalizeTitleListFromJson($json['lista_final']), fn($t) => $t !== ''));
-    if (count($finalTitles) !== count($orderedList) + 5) {
+    if (count($finalTitles) !== count($orderedList) + SUBTOPIC_BATCH_SIZE) {
         return ['new_titles' => $uniqueAtomic, 'final_titles' => $fallbackFinal];
     }
 
@@ -265,8 +263,8 @@ function generateSubtopics(string $materia, array $orderedList, int $insertAfter
     }
 
     $newFromFinal = computeNewTitlesFromFinalList($orderedList, $finalTitles);
-    $validatedNew = buildUniqueAtomicTitles($newFromFinal, $orderedList, $contextTitle, 5);
-    if (count($validatedNew) < 5) {
+    $validatedNew = buildUniqueAtomicTitles($newFromFinal, $orderedList, $contextTitle, SUBTOPIC_BATCH_SIZE);
+    if (count($validatedNew) < SUBTOPIC_BATCH_SIZE) {
         return ['new_titles' => $uniqueAtomic, 'final_titles' => $fallbackFinal];
     }
 
@@ -279,7 +277,7 @@ function generateSubtopics(string $materia, array $orderedList, int $insertAfter
             $existingCounter[$k]--;
             continue;
         }
-        if ($replaced < 5) {
+        if ($replaced < SUBTOPIC_BATCH_SIZE) {
             $finalAdjusted[$idx] = $validatedNew[$replaced];
             $replaced++;
             continue;
@@ -287,7 +285,7 @@ function generateSubtopics(string $materia, array $orderedList, int $insertAfter
         unset($finalAdjusted[$idx]);
     }
 
-    if ($replaced !== 5) {
+    if ($replaced !== SUBTOPIC_BATCH_SIZE) {
         return ['new_titles' => $uniqueAtomic, 'final_titles' => $fallbackFinal];
     }
 
@@ -457,14 +455,14 @@ if ($action === 'generate_subtopicos') {
     $generated = generateSubtopics(decryptDirectoryName($materia), $orderedTitles, $insertAfterPos, $contextTitle);
     $newTitles = $generated['new_titles'] ?? [];
     $finalTitles = $generated['final_titles'] ?? [];
-    if (count($newTitles) !== 5 || count($finalTitles) !== count($orderedTitles) + 5) {
+    if (count($newTitles) !== SUBTOPIC_BATCH_SIZE || count($finalTitles) !== count($orderedTitles) + SUBTOPIC_BATCH_SIZE) {
         die(json_encode(['status' => 'error', 'message' => 'Falha ao montar novas sub-matérias.']));
     }
 
     $pdo->beginTransaction();
     try {
         $ins = $pdo->prepare('INSERT INTO directories (user_id, parent_id, type, name_encrypted, default_view, open_mode, new_item_position, sort_order, icon, icon_color_from, icon_color_to, deck_structure) VALUES (?, ?, 10, ?, "grid", "fullscreen", "end", 0, "fa-layer-group", "#f59e0b", "#d97706", "traducoes")');
-        for ($i = 0; $i < 5; $i++) {
+        for ($i = 0; $i < SUBTOPIC_BATCH_SIZE; $i++) {
             $ins->execute([$user_id, $materia_id, Security::encryptData($newTitles[$i])]);
         }
 
