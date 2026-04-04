@@ -1945,7 +1945,7 @@
                 const response = await this.api('directories', 'fetch', { parent_id: parentId, target_user_id: this.state.profileUserId || undefined });
                 if (response) { 
                     let directories = Array.isArray(response.data) ? response.data : [];
-                    if (Number(parentId) === 1008) {
+                    if (Number(parentId) === 1903) {
                         directories = directories.filter(d => Number(d?.deck_total_cards || 0) < 1);
                     }
                     this.state.directories = directories; 
