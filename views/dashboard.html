@@ -415,6 +415,7 @@
 
         <!-- Render Target -->
         <div id="viewContainer" class="flex-1 transition-all min-h-0 relative pb-[env(safe-area-inset-bottom)]"></div>
+        <div id="paginationControls" class="hidden shrink-0 mt-4 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"></div>
     </main>
 
     <!-- BARRA DE ROLAGEM CUSTOMIZADA -->
@@ -846,6 +847,7 @@
             state: {
                 path: [{ id: null, name: 'Meu Cofre', view: 'grid', type: 0 }],
                 directories: [],
+                pagination: { perPage: 100, currentPage: 1 },
                 directoryCache: new Map(), 
                 kanbanChildCache: new Map(),
                 kanbanCacheScopeKey: null,
@@ -2004,6 +2006,7 @@
                         directories = directories.filter(d => Number(d?.deck_total_cards || 0) < 1);
                     }
                     this.state.directories = directories; 
+                    this.state.pagination.currentPage = 1;
                     directories.forEach(d => this.state.directoryCache.set(Number(d.id), d));
                     await this.fetchSavedStatusForCurrentDirectory();
                     this.render(); 
@@ -3475,6 +3478,65 @@
                 if (this.state.reorderMode || this.state.relocateMode) this.initSortable();
             },
 
+            getTotalPages() {
+                const total = this.state.directories.length;
+                return Math.max(1, Math.ceil(total / this.state.pagination.perPage));
+            },
+
+            getVisibleDirectories() {
+                if (this.state.reorderMode || this.state.relocateMode) {
+                    return this.state.directories;
+                }
+                const totalPages = this.getTotalPages();
+                this.state.pagination.currentPage = Math.min(Math.max(1, this.state.pagination.currentPage), totalPages);
+                const startIndex = (this.state.pagination.currentPage - 1) * this.state.pagination.perPage;
+                const endIndex = startIndex + this.state.pagination.perPage;
+                return this.state.directories.slice(startIndex, endIndex);
+            },
+
+            goToPage(page) {
+                const totalPages = this.getTotalPages();
+                const nextPage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+                if (nextPage === this.state.pagination.currentPage) return;
+                this.state.pagination.currentPage = nextPage;
+                this.render();
+            },
+
+            renderPaginationControls(visibleCount) {
+                const controls = document.getElementById('paginationControls');
+                if (!controls) return;
+
+                if (this.state.reorderMode || this.state.relocateMode) {
+                    controls.classList.add('hidden');
+                    controls.innerHTML = '';
+                    return;
+                }
+
+                const total = this.state.directories.length;
+                const totalPages = this.getTotalPages();
+
+                if (total <= this.state.pagination.perPage) {
+                    controls.classList.add('hidden');
+                    controls.innerHTML = '';
+                    return;
+                }
+
+                const currentPage = this.state.pagination.currentPage;
+                const start = (currentPage - 1) * this.state.pagination.perPage + 1;
+                const end = Math.min(start + visibleCount - 1, total);
+                const prevDisabled = currentPage <= 1;
+                const nextDisabled = currentPage >= totalPages;
+
+                controls.classList.remove('hidden');
+                controls.innerHTML = `
+                    <div class="text-xs sm:text-sm text-slate-400">Mostrando <span class="text-slate-200 font-semibold">${start}-${end}</span> de <span class="text-slate-200 font-semibold">${total}</span> diretórios</div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="app.goToPage(${currentPage - 1})" class="px-3 py-1.5 rounded-lg border border-slate-700 text-sm transition-colors ${prevDisabled ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 hover:text-white hover:border-slate-500'}" ${prevDisabled ? 'disabled' : ''}>Anterior</button>
+                        <span class="text-xs sm:text-sm text-slate-400">Página <span class="text-slate-200 font-semibold">${currentPage}</span> de <span class="text-slate-200 font-semibold">${totalPages}</span></span>
+                        <button type="button" onclick="app.goToPage(${currentPage + 1})" class="px-3 py-1.5 rounded-lg border border-slate-700 text-sm transition-colors ${nextDisabled ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 hover:text-white hover:border-slate-500'}" ${nextDisabled ? 'disabled' : ''}>Próxima</button>
+                    </div>`;
+            },
+
             render() {
                 const container = document.getElementById('viewContainer');
                 const view = this.getCurrentView();
@@ -3482,6 +3544,7 @@
 
                 if (this.state.directories.length === 0) {
                     container.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-500 mt-20 px-4 text-center"><i class="fa-regular fa-folder-open text-5xl sm:text-6xl mb-4 opacity-50"></i><h2 class="text-lg sm:text-xl font-medium text-slate-400">Esta pasta está vazia</h2><p class="text-sm mt-2">Clique para explorar os diretórios disponíveis.</p></div>`;
+                    this.renderPaginationControls(0);
                     return;
                 }
 
@@ -3491,11 +3554,12 @@
                     container.className = "flex-1 overflow-y-auto no-scrollbar pb-10 transition-all min-h-0 pb-[calc(2.5rem+env(safe-area-inset-bottom))]";
                 }
 
+                const visibleDirectories = this.getVisibleDirectories();
                 let html = '';
 
                 if (view === 'grid') {
                     html = `<div id="sortable-wrapper" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">`;
-                    this.state.directories.forEach(dir => {
+                    visibleDirectories.forEach(dir => {
                         let borderClass = 'border-slate-700';
                         if(dir.type === 1) borderClass = 'border-indigo-600/50';
                         if(dir.type === 2) borderClass = 'border-emerald-600/50';
@@ -3531,7 +3595,7 @@
                 
                 else if (view === 'list') {
                     html = `<div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto"><table class="w-full text-left text-sm min-w-[300px]"><thead class="bg-slate-900/50 text-slate-400"><tr><th class="px-4 py-3 font-medium w-10 text-center hidden grip-handle">#</th><th class="px-4 sm:px-6 py-3 font-medium w-12"></th><th class="px-4 py-3 font-medium">Nome</th><th class="px-4 sm:px-6 py-3 font-medium text-right">Ações</th></tr></thead><tbody id="sortable-wrapper" class="divide-y divide-slate-700/50">`;
-                    this.state.directories.forEach(dir => {
+                    visibleDirectories.forEach(dir => {
                         let borderClass = 'border-l-transparent';
                         if(dir.type === 1) borderClass = 'border-l-indigo-500';
                         if(dir.type === 2) borderClass = 'border-l-emerald-500';
@@ -3564,7 +3628,7 @@
 
                 else if (view === 'kanban') {
                     html = `<div id="sortable-wrapper" class="flex-1 flex gap-4 sm:gap-6 overflow-x-auto items-start snap-x w-full pb-12 relative">`;
-                    this.state.directories.forEach(dir => {
+                    visibleDirectories.forEach(dir => {
                         let headerBorder = 'border-slate-700';
                         if(dir.type === 1) headerBorder = 'border-indigo-700';
                         if(dir.type === 2) headerBorder = 'border-emerald-700';
@@ -3615,6 +3679,7 @@
                 }
 
                 container.innerHTML = html;
+                this.renderPaginationControls(visibleDirectories.length);
                 if (this.state.reorderMode || this.state.relocateMode) {
                     const sortableWrapper = document.getElementById('sortable-wrapper');
                     if (sortableWrapper) {
