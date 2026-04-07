@@ -337,7 +337,7 @@
             <button onclick="flashcardApp.prevCard()" id="btnPrev" class="w-14 h-14 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center text-xl shadow-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed">
                 <i class="fa-solid fa-arrow-left"></i>
             </button>
-            <button onclick="flashcardApp.syncBackPhraseDictionary()" id="btnSyncBackDictionary" class="h-11 px-3 rounded-full bg-violet-600/90 hover:bg-violet-500 text-white border border-violet-300/40 shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-xs sm:text-sm font-medium" title="Enviar verso para o GPT e sincronizar o dicionário da pasta 1008">
+            <button onclick="flashcardApp.syncBackPhraseDictionary()" id="btnSyncBackDictionary" class="h-11 px-3 rounded-full bg-violet-600/90 hover:bg-violet-500 text-white border border-violet-300/40 shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-xs sm:text-sm font-medium" title="Enviar verso para o GPT e sincronizar o dicionário da pasta 6223">
                 <i class="fa-solid fa-wand-magic-sparkles"></i>
                 <span class="hidden sm:inline">Sincronizar Dicionário</span>
                 <span class="sm:hidden">Sync</span>
@@ -809,7 +809,7 @@
                 try {
                     const res = await this.api('sync_back_phrase_dictionary', {
                         text: backText,
-                        dictionary_parent_id: 1008
+                        dictionary_parent_id: 6223
                     });
 
                     if (!res) return;
