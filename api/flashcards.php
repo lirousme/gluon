@@ -1757,7 +1757,7 @@ elseif ($action === 'translate_text') {
 
 elseif ($action === 'sync_back_phrase_dictionary') {
     $text = trim((string)($input['text'] ?? ''));
-    $dictionary_parent_id = (int)($input['dictionary_parent_id'] ?? 1008);
+    $dictionary_parent_id = (int)($input['dictionary_parent_id'] ?? 6223);
 
     if ($text === '') {
         die(json_encode(['status' => 'error', 'message' => 'Texto do verso está vazio.']));
