@@ -897,12 +897,17 @@ function openaiGetRequest($url) {
 }
 
 
-function normalizeDictionaryToken($value) {
-    $text = trim(mb_strtolower((string)$value, 'UTF-8'));
+function normalizeDictionarySentence($value) {
+    $text = trim((string)$value);
     if ($text === '') return '';
     $text = preg_replace('/\s+/u', ' ', $text);
-    $text = preg_replace('/^[\p{P}\p{S}\s]+|[\p{P}\p{S}\s]+$/u', '', $text);
     return trim((string)$text);
+}
+
+function normalizeDictionarySentenceKey($value) {
+    $normalized = normalizeDictionarySentence($value);
+    if ($normalized === '') return '';
+    return mb_strtolower($normalized, 'UTF-8');
 }
 
 function extractDictionaryCandidatesFromGpt($text) {
@@ -925,10 +930,9 @@ function extractDictionaryCandidatesFromGpt($text) {
                 'schema' => [
                     'type' => 'object',
                     'properties' => [
-                        'words' => ['type' => 'array', 'items' => ['type' => 'string']],
-                        'expressions' => ['type' => 'array', 'items' => ['type' => 'string']]
+                        'generated_sentences' => ['type' => 'array', 'items' => ['type' => 'string']]
                     ],
-                    'required' => ['words', 'expressions'],
+                    'required' => ['generated_sentences'],
                     'additionalProperties' => false
                 ]
             ]
@@ -940,7 +944,7 @@ function extractDictionaryCandidatesFromGpt($text) {
             ],
             [
                 'role' => 'user',
-                'content' => 'split todas as palavras dessa frase, e depois separe novamente a mesma frase em expressões curtinhas. Retorne em JSON com as chaves words e expressions. Frase: "' . $inputText . '"' 
+                'content' => 'split this sentence into lexical chuncks, then create one sentence for each lexical chunk, replacing that chunk with [LEXICAL CHUNK]. Return ONLY JSON with key generated_sentences. Sentence: "' . $inputText . '"'
             ]
         ]
     ];
@@ -966,17 +970,16 @@ function extractDictionaryCandidatesFromGpt($text) {
         return ['ok' => false, 'error' => 'OpenAI retornou JSON inválido para candidatos.', 'candidates' => []];
     }
 
-    $candidates = [];
-    foreach (['words', 'expressions'] as $bucket) {
-        foreach (($parsed[$bucket] ?? []) as $item) {
-            $token = normalizeDictionaryToken($item);
-            if ($token !== '') {
-                $candidates[$token] = true;
-            }
+    $candidatesByKey = [];
+    foreach (($parsed['generated_sentences'] ?? []) as $item) {
+        $sentence = normalizeDictionarySentence($item);
+        $sentenceKey = normalizeDictionarySentenceKey($sentence);
+        if ($sentence !== '' && $sentenceKey !== '' && !isset($candidatesByKey[$sentenceKey])) {
+            $candidatesByKey[$sentenceKey] = $sentence;
         }
     }
 
-    return ['ok' => true, 'error' => '', 'candidates' => array_keys($candidates)];
+    return ['ok' => true, 'error' => '', 'candidates' => array_values($candidatesByKey)];
 }
 
 function syncBatchJobWithOpenAI($pdo, $job) {
@@ -1793,9 +1796,10 @@ elseif ($action === 'sync_back_phrase_dictionary') {
 
         $existingByName = [];
         foreach ($children as $child) {
-            $name = normalizeDictionaryToken(Security::decryptData($child['name_encrypted'] ?? ''));
-            if ($name !== '') {
-                $existingByName[$name] = true;
+            $name = normalizeDictionarySentence(Security::decryptData($child['name_encrypted'] ?? ''));
+            $nameKey = normalizeDictionarySentenceKey($name);
+            if ($nameKey !== '') {
+                $existingByName[$nameKey] = true;
             }
         }
 
@@ -1808,15 +1812,17 @@ elseif ($action === 'sync_back_phrase_dictionary') {
         $createdItems = [];
         $createdCount = 0;
         foreach ($candidates as $candidate) {
-            if (isset($existingByName[$candidate])) {
+            $candidateSentence = normalizeDictionarySentence($candidate);
+            $candidateKey = normalizeDictionarySentenceKey($candidateSentence);
+            if ($candidateSentence === '' || $candidateKey === '' || isset($existingByName[$candidateKey])) {
                 continue;
             }
 
-            $stmtInsert->execute([$user_id, $dictionary_parent_id, Security::encryptData($candidate), $nextSort]);
+            $stmtInsert->execute([$user_id, $dictionary_parent_id, Security::encryptData($candidateSentence), $nextSort]);
             $nextSort++;
             $createdCount++;
-            $createdItems[] = $candidate;
-            $existingByName[$candidate] = true;
+            $createdItems[] = $candidateSentence;
+            $existingByName[$candidateKey] = true;
         }
 
         $pdo->commit();
