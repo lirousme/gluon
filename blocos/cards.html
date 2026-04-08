@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cards do Bloco</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class'
+    };
+  </script>
+</head>
+<body class="bg-black text-zinc-100 min-h-screen">
+  <main class="max-w-3xl mx-auto px-4 py-6">
+    <header class="flex items-center justify-between mb-6">
+      <div>
+        <a href="/blocos/blocos.html" class="text-sm text-zinc-400 hover:text-zinc-200">← Voltar para blocos</a>
+        <h1 class="text-2xl font-semibold">Cards</h1>
+      </div>
+      <button
+        id="new-card-btn"
+        type="button"
+        class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800 text-xl font-semibold transition hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-500"
+        aria-label="Criar novo card"
+        title="Criar novo card"
+      >
+        +
+      </button>
+    </header>
+
+    <section id="cards-list" class="flex flex-col gap-3"></section>
+    <p id="empty-state" class="hidden text-zinc-400">Nenhum card cadastrado para este bloco.</p>
+  </main>
+
+  <div id="card-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 px-4">
+    <div class="w-full max-w-lg rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+      <h2 class="mb-4 text-lg font-semibold">Novo card</h2>
+
+      <form id="card-form" class="space-y-4">
+        <div>
+          <label for="texto" class="mb-1 block text-sm text-zinc-300">Texto</label>
+          <textarea id="texto" name="texto" rows="3" required class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:ring-2 focus:ring-zinc-600"></textarea>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label for="idioma" class="mb-1 block text-sm text-zinc-300">Idioma</label>
+            <select id="idioma" name="idioma" required class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:ring-2 focus:ring-zinc-600">
+              <option value="pt-br">pt-br</option>
+              <option value="en-us">en-us</option>
+              <option value="en-gb">en-gb</option>
+              <option value="fr-fr">fr-fr</option>
+              <option value="es-es">es-es</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="ordem" class="mb-1 block text-sm text-zinc-300">Ordem</label>
+            <input id="ordem" name="ordem" type="number" min="1" class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:ring-2 focus:ring-zinc-600" placeholder="Ex.: 1" />
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" id="cancel-modal" class="rounded-lg border border-zinc-700 px-4 py-2 text-sm hover:bg-zinc-800">Cancelar</button>
+          <button type="submit" class="rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-200">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const cardsListEl = document.getElementById('cards-list');
+    const emptyStateEl = document.getElementById('empty-state');
+    const newCardBtn = document.getElementById('new-card-btn');
+    const cardModal = document.getElementById('card-modal');
+    const cardForm = document.getElementById('card-form');
+    const cancelModalBtn = document.getElementById('cancel-modal');
+
+    const params = new URLSearchParams(window.location.search);
+    const idBloco = Number(params.get('id_bloco'));
+
+    function toggleModal(show) {
+      if (show) {
+        cardModal.classList.remove('hidden');
+        cardModal.classList.add('flex');
+      } else {
+        cardModal.classList.add('hidden');
+        cardModal.classList.remove('flex');
+      }
+    }
+
+    function renderCards(cards) {
+      cardsListEl.innerHTML = '';
+
+      if (!Array.isArray(cards) || cards.length === 0) {
+        emptyStateEl.classList.remove('hidden');
+        return;
+      }
+
+      emptyStateEl.classList.add('hidden');
+
+      cards.forEach((card) => {
+        const item = document.createElement('article');
+        item.className = 'rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3';
+
+        const meta = document.createElement('div');
+        meta.className = 'mb-2 flex items-center justify-between text-xs text-zinc-400';
+
+        const idEl = document.createElement('span');
+        idEl.textContent = `ID: ${card.id}`;
+
+        const ordemEl = document.createElement('span');
+        ordemEl.textContent = `Ordem: ${card.ordem ?? '-'}`;
+
+        meta.appendChild(idEl);
+        meta.appendChild(ordemEl);
+
+        const textoEl = document.createElement('p');
+        textoEl.className = 'mb-2 whitespace-pre-wrap text-zinc-100';
+        textoEl.textContent = card.texto;
+
+        const idiomaEl = document.createElement('p');
+        idiomaEl.className = 'text-xs uppercase tracking-wide text-zinc-400';
+        idiomaEl.textContent = card.idioma;
+
+        item.appendChild(meta);
+        item.appendChild(textoEl);
+        item.appendChild(idiomaEl);
+
+        cardsListEl.appendChild(item);
+      });
+    }
+
+    async function loadCards() {
+      if (!idBloco || idBloco <= 0) {
+        emptyStateEl.textContent = 'Bloco inválido.';
+        emptyStateEl.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/cards?id_bloco=${encodeURIComponent(idBloco)}`);
+        const payload = await response.json();
+
+        if (!response.ok || payload.status !== 'success') {
+          throw new Error(payload.message || 'Erro ao carregar cards.');
+        }
+
+        renderCards(payload.data);
+      } catch (error) {
+        console.error(error);
+        emptyStateEl.textContent = 'Erro ao carregar os cards.';
+        emptyStateEl.classList.remove('hidden');
+      }
+    }
+
+    async function createCard(event) {
+      event.preventDefault();
+
+      const formData = new FormData(cardForm);
+      const texto = (formData.get('texto') || '').toString().trim();
+      const idioma = (formData.get('idioma') || '').toString().trim();
+      const ordemRaw = (formData.get('ordem') || '').toString().trim();
+
+      const body = {
+        id_bloco: idBloco,
+        texto,
+        idioma
+      };
+
+      if (ordemRaw !== '') {
+        body.ordem = Number(ordemRaw);
+      }
+
+      try {
+        const response = await fetch('/api/cards', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok || payload.status !== 'success') {
+          throw new Error(payload.message || 'Erro ao criar card.');
+        }
+
+        cardForm.reset();
+        toggleModal(false);
+        await loadCards();
+      } catch (error) {
+        console.error(error);
+        alert('Não foi possível criar o card.');
+      }
+    }
+
+    newCardBtn.addEventListener('click', () => toggleModal(true));
+    cancelModalBtn.addEventListener('click', () => toggleModal(false));
+    cardModal.addEventListener('click', (event) => {
+      if (event.target === cardModal) {
+        toggleModal(false);
+      }
+    });
+    cardForm.addEventListener('submit', createCard);
+
+    loadCards();
+  </script>
+</body>
+</html>
