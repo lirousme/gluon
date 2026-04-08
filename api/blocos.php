@@ -15,7 +15,7 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 try {
     if ($method === 'GET') {
-        $stmt = $pdo->query('SELECT id, nome_pt_br FROM blocos ORDER BY id DESC');
+        $stmt = $pdo->query('SELECT id, nome_pt_br, ordem FROM blocos ORDER BY ordem ASC, id ASC');
         $rows = $stmt->fetchAll();
 
         echo json_encode(['status' => 'success', 'data' => $rows]);
@@ -32,14 +32,21 @@ try {
             exit;
         }
 
-        $stmt = $pdo->prepare('INSERT INTO blocos (nome_pt_br) VALUES (:nome_pt_br)');
-        $stmt->execute([':nome_pt_br' => $nomePtBr]);
+        $stmtOrdem = $pdo->query('SELECT COALESCE(MAX(ordem), 0) + 1 AS proxima_ordem FROM blocos');
+        $ordem = (int)($stmtOrdem->fetch()['proxima_ordem'] ?? 1);
+
+        $stmt = $pdo->prepare('INSERT INTO blocos (nome_pt_br, ordem) VALUES (:nome_pt_br, :ordem)');
+        $stmt->execute([
+            ':nome_pt_br' => $nomePtBr,
+            ':ordem' => $ordem,
+        ]);
 
         echo json_encode([
             'status' => 'success',
             'data' => [
                 'id' => (int)$pdo->lastInsertId(),
                 'nome_pt_br' => $nomePtBr,
+                'ordem' => $ordem,
             ],
         ]);
         exit;

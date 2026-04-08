@@ -43,22 +43,15 @@
           <textarea id="texto" name="texto" rows="3" required class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:ring-2 focus:ring-zinc-600"></textarea>
         </div>
 
-        <div class="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label for="idioma" class="mb-1 block text-sm text-zinc-300">Idioma</label>
-            <select id="idioma" name="idioma" required class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:ring-2 focus:ring-zinc-600">
-              <option value="pt-br">pt-br</option>
-              <option value="en-us">en-us</option>
-              <option value="en-gb">en-gb</option>
-              <option value="fr-fr">fr-fr</option>
-              <option value="es-es">es-es</option>
-            </select>
-          </div>
-
-          <div>
-            <label for="ordem" class="mb-1 block text-sm text-zinc-300">Ordem</label>
-            <input id="ordem" name="ordem" type="number" min="1" class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:ring-2 focus:ring-zinc-600" placeholder="Ex.: 1" />
-          </div>
+        <div>
+          <label for="idioma" class="mb-1 block text-sm text-zinc-300">Idioma</label>
+          <select id="idioma" name="idioma" required class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:ring-2 focus:ring-zinc-600">
+            <option value="pt-br">pt-br</option>
+            <option value="en-us">en-us</option>
+            <option value="en-gb">en-gb</option>
+            <option value="fr-fr">fr-fr</option>
+            <option value="es-es">es-es</option>
+          </select>
         </div>
 
         <div class="flex justify-end gap-2 pt-2">
@@ -161,17 +154,11 @@
       const formData = new FormData(cardForm);
       const texto = (formData.get('texto') || '').toString().trim();
       const idioma = (formData.get('idioma') || '').toString().trim();
-      const ordemRaw = (formData.get('ordem') || '').toString().trim();
-
       const body = {
         id_bloco: idBloco,
         texto,
         idioma
       };
-
-      if (ordemRaw !== '') {
-        body.ordem = Number(ordemRaw);
-      }
 
       try {
         const response = await fetch('/api/cards', {

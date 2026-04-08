@@ -30,10 +30,41 @@
     <p id="empty-state" class="hidden text-zinc-400">Nenhum bloco cadastrado.</p>
   </main>
 
+  <div id="block-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 px-4">
+    <div class="w-full max-w-lg rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+      <h2 class="mb-4 text-lg font-semibold">Novo bloco</h2>
+
+      <form id="block-form" class="space-y-4">
+        <div>
+          <label for="nome_pt_br" class="mb-1 block text-sm text-zinc-300">Nome</label>
+          <input id="nome_pt_br" name="nome_pt_br" type="text" required class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:ring-2 focus:ring-zinc-600" placeholder="Digite o nome do bloco" />
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" id="cancel-modal" class="rounded-lg border border-zinc-700 px-4 py-2 text-sm hover:bg-zinc-800">Cancelar</button>
+          <button type="submit" class="rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-200">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
     const listEl = document.getElementById('blocks-list');
     const emptyStateEl = document.getElementById('empty-state');
     const newBlockBtn = document.getElementById('new-block-btn');
+    const blockModal = document.getElementById('block-modal');
+    const blockForm = document.getElementById('block-form');
+    const cancelModalBtn = document.getElementById('cancel-modal');
+
+    function toggleModal(show) {
+      if (show) {
+        blockModal.classList.remove('hidden');
+        blockModal.classList.add('flex');
+      } else {
+        blockModal.classList.add('hidden');
+        blockModal.classList.remove('flex');
+      }
+    }
 
     function renderBlocks(blocks) {
       listEl.innerHTML = '';
@@ -75,9 +106,13 @@
       }
     }
 
-    async function createBlock() {
-      const nome = window.prompt('Digite o nome do novo bloco:');
-      if (!nome || !nome.trim()) return;
+    async function createBlock(event) {
+      event.preventDefault();
+
+      const formData = new FormData(blockForm);
+      const nome = (formData.get('nome_pt_br') || '').toString().trim();
+
+      if (!nome) return;
 
       try {
         const response = await fetch('/api/blocos', {
@@ -85,7 +120,7 @@
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ nome_pt_br: nome.trim() })
+          body: JSON.stringify({ nome_pt_br: nome })
         });
 
         const payload = await response.json();
@@ -94,6 +129,8 @@
           throw new Error(payload.message || 'Erro ao criar bloco.');
         }
 
+        blockForm.reset();
+        toggleModal(false);
         await loadBlocks();
       } catch (error) {
         console.error(error);
@@ -101,7 +138,14 @@
       }
     }
 
-    newBlockBtn.addEventListener('click', createBlock);
+    newBlockBtn.addEventListener('click', () => toggleModal(true));
+    cancelModalBtn.addEventListener('click', () => toggleModal(false));
+    blockModal.addEventListener('click', (event) => {
+      if (event.target === blockModal) {
+        toggleModal(false);
+      }
+    });
+    blockForm.addEventListener('submit', createBlock);
     loadBlocks();
   </script>
 </body>
