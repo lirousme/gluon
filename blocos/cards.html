@@ -122,18 +122,14 @@
         const meta = document.createElement('div');
         meta.className = 'mb-2 flex items-center justify-between gap-2 text-xs text-zinc-400';
 
-        const idEl = document.createElement('span');
-        idEl.textContent = `ID: ${card.id}`;
-
         const settingsBtn = document.createElement('button');
         settingsBtn.type = 'button';
         settingsBtn.className = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-700 text-zinc-300 transition hover:bg-zinc-800 hover:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-600';
-        settingsBtn.setAttribute('aria-label', `Configurar card ${card.id}`);
+        settingsBtn.setAttribute('aria-label', 'Configurar card');
         settingsBtn.title = 'Configurar card';
         settingsBtn.textContent = '⚙';
         settingsBtn.addEventListener('click', () => openEditModal(card));
 
-        meta.appendChild(idEl);
         meta.appendChild(settingsBtn);
 
         const textoEl = document.createElement('p');
