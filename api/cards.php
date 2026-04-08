@@ -35,7 +35,6 @@ try {
         $idBloco = (int)($input['id_bloco'] ?? 0);
         $texto = trim((string)($input['texto'] ?? ''));
         $idioma = strtolower(trim((string)($input['idioma'] ?? '')));
-        $ordem = isset($input['ordem']) ? (int)$input['ordem'] : null;
 
         $idiomasPermitidos = ['pt-br', 'en-us', 'en-gb', 'fr-fr', 'es-es'];
 
@@ -45,11 +44,9 @@ try {
             exit;
         }
 
-        if ($ordem === null) {
-            $stmtOrdem = $pdo->prepare('SELECT COALESCE(MAX(ordem), 0) + 1 AS proxima_ordem FROM cards WHERE id_bloco = :id_bloco');
-            $stmtOrdem->execute([':id_bloco' => $idBloco]);
-            $ordem = (int)($stmtOrdem->fetch()['proxima_ordem'] ?? 1);
-        }
+        $stmtOrdem = $pdo->prepare('SELECT COALESCE(MAX(ordem), 0) + 1 AS proxima_ordem FROM cards WHERE id_bloco = :id_bloco');
+        $stmtOrdem->execute([':id_bloco' => $idBloco]);
+        $ordem = (int)($stmtOrdem->fetch()['proxima_ordem'] ?? 1);
 
         $stmt = $pdo->prepare('INSERT INTO cards (id_bloco, texto, idioma, ordem) VALUES (:id_bloco, :texto, :idioma, :ordem)');
         $stmt->execute([
