@@ -69,6 +69,67 @@ try {
         exit;
     }
 
+    if ($method === 'PUT') {
+        $input = json_decode(file_get_contents('php://input'), true);
+
+        $id = (int)($input['id'] ?? 0);
+        $texto = trim((string)($input['texto'] ?? ''));
+        $idioma = strtolower(trim((string)($input['idioma'] ?? '')));
+        $idiomasPermitidos = ['pt-br', 'en-us', 'en-gb', 'fr-fr', 'es-es'];
+
+        if ($id <= 0 || $texto === '' || $idioma === '' || !in_array($idioma, $idiomasPermitidos, true)) {
+            http_response_code(422);
+            echo json_encode(['status' => 'error', 'message' => 'Dados inválidos para atualizar card.']);
+            exit;
+        }
+
+        $stmt = $pdo->prepare('UPDATE cards SET texto = :texto, idioma = :idioma WHERE id = :id');
+        $stmt->execute([
+            ':id' => $id,
+            ':texto' => $texto,
+            ':idioma' => $idioma,
+        ]);
+
+        if ($stmt->rowCount() === 0) {
+            http_response_code(404);
+            echo json_encode(['status' => 'error', 'message' => 'Card não encontrado.']);
+            exit;
+        }
+
+        echo json_encode([
+            'status' => 'success',
+            'data' => [
+                'id' => $id,
+                'texto' => $texto,
+                'idioma' => $idioma,
+            ],
+        ]);
+        exit;
+    }
+
+    if ($method === 'DELETE') {
+        $input = json_decode(file_get_contents('php://input'), true);
+        $id = (int)($input['id'] ?? 0);
+
+        if ($id <= 0) {
+            http_response_code(422);
+            echo json_encode(['status' => 'error', 'message' => 'ID inválido para excluir card.']);
+            exit;
+        }
+
+        $stmt = $pdo->prepare('DELETE FROM cards WHERE id = :id');
+        $stmt->execute([':id' => $id]);
+
+        if ($stmt->rowCount() === 0) {
+            http_response_code(404);
+            echo json_encode(['status' => 'error', 'message' => 'Card não encontrado.']);
+            exit;
+        }
+
+        echo json_encode(['status' => 'success']);
+        exit;
+    }
+
     http_response_code(405);
     echo json_encode(['status' => 'error', 'message' => 'Método não permitido.']);
 } catch (Throwable $e) {

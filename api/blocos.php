@@ -52,6 +52,62 @@ try {
         exit;
     }
 
+    if ($method === 'PUT') {
+        $input = json_decode(file_get_contents('php://input'), true);
+        $id = (int)($input['id'] ?? 0);
+        $nomePtBr = trim((string)($input['nome_pt_br'] ?? ''));
+
+        if ($id <= 0 || $nomePtBr === '') {
+            http_response_code(422);
+            echo json_encode(['status' => 'error', 'message' => 'Dados inválidos para atualizar bloco.']);
+            exit;
+        }
+
+        $stmt = $pdo->prepare('UPDATE blocos SET nome_pt_br = :nome_pt_br WHERE id = :id');
+        $stmt->execute([
+            ':id' => $id,
+            ':nome_pt_br' => $nomePtBr,
+        ]);
+
+        if ($stmt->rowCount() === 0) {
+            http_response_code(404);
+            echo json_encode(['status' => 'error', 'message' => 'Bloco não encontrado.']);
+            exit;
+        }
+
+        echo json_encode([
+            'status' => 'success',
+            'data' => [
+                'id' => $id,
+                'nome_pt_br' => $nomePtBr,
+            ],
+        ]);
+        exit;
+    }
+
+    if ($method === 'DELETE') {
+        $input = json_decode(file_get_contents('php://input'), true);
+        $id = (int)($input['id'] ?? 0);
+
+        if ($id <= 0) {
+            http_response_code(422);
+            echo json_encode(['status' => 'error', 'message' => 'ID inválido para excluir bloco.']);
+            exit;
+        }
+
+        $stmt = $pdo->prepare('DELETE FROM blocos WHERE id = :id');
+        $stmt->execute([':id' => $id]);
+
+        if ($stmt->rowCount() === 0) {
+            http_response_code(404);
+            echo json_encode(['status' => 'error', 'message' => 'Bloco não encontrado.']);
+            exit;
+        }
+
+        echo json_encode(['status' => 'success']);
+        exit;
+    }
+
     http_response_code(405);
     echo json_encode(['status' => 'error', 'message' => 'Método não permitido.']);
 } catch (Throwable $e) {
