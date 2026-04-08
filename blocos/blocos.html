@@ -55,6 +55,9 @@
     const blockModal = document.getElementById('block-modal');
     const blockForm = document.getElementById('block-form');
     const cancelModalBtn = document.getElementById('cancel-modal');
+    const modalTitleEl = blockModal.querySelector('h2');
+    const submitBtn = blockForm.querySelector('button[type="submit"]');
+    let editingBlockId = null;
 
     function toggleModal(show) {
       if (show) {
@@ -64,6 +67,24 @@
         blockModal.classList.add('hidden');
         blockModal.classList.remove('flex');
       }
+    }
+
+    function openCreateModal() {
+      editingBlockId = null;
+      modalTitleEl.textContent = 'Novo bloco';
+      submitBtn.textContent = 'Salvar';
+      blockForm.reset();
+      updateDeleteButtonVisibility();
+      toggleModal(true);
+    }
+
+    function openEditModal(block) {
+      editingBlockId = block.id;
+      modalTitleEl.textContent = 'Editar bloco';
+      submitBtn.textContent = 'Atualizar';
+      blockForm.nome_pt_br.value = block.nome_pt_br ?? '';
+      updateDeleteButtonVisibility();
+      toggleModal(true);
     }
 
     function renderBlocks(blocks) {
@@ -77,14 +98,31 @@
       emptyStateEl.classList.add('hidden');
 
       blocks.forEach((block) => {
-        const card = document.createElement('button');
-        card.type = 'button';
-        card.className = 'w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-left transition hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-600';
-        card.textContent = block.nome_pt_br;
-        card.addEventListener('click', () => {
+        const card = document.createElement('article');
+        card.className = 'rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3';
+
+        const topRow = document.createElement('div');
+        topRow.className = 'mb-2 flex items-start justify-between gap-2';
+
+        const blockNameBtn = document.createElement('button');
+        blockNameBtn.type = 'button';
+        blockNameBtn.className = 'min-w-0 flex-1 text-left text-zinc-100 transition hover:text-zinc-300';
+        blockNameBtn.textContent = block.nome_pt_br;
+        blockNameBtn.addEventListener('click', () => {
           window.location.href = `/blocos/cards.html?id_bloco=${encodeURIComponent(block.id)}`;
         });
 
+        const settingsBtn = document.createElement('button');
+        settingsBtn.type = 'button';
+        settingsBtn.className = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-700 text-zinc-300 transition hover:bg-zinc-800 hover:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-600';
+        settingsBtn.setAttribute('aria-label', `Configurar bloco ${block.nome_pt_br}`);
+        settingsBtn.title = 'Configurar bloco';
+        settingsBtn.textContent = '⚙';
+        settingsBtn.addEventListener('click', () => openEditModal(block));
+
+        topRow.appendChild(blockNameBtn);
+        topRow.appendChild(settingsBtn);
+        card.appendChild(topRow);
         listEl.appendChild(card);
       });
     }
@@ -115,37 +153,88 @@
       if (!nome) return;
 
       try {
+        const isEditing = editingBlockId !== null;
         const response = await fetch('/api/blocos', {
-          method: 'POST',
+          method: isEditing ? 'PUT' : 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ nome_pt_br: nome })
+          body: JSON.stringify(isEditing ? { id: editingBlockId, nome_pt_br: nome } : { nome_pt_br: nome })
         });
 
         const payload = await response.json();
 
         if (!response.ok || payload.status !== 'success') {
-          throw new Error(payload.message || 'Erro ao criar bloco.');
+          throw new Error(payload.message || 'Erro ao salvar bloco.');
         }
 
+        editingBlockId = null;
         blockForm.reset();
         toggleModal(false);
         await loadBlocks();
       } catch (error) {
         console.error(error);
-        alert('Não foi possível criar o bloco.');
+        alert('Não foi possível salvar o bloco.');
       }
     }
 
-    newBlockBtn.addEventListener('click', () => toggleModal(true));
-    cancelModalBtn.addEventListener('click', () => toggleModal(false));
+    async function deleteBlock() {
+      if (editingBlockId === null) return;
+      if (!confirm('Deseja realmente excluir este bloco?')) return;
+
+      try {
+        const response = await fetch('/api/blocos', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ id: editingBlockId })
+        });
+
+        const payload = await response.json();
+        if (!response.ok || payload.status !== 'success') {
+          throw new Error(payload.message || 'Erro ao excluir bloco.');
+        }
+
+        editingBlockId = null;
+        blockForm.reset();
+        toggleModal(false);
+        await loadBlocks();
+      } catch (error) {
+        console.error(error);
+        alert('Não foi possível excluir o bloco.');
+      }
+    }
+
+    const modalActions = document.createElement('div');
+    modalActions.className = 'mt-4 border-t border-zinc-800 pt-3';
+    modalActions.innerHTML = '<button type="button" id="delete-block-btn" class="rounded-lg border border-red-700 px-4 py-2 text-sm text-red-400 hover:bg-red-950/40">Excluir bloco</button>';
+    blockForm.appendChild(modalActions);
+    const deleteBlockBtn = document.getElementById('delete-block-btn');
+
+    function updateDeleteButtonVisibility() {
+      deleteBlockBtn.classList.toggle('hidden', editingBlockId === null);
+    }
+
+    newBlockBtn.addEventListener('click', () => {
+      openCreateModal();
+      updateDeleteButtonVisibility();
+    });
+    cancelModalBtn.addEventListener('click', () => {
+      toggleModal(false);
+      editingBlockId = null;
+      updateDeleteButtonVisibility();
+    });
     blockModal.addEventListener('click', (event) => {
       if (event.target === blockModal) {
         toggleModal(false);
+        editingBlockId = null;
+        updateDeleteButtonVisibility();
       }
     });
+    deleteBlockBtn.addEventListener('click', deleteBlock);
     blockForm.addEventListener('submit', createBlock);
+    updateDeleteButtonVisibility();
     loadBlocks();
   </script>
 </body>
