@@ -1195,6 +1195,7 @@ if ($action === 'fetch') {
     $book_completed_reads = 0;
 
     $book_next_review_at = null;
+    $random_next_review_at = null;
 
     if ($deck_mode === 'aleatorio') {
         $stmt = $pdo->prepare("
@@ -1205,6 +1206,18 @@ if ($action === 'fetch') {
             ORDER BY RAND()
         ");
         $stmt->execute([$user_id, $deck_id]);
+
+        $stmtNextRandomReview = $pdo->prepare("
+            SELECT MIN(fs.next_review_at)
+            FROM flashcard_scores fs
+            JOIN flashcards f ON f.id = fs.flashcard_id
+            WHERE f.directory_id = ?
+              AND fs.user_id = ?
+              AND fs.next_review_at IS NOT NULL
+              AND fs.next_review_at > NOW()
+        ");
+        $stmtNextRandomReview->execute([$deck_id, $user_id]);
+        $random_next_review_at = $stmtNextRandomReview->fetchColumn() ?: null;
     } else {
         $stmt = $pdo->prepare("
             SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, 0 as score 
@@ -1284,6 +1297,7 @@ if ($action === 'fetch') {
         'book_completed_reads' => $book_completed_reads,
         'book_completed_reads_max' => 3,
         'book_next_review_at' => $book_next_review_at,
+        'random_next_review_at' => $random_next_review_at,
         'total_cards' => $total_cards_in_deck,
         'current_index' => $current_index,
         'data' => $response
