@@ -633,6 +633,7 @@
             bookCompletedReads: 0,
             bookCompletedReadsMax: 3,
             bookNextReviewAt: null,
+            randomNextReviewAt: null,
             cards: [],
             currentIndex: 0,
             isFlipped: false,
@@ -855,6 +856,7 @@
                     this.bookCompletedReads = Math.max(0, Math.min(res.book_completed_reads || 0, 3));
                     this.bookCompletedReadsMax = res.book_completed_reads_max || 3;
                     this.bookNextReviewAt = res.book_next_review_at || null;
+                    this.randomNextReviewAt = res.random_next_review_at || null;
                     this.currentIndex = res.current_index || 0;
 
                     const resetBtn = document.getElementById('btnResetBookScore');
@@ -892,7 +894,9 @@
                 if (this.deckMode === 'aleatorio' && this.totalCardsInDeck > 0) {
                     document.getElementById('emptyStateIcon').className = "fa-solid fa-mug-hot text-6xl text-emerald-600 mb-4 opacity-70";
                     document.getElementById('emptyStateTitle').innerText = "Você está em dia!";
-                    document.getElementById('emptyStateDesc').innerText = "Não há cartas vencidas para revisão hoje. Relaxe e volte amanhã!";
+                    document.getElementById('emptyStateDesc').innerText = this.randomNextReviewAt
+                        ? `Não há cartas vencidas para revisão agora. Próxima revisão disponível em ${this.formatDateTime(this.randomNextReviewAt)}.`
+                        : "Não há cartas vencidas para revisão hoje. Relaxe e volte amanhã!";
                 } else if (this.deckMode === 'livro' && this.totalCardsInDeck > 0 && this.bookNextReviewAt) {
                     document.getElementById('emptyStateIcon').className = "fa-solid fa-book-open-reader text-6xl text-emerald-500 mb-4 opacity-70";
                     document.getElementById('emptyStateTitle').innerText = "Leitura concluída por agora";
