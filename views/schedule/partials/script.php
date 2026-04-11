@@ -2220,6 +2220,10 @@
                     folderSettings.style.display = 'none';
                     nameLabel.innerText = 'Nome do Plano';
                     this.autoChangeIcon('fa-list-ol');
+                } else if (typeValue === 8) {
+                    folderSettings.style.display = 'none';
+                    nameLabel.innerText = 'Nome da Trilha';
+                    this.autoChangeIcon('fa-location-dot');
                 }
 
                 if (taskTagsContainer) {
@@ -2313,6 +2317,7 @@
                     else if(dirObj.type === 4) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Deck de Flashcards'; iconPickerContainer.style.display = 'block'; }
                     else if(dirObj.type === 3) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Portal'; iconPickerContainer.style.display = 'none'; btnRecor.classList.add('hidden');}
                     else if(dirObj.type === 7) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome do Plano'; iconPickerContainer.style.display = 'block'; }
+                    else if(dirObj.type === 8) { folderSettings.style.display = 'none'; nameLabel.innerText = 'Nome da Trilha'; iconPickerContainer.style.display = 'block'; }
                 } else {
                     typeSelector.classList.remove('hidden');
                     iconPickerContainer.style.display = 'block';
@@ -2346,7 +2351,7 @@
                 document.getElementById('dirColorFrom').value = (dirObj && dirObj.color_from) ? dirObj.color_from : '#3b82f6';
                 document.getElementById('dirColorTo').value = (dirObj && dirObj.color_to) ? dirObj.color_to : '#6366f1';
                 
-                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : (dirObj?.type === 3 ? 'fa-door-open' : (dirObj?.type === 4 ? 'fa-layer-group' : (dirObj?.type === 7 ? 'fa-list-ol' : 'fa-check-circle'))))); 
+                const iconToSelect = (dirObj && dirObj.icon) ? dirObj.icon : (dirObj?.type === 1 ? 'fa-file-code' : (dirObj?.type === 2 ? 'fa-calendar-days' : (dirObj?.type === 3 ? 'fa-door-open' : (dirObj?.type === 4 ? 'fa-layer-group' : (dirObj?.type === 7 ? 'fa-list-ol' : (dirObj?.type === 8 ? 'fa-location-dot' : 'fa-check-circle'))))));
                 this.autoChangeIcon(iconToSelect);
 
                 const posToSelect = (dirObj && dirObj.new_item_position) ? dirObj.new_item_position : 'end';
@@ -2387,7 +2392,8 @@
                             3: 'Abrir portal',
                             4: 'Abrir flashcards',
                             5: 'Abrir mapa',
-                            7: 'Abrir plano'
+                            7: 'Abrir plano',
+                            8: 'Abrir trilha'
                         };
                         const openLabel = openLabelByType[Number(dirObj?.type)] || 'Abrir item';
                         btnOpenItem.innerHTML = `<i class="fa-solid fa-arrow-up-right-from-square"></i> ${openLabel}`;
