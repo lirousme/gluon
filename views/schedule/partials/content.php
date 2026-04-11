@@ -189,6 +189,12 @@
                                     <i class="fa-solid fa-list-ol block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Plano</span>
                                 </div>
                             </label>
+                            <label class="cursor-pointer" onclick="scheduleApp.handleTypeChange(8)">
+                                <input type="radio" name="itemType" value="8" class="peer hidden type-radio">
+                                <div class="border border-slate-600 bg-slate-800 text-slate-400 rounded-lg p-2 text-center transition-all hover:bg-slate-700">
+                                    <i class="fa-solid fa-location-dot block text-lg mb-1"></i><span class="text-[11px] font-medium leading-tight block">Trilha</span>
+                                </div>
+                            </label>
                         </div>
                     </div>
 
