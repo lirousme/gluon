@@ -12,7 +12,7 @@ $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? '';
 
 function ensureTrailTables(PDO $pdo): void {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS percursos (
+    $pdo->exec("CREATE TABLE IF NOT EXISTS track_nodes (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         track_directory_id INT UNSIGNED NOT NULL,
         position_index INT UNSIGNED NOT NULL,
@@ -30,23 +30,23 @@ function ensureTrailTables(PDO $pdo): void {
         UNIQUE KEY uniq_track_position (track_directory_id, position_index),
         INDEX idx_track_map (track_directory_id, map_number, phase_number),
         INDEX idx_track_publish (track_directory_id, is_published, position_index),
-        CONSTRAINT fk_percursos_directory FOREIGN KEY (track_directory_id) REFERENCES directories(id) ON DELETE CASCADE
+        CONSTRAINT fk_track_nodes_directory FOREIGN KEY (track_directory_id) REFERENCES directories(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     try {
-        $pdo->exec("ALTER TABLE percursos ADD COLUMN is_published TINYINT(1) NOT NULL DEFAULT 0 AFTER source");
+        $pdo->exec("ALTER TABLE track_nodes ADD COLUMN is_published TINYINT(1) NOT NULL DEFAULT 0 AFTER source");
     } catch (Throwable $e) {}
     try {
-        $pdo->exec("ALTER TABLE percursos ADD COLUMN published_at DATETIME DEFAULT NULL AFTER updated_at");
+        $pdo->exec("ALTER TABLE track_nodes ADD COLUMN published_at DATETIME DEFAULT NULL AFTER updated_at");
     } catch (Throwable $e) {}
     try {
-        $pdo->exec("ALTER TABLE percursos ADD COLUMN prerequisite_positions_json LONGTEXT DEFAULT NULL AFTER questions_json");
+        $pdo->exec("ALTER TABLE track_nodes ADD COLUMN prerequisite_positions_json LONGTEXT DEFAULT NULL AFTER questions_json");
     } catch (Throwable $e) {}
     try {
-        $pdo->exec("CREATE INDEX idx_track_publish ON percursos (track_directory_id, is_published, position_index)");
+        $pdo->exec("CREATE INDEX idx_track_publish ON track_nodes (track_directory_id, is_published, position_index)");
     } catch (Throwable $e) {}
 
-    $pdo->exec("CREATE TABLE IF NOT EXISTS revisoes (
+    $pdo->exec("CREATE TABLE IF NOT EXISTS track_user_progress (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         user_id INT UNSIGNED NOT NULL,
         track_directory_id INT UNSIGNED NOT NULL,
@@ -72,7 +72,7 @@ function ensureTrailTables(PDO $pdo): void {
         INDEX idx_track_jobs (track_directory_id, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-    $pdo->exec("CREATE TABLE IF NOT EXISTS percurso_slides (
+    $pdo->exec("CREATE TABLE IF NOT EXISTS track_node_slides (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         node_id BIGINT UNSIGNED NOT NULL,
         content_json LONGTEXT DEFAULT NULL,
@@ -81,57 +81,9 @@ function ensureTrailTables(PDO $pdo): void {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE KEY uniq_node_slide (node_id),
-        CONSTRAINT fk_percurso_slides_node FOREIGN KEY (node_id) REFERENCES percursos(id) ON DELETE CASCADE,
-        CONSTRAINT fk_percurso_slides_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+        CONSTRAINT fk_track_node_slides_node FOREIGN KEY (node_id) REFERENCES track_nodes(id) ON DELETE CASCADE,
+        CONSTRAINT fk_track_node_slides_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
-    // Migração de esquema legado:
-    // - track_nodes -> percursos (compartilhado entre usuários)
-    // - track_user_progress -> revisoes (individual por usuário)
-    // - track_node_slides -> percurso_slides
-    $legacyNodesExists = (bool)$pdo->query("SHOW TABLES LIKE 'track_nodes'")->fetchColumn();
-    if ($legacyNodesExists) {
-        $legacyCount = (int)$pdo->query("SELECT COUNT(*) FROM track_nodes")->fetchColumn();
-        $newCount = (int)$pdo->query("SELECT COUNT(*) FROM percursos")->fetchColumn();
-        if ($legacyCount > 0 && $newCount === 0) {
-            $pdo->exec("INSERT IGNORE INTO percursos (
-                id, track_directory_id, position_index, map_number, phase_number, title, objective,
-                questions_json, prerequisite_positions_json, source, is_published, created_at, updated_at, published_at
-            )
-            SELECT
-                id, track_directory_id, position_index, map_number, phase_number, title, objective,
-                questions_json, prerequisite_positions_json, source, is_published, created_at, updated_at, published_at
-            FROM track_nodes");
-        }
-    }
-
-    $legacyReviewsExists = (bool)$pdo->query("SHOW TABLES LIKE 'track_user_progress'")->fetchColumn();
-    if ($legacyReviewsExists) {
-        $legacyCount = (int)$pdo->query("SELECT COUNT(*) FROM track_user_progress")->fetchColumn();
-        $newCount = (int)$pdo->query("SELECT COUNT(*) FROM revisoes")->fetchColumn();
-        if ($legacyCount > 0 && $newCount === 0) {
-            $pdo->exec("INSERT IGNORE INTO revisoes (
-                id, user_id, track_directory_id, current_position, completed_positions_json, updated_at
-            )
-            SELECT
-                id, user_id, track_directory_id, current_position, completed_positions_json, updated_at
-            FROM track_user_progress");
-        }
-    }
-
-    $legacySlidesExists = (bool)$pdo->query("SHOW TABLES LIKE 'track_node_slides'")->fetchColumn();
-    if ($legacySlidesExists) {
-        $legacyCount = (int)$pdo->query("SELECT COUNT(*) FROM track_node_slides")->fetchColumn();
-        $newCount = (int)$pdo->query("SELECT COUNT(*) FROM percurso_slides")->fetchColumn();
-        if ($legacyCount > 0 && $newCount === 0) {
-            $pdo->exec("INSERT IGNORE INTO percurso_slides (
-                id, node_id, content_json, model, created_by, created_at, updated_at
-            )
-            SELECT
-                id, node_id, content_json, model, created_by, created_at, updated_at
-            FROM track_node_slides");
-        }
-    }
 }
 
 function verifyTrackOwnership(PDO $pdo, int $directory_id, int $user_id) {
@@ -327,7 +279,7 @@ if ($action === 'fetch_admin') {
     $dir = verifyTrackOwnership($pdo, $directory_id, $user_id);
     if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Trilha não encontrada.']));
 
-    $stmt = $pdo->prepare("SELECT id, position_index, map_number, phase_number, title, objective, questions_json, prerequisite_positions_json, source, is_published FROM percursos WHERE track_directory_id = ? ORDER BY position_index ASC");
+    $stmt = $pdo->prepare("SELECT id, position_index, map_number, phase_number, title, objective, questions_json, prerequisite_positions_json, source, is_published FROM track_nodes WHERE track_directory_id = ? ORDER BY position_index ASC");
     $stmt->execute([$directory_id]);
     $nodes = [];
     $pending = 0;
@@ -356,7 +308,7 @@ elseif ($action === 'generate_batch') {
     if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Trilha não encontrada.']));
 
     $subject = Security::decryptData($dir['name_encrypted']);
-    $stmtExisting = $pdo->prepare("SELECT position_index, title FROM percursos WHERE track_directory_id = ? ORDER BY position_index ASC");
+    $stmtExisting = $pdo->prepare("SELECT position_index, title FROM track_nodes WHERE track_directory_id = ? ORDER BY position_index ASC");
     $stmtExisting->execute([$directory_id]);
     $existing = $stmtExisting->fetchAll();
     $existingTitles = array_map(fn($r) => (string)$r['title'], $existing);
@@ -366,7 +318,7 @@ elseif ($action === 'generate_batch') {
 
     $pdo->beginTransaction();
     try {
-        $stmtIns = $pdo->prepare("INSERT INTO percursos (track_directory_id, position_index, map_number, phase_number, title, objective, questions_json, prerequisite_positions_json, source, is_published) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)");
+        $stmtIns = $pdo->prepare("INSERT INTO track_nodes (track_directory_id, position_index, map_number, phase_number, title, objective, questions_json, prerequisite_positions_json, source, is_published) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)");
         $inserted = [];
         foreach ($generated['items'] as $offset => $item) {
             $position = $startPosition + $offset;
@@ -402,7 +354,7 @@ elseif ($action === 'publish_pending') {
     $dir = verifyTrackOwnership($pdo, $directory_id, $user_id);
     if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Trilha não encontrada.']));
 
-    $stmt = $pdo->prepare("UPDATE percursos SET is_published = 1, published_at = NOW() WHERE track_directory_id = ? AND is_published = 0");
+    $stmt = $pdo->prepare("UPDATE track_nodes SET is_published = 1, published_at = NOW() WHERE track_directory_id = ? AND is_published = 0");
     $stmt->execute([$directory_id]);
     echo json_encode(['status' => 'success', 'published' => $stmt->rowCount()]);
 }
@@ -419,7 +371,7 @@ elseif ($action === 'upsert_node') {
     if ($title === '') die(json_encode(['status' => 'error', 'message' => 'Título obrigatório.']));
 
     if ($node_id > 0) {
-        $stmt = $pdo->prepare("UPDATE percursos SET title = ?, objective = ?, questions_json = ?, prerequisite_positions_json = ?, source = 'manual', is_published = 0, published_at = NULL WHERE id = ? AND track_directory_id = ?");
+        $stmt = $pdo->prepare("UPDATE track_nodes SET title = ?, objective = ?, questions_json = ?, prerequisite_positions_json = ?, source = 'manual', is_published = 0, published_at = NULL WHERE id = ? AND track_directory_id = ?");
         $stmt->execute([$title, $objective, json_encode($questions, JSON_UNESCAPED_UNICODE), json_encode($dependsOnPositions, JSON_UNESCAPED_UNICODE), $node_id, $directory_id]);
     }
 
@@ -433,11 +385,11 @@ elseif ($action === 'delete_node') {
 
     $pdo->beginTransaction();
     try {
-        $pdo->prepare("DELETE FROM percursos WHERE id = ? AND track_directory_id = ?")->execute([$node_id, $directory_id]);
-        $stmt = $pdo->prepare("SELECT id FROM percursos WHERE track_directory_id = ? ORDER BY position_index ASC");
+        $pdo->prepare("DELETE FROM track_nodes WHERE id = ? AND track_directory_id = ?")->execute([$node_id, $directory_id]);
+        $stmt = $pdo->prepare("SELECT id FROM track_nodes WHERE track_directory_id = ? ORDER BY position_index ASC");
         $stmt->execute([$directory_id]);
         $ids = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
-        $upd = $pdo->prepare("UPDATE percursos SET position_index = ?, map_number = ?, phase_number = ? WHERE id = ?");
+        $upd = $pdo->prepare("UPDATE track_nodes SET position_index = ?, map_number = ?, phase_number = ? WHERE id = ?");
         foreach ($ids as $idx => $id) {
             $position = $idx + 1;
             $upd->execute([$position, (int)floor(($position - 1) / 10) + 1, (($position - 1) % 10) + 1, $id]);
@@ -455,12 +407,12 @@ elseif ($action === 'fetch_map') {
     $dir = verifyTrackAccess($pdo, $directory_id, $user_id);
     if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Trilha indisponível.']));
 
-    $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM percursos WHERE track_directory_id = ? AND is_published = 1");
+    $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM track_nodes WHERE track_directory_id = ? AND is_published = 1");
     $stmtCount->execute([$directory_id]);
     $totalNodes = (int)$stmtCount->fetchColumn();
     $totalMaps = max(1, (int)ceil($totalNodes / 10));
 
-    $stmtProg = $pdo->prepare("SELECT id, current_position, completed_positions_json FROM revisoes WHERE user_id = ? AND track_directory_id = ? LIMIT 1");
+    $stmtProg = $pdo->prepare("SELECT id, current_position, completed_positions_json FROM track_user_progress WHERE user_id = ? AND track_directory_id = ? LIMIT 1");
     $stmtProg->execute([$user_id, $directory_id]);
     $prog = $stmtProg->fetch();
     $currentPosition = $prog ? max(1, (int)$prog['current_position']) : 1;
@@ -473,7 +425,7 @@ elseif ($action === 'fetch_map') {
 
     $offsetStart = (($activeMap - 1) * 10) + 1;
     $offsetEnd = $offsetStart + 9;
-    $stmtNodes = $pdo->prepare("SELECT n.id, n.position_index, n.map_number, n.phase_number, n.title, n.objective, n.questions_json, n.prerequisite_positions_json, (s.id IS NOT NULL) AS has_slide FROM percursos n LEFT JOIN percurso_slides s ON s.node_id = n.id WHERE n.track_directory_id = ? AND n.is_published = 1 AND n.position_index BETWEEN ? AND ? ORDER BY n.position_index ASC");
+    $stmtNodes = $pdo->prepare("SELECT n.id, n.position_index, n.map_number, n.phase_number, n.title, n.objective, n.questions_json, n.prerequisite_positions_json, (s.id IS NOT NULL) AS has_slide FROM track_nodes n LEFT JOIN track_node_slides s ON s.node_id = n.id WHERE n.track_directory_id = ? AND n.is_published = 1 AND n.position_index BETWEEN ? AND ? ORDER BY n.position_index ASC");
     $stmtNodes->execute([$directory_id, $offsetStart, $offsetEnd]);
 
     $nodes = [];
@@ -512,13 +464,13 @@ elseif ($action === 'fetch_phase') {
     if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Trilha indisponível.']));
 
     $owner = (int)$dir['user_id'] === $user_id;
-    $stmt = $pdo->prepare("SELECT id, position_index, map_number, phase_number, title, objective, questions_json, prerequisite_positions_json, is_published FROM percursos WHERE id = ? AND track_directory_id = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, position_index, map_number, phase_number, title, objective, questions_json, prerequisite_positions_json, is_published FROM track_nodes WHERE id = ? AND track_directory_id = ? LIMIT 1");
     $stmt->execute([$node_id, $directory_id]);
     $node = $stmt->fetch();
     if (!$node) die(json_encode(['status' => 'error', 'message' => 'Fase não encontrada.']));
     if (!$owner && (int)$node['is_published'] !== 1) die(json_encode(['status' => 'error', 'message' => 'Fase ainda não publicada.']));
 
-    $slideStmt = $pdo->prepare("SELECT content_json FROM percurso_slides WHERE node_id = ? LIMIT 1");
+    $slideStmt = $pdo->prepare("SELECT content_json FROM track_node_slides WHERE node_id = ? LIMIT 1");
     $slideStmt->execute([$node_id]);
     $slide = $slideStmt->fetchColumn();
     $slides = json_decode((string)$slide, true);
@@ -548,7 +500,7 @@ elseif ($action === 'generate_phase_content') {
     $dir = verifyTrackOwnership($pdo, $directory_id, $user_id);
     if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Sem permissão para gerar conteúdo.']));
 
-    $stmt = $pdo->prepare("SELECT id, title, objective FROM percursos WHERE id = ? AND track_directory_id = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, title, objective FROM track_nodes WHERE id = ? AND track_directory_id = ? LIMIT 1");
     $stmt->execute([$node_id, $directory_id]);
     $node = $stmt->fetch();
     if (!$node) die(json_encode(['status' => 'error', 'message' => 'Fase não encontrada.']));
@@ -556,7 +508,7 @@ elseif ($action === 'generate_phase_content') {
     $subject = Security::decryptData($dir['name_encrypted']);
     $generated = generateSlidesWithGPT($subject, (string)$node['title'], (string)($node['objective'] ?? ''));
 
-    $upsert = $pdo->prepare("INSERT INTO percurso_slides (node_id, content_json, model, created_by) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE content_json = VALUES(content_json), model = VALUES(model), created_by = VALUES(created_by)");
+    $upsert = $pdo->prepare("INSERT INTO track_node_slides (node_id, content_json, model, created_by) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE content_json = VALUES(content_json), model = VALUES(model), created_by = VALUES(created_by)");
     $upsert->execute([$node_id, json_encode($generated['slides'], JSON_UNESCAPED_UNICODE), $generated['model'], $user_id]);
 
     echo json_encode(['status' => 'success', 'slides' => $generated['slides'], 'model' => $generated['model']]);
@@ -581,7 +533,7 @@ elseif ($action === 'save_phase_content') {
     }
     if (!$norm) die(json_encode(['status' => 'error', 'message' => 'Envie ao menos 1 slide válido.']));
 
-    $upsert = $pdo->prepare("INSERT INTO percurso_slides (node_id, content_json, model, created_by) VALUES (?, ?, 'manual', ?) ON DUPLICATE KEY UPDATE content_json = VALUES(content_json), model = 'manual', created_by = VALUES(created_by)");
+    $upsert = $pdo->prepare("INSERT INTO track_node_slides (node_id, content_json, model, created_by) VALUES (?, ?, 'manual', ?) ON DUPLICATE KEY UPDATE content_json = VALUES(content_json), model = 'manual', created_by = VALUES(created_by)");
     $upsert->execute([$node_id, json_encode(array_slice($norm, 0, 20), JSON_UNESCAPED_UNICODE), $user_id]);
 
     echo json_encode(['status' => 'success']);
@@ -592,7 +544,7 @@ elseif ($action === 'complete_phase') {
     $dir = verifyTrackAccess($pdo, $directory_id, $user_id);
     if (!$dir) die(json_encode(['status' => 'error', 'message' => 'Trilha indisponível.']));
 
-    $stmtNode = $pdo->prepare("SELECT position_index, prerequisite_positions_json FROM percursos WHERE id = ? AND track_directory_id = ? AND is_published = 1");
+    $stmtNode = $pdo->prepare("SELECT position_index, prerequisite_positions_json FROM track_nodes WHERE id = ? AND track_directory_id = ? AND is_published = 1");
     $stmtNode->execute([$node_id, $directory_id]);
     $nodeRow = $stmtNode->fetch();
     $nodePos = $nodeRow ? (int)$nodeRow['position_index'] : 0;
@@ -600,7 +552,7 @@ elseif ($action === 'complete_phase') {
 
     $pdo->beginTransaction();
     try {
-        $stmtProg = $pdo->prepare("SELECT id, current_position, completed_positions_json FROM revisoes WHERE user_id = ? AND track_directory_id = ? LIMIT 1 FOR UPDATE");
+        $stmtProg = $pdo->prepare("SELECT id, current_position, completed_positions_json FROM track_user_progress WHERE user_id = ? AND track_directory_id = ? LIMIT 1 FOR UPDATE");
         $stmtProg->execute([$user_id, $directory_id]);
         $prog = $stmtProg->fetch();
 
@@ -629,10 +581,10 @@ elseif ($action === 'complete_phase') {
         sort($completedOut);
 
         if ($prog) {
-            $upd = $pdo->prepare("UPDATE revisoes SET current_position = ?, completed_positions_json = ? WHERE id = ?");
+            $upd = $pdo->prepare("UPDATE track_user_progress SET current_position = ?, completed_positions_json = ? WHERE id = ?");
             $upd->execute([$currentPosition, json_encode($completedOut), $prog['id']]);
         } else {
-            $ins = $pdo->prepare("INSERT INTO revisoes (user_id, track_directory_id, current_position, completed_positions_json) VALUES (?, ?, ?, ?)");
+            $ins = $pdo->prepare("INSERT INTO track_user_progress (user_id, track_directory_id, current_position, completed_positions_json) VALUES (?, ?, ?, ?)");
             $ins->execute([$user_id, $directory_id, $currentPosition, json_encode($completedOut)]);
         }
 
