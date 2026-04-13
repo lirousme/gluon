@@ -909,9 +909,11 @@
             },
 
             formatDateTime(dateStr) {
-                const date = new Date(dateStr.replace(' ', 'T'));
+                const isoUtc = `${String(dateStr).replace(' ', 'T')}Z`;
+                const date = new Date(isoUtc);
                 if (Number.isNaN(date.getTime())) return 'breve';
                 return date.toLocaleString('pt-BR', {
+                    timeZone: 'America/Sao_Paulo',
                     day: '2-digit',
                     month: '2-digit',
                     year: 'numeric',
