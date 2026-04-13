@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gluon - Pares</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+    <header class="h-16 border-b border-slate-800 bg-slate-900/80 backdrop-blur flex items-center justify-between px-4">
+        <button id="btnVoltar" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>Voltar</span>
+        </button>
+        <h1 class="font-semibold">Pares</h1>
+        <button id="btnCriarPares" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white">
+            <i class="fa-solid fa-plus"></i>
+            <span>Criar pares</span>
+        </button>
+    </header>
+
+    <main class="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center gap-6 p-4">
+        <div id="pairInfo" class="text-sm text-slate-400"></div>
+        <div class="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 p-8 min-h-64 flex items-center justify-center shadow-2xl">
+            <p id="cardText" class="text-lg sm:text-2xl text-center whitespace-pre-wrap break-words">Carregando...</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <button id="btnAnterior" class="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700">Anterior</button>
+            <button id="btnProximo" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white">Próximo</button>
+        </div>
+    </main>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const directoryId = Number(params.get('id') || 0);
+        const cardTextEl = document.getElementById('cardText');
+        const pairInfoEl = document.getElementById('pairInfo');
+        const btnAnterior = document.getElementById('btnAnterior');
+        const btnProximo = document.getElementById('btnProximo');
+
+        const state = {
+            pairs: [],
+            pairIndex: 0,
+            cardIndex: 0
+        };
+
+        function goBack() {
+            if (window.history.length > 1) {
+                window.history.back();
+                return;
+            }
+            window.location.href = `/dashboard?id=${directoryId}`;
+        }
+
+        function getCurrentPair() {
+            return state.pairs[state.pairIndex] || null;
+        }
+
+        function render() {
+            const pair = getCurrentPair();
+            if (!pair) {
+                cardTextEl.textContent = 'Nenhum par encontrado para este diretório.';
+                pairInfoEl.textContent = '';
+                btnAnterior.disabled = true;
+                btnProximo.disabled = true;
+                btnAnterior.classList.add('opacity-50', 'cursor-not-allowed');
+                btnProximo.classList.add('opacity-50', 'cursor-not-allowed');
+                return;
+            }
+
+            const currentCard = state.cardIndex === 0 ? pair.card_um : pair.card_dois;
+            cardTextEl.textContent = currentCard?.texto || 'Card sem texto.';
+            pairInfoEl.textContent = `Par ${state.pairIndex + 1} de ${state.pairs.length} · Card ${state.cardIndex + 1} de 2`;
+
+            btnAnterior.disabled = state.cardIndex === 0 && state.pairIndex === 0;
+            btnAnterior.classList.toggle('opacity-50', btnAnterior.disabled);
+            btnAnterior.classList.toggle('cursor-not-allowed', btnAnterior.disabled);
+
+            btnProximo.textContent = state.cardIndex === 1 ? 'Concluir' : 'Próximo';
+        }
+
+        async function loadPairs() {
+            if (!directoryId) {
+                cardTextEl.textContent = 'ID do diretório inválido.';
+                btnAnterior.disabled = true;
+                btnProximo.disabled = true;
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/pares?id_diretorio=${directoryId}`);
+                const data = await response.json();
+                if (data.status !== 'success') {
+                    throw new Error(data.message || 'Falha ao carregar pares.');
+                }
+                state.pairs = Array.isArray(data.data) ? data.data : [];
+                render();
+            } catch (error) {
+                cardTextEl.textContent = error.message || 'Erro ao carregar pares.';
+                btnAnterior.disabled = true;
+                btnProximo.disabled = true;
+            }
+        }
+
+        async function concluirParAtual() {
+            const pair = getCurrentPair();
+            if (!pair) return;
+
+            const response = await fetch('/api/pares', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'concluir_revisao', id_par: pair.id })
+            });
+            const data = await response.json();
+            if (data.status !== 'success') {
+                throw new Error(data.message || 'Falha ao concluir revisão.');
+            }
+
+            if (state.pairIndex < state.pairs.length - 1) {
+                state.pairIndex += 1;
+                state.cardIndex = 0;
+                render();
+                return;
+            }
+
+            cardTextEl.textContent = 'Você concluiu todos os pares deste diretório 🎉';
+            pairInfoEl.textContent = `Total revisado: ${state.pairs.length}`;
+            btnAnterior.disabled = true;
+            btnProximo.disabled = true;
+            btnAnterior.classList.add('opacity-50', 'cursor-not-allowed');
+            btnProximo.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+
+        btnAnterior.addEventListener('click', () => {
+            if (state.cardIndex === 1) {
+                state.cardIndex = 0;
+            } else if (state.pairIndex > 0) {
+                state.pairIndex -= 1;
+                state.cardIndex = 1;
+            }
+            render();
+        });
+
+        btnProximo.addEventListener('click', async () => {
+            try {
+                if (state.cardIndex === 0) {
+                    state.cardIndex = 1;
+                    render();
+                    return;
+                }
+                await concluirParAtual();
+            } catch (error) {
+                alert(error.message || 'Erro ao concluir revisão.');
+            }
+        });
+
+        document.getElementById('btnVoltar').addEventListener('click', goBack);
+        document.getElementById('btnCriarPares').addEventListener('click', () => {
+            window.location.href = `/criar_pares?id=${directoryId}`;
+        });
+
+        loadPairs();
+    </script>
+</body>
+</html>
