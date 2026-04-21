@@ -772,6 +772,7 @@
 
             async api(action, payload = {}) {
                 payload.action = action;
+                const shouldLogReviewResult = action === 'update_score' || action === 'increment_book_score';
                 try {
                     const res = await fetch(`/api/flashcards`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     
@@ -782,8 +783,22 @@
                     
                     const data = await res.json();
                     if (data.status !== 'success') throw new Error(data.message);
+                    if (shouldLogReviewResult) {
+                        console.log('[Flashcards][Review API] Resposta recebida:', {
+                            action,
+                            payload,
+                            response: data
+                        });
+                    }
                     return data;
                 } catch (err) {
+                    if (shouldLogReviewResult) {
+                        console.error('[Flashcards][Review API] Falha ao marcar revisão:', {
+                            action,
+                            payload,
+                            error: err
+                        });
+                    }
                     console.error(err);
                     this.showToast(err.message || 'Erro de conexão.', 'error');
                     return null;
