@@ -1727,21 +1727,10 @@
 
             registerScore(card) {
                 if (card.score >= 20 || this.scoredThisSession.has(card.id)) return Promise.resolve();
-                
-                const expireTime = localStorage.getItem(`gluon_card_expire_${card.id}`);
-                const now = new Date().getTime();
-                
-                if (expireTime && now < parseInt(expireTime)) {
-                    this.scoredThisSession.add(card.id);
-                    return Promise.resolve(); 
-                }
-                
+
                 this.scoredThisSession.add(card.id);
                 
                 const nextScore = Math.min(card.score + 1, 20);
-                const nextExpire = now + (nextScore * 24 * 60 * 60 * 1000);
-                localStorage.setItem(`gluon_card_expire_${card.id}`, nextExpire.toString());
-                
                 card.score = nextScore;
                 
                 const maxPossible = this.totalCardsInDeck * 20;
