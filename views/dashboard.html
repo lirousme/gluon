@@ -1187,14 +1187,17 @@
                 this.state.path[0].name = this.getProfileRootName();
 
                 const entryId = startId || (!profileUser && preferredHomeId ? String(preferredHomeId) : null);
+                const entryFromUrl = Boolean(startId);
 
                 if (entryId) {
                     const pathRes = await this.api('directories', 'get_path', { id: entryId, target_user_id: this.state.profileUserId || undefined });
                     if (pathRes && pathRes.status === 'success' && pathRes.data.length > 0) {
                         const targetDir = pathRes.data[pathRes.data.length - 1];
 
+                        const isSeparatePairsModule = targetDir.type === 2;
+                        const canAutoNavigateToTarget = entryFromUrl || !isSeparatePairsModule;
                         const resolvedOpenMode = targetDir.open_mode === 'preview' ? 'preview' : 'fullscreen';
-                        if (!isEmbeddedPreview && !this.isVisitingProfile() && this.navigateToItemView(targetDir.type, targetDir.id, resolvedOpenMode, targetDir)) {
+                        if (canAutoNavigateToTarget && !isEmbeddedPreview && !this.isVisitingProfile() && this.navigateToItemView(targetDir.type, targetDir.id, resolvedOpenMode, targetDir)) {
                             return;
                         }
 
