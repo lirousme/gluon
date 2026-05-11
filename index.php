@@ -86,6 +86,14 @@ if ($route === '') {
 // Segurança: Impede manipulação de caminhos na inclusão das views
 $route = str_replace(['../', '..\\'], '', $route);
 
+// Visitantes não autenticados só podem acessar a tela de login.
+// Evita cair em rotas de módulos isolados (ex: /pares) antes da autenticação.
+$public_routes = ['login'];
+if (!isset($_SESSION['user_id']) && !in_array($route, $public_routes, true)) {
+    header('Location: /login');
+    exit;
+}
+
 $admin_routes = ['adm', 'configuracao-tts', 'topicos', 'materia'];
 if (in_array($route, $admin_routes, true) && (!isset($_SESSION['user_id']) || (int)$_SESSION['user_id'] !== 1)) {
     http_response_code(403);
