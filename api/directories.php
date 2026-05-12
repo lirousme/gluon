@@ -24,6 +24,7 @@ if (!isset($_SESSION['user_id'])) {
 
 $pdo = Database::getConnection();
 $user_id = $_SESSION['user_id'];
+ensureLegacyDirectoryTypesCleanup($pdo, $user_id);
 $method = $_SERVER['REQUEST_METHOD'];
 
 // Captura do input via JSON
@@ -263,7 +264,7 @@ function normalizeDeckStructureForDirectory($value, $default = 'fatos') {
 }
 
 function normalizeChildDefaultType($value, $default = 0) {
-    $allowed = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    $allowed = [0, 1, 2, 4];
     $type = (int)$value;
     return in_array($type, $allowed, true) ? $type : (int)$default;
 }
@@ -277,38 +278,28 @@ function getDirectoryTypeById(PDO $pdo, int $user_id, ?int $directory_id): ?int 
     return (int)$row['type'];
 }
 
-function getAllowedChildTypesForParentType(?int $parentType): ?array {
-    // null = sem restrição adicional
-    if ($parentType === null) return null;
-    if ($parentType === 8) return [10];  // Trilha (matéria) aceita apenas Fase (sub-matéria)
-    if ($parentType === 9) return [10];  // Compat legado: Mapa antigo ainda aceita Fase
-    return null;
-}
-
 function validateDirectoryHierarchy(PDO $pdo, int $user_id, ?int $parent_id, int $type): ?string {
     $parentType = getDirectoryTypeById($pdo, $user_id, $parent_id);
     if ($parent_id !== null && $parentType === null) {
         return 'Diretório pai inválido.';
     }
 
-    // Mapa não é mais criado manualmente pelo usuário.
-    if ($type === 9) {
-        return 'Mapas são automáticos no modo jogo e não podem mais ser criados manualmente.';
-    }
-
-    // Fase só pode ser criada dentro de Trilha (novo) ou Mapa (legado).
-    if ($type === 10 && !in_array($parentType, [8, 9], true)) {
-        return 'Diretórios do tipo Fase só podem ser criados dentro de uma Trilha.';
-    }
-
-    // Trilha e Mapa possuem restrição rígida de filhos
-    $allowedChildren = getAllowedChildTypesForParentType($parentType);
-    if (is_array($allowedChildren) && !in_array($type, $allowedChildren, true)) {
-        if ($parentType === 8) return 'Dentro de uma Trilha só é permitido criar diretórios do tipo Fase.';
-        if ($parentType === 9) return 'Dentro de um Mapa só é permitido criar diretórios do tipo Fase.';
-    }
+    if (!in_array($type, [0, 1, 2, 4], true)) return 'Tipo de diretório não suportado.';
 
     return null;
+}
+
+function ensureLegacyDirectoryTypesCleanup(PDO $pdo, int $user_id): void {
+    static $alreadyRan = false;
+    if ($alreadyRan) return;
+    $alreadyRan = true;
+
+    $stmt = $pdo->prepare("DELETE FROM directories WHERE user_id = ? AND type IN (3,5,6,7,8,9,10)");
+    $stmt->execute([$user_id]);
+
+    foreach (['adjacency_items', 'conditional_items', 'plano_meta', 'track_node_slides', 'track_generation_jobs', 'track_user_progress', 'track_nodes'] as $table) {
+        try { $pdo->exec("DROP TABLE IF EXISTS {$table}"); } catch (Throwable $e) {}
+    }
 }
 
 function normalizeChildDefaultView($value, $default = 'grid') {
@@ -656,11 +647,6 @@ elseif ($action === 'create') {
     $default_icon = 'fa-folder';
     if($type === 1) $default_icon = 'fa-file-code';
     if($type === 2) $default_icon = 'fa-calendar-days';
-    if($type === 5) $default_icon = 'fa-list-check';
-    if($type === 6) $default_icon = 'fa-code-branch';
-    if($type === 8) $default_icon = 'fa-map-location-dot';
-    if($type === 9) $default_icon = 'fa-map';
-    if($type === 10) $default_icon = 'fa-layer-group';
 
     $icon = preg_match('/^fa-[a-z0-9-]+$/', $input['icon'] ?? '') ? $input['icon'] : $default_icon;
     $color_from = preg_match('/^#[a-fA-F0-9]{6}$/', $input['color_from'] ?? '') ? $input['color_from'] : '#3b82f6';
@@ -718,9 +704,6 @@ elseif ($action === 'create') {
             [$deck_front_language, $deck_back_language, $deck_structure] = getFolderDeckPresetForParentChain($pdo, $user_id, $parent_id);
         }
 
-        if ($type === 10) {
-            $deck_structure = 'traducoes';
-        }
 
         $newOrder = getSortOrderForNewSibling($pdo, $user_id, $parent_id, $parentPref);
 
