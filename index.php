@@ -11,6 +11,8 @@
 
 // Inicia sessão segura e persistente (permanece logado até logout manual)
 $persistent_session_lifetime = 60 * 60 * 24 * 365 * 10; // 10 anos
+// Evita colisão de sessão com outros sistemas no mesmo domínio (ex.: /pares)
+session_name('GLUONSESSID');
 session_start([
     'cookie_httponly' => true, // Previne roubo de sessão via XSS
     'cookie_secure' => isset($_SERVER['HTTPS']), // Apenas HTTPS se disponível
