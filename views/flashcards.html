@@ -631,7 +631,7 @@
             deckPercentage: 0,
             totalCardsInDeck: 0,
             bookCompletedReads: 0,
-            bookCompletedReadsMax: 3,
+            bookCompletedReadsMax: 10,
             bookNextReviewAt: null,
             randomNextReviewAt: null,
             cards: [],
@@ -868,8 +868,8 @@
                     this.cards = res.data || [];
                     this.deckPercentage = res.deck_percentage || 0;
                     this.totalCardsInDeck = res.total_cards || 0;
-                    this.bookCompletedReads = Math.max(0, Math.min(res.book_completed_reads || 0, 3));
-                    this.bookCompletedReadsMax = res.book_completed_reads_max || 3;
+                    this.bookCompletedReads = Math.max(0, Math.min(res.book_completed_reads || 0, 10));
+                    this.bookCompletedReadsMax = res.book_completed_reads_max || 10;
                     this.bookNextReviewAt = res.book_next_review_at || null;
                     this.randomNextReviewAt = res.random_next_review_at || null;
                     this.currentIndex = res.current_index || 0;
