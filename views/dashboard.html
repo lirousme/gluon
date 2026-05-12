@@ -3263,6 +3263,7 @@
                 
                 if(response) { 
                     this.closeModal(); 
+                    this.state.kanbanChildCache.clear();
                     const pathIndex = this.state.path.findIndex(step => String(step.id) === String(id));
                     if (pathIndex !== -1) { await this.goUpTo(pathIndex - 1); } 
                     else { await this.fetchDirectories(); }
