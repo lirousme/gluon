@@ -3080,6 +3080,7 @@
                 }
 
                 this.closeBatchPhaseModal();
+                this.state.kanbanChildCache.clear();
                 await this.fetchDirectories();
                 const total = names.length;
                 const failed = total - successCount;
@@ -3207,6 +3208,7 @@
 
                 if (response) { 
                     this.closeModal(); 
+                    this.state.kanbanChildCache.clear();
                     await this.fetchDirectories(); 
                 } else {
                     btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar'; 
