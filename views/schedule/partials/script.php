@@ -2216,14 +2216,6 @@
                     folderSettings.style.display = 'none';
                     nameLabel.innerText = 'Nome do Deck de Flashcards';
                     this.autoChangeIcon('fa-layer-group');
-                } else if (typeValue === 7) {
-                    folderSettings.style.display = 'none';
-                    nameLabel.innerText = 'Nome do Plano';
-                    this.autoChangeIcon('fa-list-ol');
-                } else if (typeValue === 8) {
-                    folderSettings.style.display = 'none';
-                    nameLabel.innerText = 'Nome da Trilha';
-                    this.autoChangeIcon('fa-location-dot');
                 }
 
                 if (taskTagsContainer) {

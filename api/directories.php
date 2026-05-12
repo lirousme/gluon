@@ -297,7 +297,7 @@ function ensureLegacyDirectoryTypesCleanup(PDO $pdo, int $user_id): void {
     $stmt = $pdo->prepare("DELETE FROM directories WHERE user_id = ? AND type IN (3,5,6,7,8,9,10)");
     $stmt->execute([$user_id]);
 
-    foreach (['adjacency_items', 'conditional_items', 'plano_meta', 'track_node_slides', 'track_generation_jobs', 'track_user_progress', 'track_nodes'] as $table) {
+    foreach (['adjacency_items', 'conditional_items', 'plano_meta', 'track_node_slides', 'track_generation_jobs', 'track_user_progress', 'track_nodes', 'track_node_links', 'map_nodes', 'map_edges'] as $table) {
         try { $pdo->exec("DROP TABLE IF EXISTS {$table}"); } catch (Throwable $e) {}
     }
 }
