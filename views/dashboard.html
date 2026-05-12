@@ -1045,8 +1045,7 @@
             },
 
             buildViewUrl(view, id, extraParams = {}) {
-                const from = encodeURIComponent(this.getCurrentRoute());
-                const params = new URLSearchParams({ id: String(id), from });
+                const params = new URLSearchParams({ id: String(id), from: this.getCurrentRoute() });
                 Object.entries(extraParams || {}).forEach(([key, value]) => {
                     if (value !== null && value !== undefined && value !== '') {
                         params.set(key, String(value));
@@ -1060,7 +1059,7 @@
             },
 
             openItemPreviewModal(item, forcedView = null, forcedId = null) {
-                const viewByType = { 1: 'editor', 2: 'pares', 4: 'flashcards', 5: 'adjacency', 6: 'sistema_de_condicionais', 7: 'plano', 10: 'flashcards' };
+                const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 6: 'sistema_de_condicionais', 7: 'plano', 10: 'flashcards' };
                 const targetType = forcedView ? null : Number(item?.type);
                 const targetView = forcedView || viewByType[targetType] || 'dashboard';
                 const targetId = forcedId || item?.id;
@@ -1107,7 +1106,7 @@
             },
 
             navigateToItemView(type, id, openMode = 'fullscreen', item = null) {
-                const viewByType = { 1: 'editor', 2: 'pares', 4: 'flashcards', 5: 'adjacency', 6: 'sistema_de_condicionais', 7: 'plano', 10: 'flashcards' };
+                const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency', 6: 'sistema_de_condicionais', 7: 'plano', 10: 'flashcards' };
                 if (openMode === 'preview') {
                     return this.openItemPreviewModal(item || { id, type });
                 }

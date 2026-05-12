@@ -612,12 +612,12 @@
             },
 
             buildViewUrl(view, id) {
-                const from = encodeURIComponent(this.getCurrentRoute());
-                return `/${view}?id=${id}&from=${from}`;
+                const params = new URLSearchParams({ id: String(id), from: this.getCurrentRoute() });
+                return `/${view}?${params.toString()}`;
             },
 
             navigateToItemView(type, id) {
-                const viewByType = { 1: 'editor', 2: 'pares', 4: 'flashcards', 5: 'adjacency' };
+                const viewByType = { 1: 'editor', 2: 'schedule', 4: 'flashcards', 5: 'adjacency' };
                 const targetView = viewByType[type];
                 if (!targetView) return false;
                 window.location.href = this.buildViewUrl(targetView, id);
