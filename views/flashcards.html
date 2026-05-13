@@ -267,6 +267,13 @@
             <span id="cardCounter" class="bg-slate-800 text-slate-400 font-medium px-4 py-1.5 rounded-full text-sm border border-slate-700 shadow-sm">
                 0 / 0
             </span>
+            <label class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700" title="Repetir áudio do card até 108 vezes">
+                <i class="fa-solid fa-repeat text-slate-400 text-xs" id="repeatAudioIcon"></i>
+                <div class="relative inline-block w-8 h-4 rounded-full bg-slate-600">
+                    <input type="checkbox" id="repeatAudioToggle" class="peer hidden" onchange="flashcardApp.toggleRepeatAudio()">
+                    <span class="absolute left-1 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4 peer-checked:bg-violet-400"></span>
+                </div>
+            </label>
             
             <label class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700" title="Reproduzir áudio automaticamente">
                 <i class="fa-solid fa-volume-high text-slate-400 text-xs" id="autoPlayIcon"></i>
@@ -342,10 +349,9 @@
             <button onclick="flashcardApp.prevCard()" id="btnPrev" class="w-14 h-14 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center text-xl shadow-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed">
                 <i class="fa-solid fa-arrow-left"></i>
             </button>
-            <button onclick="flashcardApp.syncBackPhraseDictionary()" id="btnSyncBackDictionary" class="h-11 px-3 rounded-full bg-violet-600/90 hover:bg-violet-500 text-white border border-violet-300/40 shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-xs sm:text-sm font-medium" title="Enviar verso para o GPT e sincronizar o dicionário da pasta 6223">
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                <span class="hidden sm:inline">Sincronizar Dicionário</span>
-                <span class="sm:hidden">Sync</span>
+            <button id="btnRepeatCounter" class="hidden h-11 px-3 rounded-full bg-violet-600/90 text-white border border-violet-300/40 shadow-lg transition-all flex items-center gap-2 text-xs sm:text-sm font-medium" title="Repetição automática de áudio">
+                <i class="fa-solid fa-repeat"></i>
+                <span id="repeatCounterLabel">108 restantes</span>
             </button>
             <button onclick="flashcardApp.nextCard()" id="btnNext" class="w-14 h-14 rounded-full bg-gluon-primary hover:bg-blue-600 text-white flex items-center justify-center text-xl shadow-lg shadow-blue-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
                 <i class="fa-solid fa-arrow-right"></i>
@@ -644,9 +650,10 @@
             isFlipped: false,
             scoredThisSession: new Set(),
             isRightPanelOpen: false,
-            isSyncingBackDictionary: false,
-            
             autoPlayEnabled: false,
+            repeatAudioEnabled: false,
+            repeatAudioTotal: 108,
+            repeatAudioRemaining: 108,
             autoFlowEnabled: false,
             currentAudioElement: null,
             currentAudioEndedHandler: null,
@@ -685,6 +692,13 @@
                     document.getElementById('autoFlowToggle').checked = true;
                     document.getElementById('autoFlowIcon').classList.replace('text-slate-400', 'text-emerald-400');
                 }
+                const savedRepeatAudio = localStorage.getItem('gluon_repeat_audio');
+                if(savedRepeatAudio === 'true') {
+                    this.repeatAudioEnabled = true;
+                    document.getElementById('repeatAudioToggle').checked = true;
+                    document.getElementById('repeatAudioIcon').classList.replace('text-slate-400', 'text-violet-400');
+                }
+                this.updateRepeatCounterUI();
 
                 this.setupKeyboardListeners();
                 this.setupBulkListener();
@@ -810,41 +824,27 @@
                 }
             },
 
-            async syncBackPhraseDictionary() {
-                if (this.isSyncingBackDictionary) return;
-                const card = this.cards[this.currentIndex] || null;
-                const backText = (card?.back || '').trim();
+            updateRepeatCounterUI() {
+                const btn = document.getElementById('btnRepeatCounter');
+                const label = document.getElementById('repeatCounterLabel');
+                if (label) label.textContent = `${Math.max(0, this.repeatAudioRemaining)} restantes`;
+                if (!btn) return;
+                if (this.repeatAudioEnabled) btn.classList.remove('hidden');
+                else btn.classList.add('hidden');
+            },
 
-                if (!backText) {
-                    this.showToast('Este card não possui texto no verso para sincronizar.', 'error');
-                    return;
-                }
-
-                const btn = document.getElementById('btnSyncBackDictionary');
-                this.isSyncingBackDictionary = true;
-                if (btn) {
-                    btn.disabled = true;
-                    btn.classList.add('opacity-60');
-                }
-
-                try {
-                    const res = await this.api('sync_back_phrase_dictionary', {
-                        text: backText,
-                        dictionary_parent_id: 6223
-                    });
-
-                    if (!res) return;
-
-                    const created = Number(res.created_count || 0);
-                    const total = Number(res.candidate_count || 0);
-                    const skipped = Number(res.skipped_count || 0);
-                    this.showToast(`Sync concluído: ${created} criados, ${skipped} já existiam (${total} candidatos).`, 'success');
-                } finally {
-                    this.isSyncingBackDictionary = false;
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.classList.remove('opacity-60');
-                    }
+            toggleRepeatAudio() {
+                this.repeatAudioEnabled = document.getElementById('repeatAudioToggle').checked;
+                const icon = document.getElementById('repeatAudioIcon');
+                localStorage.setItem('gluon_repeat_audio', this.repeatAudioEnabled);
+                this.repeatAudioRemaining = this.repeatAudioTotal;
+                this.updateRepeatCounterUI();
+                if (this.repeatAudioEnabled) {
+                    icon.classList.replace('text-slate-400', 'text-violet-400');
+                    this.handleAutoPlaybackAndFlow();
+                } else {
+                    icon.classList.replace('text-violet-400', 'text-slate-400');
+                    if (!this.autoPlayEnabled && !this.autoFlowEnabled) this.stopAudio();
                 }
             },
 
@@ -1363,7 +1363,7 @@
                     this.handleAutoPlaybackAndFlow();
                 } else {
                     icon.classList.replace('text-gluon-primary', 'text-slate-400');
-                    if (!this.autoFlowEnabled) this.stopAudio();
+                    if (!this.autoFlowEnabled && !this.repeatAudioEnabled) this.stopAudio();
                 }
             },
 
@@ -1426,6 +1426,37 @@
                         this.nextCard();
                     }
                 };
+
+                if (this.repeatAudioEnabled && hasAudio) {
+                    if (this.repeatAudioRemaining <= 0) {
+                        this.repeatAudioEnabled = false;
+                        const toggle = document.getElementById('repeatAudioToggle');
+                        if (toggle) toggle.checked = false;
+                        localStorage.setItem('gluon_repeat_audio', 'false');
+                        const icon = document.getElementById('repeatAudioIcon');
+                        if (icon) icon.classList.replace('text-violet-400', 'text-slate-400');
+                        this.updateRepeatCounterUI();
+                        return;
+                    }
+                    const repeatPlayback = () => {
+                        if (!this.repeatAudioEnabled) return;
+                        this.repeatAudioRemaining = Math.max(0, this.repeatAudioRemaining - 1);
+                        this.updateRepeatCounterUI();
+                        if (this.repeatAudioRemaining > 0) {
+                            this.playCardAudio(card.id, side, repeatPlayback);
+                        } else {
+                            this.repeatAudioEnabled = false;
+                            const toggle = document.getElementById('repeatAudioToggle');
+                            if (toggle) toggle.checked = false;
+                            localStorage.setItem('gluon_repeat_audio', 'false');
+                            const icon = document.getElementById('repeatAudioIcon');
+                            if (icon) icon.classList.replace('text-violet-400', 'text-slate-400');
+                            this.updateRepeatCounterUI();
+                        }
+                    };
+                    this.playCardAudio(card.id, side, repeatPlayback);
+                    return;
+                }
 
                 if (hasAudio && (this.autoPlayEnabled || this.autoFlowEnabled)) {
                     if (this.autoFlowEnabled) {
