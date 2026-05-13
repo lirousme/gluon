@@ -997,17 +997,18 @@
             handleTimelineClick(e) {
                 if (e.target.closest('.event-card') || this.wasDragged || this.isDragging || this.isResizing) return;
 
-                const containerRect = document.getElementById('timelineScroll').getBoundingClientRect();
-                const clickY = e.clientY - containerRect.top + document.getElementById('timelineScroll').scrollTop;
-                
-                const snappedY = Math.floor(clickY / 30) * 30; 
+                const dayGrid = e.target.closest('.timeline-day-grid');
+                const dayScroll = e.target.closest('.timeline-day-scroll');
+                if (!dayGrid || !dayScroll) return;
+
+                const containerRect = dayScroll.getBoundingClientRect();
+                const clickY = e.clientY - containerRect.top + dayScroll.scrollTop;
+
+                const snappedY = Math.floor(clickY / 30) * 30;
                 const hours = Math.floor(snappedY / 60);
                 const minutes = snappedY % 60;
 
-                const y = this.currentDateObj.getFullYear();
-                const m = String(this.currentDateObj.getMonth() + 1).padStart(2, '0');
-                const d = String(this.currentDateObj.getDate()).padStart(2, '0');
-                const baseDate = `${y}-${m}-${d}`;
+                const baseDate = dayGrid.getAttribute('data-date') || this.getLocalYYYYMMDD(this.currentDateObj);
 
                 const startObj = new Date(`${baseDate}T${hours.toString().padStart(2,'0')}:${minutes.toString().padStart(2,'0')}:00`);
                 const endObj = new Date(startObj.getTime() + 60*60000); 
@@ -1153,34 +1154,36 @@
                 const timelineDays = Math.max(1, Number(this.state.timelineDays) || 1);
                 const dates = this.getDatesArray(this.currentDateObj, timelineDays);
                 const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-                let labelsHTML = '';
-                for(let i=0; i<24; i++) {
-                    labelsHTML += `<div class="absolute w-full text-right pr-2 text-xs text-slate-500 font-medium" style="top: ${i*60 - 8}px">${i.toString().padStart(2, '0')}:00</div>`;
-                }
-                let dayHeaders = '';
-                let columnGuides = '';
-                let columnBackgrounds = '';
-                dates.forEach((dateObj, index) => {
+
+                let html = `<div id="timelineColumnsWrapper" class="flex-1 overflow-x-auto overflow-y-hidden no-scrollbar p-4 pb-20"><div class="flex gap-4 min-w-max h-full">`;
+
+                dates.forEach((dateObj) => {
+                    const dateStr = this.getLocalYYYYMMDD(dateObj);
                     const dayLabel = `${dayNames[dateObj.getDay()]}, ${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-                    const leftPercent = (index / timelineDays) * 100;
-                    const widthPercent = 100 / timelineDays;
-                    dayHeaders += `<div class="absolute top-0 h-9 px-2 flex items-center justify-center text-xs font-semibold text-slate-300 border-r border-slate-700/60 bg-slate-900/80" style="left:${leftPercent}%; width:${widthPercent}%;">${dayLabel}</div>`;
-                    columnBackgrounds += `<div class="absolute top-9 bottom-0 bg-slate-900/20" style="left: calc(50px + (${leftPercent}% * (100% - 50px))); width: calc(${widthPercent}% * (100% - 50px));"></div>`;
-                    if (index > 0) {
-                        columnGuides += `<div class="absolute top-0 bottom-0 border-l border-slate-700/60 z-[1]" style="left: calc(50px + (${leftPercent}% * (100% - 50px)));"></div>`;
+                    const isToday = dateStr === this.getLocalYYYYMMDD(new Date());
+                    const headerClass = isToday ? 'text-gluon-primary font-bold' : 'text-slate-300 font-semibold';
+
+                    let hourRows = '';
+                    for (let i = 0; i < 24; i++) {
+                        const top = i * 60;
+                        const label = `${i.toString().padStart(2, '0')}:00`;
+                        hourRows += `<div class="absolute left-0 right-0 border-t border-slate-700/50" style="top:${top}px;"><span class="absolute -top-2 left-2 text-[10px] text-slate-500 bg-slate-900/80 px-1 rounded">${label}</span></div>`;
                     }
+
+                    html += `
+                        <div class="bg-slate-800/80 border border-slate-700 rounded-xl w-[360px] shrink-0 flex flex-col shadow-lg overflow-hidden">
+                            <div class="p-3 border-b border-slate-700 text-center ${headerClass} bg-slate-900/60">${dayLabel}</div>
+                            <div class="timeline-day-scroll flex-1 overflow-y-auto no-scrollbar" data-date="${dateStr}">
+                                <div class="timeline-day-grid relative h-[1440px] bg-slate-900/25" data-date="${dateStr}" ondragover="scheduleApp.allowDrop(event)" ondrop="scheduleApp.dropOnTimeline(event)" onclick="scheduleApp.handleTimelineClick(event)">
+                                    ${hourRows}
+                                    <div class="timeline-day-events absolute inset-0 z-10 px-2" data-date="${dateStr}"></div>
+                                </div>
+                            </div>
+                        </div>`;
                 });
 
-                return `
-                <div id="timelineScroll" class="flex-1 overflow-y-auto relative no-scrollbar">
-                    <div id="timelineContainer" class="relative w-full h-[1440px] timeline-grid" ondragover="scheduleApp.allowDrop(event)" ondrop="scheduleApp.dropOnTimeline(event)" onclick="scheduleApp.handleTimelineClick(event)">
-                        <div class="absolute left-0 top-0 bottom-0 w-12 border-r border-slate-700/50 bg-slate-900/50 z-0">${labelsHTML}</div>
-                        <div class="absolute left-[50px] right-0 top-0 h-9 border-b border-slate-700/70 z-[2]">${dayHeaders}</div>
-                        ${columnBackgrounds}
-                        ${columnGuides}
-                        <div id="eventsLayer" class="absolute inset-0 z-10"></div>
-                    </div>
-                </div>`;
+                html += `</div></div>`;
+                return html;
             },
 
             getKanbanHTML(startDate, customDates = null) {
@@ -1444,8 +1447,9 @@
                     this.setupTimelineMouseEvents();
                     
                     setTimeout(() => {
-                        const scrollEl = document.getElementById('timelineScroll');
-                        if(scrollEl && scrollEl.scrollTop === 0) scrollEl.scrollTop = 8 * 60 - 20;
+                        document.querySelectorAll('.timeline-day-scroll').forEach((scrollEl) => {
+                            if (scrollEl.scrollTop === 0) scrollEl.scrollTop = 8 * 60 - 20;
+                        });
                     }, 50);
 
                 } else if (this.state.view === 'kanban') {
@@ -1521,81 +1525,71 @@
             },
 
             renderTimelineItems(scheduledItems, timelineDates) {
-                const eventsLayer = document.getElementById('eventsLayer');
-                eventsLayer.innerHTML = '';
-                const now = new Date();
                 const safeDates = Array.isArray(timelineDates) && timelineDates.length > 0 ? timelineDates : [new Date(this.currentDateObj)];
-                const totalColumns = safeDates.length;
-                
-                let allInstances = [];
-                safeDates.forEach((dateObj, dayIndex) => {
+                const now = new Date();
+
+                safeDates.forEach((dateObj) => {
                     const selectedDateStr = this.getLocalYYYYMMDD(dateObj);
-                    scheduledItems.forEach(item => {
+                    const eventsLayer = document.querySelector(`.timeline-day-events[data-date="${selectedDateStr}"]`);
+                    if (!eventsLayer) return;
+                    eventsLayer.innerHTML = '';
+
+                    let dailyInstances = [];
+                    scheduledItems.forEach((item) => {
                         const instances = this.getTaskInstancesOnDate(item, selectedDateStr);
-                        instances.forEach(inst => allInstances.push({ item, inst, dayIndex, selectedDateStr }));
+                        instances.forEach((inst) => dailyInstances.push({ item, inst, selectedDateStr }));
+                    });
+
+                    dailyInstances.sort((a, b) => a.inst.start.getTime() - b.inst.start.getTime());
+
+                    dailyInstances.forEach((entry) => {
+                        const item = entry.item;
+                        const inst = entry.inst;
+                        const startMins = inst.start.getHours() * 60 + inst.start.getMinutes();
+                        const endMins = inst.end.getHours() * 60 + inst.end.getMinutes();
+                        const duration = endMins - startMins;
+
+                        const fromColor = item.color_from || '#3b82f6';
+                        const toColor = item.color_to || '#6366f1';
+
+                        const borderStyle = inst.isProjection ? 'border-style: dashed; border-width: 2px;' : `border-left: 4px solid ${fromColor};`;
+                        const bgStyle = `background: linear-gradient(135deg, ${fromColor}33, ${toColor}33); border-color: ${fromColor}80; color: #fff; ${borderStyle}`;
+
+                        const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 opacity-80" title="Tarefa Recorrente"></i>` : '';
+                        const tagsHTML = this.getTagBadgesHTML(item.tags);
+                        const isCurrentTime = this.isInstanceInCurrentTime(inst, now);
+                        const projClass = inst.isProjection ? 'virtual-task opacity-80' : '';
+                        const isReadOnly = this.isReadOnlyScheduleItem(item);
+                        const readOnlyClass = isReadOnly ? 'readonly-schedule-item' : '';
+                        const currentTimeClass = isCurrentTime ? 'current-time-item' : '';
+                        const resizeHTML = (inst.isProjection || isReadOnly) ? '' : `<div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>`;
+                        const contextStart = this.toMySQLFormat(inst.start);
+                        const contextEnd = this.toMySQLFormat(inst.end);
+                        const iconTrigger = !isReadOnly
+                            ? `<button type="button" onclick="event.stopPropagation(); scheduleApp.completeTask(${item.id}, '${contextStart}', '${contextEnd}')" class="pointer-events-auto text-white/80 hover:text-emerald-200 transition-colors" title="Concluir tarefa"><i class="fa-solid ${item.icon} text-xs"></i></button>`
+                            : `<i class="fa-solid ${item.icon} text-xs"></i>`;
+
+                        const instTimeStr = inst.start.getHours().toString().padStart(2,'0') + ':' + inst.start.getMinutes().toString().padStart(2,'0') + ':00';
+                        const contextDateStr = `${selectedDateStr} ${instTimeStr}`;
+
+                        eventsLayer.innerHTML += `
+                            <div id="evt-${inst.uid}" class="event-card group ${projClass} ${readOnlyClass} ${currentTimeClass}" data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" data-context-start-ts="${inst.start.getTime()}" data-context-end-ts="${inst.end.getTime()}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; left: 6px; width: calc(100% - 12px); ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                                ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
+                                <div class="flex justify-between items-start pointer-events-none z-10 relative">
+                                    <div class="font-bold truncate text-sm flex items-center gap-1.5 w-full pr-6">${iconTrigger} <span class="truncate">${this.escapeHTML(item.name)} ${repeatIcon}</span></div>
+                                </div>
+                                ${tagsHTML ? `<div class="mt-1 pointer-events-none z-10 relative flex flex-wrap gap-1">${tagsHTML}</div>` : ''}
+                                <div class="text-[10px] opacity-70 pointer-events-none z-10 relative font-medium">${inst.start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${inst.end.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                ${isReadOnly ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="absolute top-1 right-1 text-white/70 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 z-20 bg-black/40 rounded shadow-md"><i class="fa-solid fa-cog text-xs"></i></button>`}
+                                ${resizeHTML}
+                            </div>`;
                     });
                 });
 
-                // Ordenar globalmente pelo tempo na Linha do Tempo 
-                allInstances.sort((a, b) => a.inst.start.getTime() - b.inst.start.getTime());
-
-                allInstances.forEach(entry => {
-                    const item = entry.item;
-                    const inst = entry.inst;
-                    const dayIndex = entry.dayIndex || 0;
-                    const selectedDateStr = entry.selectedDateStr;
-                    
-                    const startMins = inst.start.getHours() * 60 + inst.start.getMinutes();
-                    const endMins = inst.end.getHours() * 60 + inst.end.getMinutes();
-                    const duration = endMins - startMins;
-                    
-                    const fromColor = item.color_from || '#3b82f6';
-                    const toColor = item.color_to || '#6366f1';
-                    
-                    const borderStyle = inst.isProjection ? 'border-style: dashed; border-width: 2px;' : `border-left: 4px solid ${fromColor};`;
-                    const bgStyle = `background: linear-gradient(135deg, ${fromColor}33, ${toColor}33); border-color: ${fromColor}80; color: #fff; ${borderStyle}`;
-                    
-                    const repeatIcon = item.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-[10px] ml-1 opacity-80" title="Tarefa Recorrente"></i>` : '';
-                    const tagsHTML = this.getTagBadgesHTML(item.tags);
-                    const isCurrentTime = this.isInstanceInCurrentTime(inst, now);
-                    const projClass = inst.isProjection ? 'virtual-task opacity-80' : '';
-                    const isReadOnly = this.isReadOnlyScheduleItem(item);
-                    const readOnlyClass = isReadOnly ? 'readonly-schedule-item' : '';
-                    const currentTimeClass = isCurrentTime ? 'current-time-item' : '';
-                    const resizeHTML = (inst.isProjection || isReadOnly) ? '' : `<div class="resize-handle" onmousedown="scheduleApp.startResize(event, ${item.id})"></div>`;
-                    const contextStart = this.toMySQLFormat(inst.start);
-                    const contextEnd = this.toMySQLFormat(inst.end);
-                    const iconTrigger = !isReadOnly
-                        ? `<button type="button" onclick="event.stopPropagation(); scheduleApp.completeTask(${item.id}, '${contextStart}', '${contextEnd}')" class="pointer-events-auto text-white/80 hover:text-emerald-200 transition-colors" title="Concluir tarefa"><i class="fa-solid ${item.icon} text-xs"></i></button>`
-                        : `<i class="fa-solid ${item.icon} text-xs"></i>`;
-
-                    const instTimeStr = inst.start.getHours().toString().padStart(2,'0') + ':' + inst.start.getMinutes().toString().padStart(2,'0') + ':00';
-                    const contextDateStr = `${selectedDateStr} ${instTimeStr}`;
-
-                    const columnWidthPercent = 100 / totalColumns;
-                    const leftPercent = dayIndex * columnWidthPercent;
-                    eventsLayer.innerHTML += `
-                        <div id="evt-${inst.uid}" class="event-card group ${projClass} ${readOnlyClass} ${currentTimeClass}" data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" data-context-start-ts="${inst.start.getTime()}" data-context-end-ts="${inst.end.getTime()}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; left: calc(50px + (${leftPercent}% * (100% - 50px)) + 4px); width: calc((${columnWidthPercent}% * (100% - 50px)) - 10px); ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
-                            ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
-                            <div class="flex justify-between items-start pointer-events-none z-10 relative">
-                                <div class="font-bold truncate text-sm flex items-center gap-1.5 w-full pr-6">
-                                    ${iconTrigger} <span class="truncate">${this.escapeHTML(item.name)} ${repeatIcon}</span>
-                                </div>
-                            </div>
-                            ${tagsHTML ? `<div class="mt-1 pointer-events-none z-10 relative flex flex-wrap gap-1">${tagsHTML}</div>` : ''}
-                            <div class="text-[10px] opacity-70 pointer-events-none z-10 relative font-medium">${inst.start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${inst.end.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                            
-                            ${isReadOnly ? '' : `<button onclick="event.stopPropagation(); scheduleApp.openModal(${item.id}, '', null, null, '${contextDateStr}')" class="absolute top-1 right-1 text-white/70 hover:text-white sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 z-20 bg-black/40 rounded shadow-md"><i class="fa-solid fa-cog text-xs"></i></button>`}
-
-                            ${resizeHTML}
-                        </div>
-                    `;
-                });
-
-                document.querySelectorAll('.event-card').forEach(el => {
+                document.querySelectorAll('.event-card').forEach((el) => {
                     el.addEventListener('mousedown', (e) => {
-                        if(el.classList.contains('virtual-task')) return; 
-                        if(e.target.classList.contains('resize-handle') || e.target.closest('button')) return;
+                        if (el.classList.contains('virtual-task')) return;
+                        if (e.target.classList.contains('resize-handle') || e.target.closest('button')) return;
                         this.startDragTimeline(e, el);
                     });
                 });
@@ -2123,16 +2117,17 @@
                 ev.preventDefault();
                 const id = ev.dataTransfer.getData("text/plain");
                 if (!id || this.isItemScheduleReadOnly(id)) return;
-                const containerRect = document.getElementById('timelineScroll').getBoundingClientRect();
-                const dropY = ev.clientY - containerRect.top + document.getElementById('timelineScroll').scrollTop;
-                const snappedY = Math.floor(dropY / 30) * 30; 
+                const dayGrid = ev.target.closest('.timeline-day-grid');
+                const dayScroll = ev.target.closest('.timeline-day-scroll');
+                if (!dayGrid || !dayScroll) return;
+
+                const containerRect = dayScroll.getBoundingClientRect();
+                const dropY = ev.clientY - containerRect.top + dayScroll.scrollTop;
+                const snappedY = Math.floor(dropY / 30) * 30;
                 const hours = Math.floor(snappedY / 60);
                 const minutes = snappedY % 60;
 
-                const y = this.currentDateObj.getFullYear();
-                const m = String(this.currentDateObj.getMonth() + 1).padStart(2, '0');
-                const d = String(this.currentDateObj.getDate()).padStart(2, '0');
-                const baseDate = `${y}-${m}-${d}`;
+                const baseDate = dayGrid.getAttribute('data-date') || this.getLocalYYYYMMDD(this.currentDateObj);
 
                 const startObj = new Date(`${baseDate}T${hours.toString().padStart(2,'0')}:${minutes.toString().padStart(2,'0')}:00`);
                 const endObj = new Date(startObj.getTime() + 60*60000); 
