@@ -535,7 +535,7 @@
                 
                 <div class="mb-4 bg-slate-900/50 p-3 rounded-lg border border-slate-700 text-sm text-slate-300 shrink-0">
                     <p class="font-medium text-white mb-1"><i class="fa-solid fa-circle-info text-gluon-primary mr-1"></i> Como usar:</p>
-                    <p>Dê um <strong>CTRL+C</strong> nas colunas do Excel/Planilha (Pergunta e Resposta) e dê <strong>CTRL+V</strong> na caixa abaixo. A tabela será gerada instantaneamente.</p>
+                    <p>Dê um <strong>CTRL+C</strong> nas colunas do Excel/Planilha (Pergunta e Resposta) e dê <strong>CTRL+V</strong> na caixa abaixo. Também aceitamos o formato em texto usando <strong>-</strong> para separar frente/verso e <strong>*</strong> para separar cards. A tabela será gerada instantaneamente.</p>
                 </div>
                 
                 <div class="flex-1 flex flex-col relative gap-4 min-h-0">
@@ -1849,19 +1849,52 @@
 
             parseExcelData(text) {
                 if (!text.trim()) return [];
-                const lines = text.split('\n');
+
                 const result = [];
-                for (let i = 0; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if (!line) continue;
-                    const columns = line.split('\t');
-                    if (columns.length >= 1 && columns[0].trim() !== '') { 
-                        result.push({ 
-                            front: columns[0].trim(), 
-                            back: columns[1] ? columns[1].trim() : '' 
-                        });
+                const normalizedText = text.replace(/\r\n?/g, '\n').trim();
+
+                const parseLine = (line) => {
+                    const cleanLine = line.trim();
+                    if (!cleanLine) return;
+
+                    let front = '';
+                    let back = '';
+
+                    if (cleanLine.includes('\t')) {
+                        const columns = cleanLine.split('\t');
+                        front = (columns[0] || '').trim();
+                        back = (columns[1] || '').trim();
+                    } else if (cleanLine.includes('-')) {
+                        const separatorIndex = cleanLine.indexOf('-');
+                        front = cleanLine.slice(0, separatorIndex).trim();
+                        back = cleanLine.slice(separatorIndex + 1).trim();
+                    } else {
+                        front = cleanLine;
                     }
+
+                    if (front) result.push({ front, back });
+                };
+
+                if (normalizedText.includes('*') && !normalizedText.includes('\n')) {
+                    normalizedText
+                        .split('*')
+                        .map(item => item.trim())
+                        .filter(Boolean)
+                        .forEach(parseLine);
+                    return result;
                 }
+
+                normalizedText
+                    .split('\n')
+                    .forEach(line => {
+                        if (!line.trim()) return;
+                        if (line.includes('*')) {
+                            line.split('*').forEach(parseLine);
+                        } else {
+                            parseLine(line);
+                        }
+                    });
+
                 return result;
             },
 
