@@ -806,7 +806,7 @@
             state: {
                 path: [{ id: null, name: 'Meu Cofre', view: 'grid', type: 0 }],
                 directories: [],
-                pagination: { perPage: 100, currentPage: 1 },
+                pagination: { perPage: 20, currentPage: 1 },
                 directoryCache: new Map(), 
                 kanbanChildCache: new Map(),
                 kanbanCacheScopeKey: null,
@@ -3478,6 +3478,7 @@
                         <button type="button" onclick="app.goToPage(${currentPage - 1})" class="px-3 py-1.5 rounded-lg border border-slate-700 text-sm transition-colors ${prevDisabled ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 hover:text-white hover:border-slate-500'}" ${prevDisabled ? 'disabled' : ''}>Anterior</button>
                         <span class="text-xs sm:text-sm text-slate-400">Página <span class="text-slate-200 font-semibold">${currentPage}</span> de <span class="text-slate-200 font-semibold">${totalPages}</span></span>
                         <button type="button" onclick="app.goToPage(${currentPage + 1})" class="px-3 py-1.5 rounded-lg border border-slate-700 text-sm transition-colors ${nextDisabled ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 hover:text-white hover:border-slate-500'}" ${nextDisabled ? 'disabled' : ''}>Próxima</button>
+                        <span class="px-2.5 py-1.5 rounded-lg border border-slate-700 text-xs sm:text-sm text-slate-300 bg-slate-900/60">Total: <span class="text-slate-100 font-semibold">${total}</span></span>
                     </div>`;
             },
 
