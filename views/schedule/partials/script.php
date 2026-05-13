@@ -56,7 +56,7 @@
                     
                     this.track = document.getElementById('gluon-custom-scrollbar');
                     this.thumb = document.getElementById('gluon-scroll-thumb');
-                    this.wrapper = document.getElementById('kanban-wrapper');
+                    this.wrapper = document.getElementById('kanban-wrapper') || document.getElementById('timelineColumnsWrapper');
                     
                     if(!this.track || !this.thumb || !this.wrapper) return;
 
@@ -1094,7 +1094,7 @@
                     yearOptions += `<option class="bg-slate-800" value="${i}" ${dateObj.getFullYear() === i ? 'selected' : ''}>${i}</option>`;
                 }
 
-                const timelineDayOptions = [1, 2, 3, 5, 7, 14, 30].map((days) => (
+                const timelineDayOptions = Array.from({ length: 30 }, (_, index) => index + 1).map((days) => (
                     `<option class="bg-slate-800" value="${days}" ${this.state.timelineDays === days ? 'selected' : ''}>${days} ${days === 1 ? 'Dia' : 'Dias'}</option>`
                 )).join('');
 
@@ -1150,7 +1150,7 @@
 
             handleTimelineDaysChange(e) {
                 const parsed = parseInt(e.target.value, 10);
-                this.state.timelineDays = Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+                this.state.timelineDays = Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, 30) : 1;
                 this.persistTimelineSettings();
                 this.render();
             },
@@ -1354,7 +1354,7 @@
             },
 
             render() {
-                if (this.state.view !== 'kanban') this.customScroll.destroy();
+                if (!['kanban', 'timeline'].includes(this.state.view)) this.customScroll.destroy();
 
                 this.renderDateControls();
                 
@@ -1373,9 +1373,7 @@
                     const endY = endDate.getFullYear();
                     const endM = String(endDate.getMonth() + 1).padStart(2, '0');
                     const endD = String(endDate.getDate()).padStart(2, '0');
-                    if (label) label.innerText = timelineDays === 1
-                        ? 'Exibição: 1 Dia'
-                        : `Exibição: ${d}/${m}/${y} até ${endD}/${endM}/${endY}`;
+                    if (label) label.innerText = `Período: ${d}/${m}/${y} até ${endD}/${endM}/${endY}`;
                 } else if (this.state.filters.showOnlyOverdueTasks) {
                     if (label) label.innerText = 'Exibição: somente tarefas vencidas';
                 } else {
@@ -1466,6 +1464,7 @@
                             if (scrollEl.scrollTop === 0) scrollEl.scrollTop = 8 * 60 - 20;
                         });
                     }, 50);
+                    setTimeout(() => this.customScroll.init(), 0);
 
                 } else if (this.state.view === 'kanban') {
                     const overdueDates = this.getOverdueDatesForItems(scheduledItems);
