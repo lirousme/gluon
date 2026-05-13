@@ -3459,12 +3459,6 @@
                 const total = this.state.directories.length;
                 const totalPages = this.getTotalPages();
 
-                if (total <= this.state.pagination.perPage) {
-                    controls.classList.add('hidden');
-                    controls.innerHTML = '';
-                    return;
-                }
-
                 const currentPage = this.state.pagination.currentPage;
                 const start = (currentPage - 1) * this.state.pagination.perPage + 1;
                 const end = Math.min(start + visibleCount - 1, total);
