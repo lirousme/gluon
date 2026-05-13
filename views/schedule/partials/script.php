@@ -331,6 +331,7 @@
                 this.renderIconPicker();
                 this.setupFormListeners();
                 this.loadFilterSettings();
+                this.loadTimelineSettings();
                 await this.loadTags();
                 this.syncFilterUI();
                 
@@ -392,6 +393,19 @@
 
             persistFilters() {
                 localStorage.setItem('gluon_schedule_filters', JSON.stringify(this.state.filters));
+            },
+
+            loadTimelineSettings() {
+                const saved = localStorage.getItem('gluon_schedule_timeline_days');
+                if (!saved) return;
+                const parsed = parseInt(saved, 10);
+                if (Number.isInteger(parsed) && parsed > 0) {
+                    this.state.timelineDays = parsed;
+                }
+            },
+
+            persistTimelineSettings() {
+                localStorage.setItem('gluon_schedule_timeline_days', String(this.state.timelineDays));
             },
 
             syncFilterUI() {
@@ -1137,6 +1151,7 @@
             handleTimelineDaysChange(e) {
                 const parsed = parseInt(e.target.value, 10);
                 this.state.timelineDays = Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+                this.persistTimelineSettings();
                 this.render();
             },
 
