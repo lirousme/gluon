@@ -30,6 +30,7 @@
                     selectedTagIds: []
                 },
                 tags: [],
+                timelineDays: 1,
                 hasPersistedTagFilter: false,
                 pendingStartDate: null,
                 pendingEndDate: null,
@@ -1078,6 +1079,10 @@
                     yearOptions += `<option class="bg-slate-800" value="${i}" ${dateObj.getFullYear() === i ? 'selected' : ''}>${i}</option>`;
                 }
 
+                const timelineDayOptions = [1, 2, 3, 5, 7, 14, 30].map((days) => (
+                    `<option class="bg-slate-800" value="${days}" ${this.state.timelineDays === days ? 'selected' : ''}>${days} ${days === 1 ? 'Dia' : 'Dias'}</option>`
+                )).join('');
+
                 container.innerHTML = `
                     <div class="flex items-center bg-slate-900 border border-slate-600 rounded p-1 shadow-inner h-[34px]">
                         <button onclick="scheduleApp.navigateDays(-1)" class="px-2 py-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors" title="Anterior"><i class="fa-solid fa-chevron-left"></i></button>
@@ -1102,6 +1107,12 @@
 
                         <button onclick="scheduleApp.navigateDays(1)" class="px-2 py-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors" title="Próximo"><i class="fa-solid fa-chevron-right"></i></button>
                     </div>
+                    <div class="flex items-center bg-slate-900 border border-slate-600 rounded px-2 py-1 h-[34px]">
+                        <label for="timelineDaysSelect" class="text-xs text-slate-400 mr-2 whitespace-nowrap">Exibição:</label>
+                        <select id="timelineDaysSelect" onchange="scheduleApp.handleTimelineDaysChange(event)" class="bg-transparent text-xs text-white font-medium focus:outline-none cursor-pointer appearance-none outline-none pr-4">
+                            ${timelineDayOptions}
+                        </select>
+                    </div>
                     <span id="dateRangeLabel" class="text-xs text-slate-400 font-medium ml-2 hidden sm:block"></span>
                 `;
             },
@@ -1122,6 +1133,12 @@
                 this.render();
             },
 
+            handleTimelineDaysChange(e) {
+                const parsed = parseInt(e.target.value, 10);
+                this.state.timelineDays = Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+                this.render();
+            },
+
             getDatesArray(startDate, days) {
                 let dates = [];
                 let curr = new Date(startDate);
@@ -1133,15 +1150,31 @@
             },
 
             getTimelineHTML() {
+                const timelineDays = Math.max(1, Number(this.state.timelineDays) || 1);
+                const dates = this.getDatesArray(this.currentDateObj, timelineDays);
+                const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
                 let labelsHTML = '';
                 for(let i=0; i<24; i++) {
                     labelsHTML += `<div class="absolute w-full text-right pr-2 text-xs text-slate-500 font-medium" style="top: ${i*60 - 8}px">${i.toString().padStart(2, '0')}:00</div>`;
                 }
+                let dayHeaders = '';
+                let columnGuides = '';
+                dates.forEach((dateObj, index) => {
+                    const dayLabel = `${dayNames[dateObj.getDay()]}, ${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+                    const leftPercent = (index / timelineDays) * 100;
+                    const widthPercent = 100 / timelineDays;
+                    dayHeaders += `<div class="absolute top-0 h-9 px-2 flex items-center justify-center text-xs font-semibold text-slate-300 border-r border-slate-700/60 bg-slate-900/80" style="left:${leftPercent}%; width:${widthPercent}%;">${dayLabel}</div>`;
+                    if (index > 0) {
+                        columnGuides += `<div class="absolute top-0 bottom-0 border-l border-slate-700/60 z-[1]" style="left: calc(50px + ${leftPercent}% * (100% - 50px));"></div>`;
+                    }
+                });
 
                 return `
                 <div id="timelineScroll" class="flex-1 overflow-y-auto relative no-scrollbar">
                     <div id="timelineContainer" class="relative w-full h-[1440px] timeline-grid" ondragover="scheduleApp.allowDrop(event)" ondrop="scheduleApp.dropOnTimeline(event)" onclick="scheduleApp.handleTimelineClick(event)">
                         <div class="absolute left-0 top-0 bottom-0 w-12 border-r border-slate-700/50 bg-slate-900/50 z-0">${labelsHTML}</div>
+                        <div class="absolute left-[50px] right-0 top-0 h-9 border-b border-slate-700/70 z-[2]">${dayHeaders}</div>
+                        ${columnGuides}
                         <div id="eventsLayer" class="absolute inset-0 z-10"></div>
                     </div>
                 </div>`;
@@ -1313,7 +1346,15 @@
                 const label = document.getElementById('dateRangeLabel');
 
                 if (this.state.view === 'timeline') {
-                    if (label) label.innerText = 'Exibição: 1 Dia';
+                    const timelineDays = Math.max(1, Number(this.state.timelineDays) || 1);
+                    const endDate = new Date(selectedDate);
+                    endDate.setDate(endDate.getDate() + (timelineDays - 1));
+                    const endY = endDate.getFullYear();
+                    const endM = String(endDate.getMonth() + 1).padStart(2, '0');
+                    const endD = String(endDate.getDate()).padStart(2, '0');
+                    if (label) label.innerText = timelineDays === 1
+                        ? 'Exibição: 1 Dia'
+                        : `Exibição: ${d}/${m}/${y} até ${endD}/${endM}/${endY}`;
                 } else if (this.state.filters.showOnlyOverdueTasks) {
                     if (label) label.innerText = 'Exibição: somente tarefas vencidas';
                 } else {
@@ -1395,7 +1436,8 @@
 
                 if (this.state.view === 'timeline') {
                     viewContainer.innerHTML = this.getTimelineHTML();
-                    this.renderTimelineItems(scheduledItems, dStr);
+                    const timelineDates = this.getDatesArray(selectedDate, Math.max(1, Number(this.state.timelineDays) || 1));
+                    this.renderTimelineItems(scheduledItems, timelineDates);
                     this.setupTimelineMouseEvents();
                     
                     setTimeout(() => {
@@ -1475,15 +1517,20 @@
                 }).join('');
             },
 
-            renderTimelineItems(scheduledItems, selectedDateStr) {
+            renderTimelineItems(scheduledItems, timelineDates) {
                 const eventsLayer = document.getElementById('eventsLayer');
                 eventsLayer.innerHTML = '';
                 const now = new Date();
+                const safeDates = Array.isArray(timelineDates) && timelineDates.length > 0 ? timelineDates : [new Date(this.currentDateObj)];
+                const totalColumns = safeDates.length;
                 
                 let allInstances = [];
-                scheduledItems.forEach(item => {
-                    const instances = this.getTaskInstancesOnDate(item, selectedDateStr);
-                    instances.forEach(inst => allInstances.push({ item, inst }));
+                safeDates.forEach((dateObj, dayIndex) => {
+                    const selectedDateStr = this.getLocalYYYYMMDD(dateObj);
+                    scheduledItems.forEach(item => {
+                        const instances = this.getTaskInstancesOnDate(item, selectedDateStr);
+                        instances.forEach(inst => allInstances.push({ item, inst, dayIndex, selectedDateStr }));
+                    });
                 });
 
                 // Ordenar globalmente pelo tempo na Linha do Tempo 
@@ -1492,6 +1539,8 @@
                 allInstances.forEach(entry => {
                     const item = entry.item;
                     const inst = entry.inst;
+                    const dayIndex = entry.dayIndex || 0;
+                    const selectedDateStr = entry.selectedDateStr;
                     
                     const startMins = inst.start.getHours() * 60 + inst.start.getMinutes();
                     const endMins = inst.end.getHours() * 60 + inst.end.getMinutes();
@@ -1520,8 +1569,10 @@
                     const instTimeStr = inst.start.getHours().toString().padStart(2,'0') + ':' + inst.start.getMinutes().toString().padStart(2,'0') + ':00';
                     const contextDateStr = `${selectedDateStr} ${instTimeStr}`;
 
+                    const leftBase = 50 + ((100 - 50) * (dayIndex / totalColumns));
+                    const rightInset = (100 - 50) * ((totalColumns - dayIndex - 1) / totalColumns);
                     eventsLayer.innerHTML += `
-                        <div id="evt-${inst.uid}" class="event-card group ${projClass} ${readOnlyClass} ${currentTimeClass}" data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" data-context-start-ts="${inst.start.getTime()}" data-context-end-ts="${inst.end.getTime()}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                        <div id="evt-${inst.uid}" class="event-card group ${projClass} ${readOnlyClass} ${currentTimeClass}" data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" data-context-start-ts="${inst.start.getTime()}" data-context-end-ts="${inst.end.getTime()}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; left: calc(${leftBase}px + 4px); right: calc(${rightInset}px + 6px); ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                             ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                             <div class="flex justify-between items-start pointer-events-none z-10 relative">
                                 <div class="font-bold truncate text-sm flex items-center gap-1.5 w-full pr-6">
