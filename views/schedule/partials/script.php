@@ -829,7 +829,7 @@
                             btn.classList.add('opacity-40', 'cursor-not-allowed');
                             btn.title = 'Desative o filtro de tarefas vencidas para usar Linha do Tempo';
                         } else if (isTimelineButton) {
-                            btn.title = 'Linha do Tempo (1 Dia)';
+                            btn.title = 'Linha do Tempo';
                         }
 
                         if(v === this.state.view) {
@@ -1588,7 +1588,7 @@
                         const contextDateStr = `${selectedDateStr} ${instTimeStr}`;
 
                         eventsLayer.innerHTML += `
-                            <div id="evt-${inst.uid}" class="event-card group ${projClass} ${readOnlyClass} ${currentTimeClass}" data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" data-context-start-ts="${inst.start.getTime()}" data-context-end-ts="${inst.end.getTime()}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; left: 6px; width: calc(100% - 12px); ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                            <div id="evt-${inst.uid}" class="event-card group ${projClass} ${readOnlyClass} ${currentTimeClass}" data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" data-context-start-ts="${inst.start.getTime()}" data-context-end-ts="${inst.end.getTime()}" data-date="${selectedDateStr}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; left: 6px; width: calc(100% - 12px); ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                                 ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                                 <div class="flex justify-between items-start pointer-events-none z-10 relative">
                                     <div class="font-bold truncate text-sm flex items-center gap-1.5 w-full pr-6">${iconTrigger} <span class="truncate">${this.escapeHTML(item.name)} ${repeatIcon}</span></div>
@@ -2048,6 +2048,20 @@
                 this.dragElement.classList.add('resizing');
             },
 
+
+            moveTimelineCardToClosestDay(clientX, clientY) {
+                if (!this.dragElement) return;
+                const dayScroll = document.elementFromPoint(clientX, clientY)?.closest('.timeline-day-scroll');
+                if (!dayScroll) return;
+                const targetDate = dayScroll.getAttribute('data-date');
+                const targetLayer = dayScroll.querySelector('.timeline-day-events');
+                if (!targetDate || !targetLayer) return;
+                if (this.dragElement.parentElement !== targetLayer) {
+                    targetLayer.appendChild(this.dragElement);
+                }
+                this.dragElement.setAttribute('data-date', targetDate);
+            },
+
             setupTimelineMouseEvents() {
                 if (this._onMouseMove) document.removeEventListener('mousemove', this._onMouseMove);
                 if (this._onMouseUp) document.removeEventListener('mouseup', this._onMouseUp);
@@ -2060,6 +2074,7 @@
                         newTop = Math.floor(newTop / 15) * 15;
                         if (newTop < 0) newTop = 0;
                         this.dragElement.style.top = newTop + 'px';
+                        this.moveTimelineCardToClosestDay(e.clientX, e.clientY);
                         this.updateLabelRealtime(this.dragElement, newTop, parseInt(this.dragElement.style.height));
                     }
                     if (this.isResizing && this.dragElement) {
@@ -2104,10 +2119,8 @@
                 const top = parseInt(el.style.top);
                 const height = parseInt(el.style.height);
 
-                const y = this.currentDateObj.getFullYear();
-                const m = String(this.currentDateObj.getMonth() + 1).padStart(2, '0');
-                const d = String(this.currentDateObj.getDate()).padStart(2, '0');
-                const baseDate = `${y}-${m}-${d}`;
+                const dayDate = el.getAttribute('data-date') || this.getLocalYYYYMMDD(this.currentDateObj);
+                const baseDate = dayDate;
                 
                 const sh = Math.floor(top/60); const sm = top%60;
                 const startObj = new Date(`${baseDate}T${sh.toString().padStart(2,'0')}:${sm.toString().padStart(2,'0')}:00`);

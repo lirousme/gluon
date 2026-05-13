@@ -31,7 +31,7 @@
                 
                 <div class="flex items-center gap-2 w-full sm:w-auto justify-center shrink-0">
                     <div class="flex items-center gap-1 bg-slate-900 rounded-lg p-1 border border-slate-700 w-full sm:w-auto justify-center shrink-0">
-                        <button onclick="scheduleApp.setViewMode('timeline')" id="btn-view-timeline" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition-colors" title="Linha do Tempo (1 Dia)"><i class="fa-solid fa-clock"></i></button>
+                        <button onclick="scheduleApp.setViewMode('timeline')" id="btn-view-timeline" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition-colors" title="Linha do Tempo"><i class="fa-solid fa-clock"></i></button>
                         <button onclick="scheduleApp.setViewMode('kanban')" id="btn-view-kanban" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition-colors" title="Kanban Semanal (7 Dias)"><i class="fa-solid fa-columns"></i></button>
                         <button onclick="scheduleApp.setViewMode('list')" id="btn-view-list" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white transition-colors" title="Lista por Dia (7 Dias)"><i class="fa-solid fa-list"></i></button>
                     </div>
