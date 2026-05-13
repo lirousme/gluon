@@ -1159,13 +1159,15 @@
                 }
                 let dayHeaders = '';
                 let columnGuides = '';
+                let columnBackgrounds = '';
                 dates.forEach((dateObj, index) => {
                     const dayLabel = `${dayNames[dateObj.getDay()]}, ${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
                     const leftPercent = (index / timelineDays) * 100;
                     const widthPercent = 100 / timelineDays;
                     dayHeaders += `<div class="absolute top-0 h-9 px-2 flex items-center justify-center text-xs font-semibold text-slate-300 border-r border-slate-700/60 bg-slate-900/80" style="left:${leftPercent}%; width:${widthPercent}%;">${dayLabel}</div>`;
+                    columnBackgrounds += `<div class="absolute top-9 bottom-0 bg-slate-900/20" style="left: calc(50px + (${leftPercent}% * (100% - 50px))); width: calc(${widthPercent}% * (100% - 50px));"></div>`;
                     if (index > 0) {
-                        columnGuides += `<div class="absolute top-0 bottom-0 border-l border-slate-700/60 z-[1]" style="left: calc(50px + ${leftPercent}% * (100% - 50px));"></div>`;
+                        columnGuides += `<div class="absolute top-0 bottom-0 border-l border-slate-700/60 z-[1]" style="left: calc(50px + (${leftPercent}% * (100% - 50px)));"></div>`;
                     }
                 });
 
@@ -1174,6 +1176,7 @@
                     <div id="timelineContainer" class="relative w-full h-[1440px] timeline-grid" ondragover="scheduleApp.allowDrop(event)" ondrop="scheduleApp.dropOnTimeline(event)" onclick="scheduleApp.handleTimelineClick(event)">
                         <div class="absolute left-0 top-0 bottom-0 w-12 border-r border-slate-700/50 bg-slate-900/50 z-0">${labelsHTML}</div>
                         <div class="absolute left-[50px] right-0 top-0 h-9 border-b border-slate-700/70 z-[2]">${dayHeaders}</div>
+                        ${columnBackgrounds}
                         ${columnGuides}
                         <div id="eventsLayer" class="absolute inset-0 z-10"></div>
                     </div>
@@ -1569,10 +1572,10 @@
                     const instTimeStr = inst.start.getHours().toString().padStart(2,'0') + ':' + inst.start.getMinutes().toString().padStart(2,'0') + ':00';
                     const contextDateStr = `${selectedDateStr} ${instTimeStr}`;
 
-                    const leftBase = 50 + ((100 - 50) * (dayIndex / totalColumns));
-                    const rightInset = (100 - 50) * ((totalColumns - dayIndex - 1) / totalColumns);
+                    const columnWidthPercent = 100 / totalColumns;
+                    const leftPercent = dayIndex * columnWidthPercent;
                     eventsLayer.innerHTML += `
-                        <div id="evt-${inst.uid}" class="event-card group ${projClass} ${readOnlyClass} ${currentTimeClass}" data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" data-context-start-ts="${inst.start.getTime()}" data-context-end-ts="${inst.end.getTime()}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; left: calc(${leftBase}px + 4px); right: calc(${rightInset}px + 6px); ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
+                        <div id="evt-${inst.uid}" class="event-card group ${projClass} ${readOnlyClass} ${currentTimeClass}" data-id="${item.id}" data-context-start="${this.toMySQLFormat(inst.start)}" data-context-end="${this.toMySQLFormat(inst.end)}" data-context-start-ts="${inst.start.getTime()}" data-context-end-ts="${inst.end.getTime()}" style="top: ${startMins}px; height: ${Math.max(duration, 15)}px; left: calc(50px + (${leftPercent}% * (100% - 50px)) + 4px); width: calc((${columnWidthPercent}% * (100% - 50px)) - 10px); ${bgStyle}" onclick="scheduleApp.handleEventClick(event, ${item.id})">
                             ${item.cover_url ? `<div class="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none" style="background-image: url('${item.cover_url}')"></div>` : ''}
                             <div class="flex justify-between items-start pointer-events-none z-10 relative">
                                 <div class="font-bold truncate text-sm flex items-center gap-1.5 w-full pr-6">
