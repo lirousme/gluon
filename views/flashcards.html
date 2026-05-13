@@ -193,6 +193,21 @@
                 <span>Importar Tabela</span>
             </button>
 
+            <button id="btnResetBookScore" onclick="flashcardApp.openResetBookScoreModal()" class="hidden w-full text-left bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm" title="Zerar pontuação do deck">
+                <i class="fa-solid fa-rotate-left"></i>
+                <span>Zerar pontuação</span>
+            </button>
+
+            <button id="btnGoToGenerateCards" onclick="flashcardApp.goToGenerateCardsView()" class="w-full text-left bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm" title="Ir para gerar cards">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>Ir para gerar cards</span>
+            </button>
+
+            <button id="btnGoToGenerateCardsBatch" onclick="flashcardApp.goToGenerateCardsBatchView()" class="w-full text-left bg-orange-500/15 hover:bg-orange-500/25 text-orange-300 border border-orange-500/40 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm" title="Ir para gerar cards (batch)">
+                <i class="fa-solid fa-layer-group"></i>
+                <span>Ir para gerar cards (batch)</span>
+            </button>
+
         </div>
     </aside>
 
@@ -268,16 +283,6 @@
                 </div>
             </label>
 
-            <button id="btnResetBookScore" onclick="flashcardApp.openResetBookScoreModal()" class="hidden flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700 text-amber-400 hover:text-amber-300" title="Zerar pontuação do deck">
-                <i class="fa-solid fa-rotate-left text-sm"></i>
-            </button>
-            
-            <button id="btnGoToGenerateCards" onclick="flashcardApp.goToGenerateCardsView()" class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700 text-emerald-500 hover:text-emerald-400" title="Ir para gerar cards">
-                <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
-            </button>
-            <button id="btnGoToGenerateCardsBatch" onclick="flashcardApp.goToGenerateCardsBatchView()" class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm transition-colors hover:bg-slate-700 text-orange-500 hover:text-orange-400" title="Ir para gerar cards (batch)">
-                <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
-            </button>
         </div>
 
         <!-- Cena 3D e Card -->
