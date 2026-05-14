@@ -762,7 +762,24 @@ elseif ($action === 'create') {
 }
 
 elseif ($action === 'create_portal') {
-    $target_parent_id = isset($input['target_parent_id']) && $input['target_parent_id'] !== null ? (int)$input['target_parent_id'] : null;
+    $raw_target_parent_id = $input['target_parent_id'] ?? null;
+    if ($raw_target_parent_id === '' || $raw_target_parent_id === 'null' || $raw_target_parent_id === 'undefined') {
+        $raw_target_parent_id = null;
+    }
+
+    $target_parent_id = $raw_target_parent_id !== null ? (int)$raw_target_parent_id : null;
+    if ($target_parent_id !== null && $target_parent_id <= 0) {
+        $target_parent_id = null;
+    }
+
+    if ($target_parent_id !== null) {
+        $stmtParent = $pdo->prepare("SELECT id FROM directories WHERE id = ? AND user_id = ? LIMIT 1");
+        $stmtParent->execute([$target_parent_id, $user_id]);
+        if (!$stmtParent->fetch()) {
+            die(json_encode(['status' => 'error', 'message' => 'Pasta de destino inválida para criar o portal.']));
+        }
+    }
+
     $start_date = !empty($input['start_date']) ? $input['start_date'] : null;
     $end_date = !empty($input['end_date']) ? $input['end_date'] : null;
 
