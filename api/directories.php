@@ -767,9 +767,13 @@ elseif ($action === 'create_portal') {
         $raw_target_parent_id = null;
     }
 
+    if ($raw_target_parent_id !== null && !is_numeric($raw_target_parent_id)) {
+        die(json_encode(['status' => 'error', 'message' => 'Destino inválido para criação do portal.']));
+    }
+
     $target_parent_id = $raw_target_parent_id !== null ? (int)$raw_target_parent_id : null;
     if ($target_parent_id !== null && $target_parent_id <= 0) {
-        $target_parent_id = null;
+        die(json_encode(['status' => 'error', 'message' => 'Destino inválido para criação do portal.']));
     }
 
     if ($target_parent_id !== null) {
@@ -834,6 +838,17 @@ elseif ($action === 'create_portal') {
     ");
     
         if ($stmtInsert->execute([$user_id, $target_parent_id, $resolved_target_id, $newNameEnc, $newOrder, $original['icon_color_from'], $original['icon_color_to'], $start_date, $end_date])) {
+            $newPortalId = (int)$pdo->lastInsertId();
+            if ($newPortalId <= 0) {
+                throw new RuntimeException('Falha ao recuperar o ID do portal criado.');
+            }
+
+            $stmtCreated = $pdo->prepare("SELECT id FROM directories WHERE id = ? AND user_id = ? LIMIT 1");
+            $stmtCreated->execute([$newPortalId, $user_id]);
+            if (!$stmtCreated->fetch()) {
+                throw new RuntimeException('Portal não persistido após inserção.');
+            }
+
             $pdo->prepare("UPDATE users SET copied_directory_id = NULL WHERE id = ?")->execute([$user_id]);
             $pdo->commit();
             echo json_encode(['status' => 'success', 'message' => 'Portal criado com sucesso!']);
