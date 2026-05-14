@@ -774,12 +774,31 @@ elseif ($action === 'create_portal') {
         die(json_encode(['status' => 'error', 'message' => 'Nenhum diretório alvo selecionado. Use "Copiar Diretório" antes.']));
     }
 
-    $stmtOrig = $pdo->prepare("SELECT name_encrypted, icon_color_from, icon_color_to FROM directories WHERE id = ? AND user_id = ?");
+    $stmtOrig = $pdo->prepare("SELECT type, target_id, name_encrypted, icon_color_from, icon_color_to FROM directories WHERE id = ? AND user_id = ?");
     $stmtOrig->execute([$target_id, $user_id]);
     $original = $stmtOrig->fetch();
 
     if (!$original) {
         die(json_encode(['status' => 'error', 'message' => 'O diretório alvo não existe mais ou sem permissão.']));
+    }
+
+    $resolved_target_id = (int)$target_id;
+    if ((int)($original['type'] ?? 0) === 3) {
+        $portalTargetId = isset($original['target_id']) ? (int)$original['target_id'] : 0;
+        if ($portalTargetId <= 0) {
+            die(json_encode(['status' => 'error', 'message' => 'Portal copiado está corrompido. Copie um diretório válido.']));
+        }
+
+        $stmtPortalTarget = $pdo->prepare("SELECT id, name_encrypted, icon_color_from, icon_color_to FROM directories WHERE id = ? AND user_id = ?");
+        $stmtPortalTarget->execute([$portalTargetId, $user_id]);
+        $portalTarget = $stmtPortalTarget->fetch();
+
+        if (!$portalTarget) {
+            die(json_encode(['status' => 'error', 'message' => 'Destino do portal copiado não existe mais. Copie outro diretório.']));
+        }
+
+        $resolved_target_id = (int)$portalTargetId;
+        $original = $portalTarget;
     }
 
     $decryptedName = Security::decryptData($original['name_encrypted']);
@@ -797,7 +816,7 @@ elseif ($action === 'create_portal') {
         ) VALUES (?, ?, ?, 3, ?, ?, 'fa-door-open', ?, ?, ?, ?)
     ");
     
-        if ($stmtInsert->execute([$user_id, $target_parent_id, $target_id, $newNameEnc, $newOrder, $original['icon_color_from'], $original['icon_color_to'], $start_date, $end_date])) {
+        if ($stmtInsert->execute([$user_id, $target_parent_id, $resolved_target_id, $newNameEnc, $newOrder, $original['icon_color_from'], $original['icon_color_to'], $start_date, $end_date])) {
             $pdo->prepare("UPDATE users SET copied_directory_id = NULL WHERE id = ?")->execute([$user_id]);
             $pdo->commit();
             echo json_encode(['status' => 'success', 'message' => 'Portal criado com sucesso!']);
