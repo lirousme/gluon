@@ -96,7 +96,7 @@ if (!isset($_SESSION['user_id']) && !in_array($route, $public_routes, true)) {
     exit;
 }
 
-$admin_routes = ['adm', 'configuracao-tts', 'topicos', 'materia'];
+$admin_routes = ['adm', 'configuracao-tts'];
 if (in_array($route, $admin_routes, true) && (!isset($_SESSION['user_id']) || (int)$_SESSION['user_id'] !== 1)) {
     http_response_code(403);
     echo '<h1>403 - Acesso restrito ao administrador</h1>';
