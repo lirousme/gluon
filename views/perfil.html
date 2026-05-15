@@ -1662,21 +1662,43 @@
                 const b = Math.round(b1 + (b2 - b1) * t);
                 return `rgb(${r}, ${g}, ${b})`;
             },
+            getDirectoryVisualData(dir) {
+                if (dir.type === 3 && dir.portal_target) {
+                    return {
+                        ...dir,
+                        type: Number(dir.portal_target.type ?? dir.type),
+                        icon: dir.portal_target.icon || dir.icon,
+                        color_from: dir.portal_target.color_from || dir.color_from,
+                        color_to: dir.portal_target.color_to || dir.color_to,
+                        deck_mode: dir.portal_target.deck_mode || dir.deck_mode,
+                        deck_total_cards: dir.portal_target.deck_total_cards ?? dir.deck_total_cards,
+                        deck_due_cards: dir.portal_target.deck_due_cards ?? dir.deck_due_cards,
+                        deck_percentage: dir.portal_target.deck_percentage ?? dir.deck_percentage,
+                        book_percentage: dir.portal_target.book_percentage ?? dir.book_percentage,
+                        book_rank: dir.portal_target.book_rank ?? dir.book_rank
+                    };
+                }
+                return dir;
+            },
+
             getDeckDisplayData(dir) {
-                const isDeck = dir.type === 4;
-                const isBookDeck = isDeck && dir.deck_mode === 'livro';
-                const percentageValue = isBookDeck ? Number(dir.book_percentage) : Number(dir.deck_percentage);
+                const visualDir = this.getDirectoryVisualData(dir);
+                const isDeck = visualDir.type === 4;
+                const isBookDeck = isDeck && visualDir.deck_mode === 'livro';
+                const percentageValue = isBookDeck ? Number(visualDir.book_percentage) : Number(visualDir.deck_percentage);
                 const percentage = Math.max(0, Math.min(100, percentageValue || 0));
-                const hasNoDueReviews = isDeck && Number(dir.deck_total_cards || 0) > 0 && Number(dir.deck_due_cards || 0) === 0;
+                const hasNoDueReviews = isDeck && Number(visualDir.deck_total_cards || 0) > 0 && Number(visualDir.deck_due_cards || 0) === 0;
                 const color = hasNoDueReviews ? 'rgb(59, 130, 246)' : this.getDeckScoreColor(percentage);
                 return {
                     isDeck,
                     isBookDeck,
                     percentage,
                     color,
-                    rank: Math.max(0, Number(dir.book_rank) || 0),
-                    iconClass: isDeck ? (isBookDeck ? 'fa-book-open' : 'fa-ranking-star') : dir.icon,
-                    title: isBookDeck ? 'Livro' : 'Flashcards'
+                    rank: Math.max(0, Number(visualDir.book_rank) || 0),
+                    iconClass: isDeck ? (isBookDeck ? 'fa-book-open' : 'fa-ranking-star') : visualDir.icon,
+                    title: isBookDeck ? 'Livro' : 'Flashcards',
+                    visualType: Number(visualDir.type || 0),
+                    visualDir
                 };
             },
 
@@ -1781,6 +1803,8 @@
                         if(dir.type === 2) borderClass = 'border-emerald-600/50';
                         if(dir.type === 3) borderClass = 'border-fuchsia-600/50';
                         if(dir.type === 4) borderClass = 'border-amber-600/50';
+                        const visualType = this.getDirectoryVisualData(dir).type;
+                        if(dir.type === 3 && visualType === 4) borderClass = 'border-amber-600/50';
                         
                         const repeatIcon = dir.is_recurring === 1 ? `<div class="absolute top-2 left-2 bg-slate-900/80 backdrop-blur rounded p-1.5 z-20 text-gluon-primary" title="Tarefa Recorrente"><i class="fa-solid fa-repeat"></i></div>` : '';
                         const dirScore = this.getDeckScoreMarkup(dir, 'text-xs sm:text-sm');
@@ -1799,7 +1823,7 @@
                             <div class="relative z-10 flex flex-col items-center justify-center w-full h-full p-4 pt-6">
                                 ${dirScore.iconHtml.replace('></i>', ' text-4xl sm:text-5xl mb-3 drop-shadow-md sm:group-hover:scale-110 transition-transform></i>')}
                                 <span class="text-xs sm:text-sm font-medium text-slate-200 w-full truncate px-1 drop-shadow-md">${this.escapeHTML(dir.name)}</span>
-                                ${dir.type === 4 ? `${dirScore.percentHtml}${dirScore.isBookDeck ? `<span class=\"text-[11px] mt-1 text-slate-300\">Rank: <span style=\"color:${dirScore.color}\">${dirScore.rank}</span></span>` : ''}` : ''}
+                                ${dirScore.isDeck ? `${dirScore.percentHtml}${dirScore.isBookDeck ? `<span class=\"text-[11px] mt-1 text-slate-300\">Rank: <span style=\"color:${dirScore.color}\">${dirScore.rank}</span></span>` : ''}` : ''}
                             </div>
                         </div>`;
                     });
@@ -1814,6 +1838,8 @@
                         if(dir.type === 2) borderClass = 'border-l-emerald-500';
                         if(dir.type === 3) borderClass = 'border-l-fuchsia-500';
                         if(dir.type === 4) borderClass = 'border-l-amber-500';
+                        const visualType = this.getDirectoryVisualData(dir).type;
+                        if(dir.type === 3 && visualType === 4) borderClass = 'border-l-amber-500';
 
                         const repeatIcon = dir.is_recurring === 1 ? `<i class="fa-solid fa-repeat ml-2 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
                         const dirScore = this.getDeckScoreMarkup(dir, 'text-xs sm:text-sm');
@@ -1823,7 +1849,7 @@
                         <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/50 transition-colors group cursor-pointer border-l-2 ${borderClass} relative overflow-hidden" onclick="app.enterDirectoryOrFile(${dir.id})">
                             <td class="px-2 py-3 text-center hidden grip-handle text-green-500 bg-slate-900/20"><i class="fa-solid fa-grip-vertical"></i></td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-center">
-                                ${dir.cover_url ? `<div class="w-8 h-8 rounded bg-cover bg-center border border-slate-600 inline-block shadow-sm" style="background-image: url('${dir.cover_url}')"></div>` : `<div class="flex flex-col items-center justify-center leading-tight">${dirScore.iconHtml.replace('></i>', ' text-xl></i>')}${dir.type === 4 ? `<span class=\"text-[11px] font-semibold\" style=\"color:${dirScore.color}\">${dirScore.percentage}%</span>${dirScore.isBookDeck ? `<span class=\"text-[10px] text-slate-400\">R:${dirScore.rank}</span>` : ''}` : ''}</div>`}
+                                ${dir.cover_url ? `<div class="w-8 h-8 rounded bg-cover bg-center border border-slate-600 inline-block shadow-sm" style="background-image: url('${dir.cover_url}')"></div>` : `<div class="flex flex-col items-center justify-center leading-tight">${dirScore.iconHtml.replace('></i>', ' text-xl></i>')}${dirScore.isDeck ? `<span class=\"text-[11px] font-semibold\" style=\"color:${dirScore.color}\">${dirScore.percentage}%</span>${dirScore.isBookDeck ? `<span class=\"text-[10px] text-slate-400\">R:${dirScore.rank}</span>` : ''}` : ''}</div>`}
                             </td>
                             <td class="px-4 py-3 sm:py-4 font-medium text-slate-200">${this.escapeHTML(dir.name)} ${repeatIcon}</td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-right">
@@ -1844,6 +1870,8 @@
                         if(dir.type === 2) headerBorder = 'border-emerald-700';
                         if(dir.type === 3) headerBorder = 'border-fuchsia-700';
                         if(dir.type === 4) headerBorder = 'border-amber-700';
+                        const visualType = this.getDirectoryVisualData(dir).type;
+                        if(dir.type === 3 && visualType === 4) headerBorder = 'border-amber-700';
 
                         const dropTargetId = dir.type === 3 ? dir.target_id : dir.id;
                         const repeatIcon = dir.is_recurring === 1 ? `<i class="fa-solid fa-repeat text-sm ml-1 text-gluon-primary" title="Tarefa Recorrente"></i>` : '';
@@ -1858,7 +1886,7 @@
                                 <div class="flex items-center gap-2 font-semibold text-slate-100 truncate w-full relative z-10 drop-shadow-md">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
                                     ${dirScore.iconHtml.replace('></i>', ' text-lg></i>')}
-                                    <span class="truncate text-sm sm:text-base">${this.escapeHTML(dir.name)} ${dir.type === 4 ? `${dirScore.percentHtml}${dirScore.isBookDeck ? `<span class=\"text-[11px] ml-1 text-slate-300\">Rank: <span style=\"color:${dirScore.color}\">${dirScore.rank}</span></span>` : ''}` : ''} ${repeatIcon}</span>
+                                    <span class="truncate text-sm sm:text-base">${this.escapeHTML(dir.name)} ${dirScore.isDeck ? `${dirScore.percentHtml}${dirScore.isBookDeck ? `<span class=\"text-[11px] ml-1 text-slate-300\">Rank: <span style=\"color:${dirScore.color}\">${dirScore.rank}</span></span>` : ''}` : ''} ${repeatIcon}</span>
                                 </div>
                                 ${canEdit ? `<div class="flex gap-1 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn relative z-10">
                                     <button onclick="event.stopPropagation(); app.openModal(${dir.id})" class="text-slate-300 hover:text-white bg-slate-800/80 backdrop-blur hover:bg-slate-600 rounded p-1.5 shadow"><i class="fa-solid fa-cog text-xs"></i></button>
