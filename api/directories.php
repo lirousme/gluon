@@ -634,6 +634,7 @@ if ($action === 'fetch') {
             'deck_percentage' => $deckPercentage,
             'book_percentage' => $isBookDeck ? $bookPercentage : 0,
             'book_rank' => $isBookDeck ? $bookCompletedReads : 0,
+            'portal_target' => ((int)($dir['type'] ?? 0) === 3 && !empty($dir['target_id'])) ? ($portalTargetDataById[(int)$dir['target_id']] ?? null) : null,
             'start_date' => $dir['start_date'],
             'end_date' => $dir['end_date'],
             'is_recurring' => (int)($dir['is_recurring'] ?? 0),
