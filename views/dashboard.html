@@ -3422,7 +3422,7 @@
                                 <div class="flex items-center gap-2 truncate pr-2 relative z-10">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
                                     ${subScore.iconHtml.replace('></i>', ' text-sm></i>')}
-                                    <span data-dir-name class="text-sm text-slate-200 truncate font-medium">${this.escapeHTML(sub.name)} ${(sub.type === 4 || sub.type === 10) ? `${subScore.percentHtml}<span class="text-[10px] text-slate-400 ml-1">${subScore.totalCards} ${subScore.totalCards === 1 ? 'card' : 'cards'}</span>${subScore.isBookDeck ? `<span class="text-[10px] text-slate-400 ml-1">R:${subScore.rank}</span>` : ''}` : ''} ${repeatIcon}</span>
+                                    <span data-dir-name class="text-sm text-slate-200 truncate font-medium">${this.escapeHTML(sub.name)} ${subScore.isDeck ? `${subScore.percentHtml}<span class="text-[10px] text-slate-400 ml-1">${subScore.totalCards} ${subScore.totalCards === 1 ? 'card' : 'cards'}</span>${subScore.isBookDeck ? `<span class="text-[10px] text-slate-400 ml-1">R:${subScore.rank}</span>` : ''}` : ''} ${repeatIcon}</span>
                                 </div>
                                 ${canEditSub ? `<div class="flex items-center gap-1 sm:opacity-0 group-hover:opacity-100 transition-all cog-btn relative z-10">
                                     ${(sub.type === 4 || sub.type === 10) ? `<button onclick="event.stopPropagation(); app.goToGenerateCardsBatchView(${sub.id})" class="text-orange-400 hover:text-orange-300 bg-slate-800 hover:bg-slate-500 rounded p-1 border border-slate-600" title="Ir para gerar cards (batch)"><i class="fa-solid fa-layer-group text-xs"></i></button>` : ''}
@@ -3546,7 +3546,7 @@
                             <div class="dir-card-content relative z-10 flex flex-col items-center justify-center w-full h-full p-4 pt-6 transition-all duration-200">
                                 ${dirScore.iconHtml.replace('></i>', ' text-4xl sm:text-5xl mb-3 drop-shadow-md sm:group-hover:scale-110 transition-transform></i>')}
                                 <span data-dir-name class="text-xs sm:text-sm font-medium text-slate-200 w-full truncate px-1 drop-shadow-md">${this.escapeHTML(dir.name)}</span>
-                                ${(dir.type === 4 || dir.type === 10) ? `${dirScore.percentHtml}<span class=\"text-[10px] text-slate-400 leading-none mt-1\">${dirScore.totalCards} ${dirScore.totalCards === 1 ? 'card' : 'cards'}</span>${dirScore.isBookDeck ? `<span class=\"text-[11px] mt-1 text-slate-300\">Rank: <span style=\"color:${dirScore.color}\">${dirScore.rank}</span></span>` : ''}` : ''}
+                                ${dirScore.isDeck ? `${dirScore.percentHtml}<span class=\"text-[10px] text-slate-400 leading-none mt-1\">${dirScore.totalCards} ${dirScore.totalCards === 1 ? 'card' : 'cards'}</span>${dirScore.isBookDeck ? `<span class=\"text-[11px] mt-1 text-slate-300\">Rank: <span style=\"color:${dirScore.color}\">${dirScore.rank}</span></span>` : ''}` : ''}
                             </div>
                         </div>`;
                     });
@@ -3572,7 +3572,7 @@
                         <tr data-id="${dir.id}" class="draggable-item hover:bg-slate-700/50 transition-colors group cursor-pointer border-l-2 ${borderClass} relative overflow-hidden" onclick="app.enterDirectoryOrFile(${dir.id})">
                             <td class="px-2 py-3 text-center hidden grip-handle text-green-500 bg-slate-900/20"><i class="fa-solid fa-grip-vertical"></i></td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-center">
-                                ${dir.cover_url ? `<div class="w-8 h-8 rounded bg-cover bg-center border border-slate-600 inline-block shadow-sm" style="background-image: url('${dir.cover_url}')"></div>` : `<div class="flex flex-col items-center justify-center leading-tight">${dirScore.iconHtml.replace('></i>', ' text-xl></i>')}${(dir.type === 4 || dir.type === 10) ? `<span class=\"text-[11px] font-semibold\" style=\"color:${dirScore.color}\">${dirScore.percentage}%</span><span class=\"text-[10px] text-slate-400\">${dirScore.totalCards} ${dirScore.totalCards === 1 ? 'card' : 'cards'}</span>${dirScore.isBookDeck ? `<span class=\"text-[10px] text-slate-400\">R:${dirScore.rank}</span>` : ''}` : ''}</div>`}
+                                ${dir.cover_url ? `<div class="w-8 h-8 rounded bg-cover bg-center border border-slate-600 inline-block shadow-sm" style="background-image: url('${dir.cover_url}')"></div>` : `<div class="flex flex-col items-center justify-center leading-tight">${dirScore.iconHtml.replace('></i>', ' text-xl></i>')}${dirScore.isDeck ? `<span class=\"text-[11px] font-semibold\" style=\"color:${dirScore.color}\">${dirScore.percentage}%</span><span class=\"text-[10px] text-slate-400\">${dirScore.totalCards} ${dirScore.totalCards === 1 ? 'card' : 'cards'}</span>${dirScore.isBookDeck ? `<span class=\"text-[10px] text-slate-400\">R:${dirScore.rank}</span>` : ''}` : ''}</div>`}
                             </td>
                             <td class="px-4 py-3 sm:py-4 font-medium text-slate-200"><span data-dir-name>${this.escapeHTML(dir.name)}</span> ${repeatIcon}</td>
                             <td class="px-4 sm:px-6 py-3 sm:py-4 text-right">
@@ -3610,7 +3610,7 @@
                                 <div class="flex items-center gap-2 font-semibold text-slate-100 truncate w-full relative z-10 drop-shadow-md">
                                     <i class="fa-solid fa-grip-vertical text-green-500 hidden grip-handle mr-1"></i>
                                     ${dirScore.iconHtml.replace('></i>', ' text-lg></i>')}
-                                    <span data-dir-name class="truncate text-sm sm:text-base">${this.escapeHTML(dir.name)} ${(dir.type === 4 || dir.type === 10) ? `${dirScore.percentHtml}${dirScore.isBookDeck ? `<span class=\"text-[11px] ml-1 text-slate-300\">Rank: <span style=\"color:${dirScore.color}\">${dirScore.rank}</span></span>` : ''}` : ''} ${repeatIcon}</span>
+                                    <span data-dir-name class="truncate text-sm sm:text-base">${this.escapeHTML(dir.name)} ${dirScore.isDeck ? `${dirScore.percentHtml}${dirScore.isBookDeck ? `<span class=\"text-[11px] ml-1 text-slate-300\">Rank: <span style=\"color:${dirScore.color}\">${dirScore.rank}</span></span>` : ''}` : ''} ${repeatIcon}</span>
                                 </div>
                                 ${canEdit ? `<div class="flex gap-1 sm:opacity-0 group-hover:opacity-100 transition-opacity cog-btn relative z-10">
                                     ${(dir.type === 4 || dir.type === 10) ? `<button onclick="event.stopPropagation(); app.goToGenerateCardsBatchView(${dir.id})" class="text-orange-300 hover:text-orange-200 bg-slate-800/80 backdrop-blur hover:bg-slate-600 rounded p-1.5 shadow" title="Ir para gerar cards (batch)"><i class="fa-solid fa-layer-group text-xs"></i></button>` : ''}
