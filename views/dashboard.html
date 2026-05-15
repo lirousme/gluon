@@ -3300,12 +3300,32 @@
                 const b = Math.round(b1 + (b2 - b1) * t);
                 return `rgb(${r}, ${g}, ${b})`;
             },
+            getDirectoryVisualData(dir) {
+                if (dir.type === 3 && dir.portal_target) {
+                    return {
+                        ...dir,
+                        type: Number(dir.portal_target.type ?? dir.type),
+                        icon: dir.portal_target.icon || dir.icon,
+                        color_from: dir.portal_target.color_from || dir.color_from,
+                        color_to: dir.portal_target.color_to || dir.color_to,
+                        deck_mode: dir.portal_target.deck_mode || dir.deck_mode,
+                        deck_total_cards: dir.portal_target.deck_total_cards ?? dir.deck_total_cards,
+                        deck_due_cards: dir.portal_target.deck_due_cards ?? dir.deck_due_cards,
+                        deck_percentage: dir.portal_target.deck_percentage ?? dir.deck_percentage,
+                        book_percentage: dir.portal_target.book_percentage ?? dir.book_percentage,
+                        book_rank: dir.portal_target.book_rank ?? dir.book_rank
+                    };
+                }
+                return dir;
+            },
+
             getDeckDisplayData(dir) {
-                const isDeck = dir.type === 4 || dir.type === 10;
-                const isBookDeck = isDeck && dir.deck_mode === 'livro';
-                const totalCards = Math.max(0, Number(dir.deck_total_cards) || 0);
-                const dueCards = Math.max(0, Number(dir.deck_due_cards) || 0);
-                const percentageValue = isBookDeck ? Number(dir.book_percentage) : Number(dir.deck_percentage);
+                const visualDir = this.getDirectoryVisualData(dir);
+                const isDeck = visualDir.type === 4 || visualDir.type === 10;
+                const isBookDeck = isDeck && visualDir.deck_mode === 'livro';
+                const totalCards = Math.max(0, Number(visualDir.deck_total_cards) || 0);
+                const dueCards = Math.max(0, Number(visualDir.deck_due_cards) || 0);
+                const percentageValue = isBookDeck ? Number(visualDir.book_percentage) : Number(visualDir.deck_percentage);
                 const percentage = Math.max(0, Math.min(100, percentageValue || 0));
                 const hasCards = totalCards > 0;
                 const hasCardsToStudyNow = dueCards > 0;
@@ -3321,9 +3341,10 @@
                     hasCardsToStudyNow,
                     percentage,
                     color,
-                    rank: Math.max(0, Number(dir.book_rank) || 0),
-                    iconClass: isDeck ? (isBookDeck ? 'fa-book-open' : 'fa-ranking-star') : dir.icon,
-                    title: isBookDeck ? 'Livro' : 'Flashcards'
+                    rank: Math.max(0, Number(visualDir.book_rank) || 0),
+                    iconClass: isDeck ? (isBookDeck ? 'fa-book-open' : 'fa-ranking-star') : visualDir.icon,
+                    title: isBookDeck ? 'Livro' : 'Flashcards',
+                    visualDir
                 };
             },
 
@@ -3332,7 +3353,7 @@
                 const percentHtml = deckData.isDeck ? `<span class="${sizeClass} font-semibold" style="color:${deckData.color}">${deckData.percentage}%</span>` : '';
                 const cardsCountHtml = deckData.isDeck ? `<span class="text-[10px] text-slate-400 leading-none">${deckData.totalCards} ${deckData.totalCards === 1 ? 'card' : 'cards'}</span>` : '';
                 return {
-                    iconHtml: `<i class="fa-solid ${deckData.iconClass}" style="${deckData.isDeck ? `color:${deckData.color}` : this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i>`,
+                    iconHtml: `<i class="fa-solid ${deckData.iconClass}" style="${deckData.isDeck ? `color:${deckData.color}` : this.getTextGradientStyle(deckData.visualDir.color_from, deckData.visualDir.color_to)}"></i>`,
                     percentHtml,
                     cardsCountHtml,
                     ...deckData
@@ -3350,7 +3371,7 @@
                     } else if (dir.type === 2) {
                          container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60"><i class="fa-solid fa-calendar-days text-4xl mb-3" style="${this.getTextGradientStyle(dir.color_from, dir.color_to)}"></i><span class="text-sm font-medium">Agenda</span><span class="text-xs mt-1 text-center px-4">Clique no topo para abrir</span></div>`;
                          return; 
-                    } else if (dir.type === 4 || dir.type === 10) {
+                    } else if ((dir.type === 4 || dir.type === 10) || (dir.type === 3 && (Number(dir.portal_target?.type) === 4 || Number(dir.portal_target?.type) === 10))) {
                          const deckData = this.getDeckDisplayData(dir);
                          const rankHtml = deckData.isBookDeck ? `<span class="text-xs mt-1">Rank: <span style="color:${deckData.color}">${deckData.rank}</span></span>` : '';
                          container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60"><i class="fa-solid ${deckData.iconClass} text-4xl mb-3" style="color:${deckData.color}"></i><span class="text-sm font-medium">${deckData.title} · <span style="color:${deckData.color}">${deckData.percentage}%</span></span><span class="text-[10px] text-slate-400 leading-none mt-1">${deckData.totalCards} ${deckData.totalCards === 1 ? 'card' : 'cards'}</span>${rankHtml}<span class="text-xs mt-1 text-center px-4">Clique no topo para abrir</span></div>`;
