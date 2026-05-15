@@ -403,9 +403,6 @@
                     <i class="fa-solid fa-list-check"></i> Criar fases em lote
                 </button>
             </div>
-            <button id="trailGameBtn" onclick="app.openCurrentTrailGame()" class="hidden w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-lg shadow-emerald-500/20 transition-all items-center justify-center gap-2 font-medium">
-                <i class="fa-solid fa-gamepad"></i> Jogar trilha
-            </button>
         </div>
 
         <div id="loader" class="hidden flex-1 flex flex-col items-center justify-center text-slate-500 gap-3">
@@ -1739,12 +1736,6 @@
                 return firstEnabled;
             },
 
-            openCurrentTrailGame() {
-                const currentDir = this.getCurrentDirectoryObject();
-                if (!currentDir || Number(currentDir.type) !== 8) return;
-                window.location.href = this.buildViewUrl('map', currentDir.id, { name: currentDir.name || 'Trilha' });
-            },
-
             isRecurrenceContext() {
                 return this.getCurrentDirectoryType() === 2;
             },
@@ -2501,11 +2492,8 @@
 
                 const primaryBtn = document.getElementById('primaryActionBtn');
                 const batchPhaseBtn = document.getElementById('batchPhaseBtn');
-                const trailGameBtn = document.getElementById('trailGameBtn');
                 const currentDir = this.getCurrentDirectoryObject();
                 const currentDirType = currentDir ? Number(currentDir.type) : Number(this.getCurrentDirectoryType());
-                const isTrailDirectory = currentDirType === 8;
-                const shouldShowTrailGame = isTrailDirectory;
                 if (primaryBtn) {
                     const isReadOnlyDir = this.isCurrentDirectoryReadOnly();
                     if (!isVisitor && !isReadOnlyDir) {
@@ -2529,16 +2517,6 @@
                     } else {
                         batchPhaseBtn.classList.add('hidden');
                         batchPhaseBtn.classList.remove('flex');
-                    }
-                }
-
-                if (trailGameBtn) {
-                    if (shouldShowTrailGame) {
-                        trailGameBtn.classList.remove('hidden');
-                        trailGameBtn.classList.add('flex');
-                    } else {
-                        trailGameBtn.classList.add('hidden');
-                        trailGameBtn.classList.remove('flex');
                     }
                 }
 
