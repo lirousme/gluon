@@ -491,6 +491,85 @@ if ($action === 'fetch') {
         $stmtSavedRootTarget->execute([$effective_target_user_id, $user_id, $user_id, $effective_target_user_id, $effective_target_user_id]);
         $directories = array_merge($directories, $stmtSavedRootTarget->fetchAll());
     }
+
+    $portalTargetDataById = [];
+    $portalTargetIds = array_values(array_unique(array_filter(array_map(static function($dir) {
+        return ((int)($dir['type'] ?? 0) === 3 && !empty($dir['target_id'])) ? (int)$dir['target_id'] : 0;
+    }, $directories))));
+
+    if (!empty($portalTargetIds)) {
+        $placeholdersPortal = implode(',', array_fill(0, count($portalTargetIds), '?'));
+        $stmtPortalTargets = $pdo->prepare("SELECT id, type, deck_mode, icon, icon_color_from, icon_color_to FROM directories WHERE id IN ($placeholdersPortal)");
+        $stmtPortalTargets->execute($portalTargetIds);
+        $portalTargets = [];
+        foreach ($stmtPortalTargets->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $portalTargets[(int)$row['id']] = $row;
+        }
+
+        $stmtPortalDeckStats = $pdo->prepare("
+            SELECT f.directory_id,
+                   COUNT(f.id) as total_cards,
+                   COALESCE(SUM(fs.score), 0) as total_score,
+                   COALESCE(SUM(CASE WHEN fs.next_review_at IS NULL OR fs.next_review_at <= NOW() THEN 1 ELSE 0 END), 0) as due_cards
+            FROM flashcards f
+            LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
+            WHERE f.directory_id IN ($placeholdersPortal)
+            GROUP BY f.directory_id
+        ");
+        $stmtPortalDeckStats->execute(array_merge([$user_id], $portalTargetIds));
+        $portalDeckStats = [];
+        foreach ($stmtPortalDeckStats->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $portalDeckStats[(int)$row['directory_id']] = [
+                'deck_total_cards' => (int)($row['total_cards'] ?? 0),
+                'deck_total_score' => (int)($row['total_score'] ?? 0),
+                'deck_due_cards' => (int)($row['due_cards'] ?? 0),
+            ];
+        }
+
+        $stmtPortalBookProgress = $pdo->prepare("SELECT directory_id, current_index, completed_reads, next_review_at FROM flashcard_book_progress WHERE user_id = ? AND directory_id IN ($placeholdersPortal)");
+        $stmtPortalBookProgress->execute(array_merge([$user_id], $portalTargetIds));
+        $portalBookProgress = [];
+        foreach ($stmtPortalBookProgress->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $portalBookProgress[(int)$row['directory_id']] = [
+                'current_index' => (int)($row['current_index'] ?? 0),
+                'completed_reads' => (int)($row['completed_reads'] ?? 0),
+                'next_review_at' => $row['next_review_at'] ?? null,
+            ];
+        }
+
+        foreach ($portalTargetIds as $targetId) {
+            $target = $portalTargets[$targetId] ?? null;
+            if (!$target) continue;
+            $targetType = (int)($target['type'] ?? 0);
+            $targetDeckMode = $target['deck_mode'] ?? 'aleatorio';
+            $stats = $portalDeckStats[$targetId] ?? ['deck_total_cards' => 0, 'deck_total_score' => 0, 'deck_due_cards' => 0];
+            $deckTotalCardsTarget = (int)$stats['deck_total_cards'];
+            $deckTotalScoreTarget = (int)$stats['deck_total_score'];
+            $deckDueCardsTarget = (int)$stats['deck_due_cards'];
+            $deckPercentageTarget = $deckTotalCardsTarget > 0 ? (int)round(($deckTotalScoreTarget / ($deckTotalCardsTarget * 20)) * 100) : 0;
+            $bookProgress = $portalBookProgress[$targetId] ?? ['current_index' => 0, 'completed_reads' => 0, 'next_review_at' => null];
+            $isBookDeckTarget = ($targetDeckMode === 'livro');
+            if ($isBookDeckTarget) {
+                $bookHasDueReview = empty($bookProgress['next_review_at']) || strtotime($bookProgress['next_review_at']) <= time();
+                $deckDueCardsTarget = ($deckTotalCardsTarget > 0 && $bookHasDueReview) ? $deckTotalCardsTarget : 0;
+            }
+            $bookPercentageTarget = $deckTotalCardsTarget > 0 ? (int)round((min((int)$bookProgress['current_index'], $deckTotalCardsTarget) / $deckTotalCardsTarget) * 100) : 0;
+
+            $portalTargetDataById[$targetId] = [
+                'type' => $targetType,
+                'icon' => $target['icon'] ?? null,
+                'color_from' => $target['icon_color_from'] ?? null,
+                'color_to' => $target['icon_color_to'] ?? null,
+                'deck_mode' => $targetDeckMode,
+                'deck_total_cards' => $deckTotalCardsTarget,
+                'deck_due_cards' => $deckDueCardsTarget,
+                'deck_percentage' => $deckPercentageTarget,
+                'book_percentage' => $isBookDeckTarget ? $bookPercentageTarget : 0,
+                'book_rank' => $isBookDeckTarget ? (int)$bookProgress['completed_reads'] : 0,
+            ];
+        }
+    }
+
     $response = [];
     
     $directoryIds = array_map(static fn($dir) => (int)$dir['id'], $directories);
