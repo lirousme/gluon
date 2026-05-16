@@ -1829,7 +1829,11 @@
 
                     if (imageModalOpen) return; // Não vira carta se imagem tá grande
 
-                    const modalsOpen = document.querySelectorAll('.fixed:not(.hidden):not(#imageModal)').length > 0;
+                    const blockingModalIds = ['settingsModal', 'singleModal', 'bulkModal', 'resetBookScoreModal', 'audioGenerationModal'];
+                    const modalsOpen = blockingModalIds.some((id) => {
+                        const modal = document.getElementById(id);
+                        return modal && !modal.classList.contains('hidden');
+                    });
 
                     const isPlusShortcut = (
                         e.code === 'NumpadAdd' ||
