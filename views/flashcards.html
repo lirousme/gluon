@@ -1835,8 +1835,21 @@
                         e.code === 'NumpadAdd' ||
                         e.code === 'Add' ||
                         e.key === '+' ||
-                        e.key === 'Add'
+                        e.key === 'Add' ||
+                        e.key === '=' ||
+                        e.keyCode === 107
                     );
+
+                    if (isPlusShortcut) {
+                        console.log('[flashcards] Tecla "+" detectada', {
+                            key: e.key,
+                            code: e.code,
+                            keyCode: e.keyCode,
+                            isTypingTarget,
+                            modalsOpen
+                        });
+                    }
+
                     if (isPlusShortcut && !isTypingTarget && !modalsOpen) {
                         e.preventDefault();
                         this.openSingleModal();
