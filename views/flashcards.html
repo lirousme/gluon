@@ -1812,6 +1812,13 @@
             setupKeyboardListeners() {
                 document.addEventListener('keydown', (e) => {
                     const imageModalOpen = !document.getElementById('imageModal').classList.contains('hidden');
+                    const target = e.target;
+                    const isTypingTarget = target && (
+                        target.tagName === 'INPUT' ||
+                        target.tagName === 'TEXTAREA' ||
+                        target.tagName === 'SELECT' ||
+                        target.isContentEditable
+                    );
                     
                     if (e.code === 'Escape') {
                         this.closeImageModal();
@@ -1823,6 +1830,17 @@
                     if (imageModalOpen) return; // Não vira carta se imagem tá grande
 
                     const modalsOpen = document.querySelectorAll('.fixed:not(.hidden):not(#imageModal)').length > 0;
+
+                    const isPlusShortcut = (
+                        e.code === 'NumpadAdd' ||
+                        e.key === '+'
+                    );
+                    if (isPlusShortcut && !isTypingTarget && !modalsOpen) {
+                        e.preventDefault();
+                        this.openSingleModal();
+                        return;
+                    }
+
                     if (modalsOpen || this.cards.length === 0) return;
 
                     if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'ArrowDown') {
