@@ -1833,7 +1833,9 @@
 
                     const isPlusShortcut = (
                         e.code === 'NumpadAdd' ||
-                        e.key === '+'
+                        e.code === 'Add' ||
+                        e.key === '+' ||
+                        e.key === 'Add'
                     );
                     if (isPlusShortcut && !isTypingTarget && !modalsOpen) {
                         e.preventDefault();
