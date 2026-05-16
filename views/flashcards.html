@@ -192,6 +192,10 @@
                 <i class="fa-solid fa-table"></i>
                 <span>Importar Tabela</span>
             </button>
+            <button id="btnCreateTagPanel" onclick="flashcardApp.openCreateTagFromPanel()" class="w-full text-left bg-violet-500/15 hover:bg-violet-500/25 text-violet-300 border border-violet-500/40 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm">
+                <i class="fa-solid fa-tags"></i>
+                <span>Criar nova tag</span>
+            </button>
 
             <button id="btnResetBookScore" onclick="flashcardApp.openResetBookScoreModal()" class="hidden w-full text-left bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm" title="Zerar pontuação do deck">
                 <i class="fa-solid fa-rotate-left"></i>
@@ -329,6 +333,10 @@
                 </div>
 
             </div>
+        </div>
+        <div id="cardTagsPanel" class="hidden w-full max-w-md mt-4 mx-auto bg-slate-900/70 border border-slate-700 rounded-xl p-3">
+            <div class="text-xs text-slate-400 mb-2">Tags deste card</div>
+            <div id="cardTagsList" class="flex flex-wrap gap-2"></div>
         </div>
 
         <!-- Tela Vazia -->
@@ -477,6 +485,23 @@
         </div>
     </div>
 
+    <div id="tagModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-[61] opacity-0 transition-opacity duration-300 p-4">
+        <div id="tagModalContent" class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md transform scale-95 transition-transform duration-300">
+            <div class="flex items-center justify-between p-5 border-b border-slate-700">
+                <h3 class="text-lg font-semibold text-white">Criar nova tag</h3>
+                <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form onsubmit="flashcardApp.createTag(event)" class="p-5 space-y-4">
+                <input id="tagNameInput" type="text" required maxlength="80" placeholder="Ex.: Gramática, Verbos, Trabalho..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+                <input id="tagColorInput" type="color" value="#6366f1" class="w-full h-10 bg-slate-900 border border-slate-600 rounded-lg">
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="flashcardApp.closeModals()" class="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-800">Cancelar</button>
+                    <button id="btnSaveTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white">Criar tag</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Modal: Adicionar/Editar Card Unitário -->
     <div id="singleModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
         <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg p-0 transform scale-95 transition-transform duration-300 flex flex-col max-h-[95vh]" id="singleModalContent">
@@ -489,6 +514,7 @@
             
             <form onsubmit="flashcardApp.saveSingleCard(event)" class="p-6 overflow-y-auto flex-1 space-y-5">
                 <input type="hidden" id="editCardId" value="">
+                <input type="hidden" id="selectedTagIds" value="[]">
 
                 <div>
                     <label class="block text-sm font-medium text-slate-300 mb-2">Frente (Obrigatório texto ou imagem)</label>
@@ -514,6 +540,11 @@
                         <div id="backImagePreview" class="mt-2 hidden w-full h-32 rounded bg-contain bg-center bg-no-repeat border border-blue-500/50"></div>
                         <button type="button" id="btnRemoveBackImage" onclick="flashcardApp.removeCardImage('back')" class="hidden mt-2 text-xs text-red-400 hover:text-red-300 flex items-center gap-1"><i class="fa-solid fa-trash"></i> Remover Imagem</button>
                     </div>
+                </div>
+
+                <div class="pt-3 border-t border-slate-700">
+                    <label class="block text-sm font-medium text-violet-300 mb-2">Tags deste card</label>
+                    <div id="cardTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
                 </div>
                 
                 <div class="flex flex-col sm:flex-row justify-between items-center pt-2 border-t border-slate-700 mt-6 gap-3 shrink-0">
@@ -646,6 +677,7 @@
             bookNextReviewAt: null,
             randomNextReviewAt: null,
             cards: [],
+            availableTags: [],
             currentIndex: 0,
             isFlipped: false,
             scoredThisSession: new Set(),
@@ -703,6 +735,7 @@
                 this.setupKeyboardListeners();
                 this.setupBulkListener();
                 this.applyStudyScopeUI();
+                await this.loadTags();
                 await this.loadDeck();
             },
 
@@ -782,6 +815,39 @@
             openBulkFromPanel() {
                 this.closeRightPanel();
                 this.openBulkModal();
+            },
+            openCreateTagFromPanel() {
+                this.closeRightPanel();
+                const modal = document.getElementById('tagModal');
+                const content = document.getElementById('tagModalContent');
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); }, 20);
+            },
+            async loadTags() {
+                const res = await this.api('list_tags');
+                this.availableTags = res?.data || [];
+                this.renderTagSelector();
+            },
+            renderTagSelector(selectedIds = null) {
+                const el = document.getElementById('cardTagSelector');
+                if (!el) return;
+                const currentSelected = selectedIds ?? JSON.parse(document.getElementById('selectedTagIds').value || '[]');
+                if (!this.availableTags.length) {
+                    el.innerHTML = '<span class="text-xs text-slate-400">Sem tags. Crie uma no menu lateral.</span>';
+                    return;
+                }
+                el.innerHTML = this.availableTags.map(tag => {
+                    const active = currentSelected.includes(Number(tag.id));
+                    return `<button type="button" onclick="flashcardApp.toggleTagSelection(${Number(tag.id)})" class="px-2.5 py-1 rounded-full text-xs border transition ${active ? 'bg-violet-500/20 text-violet-200 border-violet-400' : 'bg-slate-800 text-slate-300 border-slate-600'}"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color}"></span>${this.escapeHTML(tag.name)}</button>`;
+                }).join('');
+            },
+            toggleTagSelection(tagId) {
+                const hidden = document.getElementById('selectedTagIds');
+                const ids = JSON.parse(hidden.value || '[]');
+                const next = ids.includes(tagId) ? ids.filter(id => id !== tagId) : [...ids, tagId];
+                hidden.value = JSON.stringify(next);
+                this.renderTagSelector(next);
             },
 
             async generateMissingAudiosFromDeckFromPanel() {
@@ -1020,6 +1086,16 @@
                 this.renderMathInElement(document.getElementById('cardBackText'));
                 
                 document.getElementById('cardCounter').innerText = `${this.currentIndex + 1} / ${this.cards.length}`;
+                const tagsPanel = document.getElementById('cardTagsPanel');
+                const tagsList = document.getElementById('cardTagsList');
+                const tags = card.tags || [];
+                if (tags.length) {
+                    tagsPanel.classList.remove('hidden');
+                    tagsList.innerHTML = tags.map(tag => `<span class="px-2.5 py-1 rounded-full text-xs border border-slate-600 text-slate-200 bg-slate-800"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color || '#334155'}"></span>${this.escapeHTML(tag.name || '')}</span>`).join('');
+                } else {
+                    tagsPanel.classList.add('hidden');
+                    tagsList.innerHTML = '';
+                }
                 
                 const cardEl = document.getElementById('flashcard');
                 
@@ -1294,6 +1370,8 @@
                 document.getElementById('editCardId').value = card.id;
                 document.getElementById('singleFront').value = card.front;
                 document.getElementById('singleBack').value = card.back;
+                document.getElementById('selectedTagIds').value = JSON.stringify((card.tags || []).map(tag => Number(tag.id)));
+                this.renderTagSelector();
                 document.getElementById('modalTitleText').innerText = 'Editar Flashcard';
                 
                 this.removeCardImage('front');
@@ -2063,6 +2141,8 @@
                 document.getElementById('editCardId').value = '';
                 document.getElementById('singleFront').value = '';
                 document.getElementById('singleBack').value = '';
+                document.getElementById('selectedTagIds').value = '[]';
+                this.renderTagSelector([]);
                 document.getElementById('modalTitleText').innerText = 'Adicionar Flashcard';
                 
                 this.removeCardImage('front');
@@ -2097,7 +2177,7 @@
             },
 
             closeModals() {
-                ['settings', 'single', 'bulk', 'resetBookScore'].forEach(prefix => {
+                ['settings', 'single', 'bulk', 'resetBookScore', 'tag'].forEach(prefix => {
                     const modal = document.getElementById(`${prefix}Modal`);
                     const content = document.getElementById(`${prefix}ModalContent`);
                     if(modal && !modal.classList.contains('hidden')) {
@@ -2211,6 +2291,7 @@
                 const backVal = document.getElementById('singleBack').value.trim();
                 const imageFront = document.getElementById('frontImageBase64').value;
                 const imageBack = document.getElementById('backImageBase64').value;
+                const tagIds = JSON.parse(document.getElementById('selectedTagIds').value || '[]');
                 
                 if (!frontVal && !backVal && !imageFront && !imageBack) return this.showToast('Preencha pelo menos um lado do card com texto ou imagem.', 'error');
                 
@@ -2223,7 +2304,8 @@
                     front: frontVal, 
                     back: backVal,
                     image_front: imageFront,
-                    image_back: imageBack
+                    image_back: imageBack,
+                    tag_ids: tagIds
                 };
                 if (editId) payload.card_id = editId;
 
@@ -2251,6 +2333,21 @@
                     }
                 }
                 btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvar'; btn.disabled = false;
+            },
+            async createTag(e) {
+                e.preventDefault();
+                const btn = document.getElementById('btnSaveTag');
+                btn.disabled = true;
+                const res = await this.api('create_tag', {
+                    name: document.getElementById('tagNameInput').value.trim(),
+                    color: document.getElementById('tagColorInput').value
+                });
+                btn.disabled = false;
+                if (res) {
+                    this.showToast(res.message || 'Tag criada com sucesso!');
+                    await this.loadTags();
+                    this.closeModals();
+                }
             },
 
             async saveBulkCards(e) {
