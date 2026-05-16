@@ -334,9 +334,9 @@
 
             </div>
         </div>
-        <div id="cardTagsPanel" class="hidden w-full max-w-md mt-4 mx-auto bg-slate-900/70 border border-slate-700 rounded-xl p-3">
-            <div class="text-xs text-slate-400 mb-2">Tags deste card</div>
-            <div id="cardTagsList" class="flex flex-wrap gap-2"></div>
+        <div id="cardTagsPanel" class="hidden w-full max-w-sm mt-3 mx-auto rounded-xl border border-slate-700/80 bg-slate-900/80 px-3 py-2 shadow-lg shadow-black/20">
+            <div class="text-[11px] text-slate-400 mb-1.5 uppercase tracking-wide">Tags deste card</div>
+            <div id="cardTagsList" class="flex flex-wrap gap-1.5"></div>
         </div>
 
         <!-- Tela Vazia -->
@@ -1091,7 +1091,7 @@
                 const tags = card.tags || [];
                 if (tags.length) {
                     tagsPanel.classList.remove('hidden');
-                    tagsList.innerHTML = tags.map(tag => `<span class="px-2.5 py-1 rounded-full text-xs border border-slate-600 text-slate-200 bg-slate-800"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color || '#334155'}"></span>${this.escapeHTML(tag.name || '')}</span>`).join('');
+                    tagsList.innerHTML = tags.map(tag => `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-slate-600/90 text-slate-200 bg-slate-800/90"><span class="inline-block w-1.5 h-1.5 rounded-full" style="background:${tag.color || '#334155'}"></span>${this.escapeHTML(tag.name || '')}</span>`).join('');
                 } else {
                     tagsPanel.classList.add('hidden');
                     tagsList.innerHTML = '';
