@@ -253,13 +253,32 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
     };
 
     $pickMaxCardInTag = static function(int $tagId, array $avoidCards = []) use (&$cardsByTag, &$scoreByCard): ?int {
-        $best = null; $bestScore = null;
+        $candidateIds = [];
         foreach ($cardsByTag[$tagId] ?? [] as $cid) {
             if (isset($avoidCards[$cid])) continue;
-            $s = (int)($scoreByCard[$cid] ?? 0);
-            if ($best === null || $s > $bestScore || ($s === $bestScore && $cid < $best)) { $best = $cid; $bestScore = $s; }
+            $candidateIds[] = (int)$cid;
         }
-        return $best;
+        if (empty($candidateIds)) return null;
+
+        $maxScore = null;
+        foreach ($candidateIds as $cid) {
+            $s = (int)($scoreByCard[$cid] ?? 0);
+            if ($maxScore === null || $s > $maxScore) $maxScore = $s;
+        }
+
+        $limit = 5;
+        while ($limit <= ((int)$maxScore + 5)) {
+            $best = null; $bestScore = null;
+            foreach ($candidateIds as $cid) {
+                $s = (int)($scoreByCard[$cid] ?? 0);
+                if ($s >= $limit) continue;
+                if ($best === null || $s > $bestScore || ($s === $bestScore && $cid < $best)) { $best = $cid; $bestScore = $s; }
+            }
+            if ($best !== null) return $best;
+            $limit += 5;
+        }
+
+        return null;
     };
 
     $tagIds = array_keys($cardsByTag);
