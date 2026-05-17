@@ -1252,7 +1252,141 @@ if ($action === 'fetch') {
     $book_next_review_at = null;
     $random_next_review_at = null;
 
-    if (in_array($deck_mode, ['aleatorio', 'grafo'], true)) {
+    if ($deck_mode === 'grafo') {
+        $stmtAllCards = $pdo->prepare("
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score
+            FROM flashcards f
+            LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
+            WHERE f.directory_id = ? AND (fs.next_review_at IS NULL OR fs.next_review_at <= NOW())
+        ");
+        $stmtAllCards->execute([$user_id, $deck_id]);
+        $allDueCards = $stmtAllCards->fetchAll();
+
+        $cardsById = [];
+        foreach ($allDueCards as $cardRow) {
+            $cardsById[(int)$cardRow['id']] = $cardRow;
+        }
+
+        $stmtAllScores = $pdo->prepare("
+            SELECT f.id AS flashcard_id, COALESCE(fs.score, 0) AS score
+            FROM flashcards f
+            LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
+            WHERE f.directory_id = ?
+        ");
+        $stmtAllScores->execute([$user_id, $deck_id]);
+        $allScoresByCardId = [];
+        foreach ($stmtAllScores->fetchAll() as $scoreRow) {
+            $allScoresByCardId[(int)$scoreRow['flashcard_id']] = (int)$scoreRow['score'];
+        }
+
+        $stmtCardTags = $pdo->prepare("
+            SELECT l.flashcard_id, l.tag_id, t.name, t.color
+            FROM flashcard_tag_links l
+            JOIN flashcard_tags t ON t.id = l.tag_id
+            JOIN flashcards f ON f.id = l.flashcard_id
+            WHERE f.directory_id = ? AND t.user_id = ?
+        ");
+        $stmtCardTags->execute([$deck_id, $user_id]);
+        $tagLinks = $stmtCardTags->fetchAll();
+
+        $tagsByCardId = [];
+        $cardIdsByTagId = [];
+        $tagMetaById = [];
+        foreach ($tagLinks as $link) {
+            $cardId = (int)$link['flashcard_id'];
+            $tagId = (int)$link['tag_id'];
+            $tagsByCardId[$cardId][] = $tagId;
+            $cardIdsByTagId[$tagId][] = $cardId;
+            if (!isset($tagMetaById[$tagId])) {
+                $tagMetaById[$tagId] = [
+                    'id' => $tagId,
+                    'name' => $link['name'],
+                    'color' => $link['color']
+                ];
+            }
+        }
+
+        $tagSensitivity = [];
+        foreach ($cardIdsByTagId as $tagId => $tagCardIds) {
+            $sum = 0;
+            foreach ($tagCardIds as $tagCardId) {
+                $sum += (int)($allScoresByCardId[$tagCardId] ?? 0);
+            }
+            $tagSensitivity[$tagId] = $sum;
+        }
+
+        if (!empty($tagSensitivity) && !empty($cardsById)) {
+            asort($tagSensitivity, SORT_NUMERIC);
+            $baseTagId = (int)array_key_first($tagSensitivity);
+            $baseTagCardIds = $cardIdsByTagId[$baseTagId] ?? [];
+
+            $usedAnchorIds = [];
+            $selectedCards = [];
+
+            for ($i = 0; $i < 3; $i++) {
+                $anchorCandidates = [];
+                foreach ($baseTagCardIds as $candidateId) {
+                    if (!isset($cardsById[$candidateId]) || in_array($candidateId, $usedAnchorIds, true)) continue;
+                    $anchorCandidates[] = $candidateId;
+                }
+                if (empty($anchorCandidates)) break;
+
+                usort($anchorCandidates, static function ($a, $b) use ($cardsById) {
+                    $scoreA = (int)($cardsById[$a]['score'] ?? 0);
+                    $scoreB = (int)($cardsById[$b]['score'] ?? 0);
+                    if ($scoreA === $scoreB) return $a <=> $b;
+                    return $scoreA <=> $scoreB;
+                });
+
+                $anchorId = (int)$anchorCandidates[0];
+                $usedAnchorIds[] = $anchorId;
+                $selectedCards[] = $cardsById[$anchorId];
+                $cardsById[$anchorId]['score'] = min(20, ((int)$cardsById[$anchorId]['score']) + 1);
+
+                $anchorTagIds = $tagsByCardId[$anchorId] ?? [];
+                $decidingTagId = null;
+                $decidingTagSensitivity = null;
+                foreach ($anchorTagIds as $tagId) {
+                    if ($decidingTagId === null || (int)$tagSensitivity[$tagId] > (int)$decidingTagSensitivity || ((int)$tagSensitivity[$tagId] === (int)$decidingTagSensitivity && $tagId < $decidingTagId)) {
+                        $decidingTagId = $tagId;
+                        $decidingTagSensitivity = (int)$tagSensitivity[$tagId];
+                    }
+                }
+                if ($decidingTagId === null) continue;
+
+                $candidateHighIds = [];
+                foreach (($cardIdsByTagId[$decidingTagId] ?? []) as $candidateId) {
+                    if (!isset($cardsById[$candidateId]) || $candidateId === $anchorId) continue;
+                    $candidateHighIds[] = $candidateId;
+                }
+                if (empty($candidateHighIds)) continue;
+
+                usort($candidateHighIds, static function ($a, $b) use ($cardsById) {
+                    $scoreA = (int)($cardsById[$a]['score'] ?? 0);
+                    $scoreB = (int)($cardsById[$b]['score'] ?? 0);
+                    if ($scoreA === $scoreB) return $a <=> $b;
+                    return $scoreB <=> $scoreA;
+                });
+                $selectedCards[] = $cardsById[(int)$candidateHighIds[0]];
+            }
+
+            $cards = array_slice($selectedCards, 0, 6);
+        } else {
+            $cards = array_values($cardsById);
+        }
+
+        $stmtNextRandomReview = $pdo->prepare("
+            SELECT MIN(fs.next_review_at)
+            FROM flashcard_scores fs
+            JOIN flashcards f ON f.id = fs.flashcard_id
+            WHERE f.directory_id = ?
+              AND fs.user_id = ?
+              AND fs.next_review_at IS NOT NULL
+              AND fs.next_review_at > NOW()
+        ");
+        $stmtNextRandomReview->execute([$deck_id, $user_id]);
+        $random_next_review_at = $stmtNextRandomReview->fetchColumn() ?: null;
+    } elseif ($deck_mode === 'aleatorio') {
         $stmt = $pdo->prepare("
             SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score 
             FROM flashcards f
@@ -1292,7 +1426,9 @@ if ($action === 'fetch') {
         }
     }
     
-    $cards = $stmt->fetchAll();
+    if ($deck_mode !== 'grafo') {
+        $cards = $stmt->fetchAll();
+    }
 
     if ($deck_mode === 'livro' && !empty($book_next_review_at) && strtotime($book_next_review_at) > time()) {
         $cards = [];
