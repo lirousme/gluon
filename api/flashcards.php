@@ -1252,7 +1252,7 @@ if ($action === 'fetch') {
     $book_next_review_at = null;
     $random_next_review_at = null;
 
-    if ($deck_mode === 'aleatorio') {
+    if (in_array($deck_mode, ['aleatorio', 'grafo'], true)) {
         $stmt = $pdo->prepare("
             SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score 
             FROM flashcards f
@@ -2023,7 +2023,8 @@ elseif ($action === 'reset_book_score') {
 
 elseif ($action === 'update_settings') {
     $deck_id = (int)($input['deck_id'] ?? 0);
-    $mode = $input['deck_mode'] === 'livro' ? 'livro' : 'aleatorio';
+    $allowed_modes = ['aleatorio', 'livro', 'grafo'];
+    $mode = in_array(($input['deck_mode'] ?? ''), $allowed_modes, true) ? $input['deck_mode'] : 'aleatorio';
     $front_language = normalizeDeckLanguage($input['deck_front_language'] ?? 'pt-BR', 'pt-BR');
     $back_language = normalizeDeckLanguage($input['deck_back_language'] ?? 'en-GB', 'en-GB');
     $deck_structure = normalizeDeckStructure($input['deck_structure'] ?? 'traducoes', 'traducoes');

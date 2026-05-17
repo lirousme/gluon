@@ -398,6 +398,14 @@
                         </label>
 
                         <label class="flex items-start gap-3 cursor-pointer p-3 border border-slate-600 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors">
+                            <input type="radio" name="deckMode" value="grafo" class="mt-1 text-violet-500 bg-slate-900 border-slate-600 focus:ring-violet-500">
+                            <div>
+                                <div class="font-medium text-white mb-0.5"><i class="fa-solid fa-diagram-project text-violet-400 mr-1"></i> Modo Grafo</div>
+                                <div class="text-xs text-slate-400">Inicialmente funciona igual ao modo aleatório, exibindo cartas vencidas com repetição espaçada.</div>
+                            </div>
+                        </label>
+
+                        <label class="flex items-start gap-3 cursor-pointer p-3 border border-slate-600 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors">
                             <input type="radio" name="deckMode" value="livro" class="mt-1 text-emerald-500 bg-slate-900 border-slate-600 focus:ring-emerald-500">
                             <div>
                                 <div class="font-medium text-white mb-0.5"><i class="fa-solid fa-book-open text-emerald-500 mr-1"></i> Livro (Sequencial)</div>
@@ -961,7 +969,7 @@
                         document.getElementById('topControlPanel').style.display = 'flex';
                         document.getElementById('cardCounter').style.display = 'none';
                     } else {
-                        if (this.deckMode === 'aleatorio' || this.currentIndex >= this.cards.length) {
+                        if (['aleatorio', 'grafo'].includes(this.deckMode) || this.currentIndex >= this.cards.length) {
                             this.currentIndex = 0;
                         }
                         document.getElementById('cardScene').style.display = 'block';
@@ -982,7 +990,7 @@
                 document.getElementById('deckMasteryBadge').classList.add('hidden');
                 document.getElementById('deckProgressBar').style.width = '0%';
                 
-                if (this.deckMode === 'aleatorio' && this.totalCardsInDeck > 0) {
+                if (['aleatorio', 'grafo'].includes(this.deckMode) && this.totalCardsInDeck > 0) {
                     document.getElementById('emptyStateIcon').className = "fa-solid fa-mug-hot text-6xl text-emerald-600 mb-4 opacity-70";
                     document.getElementById('emptyStateTitle').innerText = "Você está em dia!";
                     document.getElementById('emptyStateDesc').innerText = this.randomNextReviewAt
@@ -1180,7 +1188,7 @@
                     }
                 }
 
-                if (this.deckMode === 'aleatorio') {
+                if (['aleatorio', 'grafo'].includes(this.deckMode)) {
                     let dotsHtml = '';
                     for (let i = 0; i < 10; i++) {
                         let fillClass = card.score >= (i + 1) * 2 ? 'filled' : (card.score === (i * 2) + 1 ? 'half-filled' : '');
@@ -1202,7 +1210,7 @@
                 }
 
                 document.getElementById('btnPrev').disabled = this.currentIndex === 0;
-                document.getElementById('btnNext').disabled = this.deckMode !== 'livro' && this.deckMode !== 'aleatorio' && this.currentIndex === this.cards.length - 1;
+                document.getElementById('btnNext').disabled = this.deckMode !== 'livro' && !['aleatorio', 'grafo'].includes(this.deckMode) && this.currentIndex === this.cards.length - 1;
             },
 
             incrementBookReadProgress() {
@@ -1233,7 +1241,7 @@
 
                 if (this.isFlipped) {
                     cardEl.classList.add('is-flipped');
-                    if (this.deckMode === 'aleatorio') this.registerScore(card);
+                    if (['aleatorio', 'grafo'].includes(this.deckMode)) this.registerScore(card);
                     
                     this.handleAutoPlaybackAndFlow();
                 } else {
@@ -1259,7 +1267,7 @@
                 
                 this.stopAudio(); 
                 
-                if (this.deckMode === 'aleatorio' && !(hasTwoSides && this.isFlipped)) await this.registerScore(card);
+                if (['aleatorio', 'grafo'].includes(this.deckMode) && !(hasTwoSides && this.isFlipped)) await this.registerScore(card);
 
                 if (this.deckMode === 'livro' && this.cards.length === 1) {
                     this.incrementBookReadProgress();
@@ -1277,7 +1285,7 @@
                 } else if (this.deckMode === 'livro') {
                     this.incrementBookReadProgress();
                     await this.loadDeck();
-                } else if (this.deckMode === 'aleatorio') {
+                } else if (['aleatorio', 'grafo'].includes(this.deckMode)) {
                     // Último card da revisão do dia: recarrega para refletir as cartas vencidas restantes.
                     // Se não houver mais cartas, o loadDeck mostra o estado "Você está em dia".
                     await this.loadDeck();
@@ -1872,7 +1880,7 @@
                 this.deckPercentage = maxPossible > 0 ? Math.round((currentTotal / maxPossible) * 100) : 0;
                 this.updateGlobalProgressUI();
 
-                if (this.deckMode === 'aleatorio') {
+                if (['aleatorio', 'grafo'].includes(this.deckMode)) {
                     let dotsHtml = '';
                     for (let i = 0; i < 10; i++) {
                         let fillClass = card.score >= (i + 1) * 2 ? 'filled' : (card.score === (i * 2) + 1 ? 'half-filled' : '');
