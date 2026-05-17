@@ -1452,29 +1452,24 @@ if ($action === 'fetch') {
     if ($deck_mode === 'grafo') {
         $graphCards = buildGraphCardsSequence($cards, $tagsByCard, 6);
         if (!empty($graphCards)) {
-            $allowedIds = [];
+            $cardsById = [];
+            foreach ($cards as $cardRow) $cardsById[(int)$cardRow['id']] = $cardRow;
+
+            $orderedCards = [];
             foreach ($graphCards as $entry) {
                 $cid = (int)($entry['card_id'] ?? 0);
-                if ($cid <= 0) continue;
-                $allowedIds[$cid] = true;
-                $graphDecisionByCardId[$cid] = isset($entry['decision_tag']) ? (int)$entry['decision_tag'] : null;
+                if ($cid <= 0 || !isset($cardsById[$cid])) continue;
+                $orderedCards[] = $cardsById[$cid];
+                $graphDecisionByCardId[] = isset($entry['decision_tag']) ? (int)$entry['decision_tag'] : null;
             }
-            $cards = array_values(array_filter($cards, static fn($card) => isset($allowedIds[(int)$card['id']])));
-            usort($cards, static function($a, $b) use ($graphCards) {
-                static $position = null;
-                if ($position === null) {
-                    $position = [];
-                    foreach ($graphCards as $i => $entry) $position[(int)$entry['card_id']] = (int)$i;
-                }
-                return ($position[(int)$a['id']] ?? PHP_INT_MAX) <=> ($position[(int)$b['id']] ?? PHP_INT_MAX);
-            });
+            $cards = $orderedCards;
         } else {
             $cards = [];
         }
     }
 
     $response = [];
-    foreach ($cards as $card) {
+    foreach ($cards as $idx => $card) {
         $response[] = [
             'id' => $card['id'],
             'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
@@ -1485,7 +1480,7 @@ if ($action === 'fetch') {
             'has_audio_back' => (int)$card['has_audio_back'],
             'score' => (int)$card['score'],
             'tags' => $tagsByCard[(int)$card['id']] ?? [],
-            'graph_decision_tag_id' => $graphDecisionByCardId[(int)$card['id']] ?? null
+            'graph_decision_tag_id' => ($deck_mode === 'grafo' ? ($graphDecisionByCardId[$idx] ?? null) : ($graphDecisionByCardId[(int)$card['id']] ?? null))
         ];
     }
 
@@ -2081,9 +2076,9 @@ elseif ($action === 'update_score') {
         INSERT INTO flashcard_scores (user_id, flashcard_id, score, next_review_at) 
         VALUES (?, ?, 1, DATE_ADD(NOW(), INTERVAL 24 HOUR)) 
         ON DUPLICATE KEY UPDATE 
-            score = IF(next_review_at IS NULL OR next_review_at <= NOW(), LEAST(score + 1, 20), score), 
-            last_reviewed_at = IF(next_review_at IS NULL OR next_review_at <= NOW(), CURRENT_TIMESTAMP, last_reviewed_at),
-            next_review_at = IF(next_review_at IS NULL OR next_review_at <= NOW(), DATE_ADD(NOW(), INTERVAL (LEAST(score + 1, 20) * 24) HOUR), next_review_at)
+            score = LEAST(score + 1, 20), 
+            last_reviewed_at = CURRENT_TIMESTAMP,
+            next_review_at = DATE_ADD(NOW(), INTERVAL (LEAST(score + 1, 20) * 24) HOUR)
     ");
     
     if ($stmt->execute([$user_id, $card_id])) echo json_encode(['status' => 'success']);
