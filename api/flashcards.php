@@ -281,19 +281,34 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
 
     $chosen = [];
     $used = [];
+    $oddDecisionTagsHistory = [];
+    $oddCardsHistory = [];
 
     while (count($chosen) < $batchSize) {
         $oddCard = $pickMinCardInTag($baseTagId, $used);
         if ($oddCard === null) break;
 
-        $chosen[] = ['card_id' => $oddCard, 'decision_tag' => $baseTagId];
+        $chosen[] = [
+            'card_id' => $oddCard,
+            'decision_tag' => $baseTagId,
+            'excluded_tags' => array_values(array_unique(array_map('intval', $oddDecisionTagsHistory))),
+            'excluded_cards' => array_values(array_unique(array_map('intval', $oddCardsHistory))),
+        ];
         $used[$oddCard] = true;
+        $oddDecisionTagsHistory[] = $baseTagId;
+        $oddCardsHistory[] = $oddCard;
         $scoreByCard[$oddCard] = (int)$scoreByCard[$oddCard] + 1; // simulação local
         if (count($chosen) >= $batchSize) break;
 
         $linkedTagIds = array_map(static fn($t) => (int)$t['id'], $tagsByCard[$oddCard] ?? []);
         $linkedTagIds = array_values(array_filter(array_unique($linkedTagIds), static fn($tid) => $tid > 0));
         if (empty($linkedTagIds)) continue;
+
+        $linkedTagIdsFiltered = array_values(array_filter(
+            $linkedTagIds,
+            static fn($tid) => !in_array((int)$tid, $oddDecisionTagsHistory, true)
+        ));
+        if (!empty($linkedTagIdsFiltered)) $linkedTagIds = $linkedTagIdsFiltered;
 
         usort($linkedTagIds, static function($a, $b) use ($calcTagSens) {
             $sa = $calcTagSens((int)$a); $sb = $calcTagSens((int)$b);
@@ -304,7 +319,12 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
         $evenCard = $pickMaxCardInTag($strongestTagId, $used);
         if ($evenCard === null) continue;
 
-        $chosen[] = ['card_id' => $evenCard, 'decision_tag' => $strongestTagId];
+        $chosen[] = [
+            'card_id' => $evenCard,
+            'decision_tag' => $strongestTagId,
+            'excluded_tags' => array_values(array_unique(array_map('intval', $oddDecisionTagsHistory))),
+            'excluded_cards' => array_values(array_unique(array_map('intval', $oddCardsHistory))),
+        ];
         $used[$evenCard] = true;
         $scoreByCard[$evenCard] = (int)$scoreByCard[$evenCard] + 1; // simulação local
     }
