@@ -242,10 +242,10 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
         return $sum;
     };
 
-    $pickMinCardInTag = static function(int $tagId, ?int $avoidCard = null) use (&$cardsByTag, &$scoreByCard): ?int {
+    $pickMinCardInTag = static function(int $tagId, array $avoidCards = []) use (&$cardsByTag, &$scoreByCard): ?int {
         $best = null; $bestScore = null;
         foreach ($cardsByTag[$tagId] ?? [] as $cid) {
-            if ($avoidCard !== null && $cid === $avoidCard) continue;
+            if (isset($avoidCards[$cid])) continue;
             $s = (int)($scoreByCard[$cid] ?? 0);
             if ($best === null || $s < $bestScore || ($s === $bestScore && $cid < $best)) { $best = $cid; $bestScore = $s; }
         }
@@ -257,10 +257,10 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
         return $best;
     };
 
-    $pickMaxCardInTag = static function(int $tagId, ?int $avoidCard = null) use (&$cardsByTag, &$scoreByCard): ?int {
+    $pickMaxCardInTag = static function(int $tagId, array $avoidCards = []) use (&$cardsByTag, &$scoreByCard): ?int {
         $best = null; $bestScore = null;
         foreach ($cardsByTag[$tagId] ?? [] as $cid) {
-            if ($avoidCard !== null && $cid === $avoidCard) continue;
+            if (isset($avoidCards[$cid])) continue;
             $s = (int)($scoreByCard[$cid] ?? 0);
             if ($best === null || $s > $bestScore || ($s === $bestScore && $cid < $best)) { $best = $cid; $bestScore = $s; }
         }
@@ -280,13 +280,14 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
     $baseTagId = (int)$tagIds[0];
 
     $chosen = [];
+    $used = [];
 
     while (count($chosen) < $batchSize) {
-        $previousCard = !empty($chosen) ? (int)$chosen[count($chosen)-1]['card_id'] : null;
-        $oddCard = $pickMinCardInTag($baseTagId, $previousCard);
+        $oddCard = $pickMinCardInTag($baseTagId, $used);
         if ($oddCard === null) break;
 
         $chosen[] = ['card_id' => $oddCard, 'decision_tag' => $baseTagId];
+        $used[$oddCard] = true;
         $scoreByCard[$oddCard] = (int)$scoreByCard[$oddCard] + 1; // simulação local
         if (count($chosen) >= $batchSize) break;
 
@@ -300,10 +301,11 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
         });
 
         $strongestTagId = (int)$linkedTagIds[0];
-        $evenCard = $pickMaxCardInTag($strongestTagId, $oddCard);
+        $evenCard = $pickMaxCardInTag($strongestTagId, $used);
         if ($evenCard === null) continue;
 
         $chosen[] = ['card_id' => $evenCard, 'decision_tag' => $strongestTagId];
+        $used[$evenCard] = true;
         $scoreByCard[$evenCard] = (int)$scoreByCard[$evenCard] + 1; // simulação local
     }
 
