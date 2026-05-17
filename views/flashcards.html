@@ -703,6 +703,7 @@
             autoFlowTimer: null,
             autoFlowToken: 0,
             autoFlowTransitionDelayMs: 250,
+            scoredCardIds: new Set(),
             isGeneratingMissingAudios: false,
             audioGeneration: {
                 running: false,
@@ -943,6 +944,7 @@
                 document.getElementById('loader').style.display = 'none';
 
                 if (res) {
+                    this.scoredCardIds = new Set();
                     document.getElementById('deckName').innerText = res.deck_name || 'Flashcards';
                     this.deckMode = res.deck_mode || 'aleatorio';
                     this.frontLanguage = res.deck_front_language || 'pt-BR';
@@ -1865,10 +1867,13 @@
             },
 
             registerScore(card) {
+                if (!card || !card.id) return Promise.resolve();
+                if (this.scoredCardIds.has(card.id)) return Promise.resolve();
                 if (card.score >= 20) return Promise.resolve();
 
                 const nextScore = Math.min(card.score + 1, 20);
                 card.score = nextScore;
+                this.scoredCardIds.add(card.id);
                 
                 const maxPossible = this.totalCardsInDeck * 20;
                 let currentTotal = this.cards.reduce((sum, c) => sum + c.score, 0);
@@ -1887,7 +1892,10 @@
                     if (backDots) backDots.innerHTML = dotsHtml;
                 }
 
-                return this.api('update_score', { card_id: card.id }).catch(e => console.error(e));
+                return this.api('update_score', { card_id: card.id }).catch(e => {
+                    this.scoredCardIds.delete(card.id);
+                    console.error(e);
+                });
             },
 
             saveBookProgress() {
