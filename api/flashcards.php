@@ -1350,11 +1350,15 @@ if ($action === 'fetch') {
 
     if (in_array($deck_mode, ['aleatorio', 'grafo'], true)) {
         $orderClause = $deck_mode === 'grafo' ? 'ORDER BY f.id ASC' : 'ORDER BY RAND()';
+        $dueFilter = $deck_mode === 'grafo'
+            ? ''
+            : 'AND (fs.next_review_at IS NULL OR fs.next_review_at <= NOW())';
         $stmt = $pdo->prepare("
             SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score 
             FROM flashcards f
             LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
-            WHERE f.directory_id = ? AND (fs.next_review_at IS NULL OR fs.next_review_at <= NOW())
+            WHERE f.directory_id = ?
+            {$dueFilter}
             {$orderClause}
         ");
         $stmt->execute([$user_id, $deck_id]);
