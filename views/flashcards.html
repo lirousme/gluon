@@ -519,15 +519,13 @@
         <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg p-0 transform scale-95 transition-transform duration-300 flex flex-col max-h-[95vh]" id="singleModalContent">
             
             <div class="p-5 border-b border-slate-700 bg-slate-800/50 shrink-0 space-y-4">
-                <div id="cabecalhoDoModalDeCriarCard" class="flex justify-between items-center">
-                    <h3 class="text-lg font-semibold text-white flex items-center gap-2">
-                        <i class="fa-solid fa-plus text-gluon-primary"></i> <span id="modalTitleText">Criar Flashcard</span>
-                    </h3>
-                    <div class="grid grid-cols-2 gap-2 rounded-lg bg-slate-900/70 p-1 border border-slate-700">
-                    <button type="button" id="singleTabFront" onclick="flashcardApp.switchSingleModalTab('front')" class="single-modal-tab-btn px-3 py-2 rounded-md text-sm font-medium transition-colors bg-gluon-primary text-white">Frente do card</button>
-                    <button type="button" id="singleTabBack" onclick="flashcardApp.switchSingleModalTab('back')" class="single-modal-tab-btn px-3 py-2 rounded-md text-sm font-medium transition-colors text-slate-300 hover:text-white">Verso do card</button>
+                <div id="cabecalhoDoModalDeCriarCard" class="flex items-center gap-3">
+                    <span id="modalTitleText" class="sr-only">Criar Flashcard</span>
+                    <div class="grid grid-cols-2 gap-2 rounded-lg bg-slate-900/70 p-1 border border-slate-700 flex-1">
+                        <button type="button" id="singleTabFront" onclick="flashcardApp.switchSingleModalTab('front')" class="single-modal-tab-btn px-3 py-2 rounded-md text-sm font-medium transition-colors bg-gluon-primary text-white">Frente do card</button>
+                        <button type="button" id="singleTabBack" onclick="flashcardApp.switchSingleModalTab('back')" class="single-modal-tab-btn px-3 py-2 rounded-md text-sm font-medium transition-colors text-slate-300 hover:text-white">Verso do card</button>
                     </div>
-                    <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+                    <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl" aria-label="Fechar modal"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             </div>
             
