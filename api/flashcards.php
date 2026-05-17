@@ -249,11 +249,6 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
             $s = (int)($scoreByCard[$cid] ?? 0);
             if ($best === null || $s < $bestScore || ($s === $bestScore && $cid < $best)) { $best = $cid; $bestScore = $s; }
         }
-        if ($best !== null) return $best;
-        foreach ($cardsByTag[$tagId] ?? [] as $cid) {
-            $s = (int)($scoreByCard[$cid] ?? 0);
-            if ($best === null || $s < $bestScore || ($s === $bestScore && $cid < $best)) { $best = $cid; $bestScore = $s; }
-        }
         return $best;
     };
 
@@ -261,11 +256,6 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
         $best = null; $bestScore = null;
         foreach ($cardsByTag[$tagId] ?? [] as $cid) {
             if (isset($avoidCards[$cid])) continue;
-            $s = (int)($scoreByCard[$cid] ?? 0);
-            if ($best === null || $s > $bestScore || ($s === $bestScore && $cid < $best)) { $best = $cid; $bestScore = $s; }
-        }
-        if ($best !== null) return $best;
-        foreach ($cardsByTag[$tagId] ?? [] as $cid) {
             $s = (int)($scoreByCard[$cid] ?? 0);
             if ($best === null || $s > $bestScore || ($s === $bestScore && $cid < $best)) { $best = $cid; $bestScore = $s; }
         }
