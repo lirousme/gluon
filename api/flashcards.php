@@ -242,27 +242,30 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
         return $sum;
     };
 
-    $pickMinCardInTag = static function(int $tagId, array $exclude) use (&$cardsByTag, &$scoreByCard): ?int {
+    $pickMinCardInTag = static function(int $tagId, ?int $avoidCard = null) use (&$cardsByTag, &$scoreByCard): ?int {
         $best = null; $bestScore = null;
         foreach ($cardsByTag[$tagId] ?? [] as $cid) {
-            if (isset($exclude[$cid])) continue;
+            if ($avoidCard !== null && $cid === $avoidCard) continue;
+            $s = (int)($scoreByCard[$cid] ?? 0);
+            if ($best === null || $s < $bestScore || ($s === $bestScore && $cid < $best)) { $best = $cid; $bestScore = $s; }
+        }
+        if ($best !== null) return $best;
+        foreach ($cardsByTag[$tagId] ?? [] as $cid) {
             $s = (int)($scoreByCard[$cid] ?? 0);
             if ($best === null || $s < $bestScore || ($s === $bestScore && $cid < $best)) { $best = $cid; $bestScore = $s; }
         }
         return $best;
     };
 
-    $pickMaxCardInTag = static function(int $tagId, array $exclude, ?int $preferNotCard = null) use (&$cardsByTag, &$scoreByCard): ?int {
+    $pickMaxCardInTag = static function(int $tagId, ?int $avoidCard = null) use (&$cardsByTag, &$scoreByCard): ?int {
         $best = null; $bestScore = null;
         foreach ($cardsByTag[$tagId] ?? [] as $cid) {
-            if (isset($exclude[$cid])) continue;
-            if ($preferNotCard !== null && $cid === $preferNotCard) continue;
+            if ($avoidCard !== null && $cid === $avoidCard) continue;
             $s = (int)($scoreByCard[$cid] ?? 0);
             if ($best === null || $s > $bestScore || ($s === $bestScore && $cid < $best)) { $best = $cid; $bestScore = $s; }
         }
         if ($best !== null) return $best;
         foreach ($cardsByTag[$tagId] ?? [] as $cid) {
-            if (isset($exclude[$cid])) continue;
             $s = (int)($scoreByCard[$cid] ?? 0);
             if ($best === null || $s > $bestScore || ($s === $bestScore && $cid < $best)) { $best = $cid; $bestScore = $s; }
         }
@@ -277,14 +280,14 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
     $baseTagId = (int)$tagIds[0];
 
     $chosen = [];
-    $chosenMap = [];
 
     while (count($chosen) < $batchSize) {
-        $oddCard = $pickMinCardInTag($baseTagId, $chosenMap);
+        $previousCard = !empty($chosen) ? (int)$chosen[count($chosen)-1]['card_id'] : null;
+        $oddCard = $pickMinCardInTag($baseTagId, $previousCard);
         if ($oddCard === null) break;
+
         $chosen[] = ['card_id' => $oddCard, 'decision_tag' => $baseTagId];
-        $chosenMap[$oddCard] = true;
-        $scoreByCard[$oddCard] = (int)$scoreByCard[$oddCard] + 1; // simulação
+        $scoreByCard[$oddCard] = (int)$scoreByCard[$oddCard] + 1; // simulação local
         if (count($chosen) >= $batchSize) break;
 
         $linkedTagIds = array_map(static fn($t) => (int)$t['id'], $tagsByCard[$oddCard] ?? []);
@@ -295,17 +298,18 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
             $sa = $calcTagSens((int)$a); $sb = $calcTagSens((int)$b);
             return ($sb <=> $sa) ?: ((int)$a <=> (int)$b);
         });
+
         $strongestTagId = (int)$linkedTagIds[0];
-        $evenCard = $pickMaxCardInTag($strongestTagId, $chosenMap, $oddCard);
+        $evenCard = $pickMaxCardInTag($strongestTagId, $oddCard);
         if ($evenCard === null) continue;
 
         $chosen[] = ['card_id' => $evenCard, 'decision_tag' => $strongestTagId];
-        $chosenMap[$evenCard] = true;
-        $scoreByCard[$evenCard] = (int)$scoreByCard[$evenCard] + 1; // simulação
+        $scoreByCard[$evenCard] = (int)$scoreByCard[$evenCard] + 1; // simulação local
     }
 
     return $chosen;
 }
+
 
 function verifyDirectoryOwnership($pdo, $directory_id, $user_id) {
     $stmt = $pdo->prepare("SELECT id, type, name_encrypted FROM directories WHERE id = ? AND user_id = ?");
