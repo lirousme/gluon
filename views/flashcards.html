@@ -518,18 +518,24 @@
     <div id="singleModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
         <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg p-0 transform scale-95 transition-transform duration-300 flex flex-col max-h-[95vh]" id="singleModalContent">
             
-            <div id="cabecalhoDoModalDeCriarCard" class="p-5 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center shrink-0">
-                <h3 class="text-lg font-semibold text-white flex items-center gap-2">
-                    <i class="fa-solid fa-plus text-gluon-primary"></i> <span id="modalTitleText">Adicionar Flashcard</span>
-                </h3>
-                <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+            <div id="cabecalhoDoModalDeCriarCard" class="p-5 border-b border-slate-700 bg-slate-800/50 shrink-0 space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-plus text-gluon-primary"></i> <span id="modalTitleText">Criar Flashcard</span>
+                    </h3>
+                    <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="grid grid-cols-2 gap-2 rounded-lg bg-slate-900/70 p-1 border border-slate-700">
+                    <button type="button" id="singleTabFront" onclick="flashcardApp.switchSingleModalTab('front')" class="single-modal-tab-btn px-3 py-2 rounded-md text-sm font-medium transition-colors bg-gluon-primary text-white">Frente do card</button>
+                    <button type="button" id="singleTabBack" onclick="flashcardApp.switchSingleModalTab('back')" class="single-modal-tab-btn px-3 py-2 rounded-md text-sm font-medium transition-colors text-slate-300 hover:text-white">Verso do card</button>
+                </div>
             </div>
             
             <form onsubmit="flashcardApp.saveSingleCard(event)" class="p-6 overflow-y-auto flex-1 space-y-5">
                 <input type="hidden" id="editCardId" value="">
                 <input type="hidden" id="selectedTagIds" value="[]">
 
-                <div>
+                <div id="singleFrontTabContent">
                     <label class="block text-sm font-medium text-slate-300 mb-2">Frente (Obrigatório texto ou imagem)</label>
                     <textarea id="singleFront" rows="2" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors resize-none"></textarea>
                     
@@ -542,7 +548,7 @@
                     </div>
                 </div>
                 
-                <div class="pt-3 border-t border-slate-700">
+                <div id="singleBackTabContent" class="pt-3 border-t border-slate-700 hidden">
                     <label class="block text-sm font-medium text-blue-300 mb-2">Verso (Opcional)</label>
                     <textarea id="singleBack" rows="2" class="w-full bg-slate-900 border border-blue-500/50 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors resize-none"></textarea>
                     
@@ -1386,6 +1392,7 @@
                 document.getElementById('selectedTagIds').value = JSON.stringify((card.tags || []).map(tag => Number(tag.id)));
                 this.renderTagSelector();
                 document.getElementById('modalTitleText').innerText = 'Editar Flashcard';
+                this.switchSingleModalTab('front');
                 
                 this.removeCardImage('front');
                 if (card.image_front) {
@@ -2150,6 +2157,26 @@
                 setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); }, 20);
             },
 
+            switchSingleModalTab(tab) {
+                const isFrontTab = tab !== 'back';
+                const frontButton = document.getElementById('singleTabFront');
+                const backButton = document.getElementById('singleTabBack');
+                const frontContent = document.getElementById('singleFrontTabContent');
+                const backContent = document.getElementById('singleBackTabContent');
+
+                if (!frontButton || !backButton || !frontContent || !backContent) return;
+
+                frontButton.classList.toggle('bg-gluon-primary', isFrontTab);
+                frontButton.classList.toggle('text-white', isFrontTab);
+                frontButton.classList.toggle('text-slate-300', !isFrontTab);
+                backButton.classList.toggle('bg-gluon-primary', !isFrontTab);
+                backButton.classList.toggle('text-white', !isFrontTab);
+                backButton.classList.toggle('text-slate-300', isFrontTab);
+
+                frontContent.classList.toggle('hidden', !isFrontTab);
+                backContent.classList.toggle('hidden', isFrontTab);
+            },
+
             openSingleModal() {
                 if (this.isDirectoryRandomStudy()) {
                     this.showToast('A criação de cards está disponível apenas no modo deck.', 'error');
@@ -2160,7 +2187,8 @@
                 document.getElementById('singleBack').value = '';
                 document.getElementById('selectedTagIds').value = '[]';
                 this.renderTagSelector([]);
-                document.getElementById('modalTitleText').innerText = 'Adicionar Flashcard';
+                this.switchSingleModalTab('front');
+                document.getElementById('modalTitleText').innerText = 'Criar Flashcard';
                 
                 this.removeCardImage('front');
                 this.removeCardImage('back');
