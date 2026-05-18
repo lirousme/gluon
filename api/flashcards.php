@@ -124,6 +124,11 @@ try {
         name VARCHAR(80) NOT NULL,
         color VARCHAR(20) NOT NULL DEFAULT '#334155',
         is_book TINYINT(1) NOT NULL DEFAULT 0,
+        is_verb_tense TINYINT(1) NOT NULL DEFAULT 0,
+        is_sentence_type TINYINT(1) NOT NULL DEFAULT 0,
+        is_lexical_chunk TINYINT(1) NOT NULL DEFAULT 0,
+        is_relation_type TINYINT(1) NOT NULL DEFAULT 0,
+        is_word TINYINT(1) NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uniq_user_tag_name (user_id, name),
         INDEX idx_tag_user (user_id),
@@ -133,6 +138,26 @@ try {
 
 try {
     $pdo->exec("ALTER TABLE flashcard_tags ADD COLUMN is_book TINYINT(1) NOT NULL DEFAULT 0");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE flashcard_tags ADD COLUMN is_verb_tense TINYINT(1) NOT NULL DEFAULT 0");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE flashcard_tags ADD COLUMN is_sentence_type TINYINT(1) NOT NULL DEFAULT 0");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE flashcard_tags ADD COLUMN is_lexical_chunk TINYINT(1) NOT NULL DEFAULT 0");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE flashcard_tags ADD COLUMN is_relation_type TINYINT(1) NOT NULL DEFAULT 0");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE flashcard_tags ADD COLUMN is_word TINYINT(1) NOT NULL DEFAULT 0");
 } catch (PDOException $e) {}
 
 try {
@@ -2365,7 +2390,7 @@ elseif ($action === 'delete_card') {
 }
 
 elseif ($action === 'list_tags') {
-    $stmt = $pdo->prepare("SELECT id, name, color, is_book FROM flashcard_tags WHERE user_id = ? ORDER BY name ASC");
+    $stmt = $pdo->prepare("SELECT id, name, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word FROM flashcard_tags WHERE user_id = ? ORDER BY name ASC");
     $stmt->execute([$user_id]);
     echo json_encode(['status' => 'success', 'data' => $stmt->fetchAll()]);
 }
@@ -2374,12 +2399,17 @@ elseif ($action === 'create_tag') {
     $name = trim((string)($input['name'] ?? ''));
     $color = trim((string)($input['color'] ?? '#334155'));
     $is_book = !empty($input['is_book']) ? 1 : 0;
+    $is_verb_tense = !empty($input['is_verb_tense']) ? 1 : 0;
+    $is_sentence_type = !empty($input['is_sentence_type']) ? 1 : 0;
+    $is_lexical_chunk = !empty($input['is_lexical_chunk']) ? 1 : 0;
+    $is_relation_type = !empty($input['is_relation_type']) ? 1 : 0;
+    $is_word = !empty($input['is_word']) ? 1 : 0;
     if ($name === '') die(json_encode(['status' => 'error', 'message' => 'Nome da tag é obrigatório.']));
     if (!preg_match('/^#[0-9a-fA-F]{6}$/', $color)) $color = '#334155';
 
-    $stmt = $pdo->prepare("INSERT INTO flashcard_tags (user_id, name, color, is_book) VALUES (?, ?, ?, ?)");
+    $stmt = $pdo->prepare("INSERT INTO flashcard_tags (user_id, name, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
     try {
-        $stmt->execute([$user_id, $name, $color, $is_book]);
+        $stmt->execute([$user_id, $name, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word]);
     } catch (PDOException $e) {
         die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com esse nome.']));
     }

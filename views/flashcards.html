@@ -502,10 +502,32 @@
             <form onsubmit="flashcardApp.createTag(event)" class="p-5 space-y-4">
                 <input id="tagNameInput" type="text" required maxlength="80" placeholder="Ex.: Gramática, Verbos, Trabalho..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
                 <input id="tagColorInput" type="color" value="#6366f1" class="w-full h-10 bg-slate-900 border border-slate-600 rounded-lg">
-                <label class="flex items-center gap-2 text-sm text-slate-200">
-                    <input id="tagIsBookInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
-                    <span>Esta tag representa um livro</span>
-                </label>
+                <div class="space-y-2 text-sm text-slate-200">
+                    <label class="flex items-center gap-2">
+                        <input id="tagIsBookInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
+                        <span>Esta tag representa um livro</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input id="tagIsVerbTenseInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
+                        <span>Esta tag representa um Tempo Verbal</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input id="tagIsSentenceTypeInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
+                        <span>Esta tag representa um Tipo Frasal</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input id="tagIsLexicalChunkInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
+                        <span>Esta tag representa um Lexical Chunk</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input id="tagIsRelationTypeInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
+                        <span>Esta tag representa um Tipo de Relação</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input id="tagIsWordInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
+                        <span>Esta tag representa uma Palavra</span>
+                    </label>
+                </div>
                 <div class="flex justify-end gap-3">
                     <button type="button" onclick="flashcardApp.closeModals()" class="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-800">Cancelar</button>
                     <button id="btnSaveTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white">Criar tag</button>
@@ -2445,13 +2467,23 @@
                 const res = await this.api('create_tag', {
                     name: document.getElementById('tagNameInput').value.trim(),
                     color: document.getElementById('tagColorInput').value,
-                    is_book: document.getElementById('tagIsBookInput').checked ? 1 : 0
+                    is_book: document.getElementById('tagIsBookInput').checked ? 1 : 0,
+                    is_verb_tense: document.getElementById('tagIsVerbTenseInput').checked ? 1 : 0,
+                    is_sentence_type: document.getElementById('tagIsSentenceTypeInput').checked ? 1 : 0,
+                    is_lexical_chunk: document.getElementById('tagIsLexicalChunkInput').checked ? 1 : 0,
+                    is_relation_type: document.getElementById('tagIsRelationTypeInput').checked ? 1 : 0,
+                    is_word: document.getElementById('tagIsWordInput').checked ? 1 : 0
                 });
                 btn.disabled = false;
                 if (res) {
                     this.showToast(res.message || 'Tag criada com sucesso!');
                     await this.loadTags();
                     document.getElementById('tagIsBookInput').checked = false;
+                    document.getElementById('tagIsVerbTenseInput').checked = false;
+                    document.getElementById('tagIsSentenceTypeInput').checked = false;
+                    document.getElementById('tagIsLexicalChunkInput').checked = false;
+                    document.getElementById('tagIsRelationTypeInput').checked = false;
+                    document.getElementById('tagIsWordInput').checked = false;
                     this.closeModals();
                 }
             },
