@@ -514,6 +514,23 @@
         </div>
     </div>
 
+    <div id="editTagModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-[61] opacity-0 transition-opacity duration-300 p-4">
+        <div id="editTagModalContent" class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md transform scale-95 transition-transform duration-300">
+            <div class="flex items-center justify-between p-5 border-b border-slate-700">
+                <h3 class="text-lg font-semibold text-white">Editar tag</h3>
+                <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form onsubmit="flashcardApp.updateTagName(event)" class="p-5 space-y-4">
+                <input id="editTagIdInput" type="hidden">
+                <input id="editTagNameInput" type="text" required maxlength="80" placeholder="Ex.: Morango Verde" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="flashcardApp.closeModals()" class="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-800">Cancelar</button>
+                    <button id="btnUpdateTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Modal: Adicionar/Editar Card Unitário -->
     <div id="singleModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
         <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg p-0 transform scale-95 transition-transform duration-300 flex flex-col max-h-[95vh]" id="singleModalContent">
@@ -884,6 +901,27 @@
                 hidden.value = JSON.stringify(next);
                 this.renderTagSelector(next);
             },
+            openEditTagModal(tagId) {
+                const parsedId = Number(tagId);
+                if (!parsedId) return;
+                const tag = this.availableTags.find(t => Number(t.id) === parsedId);
+                if (!tag) {
+                    this.showToast('Tag não encontrada.', 'error');
+                    return;
+                }
+                document.getElementById('editTagIdInput').value = String(parsedId);
+                document.getElementById('editTagNameInput').value = String(tag.name || '');
+                const modal = document.getElementById('editTagModal');
+                const content = document.getElementById('editTagModalContent');
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => {
+                    modal.classList.remove('opacity-0');
+                    content.classList.remove('scale-95');
+                    document.getElementById('editTagNameInput').focus();
+                    document.getElementById('editTagNameInput').select();
+                }, 20);
+            },
 
             async generateMissingAudiosFromDeckFromPanel() {
                 this.closeRightPanel();
@@ -1127,7 +1165,7 @@
                 const tags = card.tags || [];
                 if (tags.length) {
                     tagsPanel.classList.remove('hidden');
-                    tagsList.innerHTML = tags.map(tag => `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-slate-600/90 text-slate-200 bg-slate-800/90"><span class="inline-block w-1.5 h-1.5 rounded-full" style="background:${tag.color || '#334155'}"></span>${this.escapeHTML(tag.name || '')}</span>`).join('');
+                    tagsList.innerHTML = tags.map(tag => `<button type="button" onclick="flashcardApp.openEditTagModal(${Number(tag.id)})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-slate-600/90 text-slate-200 bg-slate-800/90 hover:bg-slate-700/90 transition-colors" title="Editar tag"><span class="inline-block w-1.5 h-1.5 rounded-full" style="background:${tag.color || '#334155'}"></span>${this.escapeHTML(tag.name || '')}<i class="fa-solid fa-pen text-[9px] opacity-75 ml-0.5"></i></button>`).join('');
                 } else {
                     tagsPanel.classList.add('hidden');
                     tagsList.innerHTML = '';
@@ -2243,7 +2281,7 @@
             },
 
             closeModals() {
-                ['settings', 'single', 'bulk', 'resetBookScore', 'tag'].forEach(prefix => {
+                ['settings', 'single', 'bulk', 'resetBookScore', 'tag', 'editTag'].forEach(prefix => {
                     const modal = document.getElementById(`${prefix}Modal`);
                     const content = document.getElementById(`${prefix}ModalContent`);
                     if(modal && !modal.classList.contains('hidden')) {
@@ -2414,6 +2452,21 @@
                     this.showToast(res.message || 'Tag criada com sucesso!');
                     await this.loadTags();
                     document.getElementById('tagIsBookInput').checked = false;
+                    this.closeModals();
+                }
+            },
+            async updateTagName(e) {
+                e.preventDefault();
+                const btn = document.getElementById('btnUpdateTag');
+                btn.disabled = true;
+                const tagId = Number(document.getElementById('editTagIdInput').value);
+                const name = document.getElementById('editTagNameInput').value.trim();
+                const res = await this.api('update_tag', { id: tagId, name });
+                btn.disabled = false;
+                if (res) {
+                    this.showToast(res.message || 'Tag atualizada com sucesso!');
+                    await this.loadTags();
+                    await this.loadDeck();
                     this.closeModals();
                 }
             },
