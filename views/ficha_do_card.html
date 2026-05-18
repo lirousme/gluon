@@ -4,26 +4,143 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Gluon - Ficha do Card</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    textarea { min-height: 170px; }
+  </style>
 </head>
-<body>
+<body class="min-h-[100dvh] bg-slate-950 text-slate-100 selection:bg-blue-600/60">
+  <main class="max-w-4xl mx-auto px-4 py-6 sm:py-8">
+    <div class="mb-5 flex items-center justify-between gap-3">
+      <a id="backLink" href="/dashboard" class="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm">
+        <i class="fa-solid fa-arrow-left"></i> Voltar
+      </a>
+      <h1 id="pageTitle" class="text-lg sm:text-xl font-semibold">Nova ficha de card</h1>
+    </div>
+
+    <form id="cardForm" class="bg-slate-900 border border-slate-700 rounded-xl p-4 sm:p-6 space-y-4 shadow-xl">
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label for="singleFront" class="block text-sm mb-1 text-slate-300">Frente</label>
+          <textarea id="singleFront" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Conteúdo da frente do card"></textarea>
+        </div>
+        <div>
+          <label for="singleBack" class="block text-sm mb-1 text-slate-300">Verso</label>
+          <textarea id="singleBack" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Conteúdo do verso do card"></textarea>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between gap-3 pt-2">
+        <p id="statusMessage" class="text-sm text-slate-400">Preencha ao menos um lado do card.</p>
+        <button type="submit" id="btnSave" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2 rounded-lg font-medium">
+          <i class="fa-solid fa-check"></i>
+          <span id="btnLabel">Salvar card</span>
+        </button>
+      </div>
+    </form>
+  </main>
+
   <script>
-    const urlParams = new URLSearchParams(window.location.search);
-    const deckId = urlParams.get('id');
-    const from = urlParams.get('from') || '/dashboard';
-    const editCardId = urlParams.get('edit_card_id');
+    const params = new URLSearchParams(window.location.search);
+    const deckId = params.get('id');
+    const from = params.get('from') || '/dashboard';
+    const editCardId = params.get('edit_card_id');
+
+    const backLink = document.getElementById('backLink');
+    const pageTitle = document.getElementById('pageTitle');
+    const statusMessage = document.getElementById('statusMessage');
+    const btnSave = document.getElementById('btnSave');
+    const btnLabel = document.getElementById('btnLabel');
+    const form = document.getElementById('cardForm');
+
+    backLink.href = decodeURIComponent(from);
 
     if (!deckId) {
-      window.location.href = decodeURIComponent(from);
-    } else {
-      const flashcardsParams = new URLSearchParams({
-        id: deckId,
-        card_sheet_embed: '1',
-        card_sheet_mode: editCardId ? 'edit' : 'create',
-        from: `/ficha_do_card?id=${encodeURIComponent(deckId)}&from=${encodeURIComponent(from)}`
-      });
-      if (editCardId) flashcardsParams.set('edit_card_id', editCardId);
-      window.location.replace(`/flashcards?${flashcardsParams.toString()}`);
+      window.location.replace(backLink.href);
     }
+
+    async function api(action, payload = {}) {
+      payload.action = action;
+      const res = await fetch('/api/flashcards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.status === 401) {
+        window.location.href = '/';
+        return null;
+      }
+
+      const data = await res.json();
+      if (data.status !== 'success') throw new Error(data.message || 'Falha na requisição.');
+      return data;
+    }
+
+    async function preloadEditCard() {
+      if (!editCardId) return;
+      pageTitle.textContent = 'Editar ficha do card';
+      btnLabel.textContent = 'Salvar alterações';
+      statusMessage.textContent = 'Carregando conteúdo atual do card...';
+
+      try {
+        const res = await api('get_deck', { deck_id: deckId });
+        const cards = Array.isArray(res?.data?.cards) ? res.data.cards : [];
+        const card = cards.find(c => String(c.id) === String(editCardId));
+
+        if (!card) throw new Error('Card não encontrado para edição.');
+
+        document.getElementById('singleFront').value = card.front || '';
+        document.getElementById('singleBack').value = card.back || '';
+        statusMessage.textContent = 'Você está editando um card existente.';
+      } catch (error) {
+        statusMessage.textContent = error.message;
+        statusMessage.classList.remove('text-slate-400');
+        statusMessage.classList.add('text-red-400');
+      }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const front = document.getElementById('singleFront').value.trim();
+      const back = document.getElementById('singleBack').value.trim();
+
+      if (!front && !back) {
+        statusMessage.textContent = 'Preencha pelo menos frente ou verso.';
+        statusMessage.classList.remove('text-slate-400');
+        statusMessage.classList.add('text-amber-300');
+        return;
+      }
+
+      const original = btnSave.innerHTML;
+      btnSave.disabled = true;
+      btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
+
+      try {
+        const action = editCardId ? 'update_card' : 'add_single';
+        const payload = { deck_id: deckId, front, back, tag_ids: [] };
+        if (editCardId) payload.card_id = editCardId;
+
+        const response = await api(action, payload);
+        statusMessage.textContent = response?.message || 'Card salvo com sucesso.';
+        statusMessage.classList.remove('text-slate-400', 'text-amber-300', 'text-red-400');
+        statusMessage.classList.add('text-emerald-300');
+
+        setTimeout(() => {
+          window.location.href = backLink.href;
+        }, 250);
+      } catch (error) {
+        statusMessage.textContent = error.message || 'Erro ao salvar card.';
+        statusMessage.classList.remove('text-slate-400', 'text-amber-300', 'text-emerald-300');
+        statusMessage.classList.add('text-red-400');
+      } finally {
+        btnSave.disabled = false;
+        btnSave.innerHTML = original;
+      }
+    });
+
+    preloadEditCard();
   </script>
 </body>
 </html>
