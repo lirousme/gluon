@@ -4,47 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Gluon - Ficha do Card</title>
-  <style>html,body{margin:0;height:100%;background:#020617}iframe{border:0;width:100%;height:100%;display:block}</style>
 </head>
 <body>
-  <iframe id="cardSheetFrame" title="Ficha do card"></iframe>
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     const deckId = urlParams.get('id');
     const from = urlParams.get('from') || '/dashboard';
     const editCardId = urlParams.get('edit_card_id');
+
     if (!deckId) {
       window.location.href = decodeURIComponent(from);
     } else {
-      const frame = document.getElementById('cardSheetFrame');
-      const flashcardsParams = new URLSearchParams({ id: deckId, card_sheet_embed: '1', from: `/ficha_do_card?id=${encodeURIComponent(deckId)}&from=${encodeURIComponent(from)}` });
-      frame.src = `/flashcards?${flashcardsParams.toString()}`;
-      const tryOpen = () => {
-        try {
-          const app = frame.contentWindow?.flashcardApp;
-          if (!app || !app.deckMode) return false;
-          if (app.deckMode !== 'grafo') {
-            frame.contentWindow.location.href = `/flashcards?id=${encodeURIComponent(deckId)}&from=${encodeURIComponent(from)}`;
-            return true;
-          }
-          if (editCardId) {
-            const idNum = Number(editCardId);
-            const idx = app.cards.findIndex(c => Number(c.id) === idNum);
-            if (idx >= 0) app.currentIndex = idx;
-            app.editCurrentCard();
-          } else {
-            app.openSingleModal();
-          }
-          return true;
-        } catch (_) {
-          return false;
-        }
-      };
-      let tries = 0;
-      const interval = setInterval(() => {
-        tries += 1;
-        if (tryOpen() || tries > 120) clearInterval(interval);
-      }, 100);
+      const flashcardsParams = new URLSearchParams({
+        id: deckId,
+        card_sheet_embed: '1',
+        card_sheet_mode: editCardId ? 'edit' : 'create',
+        from: `/ficha_do_card?id=${encodeURIComponent(deckId)}&from=${encodeURIComponent(from)}`
+      });
+      if (editCardId) flashcardsParams.set('edit_card_id', editCardId);
+      window.location.replace(`/flashcards?${flashcardsParams.toString()}`);
     }
   </script>
 </body>
