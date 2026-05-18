@@ -188,6 +188,71 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (PDOException $e) {}
 
+foreach (['subjects_links', 'objects_links'] as $linkTable) {
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS {$linkTable} (
+            flashcard_id INT UNSIGNED NOT NULL,
+            tag_id INT UNSIGNED NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (flashcard_id, tag_id),
+            INDEX idx_tag_id (tag_id),
+            INDEX idx_flashcard_id (flashcard_id),
+            FOREIGN KEY (flashcard_id) REFERENCES flashcards(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id) REFERENCES flashcard_tags(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    } catch (PDOException $e) {}
+}
+
+function sanitizeTagIds($rawTagIds): array {
+    if (!is_array($rawTagIds)) return [];
+    return array_values(array_unique(array_filter(array_map('intval', $rawTagIds), static fn($id) => $id > 0)));
+}
+
+function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int $user_id): array {
+    $allowedTables = ['flashcard_tag_links', 'subjects_links', 'objects_links'];
+    if (!in_array($linkTable, $allowedTables, true) || empty($cardIds)) return [];
+
+    $tagPlaceholders = implode(',', array_fill(0, count($cardIds), '?'));
+    $stmtTags = $pdo->prepare("
+        SELECT l.flashcard_id, t.id AS tag_id, t.name, t.color
+        FROM {$linkTable} l
+        JOIN flashcard_tags t ON t.id = l.tag_id
+        WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id = ?
+        ORDER BY t.name ASC
+    ");
+    $stmtTags->execute(array_merge($cardIds, [$user_id]));
+
+    $tagsByCard = [];
+    foreach ($stmtTags->fetchAll() as $tagRow) {
+        $flashcardId = (int)$tagRow['flashcard_id'];
+        if (!isset($tagsByCard[$flashcardId])) $tagsByCard[$flashcardId] = [];
+        $tagsByCard[$flashcardId][] = [
+            'id' => (int)$tagRow['tag_id'],
+            'name' => $tagRow['name'],
+            'color' => $tagRow['color']
+        ];
+    }
+    return $tagsByCard;
+}
+
+function syncCardTagLinks(PDO $pdo, string $linkTable, int $card_id, array $tagIds, int $user_id): void {
+    $allowedTables = ['flashcard_tag_links', 'subjects_links', 'objects_links'];
+    if (!in_array($linkTable, $allowedTables, true)) return;
+
+    $pdo->prepare("DELETE l FROM {$linkTable} l JOIN flashcards f ON f.id = l.flashcard_id JOIN directories d ON d.id = f.directory_id WHERE l.flashcard_id = ? AND d.user_id = ?")
+        ->execute([$card_id, $user_id]);
+
+    if (empty($tagIds)) return;
+
+    $stmtInsertTag = $pdo->prepare("
+        INSERT IGNORE INTO {$linkTable} (flashcard_id, tag_id)
+        SELECT ?, t.id FROM flashcard_tags t WHERE t.id = ? AND t.user_id = ?
+    ");
+    foreach ($tagIds as $tag_id) {
+        $stmtInsertTag->execute([$card_id, $tag_id, $user_id]);
+    }
+}
+
 // Função auxiliar para verificar se o usuário é dono do deck (Segurança IDOR)
 function isFlashcardDeckDirectoryType($type): bool {
     $type = (int)$type;
@@ -1349,27 +1414,9 @@ if ($action === 'fetch') {
         $deck_percentage = $max_possible_score > 0 ? round(($total_score_directory / $max_possible_score) * 100) : 0;
 
         $cardIds = array_map(static fn($card) => (int)$card['id'], $cards);
-        $tagsByCard = [];
-        if (!empty($cardIds)) {
-            $tagPlaceholders = implode(',', array_fill(0, count($cardIds), '?'));
-            $stmtTags = $pdo->prepare("
-                SELECT l.flashcard_id, t.id AS tag_id, t.name, t.color
-                FROM flashcard_tag_links l
-                JOIN flashcard_tags t ON t.id = l.tag_id
-                WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id = ?
-                ORDER BY t.name ASC
-            ");
-            $stmtTags->execute(array_merge($cardIds, [$user_id]));
-            foreach ($stmtTags->fetchAll() as $tagRow) {
-                $flashcardId = (int)$tagRow['flashcard_id'];
-                if (!isset($tagsByCard[$flashcardId])) $tagsByCard[$flashcardId] = [];
-                $tagsByCard[$flashcardId][] = [
-                    'id' => (int)$tagRow['tag_id'],
-                    'name' => $tagRow['name'],
-                    'color' => $tagRow['color']
-                ];
-            }
-        }
+        $tagsByCard = fetchLinkedTagsByCard($pdo, 'flashcard_tag_links', $cardIds, $user_id);
+        $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', $cardIds, $user_id);
+        $objectTagsByCard = fetchLinkedTagsByCard($pdo, 'objects_links', $cardIds, $user_id);
 
         $response = [];
         foreach ($cards as $card) {
@@ -1382,7 +1429,9 @@ if ($action === 'fetch') {
                 'has_audio_front' => (int)$card['has_audio_front'],
                 'has_audio_back' => (int)$card['has_audio_back'],
                 'score' => (int)$card['score'],
-                'tags' => $tagsByCard[(int)$card['id']] ?? []
+                'tags' => $tagsByCard[(int)$card['id']] ?? [],
+                'subject_tags' => $subjectTagsByCard[(int)$card['id']] ?? [],
+                'object_tags' => $objectTagsByCard[(int)$card['id']] ?? []
             ];
         }
 
@@ -1495,27 +1544,9 @@ if ($action === 'fetch') {
     }
 
     $cardIds = array_map(static fn($card) => (int)$card['id'], $cards);
-    $tagsByCard = [];
-    if (!empty($cardIds)) {
-        $tagPlaceholders = implode(',', array_fill(0, count($cardIds), '?'));
-        $stmtTags = $pdo->prepare("
-            SELECT l.flashcard_id, t.id AS tag_id, t.name, t.color
-            FROM flashcard_tag_links l
-            JOIN flashcard_tags t ON t.id = l.tag_id
-            WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id = ?
-            ORDER BY t.name ASC
-        ");
-        $stmtTags->execute(array_merge($cardIds, [$user_id]));
-        foreach ($stmtTags->fetchAll() as $tagRow) {
-            $flashcardId = (int)$tagRow['flashcard_id'];
-            if (!isset($tagsByCard[$flashcardId])) $tagsByCard[$flashcardId] = [];
-            $tagsByCard[$flashcardId][] = [
-                'id' => (int)$tagRow['tag_id'],
-                'name' => $tagRow['name'],
-                'color' => $tagRow['color']
-            ];
-        }
-    }
+    $tagsByCard = fetchLinkedTagsByCard($pdo, 'flashcard_tag_links', $cardIds, $user_id);
+    $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', $cardIds, $user_id);
+    $objectTagsByCard = fetchLinkedTagsByCard($pdo, 'objects_links', $cardIds, $user_id);
 
     $graphDecisionByCardId = [];
     if ($deck_mode === 'grafo') {
@@ -1549,6 +1580,8 @@ if ($action === 'fetch') {
             'has_audio_back' => (int)$card['has_audio_back'],
             'score' => (int)$card['score'],
             'tags' => $tagsByCard[(int)$card['id']] ?? [],
+            'subject_tags' => $subjectTagsByCard[(int)$card['id']] ?? [],
+            'object_tags' => $objectTagsByCard[(int)$card['id']] ?? [],
             'graph_decision_tag_id' => ($deck_mode === 'grafo' ? ($graphDecisionByCardId[$idx] ?? null) : ($graphDecisionByCardId[(int)$card['id']] ?? null))
         ];
     }
@@ -2240,7 +2273,9 @@ elseif ($action === 'add_single') {
     $back = trim($input['back'] ?? '');
     $image_front = $input['image_front'] ?? null;
     $image_back = $input['image_back'] ?? null; 
-    $tag_ids = array_values(array_unique(array_map('intval', $input['tag_ids'] ?? [])));
+    $tag_ids = sanitizeTagIds($input['tag_ids'] ?? []);
+    $subject_tag_ids = sanitizeTagIds($input['subject_tag_ids'] ?? []);
+    $object_tag_ids = sanitizeTagIds($input['object_tag_ids'] ?? []);
 
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
@@ -2262,15 +2297,9 @@ elseif ($action === 'add_single') {
     
     if ($stmt->execute([$deck_id, $front_enc, $back_enc, $img_front_enc, $img_back_enc])) {
         $new_card_id = (int)$pdo->lastInsertId();
-        if (!empty($tag_ids)) {
-            $stmtInsertTag = $pdo->prepare("
-                INSERT IGNORE INTO flashcard_tag_links (flashcard_id, tag_id)
-                SELECT ?, t.id FROM flashcard_tags t WHERE t.id = ? AND t.user_id = ?
-            ");
-            foreach ($tag_ids as $tag_id) {
-                $stmtInsertTag->execute([$new_card_id, $tag_id, $user_id]);
-            }
-        }
+        syncCardTagLinks($pdo, 'flashcard_tag_links', $new_card_id, $tag_ids, $user_id);
+        syncCardTagLinks($pdo, 'subjects_links', $new_card_id, $subject_tag_ids, $user_id);
+        syncCardTagLinks($pdo, 'objects_links', $new_card_id, $object_tag_ids, $user_id);
         $front_language = normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR');
         $back_language = normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB');
         $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'traducoes', 'traducoes');
@@ -2344,7 +2373,9 @@ elseif ($action === 'update_card') {
     $back = trim($input['back'] ?? '');
     $image_front = $input['image_front'] ?? null;
     $image_back = $input['image_back'] ?? null;
-    $tag_ids = array_values(array_unique(array_map('intval', $input['tag_ids'] ?? [])));
+    $tag_ids = sanitizeTagIds($input['tag_ids'] ?? []);
+    $subject_tag_ids = sanitizeTagIds($input['subject_tag_ids'] ?? []);
+    $object_tag_ids = sanitizeTagIds($input['object_tag_ids'] ?? []);
 
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
@@ -2366,17 +2397,9 @@ elseif ($action === 'update_card') {
     $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ? WHERE id = ?");
     
     if ($stmt->execute([$front_enc, $back_enc, $img_front_enc, $img_back_enc, $card_id])) {
-        $pdo->prepare("DELETE l FROM flashcard_tag_links l JOIN flashcards f ON f.id = l.flashcard_id JOIN directories d ON d.id = f.directory_id WHERE l.flashcard_id = ? AND d.user_id = ?")
-            ->execute([$card_id, $user_id]);
-        if (!empty($tag_ids)) {
-            $stmtInsertTag = $pdo->prepare("
-                INSERT IGNORE INTO flashcard_tag_links (flashcard_id, tag_id)
-                SELECT ?, t.id FROM flashcard_tags t WHERE t.id = ? AND t.user_id = ?
-            ");
-            foreach ($tag_ids as $tag_id) {
-                $stmtInsertTag->execute([$card_id, $tag_id, $user_id]);
-            }
-        }
+        syncCardTagLinks($pdo, 'flashcard_tag_links', $card_id, $tag_ids, $user_id);
+        syncCardTagLinks($pdo, 'subjects_links', $card_id, $subject_tag_ids, $user_id);
+        syncCardTagLinks($pdo, 'objects_links', $card_id, $object_tag_ids, $user_id);
         echo json_encode(['status' => 'success', 'message' => 'Card atualizado.']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar card.']);
