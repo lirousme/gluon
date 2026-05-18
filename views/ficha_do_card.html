@@ -22,6 +22,8 @@
     <form id="cardForm" class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl p-4 sm:p-5 space-y-5">
       <input type="hidden" id="editCardId" value="">
       <input type="hidden" id="selectedTagIds" value="[]">
+      <input type="hidden" id="selectedSubjectTagIds" value="[]">
+      <input type="hidden" id="selectedObjectTagIds" value="[]">
 
       <div class="grid grid-cols-2 gap-2 rounded-lg bg-slate-900/70 p-1 border border-slate-700">
         <button type="button" id="singleTabFront" class="px-3 py-2 rounded-md text-sm font-medium transition-colors bg-gluon-primary text-white">Frente do card</button>
@@ -58,6 +60,18 @@
         <div id="cardTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
 
+      <section id="SubjectTagsPanel" class="pt-3 border-t border-slate-700">
+        <label class="block text-sm font-medium text-emerald-300 mb-2">Subjects deste card</label>
+        <input id="subjectTagSearchInput" type="text" placeholder="Pesquisar tag de subject por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm">
+        <div id="subjectTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
+      </section>
+
+      <section id="ObjectTagsPanel" class="pt-3 border-t border-slate-700">
+        <label class="block text-sm font-medium text-amber-300 mb-2">Objects deste card</label>
+        <input id="objectTagSearchInput" type="text" placeholder="Pesquisar tag de object por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm">
+        <div id="objectTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
+      </section>
+
       <div class="flex items-center justify-between gap-3 pt-2 border-t border-slate-700">
         <p id="statusMessage" class="text-sm text-slate-400">Preencha pelo menos um lado com texto ou imagem.</p>
         <button type="submit" id="btnSave" class="inline-flex items-center gap-2 bg-gluon-primary hover:bg-blue-600 px-4 py-2 rounded-lg font-medium">
@@ -74,7 +88,11 @@ const app = {
   from: params.get('from') || '/dashboard',
   editCardId: params.get('edit_card_id'),
   availableTags: [],
-  tagSearchQuery: '',
+  tagPanels: {
+    card: { selectedInputId: 'selectedTagIds', selectorId: 'cardTagSelector', activeClass: 'bg-violet-500/20 text-violet-200 border-violet-400', searchQuery: '' },
+    subject: { selectedInputId: 'selectedSubjectTagIds', selectorId: 'subjectTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' },
+    object: { selectedInputId: 'selectedObjectTagIds', selectorId: 'objectTagSelector', activeClass: 'bg-amber-500/20 text-amber-200 border-amber-400', searchQuery: '' }
+  },
 
   async api(action, payload = {}) {
     payload.action = action;
@@ -140,25 +158,39 @@ const app = {
   async loadTags() {
     const res = await this.api('list_tags');
     this.availableTags = res?.data || [];
-    this.renderTagSelector();
+    this.renderAllTagSelectors();
   },
-  handleTagSearch(query='') { this.tagSearchQuery = query.trim().toLowerCase(); this.renderTagSelector(); },
-  renderTagSelector(selectedIds = null) {
-    const el = cardTagSelector;
-    const currentSelected = selectedIds ?? JSON.parse(selectedTagIds.value || '[]');
+  getPanelConfig(panel) { return this.tagPanels[panel] || this.tagPanels.card; },
+  getSelectedTagIds(panel) {
+    const input = document.getElementById(this.getPanelConfig(panel).selectedInputId);
+    try { return JSON.parse(input.value || '[]').map(Number).filter(Boolean); }
+    catch (_) { return []; }
+  },
+  setSelectedTagIds(panel, ids) {
+    document.getElementById(this.getPanelConfig(panel).selectedInputId).value = JSON.stringify(ids.map(Number).filter(Boolean));
+  },
+  handleTagSearch(panel, query='') {
+    this.getPanelConfig(panel).searchQuery = query.trim().toLowerCase();
+    this.renderTagSelector(panel);
+  },
+  renderAllTagSelectors() { ['card', 'subject', 'object'].forEach(panel => this.renderTagSelector(panel)); },
+  renderTagSelector(panel = 'card', selectedIds = null) {
+    const config = this.getPanelConfig(panel);
+    const el = document.getElementById(config.selectorId);
+    const currentSelected = selectedIds ?? this.getSelectedTagIds(panel);
     if (!this.availableTags.length) { el.innerHTML = '<span class="text-xs text-slate-400">Sem tags cadastradas.</span>'; return; }
-    const filtered = this.tagSearchQuery ? this.availableTags.filter(t => String(t.name||'').toLowerCase().includes(this.tagSearchQuery)) : this.availableTags.filter(t => currentSelected.includes(Number(t.id)));
+    const filtered = config.searchQuery ? this.availableTags.filter(t => String(t.name||'').toLowerCase().includes(config.searchQuery)) : this.availableTags.filter(t => currentSelected.includes(Number(t.id)));
     if (!filtered.length) { el.innerHTML = '<span class="text-xs text-slate-400">Nenhuma tag para exibir.</span>'; return; }
     el.innerHTML = filtered.map(tag => {
       const id = Number(tag.id); const active = currentSelected.includes(id);
-      return `<button type="button" data-tag-id="${id}" class="px-2.5 py-1 rounded-full text-xs border transition ${active ? 'bg-violet-500/20 text-violet-200 border-violet-400' : 'bg-slate-800 text-slate-300 border-slate-600'}"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color}"></span>${String(tag.name||'')}</button>`;
+      return `<button type="button" data-tag-id="${id}" class="px-2.5 py-1 rounded-full text-xs border transition ${active ? config.activeClass : 'bg-slate-800 text-slate-300 border-slate-600'}"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color}"></span>${String(tag.name||'')}</button>`;
     }).join('');
-    el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(Number(btn.dataset.tagId)));
+    el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
   },
-  toggleTagSelection(tagId) {
-    const ids = JSON.parse(selectedTagIds.value || '[]');
-    selectedTagIds.value = JSON.stringify(ids.includes(tagId) ? ids.filter(id => id !== tagId) : [...ids, tagId]);
-    this.renderTagSelector();
+  toggleTagSelection(panel, tagId) {
+    const ids = this.getSelectedTagIds(panel);
+    this.setSelectedTagIds(panel, ids.includes(tagId) ? ids.filter(id => id !== tagId) : [...ids, tagId]);
+    this.renderTagSelector(panel);
   },
   setStatus(text, tone='neutral') {
     statusMessage.textContent = text;
@@ -177,8 +209,12 @@ const app = {
     if (card.image_front) this.setBase64ImagePreview('front', card.image_front);
     if (card.image_back) this.setBase64ImagePreview('back', card.image_back);
     const tags = Array.isArray(card.tags) ? card.tags.map(t => Number(t.id)).filter(Boolean) : [];
-    selectedTagIds.value = JSON.stringify(tags);
-    this.renderTagSelector(tags);
+    const subjectTags = Array.isArray(card.subject_tags) ? card.subject_tags.map(t => Number(t.id)).filter(Boolean) : [];
+    const objectTags = Array.isArray(card.object_tags) ? card.object_tags.map(t => Number(t.id)).filter(Boolean) : [];
+    this.setSelectedTagIds('card', tags);
+    this.setSelectedTagIds('subject', subjectTags);
+    this.setSelectedTagIds('object', objectTags);
+    this.renderAllTagSelectors();
     this.setStatus('Você está editando um card.', 'neutral');
   },
   async save(e) {
@@ -187,12 +223,14 @@ const app = {
     const back = singleBack.value.trim();
     const image_front = frontImageBase64.value;
     const image_back = backImageBase64.value;
-    const tag_ids = JSON.parse(selectedTagIds.value || '[]');
+    const tag_ids = this.getSelectedTagIds('card');
+    const subject_tag_ids = this.getSelectedTagIds('subject');
+    const object_tag_ids = this.getSelectedTagIds('object');
     if (!front && !back && !image_front && !image_back) return this.setStatus('Preencha pelo menos um lado do card com texto ou imagem.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
-      const payload = { deck_id: this.deckId, front, back, image_front, image_back, tag_ids };
+      const payload = { deck_id: this.deckId, front, back, image_front, image_back, tag_ids, subject_tag_ids, object_tag_ids };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
@@ -210,7 +248,9 @@ frontImageFile.onchange = (e) => app.handleCardImageUpload(e, 'front');
 backImageFile.onchange = (e) => app.handleCardImageUpload(e, 'back');
 btnRemoveFrontImage.onclick = () => app.removeCardImage('front');
 btnRemoveBackImage.onclick = () => app.removeCardImage('back');
-cardTagSearchInput.oninput = (e) => app.handleTagSearch(e.target.value);
+cardTagSearchInput.oninput = (e) => app.handleTagSearch('card', e.target.value);
+subjectTagSearchInput.oninput = (e) => app.handleTagSearch('subject', e.target.value);
+objectTagSearchInput.oninput = (e) => app.handleTagSearch('object', e.target.value);
 cardForm.onsubmit = (e) => app.save(e);
 
 (async () => {
