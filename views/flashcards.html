@@ -1987,7 +1987,7 @@
 
                     if (imageModalOpen) return; // Não vira carta se imagem tá grande
 
-                    const blockingModalIds = ['settingsModal', 'singleModal', 'bulkModal', 'resetBookScoreModal', 'audioGenerationModal'];
+                    const blockingModalIds = ['settingsModal', 'singleModal', 'bulkModal', 'resetBookScoreModal', 'audioGenerationModal', 'tagModal', 'editTagModal'];
                     const modalsOpen = blockingModalIds.some((id) => {
                         const modal = document.getElementById(id);
                         return modal && !modal.classList.contains('hidden');
@@ -2020,12 +2020,12 @@
 
                     if (modalsOpen || this.cards.length === 0) return;
 
-                    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'ArrowDown') {
+                    if (!isTypingTarget && (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'ArrowDown')) {
                         e.preventDefault();
                         this.flipCard();
-                    } else if (e.code === 'ArrowRight') {
+                    } else if (!isTypingTarget && e.code === 'ArrowRight') {
                         this.nextCard();
-                    } else if (e.code === 'ArrowLeft') {
+                    } else if (!isTypingTarget && e.code === 'ArrowLeft') {
                         this.prevCard();
                     }
                 });
