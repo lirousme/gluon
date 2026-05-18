@@ -781,6 +781,7 @@
                 this.deckId = urlParams.get('id');
                 this.studyScope = urlParams.get('study_scope') === 'directory_random' ? 'directory_random' : 'deck';
                 this.cardSheetEmbed = urlParams.get('card_sheet_embed') === '1';
+                this.applyCardSheetEmbedLayout();
 
                 if (!this.deckId) {
                     window.location.href = getMarkedBackRoute();
@@ -812,6 +813,36 @@
                 this.applyStudyScopeUI();
                 await this.loadTags();
                 await this.loadDeck();
+            },
+
+
+            applyCardSheetEmbedLayout() {
+                if (!this.cardSheetEmbed) return;
+
+                document.body.classList.remove('overflow-hidden');
+                document.body.classList.add('overflow-y-auto');
+
+                const navbar = document.querySelector('nav');
+                if (navbar) navbar.classList.add('hidden');
+
+                const main = document.querySelector('main');
+                if (main) main.classList.add('hidden');
+
+                const rightPanel = document.getElementById('rightPanel');
+                if (rightPanel) rightPanel.classList.add('hidden');
+
+                const rightPanelBackdrop = document.getElementById('rightPanelBackdrop');
+                if (rightPanelBackdrop) rightPanelBackdrop.classList.add('hidden');
+
+                const singleModal = document.getElementById('singleModal');
+                const singleModalContent = document.getElementById('singleModalContent');
+                if (singleModal && singleModalContent) {
+                    singleModal.classList.remove('hidden', 'opacity-0', 'bg-black/80', 'backdrop-blur-sm', 'px-4');
+                    singleModal.classList.add('flex', 'relative', 'min-h-screen', 'py-4', 'px-3', 'bg-slate-950');
+
+                    singleModalContent.classList.remove('scale-95', 'max-h-[95vh]', 'max-w-lg');
+                    singleModalContent.classList.add('max-w-3xl', 'w-full', 'max-h-none');
+                }
             },
 
             isDirectoryRandomStudy() {
@@ -2341,6 +2372,10 @@
                     const modal = document.getElementById(`${prefix}Modal`);
                     const content = document.getElementById(`${prefix}ModalContent`);
                     if(modal && !modal.classList.contains('hidden')) {
+                        if (this.cardSheetEmbed && prefix === 'single') {
+                            goBackToMarkedRoute();
+                            return;
+                        }
                         modal.classList.add('opacity-0'); content.classList.add('scale-95');
                         setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
                     }
