@@ -24,6 +24,12 @@
       <input type="hidden" id="selectedTagIds" value="[]">
       <input type="hidden" id="selectedSubjectTagIds" value="[]">
       <input type="hidden" id="selectedObjectTagIds" value="[]">
+      <input type="hidden" id="selectedTipoFrasalTagIds" value="[]">
+      <input type="hidden" id="selectedTenseTagIds" value="[]">
+      <input type="hidden" id="selectedLexicalChunksTagIds" value="[]">
+      <input type="hidden" id="selectedRelationTagIds" value="[]">
+      <input type="hidden" id="selectedWordsTagIds" value="[]">
+      <input type="hidden" id="selectedIdiomasTagIds" value="[]">
 
       <div class="grid grid-cols-2 gap-2 rounded-lg bg-slate-900/70 p-1 border border-slate-700">
         <button type="button" id="singleTabFront" class="px-3 py-2 rounded-md text-sm font-medium transition-colors bg-gluon-primary text-white">Frente do card</button>
@@ -127,7 +133,13 @@ const app = {
   tagPanels: {
     card: { selectedInputId: 'selectedTagIds', selectorId: 'cardTagSelector', activeClass: 'bg-violet-500/20 text-violet-200 border-violet-400', searchQuery: '' },
     subject: { selectedInputId: 'selectedSubjectTagIds', selectorId: 'subjectTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' },
-    object: { selectedInputId: 'selectedObjectTagIds', selectorId: 'objectTagSelector', activeClass: 'bg-amber-500/20 text-amber-200 border-amber-400', searchQuery: '' }
+    object: { selectedInputId: 'selectedObjectTagIds', selectorId: 'objectTagSelector', activeClass: 'bg-amber-500/20 text-amber-200 border-amber-400', searchQuery: '' },
+    tipoFrasal: { selectedInputId: 'selectedTipoFrasalTagIds', selectorId: 'tipoFrasalTagSelector', activeClass: 'bg-rose-500/20 text-rose-200 border-rose-400', searchQuery: '' },
+    tense: { selectedInputId: 'selectedTenseTagIds', selectorId: 'tenseTagSelector', activeClass: 'bg-sky-500/20 text-sky-200 border-sky-400', searchQuery: '' },
+    lexicalChunks: { selectedInputId: 'selectedLexicalChunksTagIds', selectorId: 'lexicalChunksTagSelector', activeClass: 'bg-fuchsia-500/20 text-fuchsia-200 border-fuchsia-400', searchQuery: '' },
+    relation: { selectedInputId: 'selectedRelationTagIds', selectorId: 'relationTagSelector', activeClass: 'bg-cyan-500/20 text-cyan-200 border-cyan-400', searchQuery: '' },
+    words: { selectedInputId: 'selectedWordsTagIds', selectorId: 'wordsTagSelector', activeClass: 'bg-lime-500/20 text-lime-200 border-lime-400', searchQuery: '' },
+    idiomas: { selectedInputId: 'selectedIdiomasTagIds', selectorId: 'idiomasTagSelector', activeClass: 'bg-indigo-500/20 text-indigo-200 border-indigo-400', searchQuery: '' }
   },
 
   async api(action, payload = {}) {
@@ -209,7 +221,7 @@ const app = {
     this.getPanelConfig(panel).searchQuery = query.trim().toLowerCase();
     this.renderTagSelector(panel);
   },
-  renderAllTagSelectors() { ['card', 'subject', 'object'].forEach(panel => this.renderTagSelector(panel)); },
+  renderAllTagSelectors() { Object.keys(this.tagPanels).forEach(panel => this.renderTagSelector(panel)); },
   renderTagSelector(panel = 'card', selectedIds = null) {
     const config = this.getPanelConfig(panel);
     const el = document.getElementById(config.selectorId);
@@ -247,9 +259,21 @@ const app = {
     const tags = Array.isArray(card.tags) ? card.tags.map(t => Number(t.id)).filter(Boolean) : [];
     const subjectTags = Array.isArray(card.subject_tags) ? card.subject_tags.map(t => Number(t.id)).filter(Boolean) : [];
     const objectTags = Array.isArray(card.object_tags) ? card.object_tags.map(t => Number(t.id)).filter(Boolean) : [];
+    const tipoFrasalTags = Array.isArray(card.tipo_frasal_tags) ? card.tipo_frasal_tags.map(t => Number(t.id)).filter(Boolean) : [];
+    const tenseTags = Array.isArray(card.tense_tags) ? card.tense_tags.map(t => Number(t.id)).filter(Boolean) : [];
+    const lexicalChunksTags = Array.isArray(card.lexical_chunks_tags) ? card.lexical_chunks_tags.map(t => Number(t.id)).filter(Boolean) : [];
+    const relationTags = Array.isArray(card.relation_tags) ? card.relation_tags.map(t => Number(t.id)).filter(Boolean) : [];
+    const wordsTags = Array.isArray(card.words_tags) ? card.words_tags.map(t => Number(t.id)).filter(Boolean) : [];
+    const idiomasTags = Array.isArray(card.idiomas_tags) ? card.idiomas_tags.map(t => Number(t.id)).filter(Boolean) : [];
     this.setSelectedTagIds('card', tags);
     this.setSelectedTagIds('subject', subjectTags);
     this.setSelectedTagIds('object', objectTags);
+    this.setSelectedTagIds('tipoFrasal', tipoFrasalTags);
+    this.setSelectedTagIds('tense', tenseTags);
+    this.setSelectedTagIds('lexicalChunks', lexicalChunksTags);
+    this.setSelectedTagIds('relation', relationTags);
+    this.setSelectedTagIds('words', wordsTags);
+    this.setSelectedTagIds('idiomas', idiomasTags);
     this.renderAllTagSelectors();
     this.setStatus('Você está editando um card.', 'neutral');
   },
@@ -262,11 +286,17 @@ const app = {
     const tag_ids = this.getSelectedTagIds('card');
     const subject_tag_ids = this.getSelectedTagIds('subject');
     const object_tag_ids = this.getSelectedTagIds('object');
+    const tipo_frasal_tag_ids = this.getSelectedTagIds('tipoFrasal');
+    const tense_tag_ids = this.getSelectedTagIds('tense');
+    const lexical_chunks_tag_ids = this.getSelectedTagIds('lexicalChunks');
+    const relation_tag_ids = this.getSelectedTagIds('relation');
+    const words_tag_ids = this.getSelectedTagIds('words');
+    const idiomas_tag_ids = this.getSelectedTagIds('idiomas');
     if (!front && !back && !image_front && !image_back) return this.setStatus('Preencha pelo menos um lado do card com texto ou imagem.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
-      const payload = { deck_id: this.deckId, front, back, image_front, image_back, tag_ids, subject_tag_ids, object_tag_ids };
+      const payload = { deck_id: this.deckId, front, back, image_front, image_back, tag_ids, subject_tag_ids, object_tag_ids, tipo_frasal_tag_ids, tense_tag_ids, lexical_chunks_tag_ids, relation_tag_ids, words_tag_ids, idiomas_tag_ids };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
@@ -287,6 +317,12 @@ btnRemoveBackImage.onclick = () => app.removeCardImage('back');
 cardTagSearchInput.oninput = (e) => app.handleTagSearch('card', e.target.value);
 subjectTagSearchInput.oninput = (e) => app.handleTagSearch('subject', e.target.value);
 objectTagSearchInput.oninput = (e) => app.handleTagSearch('object', e.target.value);
+tipoFrasalTagSearchInput.oninput = (e) => app.handleTagSearch('tipoFrasal', e.target.value);
+tenseTagSearchInput.oninput = (e) => app.handleTagSearch('tense', e.target.value);
+lexicalChunksTagSearchInput.oninput = (e) => app.handleTagSearch('lexicalChunks', e.target.value);
+relationTagSearchInput.oninput = (e) => app.handleTagSearch('relation', e.target.value);
+wordsTagSearchInput.oninput = (e) => app.handleTagSearch('words', e.target.value);
+idiomasTagSearchInput.oninput = (e) => app.handleTagSearch('idiomas', e.target.value);
 cardForm.onsubmit = (e) => app.save(e);
 
 (async () => {
