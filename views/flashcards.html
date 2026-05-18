@@ -766,6 +766,8 @@
             scoredCardIds: new Set(),
             isGeneratingMissingAudios: false,
             cardSheetEmbed: false,
+            cardSheetMode: null,
+            cardSheetEditCardId: null,
 
             audioGeneration: {
                 running: false,
@@ -781,6 +783,9 @@
                 this.deckId = urlParams.get('id');
                 this.studyScope = urlParams.get('study_scope') === 'directory_random' ? 'directory_random' : 'deck';
                 this.cardSheetEmbed = urlParams.get('card_sheet_embed') === '1';
+                this.cardSheetMode = urlParams.get('card_sheet_mode');
+                this.cardSheetEditCardId = Number(urlParams.get('edit_card_id'));
+                if (!Number.isFinite(this.cardSheetEditCardId)) this.cardSheetEditCardId = null;
                 this.applyCardSheetEmbedLayout();
 
                 if (!this.deckId) {
@@ -1110,8 +1115,25 @@
                         this.renderCurrentCard();
                         
                         this.handleAutoPlaybackAndFlow();
+                        this.handleCardSheetEmbedEntry();
                     }
                 }
+            },
+
+            handleCardSheetEmbedEntry() {
+                if (!this.cardSheetEmbed || this.deckMode !== 'grafo' || !this.cardSheetMode) return;
+
+                const mode = this.cardSheetMode;
+                this.cardSheetMode = null;
+
+                if (mode === 'edit' && this.cardSheetEditCardId !== null) {
+                    const idx = this.cards.findIndex(c => Number(c.id) === this.cardSheetEditCardId);
+                    if (idx >= 0) this.currentIndex = idx;
+                    this.editCurrentCard();
+                    return;
+                }
+
+                this.openSingleModal();
             },
 
             showEmptyState() {
