@@ -527,6 +527,18 @@
                         <input id="tagIsWordInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
                         <span>Esta tag representa uma Palavra</span>
                     </label>
+                    <label class="flex items-center gap-2">
+                        <input id="tagIsMonthInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
+                        <span>Esta tag representa um mês</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input id="tagIsDayInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
+                        <span>Esta tag representa um dia</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input id="tagIsYearInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
+                        <span>Esta tag representa um ano</span>
+                    </label>
                 </div>
                 <div class="flex justify-end gap-3">
                     <button type="button" onclick="flashcardApp.closeModals()" class="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-800">Cancelar</button>
@@ -2472,7 +2484,10 @@
                     is_sentence_type: document.getElementById('tagIsSentenceTypeInput').checked ? 1 : 0,
                     is_lexical_chunk: document.getElementById('tagIsLexicalChunkInput').checked ? 1 : 0,
                     is_relation_type: document.getElementById('tagIsRelationTypeInput').checked ? 1 : 0,
-                    is_word: document.getElementById('tagIsWordInput').checked ? 1 : 0
+                    is_word: document.getElementById('tagIsWordInput').checked ? 1 : 0,
+                    is_month: document.getElementById('tagIsMonthInput').checked ? 1 : 0,
+                    is_day: document.getElementById('tagIsDayInput').checked ? 1 : 0,
+                    is_year: document.getElementById('tagIsYearInput').checked ? 1 : 0
                 });
                 btn.disabled = false;
                 if (res) {
@@ -2484,6 +2499,9 @@
                     document.getElementById('tagIsLexicalChunkInput').checked = false;
                     document.getElementById('tagIsRelationTypeInput').checked = false;
                     document.getElementById('tagIsWordInput').checked = false;
+                    document.getElementById('tagIsMonthInput').checked = false;
+                    document.getElementById('tagIsDayInput').checked = false;
+                    document.getElementById('tagIsYearInput').checked = false;
                     this.closeModals();
                 }
             },
