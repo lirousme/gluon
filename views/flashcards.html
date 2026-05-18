@@ -1197,7 +1197,8 @@
                 const tagsPanel = document.getElementById('cardTagsPanel');
                 const tagsList = document.getElementById('cardTagsList');
                 const tags = card.tags || [];
-                if (tags.length) {
+                const shouldShowTags = this.deckMode === 'grafo';
+                if (shouldShowTags && tags.length) {
                     tagsPanel.classList.remove('hidden');
                     tagsList.innerHTML = tags.map(tag => `<button type="button" onclick="flashcardApp.openEditTagModal(${Number(tag.id)})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-slate-600/90 text-slate-200 bg-slate-800/90 hover:bg-slate-700/90 transition-colors" title="Editar tag"><span class="inline-block w-1.5 h-1.5 rounded-full" style="background:${tag.color || '#334155'}"></span>${this.escapeHTML(tag.name || '')}<i class="fa-solid fa-pen text-[9px] opacity-75 ml-0.5"></i></button>`).join('');
                 } else {
@@ -2280,6 +2281,8 @@
                 const tagSearchInput = document.getElementById('cardTagSearchInput');
                 if (tagSearchInput) tagSearchInput.value = '';
                 this.renderTagSelector([]);
+                const createCardTagsPanel = document.getElementById('cardTagsPanelCreatCardModal');
+                if (createCardTagsPanel) createCardTagsPanel.classList.toggle('hidden', this.deckMode !== 'grafo');
                 this.switchSingleModalTab('front');
                 document.getElementById('modalTitleText').innerText = 'Criar Flashcard';
                 
