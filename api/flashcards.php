@@ -2386,6 +2386,33 @@ elseif ($action === 'create_tag') {
     echo json_encode(['status' => 'success', 'message' => 'Tag criada com sucesso.', 'tag_id' => (int)$pdo->lastInsertId()]);
 }
 
+elseif ($action === 'update_tag') {
+    $tag_id = (int)($input['id'] ?? 0);
+    $name = trim((string)($input['name'] ?? ''));
+    $name = preg_replace('/\s+/u', ' ', $name);
+
+    if ($tag_id <= 0 || $name === '') {
+        die(json_encode(['status' => 'error', 'message' => 'Dados da tag inválidos.']));
+    }
+
+    $stmt = $pdo->prepare("UPDATE flashcard_tags SET name = ? WHERE id = ? AND user_id = ?");
+    try {
+        $stmt->execute([$name, $tag_id, $user_id]);
+    } catch (PDOException $e) {
+        die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com esse nome.']));
+    }
+
+    if ($stmt->rowCount() === 0) {
+        $checkStmt = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id = ? LIMIT 1");
+        $checkStmt->execute([$tag_id, $user_id]);
+        if (!$checkStmt->fetchColumn()) {
+            die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada.']));
+        }
+    }
+
+    echo json_encode(['status' => 'success', 'message' => 'Tag atualizada com sucesso.']);
+}
+
 
 elseif ($action === 'create_batch_generation') {
     $deck_id = (int)($input['deck_id'] ?? 0);
