@@ -231,15 +231,24 @@ try {
     $pdo->exec("ALTER TABLE idiomas_links ADD CONSTRAINT fk_idiomas_links_segundo_tag FOREIGN KEY (segundo_idioma_tag_id) REFERENCES flashcard_tags(id) ON DELETE SET NULL");
 } catch (PDOException $e) {}
 
+/**
+ * Função sanitizeTagIds: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function sanitizeTagIds($rawTagIds): array {
     if (!is_array($rawTagIds)) return [];
     return array_values(array_unique(array_filter(array_map('intval', $rawTagIds), static fn($id) => $id > 0)));
 }
 
+/**
+ * Função getAllowedCardTagLinkTables: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function getAllowedCardTagLinkTables(): array {
     return ['flashcard_tag_links', 'subjects_links', 'objects_links', 'tipo_frasal_links', 'tense_links', 'lexical_chunks_links', 'relation_links', 'words_links', 'idiomas_links'];
 }
 
+/**
+ * Função fetchLinkedTagsByCard: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int $user_id): array {
     $allowedTables = getAllowedCardTagLinkTables();
     if (!in_array($linkTable, $allowedTables, true) || empty($cardIds)) return [];
@@ -267,6 +276,9 @@ function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int 
     return $tagsByCard;
 }
 
+/**
+ * Função fetchLinkedTagsByCardColumn: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagColumn, array $cardIds, int $user_id): array {
     $allowedTables = getAllowedCardTagLinkTables();
     $allowedColumns = ['tag_id', 'segundo_idioma_tag_id'];
@@ -295,6 +307,9 @@ function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagCol
     return $tagsByCard;
 }
 
+/**
+ * Função syncCardIdiomaLinks: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function syncCardIdiomaLinks(PDO $pdo, int $card_id, array $principalTagIds, array $secundarioTagIds, int $user_id): void {
     $pdo->prepare("DELETE l FROM idiomas_links l JOIN flashcards f ON f.id = l.flashcard_id JOIN directories d ON d.id = f.directory_id WHERE l.flashcard_id = ? AND d.user_id = ?")
         ->execute([$card_id, $user_id]);
@@ -322,6 +337,9 @@ function syncCardIdiomaLinks(PDO $pdo, int $card_id, array $principalTagIds, arr
     $stmtInsert->execute([$card_id, $principalTagId, $secundarioValue]);
 }
 
+/**
+ * Função syncCardTagLinks: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function syncCardTagLinks(PDO $pdo, string $linkTable, int $card_id, array $tagIds, int $user_id): void {
     $allowedTables = getAllowedCardTagLinkTables();
     if (!in_array($linkTable, $allowedTables, true)) return;
@@ -341,17 +359,26 @@ function syncCardTagLinks(PDO $pdo, string $linkTable, int $card_id, array $tagI
 }
 
 // Função auxiliar para verificar se o usuário é dono do deck (Segurança IDOR)
+/**
+ * Função isFlashcardDeckDirectoryType: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function isFlashcardDeckDirectoryType($type): bool {
     $type = (int)$type;
     return $type === 4 || $type === 10; // Deck tradicional ou Fase (deck de fase)
 }
 
+/**
+ * Função verifyDeckOwnership: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function verifyDeckOwnership($pdo, $deck_id, $user_id) {
     $stmt = $pdo->prepare("SELECT id, type, name_encrypted, deck_mode, deck_front_language, deck_back_language, deck_structure, deck_generation_base_prompt FROM directories WHERE id = ? AND user_id = ? AND type IN (4, 10)");
     $stmt->execute([$deck_id, $user_id]);
     return $stmt->fetch();
 }
 
+/**
+ * Função validatePhaseDeckUnlock: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function validatePhaseDeckUnlock($pdo, $deck_id, $user_id): ?string {
     $stmtPhase = $pdo->prepare("
         SELECT p.id AS phase_id, p.parent_id AS map_id, m.parent_id AS track_id
@@ -404,6 +431,9 @@ function validatePhaseDeckUnlock($pdo, $deck_id, $user_id): ?string {
 }
 
 
+/**
+ * Função buildGraphCardsSequence: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize = 6): array {
     if (empty($cards)) return [];
 
@@ -534,12 +564,18 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
 }
 
 
+/**
+ * Função verifyDirectoryOwnership: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function verifyDirectoryOwnership($pdo, $directory_id, $user_id) {
     $stmt = $pdo->prepare("SELECT id, type, name_encrypted FROM directories WHERE id = ? AND user_id = ?");
     $stmt->execute([$directory_id, $user_id]);
     return $stmt->fetch();
 }
 
+/**
+ * Função collectDecksFromDirectoryTree: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function collectDecksFromDirectoryTree($pdo, $root_directory_id, $user_id) {
     $decks = [];
     $visited = [];
@@ -588,6 +624,9 @@ function collectDecksFromDirectoryTree($pdo, $root_directory_id, $user_id) {
     return $decks;
 }
 
+/**
+ * Função countPendingAudiosForDeck: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function countPendingAudiosForDeck($pdo, $deck_id) {
     $pending = 0;
     $stmtCards = $pdo->prepare("SELECT front_encrypted, back_encrypted, has_audio_front, has_audio_back FROM flashcards WHERE directory_id = ?");
@@ -613,6 +652,9 @@ function countPendingAudiosForDeck($pdo, $deck_id) {
     return $pending;
 }
 
+/**
+ * Função findNextPendingAudioJobForDeck: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function findNextPendingAudioJobForDeck($pdo, $deck_id, $front_language, $back_language) {
     $stmtCards = $pdo->prepare("SELECT id, front_encrypted, back_encrypted, has_audio_front, has_audio_back FROM flashcards WHERE directory_id = ? AND (has_audio_front = 0 OR has_audio_back = 0) ORDER BY sort_order ASC, id ASC");
     $stmtCards->execute([$deck_id]);
@@ -648,6 +690,9 @@ function findNextPendingAudioJobForDeck($pdo, $deck_id, $front_language, $back_l
 }
 
 // Função auxiliar para verificar a propriedade de um card unitário
+/**
+ * Função verifyCardOwnership: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function verifyCardOwnership($pdo, $card_id, $user_id) {
     $stmt = $pdo->prepare("SELECT f.id, f.directory_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND d.user_id = ?");
     $stmt->execute([$card_id, $user_id]);
@@ -659,16 +704,25 @@ function verifyCardOwnership($pdo, $card_id, $user_id) {
  * Substitui siglas e palavras estrangeiras pela sua fonética correspondente em português.
  * Pilar: Fácil Manutenção (Basta adicionar novas siglas no array $replacements).
  */
+/**
+ * Função normalizeDeckLanguage: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function normalizeDeckLanguage($value, $default = 'pt-BR') {
     $allowed = ['pt-BR', 'en-US', 'en-GB'];
     return in_array($value, $allowed, true) ? $value : $default;
 }
 
+/**
+ * Função normalizeDeckStructure: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function normalizeDeckStructure($value, $default = 'traducoes') {
     $allowed = ['fatos', 'perguntas', 'traducoes', 'parafrases', 'ingles'];
     return in_array($value, $allowed, true) ? $value : $default;
 }
 
+/**
+ * Função getFishReferenceIdByLanguage: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function getFishReferenceIdByLanguage($language) {
     switch ($language) {
         case 'pt-BR': return FISH_REFERENCE_ID_PT_BR;
@@ -678,6 +732,9 @@ function getFishReferenceIdByLanguage($language) {
     }
 }
 
+/**
+ * Função getGoogleTtsVoiceByLanguage: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function getGoogleTtsVoiceByLanguage($language) {
     switch ($language) {
         case 'pt-BR': return 'pt-BR-Chirp3-HD-Fenrir'; //Algenib* //Charon //Enceladus** //Fenrir** //Iapetus //Vindemiatrix*FEMME //Pulcherrima*FEMME
@@ -687,6 +744,9 @@ function getGoogleTtsVoiceByLanguage($language) {
     }
 }
 
+/**
+ * Função getGoogleTtsAlternateVoiceByLanguage: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function getGoogleTtsAlternateVoiceByLanguage($language) {
     switch ($language) {
         case 'pt-BR': return 'pt-BR-Chirp3-HD-Fenrir';
@@ -696,6 +756,9 @@ function getGoogleTtsAlternateVoiceByLanguage($language) {
     }
 }
 
+/**
+ * Função getGoogleTtsVoiceForDeckContext: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $front_language, $back_language) {
     $normalized_structure = normalizeDeckStructure($deck_structure, 'traducoes');
     $normalized_front = normalizeDeckLanguage($front_language, 'pt-BR');
@@ -743,6 +806,9 @@ function getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $fro
     return getGoogleTtsVoiceByLanguage($normalized_front);
 }
 
+/**
+ * Função getLanguageLabel: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function getLanguageLabel($language) {
     $map = [
         'pt-BR' => 'Português Brasileiro',
@@ -752,6 +818,9 @@ function getLanguageLabel($language) {
     return $map[$language] ?? $language;
 }
 
+/**
+ * Função adjustPronunciationForTTS: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function adjustPronunciationForTTS($pdo, $text, $language) {
     $allowed = ['pt-BR', 'en-US', 'en-GB'];
     if (!in_array($language, $allowed, true)) {
@@ -780,6 +849,9 @@ function adjustPronunciationForTTS($pdo, $text, $language) {
     return $text;
 }
 
+/**
+ * Função cardTextContainsMathNotation: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function cardTextContainsMathNotation($text) {
     $value = trim((string)$text);
     if ($value === '') {
@@ -805,6 +877,9 @@ function cardTextContainsMathNotation($text) {
     return false;
 }
 
+/**
+ * Função decodeTtsAudioBinaryFromJsonPayload: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function decodeTtsAudioBinaryFromJsonPayload($payload) {
     if (!is_array($payload)) {
         return null;
@@ -849,6 +924,9 @@ function decodeTtsAudioBinaryFromJsonPayload($payload) {
     return null;
 }
 
+/**
+ * Função normalizeStoredAudioToBinary: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function normalizeStoredAudioToBinary($audioValue) {
     if (!is_string($audioValue) || $audioValue === '') {
         return null;
@@ -868,11 +946,17 @@ function normalizeStoredAudioToBinary($audioValue) {
     return $audioValue;
 }
 
+/**
+ * Função normalizeTtsProvider: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function normalizeTtsProvider($value, $default = 'fishaudio') {
     $allowed = ['fishaudio', 'openai', 'google'];
     return in_array($value, $allowed, true) ? $value : $default;
 }
 
+/**
+ * Função getUserTtsProvider: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function getUserTtsProvider($pdo, $user_id) {
     $stmt = $pdo->prepare("SELECT tts_provider FROM users WHERE id = ? LIMIT 1");
     $stmt->execute([$user_id]);
@@ -880,6 +964,9 @@ function getUserTtsProvider($pdo, $user_id) {
     return normalizeTtsProvider((string)$provider, 'fishaudio');
 }
 
+/**
+ * Função buildTtsProviderErrorDetails: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function buildTtsProviderErrorDetails($provider, $httpcode, $curlError, $responseBody = null) {
     $providerLabel = strtoupper((string)$provider);
     $parts = ["Provider {$providerLabel}"];
@@ -911,6 +998,9 @@ function buildTtsProviderErrorDetails($provider, $httpcode, $curlError, $respons
     return implode(' | ', $parts);
 }
 
+/**
+ * Função requestFishAudioTts: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function requestFishAudioTts($text_to_speech, $language, &$error_details = null) {
     if (trim((string)FISH_API_KEY) === '') {
         $error_details = 'Chave FISH_API_KEY não configurada.';
@@ -959,6 +1049,9 @@ function requestFishAudioTts($text_to_speech, $language, &$error_details = null)
     return is_string($audio_binary) && $audio_binary !== '' ? $audio_binary : null;
 }
 
+/**
+ * Função requestOpenAITts: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function requestOpenAITts($text_to_speech, &$error_details = null) {
     if (trim((string)OPENAI_API_KEY) === '') {
         $error_details = 'Chave OPENAI_API_KEY não configurada.';
@@ -997,6 +1090,9 @@ function requestOpenAITts($text_to_speech, &$error_details = null) {
 }
 
 
+/**
+ * Função requestGoogleCloudTts: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function requestGoogleCloudTts($text_to_speech, $language, $side = null, $deck_structure = 'traducoes', $front_language = 'pt-BR', $back_language = 'en-GB', &$error_details = null) {
     if (trim((string)GOOGLE_CLOUD_API_KEY) === '') {
         $error_details = 'Chave GOOGLE_CLOUD_API_KEY não configurada.';
@@ -1051,6 +1147,9 @@ function requestGoogleCloudTts($text_to_speech, $language, $side = null, $deck_s
 
 
 
+/**
+ * Função generateAndPersistCardAudio: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $language, $deck_structure = 'traducoes', $front_language = 'pt-BR', $back_language = 'en-GB', &$error_details = null) {
     $text_to_speech = adjustPronunciationForTTS($pdo, $text, $language);
     $provider = getUserTtsProvider($pdo, (int)$user_id);
@@ -1082,6 +1181,9 @@ function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $la
     return true;
 }
 
+/**
+ * Função buildDefaultBasePromptByStructure: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function buildDefaultBasePromptByStructure($deck_name, $deck_structure) {
     $basePrompt = '';
     if ($deck_structure === 'fatos') {
@@ -1111,12 +1213,18 @@ function buildDefaultBasePromptByStructure($deck_name, $deck_structure) {
     return $basePrompt;
 }
 
+/**
+ * Função applyGenerationPromptTemplateVariables: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function applyGenerationPromptTemplateVariables($prompt, $deck_name) {
     $normalizedPrompt = (string)$prompt;
     $normalizedDeckName = trim((string)$deck_name);
     return str_replace('$deck_name', $normalizedDeckName, $normalizedPrompt);
 }
 
+/**
+ * Função normalizeGenerationBasePromptInput: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function normalizeGenerationBasePromptInput($value) {
     $text = trim((string)$value);
     if ($text === '') {
@@ -1125,6 +1233,9 @@ function normalizeGenerationBasePromptInput($value) {
     return function_exists('mb_substr') ? mb_substr($text, 0, 5000) : substr($text, 0, 5000);
 }
 
+/**
+ * Função buildFlashcardsGenerationPayload: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, $model = 'gpt-5.4', $customBasePrompt = '') {
     $basePrompt = normalizeGenerationBasePromptInput($customBasePrompt);
     if ($basePrompt === '') {
@@ -1193,6 +1304,9 @@ Gere novos cards sem repetição de conteúdo com o histórico.";
     ];
 }
 
+/**
+ * Função sanitizeGeneratedCards: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function sanitizeGeneratedCards($rawContent, $deck_structure) {
     $raw = trim((string)$rawContent);
     if ($raw !== '' && str_starts_with($raw, '```')) {
@@ -1220,6 +1334,9 @@ function sanitizeGeneratedCards($rawContent, $deck_structure) {
     return $cards;
 }
 
+/**
+ * Função openaiJsonRequest: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function openaiJsonRequest($url, $payload) {
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -1236,6 +1353,9 @@ function openaiJsonRequest($url, $payload) {
     return [$httpcode, $response, $curlError];
 }
 
+/**
+ * Função openaiGetRequest: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function openaiGetRequest($url) {
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -1251,6 +1371,9 @@ function openaiGetRequest($url) {
 }
 
 
+/**
+ * Função normalizeDictionarySentence: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function normalizeDictionarySentence($value) {
     $text = trim((string)$value);
     if ($text === '') return '';
@@ -1258,12 +1381,18 @@ function normalizeDictionarySentence($value) {
     return trim((string)$text);
 }
 
+/**
+ * Função normalizeDictionarySentenceKey: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function normalizeDictionarySentenceKey($value) {
     $normalized = normalizeDictionarySentence($value);
     if ($normalized === '') return '';
     return mb_strtolower($normalized, 'UTF-8');
 }
 
+/**
+ * Função extractDictionaryCandidatesFromGpt: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function extractDictionaryCandidatesFromGpt($text) {
     $inputText = trim((string)$text);
     if ($inputText === '') {
@@ -1336,6 +1465,9 @@ function extractDictionaryCandidatesFromGpt($text) {
     return ['ok' => true, 'error' => '', 'candidates' => array_values($candidatesByKey)];
 }
 
+/**
+ * Função syncBatchJobWithOpenAI: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function syncBatchJobWithOpenAI($pdo, $job) {
     $openaiBatchId = trim((string)($job['openai_batch_id'] ?? ''));
     if ($openaiBatchId === '') {
@@ -1405,6 +1537,9 @@ function syncBatchJobWithOpenAI($pdo, $job) {
     ];
 }
 
+/**
+ * Função fetchDeckHistoryText: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ */
 function fetchDeckHistoryText($pdo, $deck_id) {
     $stmt = $pdo->prepare("SELECT front_encrypted, back_encrypted FROM flashcards WHERE directory_id = ? ORDER BY sort_order ASC, id ASC");
     $stmt->execute([$deck_id]);
