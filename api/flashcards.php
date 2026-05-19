@@ -434,132 +434,469 @@ function validatePhaseDeckUnlock($pdo, $deck_id, $user_id): ?string {
 /**
  * Função buildGraphCardsSequence: Monta uma sequência balanceada de cards por tags e score para estudo em lotes.
  */
-function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize = 6): array {
+function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize = 6): array
+{
+    // Se não existem cards disponíveis, não tem o que montar.
+    // Então a função retorna uma lista vazia.
     if (empty($cards)) return [];
 
+    // Garante que o tamanho do lote nunca seja menor que 1.
+    // Se alguém passar 0, -1, -5 etc., vira 1.
     $batchSize = max(1, $batchSize);
+
+    // Array que vai guardar o score de cada card pelo ID.
+    // Exemplo:
+    // $scoreByCard[10] = 3;
+    // $scoreByCard[15] = 0;
     $scoreByCard = [];
+
+    // Percorre todos os cards recebidos.
     foreach ($cards as $card) {
+        // Pega o ID do card e associa ao score dele.
+        // Se o score não existir, usa 0 como padrão.
         $scoreByCard[(int)$card['id']] = (int)($card['score'] ?? 0);
     }
 
+    // Array que vai inverter a relação:
+    //
+    // Antes:
+    // card 10 tem tag 1 e tag 2
+    //
+    // Depois:
+    // tag 1 tem card 10
+    // tag 2 tem card 10
     $cardsByTag = [];
+
+    // Percorre o array que diz quais tags cada card possui.
     foreach ($tagsByCard as $cardId => $tags) {
+        // Percorre todas as tags daquele card.
         foreach ($tags as $tag) {
+            // Pega o ID da tag.
+            // Se não existir ID, usa 0.
             $tagId = (int)($tag['id'] ?? 0);
+
+            // Se a tag for inválida, pula para a próxima.
             if ($tagId <= 0) continue;
-            if (!isset($cardsByTag[$tagId])) $cardsByTag[$tagId] = [];
+
+            // Se ainda não existir uma lista para essa tag,
+            // cria uma lista vazia.
+            if (!isset($cardsByTag[$tagId])) {
+                $cardsByTag[$tagId] = [];
+            }
+
+            // Adiciona esse card dentro da lista de cards dessa tag.
             $cardsByTag[$tagId][] = (int)$cardId;
         }
     }
 
+    // Se nenhum card tiver tag, não dá para usar lógica de grafo.
+    // Então ele simplesmente ordena os cards pelo menor score.
     if (empty($cardsByTag)) {
-        usort($cards, static fn($a, $b) => ((int)$a['score'] <=> (int)$b['score']) ?: ((int)$a['id'] <=> (int)$b['id']));
-        return array_slice(array_map(static fn($c) => ['card_id' => (int)$c['id'], 'decision_tag' => null], $cards), 0, $batchSize);
+        // Ordena os cards:
+        // 1. Primeiro pelo menor score.
+        // 2. Se o score empatar, pelo menor ID.
+        usort(
+            $cards,
+            static fn($a, $b) =>
+                ((int)$a['score'] <=> (int)$b['score'])
+                ?: ((int)$a['id'] <=> (int)$b['id'])
+        );
+
+        // Transforma cada card no formato de retorno da função.
+        // Como não existe tag de decisão, decision_tag fica null.
+        // Depois corta a lista para retornar no máximo $batchSize cards.
+        return array_slice(
+            array_map(
+                static fn($c) => [
+                    'card_id' => (int)$c['id'],
+                    'decision_tag' => null
+                ],
+                $cards
+            ),
+            0,
+            $batchSize
+        );
     }
 
-    $calcTagSens = static function(int $tagId) use (&$cardsByTag, &$scoreByCard): int {
+    // Função interna que calcula a "força" ou "sensibilidade" de uma tag.
+    //
+    // Ela soma os scores de todos os cards daquela tag.
+    //
+    // Exemplo:
+    // tag 5 tem cards 10, 11 e 12
+    // card 10 score 2
+    // card 11 score 4
+    // card 12 score 1
+    //
+    // sensibilidade da tag 5 = 2 + 4 + 1 = 7
+    $calcTagSens = static function (int $tagId) use (&$cardsByTag, &$scoreByCard): int {
+        // Começa a soma em zero.
         $sum = 0;
-        foreach ($cardsByTag[$tagId] ?? [] as $cid) $sum += (int)($scoreByCard[$cid] ?? 0);
+
+        // Percorre todos os cards que pertencem a essa tag.
+        foreach ($cardsByTag[$tagId] ?? [] as $cid) {
+            // Soma o score desse card.
+            // Se não existir score para ele, usa 0.
+            $sum += (int)($scoreByCard[$cid] ?? 0);
+        }
+
+        // Retorna a soma total dos scores dos cards dessa tag.
         return $sum;
     };
 
-    $pickMinCardInTag = static function(int $tagId, array $avoidCards = []) use (&$cardsByTag, &$scoreByCard): ?int {
-        $best = null; $bestScore = null;
+    // Função interna que escolhe o card mais fraco dentro de uma tag.
+    //
+    // "Mais fraco" aqui significa:
+    // o card com menor score.
+    $pickMinCardInTag = static function (int $tagId, array $avoidCards = []) use (&$cardsByTag, &$scoreByCard): ?int {
+        // Guarda o melhor card encontrado até agora.
+        $best = null;
+
+        // Guarda o score do melhor card encontrado até agora.
+        $bestScore = null;
+
+        // Percorre todos os cards dessa tag.
         foreach ($cardsByTag[$tagId] ?? [] as $cid) {
+            // Se esse card está na lista de cards que devem ser evitados,
+            // pula ele.
             if (isset($avoidCards[$cid])) continue;
+
+            // Pega o score do card.
+            // Se não existir score, considera 0.
             $s = (int)($scoreByCard[$cid] ?? 0);
-            if ($best === null || $s < $bestScore || ($s === $bestScore && $cid < $best)) { $best = $cid; $bestScore = $s; }
+
+            // Escolhe esse card se:
+            //
+            // 1. Ainda não existe nenhum melhor card;
+            // ou
+            // 2. O score dele é menor que o melhor score atual;
+            // ou
+            // 3. O score empatou, mas o ID dele é menor.
+            if (
+                $best === null
+                || $s < $bestScore
+                || ($s === $bestScore && $cid < $best)
+            ) {
+                $best = $cid;
+                $bestScore = $s;
+            }
         }
+
+        // Retorna o ID do card escolhido.
+        // Se nenhum card foi encontrado, retorna null.
         return $best;
     };
 
-    $pickMaxCardInTag = static function(int $tagId, array $avoidCards = []) use (&$cardsByTag, &$scoreByCard): ?int {
+    // Função interna que escolhe um card "mais forte" dentro de uma tag.
+    //
+    // Mas ela não pega simplesmente o maior score absoluto.
+    // Ela tenta pegar o maior score dentro de faixas:
+    //
+    // menor que 5,
+    // depois menor que 10,
+    // depois menor que 15,
+    // e assim por diante.
+    $pickMaxCardInTag = static function (int $tagId, array $avoidCards = []) use (&$cardsByTag, &$scoreByCard): ?int {
+        // Lista dos cards candidatos.
         $candidateIds = [];
+
+        // Percorre todos os cards dessa tag.
         foreach ($cardsByTag[$tagId] ?? [] as $cid) {
+            // Se o card já foi usado ou deve ser evitado, pula.
             if (isset($avoidCards[$cid])) continue;
+
+            // Adiciona o card como candidato.
             $candidateIds[] = (int)$cid;
         }
+
+        // Se não sobrou nenhum candidato, retorna null.
         if (empty($candidateIds)) return null;
 
+        // Vai descobrir qual é o maior score entre os candidatos.
         $maxScore = null;
+
+        // Percorre os cards candidatos.
         foreach ($candidateIds as $cid) {
+            // Pega o score do card.
             $s = (int)($scoreByCard[$cid] ?? 0);
-            if ($maxScore === null || $s > $maxScore) $maxScore = $s;
+
+            // Atualiza o maior score encontrado.
+            if ($maxScore === null || $s > $maxScore) {
+                $maxScore = $s;
+            }
         }
 
+        // Começa procurando cards com score abaixo de 5.
         $limit = 5;
+
+        // Continua aumentando o limite até passar do maior score.
         while ($limit <= ((int)$maxScore + 5)) {
-            $best = null; $bestScore = null;
+            // Melhor card encontrado dentro dessa faixa.
+            $best = null;
+
+            // Score do melhor card encontrado dentro dessa faixa.
+            $bestScore = null;
+
+            // Percorre todos os candidatos.
             foreach ($candidateIds as $cid) {
+                // Pega o score do card.
                 $s = (int)($scoreByCard[$cid] ?? 0);
+
+                // Se o score é maior ou igual ao limite atual,
+                // esse card não entra nessa faixa.
+                //
+                // Exemplo:
+                // limite = 5
+                // aceita scores 0, 1, 2, 3, 4
+                // não aceita 5, 6, 7...
                 if ($s >= $limit) continue;
-                if ($best === null || $s > $bestScore || ($s === $bestScore && $cid < $best)) { $best = $cid; $bestScore = $s; }
+
+                // Escolhe o card se:
+                //
+                // 1. Ainda não existe melhor card;
+                // ou
+                // 2. O score dele é maior que o melhor score atual;
+                // ou
+                // 3. O score empatou, mas o ID dele é menor.
+                if (
+                    $best === null
+                    || $s > $bestScore
+                    || ($s === $bestScore && $cid < $best)
+                ) {
+                    $best = $cid;
+                    $bestScore = $s;
+                }
             }
+
+            // Se achou algum card dentro dessa faixa,
+            // retorna esse card.
             if ($best !== null) return $best;
+
+            // Se não achou, aumenta o limite em 5.
+            //
+            // Primeiro tenta menor que 5.
+            // Depois menor que 10.
+            // Depois menor que 15.
+            // etc.
             $limit += 5;
         }
 
+        // Se por algum motivo não encontrou nada,
+        // retorna null.
         return null;
     };
 
+    // Pega todos os IDs das tags existentes.
     $tagIds = array_keys($cardsByTag);
-    usort($tagIds, static function($a, $b) use ($calcTagSens) {
-        $sa = $calcTagSens((int)$a); $sb = $calcTagSens((int)$b);
+
+    // Ordena as tags pela sensibilidade.
+    //
+    // A tag com menor soma de scores vem primeiro.
+    //
+    // Se duas tags tiverem a mesma soma,
+    // a tag com menor ID vem primeiro.
+    usort($tagIds, static function ($a, $b) use ($calcTagSens) {
+        // Calcula a soma dos scores da tag A.
+        $sa = $calcTagSens((int)$a);
+
+        // Calcula a soma dos scores da tag B.
+        $sb = $calcTagSens((int)$b);
+
+        // Ordena primeiro pela menor soma.
+        // Se empatar, ordena pelo menor ID da tag.
         return ($sa <=> $sb) ?: ((int)$a <=> (int)$b);
     });
+
+    // A tag-base será a tag mais fraca,
+    // ou seja, a tag com menor soma de scores.
     $baseTagId = (int)$tagIds[0];
 
+    // Lista final dos cards escolhidos.
     $chosen = [];
+
+    // Lista de cards já usados.
+    // Serve para impedir repetir o mesmo card no mesmo lote.
     $used = [];
+
+    // Histórico das tags usadas nas escolhas principais.
     $oddDecisionTagsHistory = [];
+
+    // Histórico dos cards escolhidos nas escolhas principais.
     $oddCardsHistory = [];
 
+    // Enquanto a quantidade de cards escolhidos for menor que o tamanho do lote,
+    // continua montando a sequência.
     while (count($chosen) < $batchSize) {
+        // Escolhe o card mais fraco da tag-base.
+        //
+        // Esse é o card principal da rodada.
         $oddCard = $pickMinCardInTag($baseTagId, $used);
+
+        // Se não encontrou nenhum card disponível nessa tag,
+        // encerra o loop.
         if ($oddCard === null) break;
 
+        // Adiciona o card escolhido na lista final.
         $chosen[] = [
+            // ID do card escolhido.
             'card_id' => $oddCard,
+
+            // A tag que decidiu a escolha desse card.
+            // Aqui é a tag-base.
             'decision_tag' => $baseTagId,
-            'excluded_tags' => array_values(array_unique(array_map('intval', $oddDecisionTagsHistory))),
-            'excluded_cards' => array_values(array_unique(array_map('intval', $oddCardsHistory))),
+
+            // Tags que já tinham sido usadas antes.
+            // Isso serve como histórico/explicação da escolha.
+            'excluded_tags' => array_values(
+                array_unique(
+                    array_map('intval', $oddDecisionTagsHistory)
+                )
+            ),
+
+            // Cards principais que já tinham sido escolhidos antes.
+            // Também serve como histórico/explicação.
+            'excluded_cards' => array_values(
+                array_unique(
+                    array_map('intval', $oddCardsHistory)
+                )
+            ),
         ];
+
+        // Marca esse card como usado,
+        // para ele não ser escolhido de novo nesse mesmo lote.
         $used[$oddCard] = true;
+
+        // Guarda a tag-base no histórico de tags principais.
         $oddDecisionTagsHistory[] = $baseTagId;
+
+        // Guarda o card escolhido no histórico de cards principais.
         $oddCardsHistory[] = $oddCard;
-        $scoreByCard[$oddCard] = (int)$scoreByCard[$oddCard] + 1; // simulação local
+
+        // Aumenta o score desse card apenas localmente.
+        //
+        // Isso NÃO altera o banco de dados.
+        // É só uma simulação dentro dessa função.
+        //
+        // A ideia é:
+        // "se esse card já foi escolhido agora,
+        // ele fica um pouco menos prioritário nas próximas escolhas".
+        $scoreByCard[$oddCard] = (int)$scoreByCard[$oddCard] + 1;
+
+        // Se já atingiu o tamanho máximo do lote,
+        // para aqui.
         if (count($chosen) >= $batchSize) break;
 
-        $linkedTagIds = array_map(static fn($t) => (int)$t['id'], $tagsByCard[$oddCard] ?? []);
-        $linkedTagIds = array_values(array_filter(array_unique($linkedTagIds), static fn($tid) => $tid > 0));
+        // Pega todas as tags ligadas ao card principal escolhido.
+        //
+        // Exemplo:
+        // card 10 tem tags 1, 2 e 3
+        //
+        // então:
+        // $linkedTagIds = [1, 2, 3]
+        $linkedTagIds = array_map(
+            static fn($t) => (int)$t['id'],
+            $tagsByCard[$oddCard] ?? []
+        );
+
+        // Remove tags repetidas e tags inválidas.
+        $linkedTagIds = array_values(
+            array_filter(
+                array_unique($linkedTagIds),
+                static fn($tid) => $tid > 0
+            )
+        );
+
+        // Se esse card não possui nenhuma tag válida,
+        // pula para a próxima rodada.
         if (empty($linkedTagIds)) continue;
 
-        $linkedTagIdsFiltered = array_values(array_filter(
-            $linkedTagIds,
-            static fn($tid) => !in_array((int)$tid, $oddDecisionTagsHistory, true)
-        ));
-        if (!empty($linkedTagIdsFiltered)) $linkedTagIds = $linkedTagIdsFiltered;
+        // Remove das tags ligadas aquelas que já foram usadas
+        // no histórico de decisões principais.
+        //
+        // Isso evita ficar repetindo sempre a mesma tag.
+        $linkedTagIdsFiltered = array_values(
+            array_filter(
+                $linkedTagIds,
+                static fn($tid) => !in_array((int)$tid, $oddDecisionTagsHistory, true)
+            )
+        );
 
-        usort($linkedTagIds, static function($a, $b) use ($calcTagSens) {
-            $sa = $calcTagSens((int)$a); $sb = $calcTagSens((int)$b);
+        // Se depois de filtrar ainda sobrou alguma tag,
+        // usa a versão filtrada.
+        //
+        // Mas se todas foram removidas,
+        // mantém a lista original para não ficar sem opção.
+        if (!empty($linkedTagIdsFiltered)) {
+            $linkedTagIds = $linkedTagIdsFiltered;
+        }
+
+        // Ordena as tags ligadas do card principal.
+        //
+        // Aqui a ordem é da tag mais forte para a mais fraca.
+        //
+        // Ou seja:
+        // a tag com maior soma de scores vem primeiro.
+        usort($linkedTagIds, static function ($a, $b) use ($calcTagSens) {
+            // Soma dos scores da tag A.
+            $sa = $calcTagSens((int)$a);
+
+            // Soma dos scores da tag B.
+            $sb = $calcTagSens((int)$b);
+
+            // Ordena da maior soma para a menor soma.
+            // Se empatar, usa o menor ID.
             return ($sb <=> $sa) ?: ((int)$a <=> (int)$b);
         });
 
+        // A tag relacionada mais forte será a primeira da lista.
         $strongestTagId = (int)$linkedTagIds[0];
+
+        // Dentro dessa tag mais forte, escolhe um card forte.
+        //
+        // Esse será o segundo card da rodada.
         $evenCard = $pickMaxCardInTag($strongestTagId, $used);
+
+        // Se não encontrou card disponível nessa tag,
+        // pula para a próxima rodada.
         if ($evenCard === null) continue;
 
+        // Adiciona o segundo card da rodada na lista final.
         $chosen[] = [
+            // ID do card escolhido.
             'card_id' => $evenCard,
+
+            // Tag que decidiu a escolha desse card.
+            // Aqui é a tag relacionada mais forte.
             'decision_tag' => $strongestTagId,
-            'excluded_tags' => array_values(array_unique(array_map('intval', $oddDecisionTagsHistory))),
-            'excluded_cards' => array_values(array_unique(array_map('intval', $oddCardsHistory))),
+
+            // Histórico de tags principais já usadas.
+            'excluded_tags' => array_values(
+                array_unique(
+                    array_map('intval', $oddDecisionTagsHistory)
+                )
+            ),
+
+            // Histórico de cards principais já usados.
+            'excluded_cards' => array_values(
+                array_unique(
+                    array_map('intval', $oddCardsHistory)
+                )
+            ),
         ];
+
+        // Marca esse segundo card como usado,
+        // para ele não aparecer de novo no mesmo lote.
         $used[$evenCard] = true;
-        $scoreByCard[$evenCard] = (int)$scoreByCard[$evenCard] + 1; // simulação local
+
+        // Também aumenta o score dele localmente.
+        //
+        // De novo:
+        // isso não salva no banco.
+        // Só muda a pontuação durante a montagem desse lote.
+        $scoreByCard[$evenCard] = (int)$scoreByCard[$evenCard] + 1;
     }
 
+    // Retorna a sequência final de cards escolhidos.
     return $chosen;
 }
 
@@ -1711,9 +2048,12 @@ if ($action === 'fetch') {
 
     if (in_array($deck_mode, ['aleatorio', 'grafo'], true)) {
         $orderClause = $deck_mode === 'grafo' ? 'ORDER BY f.id ASC' : 'ORDER BY RAND()';
+        //Aqui se for grafo busca todos, se for aleatório ele discrimina por vencimento de revisão
         $dueFilter = $deck_mode === 'grafo'
             ? ''
             : 'AND (fs.next_review_at IS NULL OR fs.next_review_at <= NOW())';
+        //
+        //Busca todos os flashcards com os filtros acima
         $stmt = $pdo->prepare("
             SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score 
             FROM flashcards f
@@ -1723,7 +2063,8 @@ if ($action === 'fetch') {
             {$orderClause}
         ");
         $stmt->execute([$user_id, $deck_id]);
-
+        
+        //Caso não tiver nenhum card disponível, verifica qual data e hora o próximo ficará disponível (vale para o Modo Aleatório)
         $stmtNextRandomReview = $pdo->prepare("
             SELECT MIN(fs.next_review_at)
             FROM flashcard_scores fs
