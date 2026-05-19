@@ -232,7 +232,7 @@ try {
 } catch (PDOException $e) {}
 
 /**
- * Função sanitizeTagIds: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função sanitizeTagIds: Normaliza uma lista de IDs de tags recebida na requisição, mantendo apenas inteiros positivos únicos.
  */
 function sanitizeTagIds($rawTagIds): array {
     if (!is_array($rawTagIds)) return [];
@@ -240,14 +240,14 @@ function sanitizeTagIds($rawTagIds): array {
 }
 
 /**
- * Função getAllowedCardTagLinkTables: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função getAllowedCardTagLinkTables: Retorna a lista branca das tabelas de vínculo entre cards e tags permitidas para consultas e escrita.
  */
 function getAllowedCardTagLinkTables(): array {
     return ['flashcard_tag_links', 'subjects_links', 'objects_links', 'tipo_frasal_links', 'tense_links', 'lexical_chunks_links', 'relation_links', 'words_links', 'idiomas_links'];
 }
 
 /**
- * Função fetchLinkedTagsByCard: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função fetchLinkedTagsByCard: Busca as tags vinculadas a vários flashcards em uma tabela de ligação e devolve agrupado por card.
  */
 function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int $user_id): array {
     $allowedTables = getAllowedCardTagLinkTables();
@@ -277,7 +277,7 @@ function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int 
 }
 
 /**
- * Função fetchLinkedTagsByCardColumn: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função fetchLinkedTagsByCardColumn: Busca tags vinculadas aos cards usando uma coluna específica de tag (principal ou secundária).
  */
 function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagColumn, array $cardIds, int $user_id): array {
     $allowedTables = getAllowedCardTagLinkTables();
@@ -308,7 +308,7 @@ function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagCol
 }
 
 /**
- * Função syncCardIdiomaLinks: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função syncCardIdiomaLinks: Sincroniza o vínculo de idiomas de um card, mantendo no máximo um idioma principal e um secundário válidos.
  */
 function syncCardIdiomaLinks(PDO $pdo, int $card_id, array $principalTagIds, array $secundarioTagIds, int $user_id): void {
     $pdo->prepare("DELETE l FROM idiomas_links l JOIN flashcards f ON f.id = l.flashcard_id JOIN directories d ON d.id = f.directory_id WHERE l.flashcard_id = ? AND d.user_id = ?")
@@ -338,7 +338,7 @@ function syncCardIdiomaLinks(PDO $pdo, int $card_id, array $principalTagIds, arr
 }
 
 /**
- * Função syncCardTagLinks: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função syncCardTagLinks: Sincroniza os vínculos de tags de um card em uma tabela de ligação, removendo antigos e inserindo os novos válidos.
  */
 function syncCardTagLinks(PDO $pdo, string $linkTable, int $card_id, array $tagIds, int $user_id): void {
     $allowedTables = getAllowedCardTagLinkTables();
@@ -360,7 +360,7 @@ function syncCardTagLinks(PDO $pdo, string $linkTable, int $card_id, array $tagI
 
 // Função auxiliar para verificar se o usuário é dono do deck (Segurança IDOR)
 /**
- * Função isFlashcardDeckDirectoryType: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função isFlashcardDeckDirectoryType: Verifica se o tipo de diretório representa um deck de flashcards aceito (tradicional ou fase).
  */
 function isFlashcardDeckDirectoryType($type): bool {
     $type = (int)$type;
@@ -368,7 +368,7 @@ function isFlashcardDeckDirectoryType($type): bool {
 }
 
 /**
- * Função verifyDeckOwnership: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função verifyDeckOwnership: Confere se o deck pertence ao usuário e retorna seus metadados de configuração.
  */
 function verifyDeckOwnership($pdo, $deck_id, $user_id) {
     $stmt = $pdo->prepare("SELECT id, type, name_encrypted, deck_mode, deck_front_language, deck_back_language, deck_structure, deck_generation_base_prompt FROM directories WHERE id = ? AND user_id = ? AND type IN (4, 10)");
@@ -377,7 +377,7 @@ function verifyDeckOwnership($pdo, $deck_id, $user_id) {
 }
 
 /**
- * Função validatePhaseDeckUnlock: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função validatePhaseDeckUnlock: Valida se uma fase pode ser acessada, exigindo que a fase anterior esteja sem revisões pendentes.
  */
 function validatePhaseDeckUnlock($pdo, $deck_id, $user_id): ?string {
     $stmtPhase = $pdo->prepare("
@@ -432,7 +432,7 @@ function validatePhaseDeckUnlock($pdo, $deck_id, $user_id): ?string {
 
 
 /**
- * Função buildGraphCardsSequence: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função buildGraphCardsSequence: Monta uma sequência balanceada de cards por tags e score para estudo em lotes.
  */
 function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize = 6): array {
     if (empty($cards)) return [];
@@ -565,7 +565,7 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
 
 
 /**
- * Função verifyDirectoryOwnership: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função verifyDirectoryOwnership: Confere se um diretório pertence ao usuário autenticado.
  */
 function verifyDirectoryOwnership($pdo, $directory_id, $user_id) {
     $stmt = $pdo->prepare("SELECT id, type, name_encrypted FROM directories WHERE id = ? AND user_id = ?");
@@ -574,7 +574,7 @@ function verifyDirectoryOwnership($pdo, $directory_id, $user_id) {
 }
 
 /**
- * Função collectDecksFromDirectoryTree: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função collectDecksFromDirectoryTree: Percorre a árvore de diretórios a partir de uma raiz e coleta todos os decks de flashcards encontrados.
  */
 function collectDecksFromDirectoryTree($pdo, $root_directory_id, $user_id) {
     $decks = [];
@@ -625,7 +625,7 @@ function collectDecksFromDirectoryTree($pdo, $root_directory_id, $user_id) {
 }
 
 /**
- * Função countPendingAudiosForDeck: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função countPendingAudiosForDeck: Conta quantos lados de cards de um deck ainda precisam ter áudio gerado.
  */
 function countPendingAudiosForDeck($pdo, $deck_id) {
     $pending = 0;
@@ -653,7 +653,7 @@ function countPendingAudiosForDeck($pdo, $deck_id) {
 }
 
 /**
- * Função findNextPendingAudioJobForDeck: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função findNextPendingAudioJobForDeck: Localiza o próximo lado de card pendente de áudio e retorna os dados necessários para geração.
  */
 function findNextPendingAudioJobForDeck($pdo, $deck_id, $front_language, $back_language) {
     $stmtCards = $pdo->prepare("SELECT id, front_encrypted, back_encrypted, has_audio_front, has_audio_back FROM flashcards WHERE directory_id = ? AND (has_audio_front = 0 OR has_audio_back = 0) ORDER BY sort_order ASC, id ASC");
@@ -691,7 +691,7 @@ function findNextPendingAudioJobForDeck($pdo, $deck_id, $front_language, $back_l
 
 // Função auxiliar para verificar a propriedade de um card unitário
 /**
- * Função verifyCardOwnership: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função verifyCardOwnership: Confere se um card pertence ao usuário por meio do deck ao qual ele está associado.
  */
 function verifyCardOwnership($pdo, $card_id, $user_id) {
     $stmt = $pdo->prepare("SELECT f.id, f.directory_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND d.user_id = ?");
@@ -705,7 +705,7 @@ function verifyCardOwnership($pdo, $card_id, $user_id) {
  * Pilar: Fácil Manutenção (Basta adicionar novas siglas no array $replacements).
  */
 /**
- * Função normalizeDeckLanguage: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função normalizeDeckLanguage: Normaliza o idioma do deck para um valor permitido, aplicando fallback padrão.
  */
 function normalizeDeckLanguage($value, $default = 'pt-BR') {
     $allowed = ['pt-BR', 'en-US', 'en-GB'];
@@ -713,7 +713,7 @@ function normalizeDeckLanguage($value, $default = 'pt-BR') {
 }
 
 /**
- * Função normalizeDeckStructure: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função normalizeDeckStructure: Normaliza a estrutura do deck para um tipo permitido, aplicando fallback padrão.
  */
 function normalizeDeckStructure($value, $default = 'traducoes') {
     $allowed = ['fatos', 'perguntas', 'traducoes', 'parafrases', 'ingles'];
@@ -721,7 +721,7 @@ function normalizeDeckStructure($value, $default = 'traducoes') {
 }
 
 /**
- * Função getFishReferenceIdByLanguage: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função getFishReferenceIdByLanguage: Retorna o reference_id da Fish Audio conforme o idioma selecionado.
  */
 function getFishReferenceIdByLanguage($language) {
     switch ($language) {
@@ -733,7 +733,7 @@ function getFishReferenceIdByLanguage($language) {
 }
 
 /**
- * Função getGoogleTtsVoiceByLanguage: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função getGoogleTtsVoiceByLanguage: Retorna a voz padrão do Google TTS para o idioma informado.
  */
 function getGoogleTtsVoiceByLanguage($language) {
     switch ($language) {
@@ -745,7 +745,7 @@ function getGoogleTtsVoiceByLanguage($language) {
 }
 
 /**
- * Função getGoogleTtsAlternateVoiceByLanguage: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função getGoogleTtsAlternateVoiceByLanguage: Retorna uma voz alternativa do Google TTS para evitar repetição entre frente e verso.
  */
 function getGoogleTtsAlternateVoiceByLanguage($language) {
     switch ($language) {
@@ -757,7 +757,7 @@ function getGoogleTtsAlternateVoiceByLanguage($language) {
 }
 
 /**
- * Função getGoogleTtsVoiceForDeckContext: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função getGoogleTtsVoiceForDeckContext: Escolhe a voz do Google TTS considerando lado do card, idiomas e estrutura do deck.
  */
 function getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $front_language, $back_language) {
     $normalized_structure = normalizeDeckStructure($deck_structure, 'traducoes');
@@ -807,7 +807,7 @@ function getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $fro
 }
 
 /**
- * Função getLanguageLabel: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função getLanguageLabel: Converte código de idioma em rótulo legível para exibição.
  */
 function getLanguageLabel($language) {
     $map = [
@@ -819,7 +819,7 @@ function getLanguageLabel($language) {
 }
 
 /**
- * Função adjustPronunciationForTTS: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função adjustPronunciationForTTS: Aplica substituições fonéticas cadastradas para melhorar a pronúncia do TTS.
  */
 function adjustPronunciationForTTS($pdo, $text, $language) {
     $allowed = ['pt-BR', 'en-US', 'en-GB'];
@@ -850,7 +850,7 @@ function adjustPronunciationForTTS($pdo, $text, $language) {
 }
 
 /**
- * Função cardTextContainsMathNotation: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função cardTextContainsMathNotation: Detecta se o texto contém notação matemática/LaTeX para evitar geração indevida de áudio.
  */
 function cardTextContainsMathNotation($text) {
     $value = trim((string)$text);
@@ -878,7 +878,7 @@ function cardTextContainsMathNotation($text) {
 }
 
 /**
- * Função decodeTtsAudioBinaryFromJsonPayload: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função decodeTtsAudioBinaryFromJsonPayload: Extrai e decodifica áudio binário de diferentes formatos de payload JSON de provedores TTS.
  */
 function decodeTtsAudioBinaryFromJsonPayload($payload) {
     if (!is_array($payload)) {
@@ -925,7 +925,7 @@ function decodeTtsAudioBinaryFromJsonPayload($payload) {
 }
 
 /**
- * Função normalizeStoredAudioToBinary: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função normalizeStoredAudioToBinary: Normaliza áudio salvo (base64 ou data URI) para conteúdo binário utilizável.
  */
 function normalizeStoredAudioToBinary($audioValue) {
     if (!is_string($audioValue) || $audioValue === '') {
@@ -947,7 +947,7 @@ function normalizeStoredAudioToBinary($audioValue) {
 }
 
 /**
- * Função normalizeTtsProvider: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função normalizeTtsProvider: Normaliza o provedor de TTS para valores suportados, com fallback.
  */
 function normalizeTtsProvider($value, $default = 'fishaudio') {
     $allowed = ['fishaudio', 'openai', 'google'];
@@ -955,7 +955,7 @@ function normalizeTtsProvider($value, $default = 'fishaudio') {
 }
 
 /**
- * Função getUserTtsProvider: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função getUserTtsProvider: Obtém do banco o provedor de TTS preferido do usuário, já normalizado.
  */
 function getUserTtsProvider($pdo, $user_id) {
     $stmt = $pdo->prepare("SELECT tts_provider FROM users WHERE id = ? LIMIT 1");
@@ -965,7 +965,7 @@ function getUserTtsProvider($pdo, $user_id) {
 }
 
 /**
- * Função buildTtsProviderErrorDetails: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função buildTtsProviderErrorDetails: Monta uma mensagem de erro detalhada e padronizada para falhas de provedores TTS.
  */
 function buildTtsProviderErrorDetails($provider, $httpcode, $curlError, $responseBody = null) {
     $providerLabel = strtoupper((string)$provider);
@@ -999,7 +999,7 @@ function buildTtsProviderErrorDetails($provider, $httpcode, $curlError, $respons
 }
 
 /**
- * Função requestFishAudioTts: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função requestFishAudioTts: Solicita áudio ao provedor Fish Audio e retorna o binário gerado.
  */
 function requestFishAudioTts($text_to_speech, $language, &$error_details = null) {
     if (trim((string)FISH_API_KEY) === '') {
@@ -1050,7 +1050,7 @@ function requestFishAudioTts($text_to_speech, $language, &$error_details = null)
 }
 
 /**
- * Função requestOpenAITts: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função requestOpenAITts: Solicita áudio ao endpoint de TTS da OpenAI e retorna o binário MP3.
  */
 function requestOpenAITts($text_to_speech, &$error_details = null) {
     if (trim((string)OPENAI_API_KEY) === '') {
@@ -1091,7 +1091,7 @@ function requestOpenAITts($text_to_speech, &$error_details = null) {
 
 
 /**
- * Função requestGoogleCloudTts: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função requestGoogleCloudTts: Solicita áudio ao Google Cloud TTS com voz contextual do deck e retorna o binário.
  */
 function requestGoogleCloudTts($text_to_speech, $language, $side = null, $deck_structure = 'traducoes', $front_language = 'pt-BR', $back_language = 'en-GB', &$error_details = null) {
     if (trim((string)GOOGLE_CLOUD_API_KEY) === '') {
@@ -1148,7 +1148,7 @@ function requestGoogleCloudTts($text_to_speech, $language, $side = null, $deck_s
 
 
 /**
- * Função generateAndPersistCardAudio: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função generateAndPersistCardAudio: Gera áudio para um lado do card com o provedor configurado e persiste no banco criptografado.
  */
 function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $language, $deck_structure = 'traducoes', $front_language = 'pt-BR', $back_language = 'en-GB', &$error_details = null) {
     $text_to_speech = adjustPronunciationForTTS($pdo, $text, $language);
@@ -1182,7 +1182,7 @@ function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $la
 }
 
 /**
- * Função buildDefaultBasePromptByStructure: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função buildDefaultBasePromptByStructure: Monta o prompt base padrão de geração conforme a estrutura do deck.
  */
 function buildDefaultBasePromptByStructure($deck_name, $deck_structure) {
     $basePrompt = '';
@@ -1214,7 +1214,7 @@ function buildDefaultBasePromptByStructure($deck_name, $deck_structure) {
 }
 
 /**
- * Função applyGenerationPromptTemplateVariables: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função applyGenerationPromptTemplateVariables: Substitui variáveis de template (ex.: $deck_name) no prompt de geração.
  */
 function applyGenerationPromptTemplateVariables($prompt, $deck_name) {
     $normalizedPrompt = (string)$prompt;
@@ -1223,7 +1223,7 @@ function applyGenerationPromptTemplateVariables($prompt, $deck_name) {
 }
 
 /**
- * Função normalizeGenerationBasePromptInput: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função normalizeGenerationBasePromptInput: Sanitiza e limita o tamanho do prompt base personalizado antes do uso.
  */
 function normalizeGenerationBasePromptInput($value) {
     $text = trim((string)$value);
@@ -1234,7 +1234,7 @@ function normalizeGenerationBasePromptInput($value) {
 }
 
 /**
- * Função buildFlashcardsGenerationPayload: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função buildFlashcardsGenerationPayload: Monta o payload completo para gerar flashcards via modelo, com schema JSON estrito.
  */
 function buildFlashcardsGenerationPayload($deck_name, $deck_structure, $historyText, $model = 'gpt-5.4', $customBasePrompt = '') {
     $basePrompt = normalizeGenerationBasePromptInput($customBasePrompt);
@@ -1305,7 +1305,7 @@ Gere novos cards sem repetição de conteúdo com o histórico.";
 }
 
 /**
- * Função sanitizeGeneratedCards: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função sanitizeGeneratedCards: Valida e higieniza o JSON de cards gerado, removendo itens inválidos.
  */
 function sanitizeGeneratedCards($rawContent, $deck_structure) {
     $raw = trim((string)$rawContent);
@@ -1335,7 +1335,7 @@ function sanitizeGeneratedCards($rawContent, $deck_structure) {
 }
 
 /**
- * Função openaiJsonRequest: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função openaiJsonRequest: Executa requisição POST JSON para a OpenAI e retorna HTTP code, resposta e erro cURL.
  */
 function openaiJsonRequest($url, $payload) {
     $ch = curl_init($url);
@@ -1354,7 +1354,7 @@ function openaiJsonRequest($url, $payload) {
 }
 
 /**
- * Função openaiGetRequest: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função openaiGetRequest: Executa requisição GET para a OpenAI e retorna HTTP code, resposta e erro cURL.
  */
 function openaiGetRequest($url) {
     $ch = curl_init($url);
@@ -1372,7 +1372,7 @@ function openaiGetRequest($url) {
 
 
 /**
- * Função normalizeDictionarySentence: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função normalizeDictionarySentence: Normaliza frase para uso em dicionário, limpando espaços e formatação básica.
  */
 function normalizeDictionarySentence($value) {
     $text = trim((string)$value);
@@ -1382,7 +1382,7 @@ function normalizeDictionarySentence($value) {
 }
 
 /**
- * Função normalizeDictionarySentenceKey: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função normalizeDictionarySentenceKey: Gera chave normalizada da frase para deduplicação no dicionário de sentenças.
  */
 function normalizeDictionarySentenceKey($value) {
     $normalized = normalizeDictionarySentence($value);
@@ -1391,7 +1391,7 @@ function normalizeDictionarySentenceKey($value) {
 }
 
 /**
- * Função extractDictionaryCandidatesFromGpt: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função extractDictionaryCandidatesFromGpt: Extrai e valida candidatos de sentenças retornados pelo GPT para alimentar o dicionário.
  */
 function extractDictionaryCandidatesFromGpt($text) {
     $inputText = trim((string)$text);
@@ -1466,7 +1466,7 @@ function extractDictionaryCandidatesFromGpt($text) {
 }
 
 /**
- * Função syncBatchJobWithOpenAI: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função syncBatchJobWithOpenAI: Sincroniza o status de um job em lote com a OpenAI e persiste progresso/resultado no banco.
  */
 function syncBatchJobWithOpenAI($pdo, $job) {
     $openaiBatchId = trim((string)($job['openai_batch_id'] ?? ''));
@@ -1538,7 +1538,7 @@ function syncBatchJobWithOpenAI($pdo, $job) {
 }
 
 /**
- * Função fetchDeckHistoryText: descrição em PT-BR adicionada para facilitar manutenção e leitura do fluxo.
+ * Função fetchDeckHistoryText: Monta texto histórico dos cards do deck para evitar repetição em novas gerações.
  */
 function fetchDeckHistoryText($pdo, $deck_id) {
     $stmt = $pdo->prepare("SELECT front_encrypted, back_encrypted FROM flashcards WHERE directory_id = ? ORDER BY sort_order ASC, id ASC");
