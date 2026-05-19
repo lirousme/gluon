@@ -188,7 +188,7 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (PDOException $e) {}
 
-foreach (['subjects_links', 'objects_links', 'tipo_frasal_links', 'tense_links', 'lexical_chunks_links', 'relation_links', 'words_links', 'idiomas_links'] as $linkTable) {
+foreach (['subjects_links', 'objects_links', 'tipo_frasal_links', 'tense_links', 'lexical_chunks_links', 'relation_links', 'words_links'] as $linkTable) {
     try {
         $pdo->exec("CREATE TABLE IF NOT EXISTS {$linkTable} (
             flashcard_id INT UNSIGNED NOT NULL,
@@ -202,6 +202,34 @@ foreach (['subjects_links', 'objects_links', 'tipo_frasal_links', 'tense_links',
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     } catch (PDOException $e) {}
 }
+
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS idiomas_links (
+        flashcard_id INT UNSIGNED NOT NULL,
+        tag_id INT UNSIGNED NOT NULL,
+        segundo_idioma_tag_id INT UNSIGNED NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (flashcard_id, tag_id),
+        INDEX idx_tag_id (tag_id),
+        INDEX idx_segundo_idioma_tag_id (segundo_idioma_tag_id),
+        INDEX idx_flashcard_id (flashcard_id),
+        FOREIGN KEY (flashcard_id) REFERENCES flashcards(id) ON DELETE CASCADE,
+        FOREIGN KEY (tag_id) REFERENCES flashcard_tags(id) ON DELETE CASCADE,
+        FOREIGN KEY (segundo_idioma_tag_id) REFERENCES flashcard_tags(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE idiomas_links ADD COLUMN segundo_idioma_tag_id INT UNSIGNED NULL AFTER tag_id");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE idiomas_links ADD INDEX idx_segundo_idioma_tag_id (segundo_idioma_tag_id)");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE idiomas_links ADD CONSTRAINT fk_idiomas_links_segundo_tag FOREIGN KEY (segundo_idioma_tag_id) REFERENCES flashcard_tags(id) ON DELETE SET NULL");
+} catch (PDOException $e) {}
 
 function sanitizeTagIds($rawTagIds): array {
     if (!is_array($rawTagIds)) return [];
@@ -237,6 +265,61 @@ function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int 
         ];
     }
     return $tagsByCard;
+}
+
+function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagColumn, array $cardIds, int $user_id): array {
+    $allowedTables = getAllowedCardTagLinkTables();
+    $allowedColumns = ['tag_id', 'segundo_idioma_tag_id'];
+    if (!in_array($linkTable, $allowedTables, true) || !in_array($tagColumn, $allowedColumns, true) || empty($cardIds)) return [];
+
+    $tagPlaceholders = implode(',', array_fill(0, count($cardIds), '?'));
+    $stmtTags = $pdo->prepare("
+        SELECT l.flashcard_id, t.id AS tag_id, t.name, t.color
+        FROM {$linkTable} l
+        JOIN flashcard_tags t ON t.id = l.{$tagColumn}
+        WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id = ?
+        ORDER BY t.name ASC
+    ");
+    $stmtTags->execute(array_merge($cardIds, [$user_id]));
+
+    $tagsByCard = [];
+    foreach ($stmtTags->fetchAll() as $tagRow) {
+        $flashcardId = (int)$tagRow['flashcard_id'];
+        if (!isset($tagsByCard[$flashcardId])) $tagsByCard[$flashcardId] = [];
+        $tagsByCard[$flashcardId][] = [
+            'id' => (int)$tagRow['tag_id'],
+            'name' => $tagRow['name'],
+            'color' => $tagRow['color']
+        ];
+    }
+    return $tagsByCard;
+}
+
+function syncCardIdiomaLinks(PDO $pdo, int $card_id, array $principalTagIds, array $secundarioTagIds, int $user_id): void {
+    $pdo->prepare("DELETE l FROM idiomas_links l JOIN flashcards f ON f.id = l.flashcard_id JOIN directories d ON d.id = f.directory_id WHERE l.flashcard_id = ? AND d.user_id = ?")
+        ->execute([$card_id, $user_id]);
+
+    $principalTagId = (int)($principalTagIds[0] ?? 0);
+    if ($principalTagId <= 0) return;
+
+    $secundarioTagId = (int)($secundarioTagIds[0] ?? 0);
+    $stmtPrincipal = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id = ?");
+    $stmtPrincipal->execute([$principalTagId, $user_id]);
+    if (!$stmtPrincipal->fetchColumn()) return;
+
+    $secundarioValue = null;
+    if ($secundarioTagId > 0) {
+        $stmtSecundario = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id = ?");
+        $stmtSecundario->execute([$secundarioTagId, $user_id]);
+        if ($stmtSecundario->fetchColumn()) $secundarioValue = $secundarioTagId;
+    }
+
+    $stmtInsert = $pdo->prepare("
+        INSERT INTO idiomas_links (flashcard_id, tag_id, segundo_idioma_tag_id)
+        VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE segundo_idioma_tag_id = VALUES(segundo_idioma_tag_id)
+    ");
+    $stmtInsert->execute([$card_id, $principalTagId, $secundarioValue]);
 }
 
 function syncCardTagLinks(PDO $pdo, string $linkTable, int $card_id, array $tagIds, int $user_id): void {
@@ -1426,7 +1509,8 @@ if ($action === 'fetch') {
         $lexicalChunksTagsByCard = fetchLinkedTagsByCard($pdo, 'lexical_chunks_links', $cardIds, $user_id);
         $relationTagsByCard = fetchLinkedTagsByCard($pdo, 'relation_links', $cardIds, $user_id);
         $wordsTagsByCard = fetchLinkedTagsByCard($pdo, 'words_links', $cardIds, $user_id);
-        $idiomasTagsByCard = fetchLinkedTagsByCard($pdo, 'idiomas_links', $cardIds, $user_id);
+        $idiomaPrincipalTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'tag_id', $cardIds, $user_id);
+        $idiomaSecundarioTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'segundo_idioma_tag_id', $cardIds, $user_id);
 
         $response = [];
         foreach ($cards as $card) {
@@ -1447,7 +1531,9 @@ if ($action === 'fetch') {
                 'lexical_chunks_tags' => $lexicalChunksTagsByCard[(int)$card['id']] ?? [],
                 'relation_tags' => $relationTagsByCard[(int)$card['id']] ?? [],
                 'words_tags' => $wordsTagsByCard[(int)$card['id']] ?? [],
-                'idiomas_tags' => $idiomasTagsByCard[(int)$card['id']] ?? []
+                'idioma_principal_tags' => $idiomaPrincipalTagsByCard[(int)$card['id']] ?? [],
+                'idioma_secundario_tags' => $idiomaSecundarioTagsByCard[(int)$card['id']] ?? [],
+                'idiomas_tags' => $idiomaPrincipalTagsByCard[(int)$card['id']] ?? []
             ];
         }
 
@@ -1568,7 +1654,8 @@ if ($action === 'fetch') {
     $lexicalChunksTagsByCard = fetchLinkedTagsByCard($pdo, 'lexical_chunks_links', $cardIds, $user_id);
     $relationTagsByCard = fetchLinkedTagsByCard($pdo, 'relation_links', $cardIds, $user_id);
     $wordsTagsByCard = fetchLinkedTagsByCard($pdo, 'words_links', $cardIds, $user_id);
-    $idiomasTagsByCard = fetchLinkedTagsByCard($pdo, 'idiomas_links', $cardIds, $user_id);
+    $idiomaPrincipalTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'tag_id', $cardIds, $user_id);
+    $idiomaSecundarioTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'segundo_idioma_tag_id', $cardIds, $user_id);
 
     $graphDecisionByCardId = [];
     if ($deck_mode === 'grafo') {
@@ -1609,7 +1696,9 @@ if ($action === 'fetch') {
             'lexical_chunks_tags' => $lexicalChunksTagsByCard[(int)$card['id']] ?? [],
             'relation_tags' => $relationTagsByCard[(int)$card['id']] ?? [],
             'words_tags' => $wordsTagsByCard[(int)$card['id']] ?? [],
-            'idiomas_tags' => $idiomasTagsByCard[(int)$card['id']] ?? [],
+            'idioma_principal_tags' => $idiomaPrincipalTagsByCard[(int)$card['id']] ?? [],
+            'idioma_secundario_tags' => $idiomaSecundarioTagsByCard[(int)$card['id']] ?? [],
+            'idiomas_tags' => $idiomaPrincipalTagsByCard[(int)$card['id']] ?? [],
             'graph_decision_tag_id' => ($deck_mode === 'grafo' ? ($graphDecisionByCardId[$idx] ?? null) : ($graphDecisionByCardId[(int)$card['id']] ?? null))
         ];
     }
@@ -2309,7 +2398,8 @@ elseif ($action === 'add_single') {
     $lexical_chunks_tag_ids = sanitizeTagIds($input['lexical_chunks_tag_ids'] ?? []);
     $relation_tag_ids = sanitizeTagIds($input['relation_tag_ids'] ?? []);
     $words_tag_ids = sanitizeTagIds($input['words_tag_ids'] ?? []);
-    $idiomas_tag_ids = sanitizeTagIds($input['idiomas_tag_ids'] ?? []);
+    $idioma_principal_tag_ids = sanitizeTagIds($input['idioma_principal_tag_ids'] ?? ($input['idiomas_tag_ids'] ?? []));
+    $idioma_secundario_tag_ids = sanitizeTagIds($input['idioma_secundario_tag_ids'] ?? []);
 
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
@@ -2339,7 +2429,7 @@ elseif ($action === 'add_single') {
         syncCardTagLinks($pdo, 'lexical_chunks_links', $new_card_id, $lexical_chunks_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'relation_links', $new_card_id, $relation_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'words_links', $new_card_id, $words_tag_ids, $user_id);
-        syncCardTagLinks($pdo, 'idiomas_links', $new_card_id, $idiomas_tag_ids, $user_id);
+        syncCardIdiomaLinks($pdo, $new_card_id, $idioma_principal_tag_ids, $idioma_secundario_tag_ids, $user_id);
         $front_language = normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR');
         $back_language = normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB');
         $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'traducoes', 'traducoes');
@@ -2421,7 +2511,8 @@ elseif ($action === 'update_card') {
     $lexical_chunks_tag_ids = sanitizeTagIds($input['lexical_chunks_tag_ids'] ?? []);
     $relation_tag_ids = sanitizeTagIds($input['relation_tag_ids'] ?? []);
     $words_tag_ids = sanitizeTagIds($input['words_tag_ids'] ?? []);
-    $idiomas_tag_ids = sanitizeTagIds($input['idiomas_tag_ids'] ?? []);
+    $idioma_principal_tag_ids = sanitizeTagIds($input['idioma_principal_tag_ids'] ?? ($input['idiomas_tag_ids'] ?? []));
+    $idioma_secundario_tag_ids = sanitizeTagIds($input['idioma_secundario_tag_ids'] ?? []);
 
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
@@ -2451,7 +2542,7 @@ elseif ($action === 'update_card') {
         syncCardTagLinks($pdo, 'lexical_chunks_links', $card_id, $lexical_chunks_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'relation_links', $card_id, $relation_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'words_links', $card_id, $words_tag_ids, $user_id);
-        syncCardTagLinks($pdo, 'idiomas_links', $card_id, $idiomas_tag_ids, $user_id);
+        syncCardIdiomaLinks($pdo, $card_id, $idioma_principal_tag_ids, $idioma_secundario_tag_ids, $user_id);
         echo json_encode(['status' => 'success', 'message' => 'Card atualizado.']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar card.']);

@@ -29,7 +29,8 @@
       <input type="hidden" id="selectedLexicalChunksTagIds" value="[]">
       <input type="hidden" id="selectedRelationTagIds" value="[]">
       <input type="hidden" id="selectedWordsTagIds" value="[]">
-      <input type="hidden" id="selectedIdiomasTagIds" value="[]">
+      <input type="hidden" id="selectedIdiomaPrincipalTagIds" value="[]">
+      <input type="hidden" id="selectedIdiomaSecundarioTagIds" value="[]">
 
       <div class="grid grid-cols-2 gap-2 rounded-lg bg-slate-900/70 p-1 border border-slate-700">
         <button type="button" id="singleTabFront" class="px-3 py-2 rounded-md text-sm font-medium transition-colors bg-gluon-primary text-white">Frente do card</button>
@@ -108,10 +109,16 @@
         <div id="wordsTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
       
-      <section id="IdiomasTagsPanel" class="pt-3 border-t border-slate-700">
-        <label class="block text-sm font-medium text-amber-300 mb-2">Idiomas deste card</label>
-        <input id="idiomasTagSearchInput" type="text" placeholder="Pesquisar tag de object por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm">
-        <div id="idiomasTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
+      <section id="IdiomaPrincipalTagPanel" class="pt-3 border-t border-slate-700">
+        <label class="block text-sm font-medium text-amber-300 mb-2">Idioma principal deste card</label>
+        <input id="idiomaPrincipalTagSearchInput" type="text" placeholder="Pesquisar tag do idioma principal por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm">
+        <div id="idiomaPrincipalTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
+      </section>
+
+      <section id="IdiomaSecundarioTagPanel" class="pt-3 border-t border-slate-700">
+        <label class="block text-sm font-medium text-amber-300 mb-2">Idioma secundário deste card</label>
+        <input id="idiomaSecundarioTagSearchInput" type="text" placeholder="Pesquisar tag do idioma secundário por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm">
+        <div id="idiomaSecundarioTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
 
       <div class="flex items-center justify-between gap-3 pt-2 border-t border-slate-700">
@@ -139,7 +146,8 @@ const app = {
     lexicalChunks: { selectedInputId: 'selectedLexicalChunksTagIds', selectorId: 'lexicalChunksTagSelector', activeClass: 'bg-fuchsia-500/20 text-fuchsia-200 border-fuchsia-400', searchQuery: '' },
     relation: { selectedInputId: 'selectedRelationTagIds', selectorId: 'relationTagSelector', activeClass: 'bg-cyan-500/20 text-cyan-200 border-cyan-400', searchQuery: '' },
     words: { selectedInputId: 'selectedWordsTagIds', selectorId: 'wordsTagSelector', activeClass: 'bg-lime-500/20 text-lime-200 border-lime-400', searchQuery: '' },
-    idiomas: { selectedInputId: 'selectedIdiomasTagIds', selectorId: 'idiomasTagSelector', activeClass: 'bg-indigo-500/20 text-indigo-200 border-indigo-400', searchQuery: '' }
+    idiomaPrincipal: { selectedInputId: 'selectedIdiomaPrincipalTagIds', selectorId: 'idiomaPrincipalTagSelector', activeClass: 'bg-indigo-500/20 text-indigo-200 border-indigo-400', searchQuery: '', singleSelect: true },
+    idiomaSecundario: { selectedInputId: 'selectedIdiomaSecundarioTagIds', selectorId: 'idiomaSecundarioTagSelector', activeClass: 'bg-teal-500/20 text-teal-200 border-teal-400', searchQuery: '', singleSelect: true }
   },
 
   async api(action, payload = {}) {
@@ -236,8 +244,9 @@ const app = {
     el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
   },
   toggleTagSelection(panel, tagId) {
+    const config = this.getPanelConfig(panel);
     const ids = this.getSelectedTagIds(panel);
-    this.setSelectedTagIds(panel, ids.includes(tagId) ? ids.filter(id => id !== tagId) : [...ids, tagId]);
+    this.setSelectedTagIds(panel, config.singleSelect ? (ids.includes(tagId) ? [] : [tagId]) : (ids.includes(tagId) ? ids.filter(id => id !== tagId) : [...ids, tagId]));
     this.renderTagSelector(panel);
   },
   setStatus(text, tone='neutral') {
@@ -264,7 +273,8 @@ const app = {
     const lexicalChunksTags = Array.isArray(card.lexical_chunks_tags) ? card.lexical_chunks_tags.map(t => Number(t.id)).filter(Boolean) : [];
     const relationTags = Array.isArray(card.relation_tags) ? card.relation_tags.map(t => Number(t.id)).filter(Boolean) : [];
     const wordsTags = Array.isArray(card.words_tags) ? card.words_tags.map(t => Number(t.id)).filter(Boolean) : [];
-    const idiomasTags = Array.isArray(card.idiomas_tags) ? card.idiomas_tags.map(t => Number(t.id)).filter(Boolean) : [];
+    const idiomaPrincipalTags = Array.isArray(card.idioma_principal_tags) ? card.idioma_principal_tags.map(t => Number(t.id)).filter(Boolean) : (Array.isArray(card.idiomas_tags) ? card.idiomas_tags.map(t => Number(t.id)).filter(Boolean) : []);
+    const idiomaSecundarioTags = Array.isArray(card.idioma_secundario_tags) ? card.idioma_secundario_tags.map(t => Number(t.id)).filter(Boolean) : [];
     this.setSelectedTagIds('card', tags);
     this.setSelectedTagIds('subject', subjectTags);
     this.setSelectedTagIds('object', objectTags);
@@ -273,7 +283,8 @@ const app = {
     this.setSelectedTagIds('lexicalChunks', lexicalChunksTags);
     this.setSelectedTagIds('relation', relationTags);
     this.setSelectedTagIds('words', wordsTags);
-    this.setSelectedTagIds('idiomas', idiomasTags);
+    this.setSelectedTagIds('idiomaPrincipal', idiomaPrincipalTags);
+    this.setSelectedTagIds('idiomaSecundario', idiomaSecundarioTags);
     this.renderAllTagSelectors();
     this.setStatus('Você está editando um card.', 'neutral');
   },
@@ -291,12 +302,13 @@ const app = {
     const lexical_chunks_tag_ids = this.getSelectedTagIds('lexicalChunks');
     const relation_tag_ids = this.getSelectedTagIds('relation');
     const words_tag_ids = this.getSelectedTagIds('words');
-    const idiomas_tag_ids = this.getSelectedTagIds('idiomas');
+    const idioma_principal_tag_ids = this.getSelectedTagIds('idiomaPrincipal');
+    const idioma_secundario_tag_ids = this.getSelectedTagIds('idiomaSecundario');
     if (!front && !back && !image_front && !image_back) return this.setStatus('Preencha pelo menos um lado do card com texto ou imagem.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
-      const payload = { deck_id: this.deckId, front, back, image_front, image_back, tag_ids, subject_tag_ids, object_tag_ids, tipo_frasal_tag_ids, tense_tag_ids, lexical_chunks_tag_ids, relation_tag_ids, words_tag_ids, idiomas_tag_ids };
+      const payload = { deck_id: this.deckId, front, back, image_front, image_back, tag_ids, subject_tag_ids, object_tag_ids, tipo_frasal_tag_ids, tense_tag_ids, lexical_chunks_tag_ids, relation_tag_ids, words_tag_ids, idioma_principal_tag_ids, idioma_secundario_tag_ids };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
@@ -322,7 +334,8 @@ tenseTagSearchInput.oninput = (e) => app.handleTagSearch('tense', e.target.value
 lexicalChunksTagSearchInput.oninput = (e) => app.handleTagSearch('lexicalChunks', e.target.value);
 relationTagSearchInput.oninput = (e) => app.handleTagSearch('relation', e.target.value);
 wordsTagSearchInput.oninput = (e) => app.handleTagSearch('words', e.target.value);
-idiomasTagSearchInput.oninput = (e) => app.handleTagSearch('idiomas', e.target.value);
+idiomaPrincipalTagSearchInput.oninput = (e) => app.handleTagSearch('idiomaPrincipal', e.target.value);
+idiomaSecundarioTagSearchInput.oninput = (e) => app.handleTagSearch('idiomaSecundario', e.target.value);
 cardForm.onsubmit = (e) => app.save(e);
 
 (async () => {
