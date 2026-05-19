@@ -2158,7 +2158,7 @@ if ($action === 'fetch') {
         $idiomaPrincipalTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'tag_id', $cardIds, $user_id);
         $idiomaSecundarioTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'segundo_idioma_tag_id', $cardIds, $user_id);
 
-        $graphCards = buildGraphCardsSequence($cards, $tagsByCard, 6);
+        $graphCards = buildGraphCardsSequence($cards, $subjectTagsByCard, 6);
         if (!empty($graphCards)) {
             $cardsById = [];
             foreach ($cards as $cardRow) $cardsById[(int)$cardRow['id']] = $cardRow;
