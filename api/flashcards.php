@@ -1971,9 +1971,12 @@ if ($action === 'fetch') {
         $total_score_directory = (int)$stmtScore->fetchColumn();
         $max_possible_score = $total_cards_in_directory * 20;
         $deck_percentage = $max_possible_score > 0 ? round(($total_score_directory / $max_possible_score) * 100) : 0;
-
+        
+        //$cardIds são todos os cards (do deck) sem discriminação no caso de grafos, e com filtro de vencimento no caso de aleatório
         $cardIds = array_map(static fn($card) => (int)$card['id'], $cards);
+        //$tagsByCard todas as tags sem subcategorias dos cards de $cardIds
         $tagsByCard = fetchLinkedTagsByCard($pdo, 'flashcard_tag_links', $cardIds, $user_id);
+        //$subjectTagsByCard todas as tags da subcategoria "subject" dos cards de $cardIds
         $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', $cardIds, $user_id);
         $objectTagsByCard = fetchLinkedTagsByCard($pdo, 'objects_links', $cardIds, $user_id);
         $tipoFrasalTagsByCard = fetchLinkedTagsByCard($pdo, 'tipo_frasal_links', $cardIds, $user_id);
