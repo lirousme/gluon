@@ -830,26 +830,62 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
             $linkedTagIds = $linkedTagIdsFiltered;
         }
 
-        // Ordena as tags ligadas do card principal.
+        // Escolhe a tag relacionada usando a lógica de faixas de 5 pontos.
         //
-        // Aqui a ordem é da tag mais forte para a mais fraca.
+        // Regras:
+        // 1) Começa na faixa "menor que 5".
+        // 2) Se nenhuma tag couber, sobe para "menor que 10", depois 15, etc.
+        // 3) Dentro da faixa atual, escolhe a tag de MAIOR score.
+        // 4) Se empatar score, usa o menor ID da tag.
         //
-        // Ou seja:
-        // a tag com maior soma de scores vem primeiro.
-        usort($linkedTagIds, static function ($a, $b) use ($calcTagSens) {
-            // Soma dos scores da tag A.
-            $sa = $calcTagSens((int)$a);
+        // Exemplo:
+        // scores: 11, 8, 6, 3, 0
+        // faixa <5  => escolhe 3
+        // quando todas >=5, faixa <10 => escolhe 8
+        $strongestTagId = null;
+        $maxLinkedTagScore = null;
 
-            // Soma dos scores da tag B.
-            $sb = $calcTagSens((int)$b);
+        foreach ($linkedTagIds as $tid) {
+            $tagScore = $calcTagSens((int)$tid);
+            if ($maxLinkedTagScore === null || $tagScore > $maxLinkedTagScore) {
+                $maxLinkedTagScore = $tagScore;
+            }
+        }
 
-            // Ordena da maior soma para a menor soma.
-            // Se empatar, usa o menor ID.
-            return ($sb <=> $sa) ?: ((int)$a <=> (int)$b);
-        });
+        if ($maxLinkedTagScore !== null) {
+            $limit = 5;
 
-        // A tag relacionada mais forte será a primeira da lista.
-        $strongestTagId = (int)$linkedTagIds[0];
+            while ($limit <= ((int)$maxLinkedTagScore + 5)) {
+                $bestTagId = null;
+                $bestTagScore = null;
+
+                foreach ($linkedTagIds as $tid) {
+                    $tagId = (int)$tid;
+                    $tagScore = $calcTagSens($tagId);
+
+                    // Fora da faixa atual: desconsidera.
+                    if ($tagScore >= $limit) continue;
+
+                    if (
+                        $bestTagId === null
+                        || $tagScore > $bestTagScore
+                        || ($tagScore === $bestTagScore && $tagId < $bestTagId)
+                    ) {
+                        $bestTagId = $tagId;
+                        $bestTagScore = $tagScore;
+                    }
+                }
+
+                if ($bestTagId !== null) {
+                    $strongestTagId = $bestTagId;
+                    break;
+                }
+
+                $limit += 5;
+            }
+        }
+
+        if ($strongestTagId === null) continue;
 
         // Dentro dessa tag mais forte, escolhe um card forte.
         //
