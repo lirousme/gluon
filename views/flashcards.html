@@ -502,6 +502,7 @@
             <form onsubmit="flashcardApp.createTag(event)" class="p-5 space-y-4">
                 <input id="tagNameInput" type="text" required maxlength="80" placeholder="Ex.: Gramática, Verbos, Trabalho..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
                 <p class="text-xs text-slate-400">A cor da tag é definida automaticamente conforme a categoria selecionada.</p>
+                <p class="text-xs text-amber-300">Selecione no máximo 1 categoria para a nova tag.</p>
                 <div class="space-y-2 text-sm text-slate-200">
                     <label class="flex items-center gap-2">
                         <input id="tagIsBookInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
@@ -815,9 +816,33 @@
 
                 this.setupKeyboardListeners();
                 this.setupBulkListener();
+                this.setupTagCategorySingleSelect();
                 this.applyStudyScopeUI();
                 await this.loadTags();
                 await this.loadDeck();
+            },
+
+            setupTagCategorySingleSelect() {
+                const categoryInputs = [
+                    'tagIsBookInput',
+                    'tagIsVerbTenseInput',
+                    'tagIsSentenceTypeInput',
+                    'tagIsLexicalChunkInput',
+                    'tagIsRelationTypeInput',
+                    'tagIsWordInput',
+                    'tagIsMonthInput',
+                    'tagIsDayInput',
+                    'tagIsYearInput'
+                ].map(id => document.getElementById(id)).filter(Boolean);
+
+                categoryInputs.forEach(input => {
+                    input.addEventListener('change', () => {
+                        if (!input.checked) return;
+                        categoryInputs.forEach(otherInput => {
+                            if (otherInput !== input) otherInput.checked = false;
+                        });
+                    });
+                });
             },
 
 
@@ -2561,6 +2586,24 @@
                 e.preventDefault();
                 const btn = document.getElementById('btnSaveTag');
                 btn.disabled = true;
+                const selectedCategoryCount = [
+                    'tagIsBookInput',
+                    'tagIsVerbTenseInput',
+                    'tagIsSentenceTypeInput',
+                    'tagIsLexicalChunkInput',
+                    'tagIsRelationTypeInput',
+                    'tagIsWordInput',
+                    'tagIsMonthInput',
+                    'tagIsDayInput',
+                    'tagIsYearInput'
+                ].map(id => document.getElementById(id)).filter(input => input && input.checked).length;
+
+                if (selectedCategoryCount > 1) {
+                    this.showToast('Selecione apenas 1 categoria para criar a tag.', 'warning');
+                    btn.disabled = false;
+                    return;
+                }
+
                 const res = await this.api('create_tag', {
                     name: document.getElementById('tagNameInput').value.trim(),
                     is_book: document.getElementById('tagIsBookInput').checked ? 1 : 0,
