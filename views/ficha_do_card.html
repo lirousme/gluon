@@ -231,10 +231,7 @@ const app = {
     if (!filtered.length) { el.innerHTML = '<span class="text-xs text-slate-400">Nenhuma tag para exibir.</span>'; return; }
     el.innerHTML = filtered.map(tag => {
       const id = Number(tag.id); const active = currentSelected.includes(id);
-      const safeColor = String(tag.color || '#334155');
-      const selectedStyle = `background:${safeColor}33;border-color:${safeColor};color:#e2e8f0`;
-      const defaultStyle = `background:#1e293b;border-color:${safeColor}99;color:#cbd5e1`;
-      return `<button type="button" data-tag-id="${id}" class="px-2.5 py-1 rounded-full text-xs border transition" style="${active ? selectedStyle : defaultStyle}"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${safeColor}"></span>${String(tag.name||'')}</button>`;
+      return `<button type="button" data-tag-id="${id}" class="px-2.5 py-1 rounded-full text-xs border transition ${active ? config.activeClass : 'bg-slate-800 text-slate-300 border-slate-600'}"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color || '#334155'}"></span>${String(tag.name||'')}</button>`;
     }).join('');
     el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
   },
