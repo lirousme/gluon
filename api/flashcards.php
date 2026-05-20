@@ -242,6 +242,20 @@ function sanitizeTagIds($rawTagIds): array {
 /**
  * Função getAllowedCardTagLinkTables: Retorna a lista branca das tabelas de vínculo entre cards e tags permitidas para consultas e escrita.
  */
+
+function resolveTagColorByCategory(array $tagFlags): string {
+    if (($tagFlags['is_book'] ?? 0) === 1) return '#f59e0b';
+    if (($tagFlags['is_verb_tense'] ?? 0) === 1) return '#38bdf8';
+    if (($tagFlags['is_sentence_type'] ?? 0) === 1) return '#fb7185';
+    if (($tagFlags['is_lexical_chunk'] ?? 0) === 1) return '#d946ef';
+    if (($tagFlags['is_relation_type'] ?? 0) === 1) return '#22d3ee';
+    if (($tagFlags['is_word'] ?? 0) === 1) return '#84cc16';
+    if (($tagFlags['is_month'] ?? 0) === 1) return '#14b8a6';
+    if (($tagFlags['is_day'] ?? 0) === 1) return '#6366f1';
+    if (($tagFlags['is_year'] ?? 0) === 1) return '#a855f7';
+    return '#334155';
+}
+
 function getAllowedCardTagLinkTables(): array {
     return ['flashcard_tag_links', 'subjects_links', 'objects_links', 'tipo_frasal_links', 'tense_links', 'lexical_chunks_links', 'relation_links', 'words_links', 'idiomas_links'];
 }
@@ -3128,7 +3142,6 @@ elseif ($action === 'list_tags') {
 
 elseif ($action === 'create_tag') {
     $name = trim((string)($input['name'] ?? ''));
-    $color = trim((string)($input['color'] ?? '#334155'));
     $is_book = !empty($input['is_book']) ? 1 : 0;
     $is_verb_tense = !empty($input['is_verb_tense']) ? 1 : 0;
     $is_sentence_type = !empty($input['is_sentence_type']) ? 1 : 0;
@@ -3139,7 +3152,18 @@ elseif ($action === 'create_tag') {
     $is_day = !empty($input['is_day']) ? 1 : 0;
     $is_year = !empty($input['is_year']) ? 1 : 0;
     if ($name === '') die(json_encode(['status' => 'error', 'message' => 'Nome da tag é obrigatório.']));
-    if (!preg_match('/^#[0-9a-fA-F]{6}$/', $color)) $color = '#334155';
+
+    $color = resolveTagColorByCategory([
+        'is_book' => $is_book,
+        'is_verb_tense' => $is_verb_tense,
+        'is_sentence_type' => $is_sentence_type,
+        'is_lexical_chunk' => $is_lexical_chunk,
+        'is_relation_type' => $is_relation_type,
+        'is_word' => $is_word,
+        'is_month' => $is_month,
+        'is_day' => $is_day,
+        'is_year' => $is_year,
+    ]);
 
     $stmt = $pdo->prepare("INSERT INTO flashcard_tags (user_id, name, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     try {
