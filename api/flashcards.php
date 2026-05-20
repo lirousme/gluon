@@ -2198,20 +2198,17 @@ if ($action === 'fetch') {
         $wordsTagsByCard = fetchLinkedTagsByCard($pdo, 'words_links', $cardIds, $user_id);
         $idiomaPrincipalTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'tag_id', $cardIds, $user_id);
         $idiomaSecundarioTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'segundo_idioma_tag_id', $cardIds, $user_id);
-
+        
+        //entre colchetes estão as tags que serão consideradas nos evenCards/cards pares
         $graphCards = buildGraphCardsSequence(
             $cards,
             $subjectTagsByCard,
             6,
             [
+                $subjectTagsByCard,
                 $objectTagsByCard,
-                $tipoFrasalTagsByCard,
-                $tenseTagsByCard,
                 $lexicalChunksTagsByCard,
-                $relationTagsByCard,
-                $wordsTagsByCard,
-                $idiomaPrincipalTagsByCard,
-                $idiomaSecundarioTagsByCard
+                $wordsTagsByCard
             ]
         );
         if (!empty($graphCards)) {
