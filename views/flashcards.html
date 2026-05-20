@@ -501,7 +501,7 @@
             </div>
             <form onsubmit="flashcardApp.createTag(event)" class="p-5 space-y-4">
                 <input id="tagNameInput" type="text" required maxlength="80" placeholder="Ex.: Gramática, Verbos, Trabalho..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
-                <input id="tagColorInput" type="color" value="#6366f1" class="w-full h-10 bg-slate-900 border border-slate-600 rounded-lg">
+                <p class="text-xs text-slate-400">A cor da tag é definida automaticamente conforme a categoria selecionada.</p>
                 <div class="space-y-2 text-sm text-slate-200">
                     <label class="flex items-center gap-2">
                         <input id="tagIsBookInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
@@ -964,7 +964,7 @@
                 el.innerHTML = filteredTags.map(tag => {
                     const active = currentSelected.includes(Number(tag.id));
                     const bookBadge = Number(tag.is_book) === 1 ? '<span class="ml-1 text-[10px] text-amber-300">📚</span>' : '';
-                    return `<button type="button" onclick="flashcardApp.toggleTagSelection(${Number(tag.id)})" class="px-2.5 py-1 rounded-full text-xs border transition ${active ? 'bg-violet-500/20 text-violet-200 border-violet-400' : 'bg-slate-800 text-slate-300 border-slate-600'}"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color}"></span>${this.escapeHTML(tag.name)}${bookBadge}</button>`;
+                    return `<button type="button" onclick="flashcardApp.toggleTagSelection(${Number(tag.id)})" class="px-2.5 py-1 rounded-full text-xs border transition ${active ? 'bg-violet-500/20 text-violet-200 border-violet-400' : 'bg-slate-800 text-slate-300 border-slate-600'}"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color || '#334155'}"></span>${this.escapeHTML(tag.name)}${bookBadge}</button>`;
                 }).join('');
             },
             toggleTagSelection(tagId) {
@@ -2557,7 +2557,6 @@
                 btn.disabled = true;
                 const res = await this.api('create_tag', {
                     name: document.getElementById('tagNameInput').value.trim(),
-                    color: document.getElementById('tagColorInput').value,
                     is_book: document.getElementById('tagIsBookInput').checked ? 1 : 0,
                     is_verb_tense: document.getElementById('tagIsVerbTenseInput').checked ? 1 : 0,
                     is_sentence_type: document.getElementById('tagIsSentenceTypeInput').checked ? 1 : 0,
