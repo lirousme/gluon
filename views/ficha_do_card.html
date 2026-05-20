@@ -21,7 +21,6 @@
 
     <form id="cardForm" class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl p-4 sm:p-5 space-y-5">
       <input type="hidden" id="editCardId" value="">
-      <input type="hidden" id="selectedTagIds" value="[]">
       <input type="hidden" id="selectedSubjectTagIds" value="[]">
       <input type="hidden" id="selectedObjectTagIds" value="[]">
       <input type="hidden" id="selectedTipoFrasalTagIds" value="[]">
@@ -59,12 +58,6 @@
           <div id="backImagePreview" class="mt-2 hidden w-full h-36 rounded bg-contain bg-center bg-no-repeat border border-blue-500/50"></div>
           <button type="button" id="btnRemoveBackImage" class="hidden mt-2 text-xs text-red-400 hover:text-red-300 flex items-center gap-1"><i class="fa-solid fa-trash"></i> Remover Imagem</button>
         </div>
-      </section>
-
-      <section class="pt-3 border-t border-slate-700">
-        <label class="block text-sm font-medium text-violet-300 mb-2">Tags deste card</label>
-        <input id="cardTagSearchInput" type="text" placeholder="Pesquisar tag por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
-        <div id="cardTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
 
       <section id="SubjectTagsPanel" class="pt-3 border-t border-slate-700">
@@ -138,7 +131,6 @@ const app = {
   editCardId: params.get('edit_card_id'),
   availableTags: [],
   tagPanels: {
-    card: { selectedInputId: 'selectedTagIds', selectorId: 'cardTagSelector', activeClass: 'bg-violet-500/20 text-violet-200 border-violet-400', searchQuery: '' },
     subject: { selectedInputId: 'selectedSubjectTagIds', selectorId: 'subjectTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' },
     object: { selectedInputId: 'selectedObjectTagIds', selectorId: 'objectTagSelector', activeClass: 'bg-amber-500/20 text-amber-200 border-amber-400', searchQuery: '' },
     tipoFrasal: { selectedInputId: 'selectedTipoFrasalTagIds', selectorId: 'tipoFrasalTagSelector', activeClass: 'bg-rose-500/20 text-rose-200 border-rose-400', searchQuery: '' },
@@ -216,7 +208,7 @@ const app = {
     this.availableTags = res?.data || [];
     this.renderAllTagSelectors();
   },
-  getPanelConfig(panel) { return this.tagPanels[panel] || this.tagPanels.card; },
+  getPanelConfig(panel) { return this.tagPanels[panel] || this.tagPanels.subject; },
   getSelectedTagIds(panel) {
     const input = document.getElementById(this.getPanelConfig(panel).selectedInputId);
     try { return JSON.parse(input.value || '[]').map(Number).filter(Boolean); }
@@ -230,7 +222,7 @@ const app = {
     this.renderTagSelector(panel);
   },
   renderAllTagSelectors() { Object.keys(this.tagPanels).forEach(panel => this.renderTagSelector(panel)); },
-  renderTagSelector(panel = 'card', selectedIds = null) {
+  renderTagSelector(panel = 'subject', selectedIds = null) {
     const config = this.getPanelConfig(panel);
     const el = document.getElementById(config.selectorId);
     const currentSelected = selectedIds ?? this.getSelectedTagIds(panel);
@@ -265,7 +257,6 @@ const app = {
     singleBack.value = card.back || '';
     if (card.image_front) this.setBase64ImagePreview('front', card.image_front);
     if (card.image_back) this.setBase64ImagePreview('back', card.image_back);
-    const tags = Array.isArray(card.tags) ? card.tags.map(t => Number(t.id)).filter(Boolean) : [];
     const subjectTags = Array.isArray(card.subject_tags) ? card.subject_tags.map(t => Number(t.id)).filter(Boolean) : [];
     const objectTags = Array.isArray(card.object_tags) ? card.object_tags.map(t => Number(t.id)).filter(Boolean) : [];
     const tipoFrasalTags = Array.isArray(card.tipo_frasal_tags) ? card.tipo_frasal_tags.map(t => Number(t.id)).filter(Boolean) : [];
@@ -275,7 +266,6 @@ const app = {
     const wordsTags = Array.isArray(card.words_tags) ? card.words_tags.map(t => Number(t.id)).filter(Boolean) : [];
     const idiomaPrincipalTags = Array.isArray(card.idioma_principal_tags) ? card.idioma_principal_tags.map(t => Number(t.id)).filter(Boolean) : (Array.isArray(card.idiomas_tags) ? card.idiomas_tags.map(t => Number(t.id)).filter(Boolean) : []);
     const idiomaSecundarioTags = Array.isArray(card.idioma_secundario_tags) ? card.idioma_secundario_tags.map(t => Number(t.id)).filter(Boolean) : [];
-    this.setSelectedTagIds('card', tags);
     this.setSelectedTagIds('subject', subjectTags);
     this.setSelectedTagIds('object', objectTags);
     this.setSelectedTagIds('tipoFrasal', tipoFrasalTags);
@@ -294,7 +284,6 @@ const app = {
     const back = singleBack.value.trim();
     const image_front = frontImageBase64.value;
     const image_back = backImageBase64.value;
-    const tag_ids = this.getSelectedTagIds('card');
     const subject_tag_ids = this.getSelectedTagIds('subject');
     const object_tag_ids = this.getSelectedTagIds('object');
     const tipo_frasal_tag_ids = this.getSelectedTagIds('tipoFrasal');
@@ -308,7 +297,7 @@ const app = {
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
-      const payload = { deck_id: this.deckId, front, back, image_front, image_back, tag_ids, subject_tag_ids, object_tag_ids, tipo_frasal_tag_ids, tense_tag_ids, lexical_chunks_tag_ids, relation_tag_ids, words_tag_ids, idioma_principal_tag_ids, idioma_secundario_tag_ids };
+      const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids, object_tag_ids, tipo_frasal_tag_ids, tense_tag_ids, lexical_chunks_tag_ids, relation_tag_ids, words_tag_ids, idioma_principal_tag_ids, idioma_secundario_tag_ids };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
@@ -326,7 +315,6 @@ frontImageFile.onchange = (e) => app.handleCardImageUpload(e, 'front');
 backImageFile.onchange = (e) => app.handleCardImageUpload(e, 'back');
 btnRemoveFrontImage.onclick = () => app.removeCardImage('front');
 btnRemoveBackImage.onclick = () => app.removeCardImage('back');
-cardTagSearchInput.oninput = (e) => app.handleTagSearch('card', e.target.value);
 subjectTagSearchInput.oninput = (e) => app.handleTagSearch('subject', e.target.value);
 objectTagSearchInput.oninput = (e) => app.handleTagSearch('object', e.target.value);
 tipoFrasalTagSearchInput.oninput = (e) => app.handleTagSearch('tipoFrasal', e.target.value);

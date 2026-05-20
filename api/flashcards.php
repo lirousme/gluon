@@ -263,17 +263,17 @@ function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int 
     ");
     $stmtTags->execute(array_merge($cardIds, [$user_id]));
 
-    $tagsByCard = [];
+    $linkedTagsByCard = [];
     foreach ($stmtTags->fetchAll() as $tagRow) {
         $flashcardId = (int)$tagRow['flashcard_id'];
-        if (!isset($tagsByCard[$flashcardId])) $tagsByCard[$flashcardId] = [];
-        $tagsByCard[$flashcardId][] = [
+        if (!isset($linkedTagsByCard[$flashcardId])) $linkedTagsByCard[$flashcardId] = [];
+        $linkedTagsByCard[$flashcardId][] = [
             'id' => (int)$tagRow['tag_id'],
             'name' => $tagRow['name'],
             'color' => $tagRow['color']
         ];
     }
-    return $tagsByCard;
+    return $linkedTagsByCard;
 }
 
 /**
@@ -294,17 +294,17 @@ function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagCol
     ");
     $stmtTags->execute(array_merge($cardIds, [$user_id]));
 
-    $tagsByCard = [];
+    $linkedTagsByCard = [];
     foreach ($stmtTags->fetchAll() as $tagRow) {
         $flashcardId = (int)$tagRow['flashcard_id'];
-        if (!isset($tagsByCard[$flashcardId])) $tagsByCard[$flashcardId] = [];
-        $tagsByCard[$flashcardId][] = [
+        if (!isset($linkedTagsByCard[$flashcardId])) $linkedTagsByCard[$flashcardId] = [];
+        $linkedTagsByCard[$flashcardId][] = [
             'id' => (int)$tagRow['tag_id'],
             'name' => $tagRow['name'],
             'color' => $tagRow['color']
         ];
     }
-    return $tagsByCard;
+    return $linkedTagsByCard;
 }
 
 /**
@@ -434,7 +434,7 @@ function validatePhaseDeckUnlock($pdo, $deck_id, $user_id): ?string {
 /**
  * Função buildGraphCardsSequence: Monta uma sequência balanceada de cards por tags e score para estudo em lotes.
  */
-function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize = 6, array $evenTagsSourcesByCard = []): array
+function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batchSize = 6, array $evenTagsSourcesByCard = []): array
 {
     // Se não existem cards disponíveis, não tem o que montar.
     // Então a função retorna uma lista vazia.
@@ -468,7 +468,7 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
     $cardsByTag = [];
 
     // Percorre o array que diz quais tags cada card possui.
-    foreach ($tagsByCard as $cardId => $tags) {
+    foreach ($seedTagsByCard as $cardId => $tags) {
         // Percorre todas as tags daquele card.
         foreach ($tags as $tag) {
             // Pega o ID da tag.
@@ -795,7 +795,7 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
         // $linkedTagIds = [1, 2, 3]
         $linkedTagIds = array_map(
             static fn($t) => (int)$t['id'],
-            $tagsByCard[$oddCard] ?? []
+            $seedTagsByCard[$oddCard] ?? []
         );
 
         foreach ($evenTagsSourcesByCard as $tagsSourceByCard) {
@@ -2020,8 +2020,6 @@ if ($action === 'fetch') {
         
         //$cardIds são todos os cards (do deck) sem discriminação no caso de grafos, e com filtro de vencimento no caso de aleatório
         $cardIds = array_map(static fn($card) => (int)$card['id'], $cards);
-        //$tagsByCard todas as tags sem subcategorias dos cards de $cardIds
-        $tagsByCard = fetchLinkedTagsByCard($pdo, 'flashcard_tag_links', $cardIds, $user_id);
         //$subjectTagsByCard todas as tags da subcategoria "subject" dos cards de $cardIds
         $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', $cardIds, $user_id);
         $objectTagsByCard = fetchLinkedTagsByCard($pdo, 'objects_links', $cardIds, $user_id);
@@ -2044,7 +2042,6 @@ if ($action === 'fetch') {
                 'has_audio_front' => (int)$card['has_audio_front'],
                 'has_audio_back' => (int)$card['has_audio_back'],
                 'score' => (int)$card['score'],
-                'tags' => $tagsByCard[(int)$card['id']] ?? [],
                 'subject_tags' => $subjectTagsByCard[(int)$card['id']] ?? [],
                 'object_tags' => $objectTagsByCard[(int)$card['id']] ?? [],
                 'tipo_frasal_tags' => $tipoFrasalTagsByCard[(int)$card['id']] ?? [],
@@ -2180,7 +2177,6 @@ if ($action === 'fetch') {
     }
 
     $cardIds = array_map(static fn($card) => (int)$card['id'], $cards);
-    $tagsByCard = [];
     $subjectTagsByCard = [];
     $objectTagsByCard = [];
     $tipoFrasalTagsByCard = [];
@@ -2193,7 +2189,6 @@ if ($action === 'fetch') {
 
     $graphDecisionByCardId = [];
     if ($deck_mode === 'grafo') {
-        $tagsByCard = fetchLinkedTagsByCard($pdo, 'flashcard_tag_links', $cardIds, $user_id);
         $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', $cardIds, $user_id);
         $objectTagsByCard = fetchLinkedTagsByCard($pdo, 'objects_links', $cardIds, $user_id);
         $tipoFrasalTagsByCard = fetchLinkedTagsByCard($pdo, 'tipo_frasal_links', $cardIds, $user_id);
@@ -2209,7 +2204,6 @@ if ($action === 'fetch') {
             $subjectTagsByCard,
             6,
             [
-                $tagsByCard,
                 $objectTagsByCard,
                 $tipoFrasalTagsByCard,
                 $tenseTagsByCard,
@@ -2248,7 +2242,6 @@ if ($action === 'fetch') {
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
             'score' => (int)$card['score'],
-            'tags' => $tagsByCard[(int)$card['id']] ?? [],
             'subject_tags' => $subjectTagsByCard[(int)$card['id']] ?? [],
             'object_tags' => $objectTagsByCard[(int)$card['id']] ?? [],
             'tipo_frasal_tags' => $tipoFrasalTagsByCard[(int)$card['id']] ?? [],
