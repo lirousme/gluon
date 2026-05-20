@@ -434,7 +434,7 @@ function validatePhaseDeckUnlock($pdo, $deck_id, $user_id): ?string {
 /**
  * Função buildGraphCardsSequence: Monta uma sequência balanceada de cards por tags e score para estudo em lotes.
  */
-function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize = 6): array
+function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize = 6, array $evenTagsSourcesByCard = []): array
 {
     // Se não existem cards disponíveis, não tem o que montar.
     // Então a função retorna uma lista vazia.
@@ -797,6 +797,16 @@ function buildGraphCardsSequence(array $cards, array $tagsByCard, int $batchSize
             static fn($t) => (int)$t['id'],
             $tagsByCard[$oddCard] ?? []
         );
+
+        foreach ($evenTagsSourcesByCard as $tagsSourceByCard) {
+            $linkedTagIds = array_merge(
+                $linkedTagIds,
+                array_map(
+                    static fn($t) => (int)$t['id'],
+                    $tagsSourceByCard[$oddCard] ?? []
+                )
+            );
+        }
 
         // Remove tags repetidas e tags inválidas.
         $linkedTagIds = array_values(
@@ -2194,7 +2204,22 @@ if ($action === 'fetch') {
         $idiomaPrincipalTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'tag_id', $cardIds, $user_id);
         $idiomaSecundarioTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'segundo_idioma_tag_id', $cardIds, $user_id);
 
-        $graphCards = buildGraphCardsSequence($cards, $subjectTagsByCard, 6);
+        $graphCards = buildGraphCardsSequence(
+            $cards,
+            $subjectTagsByCard,
+            6,
+            [
+                $tagsByCard,
+                $objectTagsByCard,
+                $tipoFrasalTagsByCard,
+                $tenseTagsByCard,
+                $lexicalChunksTagsByCard,
+                $relationTagsByCard,
+                $wordsTagsByCard,
+                $idiomaPrincipalTagsByCard,
+                $idiomaSecundarioTagsByCard
+            ]
+        );
         if (!empty($graphCards)) {
             $cardsById = [];
             foreach ($cards as $cardRow) $cardsById[(int)$cardRow['id']] = $cardRow;
