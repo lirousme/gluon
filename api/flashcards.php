@@ -3018,6 +3018,30 @@ elseif ($action === 'add_single') {
     $idioma_principal_tag_ids = sanitizeTagIds($input['idioma_principal_tag_ids'] ?? ($input['idiomas_tag_ids'] ?? []));
     $idioma_secundario_tag_ids = sanitizeTagIds($input['idioma_secundario_tag_ids'] ?? []);
 
+    $words_back_text = '';
+    if (!empty($words_tag_ids)) {
+        $placeholders = implode(',', array_fill(0, count($words_tag_ids), '?'));
+        $stmtWordsTags = $pdo->prepare("
+            SELECT id, name_pt_br
+            FROM tags
+            WHERE user_id = ?
+              AND id IN ($placeholders)
+            ORDER BY FIELD(id, $placeholders)
+        ");
+        $stmtWordsTags->execute(array_merge([$user_id], $words_tag_ids, $words_tag_ids));
+        $words_back_parts = [];
+        foreach ($stmtWordsTags->fetchAll(PDO::FETCH_ASSOC) as $tag) {
+            $namePtBr = trim((string)($tag['name_pt_br'] ?? ''));
+            if ($namePtBr !== '') {
+                $words_back_parts[] = $namePtBr;
+            }
+        }
+        $words_back_text = trim(implode(' ', $words_back_parts));
+        if ($words_back_text !== '') {
+            $back = $words_back_text;
+        }
+    }
+
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
 
@@ -3074,6 +3098,7 @@ elseif ($action === 'add_single') {
         }
 
         $back_clean = trim(strip_tags($back));
+        $back_audio_language = $words_back_text !== '' ? 'pt-BR' : $back_language;
         if ($back_clean !== '' && !cardTextContainsMathNotation($back_clean)) {
             $tts_error_details = null;
             $ok_back = generateAndPersistCardAudio(
@@ -3082,7 +3107,7 @@ elseif ($action === 'add_single') {
                 $new_card_id,
                 'back',
                 $back_clean,
-                $back_language,
+                $back_audio_language,
                 $deck_structure,
                 $front_language,
                 $back_language,
