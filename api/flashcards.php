@@ -3026,16 +3026,29 @@ elseif ($action === 'add_single') {
             FROM tags
             WHERE user_id = ?
               AND id IN ($placeholders)
-            ORDER BY FIELD(id, $placeholders)
         ");
-        $stmtWordsTags->execute(array_merge([$user_id], $words_tag_ids, $words_tag_ids));
-        $words_back_parts = [];
+        $stmtWordsTags->execute(array_merge([$user_id], $words_tag_ids));
+
+        $wordsTagNamesById = [];
         foreach ($stmtWordsTags->fetchAll(PDO::FETCH_ASSOC) as $tag) {
-            $namePtBr = trim((string)($tag['name_pt_br'] ?? ''));
+            $tagId = (int)($tag['id'] ?? 0);
+            if ($tagId > 0) {
+                $wordsTagNamesById[$tagId] = trim((string)($tag['name_pt_br'] ?? ''));
+            }
+        }
+
+        $words_back_parts = [];
+        foreach ($words_tag_ids as $selectedTagId) {
+            $selectedTagId = (int)$selectedTagId;
+            if ($selectedTagId <= 0) {
+                continue;
+            }
+            $namePtBr = $wordsTagNamesById[$selectedTagId] ?? '';
             if ($namePtBr !== '') {
                 $words_back_parts[] = $namePtBr;
             }
         }
+
         $words_back_text = trim(implode(' ', $words_back_parts));
         if ($words_back_text !== '') {
             $back = $words_back_text;
