@@ -991,11 +991,17 @@
                 this.tagSearchQuery = (query || '').trim().toLowerCase();
                 this.renderTagSelector();
             },
-            getTagLabel(tag = {}) {
+            getTagLabel(tag = {}, numeroPtBrCounts = null) {
                 const numero = tag?.numero;
-                if (numero !== null && numero !== undefined && String(numero).trim() !== '') return String(numero);
+                const hasNumero = numero !== null && numero !== undefined && String(numero).trim() !== '';
                 const name = String(tag?.name || '').trim();
                 const namePtBr = String(tag?.name_pt_br || '').trim();
+                if (hasNumero) {
+                    const numeroKey = String(numero).trim();
+                    const qtdTraducoes = numeroPtBrCounts?.get(numeroKey) || 0;
+                    if (qtdTraducoes > 1 && namePtBr) return `${numeroKey} (${namePtBr})`;
+                    return numeroKey;
+                }
                 return namePtBr ? `${name} (${namePtBr})` : name;
             },
             renderTagSelector(selectedIds = null) {
@@ -1013,6 +1019,13 @@
                         || String(tag.numero ?? '').toLowerCase().includes(this.tagSearchQuery)
                     )
                     : this.availableTags.filter(tag => currentSelected.includes(Number(tag.id)));
+                const numeroPtBrCounts = new Map();
+                filteredTags.forEach(tag => {
+                    const numero = tag?.numero;
+                    const numeroKey = numero !== null && numero !== undefined ? String(numero).trim() : '';
+                    const namePtBr = String(tag?.name_pt_br || '').trim();
+                    if (numeroKey && namePtBr) numeroPtBrCounts.set(numeroKey, (numeroPtBrCounts.get(numeroKey) || 0) + 1);
+                });
                 if (!filteredTags.length) {
                     el.innerHTML = this.tagSearchQuery
                         ? '<span class="text-xs text-slate-400">Nenhuma tag encontrada para esta busca.</span>'
@@ -1025,7 +1038,7 @@
                     const selectedStyle = `background:${safeColor}33;border-color:${safeColor};color:#e2e8f0`;
                     const defaultStyle = `background:#1e293b;border-color:${safeColor}99;color:#cbd5e1`;
                     const bookBadge = Number(tag.is_book) === 1 ? '<span class="ml-1 text-[10px] text-amber-300">📚</span>' : '';
-                    return `<button type="button" onclick="flashcardApp.toggleTagSelection(${Number(tag.id)})" class="px-2.5 py-1 rounded-full text-xs border transition ${active ? 'bg-violet-500/20 text-violet-200 border-violet-400' : 'bg-slate-800 text-slate-300 border-slate-600'}"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color || '#334155'}"></span>${this.escapeHTML(this.getTagLabel(tag))}${bookBadge}</button>`;
+                    return `<button type="button" onclick="flashcardApp.toggleTagSelection(${Number(tag.id)})" class="px-2.5 py-1 rounded-full text-xs border transition ${active ? 'bg-violet-500/20 text-violet-200 border-violet-400' : 'bg-slate-800 text-slate-300 border-slate-600'}"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color || '#334155'}"></span>${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}${bookBadge}</button>`;
                 }).join('');
             },
             toggleTagSelection(tagId) {
@@ -1317,9 +1330,16 @@
                 const shouldShowTags = this.deckMode === 'grafo';
                 if (shouldShowTags && tags.length) {
                     tagsPanel.classList.remove('hidden');
+                    const numeroPtBrCounts = new Map();
+                    tags.forEach(tag => {
+                        const numero = tag?.numero;
+                        const numeroKey = numero !== null && numero !== undefined ? String(numero).trim() : '';
+                        const namePtBr = String(tag?.name_pt_br || '').trim();
+                        if (numeroKey && namePtBr) numeroPtBrCounts.set(numeroKey, (numeroPtBrCounts.get(numeroKey) || 0) + 1);
+                    });
                     tagsList.innerHTML = tags.map(tag => {
                         const safeColor = String(tag.color || '#334155');
-                        return `<button type="button" onclick="flashcardApp.openEditTagModal(${Number(tag.id)})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors" style="background:${safeColor}33;border-color:${safeColor};color:#e2e8f0" title="Editar tag"><span class="inline-block w-1.5 h-1.5 rounded-full" style="background:${safeColor}"></span>${this.escapeHTML(this.getTagLabel(tag))}<i class="fa-solid fa-pen text-[9px] opacity-75 ml-0.5"></i></button>`;
+                        return `<button type="button" onclick="flashcardApp.openEditTagModal(${Number(tag.id)})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors" style="background:${safeColor}33;border-color:${safeColor};color:#e2e8f0" title="Editar tag"><span class="inline-block w-1.5 h-1.5 rounded-full" style="background:${safeColor}"></span>${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}<i class="fa-solid fa-pen text-[9px] opacity-75 ml-0.5"></i></button>`;
                     }).join('');
                 } else {
                     tagsPanel.classList.add('hidden');
