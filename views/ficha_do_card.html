@@ -344,11 +344,17 @@ const app = {
     this.getPanelConfig(panel).searchQuery = query.trim().toLowerCase();
     this.renderTagSelector(panel);
   },
-  getTagLabel(tag = {}) {
+  getTagLabel(tag = {}, numeroPtBrCounts = null) {
     const numero = tag?.numero;
-    if (numero !== null && numero !== undefined && String(numero).trim() !== '') return String(numero);
+    const hasNumero = numero !== null && numero !== undefined && String(numero).trim() !== '';
     const name = String(tag?.name || '').trim();
     const namePtBr = String(tag?.name_pt_br || '').trim();
+    if (hasNumero) {
+      const numeroKey = String(numero).trim();
+      const qtdTraducoes = numeroPtBrCounts?.get(numeroKey) || 0;
+      if (qtdTraducoes > 1 && namePtBr) return `${numeroKey} (${namePtBr})`;
+      return numeroKey;
+    }
     return namePtBr ? `${name} (${namePtBr})` : name;
   },
   renderAllTagSelectors() { Object.keys(this.tagPanels).forEach(panel => this.renderTagSelector(panel)); },
@@ -364,10 +370,17 @@ const app = {
           || String(t.numero ?? '').toLowerCase().includes(config.searchQuery)
         )
       : this.availableTags.filter(t => currentSelected.includes(Number(t.id)));
+    const numeroPtBrCounts = new Map();
+    filtered.forEach(tag => {
+      const numero = tag?.numero;
+      const numeroKey = numero !== null && numero !== undefined ? String(numero).trim() : '';
+      const namePtBr = String(tag?.name_pt_br || '').trim();
+      if (numeroKey && namePtBr) numeroPtBrCounts.set(numeroKey, (numeroPtBrCounts.get(numeroKey) || 0) + 1);
+    });
     if (!filtered.length) { el.innerHTML = '<span class="text-xs text-slate-400">Nenhuma tag para exibir.</span>'; return; }
     el.innerHTML = filtered.map(tag => {
       const id = Number(tag.id); const active = currentSelected.includes(id);
-      return `<button type="button" data-tag-id="${id}" class="px-2.5 py-1 rounded-full text-xs border transition ${active ? config.activeClass : 'bg-slate-800 text-slate-300 border-slate-600'}"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color || '#334155'}"></span>${this.getTagLabel(tag)}</button>`;
+      return `<button type="button" data-tag-id="${id}" class="px-2.5 py-1 rounded-full text-xs border transition ${active ? config.activeClass : 'bg-slate-800 text-slate-300 border-slate-600'}"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color || '#334155'}"></span>${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button>`;
     }).join('');
     el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
   },
@@ -377,6 +390,7 @@ const app = {
     this.setSelectedTagIds(panel, config.singleSelect ? (ids.includes(tagId) ? [] : [tagId]) : (ids.includes(tagId) ? ids.filter(id => id !== tagId) : [...ids, tagId]));
     this.renderTagSelector(panel);
   },
+  escapeHTML(str='') { return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[s])); },
   setStatus(text, tone='neutral') {
     statusMessage.textContent = text;
     statusMessage.className = 'text-sm ' + (tone==='error'?'text-red-400':tone==='success'?'text-emerald-300':'text-slate-400');
