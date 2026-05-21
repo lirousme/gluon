@@ -3020,38 +3020,54 @@ elseif ($action === 'add_single') {
 
     $words_back_text = '';
     if (!empty($words_tag_ids)) {
-        $placeholders = implode(',', array_fill(0, count($words_tag_ids), '?'));
-        $stmtWordsTags = $pdo->prepare("
-            SELECT id, name_pt_br
-            FROM tags
-            WHERE user_id = ?
-              AND id IN ($placeholders)
-        ");
-        $stmtWordsTags->execute(array_merge([$user_id], $words_tag_ids));
+        try {
+            $placeholders = implode(',', array_fill(0, count($words_tag_ids), '?'));
+            $stmtWordsTags = $pdo->prepare("
+                SELECT id, name_pt_br, name
+                FROM tags
+                WHERE user_id = ?
+                  AND id IN ($placeholders)
+            ");
+            $stmtWordsTags->execute(array_merge([$user_id], $words_tag_ids));
 
-        $wordsTagNamesById = [];
-        foreach ($stmtWordsTags->fetchAll(PDO::FETCH_ASSOC) as $tag) {
-            $tagId = (int)($tag['id'] ?? 0);
-            if ($tagId > 0) {
-                $wordsTagNamesById[$tagId] = trim((string)($tag['name_pt_br'] ?? ''));
+            $wordsTagDataById = [];
+            foreach ($stmtWordsTags->fetchAll(PDO::FETCH_ASSOC) as $tag) {
+                $tagId = (int)($tag['id'] ?? 0);
+                if ($tagId <= 0) {
+                    continue;
+                }
+                $namePtBr = trim((string)($tag['name_pt_br'] ?? ''));
+                $nameFallback = trim((string)($tag['name'] ?? ''));
+                $wordsTagDataById[$tagId] = [
+                    'name_pt_br' => $namePtBr,
+                    'name_fallback' => $nameFallback,
+                ];
             }
-        }
 
-        $words_back_parts = [];
-        foreach ($words_tag_ids as $selectedTagId) {
-            $selectedTagId = (int)$selectedTagId;
-            if ($selectedTagId <= 0) {
-                continue;
+            $valid_words_tag_ids = [];
+            $words_back_parts = [];
+            foreach ($words_tag_ids as $selectedTagId) {
+                $selectedTagId = (int)$selectedTagId;
+                if ($selectedTagId <= 0 || !isset($wordsTagDataById[$selectedTagId])) {
+                    continue;
+                }
+                $valid_words_tag_ids[] = $selectedTagId;
+                $namePtBr = $wordsTagDataById[$selectedTagId]['name_pt_br'] ?? '';
+                $nameFallback = $wordsTagDataById[$selectedTagId]['name_fallback'] ?? '';
+                $textPiece = $namePtBr !== '' ? $namePtBr : $nameFallback;
+                if ($textPiece !== '') {
+                    $words_back_parts[] = $textPiece;
+                }
             }
-            $namePtBr = $wordsTagNamesById[$selectedTagId] ?? '';
-            if ($namePtBr !== '') {
-                $words_back_parts[] = $namePtBr;
-            }
-        }
 
-        $words_back_text = trim(implode(' ', $words_back_parts));
-        if ($words_back_text !== '') {
-            $back = $words_back_text;
+            $words_tag_ids = array_values(array_unique($valid_words_tag_ids));
+            $words_back_text = trim(implode(' ', $words_back_parts));
+            if ($words_back_text !== '') {
+                $back = $words_back_text;
+            }
+        } catch (Throwable $e) {
+            error_log('[flashcards][add_single][words_tags] ' . $e->getMessage());
+            $words_tag_ids = [];
         }
     }
 
