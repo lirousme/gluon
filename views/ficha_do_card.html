@@ -447,7 +447,7 @@ const app = {
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
-      const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids, object_tag_ids, tipo_frasal_tag_ids, tense_tag_ids, lexical_chunks_tag_ids, relation_tag_ids, words_tag_ids, idioma_principal_tag_ids, idioma_secundario_tag_ids };
+      const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids, object_tag_ids, tipo_frasal_tag_ids, tense_tag_ids, lexical_chunks_tag_ids, relation_tag_ids, words_tag_ids, idioma_principal_tag_ids, idioma_secundario_tag_ids, use_words_tags_as_back: 1 };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
