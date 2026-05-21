@@ -3018,8 +3018,9 @@ elseif ($action === 'add_single') {
     $idioma_principal_tag_ids = sanitizeTagIds($input['idioma_principal_tag_ids'] ?? ($input['idiomas_tag_ids'] ?? []));
     $idioma_secundario_tag_ids = sanitizeTagIds($input['idioma_secundario_tag_ids'] ?? []);
 
+    $should_use_words_tags_as_back = !empty($input['use_words_tags_as_back']);
     $words_back_text = '';
-    if (!empty($words_tag_ids)) {
+    if ($should_use_words_tags_as_back && !empty($words_tag_ids)) {
         try {
             $placeholders = implode(',', array_fill(0, count($words_tag_ids), '?'));
             $stmtWordsTags = $pdo->prepare("
