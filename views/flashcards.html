@@ -844,6 +844,25 @@
                     });
                 });
             },
+            resetCreateTagCategoryDefaults() {
+                const categoryInputIds = [
+                    'tagIsBookInput',
+                    'tagIsVerbTenseInput',
+                    'tagIsSentenceTypeInput',
+                    'tagIsLexicalChunkInput',
+                    'tagIsRelationTypeInput',
+                    'tagIsWordInput',
+                    'tagIsMonthInput',
+                    'tagIsDayInput',
+                    'tagIsYearInput'
+                ];
+                categoryInputIds.forEach((id) => {
+                    const input = document.getElementById(id);
+                    if (input) input.checked = false;
+                });
+                const defaultWordInput = document.getElementById('tagIsWordInput');
+                if (defaultWordInput) defaultWordInput.checked = true;
+            },
 
 
             applyCardSheetEmbedLayout() {
@@ -954,6 +973,7 @@
             },
             openCreateTagFromPanel() {
                 this.closeRightPanel();
+                this.resetCreateTagCategoryDefaults();
                 const modal = document.getElementById('tagModal');
                 const content = document.getElementById('tagModalContent');
                 modal.classList.remove('hidden');
@@ -2620,15 +2640,7 @@
                 if (res) {
                     this.showToast(res.message || 'Tag criada com sucesso!');
                     await this.loadTags();
-                    document.getElementById('tagIsBookInput').checked = false;
-                    document.getElementById('tagIsVerbTenseInput').checked = false;
-                    document.getElementById('tagIsSentenceTypeInput').checked = false;
-                    document.getElementById('tagIsLexicalChunkInput').checked = false;
-                    document.getElementById('tagIsRelationTypeInput').checked = false;
-                    document.getElementById('tagIsWordInput').checked = false;
-                    document.getElementById('tagIsMonthInput').checked = false;
-                    document.getElementById('tagIsDayInput').checked = false;
-                    document.getElementById('tagIsYearInput').checked = false;
+                    this.resetCreateTagCategoryDefaults();
                     this.closeModals();
                 }
             },
