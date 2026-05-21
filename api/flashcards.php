@@ -196,6 +196,10 @@ try {
 } catch (PDOException $e) {}
 
 try {
+    $pdo->exec("ALTER TABLE flashcard_tags DROP INDEX uniq_user_tag_name");
+} catch (PDOException $e) {}
+
+try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS flashcard_tag_links (
         flashcard_id INT UNSIGNED NOT NULL,
         tag_id INT UNSIGNED NOT NULL,
@@ -257,6 +261,33 @@ try {
 function sanitizeTagIds($rawTagIds): array {
     if (!is_array($rawTagIds)) return [];
     return array_values(array_unique(array_filter(array_map('intval', $rawTagIds), static fn($id) => $id > 0)));
+}
+
+function tagCombinationAlreadyExists(PDO $pdo, int $userId, string $name, ?string $namePtBr, ?int $numero, ?int $excludeTagId = null): bool
+{
+    $sql = "
+        SELECT id
+        FROM flashcard_tags
+        WHERE user_id = ?
+          AND name = ?
+          AND (
+                (name_pt_br IS NULL AND ? IS NULL)
+                OR name_pt_br = ?
+          )
+          AND (
+                (numero IS NULL AND ? IS NULL)
+                OR numero = ?
+          )
+    ";
+    $params = [$userId, $name, $namePtBr, $namePtBr, $numero, $numero];
+    if ($excludeTagId !== null) {
+        $sql .= " AND id <> ?";
+        $params[] = $excludeTagId;
+    }
+    $sql .= " LIMIT 1";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    return (bool)$stmt->fetchColumn();
 }
 
 /**
@@ -3178,6 +3209,9 @@ elseif ($action === 'create_tag') {
     $is_year = !empty($input['is_year']) ? 1 : 0;
     if ($name === '') die(json_encode(['status' => 'error', 'message' => 'Nome da tag é obrigatório.']));
     if ($name_pt_br === '') $name_pt_br = null;
+    if (tagCombinationAlreadyExists($pdo, $user_id, $name, $name_pt_br, $numero)) {
+        die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com essa combinação de nome, nome pt-br e número.']));
+    }
 
     $color = resolveTagColorByCategory([
         'is_book' => $is_book,
@@ -3212,10 +3246,14 @@ elseif ($action === 'update_tag') {
     if ($tag_id <= 0 || $name === '') {
         die(json_encode(['status' => 'error', 'message' => 'Dados da tag inválidos.']));
     }
+    if ($name_pt_br === '') $name_pt_br = null;
+    if (tagCombinationAlreadyExists($pdo, $user_id, $name, $name_pt_br, $numero, $tag_id)) {
+        die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com essa combinação de nome, nome pt-br e número.']));
+    }
 
     $stmt = $pdo->prepare("UPDATE flashcard_tags SET name = ?, name_pt_br = ?, numero = ? WHERE id = ? AND user_id = ?");
     try {
-        $stmt->execute([$name, ($name_pt_br === '' ? null : $name_pt_br), $numero, $tag_id, $user_id]);
+        $stmt->execute([$name, $name_pt_br, $numero, $tag_id, $user_id]);
     } catch (PDOException $e) {
         die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com esse nome.']));
     }
