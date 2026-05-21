@@ -159,6 +159,8 @@
         <div class="space-y-2">
           <label class="text-sm text-slate-300">Nome da tag</label>
           <input id="tagNameInput" type="text" required maxlength="80" placeholder="Ex.: Gramática, Verbos, Trabalho..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+          <input id="tagNamePtBrInput" type="text" maxlength="80" placeholder="Nome em pt-BR (ex.: Cachorro)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+          <input id="tagNumeroInput" type="number" placeholder="Número (ex.: 2026)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
           <p class="text-xs text-slate-400">A cor da tag é definida automaticamente conforme a categoria selecionada.</p>
           <p class="text-xs text-amber-300">Selecione no máximo 1 categoria para a nova tag.</p>
         </div>
@@ -217,6 +219,8 @@ const app = {
   openCreateTagModal() {
     this.resetCreateTagCategoryDefaults();
     tagNameInput.value = '';
+    tagNamePtBrInput.value = '';
+    tagNumeroInput.value = '';
     tagModal.classList.remove('hidden');
     tagModal.classList.add('flex');
     setTimeout(() => {
@@ -239,6 +243,8 @@ const app = {
     try {
       const res = await this.api('create_tag', {
         name: tagNameInput.value.trim(),
+        name_pt_br: tagNamePtBrInput.value.trim(),
+        numero: tagNumeroInput.value.trim(),
         is_book: tagIsBookInput.checked ? 1 : 0,
         is_verb_tense: tagIsVerbTenseInput.checked ? 1 : 0,
         is_sentence_type: tagIsSentenceTypeInput.checked ? 1 : 0,
@@ -338,17 +344,30 @@ const app = {
     this.getPanelConfig(panel).searchQuery = query.trim().toLowerCase();
     this.renderTagSelector(panel);
   },
+  getTagLabel(tag = {}) {
+    const numero = tag?.numero;
+    if (numero !== null && numero !== undefined && String(numero).trim() !== '') return String(numero);
+    const name = String(tag?.name || '').trim();
+    const namePtBr = String(tag?.name_pt_br || '').trim();
+    return namePtBr ? `${name} (${namePtBr})` : name;
+  },
   renderAllTagSelectors() { Object.keys(this.tagPanels).forEach(panel => this.renderTagSelector(panel)); },
   renderTagSelector(panel = 'subject', selectedIds = null) {
     const config = this.getPanelConfig(panel);
     const el = document.getElementById(config.selectorId);
     const currentSelected = selectedIds ?? this.getSelectedTagIds(panel);
     if (!this.availableTags.length) { el.innerHTML = '<span class="text-xs text-slate-400">Sem tags cadastradas.</span>'; return; }
-    const filtered = config.searchQuery ? this.availableTags.filter(t => String(t.name||'').toLowerCase().includes(config.searchQuery)) : this.availableTags.filter(t => currentSelected.includes(Number(t.id)));
+    const filtered = config.searchQuery
+      ? this.availableTags.filter(t =>
+          String(t.name || '').toLowerCase().includes(config.searchQuery)
+          || String(t.name_pt_br || '').toLowerCase().includes(config.searchQuery)
+          || String(t.numero ?? '').toLowerCase().includes(config.searchQuery)
+        )
+      : this.availableTags.filter(t => currentSelected.includes(Number(t.id)));
     if (!filtered.length) { el.innerHTML = '<span class="text-xs text-slate-400">Nenhuma tag para exibir.</span>'; return; }
     el.innerHTML = filtered.map(tag => {
       const id = Number(tag.id); const active = currentSelected.includes(id);
-      return `<button type="button" data-tag-id="${id}" class="px-2.5 py-1 rounded-full text-xs border transition ${active ? config.activeClass : 'bg-slate-800 text-slate-300 border-slate-600'}"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color || '#334155'}"></span>${String(tag.name||'')}</button>`;
+      return `<button type="button" data-tag-id="${id}" class="px-2.5 py-1 rounded-full text-xs border transition ${active ? config.activeClass : 'bg-slate-800 text-slate-300 border-slate-600'}"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color || '#334155'}"></span>${this.getTagLabel(tag)}</button>`;
     }).join('');
     el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
   },

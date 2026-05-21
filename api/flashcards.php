@@ -122,6 +122,8 @@ try {
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         user_id INT UNSIGNED NOT NULL,
         name VARCHAR(80) NOT NULL,
+        name_pt_br VARCHAR(80) DEFAULT NULL,
+        numero INT DEFAULT NULL,
         color VARCHAR(20) NOT NULL DEFAULT '#334155',
         is_book TINYINT(1) NOT NULL DEFAULT 0,
         is_verb_tense TINYINT(1) NOT NULL DEFAULT 0,
@@ -135,6 +137,8 @@ try {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uniq_user_tag_name (user_id, name),
         INDEX idx_tag_user (user_id),
+        INDEX idx_tag_name_pt_br (name_pt_br),
+        INDEX idx_tag_numero (numero),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (PDOException $e) {}
@@ -173,6 +177,22 @@ try {
 
 try {
     $pdo->exec("ALTER TABLE flashcard_tags ADD COLUMN is_year TINYINT(1) NOT NULL DEFAULT 0");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE flashcard_tags ADD COLUMN name_pt_br VARCHAR(80) DEFAULT NULL AFTER name");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE flashcard_tags ADD COLUMN numero INT DEFAULT NULL AFTER name_pt_br");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE flashcard_tags ADD INDEX idx_tag_name_pt_br (name_pt_br)");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE flashcard_tags ADD INDEX idx_tag_numero (numero)");
 } catch (PDOException $e) {}
 
 try {
@@ -269,7 +289,7 @@ function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int 
 
     $tagPlaceholders = implode(',', array_fill(0, count($cardIds), '?'));
     $stmtTags = $pdo->prepare("
-        SELECT l.flashcard_id, t.id AS tag_id, t.name, t.color
+        SELECT l.flashcard_id, t.id AS tag_id, t.name, t.name_pt_br, t.numero, t.color
         FROM {$linkTable} l
         JOIN flashcard_tags t ON t.id = l.tag_id
         WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id = ?
@@ -284,6 +304,8 @@ function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int 
         $linkedTagsByCard[$flashcardId][] = [
             'id' => (int)$tagRow['tag_id'],
             'name' => $tagRow['name'],
+            'name_pt_br' => $tagRow['name_pt_br'],
+            'numero' => isset($tagRow['numero']) ? (int)$tagRow['numero'] : null,
             'color' => $tagRow['color']
         ];
     }
@@ -3135,13 +3157,16 @@ elseif ($action === 'delete_card') {
 }
 
 elseif ($action === 'list_tags') {
-    $stmt = $pdo->prepare("SELECT id, name, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year FROM flashcard_tags WHERE user_id = ? ORDER BY name ASC");
+    $stmt = $pdo->prepare("SELECT id, name, name_pt_br, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year FROM flashcard_tags WHERE user_id = ? ORDER BY name ASC");
     $stmt->execute([$user_id]);
     echo json_encode(['status' => 'success', 'data' => $stmt->fetchAll()]);
 }
 
 elseif ($action === 'create_tag') {
     $name = trim((string)($input['name'] ?? ''));
+    $name_pt_br = trim((string)($input['name_pt_br'] ?? ''));
+    $numeroRaw = $input['numero'] ?? null;
+    $numero = ($numeroRaw === '' || $numeroRaw === null) ? null : (int)$numeroRaw;
     $is_book = !empty($input['is_book']) ? 1 : 0;
     $is_verb_tense = !empty($input['is_verb_tense']) ? 1 : 0;
     $is_sentence_type = !empty($input['is_sentence_type']) ? 1 : 0;
@@ -3152,6 +3177,7 @@ elseif ($action === 'create_tag') {
     $is_day = !empty($input['is_day']) ? 1 : 0;
     $is_year = !empty($input['is_year']) ? 1 : 0;
     if ($name === '') die(json_encode(['status' => 'error', 'message' => 'Nome da tag é obrigatório.']));
+    if ($name_pt_br === '') $name_pt_br = null;
 
     $color = resolveTagColorByCategory([
         'is_book' => $is_book,
@@ -3165,9 +3191,9 @@ elseif ($action === 'create_tag') {
         'is_year' => $is_year,
     ]);
 
-    $stmt = $pdo->prepare("INSERT INTO flashcard_tags (user_id, name, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $pdo->prepare("INSERT INTO flashcard_tags (user_id, name, name_pt_br, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     try {
-        $stmt->execute([$user_id, $name, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year]);
+        $stmt->execute([$user_id, $name, $name_pt_br, $numero, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year]);
     } catch (PDOException $e) {
         die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com esse nome.']));
     }
@@ -3177,15 +3203,19 @@ elseif ($action === 'create_tag') {
 elseif ($action === 'update_tag') {
     $tag_id = (int)($input['id'] ?? 0);
     $name = trim((string)($input['name'] ?? ''));
+    $name_pt_br = trim((string)($input['name_pt_br'] ?? ''));
+    $numeroRaw = $input['numero'] ?? null;
+    $numero = ($numeroRaw === '' || $numeroRaw === null) ? null : (int)$numeroRaw;
     $name = preg_replace('/\s+/u', ' ', $name);
+    $name_pt_br = preg_replace('/\s+/u', ' ', $name_pt_br);
 
     if ($tag_id <= 0 || $name === '') {
         die(json_encode(['status' => 'error', 'message' => 'Dados da tag inválidos.']));
     }
 
-    $stmt = $pdo->prepare("UPDATE flashcard_tags SET name = ? WHERE id = ? AND user_id = ?");
+    $stmt = $pdo->prepare("UPDATE flashcard_tags SET name = ?, name_pt_br = ?, numero = ? WHERE id = ? AND user_id = ?");
     try {
-        $stmt->execute([$name, $tag_id, $user_id]);
+        $stmt->execute([$name, ($name_pt_br === '' ? null : $name_pt_br), $numero, $tag_id, $user_id]);
     } catch (PDOException $e) {
         die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com esse nome.']));
     }
