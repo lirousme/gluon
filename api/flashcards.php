@@ -3026,16 +3026,11 @@ elseif ($action === 'add_single') {
             FROM tags
             WHERE user_id = ?
               AND id IN ($placeholders)
+            ORDER BY FIELD(id, $placeholders)
         ");
-        $stmtWordsTags->execute(array_merge([$user_id], $words_tag_ids));
-        $tagsById = [];
-        foreach ($stmtWordsTags->fetchAll(PDO::FETCH_ASSOC) as $tag) {
-            $tagsById[(int)($tag['id'] ?? 0)] = $tag;
-        }
+        $stmtWordsTags->execute(array_merge([$user_id], $words_tag_ids, $words_tag_ids));
         $words_back_parts = [];
-        foreach ($words_tag_ids as $wordTagId) {
-            $tag = $tagsById[(int)$wordTagId] ?? null;
-            if (!$tag) continue;
+        foreach ($stmtWordsTags->fetchAll(PDO::FETCH_ASSOC) as $tag) {
             $namePtBr = trim((string)($tag['name_pt_br'] ?? ''));
             if ($namePtBr !== '') {
                 $words_back_parts[] = $namePtBr;
