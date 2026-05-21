@@ -61,55 +61,82 @@
       </section>
 
       <section id="SubjectTagsPanel" class="pt-3 border-t border-slate-700">
-        <label class="block text-sm font-medium text-emerald-300 mb-2">Subjects deste card (Base form)</label>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-medium text-emerald-300">Subjects deste card (Base form)</label>
+          <button type="button" class="openTagModalBtn inline-flex items-center justify-center w-6 h-6 rounded-full border border-slate-500 text-slate-200 hover:bg-slate-700" title="Criar tag">+</button>
+        </div>
         <input id="subjectTagSearchInput" type="text" placeholder="Pesquisar tag de subject por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
         <div id="subjectTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
 
       <section id="ObjectTagsPanel" class="pt-3 border-t border-slate-700">
-        <label class="block text-sm font-medium text-amber-300 mb-2">Objects deste card (Base form)</label>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-medium text-amber-300">Objects deste card (Base form)</label>
+          <button type="button" class="openTagModalBtn inline-flex items-center justify-center w-6 h-6 rounded-full border border-slate-500 text-slate-200 hover:bg-slate-700" title="Criar tag">+</button>
+        </div>
         <input id="objectTagSearchInput" type="text" placeholder="Pesquisar tag de object por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
         <div id="objectTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
       
       <section id="TipoFrasalTagsPanel" class="pt-3 border-t border-slate-700">
-        <label class="block text-sm font-medium text-rose-300 mb-2">Tipo frasal deste card</label>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-medium text-rose-300">Tipo frasal deste card</label>
+          <button type="button" class="openTagModalBtn inline-flex items-center justify-center w-6 h-6 rounded-full border border-slate-500 text-slate-200 hover:bg-slate-700" title="Criar tag">+</button>
+        </div>
         <input id="tipoFrasalTagSearchInput" type="text" placeholder="Pesquisar tag de object por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
         <div id="tipoFrasalTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
       
       <section id="TenseTagsPanel" class="pt-3 border-t border-slate-700">
-        <label class="block text-sm font-medium text-sky-300 mb-2">Tense deste card</label>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-medium text-sky-300">Tense deste card</label>
+          <button type="button" class="openTagModalBtn inline-flex items-center justify-center w-6 h-6 rounded-full border border-slate-500 text-slate-200 hover:bg-slate-700" title="Criar tag">+</button>
+        </div>
         <input id="tenseTagSearchInput" type="text" placeholder="Pesquisar tag de object por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
         <div id="tenseTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
       
       <section id="LexicalChunksTagsPanel" class="pt-3 border-t border-slate-700">
-        <label class="block text-sm font-medium text-fuchsia-300 mb-2">Lexical chunks deste card</label>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-medium text-fuchsia-300">Lexical chunks deste card</label>
+          <button type="button" class="openTagModalBtn inline-flex items-center justify-center w-6 h-6 rounded-full border border-slate-500 text-slate-200 hover:bg-slate-700" title="Criar tag">+</button>
+        </div>
         <input id="lexicalChunksTagSearchInput" type="text" placeholder="Pesquisar tag de object por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
         <div id="lexicalChunksTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
       
       <section id="RelationTagsPanel" class="pt-3 border-t border-slate-700">
-        <label class="block text-sm font-medium text-cyan-300 mb-2">Tipo de relação deste card</label>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-medium text-cyan-300">Tipo de relação deste card</label>
+          <button type="button" class="openTagModalBtn inline-flex items-center justify-center w-6 h-6 rounded-full border border-slate-500 text-slate-200 hover:bg-slate-700" title="Criar tag">+</button>
+        </div>
         <input id="relationTagSearchInput" type="text" placeholder="Pesquisar tag de object por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
         <div id="relationTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
       
       <section id="WordsTagsPanel" class="pt-3 border-t border-slate-700">
-        <label class="block text-sm font-medium text-lime-300 mb-2">Words deste card</label>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-medium text-lime-300">Words deste card</label>
+          <button type="button" class="openTagModalBtn inline-flex items-center justify-center w-6 h-6 rounded-full border border-slate-500 text-slate-200 hover:bg-slate-700" title="Criar tag">+</button>
+        </div>
         <input id="wordsTagSearchInput" type="text" placeholder="Pesquisar tag de object por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
         <div id="wordsTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
       
       <section id="IdiomaPrincipalTagPanel" class="pt-3 border-t border-slate-700">
-        <label class="block text-sm font-medium text-indigo-300 mb-2">Idioma principal deste card</label>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-medium text-indigo-300">Idioma principal deste card</label>
+          <button type="button" class="openTagModalBtn inline-flex items-center justify-center w-6 h-6 rounded-full border border-slate-500 text-slate-200 hover:bg-slate-700" title="Criar tag">+</button>
+        </div>
         <input id="idiomaPrincipalTagSearchInput" type="text" placeholder="Pesquisar tag do idioma principal por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
         <div id="idiomaPrincipalTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
 
       <section id="IdiomaSecundarioTagPanel" class="pt-3 border-t border-slate-700">
-        <label class="block text-sm font-medium text-teal-300 mb-2">Idioma secundário deste card</label>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-medium text-teal-300">Idioma secundário deste card</label>
+          <button type="button" class="openTagModalBtn inline-flex items-center justify-center w-6 h-6 rounded-full border border-slate-500 text-slate-200 hover:bg-slate-700" title="Criar tag">+</button>
+        </div>
         <input id="idiomaSecundarioTagSearchInput" type="text" placeholder="Pesquisar tag do idioma secundário por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
         <div id="idiomaSecundarioTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
@@ -122,6 +149,34 @@
       </div>
     </form>
   </main>
+  <div id="tagModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-[61] opacity-0 transition-opacity duration-300 p-4">
+    <div id="tagModalContent" class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md transform scale-95 transition-transform duration-300">
+      <form id="tagForm" class="p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-white">Criar nova tag</h3>
+          <button type="button" id="btnCloseTagModal" class="text-slate-400 hover:text-white text-xl" aria-label="Fechar modal"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <input id="tagNameInput" type="text" required maxlength="80" placeholder="Ex.: Gramática, Verbos, Trabalho..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+        <p class="text-xs text-slate-400">A cor da tag é definida automaticamente conforme a categoria selecionada.</p>
+        <p class="text-xs text-amber-300">Selecione no máximo 1 categoria para a nova tag.</p>
+        <div class="grid grid-cols-1 gap-2 text-sm text-slate-200">
+          <label class="inline-flex items-center gap-2"><input id="tagIsBookInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900"> <span>Esta tag representa um livro</span></label>
+          <label class="inline-flex items-center gap-2"><input id="tagIsVerbTenseInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900"> <span>Esta tag representa um Tempo Verbal</span></label>
+          <label class="inline-flex items-center gap-2"><input id="tagIsSentenceTypeInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900"> <span>Esta tag representa um Tipo Frasal</span></label>
+          <label class="inline-flex items-center gap-2"><input id="tagIsLexicalChunkInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900"> <span>Esta tag representa um Lexical Chunk</span></label>
+          <label class="inline-flex items-center gap-2"><input id="tagIsRelationTypeInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900"> <span>Esta tag representa um Tipo de Relação</span></label>
+          <label class="inline-flex items-center gap-2"><input id="tagIsWordInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900"> <span>Esta tag representa uma Palavra</span></label>
+          <label class="inline-flex items-center gap-2"><input id="tagIsMonthInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900"> <span>Esta tag representa um mês</span></label>
+          <label class="inline-flex items-center gap-2"><input id="tagIsDayInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900"> <span>Esta tag representa um dia</span></label>
+          <label class="inline-flex items-center gap-2"><input id="tagIsYearInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900"> <span>Esta tag representa um ano</span></label>
+        </div>
+        <div class="flex items-center justify-end gap-2">
+          <button id="btnCancelTagModal" type="button" class="px-4 py-2 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-700">Cancelar</button>
+          <button id="btnSaveTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white">Criar tag</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
 <script>
 const params = new URLSearchParams(window.location.search);
@@ -304,6 +359,53 @@ const app = {
       setTimeout(() => window.location.href = backLink.href, 260);
     } catch (err) { this.setStatus(err.message || 'Erro ao salvar card.', 'error'); }
     finally { btnSave.disabled = false; btnSave.innerHTML = original; }
+  },
+  openTagModal() {
+    tagForm.reset();
+    const modal = document.getElementById('tagModal');
+    const content = document.getElementById('tagModalContent');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); }, 20);
+    setTimeout(() => tagNameInput.focus(), 60);
+  },
+  closeTagModal() {
+    const modal = document.getElementById('tagModal');
+    const content = document.getElementById('tagModalContent');
+    modal.classList.add('opacity-0');
+    content.classList.add('scale-95');
+    setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+  },
+  async createTag(e) {
+    e.preventDefault();
+    const categoryIds = ['tagIsBookInput','tagIsVerbTenseInput','tagIsSentenceTypeInput','tagIsLexicalChunkInput','tagIsRelationTypeInput','tagIsWordInput','tagIsMonthInput','tagIsDayInput','tagIsYearInput'];
+    const selectedCategories = categoryIds.filter(id => document.getElementById(id).checked);
+    if (selectedCategories.length > 1) return this.setStatus('Selecione apenas 1 categoria para criar a tag.', 'error');
+    const original = btnSaveTag.innerHTML;
+    btnSaveTag.disabled = true;
+    btnSaveTag.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Criando...';
+    try {
+      await this.api('create_tag', {
+        name: tagNameInput.value.trim(),
+        is_book: tagIsBookInput.checked ? 1 : 0,
+        is_verb_tense: tagIsVerbTenseInput.checked ? 1 : 0,
+        is_sentence_type: tagIsSentenceTypeInput.checked ? 1 : 0,
+        is_lexical_chunk: tagIsLexicalChunkInput.checked ? 1 : 0,
+        is_relation_type: tagIsRelationTypeInput.checked ? 1 : 0,
+        is_word: tagIsWordInput.checked ? 1 : 0,
+        is_month: tagIsMonthInput.checked ? 1 : 0,
+        is_day: tagIsDayInput.checked ? 1 : 0,
+        is_year: tagIsYearInput.checked ? 1 : 0
+      });
+      await this.loadTags();
+      this.closeTagModal();
+      this.setStatus('Tag criada com sucesso. Ela já está disponível para pesquisa.', 'success');
+    } catch (err) {
+      this.setStatus(err.message || 'Erro ao criar tag.', 'error');
+    } finally {
+      btnSaveTag.disabled = false;
+      btnSaveTag.innerHTML = original;
+    }
   }
 };
 
@@ -325,6 +427,10 @@ wordsTagSearchInput.oninput = (e) => app.handleTagSearch('words', e.target.value
 idiomaPrincipalTagSearchInput.oninput = (e) => app.handleTagSearch('idiomaPrincipal', e.target.value);
 idiomaSecundarioTagSearchInput.oninput = (e) => app.handleTagSearch('idiomaSecundario', e.target.value);
 cardForm.onsubmit = (e) => app.save(e);
+tagForm.onsubmit = (e) => app.createTag(e);
+document.querySelectorAll('.openTagModalBtn').forEach(btn => btn.onclick = () => app.openTagModal());
+btnCancelTagModal.onclick = () => app.closeTagModal();
+btnCloseTagModal.onclick = () => app.closeTagModal();
 
 (async () => {
   await app.loadTags();
