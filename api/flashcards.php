@@ -196,15 +196,15 @@ try {
 } catch (PDOException $e) {}
 
 try {
-    $pdo->exec("ALTER TABLE flashcard_tags ADD COLUMN name_pt_br VARCHAR(80) DEFAULT NULL AFTER name");
+    // Colunas legadas em texto puro (name, name_pt_br) removidas por segurança.
 } catch (PDOException $e) {}
 
 try {
-    $pdo->exec("ALTER TABLE flashcard_tags ADD COLUMN numero INT DEFAULT NULL AFTER name_pt_br");
+    $pdo->exec("ALTER TABLE flashcard_tags ADD COLUMN numero INT DEFAULT NULL AFTER name_pt_br_encrypted");
 } catch (PDOException $e) {}
 
 try {
-    $pdo->exec("ALTER TABLE flashcard_tags ADD INDEX idx_tag_name_pt_br (name_pt_br)");
+    // Índice legado de coluna removida.
 } catch (PDOException $e) {}
 
 try {
@@ -290,7 +290,7 @@ function sanitizeTagIds($rawTagIds): array {
 function tagCombinationAlreadyExists(PDO $pdo, int $userId, string $name, ?string $namePtBr, ?int $numero, ?int $excludeTagId = null): bool
 {
     $sql = "
-        SELECT id, name, name_pt_br, name_encrypted, name_pt_br_encrypted, numero
+        SELECT id, name_encrypted, name_pt_br_encrypted, numero
         FROM flashcard_tags
         WHERE user_id = ?
     ";
@@ -308,7 +308,7 @@ function tagCombinationAlreadyExists(PDO $pdo, int $userId, string $name, ?strin
             $decrypted = Security::decryptData((string)$row['name_encrypted']);
             $rowName = $decrypted !== false ? (string)$decrypted : '';
         } else {
-            $rowName = (string)($row['name'] ?? '');
+            $rowName = '';
         }
 
         $rowNamePtBr = null;
@@ -316,8 +316,7 @@ function tagCombinationAlreadyExists(PDO $pdo, int $userId, string $name, ?strin
             $decryptedPtBr = Security::decryptData((string)$row['name_pt_br_encrypted']);
             $rowNamePtBr = $decryptedPtBr !== false ? (string)$decryptedPtBr : null;
         } else {
-            $legacyPtBr = $row['name_pt_br'] ?? null;
-            $rowNamePtBr = $legacyPtBr !== null ? (string)$legacyPtBr : null;
+            $rowNamePtBr = null;
         }
 
         $rowName = trim($rowName);
@@ -362,7 +361,7 @@ function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int 
 
     $tagPlaceholders = implode(',', array_fill(0, count($cardIds), '?'));
     $stmtTags = $pdo->prepare("
-        SELECT l.flashcard_id, t.id AS tag_id, t.name, t.name_pt_br, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color
+        SELECT l.flashcard_id, t.id AS tag_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color
         FROM {$linkTable} l
         JOIN flashcard_tags t ON t.id = l.tag_id
         WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id = ?
@@ -376,8 +375,8 @@ function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int 
         if (!isset($linkedTagsByCard[$flashcardId])) $linkedTagsByCard[$flashcardId] = [];
         $linkedTagsByCard[$flashcardId][] = [
             'id' => (int)$tagRow['tag_id'],
-            'name' => !empty($tagRow['name_encrypted']) ? Security::decryptData($tagRow['name_encrypted']) : $tagRow['name'],
-            'name_pt_br' => !empty($tagRow['name_pt_br_encrypted']) ? Security::decryptData($tagRow['name_pt_br_encrypted']) : $tagRow['name_pt_br'],
+            'name' => !empty($tagRow['name_encrypted']) ? Security::decryptData($tagRow['name_encrypted']) : '',
+            'name_pt_br' => !empty($tagRow['name_pt_br_encrypted']) ? Security::decryptData($tagRow['name_pt_br_encrypted']) : null,
             'numero' => isset($tagRow['numero']) ? (int)$tagRow['numero'] : null,
             'color' => $tagRow['color']
         ];
@@ -395,7 +394,7 @@ function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagCol
 
     $tagPlaceholders = implode(',', array_fill(0, count($cardIds), '?'));
     $stmtTags = $pdo->prepare("
-        SELECT l.flashcard_id, t.id AS tag_id, t.name, t.name_encrypted, t.color
+        SELECT l.flashcard_id, t.id AS tag_id, t.name_encrypted, t.color
         FROM {$linkTable} l
         JOIN flashcard_tags t ON t.id = l.{$tagColumn}
         WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id = ?
@@ -409,7 +408,7 @@ function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagCol
         if (!isset($linkedTagsByCard[$flashcardId])) $linkedTagsByCard[$flashcardId] = [];
         $linkedTagsByCard[$flashcardId][] = [
             'id' => (int)$tagRow['tag_id'],
-            'name' => !empty($tagRow['name_encrypted']) ? Security::decryptData($tagRow['name_encrypted']) : $tagRow['name'],
+            'name' => !empty($tagRow['name_encrypted']) ? Security::decryptData($tagRow['name_encrypted']) : '',
             'color' => $tagRow['color']
         ];
     }
@@ -3066,7 +3065,7 @@ elseif ($action === 'add_single') {
         try {
             $placeholders = implode(',', array_fill(0, count($words_tag_ids), '?'));
             $stmtWordsTags = $pdo->prepare("
-                SELECT id, name_pt_br, name, name_encrypted, name_pt_br_encrypted
+                SELECT id, name_encrypted, name_pt_br_encrypted
                 FROM flashcard_tags
                 WHERE user_id = ?
                   AND id IN ($placeholders)
@@ -3079,8 +3078,8 @@ elseif ($action === 'add_single') {
                 if ($tagId <= 0) {
                     continue;
                 }
-                $namePtBrRaw = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData((string)$tag['name_pt_br_encrypted']) : ($tag['name_pt_br'] ?? '');
-                $nameFallbackRaw = !empty($tag['name_encrypted']) ? Security::decryptData((string)$tag['name_encrypted']) : ($tag['name'] ?? '');
+                $namePtBrRaw = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData((string)$tag['name_pt_br_encrypted']) : '';
+                $nameFallbackRaw = !empty($tag['name_encrypted']) ? Security::decryptData((string)$tag['name_encrypted']) : '';
                 $namePtBr = trim((string)($namePtBrRaw !== false ? $namePtBrRaw : ''));
                 $nameFallback = trim((string)($nameFallbackRaw !== false ? $nameFallbackRaw : ''));
                 $wordsTagDataById[$tagId] = [
@@ -3297,13 +3296,13 @@ elseif ($action === 'delete_card') {
 }
 
 elseif ($action === 'list_tags') {
-    $stmt = $pdo->prepare("SELECT id, user_id, name, name_pt_br, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year FROM flashcard_tags WHERE user_id IN (?, 5) ORDER BY id ASC");
+    $stmt = $pdo->prepare("SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year FROM flashcard_tags WHERE user_id IN (?, 5) ORDER BY id ASC");
     $stmt->execute([$user_id]);
     $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $parsed = [];
     foreach ($tags as $tag) {
-        $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : $tag['name'];
-        $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : $tag['name_pt_br'];
+        $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
+        $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
         unset($tag['name_encrypted'], $tag['name_pt_br_encrypted']);
         $parsed[] = $tag;
     }
@@ -3344,9 +3343,9 @@ elseif ($action === 'create_tag') {
 
     $name_enc = Security::encryptData($name);
     $name_pt_br_enc = $name_pt_br !== null ? Security::encryptData($name_pt_br) : null;
-    $stmt = $pdo->prepare("INSERT INTO flashcard_tags (user_id, name, name_pt_br, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $pdo->prepare("INSERT INTO flashcard_tags (user_id, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     try {
-        $stmt->execute([$user_id, $name, $name_pt_br, $name_enc, $name_pt_br_enc, $numero, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year]);
+        $stmt->execute([$user_id, $name_enc, $name_pt_br_enc, $numero, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year]);
     } catch (PDOException $e) {
         die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com esse nome.']));
     }
@@ -3372,9 +3371,9 @@ elseif ($action === 'update_tag') {
 
     $name_enc = Security::encryptData($name);
     $name_pt_br_enc = $name_pt_br !== null ? Security::encryptData($name_pt_br) : null;
-    $stmt = $pdo->prepare("UPDATE flashcard_tags SET name = ?, name_pt_br = ?, name_encrypted = ?, name_pt_br_encrypted = ?, numero = ? WHERE id = ? AND user_id = ?");
+    $stmt = $pdo->prepare("UPDATE flashcard_tags SET name_encrypted = ?, name_pt_br_encrypted = ?, numero = ? WHERE id = ? AND user_id = ?");
     try {
-        $stmt->execute([$name, $name_pt_br, $name_enc, $name_pt_br_enc, $numero, $tag_id, $user_id]);
+        $stmt->execute([$name_enc, $name_pt_br_enc, $numero, $tag_id, $user_id]);
     } catch (PDOException $e) {
         die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com esse nome.']));
     }
