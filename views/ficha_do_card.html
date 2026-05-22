@@ -31,11 +31,6 @@
       <input type="hidden" id="selectedIdiomaPrincipalTagIds" value="[]">
       <input type="hidden" id="selectedIdiomaSecundarioTagIds" value="[]">
 
-      <div class="grid grid-cols-2 gap-2 rounded-lg bg-slate-900/70 p-1 border border-slate-700">
-        <button type="button" id="singleTabFront" class="px-3 py-2 rounded-md text-sm font-medium transition-colors bg-gluon-primary text-white">Frente do card</button>
-        <button type="button" id="singleTabBack" class="px-3 py-2 rounded-md text-sm font-medium transition-colors text-slate-300 hover:text-white">Verso do card</button>
-      </div>
-
       <section id="singleFrontTabContent">
         <label class="block text-sm font-medium text-slate-300 mb-2">Frente (Obrigatório texto ou imagem)</label>
         <textarea id="singleFront" rows="7" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white resize-none"></textarea>
@@ -45,18 +40,6 @@
           <input type="hidden" id="frontImageBase64">
           <div id="frontImagePreview" class="mt-2 hidden w-full h-36 rounded bg-contain bg-center bg-no-repeat border border-slate-600"></div>
           <button type="button" id="btnRemoveFrontImage" class="hidden mt-2 text-xs text-red-400 hover:text-red-300 flex items-center gap-1"><i class="fa-solid fa-trash"></i> Remover Imagem</button>
-        </div>
-      </section>
-
-      <section id="singleBackTabContent" class="hidden pt-3 border-t border-slate-700">
-        <label class="block text-sm font-medium text-blue-300 mb-2">Verso (Opcional)</label>
-        <textarea id="singleBack" rows="7" class="w-full bg-slate-900 border border-blue-500/50 rounded-lg py-3 px-4 text-white resize-none"></textarea>
-        <div class="mt-3 bg-blue-900/10 p-3 rounded-lg border border-blue-900/50">
-          <label class="block text-xs font-medium text-blue-400 mb-2"><i class="fa-regular fa-image"></i> Imagem do Verso (Opcional, Máx: 4MB)</label>
-          <input type="file" id="backImageFile" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-900 file:text-blue-200 hover:file:bg-blue-800 cursor-pointer bg-slate-900 border border-blue-900/50 rounded">
-          <input type="hidden" id="backImageBase64">
-          <div id="backImagePreview" class="mt-2 hidden w-full h-36 rounded bg-contain bg-center bg-no-repeat border border-blue-500/50"></div>
-          <button type="button" id="btnRemoveBackImage" class="hidden mt-2 text-xs text-red-400 hover:text-red-300 flex items-center gap-1"><i class="fa-solid fa-trash"></i> Remover Imagem</button>
         </div>
       </section>
 
@@ -142,7 +125,7 @@
       </section>
 
       <div class="flex items-center justify-between gap-3 pt-2 border-t border-slate-700">
-        <p id="statusMessage" class="text-sm text-slate-400">Preencha pelo menos um lado com texto ou imagem.</p>
+        <p id="statusMessage" class="text-sm text-slate-400">Preencha a frente com texto ou imagem.</p>
         <button type="submit" id="btnSave" class="inline-flex items-center gap-2 bg-gluon-primary hover:bg-blue-600 px-4 py-2 rounded-lg font-medium">
           <i class="fa-solid fa-check"></i> Salvar
         </button>
@@ -189,6 +172,8 @@ const app = {
   deckId: params.get('id'),
   from: params.get('from') || '/dashboard',
   editCardId: params.get('edit_card_id'),
+  editBackText: '',
+  editBackImage: '',
   availableTags: [],
   tagPanels: {
     subject: { selectedInputId: 'selectedSubjectTagIds', selectorId: 'subjectTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' },
@@ -278,15 +263,6 @@ const app = {
     if (!data) throw new Error('A API de flashcards retornou uma resposta vazia.');
     if (data.status !== 'success') throw new Error(data.message || 'Falha na requisição.');
     return data;
-  },
-  switchSingleModalTab(tab) {
-    const isFrontTab = tab !== 'back';
-    singleTabFront.classList.toggle('bg-gluon-primary', isFrontTab);
-    singleTabFront.classList.toggle('text-white', isFrontTab);
-    singleTabBack.classList.toggle('bg-gluon-primary', !isFrontTab);
-    singleTabBack.classList.toggle('text-white', !isFrontTab);
-    singleFrontTabContent.classList.toggle('hidden', !isFrontTab);
-    singleBackTabContent.classList.toggle('hidden', isFrontTab);
   },
   handleCardImageUpload(e, side) {
     const file = e.target.files[0];
@@ -404,9 +380,9 @@ const app = {
     const card = (res?.data || []).find(c => String(c.id) === String(this.editCardId));
     if (!card) throw new Error('Card não encontrado para edição.');
     singleFront.value = card.front || '';
-    singleBack.value = card.back || '';
+    this.editBackText = String(card.back || '');
+    this.editBackImage = card.image_back || '';
     if (card.image_front) this.setBase64ImagePreview('front', card.image_front);
-    if (card.image_back) this.setBase64ImagePreview('back', card.image_back);
     const subjectTags = Array.isArray(card.subject_tags) ? card.subject_tags.map(t => Number(t.id)).filter(Boolean) : [];
     const objectTags = Array.isArray(card.object_tags) ? card.object_tags.map(t => Number(t.id)).filter(Boolean) : [];
     const tipoFrasalTags = Array.isArray(card.tipo_frasal_tags) ? card.tipo_frasal_tags.map(t => Number(t.id)).filter(Boolean) : [];
@@ -431,9 +407,9 @@ const app = {
   async save(e) {
     e.preventDefault();
     const front = singleFront.value.trim();
-    const back = singleBack.value.trim();
+    const back = this.editCardId ? this.editBackText : '';
     const image_front = frontImageBase64.value;
-    const image_back = backImageBase64.value;
+    const image_back = this.editCardId ? this.editBackImage : null;
     const subject_tag_ids = this.getSelectedTagIds('subject');
     const object_tag_ids = this.getSelectedTagIds('object');
     const tipo_frasal_tag_ids = this.getSelectedTagIds('tipoFrasal');
@@ -443,7 +419,7 @@ const app = {
     const words_tag_ids = this.getSelectedTagIds('words');
     const idioma_principal_tag_ids = this.getSelectedTagIds('idiomaPrincipal');
     const idioma_secundario_tag_ids = this.getSelectedTagIds('idiomaSecundario');
-    if (!front && !back && !image_front && !image_back) return this.setStatus('Preencha pelo menos um lado do card com texto ou imagem.', 'error');
+    if (!front && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
@@ -459,12 +435,8 @@ const app = {
 
 backLink.href = decodeURIComponent(app.from);
 if (!app.deckId) window.location.replace(backLink.href);
-singleTabFront.onclick = () => app.switchSingleModalTab('front');
-singleTabBack.onclick = () => app.switchSingleModalTab('back');
 frontImageFile.onchange = (e) => app.handleCardImageUpload(e, 'front');
-backImageFile.onchange = (e) => app.handleCardImageUpload(e, 'back');
 btnRemoveFrontImage.onclick = () => app.removeCardImage('front');
-btnRemoveBackImage.onclick = () => app.removeCardImage('back');
 subjectTagSearchInput.oninput = (e) => app.handleTagSearch('subject', e.target.value);
 objectTagSearchInput.oninput = (e) => app.handleTagSearch('object', e.target.value);
 tipoFrasalTagSearchInput.oninput = (e) => app.handleTagSearch('tipoFrasal', e.target.value);
