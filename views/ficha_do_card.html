@@ -358,40 +358,10 @@ const app = {
         this.setStatus('Não foi possível localizar seu diretório obrigatório.', 'error');
         return;
       }
-      const frame = document.getElementById('notesModalFrame');
-      if (!frame) {
-        this.setStatus('Não foi possível abrir o modal de Anotações.', 'error');
-        return;
-      }
-      frame.src = `/editor?id=${sourceDirectoryId}&from=${encodeURIComponent(window.location.pathname + window.location.search)}`;
-      this.openNotesModal();
+      window.location.href = `/editor?id=${sourceDirectoryId}&from=${encodeURIComponent(window.location.pathname + window.location.search)}`;
     } catch (_) {
       this.setStatus('Erro ao abrir suas Anotações.', 'error');
     }
-  },
-  openNotesModal() {
-    const modal = document.getElementById('notesModal');
-    const content = document.getElementById('notesModalContent');
-    if (!modal || !content) return;
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-    requestAnimationFrame(() => {
-      modal.classList.remove('opacity-0');
-      content.classList.remove('scale-95');
-    });
-  },
-  closeNotesModal() {
-    const modal = document.getElementById('notesModal');
-    const content = document.getElementById('notesModalContent');
-    const frame = document.getElementById('notesModalFrame');
-    if (!modal || !content || !frame) return;
-    modal.classList.add('opacity-0');
-    content.classList.add('scale-95');
-    setTimeout(() => {
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
-      frame.src = 'about:blank';
-    }, 200);
   },
   getVisibleTags() {
     const sessionId = Number(this.sessionUserId);
