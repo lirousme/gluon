@@ -3253,7 +3253,7 @@ elseif ($action === 'delete_card') {
 }
 
 elseif ($action === 'list_tags') {
-    $stmt = $pdo->prepare("SELECT id, name, name_pt_br, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year FROM flashcard_tags WHERE user_id = ? ORDER BY name ASC");
+    $stmt = $pdo->prepare("SELECT id, user_id, name, name_pt_br, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year FROM flashcard_tags WHERE user_id IN (?, 5) ORDER BY name ASC");
     $stmt->execute([$user_id]);
     echo json_encode(['status' => 'success', 'data' => $stmt->fetchAll()]);
 }
