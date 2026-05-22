@@ -14,6 +14,24 @@ require_once __DIR__ . '/../config/database.php';
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
+header('Content-Type: application/json; charset=utf-8');
+
+set_exception_handler(function (Throwable $e) {
+    error_log('[flashcards][uncaught_exception] ' . $e->getMessage());
+    if (!headers_sent()) http_response_code(500);
+    echo json_encode(['status' => 'error', 'message' => 'Erro interno da API de flashcards.']);
+});
+
+register_shutdown_function(function () {
+    $lastError = error_get_last();
+    if ($lastError && in_array($lastError['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        error_log('[flashcards][fatal] ' . ($lastError['message'] ?? 'fatal') . ' @ ' . ($lastError['file'] ?? '-') . ':' . ($lastError['line'] ?? 0));
+        if (!headers_sent()) http_response_code(500);
+        if (!ob_get_length()) {
+            echo json_encode(['status' => 'error', 'message' => 'Falha fatal na API de flashcards.']);
+        }
+    }
+});
 
 if (!isset($_SESSION['user_id'])) {
     http_response_code(401);
