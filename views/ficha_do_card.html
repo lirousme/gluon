@@ -368,7 +368,7 @@ const app = {
           || String(t.name_pt_br || '').toLowerCase().includes(config.searchQuery)
           || String(t.numero ?? '').toLowerCase().includes(config.searchQuery)
         )
-      : visibleTags.filter(t => currentSelected.includes(Number(t.id)));
+      : visibleTags;
     const numeroPtBrCounts = new Map();
     filtered.forEach(tag => {
       const numero = tag?.numero;
