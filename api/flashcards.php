@@ -121,8 +121,8 @@ try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS flashcard_tags (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         user_id INT UNSIGNED NOT NULL,
-        name VARCHAR(80) NOT NULL,
-        name_pt_br VARCHAR(80) DEFAULT NULL,
+        name_encrypted TEXT NOT NULL,
+        name_pt_br_encrypted TEXT DEFAULT NULL,
         numero INT DEFAULT NULL,
         color VARCHAR(20) NOT NULL DEFAULT '#334155',
         is_book TINYINT(1) NOT NULL DEFAULT 0,
@@ -135,9 +135,7 @@ try {
         is_day TINYINT(1) NOT NULL DEFAULT 0,
         is_year TINYINT(1) NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY uniq_user_tag_name (user_id, name),
         INDEX idx_tag_user (user_id),
-        INDEX idx_tag_name_pt_br (name_pt_br),
         INDEX idx_tag_numero (numero),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
@@ -350,7 +348,7 @@ function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int 
         FROM {$linkTable} l
         JOIN flashcard_tags t ON t.id = l.tag_id
         WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id = ?
-        ORDER BY t.name ASC
+        ORDER BY t.id ASC
     ");
     $stmtTags->execute(array_merge($cardIds, [$user_id]));
 
@@ -383,7 +381,7 @@ function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagCol
         FROM {$linkTable} l
         JOIN flashcard_tags t ON t.id = l.{$tagColumn}
         WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id = ?
-        ORDER BY t.name ASC
+        ORDER BY t.id ASC
     ");
     $stmtTags->execute(array_merge($cardIds, [$user_id]));
 
