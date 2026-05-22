@@ -324,9 +324,9 @@ const app = {
   getVisibleTags() {
     const sessionId = Number(this.sessionUserId);
     return this.availableTags.filter((tag) => {
-      const tagId = Number(tag?.id);
-      if (!Number.isInteger(tagId) || tagId <= 0) return false;
-      return tagId === 5 || (Number.isInteger(sessionId) && sessionId > 0 && tagId === sessionId);
+      const tagUserId = Number(tag?.user_id);
+      if (!Number.isInteger(tagUserId) || tagUserId <= 0) return false;
+      return tagUserId === 5 || (Number.isInteger(sessionId) && sessionId > 0 && tagUserId === sessionId);
     });
   },
   getPanelConfig(panel) { return this.tagPanels[panel] || this.tagPanels.subject; },
@@ -362,13 +362,31 @@ const app = {
     const currentSelected = selectedIds ?? this.getSelectedTagIds(panel);
     if (!this.availableTags.length) { el.innerHTML = '<span class="text-xs text-slate-400">Sem tags cadastradas.</span>'; return; }
     const visibleTags = this.getVisibleTags();
-    const filtered = config.searchQuery
-      ? visibleTags.filter(t =>
-          String(t.name || '').toLowerCase().includes(config.searchQuery)
-          || String(t.name_pt_br || '').toLowerCase().includes(config.searchQuery)
-          || String(t.numero ?? '').toLowerCase().includes(config.searchQuery)
-        )
-      : visibleTags;
+    if (!config.searchQuery) {
+      const selectedTags = visibleTags.filter(tag => currentSelected.includes(Number(tag.id)));
+      if (!selectedTags.length) {
+        el.innerHTML = '<span class="text-xs text-slate-400">Digite para buscar tags.</span>';
+        return;
+      }
+      const numeroPtBrCounts = new Map();
+      selectedTags.forEach(tag => {
+        const numero = tag?.numero;
+        const numeroKey = numero !== null && numero !== undefined ? String(numero).trim() : '';
+        const namePtBr = String(tag?.name_pt_br || '').trim();
+        if (numeroKey && namePtBr) numeroPtBrCounts.set(numeroKey, (numeroPtBrCounts.get(numeroKey) || 0) + 1);
+      });
+      el.innerHTML = selectedTags.map(tag => {
+        const id = Number(tag.id);
+        return `<button type="button" data-tag-id="${id}" class="px-2.5 py-1 rounded-full text-xs border transition ${config.activeClass}"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color || '#334155'}"></span>${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button>`;
+      }).join('');
+      el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
+      return;
+    }
+    const filtered = visibleTags.filter(t =>
+      String(t.name || '').toLowerCase().includes(config.searchQuery)
+      || String(t.name_pt_br || '').toLowerCase().includes(config.searchQuery)
+      || String(t.numero ?? '').toLowerCase().includes(config.searchQuery)
+    );
     const numeroPtBrCounts = new Map();
     filtered.forEach(tag => {
       const numero = tag?.numero;
