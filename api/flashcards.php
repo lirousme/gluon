@@ -3380,7 +3380,7 @@ elseif ($action === 'update_tag') {
 
     $name_enc = Security::encryptData($name);
     $name_pt_br_enc = $name_pt_br !== null ? Security::encryptData($name_pt_br) : null;
-    $color = getTagColorByFlags([
+    $color = resolveTagColorByCategory([
         'is_book' => $is_book,
         'is_verb_tense' => $is_verb_tense,
         'is_sentence_type' => $is_sentence_type,
