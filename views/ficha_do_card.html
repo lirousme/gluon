@@ -358,10 +358,31 @@ const app = {
         this.setStatus('Não foi possível localizar seu diretório obrigatório.', 'error');
         return;
       }
-      window.location.href = `/editor?id=${sourceDirectoryId}&from=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+      this.openNotesModal(sourceDirectoryId);
     } catch (_) {
       this.setStatus('Erro ao abrir suas Anotações.', 'error');
     }
+  },
+  openNotesModal(sourceDirectoryId) {
+    const frame = document.getElementById('notesModalFrame');
+    if (!frame) return;
+    const from = encodeURIComponent(window.location.pathname + window.location.search);
+    frame.src = `/editor?id=${sourceDirectoryId}&from=${from}&preview=1&embedded=1`;
+    notesModal.classList.remove('hidden');
+    notesModal.classList.add('flex');
+    requestAnimationFrame(() => {
+      notesModal.classList.remove('opacity-0');
+      notesModalContent.classList.remove('scale-95');
+    });
+  },
+  closeNotesModal() {
+    notesModal.classList.add('opacity-0');
+    notesModalContent.classList.add('scale-95');
+    setTimeout(() => {
+      notesModal.classList.add('hidden');
+      notesModal.classList.remove('flex');
+      notesModalFrame.src = 'about:blank';
+    }, 200);
   },
   getVisibleTags() {
     const sessionId = Number(this.sessionUserId);
