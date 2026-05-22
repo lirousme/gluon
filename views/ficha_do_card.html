@@ -324,9 +324,9 @@ const app = {
   getVisibleTags() {
     const sessionId = Number(this.sessionUserId);
     return this.availableTags.filter((tag) => {
-      const tagId = Number(tag?.id);
-      if (!Number.isInteger(tagId) || tagId <= 0) return false;
-      return tagId === 5 || (Number.isInteger(sessionId) && sessionId > 0 && tagId === sessionId);
+      const tagUserId = Number(tag?.user_id);
+      if (!Number.isInteger(tagUserId) || tagUserId <= 0) return false;
+      return tagUserId === 5 || (Number.isInteger(sessionId) && sessionId > 0 && tagUserId === sessionId);
     });
   },
   getPanelConfig(panel) { return this.tagPanels[panel] || this.tagPanels.subject; },
