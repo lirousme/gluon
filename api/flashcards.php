@@ -3360,6 +3360,15 @@ elseif ($action === 'update_tag') {
     $numero = ($numeroRaw === '' || $numeroRaw === null) ? null : (int)$numeroRaw;
     $name = preg_replace('/\s+/u', ' ', $name);
     $name_pt_br = preg_replace('/\s+/u', ' ', $name_pt_br);
+    $is_book = !empty($input['is_book']) ? 1 : 0;
+    $is_verb_tense = !empty($input['is_verb_tense']) ? 1 : 0;
+    $is_sentence_type = !empty($input['is_sentence_type']) ? 1 : 0;
+    $is_lexical_chunk = !empty($input['is_lexical_chunk']) ? 1 : 0;
+    $is_relation_type = !empty($input['is_relation_type']) ? 1 : 0;
+    $is_word = !empty($input['is_word']) ? 1 : 0;
+    $is_month = !empty($input['is_month']) ? 1 : 0;
+    $is_day = !empty($input['is_day']) ? 1 : 0;
+    $is_year = !empty($input['is_year']) ? 1 : 0;
 
     if ($tag_id <= 0 || $name === '') {
         die(json_encode(['status' => 'error', 'message' => 'Dados da tag inválidos.']));
@@ -3371,9 +3380,20 @@ elseif ($action === 'update_tag') {
 
     $name_enc = Security::encryptData($name);
     $name_pt_br_enc = $name_pt_br !== null ? Security::encryptData($name_pt_br) : null;
-    $stmt = $pdo->prepare("UPDATE flashcard_tags SET name_encrypted = ?, name_pt_br_encrypted = ?, numero = ? WHERE id = ? AND user_id = ?");
+    $color = getTagColorByFlags([
+        'is_book' => $is_book,
+        'is_verb_tense' => $is_verb_tense,
+        'is_sentence_type' => $is_sentence_type,
+        'is_lexical_chunk' => $is_lexical_chunk,
+        'is_relation_type' => $is_relation_type,
+        'is_word' => $is_word,
+        'is_month' => $is_month,
+        'is_day' => $is_day,
+        'is_year' => $is_year
+    ]);
+    $stmt = $pdo->prepare("UPDATE flashcard_tags SET name_encrypted = ?, name_pt_br_encrypted = ?, numero = ?, color = ?, is_book = ?, is_verb_tense = ?, is_sentence_type = ?, is_lexical_chunk = ?, is_relation_type = ?, is_word = ?, is_month = ?, is_day = ?, is_year = ? WHERE id = ? AND user_id = ?");
     try {
-        $stmt->execute([$name_enc, $name_pt_br_enc, $numero, $tag_id, $user_id]);
+        $stmt->execute([$name_enc, $name_pt_br_enc, $numero, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year, $tag_id, $user_id]);
     } catch (PDOException $e) {
         die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com esse nome.']));
     }
