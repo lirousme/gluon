@@ -3025,7 +3025,7 @@ elseif ($action === 'add_single') {
             $placeholders = implode(',', array_fill(0, count($words_tag_ids), '?'));
             $stmtWordsTags = $pdo->prepare("
                 SELECT id, name_pt_br, name
-                FROM tags
+                FROM flashcard_tags
                 WHERE user_id = ?
                   AND id IN ($placeholders)
             ");
