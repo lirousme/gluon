@@ -175,6 +175,7 @@ const app = {
   editBackText: '',
   editBackImage: '',
   availableTags: [],
+  sessionUserId: null,
   tagPanels: {
     subject: { selectedInputId: 'selectedSubjectTagIds', selectorId: 'subjectTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' },
     object: { selectedInputId: 'selectedObjectTagIds', selectorId: 'objectTagSelector', activeClass: 'bg-amber-500/20 text-amber-200 border-amber-400', searchQuery: '' },
@@ -307,6 +308,27 @@ const app = {
     this.availableTags = res?.data || [];
     this.renderAllTagSelectors();
   },
+  async loadSessionUserId() {
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_session' })
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const parsedId = Number(data?.id ?? data?.data?.id);
+      if (Number.isInteger(parsedId) && parsedId > 0) this.sessionUserId = parsedId;
+    } catch (_) {}
+  },
+  getVisibleTags() {
+    const sessionId = Number(this.sessionUserId);
+    return this.availableTags.filter((tag) => {
+      const ownerId = Number(tag?.user_id);
+      if (!Number.isInteger(ownerId) || ownerId <= 0) return false;
+      return ownerId === 5 || (Number.isInteger(sessionId) && sessionId > 0 && ownerId === sessionId);
+    });
+  },
   getPanelConfig(panel) { return this.tagPanels[panel] || this.tagPanels.subject; },
   getSelectedTagIds(panel) {
     const input = document.getElementById(this.getPanelConfig(panel).selectedInputId);
@@ -339,13 +361,14 @@ const app = {
     const el = document.getElementById(config.selectorId);
     const currentSelected = selectedIds ?? this.getSelectedTagIds(panel);
     if (!this.availableTags.length) { el.innerHTML = '<span class="text-xs text-slate-400">Sem tags cadastradas.</span>'; return; }
+    const visibleTags = this.getVisibleTags();
     const filtered = config.searchQuery
-      ? this.availableTags.filter(t =>
+      ? visibleTags.filter(t =>
           String(t.name || '').toLowerCase().includes(config.searchQuery)
           || String(t.name_pt_br || '').toLowerCase().includes(config.searchQuery)
           || String(t.numero ?? '').toLowerCase().includes(config.searchQuery)
         )
-      : this.availableTags.filter(t => currentSelected.includes(Number(t.id)));
+      : visibleTags.filter(t => currentSelected.includes(Number(t.id)));
     const numeroPtBrCounts = new Map();
     filtered.forEach(tag => {
       const numero = tag?.numero;
@@ -452,6 +475,7 @@ app.setupTagCategorySingleSelect();
 tagModal.onclick = (e) => { if (e.target === tagModal) app.closeCreateTagModal(); };
 
 (async () => {
+  await app.loadSessionUserId();
   await app.loadTags();
   await app.preloadEditCard();
 })();
