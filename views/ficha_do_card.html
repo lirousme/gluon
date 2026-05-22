@@ -461,6 +461,15 @@ const app = {
     }
     return namePtBr ? `${name} (${namePtBr})` : name;
   },
+  getTagPillStyle(tag = {}) {
+    const color = String(tag?.color || '#334155');
+    const hex = color.replace('#', '');
+    if (!/^[0-9a-fA-F]{6}$/.test(hex)) return 'background: rgba(51,65,85,.35); border-color:#64748b;';
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    return `background: rgba(${r}, ${g}, ${b}, .25); border-color: rgba(${r}, ${g}, ${b}, .9);`;
+  },
   renderAllTagSelectors() { Object.keys(this.tagPanels).forEach(panel => this.renderTagSelector(panel)); },
   renderTagSelector(panel = 'subject', selectedIds = null) {
     const config = this.getPanelConfig(panel);
