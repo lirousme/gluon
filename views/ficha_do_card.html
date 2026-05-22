@@ -13,9 +13,14 @@
 <body class="min-h-[100dvh] bg-gluon-dark text-slate-100 selection:bg-blue-600/60">
   <main class="max-w-3xl mx-auto px-3 py-4 sm:px-4 sm:py-6">
     <div class="mb-4 flex items-center justify-between gap-3">
-      <a id="backLink" href="/dashboard" class="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm">
-        <i class="fa-solid fa-arrow-left"></i> Voltar
-      </a>
+      <div class="flex items-center gap-2">
+        <a id="backLink" href="/dashboard" class="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm">
+          <i class="fa-solid fa-arrow-left"></i> Voltar
+        </a>
+        <button type="button" onclick="app.goToSourceDirectory()" class="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" title="Abrir minhas Anotações">
+          <i class="fa-solid fa-thumbtack text-gluon-primary"></i> Anotações
+        </button>
+      </div>
       <h1 id="pageTitle" class="text-base sm:text-lg font-semibold">Criar ficha de card</h1>
     </div>
 
@@ -163,6 +168,21 @@
           <button id="btnSaveTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white">Criar tag</button>
         </div>
       </form>
+    </div>
+  </div>
+  <div id="notesModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center z-[80] opacity-0 transition-opacity duration-200 p-2 sm:p-4">
+    <div id="notesModalContent" class="w-full h-full max-w-6xl max-h-[95dvh] bg-gluon-secondary border border-slate-700 rounded-xl overflow-hidden shadow-2xl transform scale-95 transition-transform duration-200 flex flex-col">
+      <div class="h-12 px-3 border-b border-slate-700 flex items-center justify-between shrink-0">
+        <h3 class="text-sm sm:text-base font-semibold text-slate-100 flex items-center gap-2">
+          <i class="fa-solid fa-thumbtack text-gluon-primary"></i>
+          <span>Anotações</span>
+        </h3>
+        <button type="button" onclick="app.closeNotesModal()" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-200 hover:text-white hover:border-gluon-primary transition-colors text-sm">
+          <i class="fa-solid fa-xmark"></i>
+          <span>Fechar</span>
+        </button>
+      </div>
+      <iframe id="notesModalFrame" class="w-full flex-1 bg-slate-950" src="about:blank" loading="lazy"></iframe>
     </div>
   </div>
 
@@ -320,6 +340,58 @@ const app = {
       const parsedId = Number(data?.id ?? data?.data?.id);
       if (Number.isInteger(parsedId) && parsedId > 0) this.sessionUserId = parsedId;
     } catch (_) {}
+  },
+  async goToSourceDirectory() {
+    try {
+      const res = await fetch('/api/user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_source_directory' })
+      });
+      if (res.status === 401) {
+        window.location.href = '/';
+        return;
+      }
+      const data = await res.json();
+      const sourceDirectoryId = Number(data?.data?.source_directory_id || 0);
+      if (!sourceDirectoryId) {
+        this.setStatus('Não foi possível localizar seu diretório obrigatório.', 'error');
+        return;
+      }
+      const frame = document.getElementById('notesModalFrame');
+      if (!frame) {
+        this.setStatus('Não foi possível abrir o modal de Anotações.', 'error');
+        return;
+      }
+      frame.src = `/editor?id=${sourceDirectoryId}&from=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+      this.openNotesModal();
+    } catch (_) {
+      this.setStatus('Erro ao abrir suas Anotações.', 'error');
+    }
+  },
+  openNotesModal() {
+    const modal = document.getElementById('notesModal');
+    const content = document.getElementById('notesModalContent');
+    if (!modal || !content) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    requestAnimationFrame(() => {
+      modal.classList.remove('opacity-0');
+      content.classList.remove('scale-95');
+    });
+  },
+  closeNotesModal() {
+    const modal = document.getElementById('notesModal');
+    const content = document.getElementById('notesModalContent');
+    const frame = document.getElementById('notesModalFrame');
+    if (!modal || !content || !frame) return;
+    modal.classList.add('opacity-0');
+    content.classList.add('scale-95');
+    setTimeout(() => {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      frame.src = 'about:blank';
+    }, 200);
   },
   getVisibleTags() {
     const sessionId = Number(this.sessionUserId);
@@ -491,6 +563,10 @@ cardForm.onsubmit = (e) => app.save(e);
 tagForm.onsubmit = (e) => app.createTag(e);
 app.setupTagCategorySingleSelect();
 tagModal.onclick = (e) => { if (e.target === tagModal) app.closeCreateTagModal(); };
+notesModal.onclick = (e) => { if (e.target === notesModal) app.closeNotesModal(); };
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !notesModal.classList.contains('hidden')) app.closeNotesModal();
+});
 
 (async () => {
   await app.loadSessionUserId();
