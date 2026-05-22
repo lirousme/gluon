@@ -492,7 +492,7 @@ const app = {
       });
       el.innerHTML = selectedTags.map(tag => {
         const id = Number(tag.id);
-        return `<div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border text-slate-100" style="${this.getTagPillStyle(tag)}"><button type="button" data-tag-id="${id}" class="inline-flex items-center"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color || '#334155'}"></span>${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button><button type="button" data-edit-tag-id="${id}" class="text-slate-100/90 hover:text-white" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button></div>`;
+        return `<div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border ${config.activeClass}"><button type="button" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button><button type="button" data-edit-tag-id="${id}" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button></div>`;
       }).join('');
       el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
       el.querySelectorAll('[data-edit-tag-id]').forEach(btn => btn.onclick = () => this.openEditTagModal(Number(btn.dataset.editTagId)));
@@ -513,7 +513,7 @@ const app = {
     if (!filtered.length) { el.innerHTML = '<span class="text-xs text-slate-400">Nenhuma tag para exibir.</span>'; return; }
     el.innerHTML = filtered.map(tag => {
       const id = Number(tag.id); const active = currentSelected.includes(id);
-      return `<div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border ${active ? 'text-white ring-1 ring-white/40' : 'text-slate-100'}" style="${this.getTagPillStyle(tag)}"><button type="button" data-tag-id="${id}" class="inline-flex items-center"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color || '#334155'}"></span>${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button><button type="button" data-edit-tag-id="${id}" class="text-slate-100/90 hover:text-white" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button></div>`;
+      return `<div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border ${active ? config.activeClass : 'bg-slate-800 text-slate-300 border-slate-600'}"><button type="button" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button><button type="button" data-edit-tag-id="${id}" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button></div>`;
     }).join('');
     el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
     el.querySelectorAll('[data-edit-tag-id]').forEach(btn => btn.onclick = () => this.openEditTagModal(Number(btn.dataset.editTagId)));
