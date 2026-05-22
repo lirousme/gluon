@@ -310,7 +310,7 @@ const app = {
   },
   async loadSessionUserId() {
     try {
-      const res = await fetch('/api/auth', {
+      const res = await fetch('/api/user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_session' })
