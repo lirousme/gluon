@@ -309,7 +309,7 @@ const app = {
   async updateTag(e) {
     e.preventDefault(); btnUpdateTag.disabled = true;
     try {
-      const res = await this.api('update_tag', { id:Number(editTagIdInput.value), name_encrypted:editTagNameInput.value.trim(), name_pt_br_encrypted:editTagNamePtBrInput.value.trim(), numero:editTagNumeroInput.value.trim(), is_book:editTagIsBookInput.checked?1:0, is_verb_tense:editTagIsVerbTenseInput.checked?1:0, is_sentence_type:editTagIsSentenceTypeInput.checked?1:0, is_lexical_chunk:editTagIsLexicalChunkInput.checked?1:0, is_relation_type:editTagIsRelationTypeInput.checked?1:0, is_word:editTagIsWordInput.checked?1:0, is_month:editTagIsMonthInput.checked?1:0, is_day:editTagIsDayInput.checked?1:0, is_year:editTagIsYearInput.checked?1:0 });
+      const res = await this.api('update_tag', { id:Number(editTagIdInput.value), name:editTagNameInput.value.trim(), name_pt_br:editTagNamePtBrInput.value.trim(), numero:editTagNumeroInput.value.trim(), is_book:editTagIsBookInput.checked?1:0, is_verb_tense:editTagIsVerbTenseInput.checked?1:0, is_sentence_type:editTagIsSentenceTypeInput.checked?1:0, is_lexical_chunk:editTagIsLexicalChunkInput.checked?1:0, is_relation_type:editTagIsRelationTypeInput.checked?1:0, is_word:editTagIsWordInput.checked?1:0, is_month:editTagIsMonthInput.checked?1:0, is_day:editTagIsDayInput.checked?1:0, is_year:editTagIsYearInput.checked?1:0 });
       await this.loadTags(); this.closeEditTagModal(); this.setStatus(res?.message || 'Tag atualizada com sucesso.', 'success');
     } catch (err) { this.setStatus(err.message || 'Erro ao atualizar tag.', 'error'); }
     finally { btnUpdateTag.disabled = false; }
