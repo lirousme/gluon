@@ -2822,7 +2822,6 @@ elseif ($action === 'translate_text') {
     if (DEEPL_API_KEY !== '') {
         $toDeepLSourceLang = function ($lang) {
             $normalized = strtoupper((string)$lang);
-            if ($normalized === 'AUTO') return '';
             $base = explode('-', $normalized)[0];
             $allowed = ['AR','BG','CS','DA','DE','EL','EN','ES','ET','FI','FR','HU','ID','IT','JA','KO','LT','LV','NB','NL','PL','PT','RO','RU','SK','SL','SV','TR','UK','ZH'];
             return in_array($base, $allowed, true) ? $base : '';
@@ -2839,6 +2838,24 @@ elseif ($action === 'translate_text') {
                 'ZH-HANS' => 'ZH-HANS',
                 'ZH-HANT' => 'ZH-HANT'
             ];
+
+            if (isset($map[$normalized])) return $map[$normalized];
+
+            $base = explode('-', $normalized)[0];
+            $allowed = ['AR','BG','CS','DA','DE','EL','EN','ES','ET','FI','FR','HU','ID','IT','JA','KO','LT','LV','NB','NL','PL','PT','RO','RU','SK','SL','SV','TR','UK','ZH'];
+            return in_array($base, $allowed, true) ? $base : '';
+        };
+
+        $deeplSource = $toDeepLSourceLang($source_language);
+        $deeplTarget = $toDeepLTargetLang($target_language);
+
+        if ($deeplSource !== '' && $deeplTarget !== '') {
+        $deeplPayload = http_build_query([
+            'text' => [$text],
+            'source_lang' => $deeplSource,
+            'target_lang' => $deeplTarget,
+            'preserve_formatting' => '1'
+        ]);
 
             if (isset($map[$normalized])) return $map[$normalized];
 
@@ -2886,6 +2903,7 @@ elseif ($action === 'translate_text') {
                     if ($translation !== '') break;
                 }
             }
+        }
         }
     }
 
