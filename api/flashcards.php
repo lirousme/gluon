@@ -2819,7 +2819,96 @@ elseif ($action === 'translate_text') {
 
     $translation = '';
 
-    if (OPENAI_API_KEY !== '') {
+    if (DEEPL_API_KEY !== '') {
+        $toDeepLSourceLang = function ($lang) {
+            $normalized = strtoupper((string)$lang);
+            $base = explode('-', $normalized)[0];
+            $allowed = ['AR','BG','CS','DA','DE','EL','EN','ES','ET','FI','FR','HU','ID','IT','JA','KO','LT','LV','NB','NL','PL','PT','RO','RU','SK','SL','SV','TR','UK','ZH'];
+            return in_array($base, $allowed, true) ? $base : '';
+        };
+
+        $toDeepLTargetLang = function ($lang) {
+            $normalized = strtoupper((string)$lang);
+            $normalized = str_replace('_', '-', $normalized);
+            $map = [
+                'EN-US' => 'EN-US',
+                'EN-GB' => 'EN-GB',
+                'PT-BR' => 'PT-BR',
+                'PT-PT' => 'PT-PT',
+                'ZH-HANS' => 'ZH-HANS',
+                'ZH-HANT' => 'ZH-HANT'
+            ];
+
+            if (isset($map[$normalized])) return $map[$normalized];
+
+            $base = explode('-', $normalized)[0];
+            $allowed = ['AR','BG','CS','DA','DE','EL','EN','ES','ET','FI','FR','HU','ID','IT','JA','KO','LT','LV','NB','NL','PL','PT','RO','RU','SK','SL','SV','TR','UK','ZH'];
+            return in_array($base, $allowed, true) ? $base : '';
+        };
+
+        $deeplSource = $toDeepLSourceLang($source_language);
+        $deeplTarget = $toDeepLTargetLang($target_language);
+
+        if ($deeplSource !== '' && $deeplTarget !== '') {
+        $deeplPayload = http_build_query([
+            'text' => [$text],
+            'source_lang' => $deeplSource,
+            'target_lang' => $deeplTarget,
+            'preserve_formatting' => '1'
+        ]);
+
+            if (isset($map[$normalized])) return $map[$normalized];
+
+            $base = explode('-', $normalized)[0];
+            $allowed = ['AR','BG','CS','DA','DE','EL','EN','ES','ET','FI','FR','HU','ID','IT','JA','KO','LT','LV','NB','NL','PL','PT','RO','RU','SK','SL','SV','TR','UK','ZH'];
+            return in_array($base, $allowed, true) ? $base : '';
+        };
+
+        $deeplSource = $toDeepLSourceLang($source_language);
+        $deeplTarget = $toDeepLTargetLang($target_language);
+
+        if ($deeplTarget !== '') {
+            $deeplBody = [
+                'text' => [$text],
+                'target_lang' => $deeplTarget,
+                'preserve_formatting' => true
+            ];
+            if ($deeplSource !== '') {
+                $deeplBody['source_lang'] = $deeplSource;
+            }
+
+            $deeplUrls = [DEEPL_API_URL];
+            if (strpos(DEEPL_API_URL, 'api-free.deepl.com') !== false) {
+                $deeplUrls[] = 'https://api.deepl.com/v2/translate';
+            } elseif (strpos(DEEPL_API_URL, 'api.deepl.com') !== false) {
+                $deeplUrls[] = 'https://api-free.deepl.com/v2/translate';
+            }
+
+            foreach ($deeplUrls as $deeplUrl) {
+                $ch = curl_init($deeplUrl);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($deeplBody));
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Content-Type: application/json',
+                    'Authorization: DeepL-Auth-Key ' . DEEPL_API_KEY
+                ]);
+                $deeplResponse = curl_exec($ch);
+                $deeplHttpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                if ($deeplHttpcode === 200 && $deeplResponse) {
+                    $deeplDecoded = json_decode($deeplResponse, true);
+                    $translation = trim($deeplDecoded['translations'][0]['text'] ?? '');
+                    if ($translation !== '') break;
+                }
+            }
+        }
+        }
+    }
+
+    // Mantemos OpenAI no código como fallback quando DeepL não estiver disponível.
+    if ($translation === '' && OPENAI_API_KEY !== '') {
         $systemPrompt = sprintf(
             'Você é um tradutor automático direto e focado. Traduza de %s para %s e retorne EXCLUSIVAMENTE a tradução.',
             getLanguageLabel($source_language),
