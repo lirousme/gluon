@@ -355,20 +355,19 @@ function getAllowedCardTagLinkTables(): array {
 /**
  * Função fetchLinkedTagsByCard: Busca as tags vinculadas a vários flashcards em uma tabela de ligação e devolve agrupado por card.
  */
-function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, array $ownerUserIds): array {
+function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int $user_id): array {
     $allowedTables = getAllowedCardTagLinkTables();
-    if (!in_array($linkTable, $allowedTables, true) || empty($cardIds) || empty($ownerUserIds)) return [];
+    if (!in_array($linkTable, $allowedTables, true) || empty($cardIds)) return [];
 
     $tagPlaceholders = implode(',', array_fill(0, count($cardIds), '?'));
-    $ownerPlaceholders = implode(',', array_fill(0, count($ownerUserIds), '?'));
     $stmtTags = $pdo->prepare("
         SELECT l.flashcard_id, t.id AS tag_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color
         FROM {$linkTable} l
         JOIN flashcard_tags t ON t.id = l.tag_id
-        WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id IN ($ownerPlaceholders)
+        WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id = ?
         ORDER BY t.id ASC
     ");
-    $stmtTags->execute(array_merge($cardIds, $ownerUserIds));
+    $stmtTags->execute(array_merge($cardIds, [$user_id]));
 
     $linkedTagsByCard = [];
     foreach ($stmtTags->fetchAll() as $tagRow) {
@@ -388,21 +387,20 @@ function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, arra
 /**
  * Função fetchLinkedTagsByCardColumn: Busca tags vinculadas aos cards usando uma coluna específica de tag (principal ou secundária).
  */
-function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagColumn, array $cardIds, array $ownerUserIds): array {
+function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagColumn, array $cardIds, int $user_id): array {
     $allowedTables = getAllowedCardTagLinkTables();
     $allowedColumns = ['tag_id', 'segundo_idioma_tag_id'];
-    if (!in_array($linkTable, $allowedTables, true) || !in_array($tagColumn, $allowedColumns, true) || empty($cardIds) || empty($ownerUserIds)) return [];
+    if (!in_array($linkTable, $allowedTables, true) || !in_array($tagColumn, $allowedColumns, true) || empty($cardIds)) return [];
 
     $tagPlaceholders = implode(',', array_fill(0, count($cardIds), '?'));
-    $ownerPlaceholders = implode(',', array_fill(0, count($ownerUserIds), '?'));
     $stmtTags = $pdo->prepare("
         SELECT l.flashcard_id, t.id AS tag_id, t.name_encrypted, t.color
         FROM {$linkTable} l
         JOIN flashcard_tags t ON t.id = l.{$tagColumn}
-        WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id IN ($ownerPlaceholders)
+        WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id = ?
         ORDER BY t.id ASC
     ");
-    $stmtTags->execute(array_merge($cardIds, $ownerUserIds));
+    $stmtTags->execute(array_merge($cardIds, [$user_id]));
 
     $linkedTagsByCard = [];
     foreach ($stmtTags->fetchAll() as $tagRow) {
@@ -415,16 +413,6 @@ function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagCol
         ];
     }
     return $linkedTagsByCard;
-}
-
-function safeDecryptOrDefault(?string $encryptedValue, $defaultValue = '') {
-    if ($encryptedValue === null || $encryptedValue === '') return $defaultValue;
-    try {
-        return Security::decryptData($encryptedValue);
-    } catch (Throwable $e) {
-        error_log('[flashcards][decrypt_fallback] ' . $e->getMessage());
-        return $defaultValue;
-    }
 }
 
 /**
@@ -2141,16 +2129,15 @@ if ($action === 'fetch') {
         //$cardIds são todos os cards (do deck) sem discriminação no caso de grafos, e com filtro de vencimento no caso de aleatório
         $cardIds = array_map(static fn($card) => (int)$card['id'], $cards);
         //$subjectTagsByCard todas as tags da subcategoria "subject" dos cards de $cardIds
-        $directoryOwnerUserIds = [(int)$user_id];
-        $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', $cardIds, $directoryOwnerUserIds);
-        $objectTagsByCard = fetchLinkedTagsByCard($pdo, 'objects_links', $cardIds, $directoryOwnerUserIds);
-        $tipoFrasalTagsByCard = fetchLinkedTagsByCard($pdo, 'tipo_frasal_links', $cardIds, $directoryOwnerUserIds);
-        $tenseTagsByCard = fetchLinkedTagsByCard($pdo, 'tense_links', $cardIds, $directoryOwnerUserIds);
-        $lexicalChunksTagsByCard = fetchLinkedTagsByCard($pdo, 'lexical_chunks_links', $cardIds, $directoryOwnerUserIds);
-        $relationTagsByCard = fetchLinkedTagsByCard($pdo, 'relation_links', $cardIds, $directoryOwnerUserIds);
-        $wordsTagsByCard = fetchLinkedTagsByCard($pdo, 'words_links', $cardIds, $directoryOwnerUserIds);
-        $idiomaPrincipalTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'tag_id', $cardIds, $directoryOwnerUserIds);
-        $idiomaSecundarioTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'segundo_idioma_tag_id', $cardIds, $directoryOwnerUserIds);
+        $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', $cardIds, $user_id);
+        $objectTagsByCard = fetchLinkedTagsByCard($pdo, 'objects_links', $cardIds, $user_id);
+        $tipoFrasalTagsByCard = fetchLinkedTagsByCard($pdo, 'tipo_frasal_links', $cardIds, $user_id);
+        $tenseTagsByCard = fetchLinkedTagsByCard($pdo, 'tense_links', $cardIds, $user_id);
+        $lexicalChunksTagsByCard = fetchLinkedTagsByCard($pdo, 'lexical_chunks_links', $cardIds, $user_id);
+        $relationTagsByCard = fetchLinkedTagsByCard($pdo, 'relation_links', $cardIds, $user_id);
+        $wordsTagsByCard = fetchLinkedTagsByCard($pdo, 'words_links', $cardIds, $user_id);
+        $idiomaPrincipalTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'tag_id', $cardIds, $user_id);
+        $idiomaSecundarioTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'segundo_idioma_tag_id', $cardIds, $user_id);
 
         $response = [];
         foreach ($cards as $card) {
@@ -2217,16 +2204,16 @@ if ($action === 'fetch') {
         $orderClause = $deck_mode === 'grafo' ? 'ORDER BY f.id ASC' : 'ORDER BY RAND()';
 
         if ($deck_mode === 'grafo') {
-            // No modo grafo, busca cards de qualquer deck do usuário atual e também do usuário de ID 5.
+            // No modo grafo, busca cards de qualquer deck do usuário.
             $stmt = $pdo->prepare("
                 SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score 
                 FROM flashcards f
                 JOIN directories d ON d.id = f.directory_id
                 LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
-                WHERE d.user_id IN (?, ?)
+                WHERE d.user_id = ?
                 {$orderClause}
             ");
-            $stmt->execute([$user_id, $user_id, 5]);
+            $stmt->execute([$user_id, $user_id]);
         } else {
             // No modo aleatório, mantém filtro por deck e cards vencidos.
             $stmt = $pdo->prepare("
@@ -2310,16 +2297,15 @@ if ($action === 'fetch') {
 
     $graphDecisionByCardId = [];
     if ($deck_mode === 'grafo') {
-        $graphOwnerUserIds = array_values(array_unique([(int)$user_id, 5]));
-        $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', $cardIds, $graphOwnerUserIds);
-        $objectTagsByCard = fetchLinkedTagsByCard($pdo, 'objects_links', $cardIds, $graphOwnerUserIds);
-        $tipoFrasalTagsByCard = fetchLinkedTagsByCard($pdo, 'tipo_frasal_links', $cardIds, $graphOwnerUserIds);
-        $tenseTagsByCard = fetchLinkedTagsByCard($pdo, 'tense_links', $cardIds, $graphOwnerUserIds);
-        $lexicalChunksTagsByCard = fetchLinkedTagsByCard($pdo, 'lexical_chunks_links', $cardIds, $graphOwnerUserIds);
-        $relationTagsByCard = fetchLinkedTagsByCard($pdo, 'relation_links', $cardIds, $graphOwnerUserIds);
-        $wordsTagsByCard = fetchLinkedTagsByCard($pdo, 'words_links', $cardIds, $graphOwnerUserIds);
-        $idiomaPrincipalTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'tag_id', $cardIds, $graphOwnerUserIds);
-        $idiomaSecundarioTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'segundo_idioma_tag_id', $cardIds, $graphOwnerUserIds);
+        $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', $cardIds, $user_id);
+        $objectTagsByCard = fetchLinkedTagsByCard($pdo, 'objects_links', $cardIds, $user_id);
+        $tipoFrasalTagsByCard = fetchLinkedTagsByCard($pdo, 'tipo_frasal_links', $cardIds, $user_id);
+        $tenseTagsByCard = fetchLinkedTagsByCard($pdo, 'tense_links', $cardIds, $user_id);
+        $lexicalChunksTagsByCard = fetchLinkedTagsByCard($pdo, 'lexical_chunks_links', $cardIds, $user_id);
+        $relationTagsByCard = fetchLinkedTagsByCard($pdo, 'relation_links', $cardIds, $user_id);
+        $wordsTagsByCard = fetchLinkedTagsByCard($pdo, 'words_links', $cardIds, $user_id);
+        $idiomaPrincipalTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'tag_id', $cardIds, $user_id);
+        $idiomaSecundarioTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'segundo_idioma_tag_id', $cardIds, $user_id);
         
         //entre colchetes estão as tags que serão consideradas nos evenCards/cards pares
         $graphCards = buildGraphCardsSequence(
@@ -2354,10 +2340,10 @@ if ($action === 'fetch') {
     foreach ($cards as $idx => $card) {
         $response[] = [
             'id' => $card['id'],
-            'front' => safeDecryptOrDefault($card['front_encrypted'] ?? null, ''),
-            'back' => safeDecryptOrDefault($card['back_encrypted'] ?? null, ''),
-            'image_front' => safeDecryptOrDefault($card['image_front_encrypted'] ?? null, null),
-            'image_back' => safeDecryptOrDefault($card['image_back_encrypted'] ?? null, null),
+            'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
+            'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
+            'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
+            'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
             'score' => (int)$card['score'],
