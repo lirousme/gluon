@@ -191,7 +191,13 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-slate-300">
           <label class="inline-flex items-center gap-2"><input id="editTagIsBookInput" type="checkbox" class="h-4 w-4"><span>Livro</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsVerbTenseInput" type="checkbox" class="h-4 w-4"><span>Tempo Verbal</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsSentenceTypeInput" type="checkbox" class="h-4 w-4"><span>Tipo Frasal</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsLexicalChunkInput" type="checkbox" class="h-4 w-4"><span>Lexical Chunk</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsRelationTypeInput" type="checkbox" class="h-4 w-4"><span>Tipo de Relação</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsWordInput" type="checkbox" class="h-4 w-4"><span>Palavra</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsMonthInput" type="checkbox" class="h-4 w-4"><span>Mês</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsDayInput" type="checkbox" class="h-4 w-4"><span>Dia</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsYearInput" type="checkbox" class="h-4 w-4"><span>Ano</span></label>
         </div>
-        <div class="flex justify-end gap-2"><button type="button" onclick="app.closeEditTagModal()" class="px-4 py-2 rounded-lg bg-slate-700">Cancelar</button><button id="btnUpdateTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600">Salvar</button></div>
+        <div class="flex justify-between gap-2">
+          <button type="button" id="btnDeleteTag" onclick="app.deleteTag()" class="px-4 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white">Excluir tag</button>
+          <div class="flex gap-2">
+            <button type="button" onclick="app.closeEditTagModal()" class="px-4 py-2 rounded-lg bg-slate-700">Cancelar</button>
+            <button id="btnUpdateTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600">Salvar</button>
+          </div>
+        </div>
       </form>
     </div>
   </div>
@@ -322,6 +328,23 @@ const app = {
       await this.loadTags(); this.closeEditTagModal(); this.setStatus(res?.message || 'Tag atualizada com sucesso.', 'success');
     } catch (err) { this.setStatus(err.message || 'Erro ao atualizar tag.', 'error'); }
     finally { btnUpdateTag.disabled = false; }
+  },
+
+  async deleteTag() {
+    const tagId = Number(editTagIdInput.value);
+    if (!tagId) return;
+    if (!confirm('Tem certeza que deseja excluir esta tag? Essa ação não pode ser desfeita.')) return;
+    btnDeleteTag.disabled = true;
+    try {
+      const res = await this.api('delete_tag', { id: tagId });
+      await this.loadTags();
+      this.closeEditTagModal();
+      this.setStatus(res?.message || 'Tag excluída com sucesso.', 'success');
+    } catch (err) {
+      this.setStatus(err.message || 'Erro ao excluir tag.', 'error');
+    } finally {
+      btnDeleteTag.disabled = false;
+    }
   },
   async api(action, payload = {}) {
     payload.action = action;
