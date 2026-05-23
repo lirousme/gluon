@@ -364,7 +364,7 @@ function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int 
         SELECT l.flashcard_id, t.id AS tag_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color
         FROM {$linkTable} l
         JOIN flashcard_tags t ON t.id = l.tag_id
-        WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id = ?
+        WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id IN (?, 5)
         ORDER BY t.id ASC
     ");
     $stmtTags->execute(array_merge($cardIds, [$user_id]));
@@ -397,7 +397,7 @@ function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagCol
         SELECT l.flashcard_id, t.id AS tag_id, t.name_encrypted, t.color
         FROM {$linkTable} l
         JOIN flashcard_tags t ON t.id = l.{$tagColumn}
-        WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id = ?
+        WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id IN (?, 5)
         ORDER BY t.id ASC
     ");
     $stmtTags->execute(array_merge($cardIds, [$user_id]));
@@ -478,7 +478,12 @@ function isFlashcardDeckDirectoryType($type): bool {
 /**
  * Função verifyDeckOwnership: Confere se o deck pertence ao usuário e retorna seus metadados de configuração.
  */
-function verifyDeckOwnership($pdo, $deck_id, $user_id) {
+function verifyDeckOwnership($pdo, $deck_id, $user_id, bool $allowPublicUserFive = false) {
+    if ($allowPublicUserFive) {
+        $stmt = $pdo->prepare("SELECT id, type, name_encrypted, deck_mode, deck_front_language, deck_back_language, deck_structure, deck_generation_base_prompt FROM directories WHERE id = ? AND user_id IN (?, 5) AND type IN (4, 10)");
+        $stmt->execute([$deck_id, $user_id]);
+        return $stmt->fetch();
+    }
     $stmt = $pdo->prepare("SELECT id, type, name_encrypted, deck_mode, deck_front_language, deck_back_language, deck_structure, deck_generation_base_prompt FROM directories WHERE id = ? AND user_id = ? AND type IN (4, 10)");
     $stmt->execute([$deck_id, $user_id]);
     return $stmt->fetch();
@@ -1184,7 +1189,12 @@ function findNextPendingAudioJobForDeck($pdo, $deck_id, $front_language, $back_l
 /**
  * Função verifyCardOwnership: Confere se um card pertence ao usuário por meio do deck ao qual ele está associado.
  */
-function verifyCardOwnership($pdo, $card_id, $user_id) {
+function verifyCardOwnership($pdo, $card_id, $user_id, bool $allowPublicUserFive = false) {
+    if ($allowPublicUserFive) {
+        $stmt = $pdo->prepare("SELECT f.id, f.directory_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND d.user_id IN (?, 5)");
+        $stmt->execute([$card_id, $user_id]);
+        return $stmt->fetch();
+    }
     $stmt = $pdo->prepare("SELECT f.id, f.directory_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND d.user_id = ?");
     $stmt->execute([$card_id, $user_id]);
     return $stmt->fetch();
@@ -2184,7 +2194,7 @@ if ($action === 'fetch') {
 
     if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
 
-    $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
+    $deck = verifyDeckOwnership($pdo, $deck_id, $user_id, true);
     if (!$deck) {
         die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado ou sem permissão.']));
     }
@@ -2204,13 +2214,14 @@ if ($action === 'fetch') {
         $orderClause = $deck_mode === 'grafo' ? 'ORDER BY f.id ASC' : 'ORDER BY RAND()';
 
         if ($deck_mode === 'grafo') {
-            // No modo grafo, busca cards de qualquer deck do usuário.
+            // No modo grafo, busca cards de qualquer deck do usuário
+            // e também dos decks pertencentes ao usuário de id 5.
             $stmt = $pdo->prepare("
                 SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score 
                 FROM flashcards f
                 JOIN directories d ON d.id = f.directory_id
                 LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
-                WHERE d.user_id = ?
+                WHERE d.user_id IN (?, 5)
                 {$orderClause}
             ");
             $stmt->execute([$user_id, $user_id]);
@@ -2945,7 +2956,7 @@ elseif ($action === 'update_score') {
     $card_id = (int)($input['card_id'] ?? 0);
     if ($card_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do card inválido.']));
 
-    if (!verifyCardOwnership($pdo, $card_id, $user_id)) {
+    if (!verifyCardOwnership($pdo, $card_id, $user_id, true)) {
         die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
     }
 
