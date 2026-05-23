@@ -2817,47 +2817,88 @@ elseif ($action === 'translate_text') {
         exit;
     }
 
-    if (OPENAI_API_KEY === '') {
-        die(json_encode(['status' => 'error', 'message' => 'OPENAI_API_KEY não configurada no .env.']));
+    $translation = '';
+
+    if (DEEPL_API_KEY !== '') {
+        $mapToDeepLLanguage = function ($langCode) {
+            $normalized = strtoupper(str_replace('-', '_', trim((string)$langCode)));
+            $map = [
+                'PT_BR' => 'PT-BR',
+                'PT_PT' => 'PT-PT',
+                'EN_US' => 'EN-US',
+                'EN_GB' => 'EN-GB',
+                'EN' => 'EN',
+                'PT' => 'PT'
+            ];
+            if (isset($map[$normalized])) return $map[$normalized];
+            $parts = explode('_', $normalized);
+            return $parts[0] ?? $normalized;
+        };
+
+        $deeplPayload = http_build_query([
+            // DeepL espera "text=..." (não "text[0]=...").
+            'text' => $text,
+            'source_lang' => $mapToDeepLLanguage($source_language),
+            'target_lang' => $mapToDeepLLanguage($target_language),
+            'preserve_formatting' => '1'
+        ]);
+
+        $ch = curl_init(DEEPL_API_URL);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $deeplPayload);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/x-www-form-urlencoded',
+            'Authorization: DeepL-Auth-Key ' . DEEPL_API_KEY
+        ]);
+        $deeplResponse = curl_exec($ch);
+        $deeplHttpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($deeplHttpcode === 200 && $deeplResponse) {
+            $deeplDecoded = json_decode($deeplResponse, true);
+            $translation = trim($deeplDecoded['translations'][0]['text'] ?? '');
+        }
     }
 
-    $systemPrompt = sprintf(
-        'Você é um tradutor automático direto e focado. Traduza de %s para %s e retorne EXCLUSIVAMENTE a tradução.',
-        getLanguageLabel($source_language),
-        getLanguageLabel($target_language)
-    );
+    // Mantemos OpenAI no código como fallback quando DeepL não estiver disponível.
+    if ($translation === '' && OPENAI_API_KEY !== '') {
+        $systemPrompt = sprintf(
+            'Você é um tradutor automático direto e focado. Traduza de %s para %s e retorne EXCLUSIVAMENTE a tradução.',
+            getLanguageLabel($source_language),
+            getLanguageLabel($target_language)
+        );
 
-    $payload = json_encode([
-        'model' => 'gpt-5.4',
-        'messages' => [
-            ['role' => 'system', 'content' => $systemPrompt],
-            ['role' => 'user', 'content' => $text]
-        ],
-        'temperature' => 0.3
-    ]);
+        $payload = json_encode([
+            'model' => 'gpt-5.4',
+            'messages' => [
+                ['role' => 'system', 'content' => $systemPrompt],
+                ['role' => 'user', 'content' => $text]
+            ],
+            'temperature' => 0.3
+        ]);
 
-    $ch = curl_init('https://api.openai.com/v1/chat/completions');
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Content-Type: application/json',
-        'Authorization: Bearer ' . OPENAI_API_KEY
-    ]);
+        $ch = curl_init('https://api.openai.com/v1/chat/completions');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . OPENAI_API_KEY
+        ]);
 
-    $response = curl_exec($ch);
-    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
+        $response = curl_exec($ch);
+        $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
 
-    if ($httpcode !== 200 || !$response) {
-        die(json_encode(['status' => 'error', 'message' => 'Erro ao traduzir com a OpenAI.']));
+        if ($httpcode === 200 && $response) {
+            $decoded = json_decode($response, true);
+            $translation = trim($decoded['choices'][0]['message']['content'] ?? '');
+        }
     }
-
-    $decoded = json_decode($response, true);
-    $translation = trim($decoded['choices'][0]['message']['content'] ?? '');
 
     if ($translation === '') {
-        die(json_encode(['status' => 'error', 'message' => 'A API não retornou tradução válida.']));
+        die(json_encode(['status' => 'error', 'message' => 'Falha ao traduzir. Verifique DEEPL_API_KEY e OPENAI_API_KEY no .env.']));
     }
 
     echo json_encode(['status' => 'success', 'translation' => $translation]);
