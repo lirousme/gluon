@@ -1080,14 +1080,23 @@
                 const shouldLogReviewResult = action === 'update_score' || action === 'increment_book_score';
                 try {
                     const res = await fetch(`/api/flashcards`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    
+
                     if (res.status === 401) {
-                        window.location.href = '/'; 
+                        window.location.href = '/';
                         return null;
                     }
-                    
-                    const data = await res.json();
-                    if (data.status !== 'success') throw new Error(data.message);
+
+                    const raw = await res.text();
+                    let data = null;
+                    try {
+                        data = raw ? JSON.parse(raw) : null;
+                    } catch (_) {
+                        throw new Error(`Resposta inválida da API de flashcards (status ${res.status}).`);
+                    }
+
+                    if (!data) throw new Error(`A API de flashcards retornou uma resposta vazia (status ${res.status}).`);
+                    if (data.status !== 'success') throw new Error(data.message || `Falha na requisição (status ${res.status}).`);
+
                     if (shouldLogReviewResult) {
                         console.log('[Flashcards][Review API] Resposta recebida:', {
                             action,
