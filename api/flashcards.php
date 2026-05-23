@@ -2131,15 +2131,16 @@ if ($action === 'fetch') {
         //$cardIds são todos os cards (do deck) sem discriminação no caso de grafos, e com filtro de vencimento no caso de aleatório
         $cardIds = array_map(static fn($card) => (int)$card['id'], $cards);
         //$subjectTagsByCard todas as tags da subcategoria "subject" dos cards de $cardIds
-        $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', $cardIds, $user_id);
-        $objectTagsByCard = fetchLinkedTagsByCard($pdo, 'objects_links', $cardIds, $user_id);
-        $tipoFrasalTagsByCard = fetchLinkedTagsByCard($pdo, 'tipo_frasal_links', $cardIds, $user_id);
-        $tenseTagsByCard = fetchLinkedTagsByCard($pdo, 'tense_links', $cardIds, $user_id);
-        $lexicalChunksTagsByCard = fetchLinkedTagsByCard($pdo, 'lexical_chunks_links', $cardIds, $user_id);
-        $relationTagsByCard = fetchLinkedTagsByCard($pdo, 'relation_links', $cardIds, $user_id);
-        $wordsTagsByCard = fetchLinkedTagsByCard($pdo, 'words_links', $cardIds, $user_id);
-        $idiomaPrincipalTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'tag_id', $cardIds, $user_id);
-        $idiomaSecundarioTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'segundo_idioma_tag_id', $cardIds, $user_id);
+        $directoryOwnerUserIds = [(int)$user_id];
+        $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', $cardIds, $directoryOwnerUserIds);
+        $objectTagsByCard = fetchLinkedTagsByCard($pdo, 'objects_links', $cardIds, $directoryOwnerUserIds);
+        $tipoFrasalTagsByCard = fetchLinkedTagsByCard($pdo, 'tipo_frasal_links', $cardIds, $directoryOwnerUserIds);
+        $tenseTagsByCard = fetchLinkedTagsByCard($pdo, 'tense_links', $cardIds, $directoryOwnerUserIds);
+        $lexicalChunksTagsByCard = fetchLinkedTagsByCard($pdo, 'lexical_chunks_links', $cardIds, $directoryOwnerUserIds);
+        $relationTagsByCard = fetchLinkedTagsByCard($pdo, 'relation_links', $cardIds, $directoryOwnerUserIds);
+        $wordsTagsByCard = fetchLinkedTagsByCard($pdo, 'words_links', $cardIds, $directoryOwnerUserIds);
+        $idiomaPrincipalTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'tag_id', $cardIds, $directoryOwnerUserIds);
+        $idiomaSecundarioTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'segundo_idioma_tag_id', $cardIds, $directoryOwnerUserIds);
 
         $response = [];
         foreach ($cards as $card) {
@@ -2215,7 +2216,7 @@ if ($action === 'fetch') {
                 WHERE d.user_id IN (?, 5)
                 {$orderClause}
             ");
-            $stmt->execute([$user_id, $user_id]);
+            $stmt->execute([$user_id, $user_id, 5]);
         } else {
             // No modo aleatório, mantém filtro por deck e cards vencidos.
             $stmt = $pdo->prepare("
