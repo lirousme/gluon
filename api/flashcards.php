@@ -2409,7 +2409,7 @@ elseif ($action === 'get_audio') {
         die('Card inválido');
     }
 
-    if (!verifyCardOwnership($pdo, $card_id, $user_id)) {
+    if (!verifyCardOwnership($pdo, $card_id, $user_id, true)) {
         http_response_code(403);
         die('Acesso negado');
     }
