@@ -415,6 +415,16 @@ function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagCol
     return $linkedTagsByCard;
 }
 
+function safeDecryptOrDefault(?string $encryptedValue, $defaultValue = '') {
+    if ($encryptedValue === null || $encryptedValue === '') return $defaultValue;
+    try {
+        return Security::decryptData($encryptedValue);
+    } catch (Throwable $e) {
+        error_log('[flashcards][decrypt_fallback] ' . $e->getMessage());
+        return $defaultValue;
+    }
+}
+
 /**
  * Função syncCardIdiomaLinks: Sincroniza o vínculo de idiomas de um card, mantendo no máximo um idioma principal e um secundário válidos.
  */
@@ -2204,16 +2214,16 @@ if ($action === 'fetch') {
         $orderClause = $deck_mode === 'grafo' ? 'ORDER BY f.id ASC' : 'ORDER BY RAND()';
 
         if ($deck_mode === 'grafo') {
-            // No modo grafo, busca cards de qualquer deck do usuário.
+            // No modo grafo, busca cards de qualquer deck do usuário atual e também do usuário de ID 5.
             $stmt = $pdo->prepare("
                 SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score 
                 FROM flashcards f
                 JOIN directories d ON d.id = f.directory_id
                 LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
-                WHERE d.user_id = ?
+                WHERE d.user_id IN (?, ?)
                 {$orderClause}
             ");
-            $stmt->execute([$user_id, $user_id]);
+            $stmt->execute([$user_id, $user_id, 5]);
         } else {
             // No modo aleatório, mantém filtro por deck e cards vencidos.
             $stmt = $pdo->prepare("
@@ -2340,10 +2350,10 @@ if ($action === 'fetch') {
     foreach ($cards as $idx => $card) {
         $response[] = [
             'id' => $card['id'],
-            'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
-            'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
-            'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
-            'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
+            'front' => safeDecryptOrDefault($card['front_encrypted'] ?? null, ''),
+            'back' => safeDecryptOrDefault($card['back_encrypted'] ?? null, ''),
+            'image_front' => safeDecryptOrDefault($card['image_front_encrypted'] ?? null, null),
+            'image_back' => safeDecryptOrDefault($card['image_back_encrypted'] ?? null, null),
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
             'score' => (int)$card['score'],
