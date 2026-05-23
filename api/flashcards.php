@@ -3016,7 +3016,8 @@ elseif ($action === 'reset_book_score') {
         die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
     }
 
-    $isBookMode = ($deck['deck_mode'] ?? 'aleatorio') === 'livro';
+    $deckMode = $deck['deck_mode'] ?? 'aleatorio';
+    $isBookMode = $deckMode === 'livro';
 
     if ($isBookMode) {
         $stmt = $pdo->prepare("
@@ -3027,13 +3028,26 @@ elseif ($action === 'reset_book_score') {
         $stmt->execute([$user_id, $deck_id]);
         echo json_encode(['status' => 'success', 'message' => 'Pontuação do livro zerada.']);
     } else {
-        $stmt = $pdo->prepare("
-            DELETE fs FROM flashcard_scores fs
-            INNER JOIN flashcards f ON f.id = fs.flashcard_id
-            WHERE fs.user_id = ? AND f.directory_id = ?
-        ");
-        $stmt->execute([$user_id, $deck_id]);
-        echo json_encode(['status' => 'success', 'message' => 'Pontuação do deck zerada.']);
+        if ($deckMode === 'grafo') {
+            $stmt = $pdo->prepare("
+                DELETE fs FROM flashcard_scores fs
+                INNER JOIN flashcards f ON f.id = fs.flashcard_id
+                INNER JOIN directories d ON d.id = f.directory_id
+                WHERE fs.user_id = ?
+                  AND d.type = 4
+                  AND d.deck_mode = 'grafo'
+            ");
+            $stmt->execute([$user_id]);
+            echo json_encode(['status' => 'success', 'message' => 'Pontuação de todos os cards em modo grafo foi zerada.']);
+        } else {
+            $stmt = $pdo->prepare("
+                DELETE fs FROM flashcard_scores fs
+                INNER JOIN flashcards f ON f.id = fs.flashcard_id
+                WHERE fs.user_id = ? AND f.directory_id = ?
+            ");
+            $stmt->execute([$user_id, $deck_id]);
+            echo json_encode(['status' => 'success', 'message' => 'Pontuação do deck zerada.']);
+        }
     }
 }
 
