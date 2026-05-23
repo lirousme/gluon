@@ -2820,26 +2820,10 @@ elseif ($action === 'translate_text') {
     $translation = '';
 
     if (DEEPL_API_KEY !== '') {
-        $mapToDeepLLanguage = function ($langCode) {
-            $normalized = strtoupper(str_replace('-', '_', trim((string)$langCode)));
-            $map = [
-                'PT_BR' => 'PT-BR',
-                'PT_PT' => 'PT-PT',
-                'EN_US' => 'EN-US',
-                'EN_GB' => 'EN-GB',
-                'EN' => 'EN',
-                'PT' => 'PT'
-            ];
-            if (isset($map[$normalized])) return $map[$normalized];
-            $parts = explode('_', $normalized);
-            return $parts[0] ?? $normalized;
-        };
-
         $deeplPayload = http_build_query([
-            // DeepL espera "text=..." (não "text[0]=...").
-            'text' => $text,
-            'source_lang' => $mapToDeepLLanguage($source_language),
-            'target_lang' => $mapToDeepLLanguage($target_language),
+            'text' => [$text],
+            'source_lang' => strtoupper(str_replace('-', '_', $source_language)),
+            'target_lang' => strtoupper(str_replace('-', '_', $target_language)),
             'preserve_formatting' => '1'
         ]);
 
