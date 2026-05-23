@@ -3377,6 +3377,28 @@ elseif ($action === 'update_tag') {
     echo json_encode(['status' => 'success', 'message' => 'Tag atualizada com sucesso.']);
 }
 
+elseif ($action === 'delete_tag') {
+    $tag_id = (int)($input['id'] ?? 0);
+
+    if ($tag_id <= 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID da tag inválido.']));
+    }
+
+    $stmt = $pdo->prepare("DELETE FROM flashcard_tags WHERE id = ? AND user_id = ?");
+    $stmt->execute([$tag_id, $user_id]);
+
+    if ($stmt->rowCount() === 0) {
+        $checkStmt = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? LIMIT 1");
+        $checkStmt->execute([$tag_id]);
+        if ($checkStmt->fetchColumn()) {
+            die(json_encode(['status' => 'error', 'message' => 'Você não tem permissão para excluir esta tag.']));
+        }
+        die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada.']));
+    }
+
+    echo json_encode(['status' => 'success', 'message' => 'Tag excluída com sucesso.']);
+}
+
 
 elseif ($action === 'create_batch_generation') {
     $deck_id = (int)($input['deck_id'] ?? 0);
