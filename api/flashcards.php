@@ -2819,34 +2819,7 @@ elseif ($action === 'translate_text') {
 
     $translation = '';
 
-    if (DEEPL_API_KEY !== '') {
-        $deeplPayload = http_build_query([
-            'text' => [$text],
-            'source_lang' => strtoupper(str_replace('-', '_', $source_language)),
-            'target_lang' => strtoupper(str_replace('-', '_', $target_language)),
-            'preserve_formatting' => '1'
-        ]);
-
-        $ch = curl_init(DEEPL_API_URL);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $deeplPayload);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/x-www-form-urlencoded',
-            'Authorization: DeepL-Auth-Key ' . DEEPL_API_KEY
-        ]);
-        $deeplResponse = curl_exec($ch);
-        $deeplHttpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($deeplHttpcode === 200 && $deeplResponse) {
-            $deeplDecoded = json_decode($deeplResponse, true);
-            $translation = trim($deeplDecoded['translations'][0]['text'] ?? '');
-        }
-    }
-
-    // Mantemos OpenAI no código como fallback quando DeepL não estiver disponível.
-    if ($translation === '' && OPENAI_API_KEY !== '') {
+    if (OPENAI_API_KEY !== '') {
         $systemPrompt = sprintf(
             'Você é um tradutor automático direto e focado. Traduza de %s para %s e retorne EXCLUSIVAMENTE a tradução.',
             getLanguageLabel($source_language),
@@ -2882,7 +2855,7 @@ elseif ($action === 'translate_text') {
     }
 
     if ($translation === '') {
-        die(json_encode(['status' => 'error', 'message' => 'Falha ao traduzir. Verifique DEEPL_API_KEY e OPENAI_API_KEY no .env.']));
+        die(json_encode(['status' => 'error', 'message' => 'Falha ao traduzir. Verifique OPENAI_API_KEY no .env.']));
     }
 
     echo json_encode(['status' => 'success', 'translation' => $translation]);
