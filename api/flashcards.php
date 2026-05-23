@@ -417,6 +417,16 @@ function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagCol
     return $linkedTagsByCard;
 }
 
+function safeDecryptOrDefault(?string $encryptedValue, $defaultValue = '') {
+    if ($encryptedValue === null || $encryptedValue === '') return $defaultValue;
+    try {
+        return Security::decryptData($encryptedValue);
+    } catch (Throwable $e) {
+        error_log('[flashcards][decrypt_fallback] ' . $e->getMessage());
+        return $defaultValue;
+    }
+}
+
 /**
  * Função syncCardIdiomaLinks: Sincroniza o vínculo de idiomas de um card, mantendo no máximo um idioma principal e um secundário válidos.
  */
@@ -2344,10 +2354,10 @@ if ($action === 'fetch') {
     foreach ($cards as $idx => $card) {
         $response[] = [
             'id' => $card['id'],
-            'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
-            'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
-            'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
-            'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
+            'front' => safeDecryptOrDefault($card['front_encrypted'] ?? null, ''),
+            'back' => safeDecryptOrDefault($card['back_encrypted'] ?? null, ''),
+            'image_front' => safeDecryptOrDefault($card['image_front_encrypted'] ?? null, null),
+            'image_back' => safeDecryptOrDefault($card['image_back_encrypted'] ?? null, null),
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
             'score' => (int)$card['score'],
