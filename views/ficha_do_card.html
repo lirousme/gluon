@@ -39,6 +39,9 @@
       <div class="flex items-center gap-2 border-b border-slate-700 pb-3">
         <button type="button" id="tabFrontBtn" class="px-3 py-1.5 rounded-lg text-sm border border-blue-400 bg-blue-500/20 text-blue-200">Frente</button>
         <button type="button" id="tabBackBtn" class="px-3 py-1.5 rounded-lg text-sm border border-slate-600 bg-slate-800 text-slate-300">Verso</button>
+        <button type="button" id="btnTranslate" class="px-3 py-1.5 rounded-lg text-sm border border-violet-400 bg-violet-500/20 text-violet-200 hover:bg-violet-500/30 transition-colors inline-flex items-center gap-1.5">
+          <i class="fa-solid fa-language"></i> Traduzir via IA
+        </button>
       </div>
 
       <section id="singleFrontTabContent">
@@ -578,6 +581,38 @@ const app = {
     this.renderAllTagSelectors();
     this.setStatus('Você está editando um card.', 'neutral');
   },
+
+  async translateCard() {
+    const frontEl = document.getElementById('singleFront');
+    const backEl = document.getElementById('singleBack');
+    const frontText = frontEl.value.trim();
+    const backText = backEl.value.trim();
+
+    if (frontText && backText) return this.setStatus('Um dos campos deve estar vazio para poder traduzir para ele.', 'error');
+    if (!frontText && !backText) return this.setStatus('Preencha um dos campos primeiro para ser traduzido.', 'error');
+
+    const textToTranslate = frontText || backText;
+    const targetEl = frontText ? backEl : frontEl;
+    const sourceLanguage = frontText ? 'auto' : 'pt-BR';
+    const targetLanguage = frontText ? 'pt-BR' : 'en-US';
+
+    const btn = document.getElementById('btnTranslate');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+    btn.disabled = true;
+
+    try {
+      const res = await this.api('translate_text', { text: textToTranslate, source_language: sourceLanguage, target_language: targetLanguage });
+      if (!res || !res.translation) throw new Error('A API não retornou uma tradução válida.');
+      targetEl.value = res.translation;
+      this.setStatus('Tradução concluída!', 'success');
+    } catch (error) {
+      this.setStatus('Falha ao traduzir: ' + error.message, 'error');
+    } finally {
+      btn.innerHTML = originalHtml;
+      btn.disabled = false;
+    }
+  },
   async save(e) {
     e.preventDefault();
     const front = singleFront.value.trim();
@@ -611,6 +646,7 @@ backLink.href = decodeURIComponent(app.from);
 if (!app.deckId) window.location.replace(backLink.href);
 tabFrontBtn.onclick = () => app.setActiveTab('front');
 tabBackBtn.onclick = () => app.setActiveTab('back');
+btnTranslate.onclick = () => app.translateCard();
 frontImageFile.onchange = (e) => app.handleCardImageUpload(e, 'front');
 btnRemoveFrontImage.onclick = () => app.removeCardImage('front');
 subjectTagSearchInput.oninput = (e) => app.handleTagSearch('subject', e.target.value);
