@@ -2223,7 +2223,7 @@ if ($action === 'fetch') {
                 FROM flashcards f
                 JOIN directories d ON d.id = f.directory_id
                 LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
-                WHERE d.user_id IN (?, 5)
+                WHERE d.user_id IN (?, ?)
                 {$orderClause}
             ");
             $stmt->execute([$user_id, $user_id, 5]);
