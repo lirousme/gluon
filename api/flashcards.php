@@ -2944,7 +2944,7 @@ elseif ($action === 'translate_text') {
     }
 
     if ($translation === '') {
-        die(json_encode(['status' => 'error', 'message' => 'Falha ao traduzir. Verifique DEEPL_API_KEY e OPENAI_API_KEY no .env.']));
+        die(json_encode(['status' => 'error', 'message' => 'Falha ao traduzir. Verifique OPENAI_API_KEY no .env.']));
     }
 
     echo json_encode(['status' => 'success', 'translation' => $translation]);
