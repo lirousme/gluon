@@ -2204,13 +2204,13 @@ if ($action === 'fetch') {
         $orderClause = $deck_mode === 'grafo' ? 'ORDER BY f.id ASC' : 'ORDER BY RAND()';
 
         if ($deck_mode === 'grafo') {
-            // No modo grafo, busca cards de qualquer deck do usuário.
+            // No modo grafo, busca cards de qualquer deck do usuário atual e também do usuário de ID 5.
             $stmt = $pdo->prepare("
                 SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score 
                 FROM flashcards f
                 JOIN directories d ON d.id = f.directory_id
                 LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
-                WHERE d.user_id = ?
+                WHERE d.user_id IN (?, 5)
                 {$orderClause}
             ");
             $stmt->execute([$user_id, $user_id]);
