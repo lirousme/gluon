@@ -3070,62 +3070,6 @@ elseif ($action === 'add_single') {
     $idioma_principal_tag_ids = sanitizeTagIds($input['idioma_principal_tag_ids'] ?? ($input['idiomas_tag_ids'] ?? []));
     $idioma_secundario_tag_ids = sanitizeTagIds($input['idioma_secundario_tag_ids'] ?? []);
 
-    $should_use_words_tags_as_back = !empty($input['use_words_tags_as_back']);
-    $words_back_text = '';
-    if ($should_use_words_tags_as_back && !empty($words_tag_ids)) {
-        try {
-            $placeholders = implode(',', array_fill(0, count($words_tag_ids), '?'));
-            $stmtWordsTags = $pdo->prepare("
-                SELECT id, name_encrypted, name_pt_br_encrypted
-                FROM flashcard_tags
-                WHERE user_id = ?
-                  AND id IN ($placeholders)
-            ");
-            $stmtWordsTags->execute(array_merge([$user_id], $words_tag_ids));
-
-            $wordsTagDataById = [];
-            foreach ($stmtWordsTags->fetchAll(PDO::FETCH_ASSOC) as $tag) {
-                $tagId = (int)($tag['id'] ?? 0);
-                if ($tagId <= 0) {
-                    continue;
-                }
-                $namePtBrRaw = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData((string)$tag['name_pt_br_encrypted']) : '';
-                $nameFallbackRaw = !empty($tag['name_encrypted']) ? Security::decryptData((string)$tag['name_encrypted']) : '';
-                $namePtBr = trim((string)($namePtBrRaw !== false ? $namePtBrRaw : ''));
-                $nameFallback = trim((string)($nameFallbackRaw !== false ? $nameFallbackRaw : ''));
-                $wordsTagDataById[$tagId] = [
-                    'name_pt_br' => $namePtBr,
-                    'name_fallback' => $nameFallback,
-                ];
-            }
-
-            $valid_words_tag_ids = [];
-            $words_back_parts = [];
-            foreach ($words_tag_ids as $selectedTagId) {
-                $selectedTagId = (int)$selectedTagId;
-                if ($selectedTagId <= 0 || !isset($wordsTagDataById[$selectedTagId])) {
-                    continue;
-                }
-                $valid_words_tag_ids[] = $selectedTagId;
-                $namePtBr = $wordsTagDataById[$selectedTagId]['name_pt_br'] ?? '';
-                $nameFallback = $wordsTagDataById[$selectedTagId]['name_fallback'] ?? '';
-                $textPiece = $namePtBr !== '' ? $namePtBr : $nameFallback;
-                if ($textPiece !== '') {
-                    $words_back_parts[] = $textPiece;
-                }
-            }
-
-            $words_tag_ids = array_values(array_unique($valid_words_tag_ids));
-            $words_back_text = trim(implode(' ', $words_back_parts));
-            if ($words_back_text !== '') {
-                $back = $words_back_text;
-            }
-        } catch (Throwable $e) {
-            error_log('[flashcards][add_single][words_tags] ' . $e->getMessage());
-            $words_tag_ids = [];
-        }
-    }
-
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
 
@@ -3187,7 +3131,6 @@ elseif ($action === 'add_single') {
         }
 
         $back_clean = trim(strip_tags($back));
-        $back_audio_language = $words_back_text !== '' ? 'pt-BR' : $back_language;
         if ($back_clean !== '' && !cardTextContainsMathNotation($back_clean)) {
             try {
                 $tts_error_details = null;
@@ -3197,7 +3140,7 @@ elseif ($action === 'add_single') {
                     $new_card_id,
                     'back',
                     $back_clean,
-                    $back_audio_language,
+                    $back_language,
                     $deck_structure,
                     $front_language,
                     $back_language,

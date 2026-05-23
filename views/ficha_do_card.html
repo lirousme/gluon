@@ -36,6 +36,11 @@
       <input type="hidden" id="selectedIdiomaPrincipalTagIds" value="[]">
       <input type="hidden" id="selectedIdiomaSecundarioTagIds" value="[]">
 
+      <div class="flex items-center gap-2 border-b border-slate-700 pb-3">
+        <button type="button" id="tabFrontBtn" class="px-3 py-1.5 rounded-lg text-sm border border-blue-400 bg-blue-500/20 text-blue-200">Frente</button>
+        <button type="button" id="tabBackBtn" class="px-3 py-1.5 rounded-lg text-sm border border-slate-600 bg-slate-800 text-slate-300">Verso</button>
+      </div>
+
       <section id="singleFrontTabContent">
         <label class="block text-sm font-medium text-slate-300 mb-2">Frente (Obrigatório texto ou imagem)</label>
         <textarea id="singleFront" rows="7" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white resize-none"></textarea>
@@ -46,6 +51,11 @@
           <div id="frontImagePreview" class="mt-2 hidden w-full h-36 rounded bg-contain bg-center bg-no-repeat border border-slate-600"></div>
           <button type="button" id="btnRemoveFrontImage" class="hidden mt-2 text-xs text-red-400 hover:text-red-300 flex items-center gap-1"><i class="fa-solid fa-trash"></i> Remover Imagem</button>
         </div>
+      </section>
+
+      <section id="singleBackTabContent" class="hidden">
+        <label class="block text-sm font-medium text-slate-300 mb-2">Verso (Opcional)</label>
+        <textarea id="singleBack" rows="7" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white resize-none" placeholder="Se não quiser texto no verso, deixe vazio."></textarea>
       </section>
 
       <section id="SubjectTagsPanel" class="pt-3 border-t border-slate-700">
@@ -207,8 +217,7 @@ const app = {
   deckId: params.get('id'),
   from: params.get('from') || '/dashboard',
   editCardId: params.get('edit_card_id'),
-  editBackText: '',
-  editBackImage: '',
+  activeTab: 'front',
   availableTags: [],
   sessionUserId: null,
   tagPanels: {
@@ -529,6 +538,14 @@ const app = {
     statusMessage.textContent = text;
     statusMessage.className = 'text-sm ' + (tone==='error'?'text-red-400':tone==='success'?'text-emerald-300':'text-slate-400');
   },
+  setActiveTab(tab) {
+    this.activeTab = tab === 'back' ? 'back' : 'front';
+    const isFront = this.activeTab === 'front';
+    singleFrontTabContent.classList.toggle('hidden', !isFront);
+    singleBackTabContent.classList.toggle('hidden', isFront);
+    tabFrontBtn.className = `px-3 py-1.5 rounded-lg text-sm border ${isFront ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`;
+    tabBackBtn.className = `px-3 py-1.5 rounded-lg text-sm border ${!isFront ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`;
+  },
   async preloadEditCard() {
     if (!this.editCardId) return;
     pageTitle.textContent = 'Editar ficha de card';
@@ -538,8 +555,7 @@ const app = {
     const card = (res?.data || []).find(c => String(c.id) === String(this.editCardId));
     if (!card) throw new Error('Card não encontrado para edição.');
     singleFront.value = card.front || '';
-    this.editBackText = String(card.back || '');
-    this.editBackImage = card.image_back || '';
+    singleBack.value = String(card.back || '');
     if (card.image_front) this.setBase64ImagePreview('front', card.image_front);
     const subjectTags = Array.isArray(card.subject_tags) ? card.subject_tags.map(t => Number(t.id)).filter(Boolean) : [];
     const objectTags = Array.isArray(card.object_tags) ? card.object_tags.map(t => Number(t.id)).filter(Boolean) : [];
@@ -565,9 +581,9 @@ const app = {
   async save(e) {
     e.preventDefault();
     const front = singleFront.value.trim();
-    const back = this.editCardId ? this.editBackText : '';
+    const back = singleBack.value.trim();
     const image_front = frontImageBase64.value;
-    const image_back = this.editCardId ? this.editBackImage : null;
+    const image_back = null;
     const subject_tag_ids = this.getSelectedTagIds('subject');
     const object_tag_ids = this.getSelectedTagIds('object');
     const tipo_frasal_tag_ids = this.getSelectedTagIds('tipoFrasal');
@@ -581,7 +597,7 @@ const app = {
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
-      const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids, object_tag_ids, tipo_frasal_tag_ids, tense_tag_ids, lexical_chunks_tag_ids, relation_tag_ids, words_tag_ids, idioma_principal_tag_ids, idioma_secundario_tag_ids, use_words_tags_as_back: 1 };
+      const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids, object_tag_ids, tipo_frasal_tag_ids, tense_tag_ids, lexical_chunks_tag_ids, relation_tag_ids, words_tag_ids, idioma_principal_tag_ids, idioma_secundario_tag_ids };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
@@ -593,6 +609,8 @@ const app = {
 
 backLink.href = decodeURIComponent(app.from);
 if (!app.deckId) window.location.replace(backLink.href);
+tabFrontBtn.onclick = () => app.setActiveTab('front');
+tabBackBtn.onclick = () => app.setActiveTab('back');
 frontImageFile.onchange = (e) => app.handleCardImageUpload(e, 'front');
 btnRemoveFrontImage.onclick = () => app.removeCardImage('front');
 subjectTagSearchInput.oninput = (e) => app.handleTagSearch('subject', e.target.value);
@@ -617,6 +635,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 (async () => {
+  app.setActiveTab('front');
   await app.loadSessionUserId();
   await app.loadTags();
   await app.preloadEditCard();
