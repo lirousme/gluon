@@ -1189,7 +1189,12 @@ function findNextPendingAudioJobForDeck($pdo, $deck_id, $front_language, $back_l
 /**
  * Função verifyCardOwnership: Confere se um card pertence ao usuário por meio do deck ao qual ele está associado.
  */
-function verifyCardOwnership($pdo, $card_id, $user_id) {
+function verifyCardOwnership($pdo, $card_id, $user_id, bool $allowPublicUserFive = false) {
+    if ($allowPublicUserFive) {
+        $stmt = $pdo->prepare("SELECT f.id, f.directory_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND d.user_id IN (?, 5)");
+        $stmt->execute([$card_id, $user_id]);
+        return $stmt->fetch();
+    }
     $stmt = $pdo->prepare("SELECT f.id, f.directory_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND d.user_id = ?");
     $stmt->execute([$card_id, $user_id]);
     return $stmt->fetch();
@@ -2951,7 +2956,7 @@ elseif ($action === 'update_score') {
     $card_id = (int)($input['card_id'] ?? 0);
     if ($card_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do card inválido.']));
 
-    if (!verifyCardOwnership($pdo, $card_id, $user_id)) {
+    if (!verifyCardOwnership($pdo, $card_id, $user_id, true)) {
         die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
     }
 
