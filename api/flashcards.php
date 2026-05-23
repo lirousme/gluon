@@ -426,13 +426,13 @@ function syncCardIdiomaLinks(PDO $pdo, int $card_id, array $principalTagIds, arr
     if ($principalTagId <= 0) return;
 
     $secundarioTagId = (int)($secundarioTagIds[0] ?? 0);
-    $stmtPrincipal = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id = ?");
+    $stmtPrincipal = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5)");
     $stmtPrincipal->execute([$principalTagId, $user_id]);
     if (!$stmtPrincipal->fetchColumn()) return;
 
     $secundarioValue = null;
     if ($secundarioTagId > 0) {
-        $stmtSecundario = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id = ?");
+        $stmtSecundario = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5)");
         $stmtSecundario->execute([$secundarioTagId, $user_id]);
         if ($stmtSecundario->fetchColumn()) $secundarioValue = $secundarioTagId;
     }
@@ -459,7 +459,7 @@ function syncCardTagLinks(PDO $pdo, string $linkTable, int $card_id, array $tagI
 
     $stmtInsertTag = $pdo->prepare("
         INSERT IGNORE INTO {$linkTable} (flashcard_id, tag_id)
-        SELECT ?, t.id FROM flashcard_tags t WHERE t.id = ? AND t.user_id = ?
+        SELECT ?, t.id FROM flashcard_tags t WHERE t.id = ? AND t.user_id IN (?, 5)
     ");
     foreach ($tagIds as $tag_id) {
         $stmtInsertTag->execute([$card_id, $tag_id, $user_id]);
