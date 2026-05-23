@@ -426,13 +426,13 @@ function syncCardIdiomaLinks(PDO $pdo, int $card_id, array $principalTagIds, arr
     if ($principalTagId <= 0) return;
 
     $secundarioTagId = (int)($secundarioTagIds[0] ?? 0);
-    $stmtPrincipal = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id = ?");
+    $stmtPrincipal = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5)");
     $stmtPrincipal->execute([$principalTagId, $user_id]);
     if (!$stmtPrincipal->fetchColumn()) return;
 
     $secundarioValue = null;
     if ($secundarioTagId > 0) {
-        $stmtSecundario = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id = ?");
+        $stmtSecundario = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5)");
         $stmtSecundario->execute([$secundarioTagId, $user_id]);
         if ($stmtSecundario->fetchColumn()) $secundarioValue = $secundarioTagId;
     }
@@ -459,7 +459,7 @@ function syncCardTagLinks(PDO $pdo, string $linkTable, int $card_id, array $tagI
 
     $stmtInsertTag = $pdo->prepare("
         INSERT IGNORE INTO {$linkTable} (flashcard_id, tag_id)
-        SELECT ?, t.id FROM flashcard_tags t WHERE t.id = ? AND t.user_id = ?
+        SELECT ?, t.id FROM flashcard_tags t WHERE t.id = ? AND t.user_id IN (?, 5)
     ");
     foreach ($tagIds as $tag_id) {
         $stmtInsertTag->execute([$card_id, $tag_id, $user_id]);
@@ -2817,134 +2817,47 @@ elseif ($action === 'translate_text') {
         exit;
     }
 
-    $translation = '';
-
-    if (DEEPL_API_KEY !== '') {
-        $toDeepLSourceLang = function ($lang) {
-            $normalized = strtoupper((string)$lang);
-            $base = explode('-', $normalized)[0];
-            $allowed = ['AR','BG','CS','DA','DE','EL','EN','ES','ET','FI','FR','HU','ID','IT','JA','KO','LT','LV','NB','NL','PL','PT','RO','RU','SK','SL','SV','TR','UK','ZH'];
-            return in_array($base, $allowed, true) ? $base : '';
-        };
-
-        $toDeepLTargetLang = function ($lang) {
-            $normalized = strtoupper((string)$lang);
-            $normalized = str_replace('_', '-', $normalized);
-            $map = [
-                'EN-US' => 'EN-US',
-                'EN-GB' => 'EN-GB',
-                'PT-BR' => 'PT-BR',
-                'PT-PT' => 'PT-PT',
-                'ZH-HANS' => 'ZH-HANS',
-                'ZH-HANT' => 'ZH-HANT'
-            ];
-
-            if (isset($map[$normalized])) return $map[$normalized];
-
-            $base = explode('-', $normalized)[0];
-            $allowed = ['AR','BG','CS','DA','DE','EL','EN','ES','ET','FI','FR','HU','ID','IT','JA','KO','LT','LV','NB','NL','PL','PT','RO','RU','SK','SL','SV','TR','UK','ZH'];
-            return in_array($base, $allowed, true) ? $base : '';
-        };
-
-        $deeplSource = $toDeepLSourceLang($source_language);
-        $deeplTarget = $toDeepLTargetLang($target_language);
-
-        if ($deeplSource !== '' && $deeplTarget !== '') {
-        $deeplPayload = http_build_query([
-            'text' => [$text],
-            'source_lang' => $deeplSource,
-            'target_lang' => $deeplTarget,
-            'preserve_formatting' => '1'
-        ]);
-
-            if (isset($map[$normalized])) return $map[$normalized];
-
-            $base = explode('-', $normalized)[0];
-            $allowed = ['AR','BG','CS','DA','DE','EL','EN','ES','ET','FI','FR','HU','ID','IT','JA','KO','LT','LV','NB','NL','PL','PT','RO','RU','SK','SL','SV','TR','UK','ZH'];
-            return in_array($base, $allowed, true) ? $base : '';
-        };
-
-        $deeplSource = $toDeepLSourceLang($source_language);
-        $deeplTarget = $toDeepLTargetLang($target_language);
-
-        if ($deeplTarget !== '') {
-            $deeplBody = [
-                'text' => [$text],
-                'target_lang' => $deeplTarget,
-                'preserve_formatting' => true
-            ];
-            if ($deeplSource !== '') {
-                $deeplBody['source_lang'] = $deeplSource;
-            }
-
-            $deeplUrls = [DEEPL_API_URL];
-            if (strpos(DEEPL_API_URL, 'api-free.deepl.com') !== false) {
-                $deeplUrls[] = 'https://api.deepl.com/v2/translate';
-            } elseif (strpos(DEEPL_API_URL, 'api.deepl.com') !== false) {
-                $deeplUrls[] = 'https://api-free.deepl.com/v2/translate';
-            }
-
-            foreach ($deeplUrls as $deeplUrl) {
-                $ch = curl_init($deeplUrl);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_POST, true);
-                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($deeplBody));
-                curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                    'Content-Type: application/json',
-                    'Authorization: DeepL-Auth-Key ' . DEEPL_API_KEY
-                ]);
-                $deeplResponse = curl_exec($ch);
-                $deeplHttpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                curl_close($ch);
-
-                if ($deeplHttpcode === 200 && $deeplResponse) {
-                    $deeplDecoded = json_decode($deeplResponse, true);
-                    $translation = trim($deeplDecoded['translations'][0]['text'] ?? '');
-                    if ($translation !== '') break;
-                }
-            }
-        }
-        }
+    if (OPENAI_API_KEY === '') {
+        die(json_encode(['status' => 'error', 'message' => 'OPENAI_API_KEY não configurada no .env.']));
     }
 
-    // Mantemos OpenAI no código como fallback quando DeepL não estiver disponível.
-    if ($translation === '' && OPENAI_API_KEY !== '') {
-        $systemPrompt = sprintf(
-            'Você é um tradutor automático direto e focado. Traduza de %s para %s e retorne EXCLUSIVAMENTE a tradução.',
-            getLanguageLabel($source_language),
-            getLanguageLabel($target_language)
-        );
+    $systemPrompt = sprintf(
+        'Você é um tradutor automático direto e focado. Traduza de %s para %s e retorne EXCLUSIVAMENTE a tradução.',
+        getLanguageLabel($source_language),
+        getLanguageLabel($target_language)
+    );
 
-        $payload = json_encode([
-            'model' => 'gpt-5.4',
-            'messages' => [
-                ['role' => 'system', 'content' => $systemPrompt],
-                ['role' => 'user', 'content' => $text]
-            ],
-            'temperature' => 0.3
-        ]);
+    $payload = json_encode([
+        'model' => 'gpt-5.4',
+        'messages' => [
+            ['role' => 'system', 'content' => $systemPrompt],
+            ['role' => 'user', 'content' => $text]
+        ],
+        'temperature' => 0.3
+    ]);
 
-        $ch = curl_init('https://api.openai.com/v1/chat/completions');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . OPENAI_API_KEY
-        ]);
+    $ch = curl_init('https://api.openai.com/v1/chat/completions');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . OPENAI_API_KEY
+    ]);
 
-        $response = curl_exec($ch);
-        $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+    $response = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
 
-        if ($httpcode === 200 && $response) {
-            $decoded = json_decode($response, true);
-            $translation = trim($decoded['choices'][0]['message']['content'] ?? '');
-        }
+    if ($httpcode !== 200 || !$response) {
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao traduzir com a OpenAI.']));
     }
+
+    $decoded = json_decode($response, true);
+    $translation = trim($decoded['choices'][0]['message']['content'] ?? '');
 
     if ($translation === '') {
-        die(json_encode(['status' => 'error', 'message' => 'Falha ao traduzir. Verifique OPENAI_API_KEY no .env.']));
+        die(json_encode(['status' => 'error', 'message' => 'A API não retornou tradução válida.']));
     }
 
     echo json_encode(['status' => 'success', 'translation' => $translation]);
