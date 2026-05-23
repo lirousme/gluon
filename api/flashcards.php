@@ -2820,28 +2820,74 @@ elseif ($action === 'translate_text') {
     $translation = '';
 
     if (DEEPL_API_KEY !== '') {
-        $deeplPayload = http_build_query([
-            'text' => [$text],
-            'source_lang' => strtoupper(str_replace('-', '_', $source_language)),
-            'target_lang' => strtoupper(str_replace('-', '_', $target_language)),
-            'preserve_formatting' => '1'
-        ]);
+        $deeplAllowed = ['AR','BG','CS','DA','DE','EL','EN','ES','ET','FI','FR','HU','ID','IT','JA','KO','LT','LV','NB','NL','PL','PT','RO','RU','SK','SL','SV','TR','UK','ZH'];
+        $deeplMap = [
+            'EN-US' => 'EN-US',
+            'EN-GB' => 'EN-GB',
+            'PT-BR' => 'PT-BR',
+            'PT-PT' => 'PT-PT',
+            'ZH-HANS' => 'ZH-HANS',
+            'ZH-HANT' => 'ZH-HANT'
+        ];
 
-        $ch = curl_init(DEEPL_API_URL);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $deeplPayload);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/x-www-form-urlencoded',
-            'Authorization: DeepL-Auth-Key ' . DEEPL_API_KEY
-        ]);
-        $deeplResponse = curl_exec($ch);
-        $deeplHttpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        $sourceNorm = strtoupper(str_replace('_', '-', (string)$source_language));
+        $targetNorm = strtoupper(str_replace('_', '-', (string)$target_language));
 
-        if ($deeplHttpcode === 200 && $deeplResponse) {
-            $deeplDecoded = json_decode($deeplResponse, true);
-            $translation = trim($deeplDecoded['translations'][0]['text'] ?? '');
+        $deeplSource = '';
+        if ($sourceNorm !== '' && $sourceNorm !== 'AUTO') {
+            $sourceBase = explode('-', $sourceNorm)[0];
+            if (in_array($sourceBase, $deeplAllowed, true)) {
+                $deeplSource = $sourceBase;
+            }
+        }
+
+        $deeplTarget = '';
+        if (isset($deeplMap[$targetNorm])) {
+            $deeplTarget = $deeplMap[$targetNorm];
+        } else {
+            $targetBase = explode('-', $targetNorm)[0];
+            if (in_array($targetBase, $deeplAllowed, true)) {
+                $deeplTarget = $targetBase;
+            }
+        }
+
+        if ($deeplTarget !== '') {
+            $deeplBody = [
+                'text' => [$text],
+                'target_lang' => $deeplTarget,
+                'preserve_formatting' => true
+            ];
+            if ($deeplSource !== '') {
+                $deeplBody['source_lang'] = $deeplSource;
+            }
+
+            $baseDeepLUrl = is_string(DEEPL_API_URL) && DEEPL_API_URL !== '' ? DEEPL_API_URL : 'https://api-free.deepl.com/v2/translate';
+            $deeplUrls = [$baseDeepLUrl];
+            if (strpos($baseDeepLUrl, 'api-free.deepl.com') !== false) {
+                $deeplUrls[] = 'https://api.deepl.com/v2/translate';
+            } elseif (strpos($baseDeepLUrl, 'api.deepl.com') !== false) {
+                $deeplUrls[] = 'https://api-free.deepl.com/v2/translate';
+            }
+
+            foreach ($deeplUrls as $deeplUrl) {
+                $ch = curl_init($deeplUrl);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($deeplBody));
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Content-Type: application/json',
+                    'Authorization: DeepL-Auth-Key ' . DEEPL_API_KEY
+                ]);
+                $deeplResponse = curl_exec($ch);
+                $deeplHttpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                if ($deeplHttpcode === 200 && $deeplResponse) {
+                    $deeplDecoded = json_decode($deeplResponse, true);
+                    $translation = trim($deeplDecoded['translations'][0]['text'] ?? '');
+                    if ($translation !== '') break;
+                }
+            }
         }
     }
 
