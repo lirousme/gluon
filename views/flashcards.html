@@ -116,15 +116,6 @@
         .score-dot.half-filled { background: linear-gradient(to right, #22c55e 50%, #334155 50%) !important; box-shadow: 0 0 3px rgba(34, 197, 94, 0.3); }
         .card-back .score-dot.half-filled { background: linear-gradient(to right, #10b981 50%, #2563eb 50%) !important; box-shadow: 0 0 3px rgba(16, 185, 129, 0.3); }
 
-        .graph-mode-indicator {
-            width: 12px;
-            height: 12px;
-            border-radius: 9999px;
-            background: #64748b;
-            border: 1px solid #94a3b8;
-            box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.7);
-        }
-
         @media (max-width: 640px) {
             .scene { height: 350px; }
             .card-text { font-size: 1.25rem; }
@@ -145,7 +136,6 @@
                 
                 <div id="deckMasteryBadge" class="hidden items-center gap-1.5 bg-slate-800/80 border border-slate-600 px-2 py-1 rounded-md text-xs font-semibold shadow-inner">
                 </div>
-                <div id="graphModeIndicator" class="hidden graph-mode-indicator" title="Modo de busca do grafo"></div>
             </div>
         </div>
         
@@ -777,7 +767,6 @@
             autoFlowToken: 0,
             autoFlowTransitionDelayMs: 250,
             scoredCardIds: new Set(),
-            graphSearchMode: null,
             isGeneratingMissingAudios: false,
             cardSheetEmbed: false,
             cardSheetMode: null,
@@ -1176,7 +1165,6 @@
                     this.bookNextReviewAt = res.book_next_review_at || null;
                     this.randomNextReviewAt = res.random_next_review_at || null;
                     this.currentIndex = res.current_index || 0;
-                    this.graphSearchMode = res.graph_search_mode || null;
 
                     const resetBtn = document.getElementById('btnResetBookScore');
                     if (resetBtn) {
@@ -1225,7 +1213,6 @@
             showEmptyState() {
                 document.getElementById('emptyState').style.display = 'flex';
                 document.getElementById('deckMasteryBadge').classList.add('hidden');
-                document.getElementById('graphModeIndicator').classList.add('hidden');
                 document.getElementById('deckProgressBar').style.width = '0%';
                 
                 if (['aleatorio', 'grafo'].includes(this.deckMode) && this.totalCardsInDeck > 0) {
@@ -1287,23 +1274,8 @@
 
             updateGlobalProgressUI() {
                 const badge = document.getElementById('deckMasteryBadge');
-                const graphIndicator = document.getElementById('graphModeIndicator');
-
-                if (this.deckMode === 'grafo') {
-                    badge.classList.add('hidden');
-                    badge.classList.remove('flex');
-                    graphIndicator.classList.remove('hidden');
-                    graphIndicator.style.backgroundColor = '#64748b';
-                    if (this.graphSearchMode === 'en_us_pt_br') {
-                        graphIndicator.style.backgroundColor = '#ef4444';
-                    } else if (this.graphSearchMode === 'no') {
-                        graphIndicator.style.backgroundColor = '#3b82f6';
-                    }
-                } else {
-                    graphIndicator.classList.add('hidden');
-                    badge.classList.remove('hidden');
-                    badge.classList.add('flex');
-                }
+                badge.classList.remove('hidden');
+                badge.classList.add('flex');
                 
                 if (this.deckMode === 'livro') {
                     const progress = this.cards.length > 0 ? Math.round(((this.currentIndex + 1) / this.cards.length) * 100) : 0;
