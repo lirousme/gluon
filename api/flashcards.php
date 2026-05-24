@@ -1064,7 +1064,7 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
  * Função verifyDirectoryOwnership: Confere se um diretório pertence ao usuário autenticado.
  */
 
-function buildGraphCardsSequenceEnUsPtBr(array $cards, array $wordsTagsByCard, array $subjectTagsByCard, array $objectTagsByCard, int $batchSizeFallback = 6): array
+function buildGraphCardsSequenceEnUsPtBr(array $cards, array $wordsTagsByCard, array $objectTagsByCard, int $batchSizeFallback = 6): array
 {
     if (empty($cards)) return [];
 
@@ -1122,13 +1122,7 @@ function buildGraphCardsSequenceEnUsPtBr(array $cards, array $wordsTagsByCard, a
         $current = array_shift($queues);
         $tagId = (int)$current['tag_id'];
         $type = $current['type'];
-        if ($type === 'object') {
-            $pool = $objectTagsByCard;
-        } else {
-            // Para as tags vindas de words do card fixo (ex.: "There are"),
-            // os pares devem ser buscados em SUBJECTS.
-            $pool = $subjectTagsByCard;
-        }
+        $pool = $type === 'object' ? $objectTagsByCard : $wordsTagsByCard;
 
         $candidates = [];
         foreach ($pool as $cid => $tags) {
@@ -2435,7 +2429,6 @@ if ($action === 'fetch') {
             $graphCards = buildGraphCardsSequenceEnUsPtBr(
                 $cards,
                 $wordsTagsByCard,
-                $subjectTagsByCard,
                 $objectTagsByCard,
                 6
             );
