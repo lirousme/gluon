@@ -2499,6 +2499,7 @@ if ($action === 'fetch') {
         'status' => 'success', 
         'deck_name' => Security::decryptData($deck['name_encrypted']),
         'deck_mode' => $deck_mode,
+        'graph_search_mode' => ($deck_mode === 'grafo' ? $languageStudent : null),
         'deck_front_language' => normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR'),
         'deck_back_language' => normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB'),
         'deck_structure' => normalizeDeckStructure($deck['deck_structure'] ?? 'traducoes', 'traducoes'),
