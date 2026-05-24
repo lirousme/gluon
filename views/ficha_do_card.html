@@ -39,9 +39,6 @@
       <div class="flex items-center gap-2 border-b border-slate-700 pb-3">
         <button type="button" id="tabFrontBtn" class="px-3 py-1.5 rounded-lg text-sm border border-blue-400 bg-blue-500/20 text-blue-200">Frente</button>
         <button type="button" id="tabBackBtn" class="px-3 py-1.5 rounded-lg text-sm border border-slate-600 bg-slate-800 text-slate-300">Verso</button>
-        <button type="button" id="btnTranslate" onclick="app.translateCard()" class="px-3 py-1.5 rounded-lg text-sm border border-violet-400/50 bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 hover:text-violet-200 transition-colors inline-flex items-center gap-2">
-          <i class="fa-solid fa-language"></i> Traduzir via IA
-        </button>
       </div>
 
       <section id="singleFrontTabContent">
@@ -79,7 +76,7 @@
         <div id="objectTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
       
-      <section style="display: none;" id="TipoFrasalTagsPanel" class="pt-3 border-t border-slate-700">
+      <section id="TipoFrasalTagsPanel" class="pt-3 border-t border-slate-700">
         <div class="mb-2 flex items-center justify-between gap-2">
           <label class="block text-sm font-medium text-rose-300">Tipo frasal deste card</label>
           <button type="button" onclick="app.openCreateTagModal()" class="h-7 w-7 rounded-md border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors" title="Criar nova tag">+</button>
@@ -88,7 +85,7 @@
         <div id="tipoFrasalTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
       
-      <section style="display: none;" id="TenseTagsPanel" class="pt-3 border-t border-slate-700">
+      <section id="TenseTagsPanel" class="pt-3 border-t border-slate-700">
         <div class="mb-2 flex items-center justify-between gap-2">
           <label class="block text-sm font-medium text-sky-300">Tense deste card</label>
           <button type="button" onclick="app.openCreateTagModal()" class="h-7 w-7 rounded-md border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors" title="Criar nova tag">+</button>
@@ -97,7 +94,7 @@
         <div id="tenseTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
       
-      <section style="display: none;" id="LexicalChunksTagsPanel" class="pt-3 border-t border-slate-700">
+      <section id="LexicalChunksTagsPanel" class="pt-3 border-t border-slate-700">
         <div class="mb-2 flex items-center justify-between gap-2">
           <label class="block text-sm font-medium text-fuchsia-300">Lexical chunks deste card</label>
           <button type="button" onclick="app.openCreateTagModal()" class="h-7 w-7 rounded-md border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors" title="Criar nova tag">+</button>
@@ -124,7 +121,7 @@
         <div id="wordsTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
       
-      <section style="display: none;" id="IdiomaPrincipalTagPanel" class="pt-3 border-t border-slate-700">
+      <section id="IdiomaPrincipalTagPanel" class="pt-3 border-t border-slate-700">
         <div class="mb-2 flex items-center justify-between gap-2">
           <label class="block text-sm font-medium text-indigo-300">Idioma principal deste card</label>
           <button type="button" onclick="app.openCreateTagModal()" class="h-7 w-7 rounded-md border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors" title="Criar nova tag">+</button>
@@ -133,7 +130,7 @@
         <div id="idiomaPrincipalTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </section>
 
-      <section style="display: none;" id="IdiomaSecundarioTagPanel" class="pt-3 border-t border-slate-700">
+      <section id="IdiomaSecundarioTagPanel" class="pt-3 border-t border-slate-700">
         <div class="mb-2 flex items-center justify-between gap-2">
           <label class="block text-sm font-medium text-teal-300">Idioma secundário deste card</label>
           <button type="button" onclick="app.openCreateTagModal()" class="h-7 w-7 rounded-md border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors" title="Criar nova tag">+</button>
@@ -226,8 +223,6 @@ const app = {
   deckId: params.get('id'),
   from: params.get('from') || '/dashboard',
   editCardId: params.get('edit_card_id'),
-  frontLanguage: 'pt-BR',
-  backLanguage: 'en-GB',
   activeTab: 'front',
   availableTags: [],
   sessionUserId: null,
@@ -574,30 +569,6 @@ const app = {
     tabFrontBtn.className = `px-3 py-1.5 rounded-lg text-sm border ${isFront ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`;
     tabBackBtn.className = `px-3 py-1.5 rounded-lg text-sm border ${!isFront ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`;
   },
-  async translateCard() {
-    const frontText = singleFront.value.trim();
-    const backText = singleBack.value.trim();
-    if (frontText && backText) return this.setStatus('Um dos campos deve estar vazio para poder traduzir para ele.', 'error');
-    if (!frontText && !backText) return this.setStatus('Preencha um dos campos primeiro para ser traduzido.', 'error');
-    const textToTranslate = frontText || backText;
-    const targetEl = frontText ? singleBack : singleFront;
-    const sourceLanguage = frontText ? this.frontLanguage : this.backLanguage;
-    const targetLanguage = frontText ? this.backLanguage : this.frontLanguage;
-    const original = btnTranslate.innerHTML;
-    btnTranslate.disabled = true;
-    btnTranslate.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Traduzindo...';
-    try {
-      const res = await this.api('translate_text', { text: textToTranslate, source_language: sourceLanguage, target_language: targetLanguage });
-      if (!res || !res.translation) throw new Error('A API não retornou uma tradução válida.');
-      targetEl.value = res.translation;
-      this.setStatus('Tradução concluída!', 'success');
-    } catch (err) {
-      this.setStatus(`Falha ao traduzir: ${err.message || 'erro desconhecido.'}`, 'error');
-    } finally {
-      btnTranslate.disabled = false;
-      btnTranslate.innerHTML = original;
-    }
-  },
   async preloadEditCard() {
     if (!this.editCardId) return;
     pageTitle.textContent = 'Editar ficha de card';
@@ -688,11 +659,6 @@ document.addEventListener('keydown', (e) => {
 
 (async () => {
   app.setActiveTab('front');
-  try {
-    const deckInfo = await app.api('fetch', { deck_id: app.deckId, limit: 1 });
-    app.frontLanguage = deckInfo?.deck_front_language || app.frontLanguage;
-    app.backLanguage = deckInfo?.deck_back_language || app.backLanguage;
-  } catch (_) {}
   await app.loadSessionUserId();
   await app.loadTags();
   await app.preloadEditCard();
