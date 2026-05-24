@@ -39,6 +39,9 @@
       <div class="flex items-center gap-2 border-b border-slate-700 pb-3">
         <button type="button" id="tabFrontBtn" class="px-3 py-1.5 rounded-lg text-sm border border-blue-400 bg-blue-500/20 text-blue-200">Frente</button>
         <button type="button" id="tabBackBtn" class="px-3 py-1.5 rounded-lg text-sm border border-slate-600 bg-slate-800 text-slate-300">Verso</button>
+        <button type="button" id="btnTranslate" onclick="app.translateCard()" class="px-3 py-1.5 rounded-lg text-sm border border-violet-400/50 bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 hover:text-violet-200 transition-colors inline-flex items-center gap-2">
+          <i class="fa-solid fa-language"></i> Traduzir via IA
+        </button>
       </div>
 
       <section id="singleFrontTabContent">
@@ -223,6 +226,8 @@ const app = {
   deckId: params.get('id'),
   from: params.get('from') || '/dashboard',
   editCardId: params.get('edit_card_id'),
+  frontLanguage: 'pt-BR',
+  backLanguage: 'en-GB',
   activeTab: 'front',
   availableTags: [],
   sessionUserId: null,
@@ -569,6 +574,30 @@ const app = {
     tabFrontBtn.className = `px-3 py-1.5 rounded-lg text-sm border ${isFront ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`;
     tabBackBtn.className = `px-3 py-1.5 rounded-lg text-sm border ${!isFront ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`;
   },
+  async translateCard() {
+    const frontText = singleFront.value.trim();
+    const backText = singleBack.value.trim();
+    if (frontText && backText) return this.setStatus('Um dos campos deve estar vazio para poder traduzir para ele.', 'error');
+    if (!frontText && !backText) return this.setStatus('Preencha um dos campos primeiro para ser traduzido.', 'error');
+    const textToTranslate = frontText || backText;
+    const targetEl = frontText ? singleBack : singleFront;
+    const sourceLanguage = frontText ? this.frontLanguage : this.backLanguage;
+    const targetLanguage = frontText ? this.backLanguage : this.frontLanguage;
+    const original = btnTranslate.innerHTML;
+    btnTranslate.disabled = true;
+    btnTranslate.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Traduzindo...';
+    try {
+      const res = await this.api('translate_text', { text: textToTranslate, source_language: sourceLanguage, target_language: targetLanguage });
+      if (!res || !res.translation) throw new Error('A API não retornou uma tradução válida.');
+      targetEl.value = res.translation;
+      this.setStatus('Tradução concluída!', 'success');
+    } catch (err) {
+      this.setStatus(`Falha ao traduzir: ${err.message || 'erro desconhecido.'}`, 'error');
+    } finally {
+      btnTranslate.disabled = false;
+      btnTranslate.innerHTML = original;
+    }
+  },
   async preloadEditCard() {
     if (!this.editCardId) return;
     pageTitle.textContent = 'Editar ficha de card';
@@ -659,6 +688,11 @@ document.addEventListener('keydown', (e) => {
 
 (async () => {
   app.setActiveTab('front');
+  try {
+    const deckInfo = await app.api('fetch', { deck_id: app.deckId, limit: 1 });
+    app.frontLanguage = deckInfo?.deck_front_language || app.frontLanguage;
+    app.backLanguage = deckInfo?.deck_back_language || app.backLanguage;
+  } catch (_) {}
   await app.loadSessionUserId();
   await app.loadTags();
   await app.preloadEditCard();
