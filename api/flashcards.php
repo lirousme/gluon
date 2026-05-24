@@ -1125,12 +1125,9 @@ function buildGraphCardsSequenceEnUsPtBr(array $cards, array $wordsTagsByCard, a
         if ($type === 'object') {
             $pool = $objectTagsByCard;
         } else {
-            // Para as tags vindas de words do card fixo, os pares podem casar tanto em words quanto em subjects.
-            $pool = $wordsTagsByCard;
-            foreach ($subjectTagsByCard as $subjectCardId => $subjectTags) {
-                if (!isset($pool[$subjectCardId])) $pool[$subjectCardId] = [];
-                $pool[$subjectCardId] = array_merge($pool[$subjectCardId], $subjectTags);
-            }
+            // Para as tags vindas de words do card fixo (ex.: "There are"),
+            // os pares devem ser buscados em SUBJECTS.
+            $pool = $subjectTagsByCard;
         }
 
         $candidates = [];
