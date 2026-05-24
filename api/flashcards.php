@@ -1063,6 +1063,104 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
 /**
  * Função verifyDirectoryOwnership: Confere se um diretório pertence ao usuário autenticado.
  */
+
+function buildGraphCardsSequenceEnUsPtBr(array $cards, array $wordsTagsByCard, array $objectTagsByCard, int $batchSizeFallback = 6): array
+{
+    if (empty($cards)) return [];
+
+    $scoreByCard = [];
+    foreach ($cards as $card) $scoreByCard[(int)$card['id']] = (int)($card['score'] ?? 0);
+
+    $cardsById = [];
+    foreach ($cards as $card) $cardsById[(int)$card['id']] = $card;
+
+    $cardsByWordTag = [];
+    foreach ($wordsTagsByCard as $cardId => $tags) {
+        foreach ($tags as $tag) {
+            $tid = (int)($tag['id'] ?? 0);
+            if ($tid <= 0) continue;
+            $cardsByWordTag[$tid][] = (int)$cardId;
+        }
+    }
+
+    if (empty($cardsByWordTag)) {
+        usort($cards, static fn($a, $b) => (((int)$a['score']) <=> ((int)$b['score'])) ?: (((int)$a['id']) <=> ((int)$b['id'])));
+        return array_slice(array_map(static fn($c) => ['card_id' => (int)$c['id'], 'decision_tag' => null], $cards), 0, $batchSizeFallback);
+    }
+
+    $calcTagSens = static function (int $tagId) use (&$cardsByWordTag, &$scoreByCard): int {
+        $sum = 0;
+        foreach ($cardsByWordTag[$tagId] ?? [] as $cid) $sum += (int)($scoreByCard[$cid] ?? 0);
+        return $sum;
+    };
+
+    $tagIds = array_keys($cardsByWordTag);
+    usort($tagIds, static fn($a, $b) => ($calcTagSens((int)$a) <=> $calcTagSens((int)$b)) ?: ((int)$a <=> (int)$b));
+    $baseTagId = (int)$tagIds[0];
+
+    $fixedOddCard = null;
+    foreach ($cardsByWordTag[$baseTagId] ?? [] as $cid) {
+        $s = (int)($scoreByCard[$cid] ?? 0);
+        if ($fixedOddCard === null || $s < (int)($scoreByCard[$fixedOddCard] ?? 0) || ($s === (int)($scoreByCard[$fixedOddCard] ?? 0) && $cid < $fixedOddCard)) {
+            $fixedOddCard = (int)$cid;
+        }
+    }
+    if ($fixedOddCard === null) return [];
+
+    $fixedWordsTags = array_map(static fn($t) => (int)($t['id'] ?? 0), $wordsTagsByCard[$fixedOddCard] ?? []);
+    $fixedWordsTags = array_values(array_filter(array_unique($fixedWordsTags), static fn($tid) => $tid > 0));
+    if (empty($fixedWordsTags)) {
+        return [['card_id' => $fixedOddCard, 'decision_tag' => $baseTagId]];
+    }
+
+    $usedEvenCards = [];
+    $queues = [];
+    foreach ($fixedWordsTags as $tid) $queues[] = ['tag_id' => (int)$tid, 'type' => 'word'];
+
+    $evenSequence = [];
+    while (!empty($queues)) {
+        $current = array_shift($queues);
+        $tagId = (int)$current['tag_id'];
+        $type = $current['type'];
+        $pool = $type === 'object' ? $objectTagsByCard : $wordsTagsByCard;
+
+        $candidates = [];
+        foreach ($pool as $cid => $tags) {
+            if (isset($usedEvenCards[(int)$cid])) continue;
+            foreach ($tags as $t) {
+                if ((int)($t['id'] ?? 0) === $tagId) {
+                    $candidates[] = (int)$cid;
+                    break;
+                }
+            }
+        }
+
+        usort($candidates, static fn($a, $b) => (((int)($scoreByCard[$a] ?? 0)) <=> ((int)($scoreByCard[$b] ?? 0))) ?: ($a <=> $b));
+
+        foreach ($candidates as $evenCid) {
+            if ($evenCid === $fixedOddCard) continue;
+            if (isset($usedEvenCards[$evenCid])) continue;
+            $usedEvenCards[$evenCid] = true;
+            $evenSequence[] = ['card_id' => $evenCid, 'decision_tag' => $tagId];
+
+            foreach ($objectTagsByCard[$evenCid] ?? [] as $objTag) {
+                $objTid = (int)($objTag['id'] ?? 0);
+                if ($objTid <= 0) continue;
+                array_unshift($queues, ['tag_id' => $objTid, 'type' => 'object']);
+            }
+        }
+    }
+
+    $result = [];
+    foreach ($evenSequence as $entry) {
+        $result[] = ['card_id' => $fixedOddCard, 'decision_tag' => $baseTagId];
+        $result[] = $entry;
+    }
+    if (empty($result)) $result[] = ['card_id' => $fixedOddCard, 'decision_tag' => $baseTagId];
+
+    return $result;
+}
+
 function verifyDirectoryOwnership($pdo, $directory_id, $user_id) {
     $stmt = $pdo->prepare("SELECT id, type, name_encrypted FROM directories WHERE id = ? AND user_id = ?");
     $stmt->execute([$directory_id, $user_id]);
@@ -2307,7 +2405,15 @@ if ($action === 'fetch') {
     $idiomaSecundarioTagsByCard = [];
 
     $graphDecisionByCardId = [];
+    $languageStudent = 'no';
     if ($deck_mode === 'grafo') {
+        try {
+            $stmtLang = $pdo->prepare("SELECT language_student FROM users WHERE id = ? LIMIT 1");
+            $stmtLang->execute([$user_id]);
+            $languageStudent = (string)($stmtLang->fetchColumn() ?: 'no');
+        } catch (Throwable $e) {
+            $languageStudent = 'no';
+        }
         $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', $cardIds, $user_id);
         $objectTagsByCard = fetchLinkedTagsByCard($pdo, 'objects_links', $cardIds, $user_id);
         $tipoFrasalTagsByCard = fetchLinkedTagsByCard($pdo, 'tipo_frasal_links', $cardIds, $user_id);
@@ -2319,17 +2425,26 @@ if ($action === 'fetch') {
         $idiomaSecundarioTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'segundo_idioma_tag_id', $cardIds, $user_id);
         
         //entre colchetes estão as tags que serão consideradas nos evenCards/cards pares
-        $graphCards = buildGraphCardsSequence(
-            $cards,
-            $subjectTagsByCard,
-            6,
-            [
-                $subjectTagsByCard,
+        if ($languageStudent === 'en_us_pt_br') {
+            $graphCards = buildGraphCardsSequenceEnUsPtBr(
+                $cards,
+                $wordsTagsByCard,
                 $objectTagsByCard,
-                $lexicalChunksTagsByCard,
-                $wordsTagsByCard
-            ]
-        );
+                6
+            );
+        } else {
+            $graphCards = buildGraphCardsSequence(
+                $cards,
+                $subjectTagsByCard,
+                6,
+                [
+                    $subjectTagsByCard,
+                    $objectTagsByCard,
+                    $lexicalChunksTagsByCard,
+                    $wordsTagsByCard
+                ]
+            );
+        }
         if (!empty($graphCards)) {
             $cardsById = [];
             foreach ($cards as $cardRow) $cardsById[(int)$cardRow['id']] = $cardRow;
