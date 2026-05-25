@@ -194,9 +194,10 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-slate-300">
           <label class="inline-flex items-center gap-2"><input id="editTagIsBookInput" type="checkbox" class="h-4 w-4"><span>Livro</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsVerbTenseInput" type="checkbox" class="h-4 w-4"><span>Tempo Verbal</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsSentenceTypeInput" type="checkbox" class="h-4 w-4"><span>Tipo Frasal</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsLexicalChunkInput" type="checkbox" class="h-4 w-4"><span>Lexical Chunk</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsRelationTypeInput" type="checkbox" class="h-4 w-4"><span>Tipo de Relação</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsWordInput" type="checkbox" class="h-4 w-4"><span>Palavra</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsMonthInput" type="checkbox" class="h-4 w-4"><span>Mês</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsDayInput" type="checkbox" class="h-4 w-4"><span>Dia</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsYearInput" type="checkbox" class="h-4 w-4"><span>Ano</span></label>
         </div>
-        <div class="flex justify-between gap-2">
-          <button type="button" id="btnDeleteTag" onclick="app.deleteTag()" class="px-4 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white">Excluir tag</button>
+        <div class="flex flex-wrap justify-between gap-2">
+          <button type="button" onclick="app.viewTagFamily()" class="px-4 py-2 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-800">Ver família</button>
           <div class="flex gap-2">
+            <button type="button" id="btnDeleteTag" onclick="app.deleteTag()" class="px-4 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white">Excluir tag</button>
             <button type="button" onclick="app.closeEditTagModal()" class="px-4 py-2 rounded-lg bg-slate-700">Cancelar</button>
             <button id="btnUpdateTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600">Salvar</button>
           </div>
@@ -286,7 +287,7 @@ const app = {
   openEditTagModal(tagId) {
     const tag = this.availableTags.find(item => Number(item.id) === Number(tagId));
     if (!tag) return;
-    editTagIdInput.value = String(tag.id || ''); editTagNameInput.value = String(tag.name || ''); editTagNamePtBrInput.value = String(tag.name_pt_br || ''); editTagNumeroInput.value = tag.numero ?? '';
+    editTagIdInput.value = String(tag.id || ''); editTagNameInput.value = String(tag.name || ''); editTagNameInput.dataset.tagName = String(tag.name || ''); editTagNamePtBrInput.value = String(tag.name_pt_br || ''); editTagNumeroInput.value = tag.numero ?? '';
     editTagIsBookInput.checked = Number(tag.is_book) === 1; editTagIsVerbTenseInput.checked = Number(tag.is_verb_tense) === 1; editTagIsSentenceTypeInput.checked = Number(tag.is_sentence_type) === 1; editTagIsLexicalChunkInput.checked = Number(tag.is_lexical_chunk) === 1; editTagIsRelationTypeInput.checked = Number(tag.is_relation_type) === 1; editTagIsWordInput.checked = Number(tag.is_word) === 1; editTagIsMonthInput.checked = Number(tag.is_month) === 1; editTagIsDayInput.checked = Number(tag.is_day) === 1; editTagIsYearInput.checked = Number(tag.is_year) === 1;
     editTagModal.classList.remove('hidden'); editTagModal.classList.add('flex');
     setTimeout(() => { editTagModal.classList.remove('opacity-0'); editTagModalContent.classList.remove('scale-95'); editTagNameInput.focus(); }, 20);
@@ -294,6 +295,11 @@ const app = {
   closeEditTagModal() {
     editTagModal.classList.add('opacity-0'); editTagModalContent.classList.add('scale-95');
     setTimeout(() => { editTagModal.classList.add('hidden'); editTagModal.classList.remove('flex'); }, 200);
+  },
+  viewTagFamily() {
+    const rawName = String(editTagNameInput?.dataset?.tagName || editTagNameInput?.value || '').trim();
+    if (!rawName) return;
+    window.location.href = `/views/tag_family.html?tag_name=${encodeURIComponent(rawName)}`;
   },
   async createTag(e) {
     e.preventDefault();
