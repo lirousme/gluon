@@ -56,17 +56,8 @@ function renderFooterTags(){
   el.innerHTML=filtered.map(t=>`<button type="button" data-id="${Number(t.id)}" class="px-2.5 py-1 rounded-full text-xs border bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700">${esc(t.name)}</button>`).join('');
   el.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>addRelation(Number(b.dataset.id)));
 }
-function openTagFamilyById(tagId){
-  const id = Number(tagId || 0);
-  if (!id) return;
-  const known = (state.tags || []).find(t => Number(t.id) === id)
-    || (state.family.children || []).find(t => Number(t.id) === id)
-    || (state.family.mothers || []).find(t => Number(t.id) === id);
-  const name = String(known?.name || '').trim() || 'Tag';
-  window.location.href = `/views/tag_family.html?tag_id=${encodeURIComponent(id)}&tag_name=${encodeURIComponent(name)}`;
-}
 function renderFamily(){
-  const mk=(arr)=>arr.length?arr.map(t=>`<button type="button" data-tag-id="${Number(t.id)}" onclick="openTagFamilyById(${Number(t.id)})" class="px-2 py-1 rounded-full text-xs border border-red-400/70 bg-red-500/10 text-red-200 hover:bg-red-500/20 cursor-pointer">${esc(t.name || 'Tag')}</button>`).join(''):'<span class="text-xs text-slate-400">Nenhuma</span>';
+  const mk=(arr)=>arr.length?arr.map(t=>`<span class="px-2 py-1 rounded-full text-xs border border-red-400/70 bg-red-500/10 text-red-200">${esc(t.name)}</span>`).join(''):'<span class="text-xs text-slate-400">Nenhuma</span>';
   document.getElementById('childrenList').innerHTML=mk(state.family.children);
   document.getElementById('mothersList').innerHTML=mk(state.family.mothers);
 }
