@@ -56,24 +56,10 @@ function renderFooterTags(){
   el.innerHTML=filtered.map(t=>`<button type="button" data-id="${Number(t.id)}" class="px-2.5 py-1 rounded-full text-xs border bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700">${esc(t.name)}</button>`).join('');
   el.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>addRelation(Number(b.dataset.id)));
 }
-function openTagFamily(tag){
-  const id = Number(tag?.id || 0);
-  const name = String(tag?.name || '').trim();
-  if (!id || !name) return;
-  window.location.href = `/views/tag_family.html?tag_id=${encodeURIComponent(id)}&tag_name=${encodeURIComponent(name)}`;
-}
 function renderFamily(){
-  const mk=(arr)=>arr.length?arr.map(t=>`<button type="button" data-tag-id="${Number(t.id)}" class="px-2 py-1 rounded-full text-xs border border-red-400/70 bg-red-500/10 text-red-200 hover:bg-red-500/20">${esc(t.name)}</button>`).join(''):'<span class="text-xs text-slate-400">Nenhuma</span>';
+  const mk=(arr)=>arr.length?arr.map(t=>`<span class="px-2 py-1 rounded-full text-xs border border-red-400/70 bg-red-500/10 text-red-200">${esc(t.name)}</span>`).join(''):'<span class="text-xs text-slate-400">Nenhuma</span>';
   document.getElementById('childrenList').innerHTML=mk(state.family.children);
   document.getElementById('mothersList').innerHTML=mk(state.family.mothers);
-  const map = new Map();
-  [...(state.family.children||[]), ...(state.family.mothers||[])].forEach(t => map.set(Number(t.id), t));
-  document.querySelectorAll('#childrenList [data-tag-id], #mothersList [data-tag-id]').forEach(el => {
-    el.onclick = () => {
-      const tag = map.get(Number(el.dataset.tagId));
-      if (tag) openTagFamily(tag);
-    };
-  });
 }
 async function load(){
   if(!state.tagId) return;
