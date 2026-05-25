@@ -560,9 +560,12 @@
             <form onsubmit="flashcardApp.updateTagName(event)" class="p-5 space-y-4">
                 <input id="editTagIdInput" type="hidden">
                 <input id="editTagNameInput" type="text" required maxlength="80" placeholder="Ex.: Morango Verde" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
-                <div class="flex justify-end gap-3">
-                    <button type="button" onclick="flashcardApp.closeModals()" class="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-800">Cancelar</button>
-                    <button id="btnUpdateTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white">Salvar</button>
+                <div class="flex flex-wrap justify-between gap-3">
+                    <button type="button" onclick="flashcardApp.viewTagFamily()" class="px-4 py-2 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-800">Ver família</button>
+                    <div class="flex justify-end gap-3">
+                        <button type="button" onclick="flashcardApp.closeModals()" class="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-800">Cancelar</button>
+                        <button id="btnUpdateTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white">Salvar</button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -1058,6 +1061,7 @@
                 }
                 document.getElementById('editTagIdInput').value = String(parsedId);
                 document.getElementById('editTagNameInput').value = String(tag.name || '');
+                document.getElementById('editTagNameInput').dataset.tagName = String(tag.name || '');
                 const modal = document.getElementById('editTagModal');
                 const content = document.getElementById('editTagModalContent');
                 modal.classList.remove('hidden');
@@ -1068,6 +1072,16 @@
                     document.getElementById('editTagNameInput').focus();
                     document.getElementById('editTagNameInput').select();
                 }, 20);
+            },
+
+            viewTagFamily() {
+                const nameInput = document.getElementById('editTagNameInput');
+                const rawName = String(nameInput?.dataset?.tagName || nameInput?.value || '').trim();
+                if (!rawName) {
+                    this.showToast('Tag não encontrada.', 'error');
+                    return;
+                }
+                window.location.href = `/views/tag_family.html?tag_name=${encodeURIComponent(rawName)}`;
             },
 
             async generateMissingAudiosFromDeckFromPanel() {
