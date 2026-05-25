@@ -219,6 +219,23 @@ try {
     $pdo->exec("ALTER TABLE flashcard_tags ADD INDEX idx_tag_numero (numero)");
 } catch (PDOException $e) {}
 
+
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS tag_family (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        id_user INT UNSIGNED NOT NULL,
+        id_tag_child INT UNSIGNED NOT NULL,
+        id_tag_mother INT UNSIGNED NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_user_child_mother (id_user, id_tag_child, id_tag_mother),
+        INDEX idx_tag_family_child (id_tag_child),
+        INDEX idx_tag_family_mother (id_tag_mother),
+        FOREIGN KEY (id_user) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (id_tag_child) REFERENCES flashcard_tags(id) ON DELETE CASCADE,
+        FOREIGN KEY (id_tag_mother) REFERENCES flashcard_tags(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
+
 try {
     $pdo->exec("ALTER TABLE flashcard_tags DROP INDEX uniq_user_tag_name");
 } catch (PDOException $e) {}
@@ -3398,6 +3415,52 @@ elseif ($action === 'delete_tag') {
     echo json_encode(['status' => 'success', 'message' => 'Tag excluída com sucesso.']);
 }
 
+
+
+elseif ($action === 'get_tag_family') {
+    $tag_id = (int)($input['tag_id'] ?? 0);
+    if ($tag_id <= 0) die(json_encode(['status'=>'error','message'=>'Tag inválida.']));
+    $check = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5) LIMIT 1");
+    $check->execute([$tag_id, $user_id]);
+    if (!$check->fetchColumn()) die(json_encode(['status'=>'error','message'=>'Sem permissão para esta tag.']));
+
+    $stmtChildren = $pdo->prepare("SELECT t.id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_child WHERE tf.id_user = ? AND tf.id_tag_mother = ? AND t.user_id IN (?,5)");
+    $stmtChildren->execute([$user_id, $tag_id, $user_id]);
+    $children = $stmtChildren->fetchAll(PDO::FETCH_ASSOC);
+
+    $stmtMothers = $pdo->prepare("SELECT t.id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_mother WHERE tf.id_user = ? AND tf.id_tag_child = ? AND t.user_id IN (?,5)");
+    $stmtMothers->execute([$user_id, $tag_id, $user_id]);
+    $mothers = $stmtMothers->fetchAll(PDO::FETCH_ASSOC);
+
+    $decode = function(array $rows) {
+        $out = [];
+        foreach ($rows as $tag) {
+            $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
+            $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
+            unset($tag['name_encrypted'], $tag['name_pt_br_encrypted']);
+            $out[] = $tag;
+        }
+        return $out;
+    };
+    echo json_encode(['status'=>'success','data'=>['children'=>$decode($children),'mothers'=>$decode($mothers)]]);
+}
+
+elseif ($action === 'add_tag_family_relation') {
+    $tag_id = (int)($input['tag_id'] ?? 0);
+    $other_tag_id = (int)($input['other_tag_id'] ?? 0);
+    $mode = (string)($input['mode'] ?? 'child');
+    if ($tag_id <= 0 || $other_tag_id <= 0 || $tag_id === $other_tag_id) die(json_encode(['status'=>'error','message'=>'Relação inválida.']));
+
+    $valid = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id IN (?, ?) AND user_id IN (?, 5)");
+    $valid->execute([$tag_id, $other_tag_id, $user_id]);
+    if (count($valid->fetchAll(PDO::FETCH_COLUMN)) !== 2) die(json_encode(['status'=>'error','message'=>'Sem permissão para uma das tags.']));
+
+    $child = $mode === 'mother' ? $tag_id : $other_tag_id;
+    $mother = $mode === 'mother' ? $other_tag_id : $tag_id;
+    $stmt = $pdo->prepare("INSERT IGNORE INTO tag_family (id_user, id_tag_child, id_tag_mother) VALUES (?, ?, ?)");
+    $stmt->execute([$user_id, $child, $mother]);
+    echo json_encode(['status'=>'success','message'=>'Relação salva com sucesso.']);
+}
 
 elseif ($action === 'create_batch_generation') {
     $deck_id = (int)($input['deck_id'] ?? 0);
