@@ -1344,7 +1344,7 @@
                 ];
                 const allTags = tagsByPanel.reduce((acc, panel) => acc.concat(panel.tags), []);
                 const shouldShowTags = this.deckMode === 'grafo';
-                if (shouldShowTags) {
+                if (shouldShowTags && allTags.length) {
                     tagsPanel.classList.remove('hidden');
                     const numeroPtBrCounts = new Map();
                     allTags.forEach(tag => {
@@ -1354,7 +1354,29 @@
                         if (numeroKey && namePtBr) numeroPtBrCounts.set(numeroKey, (numeroPtBrCounts.get(numeroKey) || 0) + 1);
                     });
 
-                    const groupedTags = tagsByPanel;
+                    const groupedTags = [
+                        { label: 'Books', filter: (tag) => Number(tag?.is_book) === 1 },
+                        { label: 'Tenses', filter: (tag) => Number(tag?.is_verb_tense) === 1 },
+                        { label: 'Tipos frasais', filter: (tag) => Number(tag?.is_sentence_type) === 1 },
+                        { label: 'Lexical chunks', filter: (tag) => Number(tag?.is_lexical_chunk) === 1 },
+                        { label: 'Relações', filter: (tag) => Number(tag?.is_relation_type) === 1 },
+                        { label: 'Palavras', filter: (tag) => Number(tag?.is_word) === 1 },
+                        { label: 'Meses', filter: (tag) => Number(tag?.is_month) === 1 },
+                        { label: 'Dias', filter: (tag) => Number(tag?.is_day) === 1 },
+                        { label: 'Anos', filter: (tag) => Number(tag?.is_year) === 1 },
+                        {
+                            label: 'Outras',
+                            filter: (tag) => Number(tag?.is_book) !== 1
+                                && Number(tag?.is_verb_tense) !== 1
+                                && Number(tag?.is_sentence_type) !== 1
+                                && Number(tag?.is_lexical_chunk) !== 1
+                                && Number(tag?.is_relation_type) !== 1
+                                && Number(tag?.is_word) !== 1
+                                && Number(tag?.is_month) !== 1
+                                && Number(tag?.is_day) !== 1
+                                && Number(tag?.is_year) !== 1
+                        },
+                    ];
 
                     const buildTagButton = (tag) => {
                         const safeColor = String(tag.color || '#334155');
@@ -1362,12 +1384,10 @@
                     };
 
                     tagsList.innerHTML = groupedTags.map(group => {
-                        const tagsFromGroup = group.tags;
-                        const tagsHtml = tagsFromGroup.length
-                            ? tagsFromGroup.map(buildTagButton).join('')
-                            : '<span class="text-[11px] text-slate-500">Sem tags nesta categoria.</span>';
-                        return `<section class="rounded-lg border border-slate-700/70 bg-slate-950/30 px-2.5 py-2"><p class="text-[10px] uppercase tracking-wide text-slate-400 mb-1">${group.label}</p><div class="flex flex-wrap gap-1.5">${tagsHtml}</div></section>`;
-                    }).join('');
+                        const tagsFromGroup = tags.filter(group.filter);
+                        if (!tagsFromGroup.length) return '';
+                        return `<section class="rounded-lg border border-slate-700/70 bg-slate-950/30 px-2.5 py-2"><p class="text-[10px] uppercase tracking-wide text-slate-400 mb-1">${group.label}</p><div class="flex flex-wrap gap-1.5">${tagsFromGroup.map(buildTagButton).join('')}</div></section>`;
+                    }).filter(Boolean).join('');
                 } else {
                     tagsPanel.classList.add('hidden');
                     tagsList.innerHTML = '';
