@@ -56,10 +56,23 @@ function renderFooterTags(){
   el.innerHTML=filtered.map(t=>`<button type="button" data-id="${Number(t.id)}" class="px-2.5 py-1 rounded-full text-xs border bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700">${esc(t.name)}</button>`).join('');
   el.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>addRelation(Number(b.dataset.id)));
 }
+function openTagFamily(tag){
+  const nextTagId=Number(tag?.id||0);
+  if(!nextTagId) return;
+  const nextTagName=String(tag?.name||'').trim();
+  window.location.href=`/views/tag_family.html?tag_id=${encodeURIComponent(nextTagId)}&tag_name=${encodeURIComponent(nextTagName)}`;
+}
 function renderFamily(){
-  const mk=(arr)=>arr.length?arr.map(t=>`<span class="px-2 py-1 rounded-full text-xs border border-red-400/70 bg-red-500/10 text-red-200">${esc(t.name)}</span>`).join(''):'<span class="text-xs text-slate-400">Nenhuma</span>';
+  const mk=(arr)=>arr.length?arr.map(t=>`<button type="button" data-family-tag-id="${Number(t.id)}" class="px-2 py-1 rounded-full text-xs border border-red-400/70 bg-red-500/10 text-red-200 hover:bg-red-500/20 transition-colors" title="Abrir família da tag">${esc(t.name)}</button>`).join(''):'<span class="text-xs text-slate-400">Nenhuma</span>';
   document.getElementById('childrenList').innerHTML=mk(state.family.children);
   document.getElementById('mothersList').innerHTML=mk(state.family.mothers);
+  document.querySelectorAll('[data-family-tag-id]').forEach((el)=>{
+    el.onclick=()=>{
+      const targetId=Number(el.dataset.familyTagId);
+      const tag=[...state.family.children,...state.family.mothers].find((item)=>Number(item.id)===targetId);
+      openTagFamily(tag||{id:targetId,name:el.textContent||''});
+    };
+  });
 }
 async function load(){
   if(!state.tagId) return;
