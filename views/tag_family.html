@@ -6,16 +6,57 @@
   <title>Família da Tag</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
+
 <body class="bg-slate-900 text-white min-h-screen">
-  <main class="relative flex min-h-screen items-center justify-center px-4">
-    <button type="button" onclick="window.history.back()" class="absolute left-4 top-4 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">Voltar</button>
-    <h1 id="tagFamilyTitle" class="text-2xl font-semibold text-center">Tag</h1>
-  </main>
+
+  <div class="min-h-screen flex flex-col">
+
+    <!-- CABEÇALHO -->
+    <header class="relative flex items-center justify-center border-b border-slate-700 px-4 py-4 bg-slate-950">
+      
+      <button 
+        type="button" 
+        onclick="window.history.back()" 
+        class="absolute left-4 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
+      >
+        Voltar
+      </button>
+
+      <h1 id="tagFamilyTitle" class="text-2xl font-semibold text-center">
+        Tag
+      </h1>
+
+    </header>
+
+
+    <!-- MEIO / CONTEÚDO PRINCIPAL -->
+    <main class="flex-1 flex items-center justify-center px-4">
+      
+      <section class="text-center">
+        <p class="text-slate-300">
+          Conteúdo da família da tag aqui.
+        </p>
+      </section>
+
+    </main>
+
+
+    <!-- RODAPÉ -->
+    <footer class="border-t border-slate-700 px-4 py-4 text-center text-sm text-slate-400 bg-slate-950">
+      Rodapé
+    </footer>
+
+  </div>
+
+
   <script>
     const params = new URLSearchParams(window.location.search);
     const tagName = (params.get('tag_name') || '').trim();
+
     const title = document.getElementById('tagFamilyTitle');
+
     title.textContent = tagName || 'Tag';
   </script>
+
 </body>
 </html>
