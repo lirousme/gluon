@@ -70,7 +70,7 @@ function renderFamily(){
     el.onclick=()=>{
       const targetId=Number(el.dataset.familyTagId);
       const tag=[...state.family.children,...state.family.mothers].find((item)=>Number(item.id)===targetId);
-      openTagFamily(tag||{id:targetId,name:el.textContent||''});
+      openActionModal(tag||{id:targetId,name:el.textContent||''}, el.closest('#childrenList') ? 'child' : 'mother');
     };
   });
 }
@@ -85,8 +85,55 @@ async function addRelation(otherTagId){
   await load();
 }
 document.getElementById('footerTagSearch').addEventListener('input',renderFooterTags);
+
 document.getElementById('relationModeSwitch').addEventListener('click',()=>{state.mode=state.mode==='child'?'mother':'child';document.getElementById('relationModeSwitch').textContent=state.mode==='child'?'Adicionando filhas':'Adicionando mães';});
-load();
+const actionState={tag:null,relationType:null};
+function openActionModal(tag, relationType){actionState.tag=tag;actionState.relationType=relationType;document.getElementById('tagActionTitle').textContent=`Ações: ${tag?.name||'Tag'}`;const m=document.getElementById('tagActionModal');const c=document.getElementById('tagActionModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');},20);} 
+function closeActionModal(){const m=document.getElementById('tagActionModal');const c=document.getElementById('tagActionModalContent');m.classList.add('opacity-0');c.classList.add('scale-95');setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);} 
+async function removeRelation(){if(!actionState.tag) return;await api('remove_tag_family_relation',{tag_id:state.tagId,other_tag_id:Number(actionState.tag.id),relation_type:actionState.relationType});closeActionModal();await load();}
+function openEditTagModal(tag){if(!tag) return;document.getElementById('editTagIdInput').value=String(tag.id);document.getElementById('editTagNameInput').value=String(tag.name||'');document.getElementById('editTagNamePtBrInput').value=String(tag.name_pt_br||'');document.getElementById('editTagNumeroInput').value=(tag.numero??'');const m=document.getElementById('editTagModal');const c=document.getElementById('editTagModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');},20);} 
+function closeEditTagModal(){const m=document.getElementById('editTagModal');const c=document.getElementById('editTagModalContent');m.classList.add('opacity-0');c.classList.add('scale-95');setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);} 
+async function submitEditTag(e){e.preventDefault();const id=Number(document.getElementById('editTagIdInput').value||0);const original=state.tags.find(t=>Number(t.id)===id)||{};await api('update_tag',{id,name:document.getElementById('editTagNameInput').value.trim(),name_pt_br:document.getElementById('editTagNamePtBrInput').value.trim(),numero:document.getElementById('editTagNumeroInput').value.trim(),is_book:Number(original.is_book||0),is_verb_tense:Number(original.is_verb_tense||0),is_sentence_type:Number(original.is_sentence_type||0),is_lexical_chunk:Number(original.is_lexical_chunk||0),is_relation_type:Number(original.is_relation_type||0),is_word:Number(original.is_word||0),is_month:Number(original.is_month||0),is_day:Number(original.is_day||0),is_year:Number(original.is_year||0)});closeEditTagModal();closeActionModal();await load();}
+async function deleteTag(){if(!actionState.tag) return;await api('delete_tag',{id:Number(actionState.tag.id)});closeActionModal();await load();}
+window.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('btnCloseActionModal').onclick=closeActionModal;
+  document.getElementById('btnRemoveRelation').onclick=removeRelation;
+  document.getElementById('btnViewFamily').onclick=()=>{const t=actionState.tag;closeActionModal();openTagFamily(t)};
+  document.getElementById('btnEditTag').onclick=()=>openEditTagModal(actionState.tag);
+  document.getElementById('btnDeleteTag').onclick=deleteTag;
+  document.getElementById('btnCancelEditTag').onclick=closeEditTagModal;
+  document.getElementById('editTagForm').addEventListener('submit',submitEditTag);
+  load();
+});
 </script>
+  <div id="tagActionModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 opacity-0 transition-opacity duration-200">
+    <div id="tagActionModalContent" class="w-[92%] max-w-sm rounded-xl border border-slate-700 bg-slate-900 p-4 scale-95 transition-transform duration-200">
+      <h3 class="text-lg font-semibold mb-3" id="tagActionTitle">Ações da tag</h3>
+      <div class="grid gap-2">
+        <button type="button" id="btnRemoveRelation" class="w-full text-left px-3 py-2 rounded-lg border border-slate-600 hover:bg-slate-800">Remover da família</button>
+        <button type="button" id="btnViewFamily" class="w-full text-left px-3 py-2 rounded-lg border border-slate-600 hover:bg-slate-800">Ver família</button>
+        <button type="button" id="btnEditTag" class="w-full text-left px-3 py-2 rounded-lg border border-slate-600 hover:bg-slate-800">Editar</button>
+        <button type="button" id="btnDeleteTag" class="w-full text-left px-3 py-2 rounded-lg border border-red-500/60 text-red-300 hover:bg-red-500/10">Excluir</button>
+      </div>
+      <button type="button" id="btnCloseActionModal" class="mt-3 w-full px-3 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">Cancelar</button>
+    </div>
+  </div>
+
+  <div id="editTagModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 opacity-0 transition-opacity duration-200">
+    <div id="editTagModalContent" class="w-[92%] max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-4 scale-95 transition-transform duration-200">
+      <h3 class="text-lg font-semibold mb-3">Editar tag</h3>
+      <form id="editTagForm" class="space-y-3">
+        <input id="editTagIdInput" type="hidden">
+        <input id="editTagNameInput" type="text" required maxlength="80" placeholder="Nome" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3">
+        <input id="editTagNamePtBrInput" type="text" maxlength="80" placeholder="Nome pt-br" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3">
+        <input id="editTagNumeroInput" type="number" placeholder="Número" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3">
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" id="btnCancelEditTag" class="px-4 py-2 rounded-lg border border-slate-600">Cancelar</button>
+          <button type="submit" id="btnSubmitEditTag" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
 </body>
 </html>
