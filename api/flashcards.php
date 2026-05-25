@@ -3462,6 +3462,21 @@ elseif ($action === 'add_tag_family_relation') {
     echo json_encode(['status'=>'success','message'=>'Relação salva com sucesso.']);
 }
 
+
+elseif ($action === 'remove_tag_family_relation') {
+    $tag_id = (int)($input['tag_id'] ?? 0);
+    $other_tag_id = (int)($input['other_tag_id'] ?? 0);
+    $relation_type = (string)($input['relation_type'] ?? 'child');
+    if ($tag_id <= 0 || $other_tag_id <= 0 || $tag_id === $other_tag_id) die(json_encode(['status'=>'error','message'=>'Relação inválida.']));
+
+    $child = $relation_type === 'mother' ? $tag_id : $other_tag_id;
+    $mother = $relation_type === 'mother' ? $other_tag_id : $tag_id;
+
+    $stmt = $pdo->prepare("DELETE FROM tag_family WHERE id_user = ? AND id_tag_child = ? AND id_tag_mother = ? LIMIT 1");
+    $stmt->execute([$user_id, $child, $mother]);
+    echo json_encode(['status'=>'success','message'=>'Relação removida com sucesso.']);
+}
+
 elseif ($action === 'create_batch_generation') {
     $deck_id = (int)($input['deck_id'] ?? 0);
     if ($deck_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do deck inválido.']));
