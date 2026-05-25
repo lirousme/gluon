@@ -1326,18 +1326,23 @@
                 document.getElementById('cardCounter').innerText = `${this.currentIndex + 1} / ${this.cards.length}`;
                 const tagsPanel = document.getElementById('cardTagsPanel');
                 const tagsList = document.getElementById('cardTagsList');
+                const normalizeTagArray = (value) => {
+                    if (!Array.isArray(value)) return [];
+                    return value.filter(tag => tag && typeof tag === 'object' && Number(tag.id) > 0);
+                };
                 const tagsByPanel = [
-                    { label: 'Subjects', tags: Array.isArray(card.subject_tags) ? card.subject_tags : [] },
-                    { label: 'Objects', tags: Array.isArray(card.object_tags) ? card.object_tags : [] },
-                    { label: 'Tipo frasal', tags: Array.isArray(card.tipo_frasal_tags) ? card.tipo_frasal_tags : [] },
-                    { label: 'Tense', tags: Array.isArray(card.tense_tags) ? card.tense_tags : [] },
-                    { label: 'Lexical chunks', tags: Array.isArray(card.lexical_chunks_tags) ? card.lexical_chunks_tags : [] },
-                    { label: 'Relações', tags: Array.isArray(card.relation_tags) ? card.relation_tags : [] },
-                    { label: 'Palavras', tags: Array.isArray(card.words_tags) ? card.words_tags : [] },
-                    { label: 'Idioma principal', tags: Array.isArray(card.idioma_principal_tags) ? card.idioma_principal_tags : [] },
-                    { label: 'Idioma secundário', tags: Array.isArray(card.idioma_secundario_tags) ? card.idioma_secundario_tags : [] },
+                    { label: 'Subjects', tags: normalizeTagArray(card.subject_tags) },
+                    { label: 'Objects', tags: normalizeTagArray(card.object_tags) },
+                    { label: 'Tipo frasal', tags: normalizeTagArray(card.tipo_frasal_tags) },
+                    { label: 'Tense', tags: normalizeTagArray(card.tense_tags) },
+                    { label: 'Lexical chunks', tags: normalizeTagArray(card.lexical_chunks_tags) },
+                    { label: 'Relações', tags: normalizeTagArray(card.relation_tags) },
+                    { label: 'Palavras', tags: normalizeTagArray(card.words_tags) },
+                    { label: 'Idioma principal', tags: normalizeTagArray(card.idioma_principal_tags) },
+                    { label: 'Idioma secundário', tags: normalizeTagArray(card.idioma_secundario_tags) },
+                    { label: 'Geral', tags: normalizeTagArray(card.tags) },
                 ];
-                const allTags = tagsByPanel.flatMap(panel => panel.tags);
+                const allTags = tagsByPanel.reduce((acc, panel) => acc.concat(panel.tags), []);
                 const shouldShowTags = this.deckMode === 'grafo';
                 if (shouldShowTags && allTags.length) {
                     tagsPanel.classList.remove('hidden');
