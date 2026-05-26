@@ -3356,6 +3356,20 @@ elseif ($action === 'list_tags') {
     echo json_encode(['status' => 'success', 'data' => $parsed]);
 }
 
+
+elseif ($action === 'list_tag_family_relations') {
+    $stmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother FROM tag_family WHERE id_user = ?");
+    $stmt->execute([$user_id]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $parsed = array_map(static function ($row) {
+        return [
+            'id_tag_child' => (int)$row['id_tag_child'],
+            'id_tag_mother' => (int)$row['id_tag_mother']
+        ];
+    }, $rows);
+    echo json_encode(['status' => 'success', 'data' => $parsed]);
+}
+
 elseif ($action === 'list_saved_filters') {
     $stmt = $pdo->prepare("
         SELECT f.id, f.id_tag, f.ativo, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color

@@ -10,17 +10,24 @@
 <body class="bg-slate-900 text-white min-h-screen">
   <div class="min-h-screen flex flex-col">
     <header class="border-b border-slate-700 px-4 py-4 bg-slate-950">
-      <div class="max-w-4xl mx-auto flex items-center justify-between gap-3">
+      <div class="max-w-4xl mx-auto flex flex-col gap-3">
+        <div class="flex items-center justify-between gap-3">
         <button type="button" onclick="goBackToMarkedRoute()" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">Voltar</button>
         <h1 class="text-lg md:text-xl font-semibold text-center flex-1">Filtro de Tags</h1>
         <button type="button" onclick="openSavedMenu()" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">Tags salvas</button>
+        </div>
+        <div class="flex items-center justify-center gap-2">
+          <button type="button" data-filter-mode="cards" onclick="setFilterMode('cards')" class="filter-mode-btn rounded-lg border border-slate-600 px-3 py-1.5 text-xs md:text-sm text-slate-200 bg-slate-700">Cards</button>
+          <button type="button" data-filter-mode="mothers" onclick="setFilterMode('mothers')" class="filter-mode-btn rounded-lg border border-slate-600 px-3 py-1.5 text-xs md:text-sm text-slate-200 bg-slate-800">Mães</button>
+          <button type="button" data-filter-mode="children" onclick="setFilterMode('children')" class="filter-mode-btn rounded-lg border border-slate-600 px-3 py-1.5 text-xs md:text-sm text-slate-200 bg-slate-800">Filhas</button>
+        </div>
       </div>
     </header>
 
     <main class="flex-1 px-4 py-6 max-w-4xl mx-auto w-full">
       <section class="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
         <div class="flex items-center justify-between gap-2 mb-3">
-          <h2 class="text-sm uppercase tracking-wide text-slate-300">Cards filtrados</h2>
+          <h2 id="resultsTitle" class="text-sm uppercase tracking-wide text-slate-300">Cards filtrados</h2>
           <span id="cardsCount" class="text-xs text-slate-400">0 cards</span>
         </div>
         <div id="cardsList" class="space-y-2"></div>
@@ -75,7 +82,7 @@
     </div>
   </div>
   <script>
-    const state = { tags: [], cards: [], selectedTagIds: [], temporaryTagIds: [], savedFilters: [] };
+    const state = { tags: [], cards: [], selectedTagIds: [], temporaryTagIds: [], savedFilters: [], filterMode: 'cards', tagFamilyRelations: [] };
     function esc(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 
     function getMarkedBackRoute() {
@@ -163,6 +170,70 @@
       return true;
     }
 
+    
+    function setFilterMode(mode){
+      if (!['cards','mothers','children'].includes(mode)) return;
+      state.filterMode = mode;
+      document.querySelectorAll('.filter-mode-btn').forEach((btn) => {
+        const active = btn.dataset.filterMode === mode;
+        btn.classList.toggle('bg-slate-700', !active);
+        btn.classList.toggle('bg-sky-600', active);
+        btn.classList.toggle('border-slate-600', !active);
+        btn.classList.toggle('border-sky-400', active);
+        btn.classList.toggle('text-white', active);
+      });
+      renderResults();
+    }
+
+    function filterByFamilyIntersection(direction, selectedSet){
+      const relationKey = direction === 'mothers' ? 'id_tag_mother' : 'id_tag_child';
+      const targetKey = direction === 'mothers' ? 'id_tag_child' : 'id_tag_mother';
+      const selected = Array.from(selectedSet);
+      const relatedMap = new Map();
+      state.tagFamilyRelations.forEach((rel) => {
+        const key = Number(rel[relationKey]);
+        const val = Number(rel[targetKey]);
+        if (!relatedMap.has(val)) relatedMap.set(val, new Set());
+        relatedMap.get(val).add(key);
+      });
+      const matchingIds = [];
+      relatedMap.forEach((requiredSet, targetId) => {
+        let ok = true;
+        for (const id of selected) {
+          if (!requiredSet.has(id)) { ok = false; break; }
+        }
+        if (ok) matchingIds.push(targetId);
+      });
+      return state.tags.filter(tag => matchingIds.includes(Number(tag.id)));
+    }
+
+    function renderResults(){
+      const selectedSet = new Set(state.selectedTagIds);
+      const titleEl = document.getElementById('resultsTitle');
+      const list = document.getElementById('cardsList');
+      const count = document.getElementById('cardsCount');
+      if (!selectedSet.size) {
+        titleEl.textContent = state.filterMode === 'cards' ? 'Cards filtrados' : (state.filterMode === 'mothers' ? 'Tags por mães' : 'Tags por filhas');
+        count.textContent = '0 item(ns)';
+        list.innerHTML = '<p class="text-sm text-slate-400">Selecione pelo menos uma tag para ver resultados.</p>';
+        return;
+      }
+      if (state.filterMode === 'cards') return renderCards();
+      const mode = state.filterMode;
+      const tags = filterByFamilyIntersection(mode, selectedSet);
+      titleEl.textContent = mode === 'mothers' ? 'Tags por mães' : 'Tags por filhas';
+      count.textContent = `${tags.length} tag(s)`;
+      const numeroPtBrCounts = new Map();
+      state.tags.forEach((tag) => {
+        const numeroKey = tag?.numero !== null && tag?.numero !== undefined ? String(tag.numero).trim() : '';
+        const namePtBr = String(tag?.name_pt_br || '').trim();
+        if (numeroKey && namePtBr) numeroPtBrCounts.set(numeroKey, (numeroPtBrCounts.get(numeroKey) || 0) + 1);
+      });
+      list.innerHTML = tags.length
+        ? tags.map(t => `<article class="rounded-lg border border-slate-700 bg-slate-900/60 p-3"><p class="text-sm text-slate-100">${esc(getTagLabel(t, numeroPtBrCounts))}</p></article>`).join('')
+        : '<p class="text-sm text-slate-400">Nenhuma tag encontrada para a combinação selecionada.</p>';
+    }
+
     function renderCards(){
       const list = document.getElementById('cardsList');
       const selectedSet = new Set(state.selectedTagIds);
@@ -189,7 +260,7 @@
       state.temporaryTagIds = state.temporaryTagIds.includes(id) ? state.temporaryTagIds.filter(v => v !== id) : [...state.temporaryTagIds, id];
       syncSelectedTags();
       renderTags();
-      renderCards();
+      renderResults();
     }
 
     function openSavedMenu(){
@@ -205,7 +276,7 @@
       await api('toggle_saved_filter', { tag_id: Number(tagId) });
       await loadSavedFilters();
       renderTags();
-      renderCards();
+      renderResults();
     }
 
     async function loadSavedFilters(){
@@ -244,7 +315,7 @@
     function applySavedActiveFilters(){
       syncSelectedTags();
       renderTags();
-      renderCards();
+      renderResults();
     }
 
     function openEditSavedTagModal(tagId){
@@ -271,17 +342,18 @@
       closeEditSavedTagModal();
       await loadSavedFilters();
       renderTags();
-      renderCards();
+      renderResults();
     }
 
     async function load(){
-      const [tagsRes, cardsRes] = await Promise.all([api('list_tags'), api('list_cards_for_tag_filtering')]);
+      const [tagsRes, cardsRes, familyRes] = await Promise.all([api('list_tags'), api('list_cards_for_tag_filtering'), api('list_tag_family_relations')]);
       state.tags = tagsRes.data || [];
       state.cards = cardsRes.data || [];
+      state.tagFamilyRelations = familyRes.data || [];
       await loadSavedFilters();
       applySavedActiveFilters();
       renderTags();
-      renderCards();
+      renderResults();
     }
 
     document.getElementById('editSavedTagForm').addEventListener('submit', async (ev) => {
