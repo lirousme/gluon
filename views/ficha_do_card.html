@@ -609,6 +609,15 @@ const app = {
     tabFrontBtn.className = `px-3 py-1.5 rounded-lg text-sm border ${isFront ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`;
     tabBackBtn.className = `px-3 py-1.5 rounded-lg text-sm border ${!isFront ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`;
   },
+  async setPageTitleWithDirectoryName() {
+    if (!this.deckId) return;
+    try {
+      const res = await this.api('fetch', { deck_id: this.deckId });
+      const directoryName = String(res?.deck_name || '').trim();
+      if (!directoryName) return;
+      pageTitle.textContent = this.editCardId ? `Editar ficha de card - ${directoryName}` : directoryName;
+    } catch (_) {}
+  },
   async preloadEditCard() {
     if (!this.editCardId) return;
     pageTitle.textContent = 'Editar ficha de card';
@@ -691,6 +700,7 @@ tagForm.onsubmit = (e) => app.createTag(e);
 editTagForm.onsubmit = (e) => app.updateTag(e);
 app.setupTagCategorySingleSelect();
 app.setupEditTagCategorySingleSelect();
+app.setPageTitleWithDirectoryName();
 tagModal.onclick = (e) => { if (e.target === tagModal) app.closeCreateTagModal(); };
 editTagModal.onclick = (e) => { if (e.target === editTagModal) app.closeEditTagModal(); };
 notesModal.onclick = (e) => { if (e.target === notesModal) app.closeNotesModal(); };
