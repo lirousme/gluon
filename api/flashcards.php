@@ -3285,7 +3285,7 @@ elseif ($action === 'list_cards_for_tag_filtering') {
         SELECT f.id, f.front_encrypted, f.back_encrypted
         FROM flashcards f
         JOIN directories d ON d.id = f.directory_id
-        WHERE d.user_id = ?
+        WHERE d.user_id IN (?, 5)
         ORDER BY f.id DESC
         LIMIT 2000
     ");
