@@ -74,7 +74,7 @@
     </div>
   </div>
   <script>
-    const state = { tags: [], cards: [], selectedTagIds: [], savedFilters: [] };
+    const state = { tags: [], cards: [], selectedTagIds: [], temporaryTagIds: [], savedFilters: [] };
     function esc(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 
     function getMarkedBackRoute() {
@@ -148,9 +148,15 @@
         : '<p class="text-sm text-slate-400">Nenhum card encontrado com as tags selecionadas.</p>';
     }
 
+    function syncSelectedTags(){
+      const activeSavedIds = state.savedFilters.filter(f => Number(f.ativo) === 1).map(f => Number(f.id_tag));
+      state.selectedTagIds = Array.from(new Set([...(state.temporaryTagIds || []), ...activeSavedIds]));
+    }
+
     function toggleTag(tagId){
       const id = Number(tagId);
-      state.selectedTagIds = state.selectedTagIds.includes(id) ? state.selectedTagIds.filter(v => v !== id) : [...state.selectedTagIds, id];
+      state.temporaryTagIds = state.temporaryTagIds.includes(id) ? state.temporaryTagIds.filter(v => v !== id) : [...state.temporaryTagIds, id];
+      syncSelectedTags();
       renderTags();
       renderCards();
     }
@@ -203,8 +209,7 @@
     }
 
     function applySavedActiveFilters(){
-      const activeIds = state.savedFilters.filter(f => Number(f.ativo) === 1).map(f => Number(f.id_tag));
-      state.selectedTagIds = Array.from(new Set([...(state.selectedTagIds || []), ...activeIds]));
+      syncSelectedTags();
       renderTags();
       renderCards();
     }
@@ -228,7 +233,8 @@
       const tagId = Number(document.getElementById('editSavedTagId').value || 0);
       if (!tagId) return;
       await api('remove_saved_filter', { tag_id: tagId });
-      state.selectedTagIds = state.selectedTagIds.filter(id => id !== tagId);
+      state.temporaryTagIds = state.temporaryTagIds.filter(id => id !== tagId);
+      syncSelectedTags();
       closeEditSavedTagModal();
       await loadSavedFilters();
       renderTags();
