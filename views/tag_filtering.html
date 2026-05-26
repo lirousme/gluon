@@ -196,12 +196,13 @@
       el.innerHTML = state.savedFilters.map(f => `
         <div class="border border-slate-700 rounded-lg p-2 bg-slate-900/70">
           <div class="flex items-start justify-between gap-2">
-            <button type="button" onclick="setSavedFilterActive(${Number(f.id_tag)}, ${Number(f.ativo) !== 1})" class="flex items-center gap-2 text-sm cursor-pointer flex-1 text-left min-h-[30px]">
-              <i class="${Number(f.ativo) === 1 ? 'fa-regular fa-square-check text-emerald-400' : 'fa-regular fa-square text-slate-400'}"></i>
+            <button type="button" onclick="setSavedFilterActive(${Number(f.id_tag)}, ${Number(f.ativo) !== 1})" class="flex items-start gap-2 text-sm cursor-pointer flex-1 text-left">
+              <i class="${Number(f.ativo) === 1 ? 'fa-regular fa-square-check text-emerald-400' : 'fa-regular fa-square text-slate-400'} mt-0.5"></i>
               <span>${esc(getTagLabel(f))}</span>
-            </button>
-            <button type="button" onclick="openEditSavedTagModal(${Number(f.id_tag)})" title="Editar tag salva" aria-label="Editar tag salva" class="inline-flex items-center justify-center rounded-md border border-slate-600 w-8 h-8 text-slate-300 hover:bg-slate-800 hover:text-white text-xs">
+            </label>
+            <button type="button" onclick="openEditSavedTagModal(${Number(f.id_tag)})" class="inline-flex items-center gap-1 rounded-md border border-slate-600 px-2 py-1 text-slate-300 hover:bg-slate-800 hover:text-white text-xs">
               <i class="fa-solid fa-sliders"></i>
+              <span>Editar</span>
             </button>
           </div>
         </div>
