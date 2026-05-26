@@ -114,11 +114,10 @@
       const selectedTags = state.tags.filter(t => selectedSet.has(Number(t.id)));
       selectedEl.innerHTML = selectedTags.length
         ? selectedTags.map(t => `<div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border bg-sky-500/20 text-sky-200 border-sky-400">
-            <button type="button" onclick="toggleTag(${Number(t.id)})" class="inline-flex items-center gap-1">
-              <i class="${savedTagIds.has(Number(t.id)) ? 'fa-solid text-sky-300' : 'fa-regular text-slate-300'} fa-bookmark"></i>${esc(getTagLabel(t))}
-            </button>
-            <button type="button" onclick="toggleSavedFilter(${Number(t.id)})" title="${savedTagIds.has(Number(t.id)) ? 'Remover tag salva' : 'Salvar tag'}" class="inline-flex items-center rounded-full border px-2 py-0.5 ${savedTagIds.has(Number(t.id)) ? 'border-sky-500/50 text-sky-400' : 'border-slate-600 text-slate-400'} hover:bg-slate-800">
+            <button type="button" onclick="toggleTag(${Number(t.id)})"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${esc(t.color || '#334155')}"></span>${esc(getTagLabel(t))}</button>
+            <button type="button" onclick="toggleSavedFilter(${Number(t.id)})" title="Salvar tag" class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${savedTagIds.has(Number(t.id)) ? 'border-sky-500/50 text-sky-400' : 'border-slate-600 text-slate-400'} hover:bg-slate-800">
               <i class="fa-solid fa-bookmark"></i>
+              <span>${savedTagIds.has(Number(t.id)) ? 'Salva' : 'Salvar'}</span>
             </button>
           </div>`).join('')
         : '<span class="text-xs text-slate-400">Nenhuma tag selecionada.</span>';
