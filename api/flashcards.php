@@ -237,6 +237,21 @@ try {
 } catch (PDOException $e) {}
 
 try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS filtros (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        id_user INT UNSIGNED NOT NULL,
+        id_tag INT UNSIGNED NOT NULL,
+        ativo INT NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_filtro_user_tag (id_user, id_tag),
+        INDEX idx_filtro_user_ativo (id_user, ativo),
+        FOREIGN KEY (id_user) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (id_tag) REFERENCES flashcard_tags(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
+
+try {
     $pdo->exec("ALTER TABLE flashcard_tags DROP INDEX uniq_user_tag_name");
 } catch (PDOException $e) {}
 
@@ -3339,6 +3354,71 @@ elseif ($action === 'list_tags') {
         $parsed[] = $tag;
     }
     echo json_encode(['status' => 'success', 'data' => $parsed]);
+}
+
+elseif ($action === 'list_saved_filters') {
+    $stmt = $pdo->prepare("
+        SELECT f.id, f.id_tag, f.ativo, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color
+        FROM filtros f
+        INNER JOIN flashcard_tags t ON t.id = f.id_tag
+        WHERE f.id_user = ? AND t.user_id IN (?, 5)
+        ORDER BY f.id DESC
+    ");
+    $stmt->execute([$user_id, $user_id]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $parsed = [];
+    foreach ($rows as $row) {
+        $row['name'] = !empty($row['name_encrypted']) ? Security::decryptData($row['name_encrypted']) : '';
+        $row['name_pt_br'] = !empty($row['name_pt_br_encrypted']) ? Security::decryptData($row['name_pt_br_encrypted']) : null;
+        $row['ativo'] = (int)$row['ativo'];
+        $row['id_tag'] = (int)$row['id_tag'];
+        $row['id'] = (int)$row['id'];
+        unset($row['name_encrypted'], $row['name_pt_br_encrypted']);
+        $parsed[] = $row;
+    }
+    echo json_encode(['status' => 'success', 'data' => $parsed]);
+}
+
+elseif ($action === 'toggle_saved_filter') {
+    $tag_id = (int)($input['tag_id'] ?? 0);
+    if ($tag_id <= 0) die(json_encode(['status' => 'error', 'message' => 'Tag inválida.']));
+    $checkTag = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5) LIMIT 1");
+    $checkTag->execute([$tag_id, $user_id]);
+    if (!$checkTag->fetchColumn()) die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada.']));
+
+    $find = $pdo->prepare("SELECT id, ativo FROM filtros WHERE id_user = ? AND id_tag = ? LIMIT 1");
+    $find->execute([$user_id, $tag_id]);
+    $existing = $find->fetch(PDO::FETCH_ASSOC);
+    if ($existing) {
+        $nextAtivo = (int)$existing['ativo'] === 1 ? 0 : 1;
+        $upd = $pdo->prepare("UPDATE filtros SET ativo = ? WHERE id = ?");
+        $upd->execute([$nextAtivo, (int)$existing['id']]);
+        echo json_encode(['status' => 'success', 'message' => $nextAtivo ? 'Tag salva.' : 'Tag des-salva.', 'saved' => $nextAtivo === 1, 'ativo' => $nextAtivo]);
+    } else {
+        $ins = $pdo->prepare("INSERT INTO filtros (id_user, id_tag, ativo) VALUES (?, ?, 1)");
+        $ins->execute([$user_id, $tag_id]);
+        echo json_encode(['status' => 'success', 'message' => 'Tag salva.', 'saved' => true, 'ativo' => 1]);
+    }
+}
+
+elseif ($action === 'set_saved_filter_active') {
+    $tag_id = (int)($input['tag_id'] ?? 0);
+    $ativo = (int)($input['ativo'] ?? 0) === 1 ? 1 : 0;
+    if ($tag_id <= 0) die(json_encode(['status' => 'error', 'message' => 'Tag inválida.']));
+    $stmt = $pdo->prepare("UPDATE filtros SET ativo = ? WHERE id_user = ? AND id_tag = ?");
+    $stmt->execute([$ativo, $user_id, $tag_id]);
+    if ($stmt->rowCount() === 0) {
+        die(json_encode(['status' => 'error', 'message' => 'Tag não está salva para este usuário.']));
+    }
+    echo json_encode(['status' => 'success', 'message' => 'Status atualizado.', 'ativo' => $ativo]);
+}
+
+elseif ($action === 'remove_saved_filter') {
+    $tag_id = (int)($input['tag_id'] ?? 0);
+    if ($tag_id <= 0) die(json_encode(['status' => 'error', 'message' => 'Tag inválida.']));
+    $stmt = $pdo->prepare("DELETE FROM filtros WHERE id_user = ? AND id_tag = ?");
+    $stmt->execute([$user_id, $tag_id]);
+    echo json_encode(['status' => 'success', 'message' => 'Tag desfixada.']);
 }
 
 elseif ($action === 'create_tag') {
