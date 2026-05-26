@@ -95,12 +95,31 @@
       return j;
     }
 
-    function getTagLabel(tag){
+    function getTagLabel(tag, numeroPtBrCounts = null){
       const numero = tag?.numero;
-      const pt = String(tag?.name_pt_br || '').trim();
+      const hasNumero = numero !== null && numero !== undefined && String(numero).trim() !== '';
       const name = String(tag?.name || '').trim();
-      if (numero !== null && numero !== undefined && String(numero).trim() !== '') return pt ? `${numero} - ${pt}` : `${numero} - ${name}`;
-      return pt || name || 'Tag sem nome';
+      const namePtBr = String(tag?.name_pt_br || '').trim();
+      if (hasNumero) {
+        const numeroKey = String(numero).trim();
+        const qtdTraducoes = numeroPtBrCounts?.get(numeroKey) || 0;
+        if (qtdTraducoes > 1 && namePtBr) return `${numeroKey} (${namePtBr})`;
+        return numeroKey;
+      }
+      return namePtBr ? `${name} (${namePtBr})` : (name || 'Tag sem nome');
+    }
+
+    function getTagPillStyle(tag = {}) {
+      const color = String(tag?.color || '#334155').trim();
+      const normalized = color.startsWith('#') ? color : `#${color}`;
+      const hex = normalized.replace('#', '');
+      if (!/^[0-9a-fA-F]{6}$/.test(hex)) {
+        return 'background: rgba(51,65,85,.35); border-color:#64748b; color:#cbd5e1;';
+      }
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      return `background: rgba(${r}, ${g}, ${b}, .25); border-color: rgba(${r}, ${g}, ${b}, .9); color:#e2e8f0;`;
     }
 
     function renderTags(){
@@ -110,24 +129,28 @@
       const selectedSet = new Set(state.selectedTagIds);
       const filtered = state.tags.filter(t => String(t.name || '').toLowerCase().includes(q) || String(t.name_pt_br || '').toLowerCase().includes(q) || String(t.numero ?? '').toLowerCase().includes(q));
 
+      const numeroPtBrCounts = new Map();
+      filtered.forEach(tag => {
+        const numero = tag?.numero;
+        const numeroKey = numero !== null && numero !== undefined ? String(numero).trim() : '';
+        const namePtBr = String(tag?.name_pt_br || '').trim();
+        if (numeroKey && namePtBr) numeroPtBrCounts.set(numeroKey, (numeroPtBrCounts.get(numeroKey) || 0) + 1);
+      });
+
       const savedTagIds = new Set(state.savedFilters.map(f => Number(f.id_tag)));
       const selectedTags = state.tags.filter(t => selectedSet.has(Number(t.id)));
       selectedEl.innerHTML = selectedTags.length
-        ? selectedTags.map(t => `<div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border ${
-            savedTagIds.has(Number(t.id))
-            ? 'bg-sky-500/20 text-sky-200 border-sky-400'
-            : 'bg-slate-800 text-slate-300 border-slate-600'
-        }">
-            <button type="button" onclick="toggleSavedFilter(${Number(t.id)})" title="${savedTagIds.has(Number(t.id)) ? 'Tag salva' : 'Salvar tag'}" aria-label="${savedTagIds.has(Number(t.id)) ? 'Dessalvar tag' : 'Salvar tag'}" class="-ml-1.5 inline-flex items-center justify-center rounded-full px-2 py-0.5 ${savedTagIds.has(Number(t.id)) ? 'text-sky-400' : 'text-slate-400'} hover:bg-slate-800">
+        ? selectedTags.map(t => `<div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border" style="${esc(getTagPillStyle(t))}">
+            <button type="button" onclick="toggleSavedFilter(${Number(t.id)})" title="${savedTagIds.has(Number(t.id)) ? 'Tag salva' : 'Salvar tag'}" aria-label="${savedTagIds.has(Number(t.id)) ? 'Dessalvar tag' : 'Salvar tag'}" class="-ml-1.5 inline-flex items-center justify-center rounded-full px-2 py-0.5 ${savedTagIds.has(Number(t.id)) ? 'text-sky-300' : 'text-slate-300'} hover:bg-slate-800/50">
             <i class="fa-solid fa-bookmark"></i>
             </button>
-            <button type="button" onclick="toggleTag(${Number(t.id)})" class="-ml-1">${esc(getTagLabel(t))}</button>
+            <button type="button" onclick="toggleTag(${Number(t.id)})" class="-ml-1">${esc(getTagLabel(t, numeroPtBrCounts))}</button>
             </div>`).join('')
             : '<span class="text-xs text-slate-400">Nenhuma tag selecionada.</span>';
 
       const unselected = filtered.filter(t => !selectedSet.has(Number(t.id)));
       searchEl.innerHTML = unselected.length
-        ? unselected.map(t => `<button type="button" onclick="toggleTag(${Number(t.id)})" class="px-2.5 py-1 rounded-full text-xs border bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${esc(t.color || '#334155')}"></span>${esc(getTagLabel(t))}</button>`).join('')
+        ? unselected.map(t => `<button type="button" onclick="toggleTag(${Number(t.id)})" class="px-2.5 py-1 rounded-full text-xs border hover:brightness-110" style="${esc(getTagPillStyle(t))}">${esc(getTagLabel(t, numeroPtBrCounts))}</button>`).join('')
         : '<span class="text-xs text-slate-400">Nenhuma tag encontrada para esta busca.</span>';
     }
 
