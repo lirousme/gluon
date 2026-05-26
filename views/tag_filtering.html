@@ -12,7 +12,10 @@
     <header class="border-b border-slate-700 px-4 py-4 bg-slate-950">
       <div class="max-w-4xl mx-auto flex flex-col gap-3">
         <div class="flex items-center justify-between gap-3">
-        <button type="button" onclick="goBackToMarkedRoute()" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">Voltar</button>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="goBackToMarkedRoute()" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">Voltar</button>
+          <button id="orphanTagsBtn" type="button" onclick="goToOrphanTags()" class="rounded-lg border border-red-500 bg-red-600/80 px-3 py-2 text-sm text-white hover:bg-red-500" title="Tags sem vínculos">0</button>
+        </div>
         <h1 class="text-lg md:text-xl font-semibold text-center flex-1">Filtro de Tags</h1>
         <button type="button" onclick="openSavedMenu()" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">Tags salvas</button>
         </div>
@@ -82,7 +85,7 @@
     </div>
   </div>
   <script>
-    const state = { tags: [], cards: [], selectedTagIds: [], temporaryTagIds: [], savedFilters: [], filterMode: 'cards', tagFamilyRelations: [] };
+    const state = { tags: [], cards: [], selectedTagIds: [], temporaryTagIds: [], savedFilters: [], filterMode: 'cards', tagFamilyRelations: [], orphanTagsCount: 0 };
     function esc(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 
     function getMarkedBackRoute() {
@@ -115,6 +118,19 @@
       }
       if (name && namePtBr && name.toLowerCase() !== namePtBr.toLowerCase()) return `${name} (${namePtBr})`;
       return name || namePtBr || 'Tag sem nome';
+    }
+
+    
+    function renderOrphanTagsButton(){
+      const btn = document.getElementById('orphanTagsBtn');
+      if (!btn) return;
+      const count = Number(state.orphanTagsCount || 0);
+      btn.textContent = String(count);
+      btn.title = `${count} tag(s) sem vínculos`;
+    }
+
+    function goToOrphanTags(){
+      window.location.href = '/views/tags_sem_vinculos.html';
     }
 
     function getTagPillStyle(tag = {}) {
@@ -356,10 +372,12 @@
     }
 
     async function load(){
-      const [tagsRes, cardsRes, familyRes] = await Promise.all([api('list_tags'), api('list_cards_for_tag_filtering'), api('list_tag_family_relations')]);
+      const [tagsRes, cardsRes, familyRes, orphanTagsRes] = await Promise.all([api('list_tags'), api('list_cards_for_tag_filtering'), api('list_tag_family_relations'), api('list_orphan_user_tags')]);
       state.tags = tagsRes.data || [];
       state.cards = cardsRes.data || [];
       state.tagFamilyRelations = familyRes.data || [];
+      state.orphanTagsCount = Number(orphanTagsRes.count || 0);
+      renderOrphanTagsButton();
       await loadSavedFilters();
       applySavedActiveFilters();
       renderTags();

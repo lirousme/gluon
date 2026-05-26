@@ -3357,6 +3357,37 @@ elseif ($action === 'list_tags') {
 }
 
 
+
+elseif ($action === 'list_orphan_user_tags') {
+    $sql = "
+        SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color
+        FROM flashcard_tags t
+        WHERE t.user_id = ?
+          AND NOT EXISTS (SELECT 1 FROM flashcard_tag_links l WHERE l.tag_id = t.id)
+          AND NOT EXISTS (SELECT 1 FROM subjects_links l WHERE l.tag_id = t.id)
+          AND NOT EXISTS (SELECT 1 FROM objects_links l WHERE l.tag_id = t.id)
+          AND NOT EXISTS (SELECT 1 FROM tipo_frasal_links l WHERE l.tag_id = t.id)
+          AND NOT EXISTS (SELECT 1 FROM tense_links l WHERE l.tag_id = t.id)
+          AND NOT EXISTS (SELECT 1 FROM lexical_chunks_links l WHERE l.tag_id = t.id)
+          AND NOT EXISTS (SELECT 1 FROM relation_links l WHERE l.tag_id = t.id)
+          AND NOT EXISTS (SELECT 1 FROM words_links l WHERE l.tag_id = t.id)
+          AND NOT EXISTS (SELECT 1 FROM idiomas_links l WHERE l.tag_id = t.id OR l.segundo_idioma_tag_id = t.id)
+          AND NOT EXISTS (SELECT 1 FROM tag_family tf WHERE tf.id_user = ? AND (tf.id_tag_child = t.id OR tf.id_tag_mother = t.id))
+        ORDER BY t.id ASC
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$user_id, $user_id]);
+    $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $parsed = [];
+    foreach ($tags as $tag) {
+        $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
+        $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
+        unset($tag['name_encrypted'], $tag['name_pt_br_encrypted']);
+        $parsed[] = $tag;
+    }
+    echo json_encode(['status' => 'success', 'count' => count($parsed), 'data' => $parsed]);
+}
+
 elseif ($action === 'list_tag_family_relations') {
     $stmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother FROM tag_family WHERE id_user = ?");
     $stmt->execute([$user_id]);
