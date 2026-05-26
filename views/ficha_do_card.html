@@ -666,6 +666,7 @@ const app = {
     const idioma_principal_tag_ids = this.getSelectedTagIds('idiomaPrincipal');
     const idioma_secundario_tag_ids = this.getSelectedTagIds('idiomaSecundario');
     if (!front && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
+    if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag na categoria Subject para salvar o card.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
