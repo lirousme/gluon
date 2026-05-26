@@ -83,7 +83,6 @@
     }
 
     function cardHasAllSelectedTags(card, selectedSet){
-      if (!selectedSet.size) return true;
       const pools = ['subject_tags','object_tags','tipo_frasal_tags','tense_tags','lexical_chunks_tags','relation_tags','words_tags','idioma_principal_tags','idioma_secundario_tags'];
       const cardTagIds = new Set();
       pools.forEach(key => (card[key] || []).forEach(t => cardTagIds.add(Number(t.id))));
@@ -94,6 +93,12 @@
     function renderCards(){
       const list = document.getElementById('cardsList');
       const selectedSet = new Set(state.selectedTagIds);
+      if (!selectedSet.size) {
+        document.getElementById('cardsCount').textContent = '0 card(s)';
+        list.innerHTML = '<p class="text-sm text-slate-400">Selecione pelo menos uma tag para ver os cards.</p>';
+        return;
+      }
+
       const filteredCards = state.cards.filter(c => cardHasAllSelectedTags(c, selectedSet));
       document.getElementById('cardsCount').textContent = `${filteredCards.length} card(s)`;
       list.innerHTML = filteredCards.length
