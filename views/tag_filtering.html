@@ -207,6 +207,16 @@
       return state.tags.filter(tag => matchingIds.includes(Number(tag.id)));
     }
 
+    function goToTagFamily(tagId){
+      const id = Number(tagId);
+      if (!id) return;
+      const tag = state.tags.find((t) => Number(t.id) === id);
+      if (!tag) return;
+      const from = encodeURIComponent(window.location.pathname + window.location.search);
+      const rawName = tag.name || tag.name_pt_br || '';
+      window.location.href = `/views/tag_family.html?tag_id=${encodeURIComponent(id)}&tag_name=${encodeURIComponent(rawName)}&from=${from}`;
+    }
+
     function renderResults(){
       const selectedSet = new Set(state.selectedTagIds);
       const titleEl = document.getElementById('resultsTitle');
@@ -230,7 +240,7 @@
         if (numeroKey && namePtBr) numeroPtBrCounts.set(numeroKey, (numeroPtBrCounts.get(numeroKey) || 0) + 1);
       });
       list.innerHTML = tags.length
-        ? tags.map(t => `<article class="rounded-lg border border-slate-700 bg-slate-900/60 p-3"><p class="text-sm text-slate-100">${esc(getTagLabel(t, numeroPtBrCounts))}</p></article>`).join('')
+        ? tags.map(t => `<button type="button" onclick="goToTagFamily(${Number(t.id)})" class="w-full text-left rounded-lg border border-slate-700 bg-slate-900/60 p-3 hover:bg-slate-800/80 transition-colors"><p class="text-sm text-slate-100">${esc(getTagLabel(t, numeroPtBrCounts))}</p></button>`).join('')
         : '<p class="text-sm text-slate-400">Nenhuma tag encontrada para a combinação selecionada.</p>';
     }
 
