@@ -3293,6 +3293,7 @@ elseif ($action === 'list_cards_for_tag_filtering') {
     $cards = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $cardIds = array_map(static fn($card) => (int)$card['id'], $cards);
+    $allTagsByCard = fetchLinkedTagsByCard($pdo, 'flashcard_tag_links', $cardIds, $user_id);
     $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', $cardIds, $user_id);
     $objectTagsByCard = fetchLinkedTagsByCard($pdo, 'objects_links', $cardIds, $user_id);
     $tipoFrasalTagsByCard = fetchLinkedTagsByCard($pdo, 'tipo_frasal_links', $cardIds, $user_id);
@@ -3310,6 +3311,7 @@ elseif ($action === 'list_cards_for_tag_filtering') {
             'id' => $cardId,
             'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
             'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
+            'all_tags' => $allTagsByCard[$cardId] ?? [],
             'subject_tags' => $subjectTagsByCard[$cardId] ?? [],
             'object_tags' => $objectTagsByCard[$cardId] ?? [],
             'tipo_frasal_tags' => $tipoFrasalTagsByCard[$cardId] ?? [],
