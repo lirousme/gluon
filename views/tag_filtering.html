@@ -199,7 +199,7 @@
             <button type="button" onclick="setSavedFilterActive(${Number(f.id_tag)}, ${Number(f.ativo) !== 1})" class="flex items-start gap-2 text-sm cursor-pointer flex-1 text-left">
               <i class="${Number(f.ativo) === 1 ? 'fa-regular fa-square-check text-emerald-400' : 'fa-regular fa-square text-slate-400'} mt-0.5"></i>
               <span>${esc(getTagLabel(f))}</span>
-            </button>
+            </label>
             <button type="button" onclick="openEditSavedTagModal(${Number(f.id_tag)})" class="inline-flex items-center gap-1 rounded-md border border-slate-600 px-2 py-1 text-slate-300 hover:bg-slate-800 hover:text-white text-xs">
               <i class="fa-solid fa-sliders"></i>
               <span>Editar</span>
