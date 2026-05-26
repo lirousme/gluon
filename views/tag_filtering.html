@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Filtro de Tags</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 </head>
 <body class="bg-slate-900 text-white min-h-screen">
   <div class="min-h-screen flex flex-col">
@@ -114,7 +115,10 @@
       selectedEl.innerHTML = selectedTags.length
         ? selectedTags.map(t => `<div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border bg-sky-500/20 text-sky-200 border-sky-400">
             <button type="button" onclick="toggleTag(${Number(t.id)})"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${esc(t.color || '#334155')}"></span>${esc(getTagLabel(t))}</button>
-            <button type="button" onclick="toggleSavedFilter(${Number(t.id)})" title="Salvar tag" class="${savedTagIds.has(Number(t.id)) ? 'text-sky-300' : 'text-slate-400'}">💾</button>
+            <button type="button" onclick="toggleSavedFilter(${Number(t.id)})" title="Salvar tag" class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${savedTagIds.has(Number(t.id)) ? 'border-sky-500/50 text-sky-400' : 'border-slate-600 text-slate-400'} hover:bg-slate-800">
+              <i class="fa-solid fa-bookmark"></i>
+              <span>${savedTagIds.has(Number(t.id)) ? 'Salva' : 'Salvar'}</span>
+            </button>
           </div>`).join('')
         : '<span class="text-xs text-slate-400">Nenhuma tag selecionada.</span>';
 
@@ -196,7 +200,10 @@
               <input type="checkbox" ${Number(f.ativo) === 1 ? 'checked' : ''} onchange="setSavedFilterActive(${Number(f.id_tag)}, this.checked)">
               <span>${esc(getTagLabel(f))}</span>
             </label>
-            <button type="button" onclick="openEditSavedTagModal(${Number(f.id_tag)})" class="text-slate-300 hover:text-white">✏️</button>
+            <button type="button" onclick="openEditSavedTagModal(${Number(f.id_tag)})" class="inline-flex items-center gap-1 rounded-md border border-slate-600 px-2 py-1 text-slate-300 hover:bg-slate-800 hover:text-white text-xs">
+              <i class="fa-solid fa-sliders"></i>
+              <span>Editar</span>
+            </button>
           </div>
         </div>
       `).join('');
