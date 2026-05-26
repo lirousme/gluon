@@ -113,13 +113,17 @@
       const savedTagIds = new Set(state.savedFilters.map(f => Number(f.id_tag)));
       const selectedTags = state.tags.filter(t => selectedSet.has(Number(t.id)));
       selectedEl.innerHTML = selectedTags.length
-        ? selectedTags.map(t => `<div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border bg-sky-500/20 text-sky-200 border-sky-400">
-            <button type="button" onclick="toggleSavedFilter(${Number(t.id)})" title="${savedTagIds.has(Number(t.id)) ? 'Tag salva' : 'Salvar tag'}" aria-label="${savedTagIds.has(Number(t.id)) ? 'Dessalvar tag' : 'Salvar tag'}" class="-ml-1.5 inline-flex items-center justify-center rounded-full px-2 py-0.5 ${savedTagIds.has(Number(t.id)) ? 'border-sky-500/50 text-sky-400' : 'border-slate-600 text-slate-400'} hover:bg-slate-800">
-              <i class="fa-solid fa-bookmark"></i>
+        ? selectedTags.map(t => `<div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border ${
+            savedTagIds.has(Number(t.id))
+            ? 'bg-sky-500/20 text-sky-200 border-sky-400'
+            : 'bg-slate-800 text-slate-300 border-slate-600'
+        }">
+            <button type="button" onclick="toggleSavedFilter(${Number(t.id)})" title="${savedTagIds.has(Number(t.id)) ? 'Tag salva' : 'Salvar tag'}" aria-label="${savedTagIds.has(Number(t.id)) ? 'Dessalvar tag' : 'Salvar tag'}" class="-ml-1.5 inline-flex items-center justify-center rounded-full px-2 py-0.5 ${savedTagIds.has(Number(t.id)) ? 'text-sky-400' : 'text-slate-400'} hover:bg-slate-800">
+            <i class="fa-solid fa-bookmark"></i>
             </button>
             <button type="button" onclick="toggleTag(${Number(t.id)})" class="-ml-1">${esc(getTagLabel(t))}</button>
-          </div>`).join('')
-        : '<span class="text-xs text-slate-400">Nenhuma tag selecionada.</span>';
+            </div>`).join('')
+            : '<span class="text-xs text-slate-400">Nenhuma tag selecionada.</span>';
 
       const unselected = filtered.filter(t => !selectedSet.has(Number(t.id)));
       searchEl.innerHTML = unselected.length
