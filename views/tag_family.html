@@ -11,6 +11,10 @@
     <header class="relative flex items-center justify-center border-b border-slate-700 px-4 py-4 bg-slate-950">
       <button type="button" onclick="window.history.back()" class="absolute left-4 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">Voltar</button>
       <h1 id="tagFamilyTitle" class="text-2xl font-semibold text-center">Tag</h1>
+      <div class="absolute right-4 flex items-center gap-2">
+        <button type="button" onclick="window.location.href='/views/tag_filtering.html'" class="h-9 rounded-lg border border-slate-600 px-3 text-sm text-slate-200 hover:bg-slate-800" title="Ir para filtros de tags">Filtros</button>
+        <button id="btnOpenCreateTagModal" type="button" class="h-9 w-9 rounded-lg border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors text-lg font-semibold" title="Criar nova tag">+</button>
+      </div>
     </header>
 
     <main class="flex-1 px-4 py-6 max-w-4xl mx-auto w-full">
@@ -56,6 +60,54 @@ function renderFooterTags(){
   el.innerHTML=filtered.map(t=>`<button type="button" data-id="${Number(t.id)}" class="px-2.5 py-1 rounded-full text-xs border bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700">${esc(t.name)}</button>`).join('');
   el.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>addRelation(Number(b.dataset.id)));
 }
+function enforceSingleCreateTagCategorySelection(changedInput){
+  if(!changedInput.checked) return;
+  document.querySelectorAll('#createTagForm input[data-tag-category]').forEach((input)=>{if(input!==changedInput) input.checked=false;});
+}
+function resetCreateTagCategoryDefaults(){
+  document.querySelectorAll('#createTagForm input[data-tag-category]').forEach((input)=>input.checked=false);
+  const defaultInput=document.getElementById('createTagIsWordInput');
+  if(defaultInput) defaultInput.checked=true;
+}
+function openCreateTagModal(){
+  resetCreateTagCategoryDefaults();
+  document.getElementById('createTagNameInput').value='';
+  document.getElementById('createTagNamePtBrInput').value='';
+  document.getElementById('createTagNumeroInput').value='';
+  const m=document.getElementById('createTagModal');
+  const c=document.getElementById('createTagModalContent');
+  m.classList.remove('hidden');m.classList.add('flex');
+  setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');document.getElementById('createTagNameInput').focus();},20);
+}
+function closeCreateTagModal(){
+  const m=document.getElementById('createTagModal');
+  const c=document.getElementById('createTagModalContent');
+  m.classList.add('opacity-0');c.classList.add('scale-95');
+  setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);
+}
+async function submitCreateTag(e){
+  e.preventDefault();
+  const btn=document.getElementById('btnSubmitCreateTag');
+  btn.disabled=true;
+  try{
+    await api('create_tag',{
+      name:document.getElementById('createTagNameInput').value.trim(),
+      name_pt_br:document.getElementById('createTagNamePtBrInput').value.trim(),
+      numero:document.getElementById('createTagNumeroInput').value.trim(),
+      is_book:document.getElementById('createTagIsBookInput').checked?1:0,
+      is_verb_tense:document.getElementById('createTagIsVerbTenseInput').checked?1:0,
+      is_sentence_type:document.getElementById('createTagIsSentenceTypeInput').checked?1:0,
+      is_lexical_chunk:document.getElementById('createTagIsLexicalChunkInput').checked?1:0,
+      is_relation_type:document.getElementById('createTagIsRelationTypeInput').checked?1:0,
+      is_word:document.getElementById('createTagIsWordInput').checked?1:0,
+      is_month:document.getElementById('createTagIsMonthInput').checked?1:0,
+      is_day:document.getElementById('createTagIsDayInput').checked?1:0,
+      is_year:document.getElementById('createTagIsYearInput').checked?1:0
+    });
+    closeCreateTagModal();
+    await load();
+  }finally{btn.disabled=false;}
+}
 function openTagFamily(tag){
   const nextTagId=Number(tag?.id||0);
   if(!nextTagId) return;
@@ -96,6 +148,11 @@ function closeEditTagModal(){const m=document.getElementById('editTagModal');con
 async function submitEditTag(e){e.preventDefault();const id=Number(document.getElementById('editTagIdInput').value||0);const original=state.tags.find(t=>Number(t.id)===id)||{};await api('update_tag',{id,name:document.getElementById('editTagNameInput').value.trim(),name_pt_br:document.getElementById('editTagNamePtBrInput').value.trim(),numero:document.getElementById('editTagNumeroInput').value.trim(),is_book:Number(original.is_book||0),is_verb_tense:Number(original.is_verb_tense||0),is_sentence_type:Number(original.is_sentence_type||0),is_lexical_chunk:Number(original.is_lexical_chunk||0),is_relation_type:Number(original.is_relation_type||0),is_word:Number(original.is_word||0),is_month:Number(original.is_month||0),is_day:Number(original.is_day||0),is_year:Number(original.is_year||0)});closeEditTagModal();closeActionModal();await load();}
 async function deleteTag(){if(!actionState.tag) return;await api('delete_tag',{id:Number(actionState.tag.id)});closeActionModal();await load();}
 window.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('btnOpenCreateTagModal').onclick=openCreateTagModal;
+  document.getElementById('btnCancelCreateTag').onclick=closeCreateTagModal;
+  document.getElementById('btnCloseCreateTagModal').onclick=closeCreateTagModal;
+  document.getElementById('createTagForm').addEventListener('submit',submitCreateTag);
+  document.querySelectorAll('#createTagForm input[data-tag-category]').forEach((input)=>input.addEventListener('change',()=>enforceSingleCreateTagCategorySelection(input)));
   document.getElementById('btnCloseActionModal').onclick=closeActionModal;
   document.getElementById('btnRemoveRelation').onclick=removeRelation;
   document.getElementById('btnViewFamily').onclick=()=>{const t=actionState.tag;closeActionModal();openTagFamily(t)};
@@ -130,6 +187,35 @@ window.addEventListener('DOMContentLoaded',()=>{
         <div class="flex justify-end gap-2 pt-2">
           <button type="button" id="btnCancelEditTag" class="px-4 py-2 rounded-lg border border-slate-600">Cancelar</button>
           <button type="submit" id="btnSubmitEditTag" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div id="createTagModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 opacity-0 transition-opacity duration-200 p-4">
+    <div id="createTagModalContent" class="w-[92%] max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-4 scale-95 transition-transform duration-200">
+      <form id="createTagForm" class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold">Criar nova tag</h3>
+          <button id="btnCloseCreateTagModal" type="button" class="text-slate-400 hover:text-white text-xl">&times;</button>
+        </div>
+        <input id="createTagNameInput" type="text" required maxlength="80" placeholder="Nome" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3">
+        <input id="createTagNamePtBrInput" type="text" maxlength="80" placeholder="Nome pt-br" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3">
+        <input id="createTagNumeroInput" type="number" placeholder="Número" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3">
+        <p class="text-xs text-amber-300">Selecione no máximo 1 categoria para a nova tag.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-slate-300">
+          <label class="inline-flex items-center gap-2"><input id="createTagIsBookInput" data-tag-category type="checkbox" class="h-4 w-4"><span>Livro</span></label>
+          <label class="inline-flex items-center gap-2"><input id="createTagIsVerbTenseInput" data-tag-category type="checkbox" class="h-4 w-4"><span>Tempo Verbal</span></label>
+          <label class="inline-flex items-center gap-2"><input id="createTagIsSentenceTypeInput" data-tag-category type="checkbox" class="h-4 w-4"><span>Tipo Frasal</span></label>
+          <label class="inline-flex items-center gap-2"><input id="createTagIsLexicalChunkInput" data-tag-category type="checkbox" class="h-4 w-4"><span>Lexical Chunk</span></label>
+          <label class="inline-flex items-center gap-2"><input id="createTagIsRelationTypeInput" data-tag-category type="checkbox" class="h-4 w-4"><span>Tipo de Relação</span></label>
+          <label class="inline-flex items-center gap-2"><input id="createTagIsWordInput" data-tag-category type="checkbox" class="h-4 w-4"><span>Palavra</span></label>
+          <label class="inline-flex items-center gap-2"><input id="createTagIsMonthInput" data-tag-category type="checkbox" class="h-4 w-4"><span>Mês</span></label>
+          <label class="inline-flex items-center gap-2"><input id="createTagIsDayInput" data-tag-category type="checkbox" class="h-4 w-4"><span>Dia</span></label>
+          <label class="inline-flex items-center gap-2"><input id="createTagIsYearInput" data-tag-category type="checkbox" class="h-4 w-4"><span>Ano</span></label>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button id="btnCancelCreateTag" type="button" class="px-4 py-2 rounded-lg border border-slate-600">Cancelar</button>
+          <button id="btnSubmitCreateTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500">Criar tag</button>
         </div>
       </form>
     </div>
