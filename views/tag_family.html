@@ -52,6 +52,31 @@ title.textContent = state.tagName || 'Tag';
 
 function esc(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 
+function getTagLabel(tag = {}, numeroPtBrCounts = null){
+  const numero = tag?.numero;
+  const hasNumero = numero !== null && numero !== undefined && String(numero).trim() !== '';
+  const name = String(tag?.name || '').trim();
+  const namePtBr = String(tag?.name_pt_br || '').trim();
+  if (hasNumero){
+    const numeroKey = String(numero).trim();
+    const qtdTraducoes = numeroPtBrCounts?.get(numeroKey) || 0;
+    if (qtdTraducoes > 1 && namePtBr) return `${numeroKey} (${namePtBr})`;
+    return numeroKey;
+  }
+  return namePtBr ? `${name} (${namePtBr})` : name;
+}
+
+function buildNumeroPtBrCounts(tags = []){
+  const counts = new Map();
+  tags.forEach((tag)=>{
+    const numero = tag?.numero;
+    const numeroKey = numero !== null && numero !== undefined ? String(numero).trim() : '';
+    const namePtBr = String(tag?.name_pt_br || '').trim();
+    if (numeroKey && namePtBr) counts.set(numeroKey, (counts.get(numeroKey) || 0) + 1);
+  });
+  return counts;
+}
+
 function getMarkedBackRoute(){
   const urlParams=new URLSearchParams(window.location.search);
   const from=urlParams.get('from');
@@ -75,7 +100,8 @@ function renderFooterTags(){
   const el=document.getElementById('footerTagSelector');
   const filtered=state.tags.filter(t=>Number(t.id)!==state.tagId).filter(t=>String(t.name||'').toLowerCase().includes(q)||String(t.name_pt_br||'').toLowerCase().includes(q)||String(t.numero??'').toLowerCase().includes(q));
   if(!filtered.length){el.innerHTML='<span class="text-xs text-slate-400">Nenhuma tag encontrada.</span>';return;}
-  el.innerHTML=filtered.map(t=>`<button type="button" data-id="${Number(t.id)}" class="px-2.5 py-1 rounded-full text-xs border bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700">${esc(t.name)}</button>`).join('');
+  const numeroPtBrCounts = buildNumeroPtBrCounts(filtered);
+  el.innerHTML=filtered.map(t=>`<button type="button" data-id="${Number(t.id)}" class="px-2.5 py-1 rounded-full text-xs border bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700">${esc(getTagLabel(t, numeroPtBrCounts))}</button>`).join('');
   el.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>addRelation(Number(b.dataset.id)));
 }
 function enforceSingleCreateTagCategorySelection(changedInput){
@@ -133,7 +159,11 @@ function openTagFamily(tag){
   window.location.href=`/views/tag_family.html?tag_id=${encodeURIComponent(nextTagId)}&tag_name=${encodeURIComponent(nextTagName)}`;
 }
 function renderFamily(){
-  const mk=(arr)=>arr.length?arr.map(t=>`<button type="button" data-family-tag-id="${Number(t.id)}" class="px-2 py-1 rounded-full text-xs border border-red-400/70 bg-red-500/10 text-red-200 hover:bg-red-500/20 transition-colors" title="Abrir família da tag">${esc(t.name)}</button>`).join(''):'<span class="text-xs text-slate-400">Nenhuma</span>';
+  const mk=(arr)=>{
+    if(!arr.length) return '<span class="text-xs text-slate-400">Nenhuma</span>';
+    const numeroPtBrCounts = buildNumeroPtBrCounts(arr);
+    return arr.map(t=>`<button type="button" data-family-tag-id="${Number(t.id)}" class="px-2 py-1 rounded-full text-xs border border-red-400/70 bg-red-500/10 text-red-200 hover:bg-red-500/20 transition-colors" title="Abrir família da tag">${esc(getTagLabel(t, numeroPtBrCounts))}</button>`).join('');
+  };
   document.getElementById('childrenList').innerHTML=mk(state.family.children);
   document.getElementById('mothersList').innerHTML=mk(state.family.mothers);
   document.querySelectorAll('[data-family-tag-id]').forEach((el)=>{
@@ -158,7 +188,7 @@ document.getElementById('footerTagSearch').addEventListener('input',renderFooter
 
 document.getElementById('relationModeSwitch').addEventListener('click',()=>{state.mode=state.mode==='child'?'mother':'child';document.getElementById('relationModeSwitch').textContent=state.mode==='child'?'Adicionando filhas':'Adicionando mães';});
 const actionState={tag:null,relationType:null};
-function openActionModal(tag, relationType){actionState.tag=tag;actionState.relationType=relationType;document.getElementById('tagActionTitle').textContent=`Ações: ${tag?.name||'Tag'}`;const m=document.getElementById('tagActionModal');const c=document.getElementById('tagActionModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');},20);} 
+function openActionModal(tag, relationType){actionState.tag=tag;actionState.relationType=relationType;document.getElementById('tagActionTitle').textContent=`Ações: ${getTagLabel(tag) || 'Tag'}`;const m=document.getElementById('tagActionModal');const c=document.getElementById('tagActionModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');},20);} 
 function closeActionModal(){const m=document.getElementById('tagActionModal');const c=document.getElementById('tagActionModalContent');m.classList.add('opacity-0');c.classList.add('scale-95');setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);} 
 async function removeRelation(){if(!actionState.tag) return;await api('remove_tag_family_relation',{tag_id:state.tagId,other_tag_id:Number(actionState.tag.id),relation_type:actionState.relationType});closeActionModal();await load();}
 function openEditTagModal(tag){if(!tag) return;document.getElementById('editTagIdInput').value=String(tag.id);document.getElementById('editTagNameInput').value=String(tag.name||'');document.getElementById('editTagNamePtBrInput').value=String(tag.name_pt_br||'');document.getElementById('editTagNumeroInput').value=(tag.numero??'');const m=document.getElementById('editTagModal');const c=document.getElementById('editTagModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');},20);} 
