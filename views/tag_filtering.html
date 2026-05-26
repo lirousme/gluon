@@ -12,7 +12,7 @@
       <div class="max-w-4xl mx-auto flex items-center justify-between gap-3">
         <button type="button" onclick="goBackToMarkedRoute()" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">Voltar</button>
         <h1 class="text-lg md:text-xl font-semibold text-center flex-1">Filtro de Tags</h1>
-        <div class="w-[72px]"></div>
+        <button type="button" onclick="openSavedMenu()" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">Tags salvas</button>
       </div>
     </header>
 
@@ -35,8 +35,46 @@
       </div>
     </footer>
   </div>
+  <aside id="savedTagsMenu" class="fixed inset-y-0 right-0 w-full max-w-sm bg-slate-950 border-l border-slate-700 transform translate-x-full transition-transform duration-200 z-40">
+    <div class="h-full flex flex-col">
+      <div class="flex items-center justify-between p-4 border-b border-slate-700">
+        <h3 class="font-semibold">Filtros salvos</h3>
+        <button type="button" onclick="closeSavedMenu()" class="text-slate-300 hover:text-white">Fechar</button>
+      </div>
+      <div id="savedTagsList" class="flex-1 overflow-y-auto p-4 space-y-2"></div>
+    </div>
+  </aside>
+  <div id="savedMenuBackdrop" onclick="closeSavedMenu()" class="fixed inset-0 bg-black/50 hidden z-30"></div>
+
+  <div id="editSavedTagModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50 p-4">
+    <div class="w-full max-w-md bg-slate-900 border border-slate-700 rounded-xl p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-base">Editar tag salva</h3>
+        <button type="button" onclick="closeEditSavedTagModal()" class="text-slate-300 hover:text-white">✕</button>
+      </div>
+      <form id="editSavedTagForm" class="space-y-3">
+        <input type="hidden" id="editSavedTagId">
+        <div>
+          <label class="text-xs text-slate-400">Número</label>
+          <input id="editSavedTagNumero" type="number" class="w-full mt-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="text-xs text-slate-400">Nome</label>
+          <input id="editSavedTagName" required class="w-full mt-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="text-xs text-slate-400">Nome pt-br</label>
+          <input id="editSavedTagNamePtBr" class="w-full mt-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm">
+        </div>
+        <div class="flex items-center justify-between gap-2 pt-2">
+          <button type="button" onclick="unpinTagFromModal()" class="px-3 py-2 rounded border border-rose-500 text-rose-300 hover:bg-rose-500/20 text-sm">Desfixar</button>
+          <button type="submit" class="px-3 py-2 rounded bg-sky-600 hover:bg-sky-500 text-white text-sm">Salvar edição</button>
+        </div>
+      </form>
+    </div>
+  </div>
   <script>
-    const state = { tags: [], cards: [], selectedTagIds: [] };
+    const state = { tags: [], cards: [], selectedTagIds: [], savedFilters: [] };
     function esc(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 
     function getMarkedBackRoute() {
@@ -71,9 +109,13 @@
       const selectedSet = new Set(state.selectedTagIds);
       const filtered = state.tags.filter(t => String(t.name || '').toLowerCase().includes(q) || String(t.name_pt_br || '').toLowerCase().includes(q) || String(t.numero ?? '').toLowerCase().includes(q));
 
+      const savedTagIds = new Set(state.savedFilters.map(f => Number(f.id_tag)));
       const selectedTags = state.tags.filter(t => selectedSet.has(Number(t.id)));
       selectedEl.innerHTML = selectedTags.length
-        ? selectedTags.map(t => `<button type="button" onclick="toggleTag(${Number(t.id)})" class="px-2.5 py-1 rounded-full text-xs border bg-sky-500/20 text-sky-200 border-sky-400"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${esc(t.color || '#334155')}"></span>${esc(getTagLabel(t))}</button>`).join('')
+        ? selectedTags.map(t => `<div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border bg-sky-500/20 text-sky-200 border-sky-400">
+            <button type="button" onclick="toggleTag(${Number(t.id)})"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${esc(t.color || '#334155')}"></span>${esc(getTagLabel(t))}</button>
+            <button type="button" onclick="toggleSavedFilter(${Number(t.id)})" title="Salvar tag" class="${savedTagIds.has(Number(t.id)) ? 'text-sky-300' : 'text-slate-400'}">💾</button>
+          </div>`).join('')
         : '<span class="text-xs text-slate-400">Nenhuma tag selecionada.</span>';
 
       const unselected = filtered.filter(t => !selectedSet.has(Number(t.id)));
@@ -113,13 +155,119 @@
       renderCards();
     }
 
+    function openSavedMenu(){
+      document.getElementById('savedTagsMenu').classList.remove('translate-x-full');
+      document.getElementById('savedMenuBackdrop').classList.remove('hidden');
+    }
+    function closeSavedMenu(){
+      document.getElementById('savedTagsMenu').classList.add('translate-x-full');
+      document.getElementById('savedMenuBackdrop').classList.add('hidden');
+    }
+
+    async function toggleSavedFilter(tagId){
+      await api('toggle_saved_filter', { tag_id: Number(tagId) });
+      await loadSavedFilters();
+      renderTags();
+      renderCards();
+    }
+
+    async function loadSavedFilters(){
+      const res = await api('list_saved_filters');
+      state.savedFilters = res.data || [];
+      renderSavedFilters();
+    }
+
+    function renderSavedFilters(){
+      const el = document.getElementById('savedTagsList');
+      if (!state.savedFilters.length) {
+        el.innerHTML = '<p class="text-sm text-slate-400">Nenhuma tag salva.</p>';
+        return;
+      }
+      el.innerHTML = state.savedFilters.map(f => `
+        <div class="border border-slate-700 rounded-lg p-2 bg-slate-900/70">
+          <div class="flex items-start justify-between gap-2">
+            <label class="flex items-start gap-2 text-sm cursor-pointer flex-1">
+              <input type="checkbox" ${Number(f.ativo) === 1 ? 'checked' : ''} onchange="setSavedFilterActive(${Number(f.id_tag)}, this.checked)">
+              <span>${esc(getTagLabel(f))}</span>
+            </label>
+            <button type="button" onclick="openEditSavedTagModal(${Number(f.id_tag)})" class="text-slate-300 hover:text-white">✏️</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function setSavedFilterActive(tagId, checked){
+      await api('set_saved_filter_active', { tag_id: Number(tagId), ativo: checked ? 1 : 0 });
+      await loadSavedFilters();
+      applySavedActiveFilters();
+    }
+
+    function applySavedActiveFilters(){
+      const activeIds = state.savedFilters.filter(f => Number(f.ativo) === 1).map(f => Number(f.id_tag));
+      state.selectedTagIds = Array.from(new Set([...(state.selectedTagIds || []), ...activeIds]));
+      renderTags();
+      renderCards();
+    }
+
+    function openEditSavedTagModal(tagId){
+      const tag = state.tags.find(t => Number(t.id) === Number(tagId));
+      if (!tag) return;
+      document.getElementById('editSavedTagId').value = String(tag.id);
+      document.getElementById('editSavedTagNumero').value = tag.numero ?? '';
+      document.getElementById('editSavedTagName').value = tag.name ?? '';
+      document.getElementById('editSavedTagNamePtBr').value = tag.name_pt_br ?? '';
+      document.getElementById('editSavedTagModal').classList.remove('hidden');
+      document.getElementById('editSavedTagModal').classList.add('flex');
+    }
+    function closeEditSavedTagModal(){
+      document.getElementById('editSavedTagModal').classList.add('hidden');
+      document.getElementById('editSavedTagModal').classList.remove('flex');
+    }
+
+    async function unpinTagFromModal(){
+      const tagId = Number(document.getElementById('editSavedTagId').value || 0);
+      if (!tagId) return;
+      await api('remove_saved_filter', { tag_id: tagId });
+      state.selectedTagIds = state.selectedTagIds.filter(id => id !== tagId);
+      closeEditSavedTagModal();
+      await loadSavedFilters();
+      renderTags();
+      renderCards();
+    }
+
     async function load(){
       const [tagsRes, cardsRes] = await Promise.all([api('list_tags'), api('list_cards_for_tag_filtering')]);
       state.tags = tagsRes.data || [];
       state.cards = cardsRes.data || [];
+      await loadSavedFilters();
+      applySavedActiveFilters();
       renderTags();
       renderCards();
     }
+
+    document.getElementById('editSavedTagForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const id = Number(document.getElementById('editSavedTagId').value || 0);
+      if (!id) return;
+      const old = state.tags.find(t => Number(t.id) === id) || {};
+      await api('update_tag', {
+        id,
+        numero: document.getElementById('editSavedTagNumero').value,
+        name: document.getElementById('editSavedTagName').value,
+        name_pt_br: document.getElementById('editSavedTagNamePtBr').value,
+        is_book: Number(old.is_book) === 1 ? 1 : 0,
+        is_verb_tense: Number(old.is_verb_tense) === 1 ? 1 : 0,
+        is_sentence_type: Number(old.is_sentence_type) === 1 ? 1 : 0,
+        is_lexical_chunk: Number(old.is_lexical_chunk) === 1 ? 1 : 0,
+        is_relation_type: Number(old.is_relation_type) === 1 ? 1 : 0,
+        is_word: Number(old.is_word) === 1 ? 1 : 0,
+        is_month: Number(old.is_month) === 1 ? 1 : 0,
+        is_day: Number(old.is_day) === 1 ? 1 : 0,
+        is_year: Number(old.is_year) === 1 ? 1 : 0
+      });
+      closeEditSavedTagModal();
+      await load();
+    });
 
     document.getElementById('footerTagSearch').addEventListener('input', renderTags);
     window.addEventListener('DOMContentLoaded', load);
