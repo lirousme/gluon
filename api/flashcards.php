@@ -3279,6 +3279,52 @@ elseif ($action === 'delete_card') {
     }
 }
 
+
+elseif ($action === 'list_cards_for_tag_filtering') {
+    $stmt = $pdo->prepare("
+        SELECT f.id, f.front_encrypted, f.back_encrypted
+        FROM flashcards f
+        JOIN directories d ON d.id = f.directory_id
+        WHERE d.user_id = ?
+        ORDER BY f.id DESC
+        LIMIT 2000
+    ");
+    $stmt->execute([$user_id]);
+    $cards = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $cardIds = array_map(static fn($card) => (int)$card['id'], $cards);
+    $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', $cardIds, $user_id);
+    $objectTagsByCard = fetchLinkedTagsByCard($pdo, 'objects_links', $cardIds, $user_id);
+    $tipoFrasalTagsByCard = fetchLinkedTagsByCard($pdo, 'tipo_frasal_links', $cardIds, $user_id);
+    $tenseTagsByCard = fetchLinkedTagsByCard($pdo, 'tense_links', $cardIds, $user_id);
+    $lexicalChunksTagsByCard = fetchLinkedTagsByCard($pdo, 'lexical_chunks_links', $cardIds, $user_id);
+    $relationTagsByCard = fetchLinkedTagsByCard($pdo, 'relation_links', $cardIds, $user_id);
+    $wordsTagsByCard = fetchLinkedTagsByCard($pdo, 'words_links', $cardIds, $user_id);
+    $idiomaPrincipalTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'tag_id', $cardIds, $user_id);
+    $idiomaSecundarioTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'segundo_idioma_tag_id', $cardIds, $user_id);
+
+    $response = [];
+    foreach ($cards as $card) {
+        $cardId = (int)$card['id'];
+        $response[] = [
+            'id' => $cardId,
+            'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
+            'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
+            'subject_tags' => $subjectTagsByCard[$cardId] ?? [],
+            'object_tags' => $objectTagsByCard[$cardId] ?? [],
+            'tipo_frasal_tags' => $tipoFrasalTagsByCard[$cardId] ?? [],
+            'tense_tags' => $tenseTagsByCard[$cardId] ?? [],
+            'lexical_chunks_tags' => $lexicalChunksTagsByCard[$cardId] ?? [],
+            'relation_tags' => $relationTagsByCard[$cardId] ?? [],
+            'words_tags' => $wordsTagsByCard[$cardId] ?? [],
+            'idioma_principal_tags' => $idiomaPrincipalTagsByCard[$cardId] ?? [],
+            'idioma_secundario_tags' => $idiomaSecundarioTagsByCard[$cardId] ?? []
+        ];
+    }
+
+    echo json_encode(['status' => 'success', 'data' => $response]);
+}
+
 elseif ($action === 'list_tags') {
     $stmt = $pdo->prepare("SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year FROM flashcard_tags WHERE user_id IN (?, 5) ORDER BY id ASC");
     $stmt->execute([$user_id]);

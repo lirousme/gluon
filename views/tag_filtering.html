@@ -17,27 +17,107 @@
     </header>
 
     <main class="flex-1 px-4 py-6 max-w-4xl mx-auto w-full">
+      <section class="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
+        <div class="flex items-center justify-between gap-2 mb-3">
+          <h2 class="text-sm uppercase tracking-wide text-slate-300">Cards filtrados</h2>
+          <span id="cardsCount" class="text-xs text-slate-400">0 cards</span>
+        </div>
+        <div id="cardsList" class="space-y-2"></div>
+      </section>
     </main>
 
     <footer class="border-t border-slate-700 px-4 py-4 bg-slate-950">
-      <div class="max-w-4xl mx-auto">
+      <div class="max-w-4xl mx-auto space-y-3">
+        <label class="text-sm text-slate-300">Selecionar tags para filtrar</label>
+        <div id="selectedTagsPanel" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
+        <input id="footerTagSearch" type="text" placeholder="Pesquisar tag por nome..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm text-slate-100">
+        <div id="searchTagsPanel" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
       </div>
     </footer>
   </div>
   <script>
+    const state = { tags: [], cards: [], selectedTagIds: [] };
+    function esc(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
     function getMarkedBackRoute() {
       const urlParams = new URLSearchParams(window.location.search);
       const from = urlParams.get('from');
       return from ? decodeURIComponent(from) : '/views/tag_family.html';
     }
-
     function goBackToMarkedRoute() {
-      if (window.history.length > 1) {
-        window.history.back();
-        return;
-      }
+      if (window.history.length > 1) { window.history.back(); return; }
       window.location.href = getMarkedBackRoute();
     }
+    async function api(action, payload = {}) {
+      payload.action = action;
+      const r = await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const j = await r.json();
+      if (!r.ok || j.status !== 'success') throw new Error(j.message || 'Erro');
+      return j;
+    }
+
+    function getTagLabel(tag){
+      const numero = tag?.numero;
+      const pt = String(tag?.name_pt_br || '').trim();
+      const name = String(tag?.name || '').trim();
+      if (numero !== null && numero !== undefined && String(numero).trim() !== '') return pt ? `${numero} - ${pt}` : `${numero} - ${name}`;
+      return pt || name || 'Tag sem nome';
+    }
+
+    function renderTags(){
+      const selectedEl = document.getElementById('selectedTagsPanel');
+      const searchEl = document.getElementById('searchTagsPanel');
+      const q = (document.getElementById('footerTagSearch').value || '').toLowerCase().trim();
+      const selectedSet = new Set(state.selectedTagIds);
+      const filtered = state.tags.filter(t => String(t.name || '').toLowerCase().includes(q) || String(t.name_pt_br || '').toLowerCase().includes(q) || String(t.numero ?? '').toLowerCase().includes(q));
+
+      const selectedTags = state.tags.filter(t => selectedSet.has(Number(t.id)));
+      selectedEl.innerHTML = selectedTags.length
+        ? selectedTags.map(t => `<button type="button" onclick="toggleTag(${Number(t.id)})" class="px-2.5 py-1 rounded-full text-xs border bg-sky-500/20 text-sky-200 border-sky-400"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${esc(t.color || '#334155')}"></span>${esc(getTagLabel(t))}</button>`).join('')
+        : '<span class="text-xs text-slate-400">Nenhuma tag selecionada.</span>';
+
+      const unselected = filtered.filter(t => !selectedSet.has(Number(t.id)));
+      searchEl.innerHTML = unselected.length
+        ? unselected.map(t => `<button type="button" onclick="toggleTag(${Number(t.id)})" class="px-2.5 py-1 rounded-full text-xs border bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${esc(t.color || '#334155')}"></span>${esc(getTagLabel(t))}</button>`).join('')
+        : '<span class="text-xs text-slate-400">Nenhuma tag encontrada para esta busca.</span>';
+    }
+
+    function cardHasAllSelectedTags(card, selectedSet){
+      if (!selectedSet.size) return true;
+      const pools = ['subject_tags','object_tags','tipo_frasal_tags','tense_tags','lexical_chunks_tags','relation_tags','words_tags','idioma_principal_tags','idioma_secundario_tags'];
+      const cardTagIds = new Set();
+      pools.forEach(key => (card[key] || []).forEach(t => cardTagIds.add(Number(t.id))));
+      for (const id of selectedSet) if (!cardTagIds.has(id)) return false;
+      return true;
+    }
+
+    function renderCards(){
+      const list = document.getElementById('cardsList');
+      const selectedSet = new Set(state.selectedTagIds);
+      const filteredCards = state.cards.filter(c => cardHasAllSelectedTags(c, selectedSet));
+      document.getElementById('cardsCount').textContent = `${filteredCards.length} card(s)`;
+      list.innerHTML = filteredCards.length
+        ? filteredCards.map(c => `<article class="rounded-lg border border-slate-700 bg-slate-900/60 p-3"><p class="text-sm text-slate-100">${esc(c.front || '(sem frente)')}</p><p class="text-xs text-slate-400 mt-1">${esc(c.back || '(sem verso)')}</p></article>`).join('')
+        : '<p class="text-sm text-slate-400">Nenhum card encontrado com as tags selecionadas.</p>';
+    }
+
+    function toggleTag(tagId){
+      const id = Number(tagId);
+      state.selectedTagIds = state.selectedTagIds.includes(id) ? state.selectedTagIds.filter(v => v !== id) : [...state.selectedTagIds, id];
+      renderTags();
+      renderCards();
+    }
+
+    async function load(){
+      const [tagsRes, cardsRes] = await Promise.all([api('list_tags'), api('list_cards_for_tag_filtering')]);
+      state.tags = tagsRes.data || [];
+      state.cards = cardsRes.data || [];
+      renderTags();
+      renderCards();
+    }
+
+    document.getElementById('footerTagSearch').addEventListener('input', renderTags);
+    window.addEventListener('DOMContentLoaded', load);
   </script>
 </body>
 </html>
