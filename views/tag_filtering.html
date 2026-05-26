@@ -186,8 +186,8 @@
     }
 
     function filterByFamilyIntersection(direction, selectedSet){
-      const relationKey = direction === 'mothers' ? 'id_tag_mother' : 'id_tag_child';
-      const targetKey = direction === 'mothers' ? 'id_tag_child' : 'id_tag_mother';
+      const relationKey = direction === 'mothers' ? 'id_tag_child' : 'id_tag_mother';
+      const targetKey = direction === 'mothers' ? 'id_tag_mother' : 'id_tag_child';
       const selected = Array.from(selectedSet);
       const relatedMap = new Map();
       state.tagFamilyRelations.forEach((rel) => {
