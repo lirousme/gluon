@@ -96,6 +96,55 @@ try {
 } catch (PDOException $e) {}
 
 
+
+
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS nouns (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        id_user INT UNSIGNED NOT NULL,
+        singular_pt_br VARCHAR(255) NOT NULL,
+        plural_pt_br VARCHAR(255) NOT NULL,
+        singular_en_us VARCHAR(255) NOT NULL,
+        plural_en_us VARCHAR(255) NOT NULL,
+        gender TINYINT(1) NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_nouns_user (id_user),
+        FOREIGN KEY (id_user) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE nouns ADD COLUMN gender TINYINT(1) NOT NULL DEFAULT 0 AFTER plural_en_us");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS verbs (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        id_user INT UNSIGNED NOT NULL,
+        simple_present_pt_br VARCHAR(255) NOT NULL,
+        simple_present_en_us VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_verbs_user (id_user),
+        FOREIGN KEY (id_user) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS adjectives (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        id_user INT UNSIGNED NOT NULL,
+        singular_feminine_pt_br VARCHAR(255) NOT NULL,
+        plural_feminine_pt_br VARCHAR(255) NOT NULL,
+        singular_masculine_pt_br VARCHAR(255) NOT NULL,
+        plural_masculine_pt_br VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_adjectives_user (id_user),
+        FOREIGN KEY (id_user) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
 try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS pronuncias (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
