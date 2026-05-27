@@ -88,7 +88,7 @@
 
         const nounApp = {
             allNounTokens: [],
-            selectedTokenIds: [],
+            selectedTokenKeys: [],
             searchQuery: '',
 
             async init() {
@@ -124,24 +124,43 @@
                 return this.allNounTokens.filter((token) => String(token.value || '').toLowerCase().includes(this.searchQuery));
             },
 
+            getTokenKey(token) {
+                return `${Number(token.id)}:${String(token.column || '')}`;
+            },
+
             toggleToken(token) {
                 const tokenId = Number(token.id);
                 if (!tokenId) return;
-                const existingIndex = this.selectedTokenIds.findIndex((id) => id === tokenId);
+                const tokenKey = this.getTokenKey(token);
+                const existingIndex = this.selectedTokenKeys.findIndex((key) => key === tokenKey);
                 if (existingIndex >= 0) {
-                    this.selectedTokenIds.splice(existingIndex, 1);
+                    this.selectedTokenKeys.splice(existingIndex, 1);
                 } else {
-                    this.selectedTokenIds.push(tokenId);
+                    this.selectedTokenKeys.push(tokenKey);
                 }
                 this.renderSelectedNouns();
                 this.renderPanel();
             },
 
+            formatSelectedNouns(values) {
+                if (!values.length) return '';
+                const normalized = values.map((value, index) => {
+                    const raw = String(value || '').trim();
+                    if (raw === '') return '';
+                    if (index === 0) return raw;
+                    return raw.charAt(0).toLowerCase() + raw.slice(1);
+                }).filter(Boolean);
+
+                if (normalized.length <= 1) return normalized[0] || '';
+                if (normalized.length === 2) return `${normalized[0]} e ${normalized[1]}`;
+                return `${normalized.slice(0, -1).join(', ')} e ${normalized[normalized.length - 1]}`;
+            },
+
             renderSelectedNouns() {
                 const section = document.getElementById('selectedNounsSection');
                 const text = document.getElementById('selectedNounText');
-                const selectedValues = this.selectedTokenIds
-                    .map((tokenId) => this.allNounTokens.find((token) => Number(token.id) === tokenId))
+                const selectedValues = this.selectedTokenKeys
+                    .map((tokenKey) => this.allNounTokens.find((token) => this.getTokenKey(token) === tokenKey))
                     .filter(Boolean)
                     .map((token) => token.value);
 
@@ -151,7 +170,7 @@
                     return;
                 }
 
-                text.textContent = selectedValues.join(', ');
+                text.textContent = this.formatSelectedNouns(selectedValues);
                 section.classList.remove('hidden');
             },
 
@@ -170,17 +189,18 @@
                 }
 
                 panel.innerHTML = tokens.map((token) => {
-                    const selected = this.selectedTokenIds.includes(Number(token.id));
+                    const tokenKey = this.getTokenKey(token);
+                    const selected = this.selectedTokenKeys.includes(tokenKey);
                     const baseClass = selected
                         ? 'bg-blue-500/20 text-blue-100 border-blue-400'
                         : 'bg-slate-800 text-slate-200 border-slate-600 hover:border-gluon-primary hover:text-white';
-                    return `<button type="button" data-token-key="${this.getTokenKey(token)}" class="noun-token border ${baseClass} rounded-full px-3 py-1.5 text-sm transition-colors">${token.value}</button>`;
+                    return `<button type="button" data-token-key="${tokenKey}" class="noun-token border ${baseClass} rounded-full px-3 py-1.5 text-sm transition-colors">${token.value}</button>`;
                 }).join('');
 
                 panel.querySelectorAll('.noun-token').forEach((button) => {
                     button.addEventListener('click', () => {
-                        const tokenId = Number(button.dataset.tokenId);
-                        const token = this.allNounTokens.find((item) => item.id === tokenId);
+                        const tokenKey = String(button.dataset.tokenKey || '');
+                        const token = this.allNounTokens.find((item) => this.getTokenKey(item) === tokenKey);
                         if (token) this.toggleToken(token);
                     });
                 });
