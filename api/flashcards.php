@@ -4093,6 +4093,36 @@ elseif ($action === 'list_noun_tokens') {
     echo json_encode(['status' => 'success', 'tokens' => $tokens]);
 }
 
+elseif ($action === 'list_verb_tokens') {
+    $query = trim((string)($input['query'] ?? ''));
+
+    $stmt = $pdo->prepare("SELECT id, verb_group_id, language_id, pronoun_id, verb_form_id, verb_text FROM verbs WHERE id_user = ? ORDER BY id DESC LIMIT 1200");
+    $stmt->execute([$user_id]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $tokens = [];
+    foreach ($rows as $row) {
+        $value = trim((string)($row['verb_text'] ?? ''));
+        if ($value === '') continue;
+        if ($query !== '' && stripos($value, $query) === false) continue;
+
+        $tokens[] = [
+            'id' => (int)$row['id'],
+            'verb_group_id' => (int)($row['verb_group_id'] ?? 0),
+            'language_id' => (int)($row['language_id'] ?? 0),
+            'pronoun_id' => (int)($row['pronoun_id'] ?? 0),
+            'verb_form_id' => (int)($row['verb_form_id'] ?? 0),
+            'value' => $value
+        ];
+    }
+
+    usort($tokens, function ($a, $b) {
+        return strcasecmp((string)$a['value'], (string)$b['value']);
+    });
+
+    echo json_encode(['status' => 'success', 'tokens' => $tokens]);
+}
+
 elseif ($action === 'add_bulk') {
     $deck_id = (int)($input['deck_id'] ?? 0);
     $cards = $input['cards'] ?? [];

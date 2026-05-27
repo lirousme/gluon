@@ -46,6 +46,21 @@
             <div id="nounPanel" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
             <input id="nounSearchInput" type="text" placeholder="Pesquisar noun..." class="w-full mt-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
         </section>
+
+        <section id="selectedVerbsSection" class="hidden mt-4 mb-4 bg-gluon-secondary border border-emerald-400/40 rounded-xl p-4 sm:p-5 shadow-2xl">
+            <p class="text-xs text-emerald-200 uppercase tracking-wide">Verbos selecionados</p>
+            <p id="selectedVerbText" class="text-base font-semibold text-emerald-100 mt-1"></p>
+        </section>
+
+        <section class="bg-gluon-secondary border border-slate-700 rounded-xl p-4 sm:p-5 shadow-2xl">
+            <div class="mb-3">
+                <h2 class="text-base sm:text-lg font-semibold text-slate-100">Selecionar verbo</h2>
+                <p class="text-xs sm:text-sm text-slate-400">Digite para buscar variações de verbos salvas na tabela verbs.</p>
+            </div>
+
+            <div id="verbPanel" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
+            <input id="verbSearchInput" type="text" placeholder="Pesquisar verbo..." class="w-full mt-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
+        </section>
     </main>
 
     <script>
@@ -207,7 +222,184 @@
             }
         };
 
+        const verbApp = {
+            allVerbTokens: [],
+            selectedTokenIds: [],
+            searchQuery: '',
+            pronounLabels: {
+                0: 'sem pronome',
+                1: 'eu',
+                2: 'você',
+                3: 'ele/ela/isso',
+                4: 'nós',
+                5: 'vós',
+                6: 'eles/elas'
+            },
+            verbFormLabels: {
+                1: 'Simple Present',
+                2: 'Simple Past',
+                3: 'Simple Future',
+                4: 'Present Continuous',
+                5: 'Past Continuous',
+                6: 'Future Continuous',
+                7: 'Present Perfect',
+                8: 'Past Perfect',
+                9: 'Future Perfect',
+                10: 'Present Perfect Continuous',
+                11: 'Past Perfect Continuous',
+                12: 'Future Perfect Continuous',
+                13: 'Infinitive',
+                14: 'Gerund',
+                15: 'Participle'
+            },
+
+            async init() {
+                this.bindEvents();
+                await this.loadVerbs();
+                this.renderPanel();
+            },
+
+            bindEvents() {
+                const input = document.getElementById('verbSearchInput');
+                input.addEventListener('input', (event) => {
+                    this.searchQuery = String(event.target.value || '').trim().toLowerCase();
+                    this.renderPanel();
+                });
+            },
+
+            async loadVerbs() {
+                try {
+                    const res = await flashcardsApi('list_verb_tokens');
+                    if (res?.status !== 'success' || !Array.isArray(res.tokens)) {
+                        this.allVerbTokens = [];
+                        return;
+                    }
+                    this.allVerbTokens = res.tokens;
+                } catch (error) {
+                    this.allVerbTokens = [];
+                }
+            },
+
+            getFilteredTokens() {
+                if (!this.searchQuery) return [];
+                return this.allVerbTokens.filter((token) => String(token.value || '').toLowerCase().includes(this.searchQuery));
+            },
+
+            getComparableValue(token) {
+                return String(token?.value || '').trim().toLowerCase();
+            },
+
+            shouldDisambiguate(token) {
+                const target = this.getComparableValue(token);
+                if (!target) return false;
+                let count = 0;
+                for (const item of this.allVerbTokens) {
+                    if (this.getComparableValue(item) === target) count += 1;
+                    if (count > 1) return true;
+                }
+                return false;
+            },
+
+            getTokenDisplayValue(token) {
+                const value = String(token?.value || '').trim();
+                if (!value) return '';
+                if (!this.shouldDisambiguate(token)) return value;
+
+                const pronounId = Number(token?.pronoun_id || 0);
+                const verbFormId = Number(token?.verb_form_id || 0);
+                const parts = [];
+
+                if (pronounId > 0 && this.pronounLabels[pronounId]) {
+                    parts.push(this.pronounLabels[pronounId]);
+                }
+                if (this.verbFormLabels[verbFormId]) {
+                    parts.push(this.verbFormLabels[verbFormId]);
+                }
+
+                if (!parts.length) return value;
+                return `${value} (${parts.join(' | ')})`;
+            },
+
+            toggleToken(token) {
+                const tokenId = Number(token.id);
+                if (!tokenId) return;
+                const existingIndex = this.selectedTokenIds.findIndex((id) => id === tokenId);
+                if (existingIndex >= 0) {
+                    this.selectedTokenIds.splice(existingIndex, 1);
+                } else {
+                    this.selectedTokenIds.push(tokenId);
+                }
+                this.renderSelectedVerbs();
+                this.renderPanel();
+            },
+
+            formatSelectedTokens(values) {
+                if (!values.length) return '';
+                const normalized = values.map((value, index) => {
+                    const raw = String(value || '').trim();
+                    if (raw === '') return '';
+                    if (index === 0) return raw;
+                    return raw.charAt(0).toLowerCase() + raw.slice(1);
+                }).filter(Boolean);
+
+                if (normalized.length <= 1) return normalized[0] || '';
+                if (normalized.length === 2) return `${normalized[0]} e ${normalized[1]}`;
+                return `${normalized.slice(0, -1).join(', ')} e ${normalized[normalized.length - 1]}`;
+            },
+
+            renderSelectedVerbs() {
+                const section = document.getElementById('selectedVerbsSection');
+                const text = document.getElementById('selectedVerbText');
+                const selectedValues = this.selectedTokenIds
+                    .map((tokenId) => this.allVerbTokens.find((token) => Number(token.id) === Number(tokenId)))
+                    .filter(Boolean)
+                    .map((token) => this.getTokenDisplayValue(token));
+
+                if (!selectedValues.length) {
+                    text.textContent = '';
+                    section.classList.add('hidden');
+                    return;
+                }
+
+                text.textContent = this.formatSelectedTokens(selectedValues);
+                section.classList.remove('hidden');
+            },
+
+            renderPanel() {
+                const panel = document.getElementById('verbPanel');
+                const tokens = this.getFilteredTokens();
+
+                if (!this.searchQuery) {
+                    panel.innerHTML = '<p class="text-sm text-slate-400">Comece digitando para ver sugestões de verbos.</p>';
+                    return;
+                }
+
+                if (!tokens.length) {
+                    panel.innerHTML = '<p class="text-sm text-slate-400">Nenhum verbo encontrado para esse filtro.</p>';
+                    return;
+                }
+
+                panel.innerHTML = tokens.map((token) => {
+                    const tokenId = Number(token.id);
+                    const selected = this.selectedTokenIds.includes(tokenId);
+                    const baseClass = selected
+                        ? 'bg-emerald-500/20 text-emerald-100 border-emerald-400'
+                        : 'bg-slate-800 text-slate-200 border-slate-600 hover:border-gluon-primary hover:text-white';
+                    return `<button type="button" data-token-id="${tokenId}" class="verb-token border ${baseClass} rounded-full px-3 py-1.5 text-sm transition-colors">${this.getTokenDisplayValue(token)}</button>`;
+                }).join('');
+
+                panel.querySelectorAll('.verb-token').forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const tokenId = Number(button.dataset.tokenId || 0);
+                        const token = this.allVerbTokens.find((item) => Number(item.id) === tokenId);
+                        if (token) this.toggleToken(token);
+                    });
+                });
+            }
+        };
+
         nounApp.init();
+        verbApp.init();
     </script>
 </body>
 </html>
