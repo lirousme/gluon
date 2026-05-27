@@ -283,7 +283,18 @@
 
             getFilteredTokens() {
                 if (!this.searchQuery) return [];
-                return this.allVerbTokens.filter((token) => String(token.value || '').toLowerCase().includes(this.searchQuery));
+                const filtered = this.allVerbTokens.filter((token) => String(token.value || '').toLowerCase().includes(this.searchQuery));
+                const uniqueByDisplayValue = new Map();
+
+                filtered.forEach((token) => {
+                    const displayValue = this.getTokenDisplayValue(token);
+                    if (!displayValue) return;
+                    if (!uniqueByDisplayValue.has(displayValue)) {
+                        uniqueByDisplayValue.set(displayValue, token);
+                    }
+                });
+
+                return Array.from(uniqueByDisplayValue.values());
             },
 
 
@@ -316,12 +327,22 @@
             toggleToken(token) {
                 const tokenId = Number(token.id);
                 if (!tokenId) return;
-                const existingIndex = this.selectedTokenIds.findIndex((id) => id === tokenId);
-                if (existingIndex >= 0) {
-                    this.selectedTokenIds.splice(existingIndex, 1);
+                const selectedValue = this.getTokenDisplayValue(token);
+                if (!selectedValue) return;
+
+                const relatedTokenIds = this.allVerbTokens
+                    .filter((item) => this.getTokenDisplayValue(item) === selectedValue)
+                    .map((item) => Number(item.id))
+                    .filter((id) => id > 0);
+
+                const isAlreadySelected = relatedTokenIds.some((id) => this.selectedTokenIds.includes(id));
+                if (isAlreadySelected) {
+                    this.selectedTokenIds = this.selectedTokenIds.filter((id) => !relatedTokenIds.includes(id));
                 } else {
-                    this.selectedTokenIds.push(tokenId);
+                    const nextIds = [...this.selectedTokenIds, ...relatedTokenIds];
+                    this.selectedTokenIds = Array.from(new Set(nextIds));
                 }
+
                 this.renderSelectedVerbs();
                 this.renderPanel();
             },
@@ -347,14 +368,15 @@
                     .map((tokenId) => this.allVerbTokens.find((token) => Number(token.id) === Number(tokenId)))
                     .filter(Boolean)
                     .map((token) => this.getTokenDisplayValue(token));
+                const uniqueSelectedValues = Array.from(new Set(selectedValues));
 
-                if (!selectedValues.length) {
+                if (!uniqueSelectedValues.length) {
                     text.textContent = '';
                     section.classList.add('hidden');
                     return;
                 }
 
-                text.textContent = this.formatSelectedTokens(selectedValues);
+                text.textContent = this.formatSelectedTokens(uniqueSelectedValues);
                 section.classList.remove('hidden');
             },
 
@@ -374,11 +396,15 @@
 
                 panel.innerHTML = tokens.map((token) => {
                     const tokenId = Number(token.id);
-                    const selected = this.selectedTokenIds.includes(tokenId);
+                    const displayValue = this.getTokenDisplayValue(token);
+                    const selected = this.selectedTokenIds
+                        .map((id) => this.allVerbTokens.find((item) => Number(item.id) === Number(id)))
+                        .filter(Boolean)
+                        .some((item) => this.getTokenDisplayValue(item) === displayValue);
                     const baseClass = selected
                         ? 'bg-emerald-500/20 text-emerald-100 border-emerald-400'
                         : 'bg-slate-800 text-slate-200 border-slate-600 hover:border-gluon-primary hover:text-white';
-                    return `<button type="button" data-token-id="${tokenId}" class="verb-token border ${baseClass} rounded-full px-3 py-1.5 text-sm transition-colors">${this.getTokenDisplayValue(token)}</button>`;
+                    return `<button type="button" data-token-id="${tokenId}" class="verb-token border ${baseClass} rounded-full px-3 py-1.5 text-sm transition-colors">${displayValue}</button>`;
                 }).join('');
 
                 panel.querySelectorAll('.verb-token').forEach((button) => {
