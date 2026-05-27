@@ -28,6 +28,11 @@
             </button>
 
             <h1 id="building-user-name" class="text-sm sm:text-base font-semibold text-slate-100 truncate">Carregando usuário...</h1>
+
+            <button id="languageSwitchButton" type="button" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-200 hover:text-white hover:border-gluon-primary transition-colors" title="Alternar idioma">
+                <i class="fa-solid fa-language"></i>
+                <span id="languageSwitchLabel" class="font-semibold text-xs sm:text-sm">PT-BR</span>
+            </button>
         </div>
     </header>
 
@@ -107,6 +112,53 @@
         }
 
 
+
+        const i18n = {
+            'pt-BR': {
+                and: 'e',
+                nounTypeHint: 'Comece digitando para ver sugestões de noun.',
+                nounNotFound: 'Nenhum noun encontrado para esse filtro.',
+                verbTypeHint: 'Comece digitando para ver sugestões de verbos.',
+                verbNotFound: 'Nenhum verbo encontrado para esse filtro.',
+                adjectiveTypeHint: 'Comece digitando para ver sugestões de adjetivos.',
+                adjectiveNotFound: 'Nenhum adjetivo encontrado para esse filtro.',
+                pronounLabels: {0:'forma nominal',1:'eu',2:'você',3:'ele/ela/isso',4:'nós',5:'vós/vocês',6:'eles/elas'},
+                languageButton: 'PT-BR'
+            },
+            'en-US': {
+                and: 'and',
+                nounTypeHint: 'Start typing to see noun suggestions.',
+                nounNotFound: 'No noun found for this filter.',
+                verbTypeHint: 'Start typing to see verb suggestions.',
+                verbNotFound: 'No verb found for this filter.',
+                adjectiveTypeHint: 'Start typing to see adjective suggestions.',
+                adjectiveNotFound: 'No adjective found for this filter.',
+                pronounLabels: {0:'nominal form',1:'I',2:'you',3:'he/she/it',4:'we',5:'you (plural)',6:'they'},
+                languageButton: 'EN-US'
+            }
+        };
+
+        const languageApp = {
+            current: 'pt-BR',
+            languageMap: {'pt-BR':1,'en-US':2},
+            init(){
+                document.getElementById('languageSwitchButton').addEventListener('click',()=>this.toggleLanguage());
+                this.renderLanguageButton();
+            },
+            toggleLanguage(){
+                this.current = this.current === 'pt-BR' ? 'en-US' : 'pt-BR';
+                this.renderLanguageButton();
+                nounApp.renderPanel();
+                verbApp.renderPanel();
+                adjectiveApp.renderPanel();
+                renderSentenceDisplay();
+            },
+            renderLanguageButton(){ document.getElementById('languageSwitchLabel').textContent = i18n[this.current].languageButton; },
+            getLanguageId(){ return this.languageMap[this.current] || 1; }
+        };
+
+        function t(key){ return i18n[languageApp.current][key]; }
+
         function formatSelectedTokens(values) {
             if (!values.length) return '';
             const normalized = values.map((value, index) => {
@@ -117,8 +169,8 @@
             }).filter(Boolean);
 
             if (normalized.length <= 1) return normalized[0] || '';
-            if (normalized.length === 2) return `${normalized[0]} e ${normalized[1]}`;
-            return `${normalized.slice(0, -1).join(', ')} e ${normalized[normalized.length - 1]}`;
+            if (normalized.length === 2) return `${normalized[0]} ${t('and')} ${normalized[1]}`;
+            return `${normalized.slice(0, -1).join(', ')} ${t('and')} ${normalized[normalized.length - 1]}`;
         }
 
         function renderSentenceDisplay() {
@@ -174,7 +226,12 @@
 
             getFilteredTokens() {
                 if (!this.searchQuery) return [];
-                return this.allNounTokens.filter((token) => String(token.value || '').toLowerCase().includes(this.searchQuery));
+                const currentLanguage = languageApp.current === 'pt-BR' ? '_pt_br' : '_en_us';
+                return this.allNounTokens.filter((token) => {
+                    const tokenColumn = String(token.column || '');
+                    if (!tokenColumn.endsWith(currentLanguage)) return false;
+                    return String(token.value || '').toLowerCase().includes(this.searchQuery);
+                });
             },
 
             getTokenKey(token) {
@@ -208,12 +265,12 @@
                 const tokens = this.getFilteredTokens();
 
                 if (!this.searchQuery) {
-                    panel.innerHTML = '<p class="text-sm text-slate-400">Comece digitando para ver sugestões de noun.</p>';
+                    panel.innerHTML = `<p class="text-sm text-slate-400">${t('nounTypeHint')}</p>`;
                     return;
                 }
 
                 if (!tokens.length) {
-                    panel.innerHTML = '<p class="text-sm text-slate-400">Nenhum noun encontrado para esse filtro.</p>';
+                    panel.innerHTML = `<p class="text-sm text-slate-400">${t('nounNotFound')}</p>`;
                     return;
                 }
 
@@ -240,15 +297,6 @@
             allVerbTokens: [],
             selectedTokenIds: [],
             searchQuery: '',
-            pronounLabels: {
-                0: 'forma nominal',
-                1: 'eu',
-                2: 'você',
-                3: 'ele/ela/isso',
-                4: 'nós',
-                5: 'vós/vocês',
-                6: 'eles/elas'
-            },
             verbFormLabels: {
                 1: 'Simple Present',
                 2: 'Simple Past',
@@ -296,7 +344,11 @@
 
             getFilteredTokens() {
                 if (!this.searchQuery) return [];
-                const filtered = this.allVerbTokens.filter((token) => String(token.value || '').toLowerCase().includes(this.searchQuery));
+                const activeLanguageId = languageApp.getLanguageId();
+                const filtered = this.allVerbTokens.filter((token) => {
+                    if (Number(token.language_id) !== activeLanguageId) return false;
+                    return String(token.value || '').toLowerCase().includes(this.searchQuery);
+                });
                 const uniqueByDisplayValue = new Map();
 
                 filtered.forEach((token) => {
@@ -330,7 +382,8 @@
 
                 const pronounId = Number(token?.pronoun_id || 0);
                 const verbFormId = Number(token?.verb_form_id || 0);
-                const pronounLabel = this.pronounLabels[pronounId] || `pronoun ${pronounId}`;
+                const pronounLabels = t('pronounLabels');
+                const pronounLabel = pronounLabels[pronounId] || `pronoun ${pronounId}`;
                 const verbFormLabel = this.verbFormLabels[verbFormId] || `Forma ${verbFormId}`;
 
                 if (pronounId > 0) return `${rawValue} (${pronounLabel})`;
@@ -374,12 +427,12 @@
                 const tokens = this.getFilteredTokens();
 
                 if (!this.searchQuery) {
-                    panel.innerHTML = '<p class="text-sm text-slate-400">Comece digitando para ver sugestões de verbos.</p>';
+                    panel.innerHTML = `<p class="text-sm text-slate-400">${t('verbTypeHint')}</p>`;
                     return;
                 }
 
                 if (!tokens.length) {
-                    panel.innerHTML = '<p class="text-sm text-slate-400">Nenhum verbo encontrado para esse filtro.</p>';
+                    panel.innerHTML = `<p class="text-sm text-slate-400">${t('verbNotFound')}</p>`;
                     return;
                 }
 
@@ -440,7 +493,11 @@
 
             getFilteredTokens() {
                 if (!this.searchQuery) return [];
-                const filtered = this.allAdjectiveTokens.filter((token) => String(token.value || '').toLowerCase().includes(this.searchQuery));
+                const activeLanguageId = languageApp.getLanguageId();
+                const filtered = this.allAdjectiveTokens.filter((token) => {
+                    if (Number(token.language_id) !== activeLanguageId) return false;
+                    return String(token.value || '').toLowerCase().includes(this.searchQuery);
+                });
                 const uniqueByValue = new Map();
                 filtered.forEach((token) => {
                     const value = String(token.value || '').trim();
@@ -475,12 +532,12 @@
                 const tokens = this.getFilteredTokens();
 
                 if (!this.searchQuery) {
-                    panel.innerHTML = '<p class="text-sm text-slate-400">Comece digitando para ver sugestões de adjetivos.</p>';
+                    panel.innerHTML = `<p class="text-sm text-slate-400">${t('adjectiveTypeHint')}</p>`;
                     return;
                 }
 
                 if (!tokens.length) {
-                    panel.innerHTML = '<p class="text-sm text-slate-400">Nenhum adjetivo encontrado para esse filtro.</p>';
+                    panel.innerHTML = `<p class="text-sm text-slate-400">${t('adjectiveNotFound')}</p>`;
                     return;
                 }
 
@@ -503,6 +560,7 @@
             }
         };
 
+        languageApp.init();
         nounApp.init();
         verbApp.init();
         adjectiveApp.init();
