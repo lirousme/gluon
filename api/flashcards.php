@@ -122,13 +122,71 @@ try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS verbs (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         id_user INT UNSIGNED NOT NULL,
-        simple_present_pt_br VARCHAR(255) NOT NULL,
-        simple_present_en_us VARCHAR(255) NOT NULL,
+        verb_group_id INT UNSIGNED NOT NULL,
+        language_id TINYINT UNSIGNED NOT NULL,
+        pronoun_id TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        verb_form_id TINYINT UNSIGNED NOT NULL,
+        verb_text VARCHAR(255) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_verbs_user (id_user),
+        INDEX idx_verbs_group (verb_group_id),
+        INDEX idx_verbs_lookup (
+            id_user,
+            verb_group_id,
+            language_id,
+            pronoun_id,
+            verb_form_id
+        ),
+        UNIQUE KEY uq_verb_form (
+            id_user,
+            verb_group_id,
+            language_id,
+            pronoun_id,
+            verb_form_id
+        ),
         FOREIGN KEY (id_user) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE verbs ADD COLUMN verb_group_id INT UNSIGNED NOT NULL DEFAULT 0 AFTER id_user");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE verbs ADD COLUMN language_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER verb_group_id");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE verbs ADD COLUMN pronoun_id TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER language_id");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE verbs ADD COLUMN verb_form_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER pronoun_id");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE verbs ADD COLUMN verb_text VARCHAR(255) NOT NULL DEFAULT '' AFTER verb_form_id");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE verbs ADD INDEX idx_verbs_group (verb_group_id)");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE verbs ADD INDEX idx_verbs_lookup (id_user, verb_group_id, language_id, pronoun_id, verb_form_id)");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE verbs ADD UNIQUE KEY uq_verb_form (id_user, verb_group_id, language_id, pronoun_id, verb_form_id)");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE verbs DROP COLUMN simple_present_pt_br");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("ALTER TABLE verbs DROP COLUMN simple_present_en_us");
 } catch (PDOException $e) {}
 
 try {
