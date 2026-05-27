@@ -143,6 +143,7 @@
                 return `${Number(token.id)}:${String(token.column || '')}`;
             },
 
+
             toggleToken(token) {
                 const tokenId = Number(token.id);
                 if (!tokenId) return;
@@ -226,6 +227,32 @@
             allVerbTokens: [],
             selectedTokenIds: [],
             searchQuery: '',
+            pronounLabels: {
+                0: 'forma nominal',
+                1: 'eu',
+                2: 'você',
+                3: 'ele/ela/isso',
+                4: 'nós',
+                5: 'vós/vocês',
+                6: 'eles/elas'
+            },
+            verbFormLabels: {
+                1: 'Simple Present',
+                2: 'Simple Past',
+                3: 'Simple Future',
+                4: 'Present Continuous',
+                5: 'Past Continuous',
+                6: 'Future Continuous',
+                7: 'Present Perfect',
+                8: 'Past Perfect',
+                9: 'Future Perfect',
+                10: 'Present Perfect Continuous',
+                11: 'Past Perfect Continuous',
+                12: 'Future Perfect Continuous',
+                13: 'Infinitive',
+                14: 'Gerund',
+                15: 'Participle'
+            },
 
             async init() {
                 this.bindEvents();
@@ -257,6 +284,49 @@
             getFilteredTokens() {
                 if (!this.searchQuery) return [];
                 return this.allVerbTokens.filter((token) => String(token.value || '').toLowerCase().includes(this.searchQuery));
+            },
+
+
+            getValueOccurrences() {
+                return this.allVerbTokens.reduce((acc, token) => {
+                    const key = String(token.value || '').trim().toLowerCase();
+                    if (!key) return acc;
+                    acc[key] = (acc[key] || 0) + 1;
+                    return acc;
+                }, {});
+            },
+
+            getTokenDisplayValue(token) {
+                const rawValue = String(token?.value || '').trim();
+                if (!rawValue) return '';
+
+                const valueOccurrences = this.getValueOccurrences();
+                const shouldDisambiguate = (valueOccurrences[rawValue.toLowerCase()] || 0) > 1;
+                if (!shouldDisambiguate) return rawValue;
+
+                const pronounId = Number(token?.pronoun_id || 0);
+                const verbFormId = Number(token?.verb_form_id || 0);
+                const pronounLabel = this.pronounLabels[pronounId] || `pronoun ${pronounId}`;
+                const verbFormLabel = this.verbFormLabels[verbFormId] || `Forma ${verbFormId}`;
+
+                const primarySuffix = pronounId > 0 ? pronounLabel : verbFormLabel;
+                const primaryLabel = `${rawValue} (${primarySuffix})`;
+
+                const hasPrimaryCollision = this.allVerbTokens.some((candidate) => {
+                    if (Number(candidate?.id || 0) === Number(token?.id || 0)) return false;
+                    const candidateRaw = String(candidate?.value || '').trim();
+                    if (candidateRaw.toLowerCase() !== rawValue.toLowerCase()) return false;
+
+                    const candidatePronounId = Number(candidate?.pronoun_id || 0);
+                    const candidateVerbFormId = Number(candidate?.verb_form_id || 0);
+                    const candidatePronounLabel = this.pronounLabels[candidatePronounId] || `pronoun ${candidatePronounId}`;
+                    const candidateVerbFormLabel = this.verbFormLabels[candidateVerbFormId] || `Forma ${candidateVerbFormId}`;
+                    const candidatePrimarySuffix = candidatePronounId > 0 ? candidatePronounLabel : candidateVerbFormLabel;
+                    return `${candidateRaw} (${candidatePrimarySuffix})`.toLowerCase() === primaryLabel.toLowerCase();
+                });
+
+                if (!hasPrimaryCollision) return primaryLabel;
+                return `${rawValue} (${pronounLabel} · ${verbFormLabel})`;
             },
 
             toggleToken(token) {
@@ -292,7 +362,7 @@
                 const selectedValues = this.selectedTokenIds
                     .map((tokenId) => this.allVerbTokens.find((token) => Number(token.id) === Number(tokenId)))
                     .filter(Boolean)
-                    .map((token) => token.value);
+                    .map((token) => this.getTokenDisplayValue(token));
 
                 if (!selectedValues.length) {
                     text.textContent = '';
@@ -324,7 +394,7 @@
                     const baseClass = selected
                         ? 'bg-emerald-500/20 text-emerald-100 border-emerald-400'
                         : 'bg-slate-800 text-slate-200 border-slate-600 hover:border-gluon-primary hover:text-white';
-                    return `<button type="button" data-token-id="${tokenId}" class="verb-token border ${baseClass} rounded-full px-3 py-1.5 text-sm transition-colors">${token.value}</button>`;
+                    return `<button type="button" data-token-id="${tokenId}" class="verb-token border ${baseClass} rounded-full px-3 py-1.5 text-sm transition-colors">${this.getTokenDisplayValue(token)}</button>`;
                 }).join('');
 
                 panel.querySelectorAll('.verb-token').forEach((button) => {
