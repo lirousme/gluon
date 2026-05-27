@@ -20,16 +20,7 @@
     <main class="flex-1 px-4 py-6 max-w-4xl mx-auto w-full">
       <section class="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
         <h2 class="text-sm uppercase tracking-wide text-slate-300 mb-3">Família da tag</h2>
-        <div class="grid md:grid-cols-2 gap-4">
-          <div>
-            <p class="text-red-300 text-sm mb-2">Esta tag é mãe de:</p>
-            <div id="childrenList" class="flex flex-wrap gap-2"></div>
-          </div>
-          <div>
-            <p class="text-red-300 text-sm mb-2">Esta tag é filha de:</p>
-            <div id="mothersList" class="flex flex-wrap gap-2"></div>
-          </div>
-        </div>
+        <div id="relationTypeSections" class="space-y-4"></div>
       </section>
     </main>
 
@@ -158,19 +149,36 @@ function openTagFamily(tag){
   const nextTagName=String(tag?.name||'').trim();
   window.location.href=`/views/tag_family.html?tag_id=${encodeURIComponent(nextTagId)}&tag_name=${encodeURIComponent(nextTagName)}`;
 }
+function getRelationTypeLabel(type){
+  const map={0:'Flexões da Palavra',1:'Apelidos e Siglas'};
+  return map[type]||`Tipo de relação ${type}`;
+}
+function getTagRelationType(tag={}){
+  const candidates=[tag?.tipo_de_relacao,tag?.relation_type,tag?.relation_type_id,tag?.tipo_relacao];
+  for(const value of candidates){
+    const num=Number(value);
+    if(Number.isInteger(num)) return num;
+  }
+  return 0;
+}
 function renderFamily(){
-  const mk=(arr)=>{
-    if(!arr.length) return '<span class="text-xs text-slate-400">Nenhuma</span>';
-    const numeroPtBrCounts = buildNumeroPtBrCounts(arr);
-    return arr.map(t=>`<button type="button" data-family-tag-id="${Number(t.id)}" class="px-2 py-1 rounded-full text-xs border border-red-400/70 bg-red-500/10 text-red-200 hover:bg-red-500/20 transition-colors" title="Abrir família da tag">${esc(getTagLabel(t, numeroPtBrCounts))}</button>`).join('');
+  const mk=(arr, relationType, relationRole)=>{
+    const current=arr.filter((tag)=>getTagRelationType(tag)===relationType);
+    if(!current.length) return '<span class="text-xs text-slate-400">Nenhuma</span>';
+    const numeroPtBrCounts = buildNumeroPtBrCounts(current);
+    return current.map(t=>`<button type="button" data-family-tag-id="${Number(t.id)}" data-relation-role="${relationRole}" class="px-2 py-1 rounded-full text-xs border border-red-400/70 bg-red-500/10 text-red-200 hover:bg-red-500/20 transition-colors" title="Abrir família da tag">${esc(getTagLabel(t, numeroPtBrCounts))}</button>`).join('');
   };
-  document.getElementById('childrenList').innerHTML=mk(state.family.children);
-  document.getElementById('mothersList').innerHTML=mk(state.family.mothers);
+  const knownTypes=[0,1];
+  const foundTypes=[...new Set([...state.family.children,...state.family.mothers].map((tag)=>getTagRelationType(tag)))];
+  const types=[...new Set([...knownTypes,...foundTypes])].sort((a,b)=>a-b);
+  const container=document.getElementById('relationTypeSections');
+  container.innerHTML=types.map((type)=>`<div class="border border-slate-700/80 rounded-lg p-3 bg-slate-900/40"><h3 class="text-sm font-semibold text-violet-200 mb-3">${esc(getRelationTypeLabel(type))}</h3><div class="grid md:grid-cols-2 gap-4"><div><p class="text-red-300 text-sm mb-2">Esta tag é mãe de:</p><div class="flex flex-wrap gap-2">${mk(state.family.children,type,'child')}</div></div><div><p class="text-red-300 text-sm mb-2">Esta tag é filha de:</p><div class="flex flex-wrap gap-2">${mk(state.family.mothers,type,'mother')}</div></div></div></div>`).join('');
   document.querySelectorAll('[data-family-tag-id]').forEach((el)=>{
     el.onclick=()=>{
       const targetId=Number(el.dataset.familyTagId);
+      const relationRole=el.dataset.relationRole||'child';
       const tag=[...state.family.children,...state.family.mothers].find((item)=>Number(item.id)===targetId);
-      openActionModal(tag||{id:targetId,name:el.textContent||''}, el.closest('#childrenList') ? 'child' : 'mother');
+      openActionModal(tag||{id:targetId,name:el.textContent||''}, relationRole);
     };
   });
 }
