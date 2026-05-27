@@ -315,6 +315,83 @@ try {
         INDEX idx_language (language)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (PDOException $e) {}
+
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS prepositions (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        id_user INT UNSIGNED NOT NULL,
+        preposition_group_id INT UNSIGNED NOT NULL,
+        language_id TINYINT UNSIGNED NOT NULL,
+        preposition_form_id TINYINT UNSIGNED NOT NULL DEFAULT 1,
+        preposition_text VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_prepositions_user (id_user),
+        INDEX idx_prepositions_group (preposition_group_id),
+        INDEX idx_prepositions_lookup (id_user, preposition_group_id, language_id, preposition_form_id),
+        UNIQUE KEY uq_preposition_form (id_user, preposition_group_id, language_id, preposition_form_id, preposition_text),
+        FOREIGN KEY (id_user) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS conjunctions (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        id_user INT UNSIGNED NOT NULL,
+        conjunction_group_id INT UNSIGNED NOT NULL,
+        language_id TINYINT UNSIGNED NOT NULL,
+        conjunction_type_id TINYINT UNSIGNED NOT NULL,
+        conjunction_text VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_conjunctions_user (id_user),
+        INDEX idx_conjunctions_group (conjunction_group_id),
+        INDEX idx_conjunctions_lookup (id_user, conjunction_group_id, language_id, conjunction_type_id),
+        UNIQUE KEY uq_conjunction_form (id_user, conjunction_group_id, language_id, conjunction_type_id, conjunction_text),
+        FOREIGN KEY (id_user) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS numerals (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        id_user INT UNSIGNED NOT NULL,
+        numeral_group_id INT UNSIGNED NOT NULL,
+        language_id TINYINT UNSIGNED NOT NULL,
+        gender_id TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        number_id TINYINT UNSIGNED NOT NULL DEFAULT 1,
+        numeral_type_id TINYINT UNSIGNED NOT NULL,
+        numeral_value DECIMAL(20,6) NULL,
+        numeral_text VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_numerals_user (id_user),
+        INDEX idx_numerals_group (numeral_group_id),
+        INDEX idx_numerals_value (numeral_value),
+        INDEX idx_numerals_lookup (id_user, numeral_group_id, language_id, gender_id, number_id, numeral_type_id),
+        UNIQUE KEY uq_numeral_form (id_user, numeral_group_id, language_id, gender_id, number_id, numeral_type_id, numeral_text),
+        FOREIGN KEY (id_user) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
+
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS adverbs (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        id_user INT UNSIGNED NOT NULL,
+        adverb_group_id INT UNSIGNED NOT NULL,
+        language_id TINYINT UNSIGNED NOT NULL,
+        adverb_type_id TINYINT UNSIGNED NOT NULL,
+        adverb_form_id TINYINT UNSIGNED NOT NULL DEFAULT 1,
+        adverb_text VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_adverbs_user (id_user),
+        INDEX idx_adverbs_group (adverb_group_id),
+        INDEX idx_adverbs_lookup (id_user, adverb_group_id, language_id, adverb_type_id, adverb_form_id),
+        UNIQUE KEY uq_adverb_form (id_user, adverb_group_id, language_id, adverb_type_id, adverb_form_id, adverb_text),
+        FOREIGN KEY (id_user) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
 // =========================================================================
 
 
@@ -4246,6 +4323,86 @@ elseif ($action === 'list_adjective_tokens') {
         return strcasecmp((string)$a['value'], (string)$b['value']);
     });
 
+    echo json_encode(['status' => 'success', 'tokens' => $tokens]);
+}
+elseif ($action === 'list_preposition_tokens') {
+    $stmt = $pdo->prepare("SELECT id, preposition_group_id, language_id, preposition_form_id, preposition_text FROM prepositions WHERE id_user = ? ORDER BY id DESC LIMIT 1200");
+    $stmt->execute([$user_id]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $tokens = [];
+    foreach ($rows as $row) {
+        $value = trim((string)($row['preposition_text'] ?? ''));
+        if ($value === '') continue;
+        $tokens[] = [
+            'id' => (int)$row['id'],
+            'preposition_group_id' => (int)($row['preposition_group_id'] ?? 0),
+            'language_id' => (int)($row['language_id'] ?? 0),
+            'preposition_form_id' => (int)($row['preposition_form_id'] ?? 0),
+            'value' => $value
+        ];
+    }
+    usort($tokens, fn($a, $b) => strcasecmp((string)$a['value'], (string)$b['value']));
+    echo json_encode(['status' => 'success', 'tokens' => $tokens]);
+}
+elseif ($action === 'list_conjunction_tokens') {
+    $stmt = $pdo->prepare("SELECT id, conjunction_group_id, language_id, conjunction_type_id, conjunction_text FROM conjunctions WHERE id_user = ? ORDER BY id DESC LIMIT 1200");
+    $stmt->execute([$user_id]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $tokens = [];
+    foreach ($rows as $row) {
+        $value = trim((string)($row['conjunction_text'] ?? ''));
+        if ($value === '') continue;
+        $tokens[] = [
+            'id' => (int)$row['id'],
+            'conjunction_group_id' => (int)($row['conjunction_group_id'] ?? 0),
+            'language_id' => (int)($row['language_id'] ?? 0),
+            'conjunction_type_id' => (int)($row['conjunction_type_id'] ?? 0),
+            'value' => $value
+        ];
+    }
+    usort($tokens, fn($a, $b) => strcasecmp((string)$a['value'], (string)$b['value']));
+    echo json_encode(['status' => 'success', 'tokens' => $tokens]);
+}
+elseif ($action === 'list_numeral_tokens') {
+    $stmt = $pdo->prepare("SELECT id, numeral_group_id, language_id, gender_id, number_id, numeral_type_id, numeral_value, numeral_text FROM numerals WHERE id_user = ? ORDER BY id DESC LIMIT 1200");
+    $stmt->execute([$user_id]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $tokens = [];
+    foreach ($rows as $row) {
+        $value = trim((string)($row['numeral_text'] ?? ''));
+        if ($value === '') continue;
+        $tokens[] = [
+            'id' => (int)$row['id'],
+            'numeral_group_id' => (int)($row['numeral_group_id'] ?? 0),
+            'language_id' => (int)($row['language_id'] ?? 0),
+            'gender_id' => (int)($row['gender_id'] ?? 0),
+            'number_id' => (int)($row['number_id'] ?? 0),
+            'numeral_type_id' => (int)($row['numeral_type_id'] ?? 0),
+            'numeral_value' => $row['numeral_value'],
+            'value' => $value
+        ];
+    }
+    usort($tokens, fn($a, $b) => strcasecmp((string)$a['value'], (string)$b['value']));
+    echo json_encode(['status' => 'success', 'tokens' => $tokens]);
+}
+elseif ($action === 'list_adverb_tokens') {
+    $stmt = $pdo->prepare("SELECT id, adverb_group_id, language_id, adverb_type_id, adverb_form_id, adverb_text FROM adverbs WHERE id_user = ? ORDER BY id DESC LIMIT 1200");
+    $stmt->execute([$user_id]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $tokens = [];
+    foreach ($rows as $row) {
+        $value = trim((string)($row['adverb_text'] ?? ''));
+        if ($value === '') continue;
+        $tokens[] = [
+            'id' => (int)$row['id'],
+            'adverb_group_id' => (int)($row['adverb_group_id'] ?? 0),
+            'language_id' => (int)($row['language_id'] ?? 0),
+            'adverb_type_id' => (int)($row['adverb_type_id'] ?? 0),
+            'adverb_form_id' => (int)($row['adverb_form_id'] ?? 0),
+            'value' => $value
+        ];
+    }
+    usort($tokens, fn($a, $b) => strcasecmp((string)$a['value'], (string)$b['value']));
     echo json_encode(['status' => 'success', 'tokens' => $tokens]);
 }
 

@@ -71,6 +71,30 @@
             <div id="adjectivePanel" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
             <input id="adjectiveSearchInput" type="text" placeholder="Pesquisar adjetivo..." class="w-full mt-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
         </section>
+
+        <section class="bg-gluon-secondary border border-slate-700 rounded-xl p-4 sm:p-5 shadow-2xl">
+            <div class="mb-3"><h2 class="text-base sm:text-lg font-semibold text-slate-100">Selecionar preposição</h2></div>
+            <div id="prepositionPanel" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
+            <input id="prepositionSearchInput" type="text" placeholder="Pesquisar preposição..." class="w-full mt-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
+        </section>
+
+        <section class="bg-gluon-secondary border border-slate-700 rounded-xl p-4 sm:p-5 shadow-2xl">
+            <div class="mb-3"><h2 class="text-base sm:text-lg font-semibold text-slate-100">Selecionar conjunção</h2></div>
+            <div id="conjunctionPanel" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
+            <input id="conjunctionSearchInput" type="text" placeholder="Pesquisar conjunção..." class="w-full mt-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
+        </section>
+
+        <section class="bg-gluon-secondary border border-slate-700 rounded-xl p-4 sm:p-5 shadow-2xl">
+            <div class="mb-3"><h2 class="text-base sm:text-lg font-semibold text-slate-100">Selecionar numeral</h2></div>
+            <div id="numeralPanel" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
+            <input id="numeralSearchInput" type="text" placeholder="Pesquisar numeral..." class="w-full mt-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
+        </section>
+
+        <section class="bg-gluon-secondary border border-slate-700 rounded-xl p-4 sm:p-5 shadow-2xl">
+            <div class="mb-3"><h2 class="text-base sm:text-lg font-semibold text-slate-100">Selecionar advérbio</h2></div>
+            <div id="adverbPanel" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
+            <input id="adverbSearchInput" type="text" placeholder="Pesquisar advérbio..." class="w-full mt-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
+        </section>
     </main>
 
     <script>
@@ -151,6 +175,10 @@
                 nounApp.renderPanel();
                 verbApp.renderPanel();
                 adjectiveApp.renderPanel();
+                prepositionApp.renderPanel();
+                conjunctionApp.renderPanel();
+                numeralApp.renderPanel();
+                adverbApp.renderPanel();
                 renderSentenceDisplay();
             },
             renderLanguageButton(){ document.getElementById('languageSwitchLabel').textContent = i18n[this.current].languageButton; },
@@ -560,10 +588,71 @@
             }
         };
 
+        function createSimpleTokenApp(config) {
+            return {
+                allTokens: [],
+                selectedTokenIds: [],
+                searchQuery: '',
+                async init() {
+                    const input = document.getElementById(config.searchInputId);
+                    input.addEventListener('input', (event) => {
+                        this.searchQuery = String(event.target.value || '').trim().toLowerCase();
+                        this.renderPanel();
+                    });
+                    try {
+                        const res = await flashcardsApi(config.action);
+                        this.allTokens = Array.isArray(res?.tokens) ? res.tokens : [];
+                    } catch (error) {
+                        this.allTokens = [];
+                    }
+                    this.renderPanel();
+                },
+                getFilteredTokens() {
+                    if (!this.searchQuery) return [];
+                    return this.allTokens.filter((token) => Number(token.language_id) === languageApp.getLanguageId() && String(token.value || '').toLowerCase().includes(this.searchQuery));
+                },
+                renderPanel() {
+                    const panel = document.getElementById(config.panelId);
+                    const tokens = this.getFilteredTokens();
+                    if (!this.searchQuery) {
+                        panel.innerHTML = `<p class="text-sm text-slate-400">Comece digitando para ver sugestões.</p>`;
+                        return;
+                    }
+                    if (!tokens.length) {
+                        panel.innerHTML = `<p class="text-sm text-slate-400">Nenhum resultado encontrado.</p>`;
+                        return;
+                    }
+                    panel.innerHTML = tokens.map((token) => {
+                        const tokenId = Number(token.id);
+                        const selected = this.selectedTokenIds.includes(tokenId);
+                        const baseClass = selected ? 'bg-cyan-500/20 text-cyan-100 border-cyan-400' : 'bg-slate-800 text-slate-200 border-slate-600 hover:border-gluon-primary hover:text-white';
+                        return `<button type="button" data-token-id="${tokenId}" class="${config.buttonClass} border ${baseClass} rounded-full px-3 py-1.5 text-sm transition-colors">${token.value}</button>`;
+                    }).join('');
+                    panel.querySelectorAll(`.${config.buttonClass}`).forEach((button) => {
+                        button.addEventListener('click', () => {
+                            const tokenId = Number(button.dataset.tokenId || 0);
+                            if (this.selectedTokenIds.includes(tokenId)) this.selectedTokenIds = this.selectedTokenIds.filter((id) => id !== tokenId);
+                            else this.selectedTokenIds.push(tokenId);
+                            this.renderPanel();
+                        });
+                    });
+                }
+            };
+        }
+
+        const prepositionApp = createSimpleTokenApp({ action: 'list_preposition_tokens', panelId: 'prepositionPanel', searchInputId: 'prepositionSearchInput', buttonClass: 'preposition-token' });
+        const conjunctionApp = createSimpleTokenApp({ action: 'list_conjunction_tokens', panelId: 'conjunctionPanel', searchInputId: 'conjunctionSearchInput', buttonClass: 'conjunction-token' });
+        const numeralApp = createSimpleTokenApp({ action: 'list_numeral_tokens', panelId: 'numeralPanel', searchInputId: 'numeralSearchInput', buttonClass: 'numeral-token' });
+        const adverbApp = createSimpleTokenApp({ action: 'list_adverb_tokens', panelId: 'adverbPanel', searchInputId: 'adverbSearchInput', buttonClass: 'adverb-token' });
+
         languageApp.init();
         nounApp.init();
         verbApp.init();
         adjectiveApp.init();
+        prepositionApp.init();
+        conjunctionApp.init();
+        numeralApp.init();
+        adverbApp.init();
     </script>
 </body>
 </html>
