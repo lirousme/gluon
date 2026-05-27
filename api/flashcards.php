@@ -3871,6 +3871,11 @@ elseif ($action === 'add_grammar_entry') {
         die(json_encode(['status' => 'error', 'message' => 'Tabela inválida.']));
     }
 
+    $supportedTables = ['nouns', 'verbs', 'prepositions', 'numerals'];
+    if (!in_array($table, $supportedTables, true)) {
+        die(json_encode(['status' => 'error', 'message' => 'Classe gramatical temporariamente indisponível neste formulário.']));
+    }
+
     try {
         $stmtColumns = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?");
         $stmtColumns->execute([$table]);
@@ -3883,8 +3888,14 @@ elseif ($action === 'add_grammar_entry') {
             if (!isset($existingColumns[$column])) continue;
             $raw = $input[$column] ?? null;
             if (is_string($raw)) $raw = trim($raw);
+            if ($column === 'numeral_value' && is_string($raw)) {
+                $raw = str_replace(',', '.', $raw);
+            }
             if ($raw === '') $raw = null;
-            if ($raw === null && $column !== 'gender_id') continue;
+            if ($column === 'gender_id' && $raw === null) {
+                $raw = 0;
+            }
+            if ($raw === null) continue;
             $columns[] = $column;
             $values[] = $raw;
         }
