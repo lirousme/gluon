@@ -45,7 +45,7 @@
         <section class="bg-gluon-secondary border border-slate-700 rounded-xl p-4 sm:p-5 shadow-2xl">
             <div class="mb-3">
                 <h2 class="text-base sm:text-lg font-semibold text-slate-100">Selecionar noun</h2>
-                <p class="text-xs sm:text-sm text-slate-400">Digite para buscar nas 4 versões do noun (pt-BR e en-US, singular e plural).</p>
+                <p class="text-xs sm:text-sm text-slate-400">Digite para buscar variações de noun salvas na tabela nouns.</p>
             </div>
 
             <div id="nounPanel" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
@@ -226,16 +226,16 @@
 
             getFilteredTokens() {
                 if (!this.searchQuery) return [];
-                const currentLanguage = languageApp.current === 'pt-BR' ? '_pt_br' : '_en_us';
+                const currentLanguageId = languageApp.getLanguageId();
                 return this.allNounTokens.filter((token) => {
-                    const tokenColumn = String(token.column || '');
-                    if (!tokenColumn.endsWith(currentLanguage)) return false;
+                    const tokenLanguageId = Number(token.language_id || 0);
+                    if (tokenLanguageId !== currentLanguageId) return false;
                     return String(token.value || '').toLowerCase().includes(this.searchQuery);
                 });
             },
 
             getTokenKey(token) {
-                return `${Number(token.id)}:${String(token.column || '')}`;
+                return String(Number(token.id));
             },
 
 
