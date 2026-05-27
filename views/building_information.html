@@ -309,24 +309,8 @@
                 const pronounLabel = this.pronounLabels[pronounId] || `pronoun ${pronounId}`;
                 const verbFormLabel = this.verbFormLabels[verbFormId] || `Forma ${verbFormId}`;
 
-                const primarySuffix = pronounId > 0 ? pronounLabel : verbFormLabel;
-                const primaryLabel = `${rawValue} (${primarySuffix})`;
-
-                const hasPrimaryCollision = this.allVerbTokens.some((candidate) => {
-                    if (Number(candidate?.id || 0) === Number(token?.id || 0)) return false;
-                    const candidateRaw = String(candidate?.value || '').trim();
-                    if (candidateRaw.toLowerCase() !== rawValue.toLowerCase()) return false;
-
-                    const candidatePronounId = Number(candidate?.pronoun_id || 0);
-                    const candidateVerbFormId = Number(candidate?.verb_form_id || 0);
-                    const candidatePronounLabel = this.pronounLabels[candidatePronounId] || `pronoun ${candidatePronounId}`;
-                    const candidateVerbFormLabel = this.verbFormLabels[candidateVerbFormId] || `Forma ${candidateVerbFormId}`;
-                    const candidatePrimarySuffix = candidatePronounId > 0 ? candidatePronounLabel : candidateVerbFormLabel;
-                    return `${candidateRaw} (${candidatePrimarySuffix})`.toLowerCase() === primaryLabel.toLowerCase();
-                });
-
-                if (!hasPrimaryCollision) return primaryLabel;
-                return `${rawValue} (${pronounLabel} · ${verbFormLabel})`;
+                if (pronounId > 0) return `${rawValue} (${pronounLabel})`;
+                return `${rawValue} (${verbFormLabel})`;
             },
 
             toggleToken(token) {
