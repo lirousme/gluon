@@ -102,20 +102,62 @@ try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS nouns (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         id_user INT UNSIGNED NOT NULL,
-        singular_pt_br VARCHAR(255) NOT NULL,
-        plural_pt_br VARCHAR(255) NOT NULL,
-        singular_en_us VARCHAR(255) NOT NULL,
-        plural_en_us VARCHAR(255) NOT NULL,
-        gender TINYINT(1) NOT NULL DEFAULT 0,
+        noun_group_id INT UNSIGNED NOT NULL,
+        language_id TINYINT UNSIGNED NOT NULL,
+        gender_id TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        number_id TINYINT UNSIGNED NOT NULL DEFAULT 1,
+        noun_form_id TINYINT UNSIGNED NOT NULL DEFAULT 1,
+        noun_text VARCHAR(255) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_nouns_user (id_user),
+        INDEX idx_nouns_group (noun_group_id),
+        INDEX idx_nouns_lookup (
+            id_user,
+            noun_group_id,
+            language_id,
+            gender_id,
+            number_id,
+            noun_form_id
+        ),
+        UNIQUE KEY uq_noun_form (
+            id_user,
+            noun_group_id,
+            language_id,
+            gender_id,
+            number_id,
+            noun_form_id
+        ),
         FOREIGN KEY (id_user) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (PDOException $e) {}
 
 try {
-    $pdo->exec("ALTER TABLE nouns ADD COLUMN gender TINYINT(1) NOT NULL DEFAULT 0 AFTER plural_en_us");
+    $pdo->exec("ALTER TABLE nouns ADD COLUMN noun_group_id INT UNSIGNED NOT NULL DEFAULT 0 AFTER id_user");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE nouns ADD COLUMN language_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER noun_group_id");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE nouns ADD COLUMN gender_id TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER language_id");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE nouns ADD COLUMN number_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER gender_id");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE nouns ADD COLUMN noun_form_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER number_id");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE nouns ADD COLUMN noun_text VARCHAR(255) NOT NULL DEFAULT '' AFTER noun_form_id");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE nouns ADD INDEX idx_nouns_group (noun_group_id)");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE nouns ADD INDEX idx_nouns_lookup (id_user, noun_group_id, language_id, gender_id, number_id, noun_form_id)");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE nouns ADD UNIQUE KEY uq_noun_form (id_user, noun_group_id, language_id, gender_id, number_id, noun_form_id)");
 } catch (PDOException $e) {}
 
 try {
@@ -4118,30 +4160,25 @@ elseif ($action === 'create_generated_cards') {
 elseif ($action === 'list_noun_tokens') {
     $query = trim((string)($input['query'] ?? ''));
 
-    $stmt = $pdo->prepare("SELECT id, singular_pt_br, plural_pt_br, singular_en_us, plural_en_us FROM nouns WHERE id_user = ? ORDER BY id DESC LIMIT 800");
+    $stmt = $pdo->prepare("SELECT id, noun_group_id, language_id, gender_id, number_id, noun_form_id, noun_text FROM nouns WHERE id_user = ? ORDER BY id DESC LIMIT 1200");
     $stmt->execute([$user_id]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $tokens = [];
     foreach ($rows as $row) {
-        $variants = [
-            'singular_pt_br' => (string)($row['singular_pt_br'] ?? ''),
-            'plural_pt_br' => (string)($row['plural_pt_br'] ?? ''),
-            'singular_en_us' => (string)($row['singular_en_us'] ?? ''),
-            'plural_en_us' => (string)($row['plural_en_us'] ?? '')
+        $value = trim((string)($row['noun_text'] ?? ''));
+        if ($value === '') continue;
+        if ($query !== '' && stripos($value, $query) === false) continue;
+
+        $tokens[] = [
+            'id' => (int)$row['id'],
+            'noun_group_id' => (int)($row['noun_group_id'] ?? 0),
+            'language_id' => (int)($row['language_id'] ?? 0),
+            'gender_id' => (int)($row['gender_id'] ?? 0),
+            'number_id' => (int)($row['number_id'] ?? 0),
+            'noun_form_id' => (int)($row['noun_form_id'] ?? 0),
+            'value' => $value
         ];
-
-        foreach ($variants as $column => $variant) {
-            $value = trim($variant);
-            if ($value === '') continue;
-            if ($query !== '' && stripos($value, $query) === false) continue;
-
-            $tokens[] = [
-                'id' => (int)$row['id'],
-                'column' => $column,
-                'value' => $value
-            ];
-        }
     }
 
     usort($tokens, function ($a, $b) {
