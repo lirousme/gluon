@@ -193,15 +193,73 @@ try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS adjectives (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         id_user INT UNSIGNED NOT NULL,
-        singular_feminine_pt_br VARCHAR(255) NOT NULL,
-        plural_feminine_pt_br VARCHAR(255) NOT NULL,
-        singular_masculine_pt_br VARCHAR(255) NOT NULL,
-        plural_masculine_pt_br VARCHAR(255) NOT NULL,
+        adjective_group_id INT UNSIGNED NOT NULL,
+        language_id TINYINT UNSIGNED NOT NULL,
+        gender_id TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        number_id TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        adjective_form_id TINYINT UNSIGNED NOT NULL,
+        adjective_text VARCHAR(255) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_adjectives_user (id_user),
+        INDEX idx_adjectives_group (adjective_group_id),
+        INDEX idx_adjectives_lookup (
+            id_user,
+            adjective_group_id,
+            language_id,
+            gender_id,
+            number_id,
+            adjective_form_id
+        ),
+        UNIQUE KEY uq_adjective_form (
+            id_user,
+            adjective_group_id,
+            language_id,
+            gender_id,
+            number_id,
+            adjective_form_id
+        ),
         FOREIGN KEY (id_user) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE adjectives ADD COLUMN adjective_group_id INT UNSIGNED NOT NULL DEFAULT 0 AFTER id_user");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE adjectives ADD COLUMN language_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER adjective_group_id");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE adjectives ADD COLUMN gender_id TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER language_id");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE adjectives ADD COLUMN number_id TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER gender_id");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE adjectives ADD COLUMN adjective_form_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER number_id");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE adjectives ADD COLUMN adjective_text VARCHAR(255) NOT NULL DEFAULT '' AFTER adjective_form_id");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE adjectives ADD INDEX idx_adjectives_group (adjective_group_id)");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE adjectives ADD INDEX idx_adjectives_lookup (id_user, adjective_group_id, language_id, gender_id, number_id, adjective_form_id)");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE adjectives ADD UNIQUE KEY uq_adjective_form (id_user, adjective_group_id, language_id, gender_id, number_id, adjective_form_id)");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE adjectives DROP COLUMN singular_feminine_pt_br");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE adjectives DROP COLUMN plural_feminine_pt_br");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE adjectives DROP COLUMN singular_masculine_pt_br");
+} catch (PDOException $e) {}
+try {
+    $pdo->exec("ALTER TABLE adjectives DROP COLUMN plural_masculine_pt_br");
 } catch (PDOException $e) {}
 try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS pronuncias (
@@ -4112,6 +4170,37 @@ elseif ($action === 'list_verb_tokens') {
             'language_id' => (int)($row['language_id'] ?? 0),
             'pronoun_id' => (int)($row['pronoun_id'] ?? 0),
             'verb_form_id' => (int)($row['verb_form_id'] ?? 0),
+            'value' => $value
+        ];
+    }
+
+    usort($tokens, function ($a, $b) {
+        return strcasecmp((string)$a['value'], (string)$b['value']);
+    });
+
+    echo json_encode(['status' => 'success', 'tokens' => $tokens]);
+}
+
+elseif ($action === 'list_adjective_tokens') {
+    $query = trim((string)($input['query'] ?? ''));
+
+    $stmt = $pdo->prepare("SELECT id, adjective_group_id, language_id, gender_id, number_id, adjective_form_id, adjective_text FROM adjectives WHERE id_user = ? ORDER BY id DESC LIMIT 1200");
+    $stmt->execute([$user_id]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $tokens = [];
+    foreach ($rows as $row) {
+        $value = trim((string)($row['adjective_text'] ?? ''));
+        if ($value === '') continue;
+        if ($query !== '' && stripos($value, $query) === false) continue;
+
+        $tokens[] = [
+            'id' => (int)$row['id'],
+            'adjective_group_id' => (int)($row['adjective_group_id'] ?? 0),
+            'language_id' => (int)($row['language_id'] ?? 0),
+            'gender_id' => (int)($row['gender_id'] ?? 0),
+            'number_id' => (int)($row['number_id'] ?? 0),
+            'adjective_form_id' => (int)($row['adjective_form_id'] ?? 0),
             'value' => $value
         ];
     }
