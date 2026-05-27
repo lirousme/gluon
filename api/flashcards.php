@@ -103,6 +103,7 @@ try {
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         id_user INT UNSIGNED NOT NULL,
         noun_group_id INT UNSIGNED NOT NULL,
+        correspondence_id INT UNSIGNED NOT NULL,
         language_id TINYINT UNSIGNED NOT NULL,
         gender_id TINYINT UNSIGNED NOT NULL DEFAULT 0,
         number_id TINYINT UNSIGNED NOT NULL DEFAULT 1,
@@ -112,6 +113,7 @@ try {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_nouns_user (id_user),
         INDEX idx_nouns_group (noun_group_id),
+        INDEX idx_nouns_correspondence (id_user, noun_group_id, correspondence_id, language_id),
         INDEX idx_nouns_lookup (
             id_user,
             noun_group_id,
@@ -123,6 +125,7 @@ try {
         UNIQUE KEY uq_noun_form (
             id_user,
             noun_group_id,
+            correspondence_id,
             language_id,
             gender_id,
             number_id,
@@ -133,38 +136,11 @@ try {
 } catch (PDOException $e) {}
 
 try {
-    $pdo->exec("ALTER TABLE nouns ADD COLUMN noun_group_id INT UNSIGNED NOT NULL DEFAULT 0 AFTER id_user");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE nouns ADD COLUMN language_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER noun_group_id");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE nouns ADD COLUMN gender_id TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER language_id");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE nouns ADD COLUMN number_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER gender_id");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE nouns ADD COLUMN noun_form_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER number_id");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE nouns ADD COLUMN noun_text VARCHAR(255) NOT NULL DEFAULT '' AFTER noun_form_id");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE nouns ADD INDEX idx_nouns_group (noun_group_id)");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE nouns ADD INDEX idx_nouns_lookup (id_user, noun_group_id, language_id, gender_id, number_id, noun_form_id)");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE nouns ADD UNIQUE KEY uq_noun_form (id_user, noun_group_id, language_id, gender_id, number_id, noun_form_id)");
-} catch (PDOException $e) {}
-
-try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS verbs (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         id_user INT UNSIGNED NOT NULL,
         verb_group_id INT UNSIGNED NOT NULL,
+        correspondence_id INT UNSIGNED NOT NULL,
         language_id TINYINT UNSIGNED NOT NULL,
         pronoun_id TINYINT UNSIGNED NOT NULL DEFAULT 0,
         verb_form_id TINYINT UNSIGNED NOT NULL,
@@ -173,6 +149,7 @@ try {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_verbs_user (id_user),
         INDEX idx_verbs_group (verb_group_id),
+        INDEX idx_verbs_correspondence (id_user, verb_group_id, correspondence_id, language_id),
         INDEX idx_verbs_lookup (
             id_user,
             verb_group_id,
@@ -183,6 +160,7 @@ try {
         UNIQUE KEY uq_verb_form (
             id_user,
             verb_group_id,
+            correspondence_id,
             language_id,
             pronoun_id,
             verb_form_id
@@ -192,50 +170,11 @@ try {
 } catch (PDOException $e) {}
 
 try {
-    $pdo->exec("ALTER TABLE verbs ADD COLUMN verb_group_id INT UNSIGNED NOT NULL DEFAULT 0 AFTER id_user");
-} catch (PDOException $e) {}
-
-try {
-    $pdo->exec("ALTER TABLE verbs ADD COLUMN language_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER verb_group_id");
-} catch (PDOException $e) {}
-
-try {
-    $pdo->exec("ALTER TABLE verbs ADD COLUMN pronoun_id TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER language_id");
-} catch (PDOException $e) {}
-
-try {
-    $pdo->exec("ALTER TABLE verbs ADD COLUMN verb_form_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER pronoun_id");
-} catch (PDOException $e) {}
-
-try {
-    $pdo->exec("ALTER TABLE verbs ADD COLUMN verb_text VARCHAR(255) NOT NULL DEFAULT '' AFTER verb_form_id");
-} catch (PDOException $e) {}
-
-try {
-    $pdo->exec("ALTER TABLE verbs ADD INDEX idx_verbs_group (verb_group_id)");
-} catch (PDOException $e) {}
-
-try {
-    $pdo->exec("ALTER TABLE verbs ADD INDEX idx_verbs_lookup (id_user, verb_group_id, language_id, pronoun_id, verb_form_id)");
-} catch (PDOException $e) {}
-
-try {
-    $pdo->exec("ALTER TABLE verbs ADD UNIQUE KEY uq_verb_form (id_user, verb_group_id, language_id, pronoun_id, verb_form_id)");
-} catch (PDOException $e) {}
-
-try {
-    $pdo->exec("ALTER TABLE verbs DROP COLUMN simple_present_pt_br");
-} catch (PDOException $e) {}
-
-try {
-    $pdo->exec("ALTER TABLE verbs DROP COLUMN simple_present_en_us");
-} catch (PDOException $e) {}
-
-try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS adjectives (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         id_user INT UNSIGNED NOT NULL,
         adjective_group_id INT UNSIGNED NOT NULL,
+        correspondence_id INT UNSIGNED NOT NULL,
         language_id TINYINT UNSIGNED NOT NULL,
         gender_id TINYINT UNSIGNED NOT NULL DEFAULT 0,
         number_id TINYINT UNSIGNED NOT NULL DEFAULT 0,
@@ -245,6 +184,7 @@ try {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_adjectives_user (id_user),
         INDEX idx_adjectives_group (adjective_group_id),
+        INDEX idx_adjectives_correspondence (id_user, adjective_group_id, correspondence_id, language_id),
         INDEX idx_adjectives_lookup (
             id_user,
             adjective_group_id,
@@ -256,6 +196,7 @@ try {
         UNIQUE KEY uq_adjective_form (
             id_user,
             adjective_group_id,
+            correspondence_id,
             language_id,
             gender_id,
             number_id,
@@ -264,45 +205,7 @@ try {
         FOREIGN KEY (id_user) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE adjectives ADD COLUMN adjective_group_id INT UNSIGNED NOT NULL DEFAULT 0 AFTER id_user");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE adjectives ADD COLUMN language_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER adjective_group_id");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE adjectives ADD COLUMN gender_id TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER language_id");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE adjectives ADD COLUMN number_id TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER gender_id");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE adjectives ADD COLUMN adjective_form_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER number_id");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE adjectives ADD COLUMN adjective_text VARCHAR(255) NOT NULL DEFAULT '' AFTER adjective_form_id");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE adjectives ADD INDEX idx_adjectives_group (adjective_group_id)");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE adjectives ADD INDEX idx_adjectives_lookup (id_user, adjective_group_id, language_id, gender_id, number_id, adjective_form_id)");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE adjectives ADD UNIQUE KEY uq_adjective_form (id_user, adjective_group_id, language_id, gender_id, number_id, adjective_form_id)");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE adjectives DROP COLUMN singular_feminine_pt_br");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE adjectives DROP COLUMN plural_feminine_pt_br");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE adjectives DROP COLUMN singular_masculine_pt_br");
-} catch (PDOException $e) {}
-try {
-    $pdo->exec("ALTER TABLE adjectives DROP COLUMN plural_masculine_pt_br");
-} catch (PDOException $e) {}
+
 try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS pronuncias (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -321,6 +224,7 @@ try {
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         id_user INT UNSIGNED NOT NULL,
         preposition_group_id INT UNSIGNED NOT NULL,
+        correspondence_id INT UNSIGNED NOT NULL,
         language_id TINYINT UNSIGNED NOT NULL,
         preposition_form_id TINYINT UNSIGNED NOT NULL DEFAULT 1,
         preposition_text VARCHAR(255) NOT NULL,
@@ -328,8 +232,9 @@ try {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_prepositions_user (id_user),
         INDEX idx_prepositions_group (preposition_group_id),
+        INDEX idx_prepositions_correspondence (id_user, preposition_group_id, correspondence_id, language_id),
         INDEX idx_prepositions_lookup (id_user, preposition_group_id, language_id, preposition_form_id),
-        UNIQUE KEY uq_preposition_form (id_user, preposition_group_id, language_id, preposition_form_id, preposition_text),
+        UNIQUE KEY uq_preposition_form (id_user, preposition_group_id, correspondence_id, language_id, preposition_form_id, preposition_text),
         FOREIGN KEY (id_user) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (PDOException $e) {}
@@ -339,6 +244,7 @@ try {
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         id_user INT UNSIGNED NOT NULL,
         conjunction_group_id INT UNSIGNED NOT NULL,
+        correspondence_id INT UNSIGNED NOT NULL,
         language_id TINYINT UNSIGNED NOT NULL,
         conjunction_type_id TINYINT UNSIGNED NOT NULL,
         conjunction_text VARCHAR(255) NOT NULL,
@@ -346,8 +252,9 @@ try {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_conjunctions_user (id_user),
         INDEX idx_conjunctions_group (conjunction_group_id),
+        INDEX idx_conjunctions_correspondence (id_user, conjunction_group_id, correspondence_id, language_id),
         INDEX idx_conjunctions_lookup (id_user, conjunction_group_id, language_id, conjunction_type_id),
-        UNIQUE KEY uq_conjunction_form (id_user, conjunction_group_id, language_id, conjunction_type_id, conjunction_text),
+        UNIQUE KEY uq_conjunction_form (id_user, conjunction_group_id, correspondence_id, language_id, conjunction_type_id, conjunction_text),
         FOREIGN KEY (id_user) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (PDOException $e) {}
@@ -357,6 +264,7 @@ try {
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         id_user INT UNSIGNED NOT NULL,
         numeral_group_id INT UNSIGNED NOT NULL,
+        correspondence_id INT UNSIGNED NOT NULL,
         language_id TINYINT UNSIGNED NOT NULL,
         gender_id TINYINT UNSIGNED NOT NULL DEFAULT 0,
         number_id TINYINT UNSIGNED NOT NULL DEFAULT 1,
@@ -367,9 +275,10 @@ try {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_numerals_user (id_user),
         INDEX idx_numerals_group (numeral_group_id),
+        INDEX idx_numerals_correspondence (id_user, numeral_group_id, correspondence_id, language_id),
         INDEX idx_numerals_value (numeral_value),
         INDEX idx_numerals_lookup (id_user, numeral_group_id, language_id, gender_id, number_id, numeral_type_id),
-        UNIQUE KEY uq_numeral_form (id_user, numeral_group_id, language_id, gender_id, number_id, numeral_type_id, numeral_text),
+        UNIQUE KEY uq_numeral_form (id_user, numeral_group_id, correspondence_id, language_id, gender_id, number_id, numeral_type_id, numeral_text),
         FOREIGN KEY (id_user) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (PDOException $e) {}
@@ -379,6 +288,7 @@ try {
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         id_user INT UNSIGNED NOT NULL,
         adverb_group_id INT UNSIGNED NOT NULL,
+        correspondence_id INT UNSIGNED NOT NULL,
         language_id TINYINT UNSIGNED NOT NULL,
         adverb_type_id TINYINT UNSIGNED NOT NULL,
         adverb_form_id TINYINT UNSIGNED NOT NULL DEFAULT 1,
@@ -387,11 +297,13 @@ try {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_adverbs_user (id_user),
         INDEX idx_adverbs_group (adverb_group_id),
+        INDEX idx_adverbs_correspondence (id_user, adverb_group_id, correspondence_id, language_id),
         INDEX idx_adverbs_lookup (id_user, adverb_group_id, language_id, adverb_type_id, adverb_form_id),
-        UNIQUE KEY uq_adverb_form (id_user, adverb_group_id, language_id, adverb_type_id, adverb_form_id, adverb_text),
+        UNIQUE KEY uq_adverb_form (id_user, adverb_group_id, correspondence_id, language_id, adverb_type_id, adverb_form_id, adverb_text),
         FOREIGN KEY (id_user) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (PDOException $e) {}
+
 // =========================================================================
 
 
