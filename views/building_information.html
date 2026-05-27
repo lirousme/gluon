@@ -32,9 +32,9 @@
     </header>
 
     <main class="max-w-3xl mx-auto px-4 sm:px-6 py-5">
-        <section id="selectedNounsSection" class="hidden mb-4 bg-gluon-secondary border border-blue-400/40 rounded-xl p-4 sm:p-5 shadow-2xl">
-            <p class="text-xs text-blue-200 uppercase tracking-wide">Nouns selecionados</p>
-            <p id="selectedNounText" class="text-base font-semibold text-blue-100 mt-1"></p>
+        <section id="selectedSentenceSection" class="hidden mb-4 bg-gluon-secondary border border-indigo-400/40 rounded-xl p-4 sm:p-5 shadow-2xl">
+            <p class="text-xs text-indigo-200 uppercase tracking-wide">Frase em construção</p>
+            <p id="selectedSentenceText" class="text-base font-semibold text-indigo-100 mt-1"></p>
         </section>
 
         <section class="bg-gluon-secondary border border-slate-700 rounded-xl p-4 sm:p-5 shadow-2xl">
@@ -45,11 +45,6 @@
 
             <div id="nounPanel" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
             <input id="nounSearchInput" type="text" placeholder="Pesquisar noun..." class="w-full mt-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
-        </section>
-
-        <section id="selectedVerbsSection" class="hidden mt-4 mb-4 bg-gluon-secondary border border-emerald-400/40 rounded-xl p-4 sm:p-5 shadow-2xl">
-            <p class="text-xs text-emerald-200 uppercase tracking-wide">Verbos selecionados</p>
-            <p id="selectedVerbText" class="text-base font-semibold text-emerald-100 mt-1"></p>
         </section>
 
         <section class="bg-gluon-secondary border border-slate-700 rounded-xl p-4 sm:p-5 shadow-2xl">
@@ -99,6 +94,38 @@
             } catch (error) {
                 label.textContent = 'Usuário';
             }
+        }
+
+
+        function formatSelectedTokens(values) {
+            if (!values.length) return '';
+            const normalized = values.map((value, index) => {
+                const raw = String(value || '').trim();
+                if (raw === '') return '';
+                if (index === 0) return raw;
+                return raw.charAt(0).toLowerCase() + raw.slice(1);
+            }).filter(Boolean);
+
+            if (normalized.length <= 1) return normalized[0] || '';
+            if (normalized.length === 2) return `${normalized[0]} e ${normalized[1]}`;
+            return `${normalized.slice(0, -1).join(', ')} e ${normalized[normalized.length - 1]}`;
+        }
+
+        function renderSentenceDisplay() {
+            const section = document.getElementById('selectedSentenceSection');
+            const text = document.getElementById('selectedSentenceText');
+            const nouns = nounApp.getSelectedValues();
+            const verbs = verbApp.getSelectedValuesForDisplay();
+            const phrase = formatSelectedTokens([...nouns, ...verbs]);
+
+            if (!phrase) {
+                text.textContent = '';
+                section.classList.add('hidden');
+                return;
+            }
+
+            text.textContent = phrase;
+            section.classList.remove('hidden');
         }
 
         const nounApp = {
@@ -154,40 +181,15 @@
                 } else {
                     this.selectedTokenKeys.push(tokenKey);
                 }
-                this.renderSelectedNouns();
+                renderSentenceDisplay();
                 this.renderPanel();
             },
 
-            formatSelectedNouns(values) {
-                if (!values.length) return '';
-                const normalized = values.map((value, index) => {
-                    const raw = String(value || '').trim();
-                    if (raw === '') return '';
-                    if (index === 0) return raw;
-                    return raw.charAt(0).toLowerCase() + raw.slice(1);
-                }).filter(Boolean);
-
-                if (normalized.length <= 1) return normalized[0] || '';
-                if (normalized.length === 2) return `${normalized[0]} e ${normalized[1]}`;
-                return `${normalized.slice(0, -1).join(', ')} e ${normalized[normalized.length - 1]}`;
-            },
-
-            renderSelectedNouns() {
-                const section = document.getElementById('selectedNounsSection');
-                const text = document.getElementById('selectedNounText');
-                const selectedValues = this.selectedTokenKeys
+            getSelectedValues() {
+                return this.selectedTokenKeys
                     .map((tokenKey) => this.allNounTokens.find((token) => this.getTokenKey(token) === tokenKey))
                     .filter(Boolean)
                     .map((token) => token.value);
-
-                if (!selectedValues.length) {
-                    text.textContent = '';
-                    section.classList.add('hidden');
-                    return;
-                }
-
-                text.textContent = this.formatSelectedNouns(selectedValues);
-                section.classList.remove('hidden');
             },
 
             renderPanel() {
@@ -343,41 +345,17 @@
                     this.selectedTokenIds = Array.from(new Set(nextIds));
                 }
 
-                this.renderSelectedVerbs();
+                renderSentenceDisplay();
                 this.renderPanel();
             },
 
-            formatSelectedTokens(values) {
-                if (!values.length) return '';
-                const normalized = values.map((value, index) => {
-                    const raw = String(value || '').trim();
-                    if (raw === '') return '';
-                    if (index === 0) return raw;
-                    return raw.charAt(0).toLowerCase() + raw.slice(1);
-                }).filter(Boolean);
-
-                if (normalized.length <= 1) return normalized[0] || '';
-                if (normalized.length === 2) return `${normalized[0]} e ${normalized[1]}`;
-                return `${normalized.slice(0, -1).join(', ')} e ${normalized[normalized.length - 1]}`;
-            },
-
-            renderSelectedVerbs() {
-                const section = document.getElementById('selectedVerbsSection');
-                const text = document.getElementById('selectedVerbText');
+            getSelectedValuesForDisplay() {
                 const selectedValues = this.selectedTokenIds
                     .map((tokenId) => this.allVerbTokens.find((token) => Number(token.id) === Number(tokenId)))
                     .filter(Boolean)
-                    .map((token) => this.getTokenDisplayValue(token));
-                const uniqueSelectedValues = Array.from(new Set(selectedValues));
-
-                if (!uniqueSelectedValues.length) {
-                    text.textContent = '';
-                    section.classList.add('hidden');
-                    return;
-                }
-
-                text.textContent = this.formatSelectedTokens(uniqueSelectedValues);
-                section.classList.remove('hidden');
+                    .map((token) => String(token.value || '').trim())
+                    .filter(Boolean);
+                return Array.from(new Set(selectedValues));
             },
 
             renderPanel() {
