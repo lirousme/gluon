@@ -56,6 +56,16 @@
             <div id="verbPanel" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
             <input id="verbSearchInput" type="text" placeholder="Pesquisar verbo..." class="w-full mt-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
         </section>
+
+        <section class="bg-gluon-secondary border border-slate-700 rounded-xl p-4 sm:p-5 shadow-2xl">
+            <div class="mb-3">
+                <h2 class="text-base sm:text-lg font-semibold text-slate-100">Selecionar adjetivo</h2>
+                <p class="text-xs sm:text-sm text-slate-400">Digite para buscar variações de adjetivos salvas na tabela adjectives.</p>
+            </div>
+
+            <div id="adjectivePanel" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
+            <input id="adjectiveSearchInput" type="text" placeholder="Pesquisar adjetivo..." class="w-full mt-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
+        </section>
     </main>
 
     <script>
@@ -116,7 +126,8 @@
             const text = document.getElementById('selectedSentenceText');
             const nouns = nounApp.getSelectedValues();
             const verbs = verbApp.getSelectedValuesForDisplay();
-            const phrase = formatSelectedTokens([...nouns, ...verbs]);
+            const adjectives = adjectiveApp.getSelectedValuesForDisplay();
+            const phrase = formatSelectedTokens([...nouns, ...verbs, ...adjectives]);
 
             if (!phrase) {
                 text.textContent = '';
@@ -395,8 +406,106 @@
             }
         };
 
+        const adjectiveApp = {
+            allAdjectiveTokens: [],
+            selectedTokenIds: [],
+            searchQuery: '',
+
+            async init() {
+                this.bindEvents();
+                await this.loadAdjectives();
+                this.renderPanel();
+            },
+
+            bindEvents() {
+                const input = document.getElementById('adjectiveSearchInput');
+                input.addEventListener('input', (event) => {
+                    this.searchQuery = String(event.target.value || '').trim().toLowerCase();
+                    this.renderPanel();
+                });
+            },
+
+            async loadAdjectives() {
+                try {
+                    const res = await flashcardsApi('list_adjective_tokens');
+                    if (res?.status !== 'success' || !Array.isArray(res.tokens)) {
+                        this.allAdjectiveTokens = [];
+                        return;
+                    }
+                    this.allAdjectiveTokens = res.tokens;
+                } catch (error) {
+                    this.allAdjectiveTokens = [];
+                }
+            },
+
+            getFilteredTokens() {
+                if (!this.searchQuery) return [];
+                const filtered = this.allAdjectiveTokens.filter((token) => String(token.value || '').toLowerCase().includes(this.searchQuery));
+                const uniqueByValue = new Map();
+                filtered.forEach((token) => {
+                    const value = String(token.value || '').trim();
+                    if (!value || uniqueByValue.has(value.toLowerCase())) return;
+                    uniqueByValue.set(value.toLowerCase(), token);
+                });
+                return Array.from(uniqueByValue.values());
+            },
+
+            toggleToken(token) {
+                const tokenId = Number(token.id);
+                if (!tokenId) return;
+                if (this.selectedTokenIds.includes(tokenId)) {
+                    this.selectedTokenIds = this.selectedTokenIds.filter((id) => id !== tokenId);
+                } else {
+                    this.selectedTokenIds.push(tokenId);
+                }
+                renderSentenceDisplay();
+                this.renderPanel();
+            },
+
+            getSelectedValuesForDisplay() {
+                return this.selectedTokenIds
+                    .map((tokenId) => this.allAdjectiveTokens.find((token) => Number(token.id) === Number(tokenId)))
+                    .filter(Boolean)
+                    .map((token) => String(token.value || '').trim())
+                    .filter(Boolean);
+            },
+
+            renderPanel() {
+                const panel = document.getElementById('adjectivePanel');
+                const tokens = this.getFilteredTokens();
+
+                if (!this.searchQuery) {
+                    panel.innerHTML = '<p class="text-sm text-slate-400">Comece digitando para ver sugestões de adjetivos.</p>';
+                    return;
+                }
+
+                if (!tokens.length) {
+                    panel.innerHTML = '<p class="text-sm text-slate-400">Nenhum adjetivo encontrado para esse filtro.</p>';
+                    return;
+                }
+
+                panel.innerHTML = tokens.map((token) => {
+                    const tokenId = Number(token.id);
+                    const selected = this.selectedTokenIds.includes(tokenId);
+                    const baseClass = selected
+                        ? 'bg-fuchsia-500/20 text-fuchsia-100 border-fuchsia-400'
+                        : 'bg-slate-800 text-slate-200 border-slate-600 hover:border-gluon-primary hover:text-white';
+                    return `<button type="button" data-token-id="${tokenId}" class="adjective-token border ${baseClass} rounded-full px-3 py-1.5 text-sm transition-colors">${token.value}</button>`;
+                }).join('');
+
+                panel.querySelectorAll('.adjective-token').forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const tokenId = Number(button.dataset.tokenId || 0);
+                        const token = this.allAdjectiveTokens.find((item) => Number(item.id) === tokenId);
+                        if (token) this.toggleToken(token);
+                    });
+                });
+            }
+        };
+
         nounApp.init();
         verbApp.init();
+        adjectiveApp.init();
     </script>
 </body>
 </html>
