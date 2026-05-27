@@ -120,7 +120,7 @@
             },
 
             getFilteredTokens() {
-                if (!this.searchQuery) return this.allNounTokens;
+                if (!this.searchQuery) return [];
                 return this.allNounTokens.filter((token) => String(token.value || '').toLowerCase().includes(this.searchQuery));
             },
 
@@ -136,6 +136,11 @@
             renderPanel() {
                 const panel = document.getElementById('nounPanel');
                 const tokens = this.getFilteredTokens();
+
+                if (!this.searchQuery) {
+                    panel.innerHTML = '<p class="text-sm text-slate-400">Comece digitando para ver sugestões de noun.</p>';
+                    return;
+                }
 
                 if (!tokens.length) {
                     panel.innerHTML = '<p class="text-sm text-slate-400">Nenhum noun encontrado para esse filtro.</p>';
