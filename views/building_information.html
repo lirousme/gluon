@@ -48,9 +48,21 @@
         </section>
 
         <section class="bg-gluon-secondary border border-slate-700 rounded-xl p-4 sm:p-5 shadow-2xl">
-            <div class="mb-3">
+            <div class="mb-3 space-y-2">
                 <h2 class="text-base sm:text-lg font-semibold text-slate-100">Selecionar noun</h2>
-                <p class="text-xs sm:text-sm text-slate-400">Digite para buscar variações de noun salvas na tabela nouns.</p>
+                <p class="text-xs sm:text-sm text-slate-400">Digite para buscar variações de noun salvas na tabela nouns (normal, diminutivo e aumentativo; singular e plural, PT-BR e EN-US).</p>
+                <div class="rounded-lg border border-slate-700 bg-slate-900/70 p-3 text-xs text-slate-300">
+                    <p class="font-semibold text-slate-200 mb-2">Exemplos para preencher a tabela <code>nouns</code>:</p>
+                    <ul class="space-y-1 list-disc list-inside">
+                        <li><strong>normal_singular_pt_br / en_us:</strong> casa / house</li>
+                        <li><strong>normal_plural_pt_br / en_us:</strong> casas / houses</li>
+                        <li><strong>diminutive_singular_pt_br / en_us:</strong> casinha / little house</li>
+                        <li><strong>diminutive_plural_pt_br / en_us:</strong> casinhas / little houses</li>
+                        <li><strong>augmentative_singular_pt_br / en_us:</strong> casarão / big house</li>
+                        <li><strong>augmentative_plural_pt_br / en_us:</strong> casarões / big houses</li>
+                        <li><strong>gender_id:</strong> 0 = masculino, 1 = feminino (ex.: <em>o carro</em> / <em>a casa</em>)</li>
+                    </ul>
+                </div>
             </div>
 
             <div id="nounPanel" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
