@@ -32,15 +32,15 @@
     </header>
 
     <main class="max-w-3xl mx-auto px-4 sm:px-6 py-5">
+        <section id="selectedNounsSection" class="hidden mb-4 bg-gluon-secondary border border-blue-400/40 rounded-xl p-4 sm:p-5 shadow-2xl">
+            <p class="text-xs text-blue-200 uppercase tracking-wide">Nouns selecionados</p>
+            <p id="selectedNounText" class="text-base font-semibold text-blue-100 mt-1"></p>
+        </section>
+
         <section class="bg-gluon-secondary border border-slate-700 rounded-xl p-4 sm:p-5 shadow-2xl">
             <div class="mb-3">
                 <h2 class="text-base sm:text-lg font-semibold text-slate-100">Selecionar noun</h2>
                 <p class="text-xs sm:text-sm text-slate-400">Digite para buscar nas 4 versões do noun (pt-BR e en-US, singular e plural).</p>
-            </div>
-
-            <div id="selectedNounCard" class="hidden mb-4 rounded-lg border border-blue-400/40 bg-blue-500/10 px-3 py-3">
-                <p class="text-xs text-blue-200 uppercase tracking-wide">Selecionado</p>
-                <p id="selectedNounText" class="text-base font-semibold text-blue-100 mt-1"></p>
             </div>
 
             <div id="nounPanel" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
@@ -88,7 +88,7 @@
 
         const nounApp = {
             allNounTokens: [],
-            selectedToken: null,
+            selectedTokenIds: [],
             searchQuery: '',
 
             async init() {
@@ -124,13 +124,35 @@
                 return this.allNounTokens.filter((token) => String(token.value || '').toLowerCase().includes(this.searchQuery));
             },
 
-            selectToken(token) {
-                this.selectedToken = token;
-                const card = document.getElementById('selectedNounCard');
-                const text = document.getElementById('selectedNounText');
-                text.textContent = token.value;
-                card.classList.remove('hidden');
+            toggleToken(token) {
+                const tokenId = Number(token.id);
+                if (!tokenId) return;
+                const existingIndex = this.selectedTokenIds.findIndex((id) => id === tokenId);
+                if (existingIndex >= 0) {
+                    this.selectedTokenIds.splice(existingIndex, 1);
+                } else {
+                    this.selectedTokenIds.push(tokenId);
+                }
+                this.renderSelectedNouns();
                 this.renderPanel();
+            },
+
+            renderSelectedNouns() {
+                const section = document.getElementById('selectedNounsSection');
+                const text = document.getElementById('selectedNounText');
+                const selectedValues = this.selectedTokenIds
+                    .map((tokenId) => this.allNounTokens.find((token) => Number(token.id) === tokenId))
+                    .filter(Boolean)
+                    .map((token) => token.value);
+
+                if (!selectedValues.length) {
+                    text.textContent = '';
+                    section.classList.add('hidden');
+                    return;
+                }
+
+                text.textContent = selectedValues.join(', ');
+                section.classList.remove('hidden');
             },
 
             renderPanel() {
@@ -148,7 +170,7 @@
                 }
 
                 panel.innerHTML = tokens.map((token) => {
-                    const selected = this.selectedToken && this.selectedToken.id === token.id;
+                    const selected = this.selectedTokenIds.includes(Number(token.id));
                     const baseClass = selected
                         ? 'bg-blue-500/20 text-blue-100 border-blue-400'
                         : 'bg-slate-800 text-slate-200 border-slate-600 hover:border-gluon-primary hover:text-white';
@@ -159,7 +181,7 @@
                     button.addEventListener('click', () => {
                         const tokenId = Number(button.dataset.tokenId);
                         const token = this.allNounTokens.find((item) => item.id === tokenId);
-                        if (token) this.selectToken(token);
+                        if (token) this.toggleToken(token);
                     });
                 });
             }
