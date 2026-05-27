@@ -27,7 +27,7 @@
     <footer class="border-t border-slate-700 px-4 py-4 bg-slate-950">
       <div class="max-w-4xl mx-auto space-y-3">
         <div class="flex items-center justify-between">
-          <label class="text-sm text-slate-300">Modo de vínculo</label>
+          <label class="text-sm text-slate-300">Modo de vínculo <span id="selectedRelationTypeLabel" class="text-violet-300"></span></label>
           <button id="relationModeSwitch" type="button" class="px-3 py-1.5 rounded-lg border border-slate-600 text-sm">Adicionando filhas</button>
         </div>
         <div id="footerTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
@@ -37,7 +37,7 @@
   </div>
 <script>
 const params = new URLSearchParams(window.location.search);
-const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', tags: [], family: {mothers:[], children:[]} };
+const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: 0, tags: [], family: {mothers:[], children:[]} };
 const title = document.getElementById('tagFamilyTitle');
 title.textContent = state.tagName || 'Tag';
 
@@ -87,6 +87,8 @@ function openTagFiltering(){
 }
 async function api(action,payload={}){payload.action=action;const r=await fetch('/api/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();if(!r.ok||j.status!=='success')throw new Error(j.message||'Erro');return j;}
 function renderFooterTags(){
+  document.getElementById('selectedRelationTypeLabel').textContent=`(${getRelationTypeLabel(state.selectedRelationType)})`;
+
   const q=(document.getElementById('footerTagSearch').value||'').toLowerCase().trim();
   const el=document.getElementById('footerTagSelector');
   const filtered=state.tags.filter(t=>Number(t.id)!==state.tagId).filter(t=>String(t.name||'').toLowerCase().includes(q)||String(t.name_pt_br||'').toLowerCase().includes(q)||String(t.numero??'').toLowerCase().includes(q));
@@ -162,24 +164,35 @@ function getTagRelationType(tag={}){
   return 0;
 }
 function renderFamily(){
-  const mk=(arr, relationType, relationRole)=>{
-    const current=arr.filter((tag)=>getTagRelationType(tag)===relationType);
-    if(!current.length) return '<span class="text-xs text-slate-400">Nenhuma</span>';
-    const numeroPtBrCounts = buildNumeroPtBrCounts(current);
-    return current.map(t=>`<button type="button" data-family-tag-id="${Number(t.id)}" data-relation-role="${relationRole}" class="px-2 py-1 rounded-full text-xs border border-red-400/70 bg-red-500/10 text-red-200 hover:bg-red-500/20 transition-colors" title="Abrir família da tag">${esc(getTagLabel(t, numeroPtBrCounts))}</button>`).join('');
+  const mk=(arr)=>{
+    if(!arr.length) return '<span class="text-xs text-slate-400">Nenhuma</span>';
+    const numeroPtBrCounts = buildNumeroPtBrCounts(arr);
+    return arr.map(t=>`<button type="button" data-family-tag-id="${Number(t.id)}" data-relation-role="${t.__relationRole||'child'}" class="px-2 py-1 rounded-full text-xs border border-red-400/70 bg-red-500/10 text-red-200 hover:bg-red-500/20 transition-colors" title="Abrir família da tag">${esc(getTagLabel(t, numeroPtBrCounts))}</button>`).join('');
   };
+  const noSplitTypes=new Set([0,1]);
   const knownTypes=[0,1,3];
   const foundTypes=[...new Set([...state.family.children,...state.family.mothers].map((tag)=>getTagRelationType(tag)))];
   const types=[...new Set([...knownTypes,...foundTypes])].sort((a,b)=>a-b);
   const container=document.getElementById('relationTypeSections');
   container.innerHTML=types.map((type)=>{
-    if(type===0){
-      const merged=[...state.family.children,...state.family.mothers].filter((tag)=>getTagRelationType(tag)===type);
-      const uniqueMerged=[...new Map(merged.map((tag)=>[Number(tag.id),tag])).values()];
-      return `<div class="border border-slate-700/80 rounded-lg p-3 bg-slate-900/40"><h3 class="text-sm font-semibold text-violet-200 mb-3">${esc(getRelationTypeLabel(type))}</h3><div><p class="text-red-300 text-sm mb-2">Tags relacionadas:</p><div class="flex flex-wrap gap-2">${mk(uniqueMerged,type,'child')}</div></div></div>`;
+    const children=state.family.children.filter((tag)=>getTagRelationType(tag)===type).map((tag)=>({...tag,__relationRole:'child'}));
+    const mothers=state.family.mothers.filter((tag)=>getTagRelationType(tag)===type).map((tag)=>({...tag,__relationRole:'mother'}));
+    const isSelected=state.selectedRelationType===type;
+    const selectedClass=isSelected?'ring-2 ring-violet-400 border-violet-500/80':'border-slate-700/80';
+    if(noSplitTypes.has(type)){
+      const merged=[...children,...mothers];
+      const uniqueMerged=[...new Map(merged.map((tag)=>[`${Number(tag.id)}-${tag.__relationRole}`,tag])).values()];
+      return `<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer"><h3 class="text-sm font-semibold text-violet-200 mb-3">${esc(getRelationTypeLabel(type))}</h3><div><p class="text-red-300 text-sm mb-2">Tags relacionadas:</p><div class="flex flex-wrap gap-2">${mk(uniqueMerged)}</div></div></div>`;
     }
-    return `<div class="border border-slate-700/80 rounded-lg p-3 bg-slate-900/40"><h3 class="text-sm font-semibold text-violet-200 mb-3">${esc(getRelationTypeLabel(type))}</h3><div class="grid md:grid-cols-2 gap-4"><div><p class="text-red-300 text-sm mb-2">Esta tag é mãe de:</p><div class="flex flex-wrap gap-2">${mk(state.family.children,type,'child')}</div></div><div><p class="text-red-300 text-sm mb-2">Esta tag é filha de:</p><div class="flex flex-wrap gap-2">${mk(state.family.mothers,type,'mother')}</div></div></div></div>`;
+    return `<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer"><h3 class="text-sm font-semibold text-violet-200 mb-3">${esc(getRelationTypeLabel(type))}</h3><div class="grid md:grid-cols-2 gap-4"><div><p class="text-red-300 text-sm mb-2">Esta tag é mãe de:</p><div class="flex flex-wrap gap-2">${mk(children)}</div></div><div><p class="text-red-300 text-sm mb-2">Esta tag é filha de:</p><div class="flex flex-wrap gap-2">${mk(mothers)}</div></div></div></div>`;
   }).join('');
+  document.querySelectorAll('.relation-type-card').forEach((card)=>{
+    card.addEventListener('click',(ev)=>{
+      if(ev.target.closest('[data-family-tag-id]')) return;
+      state.selectedRelationType=Number(card.dataset.relationType||0);
+      renderFamily();
+    });
+  });
   document.querySelectorAll('[data-family-tag-id]').forEach((el)=>{
     el.onclick=()=>{
       const targetId=Number(el.dataset.familyTagId);
@@ -196,7 +209,7 @@ async function load(){
   renderFamily(); renderFooterTags();
 }
 async function addRelation(otherTagId){
-  await api('add_tag_family_relation',{tag_id:state.tagId,other_tag_id:otherTagId,mode:state.mode});
+  await api('add_tag_family_relation',{tag_id:state.tagId,other_tag_id:otherTagId,mode:state.mode,tipo_de_relacao:state.selectedRelationType});
   await load();
 }
 document.getElementById('footerTagSearch').addEventListener('input',renderFooterTags);
@@ -205,7 +218,7 @@ document.getElementById('relationModeSwitch').addEventListener('click',()=>{stat
 const actionState={tag:null,relationType:null};
 function openActionModal(tag, relationType){actionState.tag=tag;actionState.relationType=relationType;document.getElementById('tagActionTitle').textContent=`Ações: ${getTagLabel(tag) || 'Tag'}`;const m=document.getElementById('tagActionModal');const c=document.getElementById('tagActionModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');},20);} 
 function closeActionModal(){const m=document.getElementById('tagActionModal');const c=document.getElementById('tagActionModalContent');m.classList.add('opacity-0');c.classList.add('scale-95');setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);} 
-async function removeRelation(){if(!actionState.tag) return;await api('remove_tag_family_relation',{tag_id:state.tagId,other_tag_id:Number(actionState.tag.id),relation_type:actionState.relationType});closeActionModal();await load();}
+async function removeRelation(){if(!actionState.tag) return;await api('remove_tag_family_relation',{tag_id:state.tagId,other_tag_id:Number(actionState.tag.id),relation_type:actionState.relationType,tipo_de_relacao:getTagRelationType(actionState.tag)});closeActionModal();await load();}
 function openEditTagModal(tag){if(!tag) return;document.getElementById('editTagIdInput').value=String(tag.id);document.getElementById('editTagNameInput').value=String(tag.name||'');document.getElementById('editTagNamePtBrInput').value=String(tag.name_pt_br||'');document.getElementById('editTagNumeroInput').value=(tag.numero??'');const m=document.getElementById('editTagModal');const c=document.getElementById('editTagModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');},20);} 
 function closeEditTagModal(){const m=document.getElementById('editTagModal');const c=document.getElementById('editTagModalContent');m.classList.add('opacity-0');c.classList.add('scale-95');setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);} 
 async function submitEditTag(e){e.preventDefault();const id=Number(document.getElementById('editTagIdInput').value||0);const original=state.tags.find(t=>Number(t.id)===id)||{};await api('update_tag',{id,name:document.getElementById('editTagNameInput').value.trim(),name_pt_br:document.getElementById('editTagNamePtBrInput').value.trim(),numero:document.getElementById('editTagNumeroInput').value.trim(),is_book:Number(original.is_book||0),is_verb_tense:Number(original.is_verb_tense||0),is_sentence_type:Number(original.is_sentence_type||0),is_lexical_chunk:Number(original.is_lexical_chunk||0),is_relation_type:Number(original.is_relation_type||0),is_word:Number(original.is_word||0),is_month:Number(original.is_month||0),is_day:Number(original.is_day||0),is_year:Number(original.is_year||0)});closeEditTagModal();closeActionModal();await load();}
