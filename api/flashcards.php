@@ -4009,19 +4009,20 @@ elseif ($action === 'list_noun_tokens') {
     $tokens = [];
     foreach ($rows as $row) {
         $variants = [
-            (string)($row['singular_pt_br'] ?? ''),
-            (string)($row['plural_pt_br'] ?? ''),
-            (string)($row['singular_en_us'] ?? ''),
-            (string)($row['plural_en_us'] ?? '')
+            'singular_pt_br' => (string)($row['singular_pt_br'] ?? ''),
+            'plural_pt_br' => (string)($row['plural_pt_br'] ?? ''),
+            'singular_en_us' => (string)($row['singular_en_us'] ?? ''),
+            'plural_en_us' => (string)($row['plural_en_us'] ?? '')
         ];
 
-        foreach ($variants as $variant) {
+        foreach ($variants as $column => $variant) {
             $value = trim($variant);
             if ($value === '') continue;
             if ($query !== '' && stripos($value, $query) === false) continue;
 
             $tokens[] = [
                 'id' => (int)$row['id'],
+                'column' => $column,
                 'value' => $value
             ];
         }
