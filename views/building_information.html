@@ -174,7 +174,7 @@
                     const baseClass = selected
                         ? 'bg-blue-500/20 text-blue-100 border-blue-400'
                         : 'bg-slate-800 text-slate-200 border-slate-600 hover:border-gluon-primary hover:text-white';
-                    return `<button type="button" data-token-id="${token.id}" class="noun-token border ${baseClass} rounded-full px-3 py-1.5 text-sm transition-colors">${token.value}</button>`;
+                    return `<button type="button" data-token-key="${this.getTokenKey(token)}" class="noun-token border ${baseClass} rounded-full px-3 py-1.5 text-sm transition-colors">${token.value}</button>`;
                 }).join('');
 
                 panel.querySelectorAll('.noun-token').forEach((button) => {
