@@ -4318,6 +4318,47 @@ elseif ($action === 'list_adverb_tokens') {
     echo json_encode(['status' => 'success', 'tokens' => $tokens]);
 }
 
+
+elseif ($action === 'add_grammar_entry') {
+    $table = trim((string)($input['table'] ?? ''));
+    $allowed = [
+        'nouns' => ['noun_group_id','correspondence_id','language_id','gender_id','number_id','noun_form_id','noun_text'],
+        'verbs' => ['verb_group_id','correspondence_id','language_id','pronoun_id','verb_form_id','verb_text'],
+        'adjectives' => ['adjective_group_id','correspondence_id','language_id','gender_id','number_id','adjective_form_id','adjective_text'],
+        'adverbs' => ['adverb_group_id','correspondence_id','language_id','adverb_type_id','adverb_form_id','adverb_text'],
+        'prepositions' => ['preposition_group_id','correspondence_id','language_id','preposition_form_id','preposition_text'],
+        'numerals' => ['numeral_group_id','correspondence_id','language_id','gender_id','number_id','numeral_type_id','numeral_value','numeral_text'],
+        'conjunctions' => ['conjunction_group_id','correspondence_id','language_id','conjunction_type_id','conjunction_text'],
+    ];
+
+    if (!isset($allowed[$table])) {
+        die(json_encode(['status' => 'error', 'message' => 'Tabela inválida.']));
+    }
+
+    $columns = ['id_user'];
+    $values = [$user_id];
+    foreach ($allowed[$table] as $column) {
+        $raw = $input[$column] ?? null;
+        if (is_string($raw)) $raw = trim($raw);
+        if ($raw === '') $raw = null;
+        $columns[] = $column;
+        $values[] = $raw;
+    }
+
+    $placeholders = implode(',', array_fill(0, count($columns), '?'));
+    $cols = implode(',', $columns);
+    $sql = "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders})";
+
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($values);
+        echo json_encode(['status' => 'success', 'message' => 'Registro adicionado com sucesso.']);
+    } catch (Throwable $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Não foi possível salvar o registro.']);
+    }
+}
+
+
 elseif ($action === 'add_bulk') {
     $deck_id = (int)($input['deck_id'] ?? 0);
     $cards = $input['cards'] ?? [];

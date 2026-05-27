@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <script src="/assets/zoom-lock.js" defer></script>
+    <title>Gluon - Adicionar Palavra</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-dvh">
+<header class="bg-slate-900 border-b border-slate-700">
+    <div class="max-w-5xl mx-auto h-16 px-4 flex items-center justify-between gap-3">
+        <button type="button" onclick="window.location.href='/views/building_information.html'" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 hover:border-indigo-500">
+            <i class="fa-solid fa-arrow-left"></i><span class="text-sm font-semibold">Voltar</span>
+        </button>
+        <h1 class="font-semibold">Adicionar Palavra</h1>
+        <span></span>
+    </div>
+</header>
+<main class="max-w-5xl mx-auto p-4 space-y-4">
+    <div id="menu" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2"></div>
+    <section class="bg-slate-900 border border-slate-700 rounded-xl p-4">
+        <p id="status" class="text-sm text-slate-300 mb-3"></p>
+        <form id="wordForm" class="space-y-3"></form>
+    </section>
+</main>
+<script>
+const tabs=[
+{key:'nouns',label:'Substantivo',fields:[['noun_group_id',1],['correspondence_id',1],['language_id',1],['gender_id',0],['number_id',1],['noun_form_id',1],['noun_text','']]},
+{key:'verbs',label:'Verbo',fields:[['verb_group_id',1],['correspondence_id',1],['language_id',1],['pronoun_id',0],['verb_form_id',1],['verb_text','']]},
+{key:'adjectives',label:'Adjetivo',fields:[['adjective_group_id',1],['correspondence_id',1],['language_id',1],['gender_id',0],['number_id',0],['adjective_form_id',1],['adjective_text','']]},
+{key:'adverbs',label:'Advérbio',fields:[['adverb_group_id',1],['correspondence_id',1],['language_id',1],['adverb_type_id',1],['adverb_form_id',1],['adverb_text','']]},
+{key:'prepositions',label:'Preposição',fields:[['preposition_group_id',1],['correspondence_id',1],['language_id',1],['preposition_form_id',1],['preposition_text','']]},
+{key:'numerals',label:'Numeral',fields:[['numeral_group_id',1],['correspondence_id',1],['language_id',1],['gender_id',0],['number_id',1],['numeral_type_id',1],['numeral_value',''],['numeral_text','']]},
+{key:'conjunctions',label:'Conjunção',fields:[['conjunction_group_id',1],['correspondence_id',1],['language_id',1],['conjunction_type_id',1],['conjunction_text','']]},
+];
+let active=tabs[0].key;
+function renderMenu(){const m=document.getElementById('menu');m.innerHTML='';tabs.forEach(t=>{const b=document.createElement('button');b.type='button';b.textContent=t.label;b.className=`px-3 py-2 rounded-lg border text-sm ${active===t.key?'bg-indigo-600 border-indigo-400 text-white':'bg-slate-800 border-slate-600 text-slate-300'}`;b.onclick=()=>{active=t.key;renderMenu();renderForm();};m.appendChild(b);});}
+function humanize(k){return k.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());}
+function renderForm(){const tab=tabs.find(t=>t.key===active);const f=document.getElementById('wordForm');f.innerHTML='';tab.fields.forEach(([name,val])=>{const w=document.createElement('div');w.innerHTML=`<label class="block text-xs text-slate-400 mb-1">${humanize(name)}</label><input name="${name}" value="${val}" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3 text-sm"/>`;f.appendChild(w);});const s=document.createElement('button');s.className='px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500';s.textContent='Salvar';f.appendChild(s);}
+async function save(e){e.preventDefault();const fd=new FormData(e.target);const payload={action:'add_grammar_entry',table:active};fd.forEach((v,k)=>payload[k]=v);const r=await fetch('/api/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();const el=document.getElementById('status');el.textContent=j.message|| (j.status==='success'?'Registro salvo!':'Erro');el.className=`text-sm mb-3 ${j.status==='success'?'text-emerald-400':'text-rose-400'}`;}
+document.getElementById('wordForm').addEventListener('submit',save);
+renderMenu();renderForm();
+</script>
+</body>
+</html>

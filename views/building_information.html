@@ -29,10 +29,15 @@
 
             <h1 id="building-user-name" class="text-sm sm:text-base font-semibold text-slate-100 truncate">Carregando usuário...</h1>
 
-            <button id="languageSwitchButton" type="button" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-200 hover:text-white hover:border-gluon-primary transition-colors" title="Alternar idioma">
-                <i class="fa-solid fa-language"></i>
-                <span id="languageSwitchLabel" class="font-semibold text-xs sm:text-sm">PT-BR</span>
-            </button>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="window.location.href='/views/add_word.html'" class="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-600 border border-indigo-500 text-white hover:bg-indigo-500 transition-colors" title="Adicionar palavra">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+                <button id="languageSwitchButton" type="button" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-200 hover:text-white hover:border-gluon-primary transition-colors" title="Alternar idioma">
+                    <i class="fa-solid fa-language"></i>
+                    <span id="languageSwitchLabel" class="font-semibold text-xs sm:text-sm">PT-BR</span>
+                </button>
+            </div>
         </div>
     </header>
 
