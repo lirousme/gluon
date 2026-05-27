@@ -3871,25 +3871,36 @@ elseif ($action === 'add_grammar_entry') {
         die(json_encode(['status' => 'error', 'message' => 'Tabela inválida.']));
     }
 
-    $columns = ['id_user'];
-    $values = [$user_id];
-    foreach ($allowed[$table] as $column) {
-        $raw = $input[$column] ?? null;
-        if (is_string($raw)) $raw = trim($raw);
-        if ($raw === '') $raw = null;
-        $columns[] = $column;
-        $values[] = $raw;
-    }
-
-    $placeholders = implode(',', array_fill(0, count($columns), '?'));
-    $cols = implode(',', $columns);
-    $sql = "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders})";
-
     try {
+        $stmtColumns = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?");
+        $stmtColumns->execute([$table]);
+        $existingColumns = array_column($stmtColumns->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
+        $existingColumns = array_flip($existingColumns);
+
+        $columns = ['id_user'];
+        $values = [$user_id];
+        foreach ($allowed[$table] as $column) {
+            if (!isset($existingColumns[$column])) continue;
+            $raw = $input[$column] ?? null;
+            if (is_string($raw)) $raw = trim($raw);
+            if ($raw === '') $raw = null;
+            $columns[] = $column;
+            $values[] = $raw;
+        }
+
+        if (count($columns) === 1) {
+            throw new RuntimeException('Nenhuma coluna compatível encontrada para inserção em ' . $table);
+        }
+
+        $placeholders = implode(',', array_fill(0, count($columns), '?'));
+        $cols = implode(',', $columns);
+        $sql = "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders})";
+
         $stmt = $pdo->prepare($sql);
         $stmt->execute($values);
         echo json_encode(['status' => 'success', 'message' => 'Registro adicionado com sucesso.']);
     } catch (Throwable $e) {
+        error_log('[flashcards][add_grammar_entry] ' . $e->getMessage());
         echo json_encode(['status' => 'error', 'message' => 'Não foi possível salvar o registro.']);
     }
 }
