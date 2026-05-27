@@ -3998,6 +3998,42 @@ elseif ($action === 'create_generated_cards') {
     }
 }
 
+
+elseif ($action === 'list_noun_tokens') {
+    $query = trim((string)($input['query'] ?? ''));
+
+    $stmt = $pdo->prepare("SELECT id, singular_pt_br, plural_pt_br, singular_en_us, plural_en_us FROM nouns WHERE id_user = ? ORDER BY id DESC LIMIT 800");
+    $stmt->execute([$user_id]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $tokens = [];
+    foreach ($rows as $row) {
+        $variants = [
+            (string)($row['singular_pt_br'] ?? ''),
+            (string)($row['plural_pt_br'] ?? ''),
+            (string)($row['singular_en_us'] ?? ''),
+            (string)($row['plural_en_us'] ?? '')
+        ];
+
+        foreach ($variants as $variant) {
+            $value = trim($variant);
+            if ($value === '') continue;
+            if ($query !== '' && stripos($value, $query) === false) continue;
+
+            $tokens[] = [
+                'id' => (int)$row['id'],
+                'value' => $value
+            ];
+        }
+    }
+
+    usort($tokens, function ($a, $b) {
+        return strcasecmp((string)$a['value'], (string)$b['value']);
+    });
+
+    echo json_encode(['status' => 'success', 'tokens' => $tokens]);
+}
+
 elseif ($action === 'add_bulk') {
     $deck_id = (int)($input['deck_id'] ?? 0);
     $cards = $input['cards'] ?? [];

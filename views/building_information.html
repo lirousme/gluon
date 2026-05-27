@@ -31,9 +31,35 @@
         </div>
     </header>
 
+    <main class="max-w-3xl mx-auto px-4 sm:px-6 py-5">
+        <section class="bg-gluon-secondary border border-slate-700 rounded-xl p-4 sm:p-5 shadow-2xl">
+            <div class="mb-3">
+                <h2 class="text-base sm:text-lg font-semibold text-slate-100">Selecionar noun</h2>
+                <p class="text-xs sm:text-sm text-slate-400">Digite para buscar nas 4 versões do noun (pt-BR e en-US, singular e plural).</p>
+            </div>
+
+            <div id="selectedNounCard" class="hidden mb-4 rounded-lg border border-blue-400/40 bg-blue-500/10 px-3 py-3">
+                <p class="text-xs text-blue-200 uppercase tracking-wide">Selecionado</p>
+                <p id="selectedNounText" class="text-base font-semibold text-blue-100 mt-1"></p>
+            </div>
+
+            <div id="nounPanel" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
+            <input id="nounSearchInput" type="text" placeholder="Pesquisar noun..." class="w-full mt-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
+        </section>
+    </main>
+
     <script>
-        async function api(action, payload = {}) {
+        async function userApi(action, payload = {}) {
             const response = await fetch('/api/user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, ...payload })
+            });
+            return response.json();
+        }
+
+        async function flashcardsApi(action, payload = {}) {
+            const response = await fetch('/api/flashcards', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action, ...payload })
@@ -44,7 +70,7 @@
         async function loadHeaderUserName() {
             const label = document.getElementById('building-user-name');
             try {
-                const sessionRes = await api('get_session');
+                const sessionRes = await userApi('get_session');
                 const sessionId = sessionRes?.data?.id;
 
                 if (!sessionId) {
@@ -52,7 +78,7 @@
                     return;
                 }
 
-                const profileRes = await api('get_public_profile', { target_user_id: sessionId });
+                const profileRes = await userApi('get_public_profile', { target_user_id: sessionId });
                 const username = profileRes?.data?.username || 'Usuário';
                 label.textContent = username;
             } catch (error) {
@@ -60,7 +86,81 @@
             }
         }
 
-        loadHeaderUserName();
+        const nounApp = {
+            allNounTokens: [],
+            selectedToken: null,
+            searchQuery: '',
+
+            async init() {
+                loadHeaderUserName();
+                this.bindEvents();
+                await this.loadNouns();
+                this.renderPanel();
+            },
+
+            bindEvents() {
+                const input = document.getElementById('nounSearchInput');
+                input.addEventListener('input', (event) => {
+                    this.searchQuery = String(event.target.value || '').trim().toLowerCase();
+                    this.renderPanel();
+                });
+            },
+
+            async loadNouns() {
+                try {
+                    const res = await flashcardsApi('list_noun_tokens');
+                    if (res?.status !== 'success' || !Array.isArray(res.tokens)) {
+                        this.allNounTokens = [];
+                        return;
+                    }
+                    this.allNounTokens = res.tokens;
+                } catch (error) {
+                    this.allNounTokens = [];
+                }
+            },
+
+            getFilteredTokens() {
+                if (!this.searchQuery) return this.allNounTokens;
+                return this.allNounTokens.filter((token) => String(token.value || '').toLowerCase().includes(this.searchQuery));
+            },
+
+            selectToken(token) {
+                this.selectedToken = token;
+                const card = document.getElementById('selectedNounCard');
+                const text = document.getElementById('selectedNounText');
+                text.textContent = token.value;
+                card.classList.remove('hidden');
+                this.renderPanel();
+            },
+
+            renderPanel() {
+                const panel = document.getElementById('nounPanel');
+                const tokens = this.getFilteredTokens();
+
+                if (!tokens.length) {
+                    panel.innerHTML = '<p class="text-sm text-slate-400">Nenhum noun encontrado para esse filtro.</p>';
+                    return;
+                }
+
+                panel.innerHTML = tokens.map((token) => {
+                    const selected = this.selectedToken && this.selectedToken.id === token.id;
+                    const baseClass = selected
+                        ? 'bg-blue-500/20 text-blue-100 border-blue-400'
+                        : 'bg-slate-800 text-slate-200 border-slate-600 hover:border-gluon-primary hover:text-white';
+                    return `<button type="button" data-token-id="${token.id}" class="noun-token border ${baseClass} rounded-full px-3 py-1.5 text-sm transition-colors">${token.value}</button>`;
+                }).join('');
+
+                panel.querySelectorAll('.noun-token').forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const tokenId = Number(button.dataset.tokenId);
+                        const token = this.allNounTokens.find((item) => item.id === tokenId);
+                        if (token) this.selectToken(token);
+                    });
+                });
+            }
+        };
+
+        nounApp.init();
     </script>
 </body>
 </html>
