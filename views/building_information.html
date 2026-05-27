@@ -40,6 +40,7 @@
         <section id="selectedSentenceSection" class="hidden mb-4 bg-gluon-secondary border border-indigo-400/40 rounded-xl p-4 sm:p-5 shadow-2xl">
             <p class="text-xs text-indigo-200 uppercase tracking-wide">Frase em construção</p>
             <p id="selectedSentenceText" class="text-base font-semibold text-indigo-100 mt-1"></p>
+            <p id="translatedSentenceText" class="text-base font-medium text-emerald-200 mt-2 border-t border-indigo-300/30 pt-2"></p>
         </section>
 
         <section class="bg-gluon-secondary border border-slate-700 rounded-xl p-4 sm:p-5 shadow-2xl">
@@ -204,18 +205,26 @@
         function renderSentenceDisplay() {
             const section = document.getElementById('selectedSentenceSection');
             const text = document.getElementById('selectedSentenceText');
+            const translatedText = document.getElementById('translatedSentenceText');
             const nouns = nounApp.getSelectedValues();
             const verbs = verbApp.getSelectedValuesForDisplay();
             const adjectives = adjectiveApp.getSelectedValuesForDisplay();
             const phrase = formatSelectedTokens([...nouns, ...verbs, ...adjectives]);
+            const translatedPhrase = formatSelectedTokens([
+                ...nounApp.getSelectedValuesForOppositeLanguage(),
+                ...verbApp.getSelectedValuesForOppositeLanguage(),
+                ...adjectiveApp.getSelectedValuesForOppositeLanguage()
+            ]);
 
             if (!phrase) {
                 text.textContent = '';
+                translatedText.textContent = '';
                 section.classList.add('hidden');
                 return;
             }
 
             text.textContent = phrase;
+            translatedText.textContent = translatedPhrase;
             section.classList.remove('hidden');
         }
 
@@ -286,6 +295,23 @@
                     .map((tokenKey) => this.allNounTokens.find((token) => this.getTokenKey(token) === tokenKey))
                     .filter(Boolean)
                     .map((token) => token.value);
+            },
+
+            getSelectedValuesForOppositeLanguage() {
+                const oppositeLanguageId = languageApp.getLanguageId() === 1 ? 2 : 1;
+                return this.selectedTokenKeys
+                    .map((tokenKey) => this.allNounTokens.find((token) => this.getTokenKey(token) === tokenKey))
+                    .filter(Boolean)
+                    .map((token) => this.allNounTokens.find((candidate) =>
+                        Number(candidate.noun_group_id) === Number(token.noun_group_id)
+                        && Number(candidate.gender_id) === Number(token.gender_id)
+                        && Number(candidate.number_id) === Number(token.number_id)
+                        && Number(candidate.noun_form_id) === Number(token.noun_form_id)
+                        && Number(candidate.language_id) === oppositeLanguageId
+                    ))
+                    .filter(Boolean)
+                    .map((token) => String(token.value || '').trim())
+                    .filter(Boolean);
             },
 
             renderPanel() {
@@ -450,6 +476,23 @@
                 return Array.from(new Set(selectedValues));
             },
 
+            getSelectedValuesForOppositeLanguage() {
+                const oppositeLanguageId = languageApp.getLanguageId() === 1 ? 2 : 1;
+                const selectedValues = this.selectedTokenIds
+                    .map((tokenId) => this.allVerbTokens.find((token) => Number(token.id) === Number(tokenId)))
+                    .filter(Boolean)
+                    .map((token) => this.allVerbTokens.find((candidate) =>
+                        Number(candidate.verb_group_id) === Number(token.verb_group_id)
+                        && Number(candidate.pronoun_id) === Number(token.pronoun_id)
+                        && Number(candidate.verb_form_id) === Number(token.verb_form_id)
+                        && Number(candidate.language_id) === oppositeLanguageId
+                    ))
+                    .filter(Boolean)
+                    .map((token) => String(token.value || '').trim())
+                    .filter(Boolean);
+                return Array.from(new Set(selectedValues));
+            },
+
             renderPanel() {
                 const panel = document.getElementById('verbPanel');
                 const tokens = this.getFilteredTokens();
@@ -550,6 +593,23 @@
             getSelectedValuesForDisplay() {
                 return this.selectedTokenIds
                     .map((tokenId) => this.allAdjectiveTokens.find((token) => Number(token.id) === Number(tokenId)))
+                    .filter(Boolean)
+                    .map((token) => String(token.value || '').trim())
+                    .filter(Boolean);
+            },
+
+            getSelectedValuesForOppositeLanguage() {
+                const oppositeLanguageId = languageApp.getLanguageId() === 1 ? 2 : 1;
+                return this.selectedTokenIds
+                    .map((tokenId) => this.allAdjectiveTokens.find((token) => Number(token.id) === Number(tokenId)))
+                    .filter(Boolean)
+                    .map((token) => this.allAdjectiveTokens.find((candidate) =>
+                        Number(candidate.adjective_group_id) === Number(token.adjective_group_id)
+                        && Number(candidate.gender_id) === Number(token.gender_id)
+                        && Number(candidate.number_id) === Number(token.number_id)
+                        && Number(candidate.adjective_form_id) === Number(token.adjective_form_id)
+                        && Number(candidate.language_id) === oppositeLanguageId
+                    ))
                     .filter(Boolean)
                     .map((token) => String(token.value || '').trim())
                     .filter(Boolean);
