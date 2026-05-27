@@ -32,15 +32,15 @@
     </header>
 
     <main class="max-w-3xl mx-auto px-4 sm:px-6 py-5">
+        <section id="selectedNounsSection" class="hidden mb-4 bg-gluon-secondary border border-blue-400/40 rounded-xl p-4 sm:p-5 shadow-2xl">
+            <p class="text-xs text-blue-200 uppercase tracking-wide">Nouns selecionados</p>
+            <p id="selectedNounText" class="text-base font-semibold text-blue-100 mt-1"></p>
+        </section>
+
         <section class="bg-gluon-secondary border border-slate-700 rounded-xl p-4 sm:p-5 shadow-2xl">
             <div class="mb-3">
                 <h2 class="text-base sm:text-lg font-semibold text-slate-100">Selecionar noun</h2>
                 <p class="text-xs sm:text-sm text-slate-400">Digite para buscar nas 4 versões do noun (pt-BR e en-US, singular e plural).</p>
-            </div>
-
-            <div id="selectedNounCard" class="hidden mb-4 rounded-lg border border-blue-400/40 bg-blue-500/10 px-3 py-3">
-                <p class="text-xs text-blue-200 uppercase tracking-wide">Selecionado</p>
-                <p id="selectedNounText" class="text-base font-semibold text-blue-100 mt-1"></p>
             </div>
 
             <div id="nounPanel" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
@@ -88,7 +88,7 @@
 
         const nounApp = {
             allNounTokens: [],
-            selectedToken: null,
+            selectedTokenKeys: [],
             searchQuery: '',
 
             async init() {
@@ -124,13 +124,59 @@
                 return this.allNounTokens.filter((token) => String(token.value || '').toLowerCase().includes(this.searchQuery));
             },
 
-            selectToken(token) {
-                this.selectedToken = token;
-                const card = document.getElementById('selectedNounCard');
-                const text = document.getElementById('selectedNounText');
-                text.textContent = token.value;
-                card.classList.remove('hidden');
+            getTokenKey(token) {
+                return `${Number(token.id)}::${String(token.value || '').trim().toLowerCase()}`;
+            },
+
+            normalizeDisplayValue(value, isFirst) {
+                const trimmed = String(value || '').trim();
+                if (!trimmed) return '';
+                const lower = trimmed.toLocaleLowerCase('pt-BR');
+                if (!isFirst) return lower;
+                return lower.charAt(0).toLocaleUpperCase('pt-BR') + lower.slice(1);
+            },
+
+            formatSelectedValues(values) {
+                if (!values.length) return '';
+                if (values.length === 1) return this.normalizeDisplayValue(values[0], true);
+
+                const normalized = values.map((value, index) => this.normalizeDisplayValue(value, index === 0));
+                if (normalized.length === 2) {
+                    return `${normalized[0]} e ${normalized[1]}`;
+                }
+
+                return `${normalized.slice(0, -1).join(', ')} e ${normalized[normalized.length - 1]}`;
+            },
+
+            toggleToken(token) {
+                const tokenKey = this.getTokenKey(token);
+                if (!tokenKey) return;
+                const existingIndex = this.selectedTokenKeys.findIndex((key) => key === tokenKey);
+                if (existingIndex >= 0) {
+                    this.selectedTokenKeys.splice(existingIndex, 1);
+                } else {
+                    this.selectedTokenKeys.push(tokenKey);
+                }
+                this.renderSelectedNouns();
                 this.renderPanel();
+            },
+
+            renderSelectedNouns() {
+                const section = document.getElementById('selectedNounsSection');
+                const text = document.getElementById('selectedNounText');
+                const selectedValues = this.selectedTokenKeys
+                    .map((tokenKey) => this.allNounTokens.find((token) => this.getTokenKey(token) === tokenKey))
+                    .filter(Boolean)
+                    .map((token) => token.value);
+
+                if (!selectedValues.length) {
+                    text.textContent = '';
+                    section.classList.add('hidden');
+                    return;
+                }
+
+                text.textContent = this.formatSelectedValues(selectedValues);
+                section.classList.remove('hidden');
             },
 
             renderPanel() {
@@ -148,18 +194,18 @@
                 }
 
                 panel.innerHTML = tokens.map((token) => {
-                    const selected = this.selectedToken && this.selectedToken.id === token.id;
+                    const selected = this.selectedTokenKeys.includes(this.getTokenKey(token));
                     const baseClass = selected
                         ? 'bg-blue-500/20 text-blue-100 border-blue-400'
                         : 'bg-slate-800 text-slate-200 border-slate-600 hover:border-gluon-primary hover:text-white';
-                    return `<button type="button" data-token-id="${token.id}" class="noun-token border ${baseClass} rounded-full px-3 py-1.5 text-sm transition-colors">${token.value}</button>`;
+                    return `<button type="button" data-token-key="${this.getTokenKey(token)}" class="noun-token border ${baseClass} rounded-full px-3 py-1.5 text-sm transition-colors">${token.value}</button>`;
                 }).join('');
 
                 panel.querySelectorAll('.noun-token').forEach((button) => {
                     button.addEventListener('click', () => {
-                        const tokenId = Number(button.dataset.tokenId);
-                        const token = this.allNounTokens.find((item) => item.id === tokenId);
-                        if (token) this.selectToken(token);
+                        const tokenKey = String(button.dataset.tokenKey || '');
+                        const token = this.allNounTokens.find((item) => this.getTokenKey(item) === tokenKey);
+                        if (token) this.toggleToken(token);
                     });
                 });
             }
