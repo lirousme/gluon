@@ -3075,7 +3075,7 @@ elseif ($action === 'list_cards_for_tag_filtering') {
 }
 
 elseif ($action === 'list_tags') {
-    $stmt = $pdo->prepare("SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year FROM flashcard_tags WHERE user_id IN (?, 5) ORDER BY id ASC");
+    $stmt = $pdo->prepare("SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year, (SELECT COUNT(*) FROM subjects_links sl WHERE sl.tag_id = flashcard_tags.id) AS subjects_count FROM flashcard_tags WHERE user_id IN (?, 5) ORDER BY id ASC");
     $stmt->execute([$user_id]);
     $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $parsed = [];
