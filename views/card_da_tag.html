@@ -52,7 +52,29 @@
       return String(value ?? '').replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
     }
 
+    function getDecodedParam(name){
+      const rawValue = params.get(name);
+      if(!rawValue) return '';
+      try {
+        return decodeURIComponent(rawValue);
+      } catch (error) {
+        return rawValue;
+      }
+    }
+
     function getTagFamilyRoute(){
+      const markedFrom = getDecodedParam('from');
+      if(markedFrom){
+        try {
+          const markedUrl = new URL(markedFrom, window.location.origin);
+          if(markedUrl.origin === window.location.origin && markedUrl.pathname === '/views/tag_family.html') {
+            return markedUrl.pathname + markedUrl.search;
+          }
+        } catch (error) {
+          // Ignora parâmetros inválidos e usa a rota montada pela tag atual.
+        }
+      }
+
       const tagFamilyParams = new URLSearchParams();
       if(state.tagId) tagFamilyParams.set('tag_id', String(state.tagId));
       if(state.tagName) tagFamilyParams.set('tag_name', state.tagName);
@@ -61,7 +83,7 @@
     }
 
     function goBackToMarkedRoute(){
-      window.location.href = getTagFamilyRoute();
+      window.location.replace(getTagFamilyRoute());
     }
 
     async function api(action, payload = {}){
