@@ -97,11 +97,29 @@ function renderFooterTags(){
 
   const q=(document.getElementById('footerTagSearch').value||'').toLowerCase().trim();
   const el=document.getElementById('footerTagSelector');
-  const filtered=state.tags.filter(t=>Number(t.id)!==state.tagId).filter(t=>String(t.name||'').toLowerCase().includes(q)||String(t.name_pt_br||'').toLowerCase().includes(q)||String(t.numero??'').toLowerCase().includes(q));
-  if(!filtered.length){el.innerHTML='<span class="text-xs text-slate-400">Nenhuma tag encontrada.</span>';return;}
+  const minSearchLength=2;
+  const maxResults=200;
+
+  if(q.length<minSearchLength){
+    el.innerHTML=`<span class="text-xs text-slate-400">Digite pelo menos ${minSearchLength} caracteres para buscar tags.</span>`;
+    return;
+  }
+
+  const matches=state.tags
+    .filter((t)=>Number(t.id)!==state.tagId)
+    .filter((t)=>String(t.name||'').toLowerCase().includes(q)||String(t.name_pt_br||'').toLowerCase().includes(q)||String(t.numero??'').toLowerCase().includes(q));
+
+  if(!matches.length){
+    el.innerHTML='<span class="text-xs text-slate-400">Nenhuma tag encontrada.</span>';
+    return;
+  }
+
+  const filtered=matches.slice(0,maxResults);
   const numeroPtBrCounts = buildNumeroPtBrCounts(filtered);
-  el.innerHTML=filtered.map(t=>`<button type="button" data-id="${Number(t.id)}" class="px-2.5 py-1 rounded-full text-xs border bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700">${renderTagButtonContent(t, numeroPtBrCounts)}</button>`).join('');
-  el.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>addRelation(Number(b.dataset.id)));
+  const hasMoreResults=matches.length>maxResults;
+  const summary=hasMoreResults?`<div class="w-full text-[11px] text-amber-300 mb-2">Mostrando ${maxResults} de ${matches.length} tags. Refine a busca para ver menos resultados.</div>`:'';
+  el.innerHTML=summary+filtered.map(t=>`<button type="button" data-id="${Number(t.id)}" class="px-2.5 py-1 rounded-full text-xs border bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700">${renderTagButtonContent(t, numeroPtBrCounts)}</button>`).join('');
+  el.querySelectorAll('button[data-id]').forEach((b)=>b.onclick=()=>addRelation(Number(b.dataset.id)));
 }
 function enforceSingleCreateTagCategorySelection(changedInput){
   if(!changedInput.checked) return;
