@@ -3071,56 +3071,6 @@ elseif ($action === 'delete_card') {
 }
 
 
-
-elseif ($action === 'list_subject_cards_by_tag') {
-    $tag_id = (int)($input['tag_id'] ?? 0);
-    if ($tag_id <= 0) {
-        die(json_encode(['status' => 'error', 'message' => 'ID da tag inválido.']));
-    }
-
-    $stmtTag = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5) LIMIT 1");
-    $stmtTag->execute([$tag_id, $user_id]);
-    if (!$stmtTag->fetch()) {
-        die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada ou sem permissão.']));
-    }
-
-    $stmt = $pdo->prepare("
-        SELECT
-            f.id,
-            f.directory_id,
-            f.front_encrypted,
-            f.back_encrypted,
-            f.image_front_encrypted,
-            f.image_back_encrypted,
-            d.name_encrypted AS directory_name_encrypted,
-            d.user_id AS directory_user_id
-        FROM subjects_links sl
-        INNER JOIN flashcards f ON f.id = sl.flashcard_id
-        INNER JOIN directories d ON d.id = f.directory_id
-        WHERE sl.tag_id = ?
-          AND d.user_id IN (?, 5)
-        ORDER BY f.id DESC
-        LIMIT 2000
-    ");
-    $stmt->execute([$tag_id, $user_id]);
-
-    $cards = [];
-    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $card) {
-        $cards[] = [
-            'id' => (int)$card['id'],
-            'directory_id' => (int)$card['directory_id'],
-            'directory_name' => !empty($card['directory_name_encrypted']) ? Security::decryptData($card['directory_name_encrypted']) : '',
-            'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
-            'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
-            'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
-            'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
-            'can_edit' => (int)$card['directory_user_id'] === (int)$user_id ? 1 : 0
-        ];
-    }
-
-    echo json_encode(['status' => 'success', 'data' => $cards]);
-}
-
 elseif ($action === 'list_cards_for_tag_filtering') {
     $stmt = $pdo->prepare("
         SELECT f.id, f.front_encrypted, f.back_encrypted
