@@ -216,6 +216,11 @@ elseif ($action === 'check_remember') {
             exit;
         }
     }
+
+    if (isset($_SESSION['user_id'])) {
+        ensureGraphSystemDeckForUser($pdo, (int)$_SESSION['user_id']);
+    }
+
     echo json_encode(['status' => 'success', 'logged_in' => isset($_SESSION['user_id'])]);
 }
 ?>
