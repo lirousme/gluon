@@ -3121,7 +3121,7 @@ elseif ($action === 'list_orphan_user_tags') {
 }
 
 elseif ($action === 'list_tag_family_relations') {
-    $stmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother FROM tag_family WHERE id_user = ?");
+    $stmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother FROM tag_family WHERE id_user IN (?, 5)");
     $stmt->execute([$user_id]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $parsed = array_map(static function ($row) {
@@ -3351,11 +3351,11 @@ elseif ($action === 'get_tag_family') {
     $check->execute([$tag_id, $user_id]);
     if (!$check->fetchColumn()) die(json_encode(['status'=>'error','message'=>'Sem permissão para esta tag.']));
 
-    $stmtChildren = $pdo->prepare("SELECT t.id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color, tf.tipo_de_relacao FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_child WHERE tf.id_user = ? AND tf.id_tag_mother = ? AND t.user_id IN (?,5)");
+    $stmtChildren = $pdo->prepare("SELECT t.id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color, tf.tipo_de_relacao FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_child WHERE tf.id_user IN (?, 5) AND tf.id_tag_mother = ? AND t.user_id IN (?,5)");
     $stmtChildren->execute([$user_id, $tag_id, $user_id]);
     $children = $stmtChildren->fetchAll(PDO::FETCH_ASSOC);
 
-    $stmtMothers = $pdo->prepare("SELECT t.id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color, tf.tipo_de_relacao FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_mother WHERE tf.id_user = ? AND tf.id_tag_child = ? AND t.user_id IN (?,5)");
+    $stmtMothers = $pdo->prepare("SELECT t.id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color, tf.tipo_de_relacao FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_mother WHERE tf.id_user IN (?, 5) AND tf.id_tag_child = ? AND t.user_id IN (?,5)");
     $stmtMothers->execute([$user_id, $tag_id, $user_id]);
     $mothers = $stmtMothers->fetchAll(PDO::FETCH_ASSOC);
 
@@ -3389,7 +3389,7 @@ elseif ($action === 'add_tag_family_relation') {
     $child = $mode === 'mother' ? $tag_id : $other_tag_id;
     $mother = $mode === 'mother' ? $other_tag_id : $tag_id;
 
-    $reverseStmt = $pdo->prepare("SELECT 1 FROM tag_family WHERE id_user = ? AND id_tag_child = ? AND id_tag_mother = ? AND tipo_de_relacao = ? LIMIT 1");
+    $reverseStmt = $pdo->prepare("SELECT 1 FROM tag_family WHERE id_user IN (?, 5) AND id_tag_child = ? AND id_tag_mother = ? AND tipo_de_relacao = ? LIMIT 1");
     $reverseStmt->execute([$user_id, $mother, $child, $relation_type]);
     if ($reverseStmt->fetchColumn()) {
         die(json_encode(['status'=>'error','message'=>'Já existe essa relação invertida para esse tipo de relacionamento.']));
