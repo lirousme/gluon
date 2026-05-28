@@ -3351,6 +3351,15 @@ elseif ($action === 'get_tag_family') {
     $check->execute([$tag_id, $user_id]);
     if (!$check->fetchColumn()) die(json_encode(['status'=>'error','message'=>'Sem permissão para esta tag.']));
 
+    $stmtRelationTypes = $pdo->prepare("SELECT id, hierarquia FROM tipo_de_relacao WHERE id_user IN (?, 5)");
+    $stmtRelationTypes->execute([$user_id]);
+    $relationTypeHierarchy = [];
+    foreach ($stmtRelationTypes->fetchAll(PDO::FETCH_ASSOC) as $typeRow) {
+        $typeId = (int)($typeRow['id'] ?? 0);
+        if ($typeId <= 0 || isset($relationTypeHierarchy[$typeId])) continue;
+        $relationTypeHierarchy[$typeId] = (int)($typeRow['hierarquia'] ?? 0);
+    }
+
     $stmtChildren = $pdo->prepare("SELECT t.id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color, tf.tipo_de_relacao FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_child WHERE tf.id_user IN (?, 5) AND tf.id_tag_mother = ? AND t.user_id IN (?,5)");
     $stmtChildren->execute([$user_id, $tag_id, $user_id]);
     $children = $stmtChildren->fetchAll(PDO::FETCH_ASSOC);
@@ -3359,9 +3368,63 @@ elseif ($action === 'get_tag_family') {
     $stmtMothers->execute([$user_id, $tag_id, $user_id]);
     $mothers = $stmtMothers->fetchAll(PDO::FETCH_ASSOC);
 
+    $hierarquiaTresTypes = array_keys(array_filter($relationTypeHierarchy, function($hierarquia){ return (int)$hierarquia === 3; }));
+    if (!empty($hierarquiaTresTypes)) {
+        $placeholders = implode(',', array_fill(0, count($hierarquiaTresTypes), '?'));
+        $graphStmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother, tipo_de_relacao FROM tag_family WHERE id_user IN (?, 5) AND tipo_de_relacao IN ($placeholders)");
+        $graphStmt->execute(array_merge([$user_id], $hierarquiaTresTypes));
+        $graphRows = $graphStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $adjacency = [];
+        foreach ($graphRows as $edge) {
+            $type = (int)($edge['tipo_de_relacao'] ?? 0);
+            $a = (int)($edge['id_tag_child'] ?? 0);
+            $b = (int)($edge['id_tag_mother'] ?? 0);
+            if ($type <= 0 || $a <= 0 || $b <= 0 || $a === $b) continue;
+            if (!isset($adjacency[$type])) $adjacency[$type] = [];
+            if (!isset($adjacency[$type][$a])) $adjacency[$type][$a] = [];
+            if (!isset($adjacency[$type][$b])) $adjacency[$type][$b] = [];
+            $adjacency[$type][$a][$b] = true;
+            $adjacency[$type][$b][$a] = true;
+        }
+
+        foreach ($hierarquiaTresTypes as $relationTypeId) {
+            $relationTypeId = (int)$relationTypeId;
+            if (!isset($adjacency[$relationTypeId][$tag_id])) continue;
+            $visited = [$tag_id => true];
+            $queue = [$tag_id];
+            while (!empty($queue)) {
+                $current = array_shift($queue);
+                foreach (array_keys($adjacency[$relationTypeId][$current] ?? []) as $neighbor) {
+                    $neighbor = (int)$neighbor;
+                    if ($neighbor <= 0 || isset($visited[$neighbor])) continue;
+                    $visited[$neighbor] = true;
+                    $queue[] = $neighbor;
+                }
+            }
+
+            $connectedIds = array_values(array_filter(array_map('intval', array_keys($visited)), function($id) use ($tag_id){ return $id !== $tag_id; }));
+            if (empty($connectedIds)) continue;
+
+            $idPlaceholders = implode(',', array_fill(0, count($connectedIds), '?'));
+            $tagStmt = $pdo->prepare("SELECT id, name_encrypted, name_pt_br_encrypted, numero, color FROM flashcard_tags WHERE id IN ($idPlaceholders) AND user_id IN (?,5)");
+            $tagStmt->execute(array_merge($connectedIds, [$user_id]));
+            foreach ($tagStmt->fetchAll(PDO::FETCH_ASSOC) as $connectedTag) {
+                $connectedTag['tipo_de_relacao'] = $relationTypeId;
+                $children[] = $connectedTag;
+            }
+        }
+    }
+
     $decode = function(array $rows) {
         $out = [];
+        $seen = [];
         foreach ($rows as $tag) {
+            $tagId = (int)($tag['id'] ?? 0);
+            $typeId = (int)($tag['tipo_de_relacao'] ?? 0);
+            $seenKey = $tagId . ':' . $typeId;
+            if ($tagId <= 0 || isset($seen[$seenKey])) continue;
+            $seen[$seenKey] = true;
             $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
             $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
             unset($tag['name_encrypted'], $tag['name_pt_br_encrypted']);
