@@ -100,12 +100,45 @@ class Security {
     }
 
     public static function decryptData($data) {
-        $data = base64_decode($data);
+        $rawData = (string)$data;
+        $candidates = [$rawData];
+
+        $trimmedData = trim($rawData);
+        if ($trimmedData !== $rawData) {
+            $candidates[] = $trimmedData;
+        }
+
+        $htmlDecodedData = html_entity_decode($trimmedData, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        if ($htmlDecodedData !== $trimmedData) {
+            $candidates[] = $htmlDecodedData;
+        }
+
+        $urlDecodedData = urldecode($trimmedData);
+        if ($urlDecodedData !== $trimmedData) {
+            $candidates[] = $urlDecodedData;
+        }
+
+        if (strpos($trimmedData, ' ') !== false) {
+            $candidates[] = str_replace(' ', '+', $trimmedData);
+        }
+
         $iv_length = openssl_cipher_iv_length('aes-256-gcm');
-        $iv = substr($data, 0, $iv_length);
-        $tag = substr($data, $iv_length, 16);
-        $encrypted = substr($data, $iv_length + 16);
-        return openssl_decrypt($encrypted, 'aes-256-gcm', ENCRYPTION_KEY, 0, $iv, $tag);
+        foreach (array_unique($candidates) as $candidate) {
+            $decoded = base64_decode($candidate, true);
+            if ($decoded === false || strlen($decoded) <= ($iv_length + 16)) {
+                continue;
+            }
+
+            $iv = substr($decoded, 0, $iv_length);
+            $tag = substr($decoded, $iv_length, 16);
+            $encrypted = substr($decoded, $iv_length + 16);
+            $decrypted = openssl_decrypt($encrypted, 'aes-256-gcm', ENCRYPTION_KEY, 0, $iv, $tag);
+            if ($decrypted !== false) {
+                return $decrypted;
+            }
+        }
+
+        return false;
     }
 }
 ?>
