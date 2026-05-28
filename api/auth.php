@@ -21,6 +21,66 @@ if ($method !== 'POST') {
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? '';
 
+function ensureGraphSystemDeckForUser(PDO $pdo, int $userId): int {
+    try {
+        $pdo->exec("ALTER TABLE directories ADD COLUMN deck_mode VARCHAR(20) DEFAULT 'aleatorio' AFTER type");
+    } catch (PDOException $e) {}
+    try {
+        $pdo->exec("ALTER TABLE directories ADD COLUMN deck_system INT NOT NULL DEFAULT 0 AFTER deck_structure");
+    } catch (PDOException $e) {}
+
+    $stmtExisting = $pdo->prepare("SELECT id FROM directories WHERE user_id = ? AND parent_id IS NULL AND type = 4 AND deck_system = 1 AND deck_mode = 'grafo' ORDER BY id ASC LIMIT 1");
+    $stmtExisting->execute([$userId]);
+    $existingId = $stmtExisting->fetchColumn();
+    if ($existingId) {
+        return (int)$existingId;
+    }
+
+    $startedTransaction = !$pdo->inTransaction();
+    if ($startedTransaction) {
+        $pdo->beginTransaction();
+    }
+
+    try {
+        $stmtUserLock = $pdo->prepare("SELECT id FROM users WHERE id = ? FOR UPDATE");
+        $stmtUserLock->execute([$userId]);
+
+        $stmtExisting->execute([$userId]);
+        $existingId = $stmtExisting->fetchColumn();
+        if ($existingId) {
+            if ($startedTransaction) {
+                $pdo->commit();
+            }
+            return (int)$existingId;
+        }
+
+        $stmtMax = $pdo->prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM directories WHERE user_id = ? AND parent_id IS NULL FOR UPDATE");
+        $stmtMax->execute([$userId]);
+        $nextSortOrder = (int)$stmtMax->fetchColumn();
+
+        $graphDeckNameEncrypted = Security::encryptData('Grafo');
+        $stmtCreate = $pdo->prepare("
+            INSERT INTO directories (
+                user_id, parent_id, type, name_encrypted, default_view,
+                deck_mode, deck_system, new_item_position, sort_order, icon, icon_color_from, icon_color_to
+            ) VALUES (?, NULL, 4, ?, 'grid', 'grafo', 1, 'end', ?, 'fa-diagram-project', '#8b5cf6', '#6366f1')
+        ");
+        $stmtCreate->execute([$userId, $graphDeckNameEncrypted, $nextSortOrder]);
+        $newDirectoryId = (int)$pdo->lastInsertId();
+
+        if ($startedTransaction) {
+            $pdo->commit();
+        }
+
+        return $newDirectoryId;
+    } catch (Throwable $e) {
+        if ($startedTransaction && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
+
 if ($action === 'register') {
     $username = trim($input['username'] ?? '');
     $email = trim($input['email'] ?? '');
@@ -100,6 +160,7 @@ elseif ($action === 'login') {
     if ($user && password_verify($password, $user['password_hash'])) {
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['username'] = $user['username'];
+        ensureGraphSystemDeckForUser($pdo, (int)$user['id']);
 
         $remember_lifetime = 60 * 60 * 24 * 365 * 10; // 10 anos
         $token = bin2hex(random_bytes(32));
@@ -150,6 +211,7 @@ elseif ($action === 'check_remember') {
         if ($user) {
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['username'] = $user['username'];
+            ensureGraphSystemDeckForUser($pdo, (int)$user['id']);
             echo json_encode(['status' => 'success', 'logged_in' => true]);
             exit;
         }
