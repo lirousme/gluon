@@ -28,6 +28,13 @@ try {
     // Ignora caso já exista.
 }
 
+try {
+    $pdo->exec("ALTER TABLE directories ADD COLUMN deck_system INT NOT NULL DEFAULT 0 AFTER deck_structure");
+    echo "[migração] Coluna directories.deck_system criada.\n";
+} catch (PDOException $e) {
+    // Ignora caso já exista.
+}
+
 $stmtMissing = $pdo->query("
     SELECT u.id
     FROM users u
@@ -69,8 +76,8 @@ foreach ($userIds as $userId) {
         $stmtCreate = $pdo->prepare("
             INSERT INTO directories (
                 user_id, parent_id, type, name_encrypted, default_view,
-                new_item_position, sort_order, icon, icon_color_from, icon_color_to
-            ) VALUES (?, NULL, 1, ?, 'grid', 'end', ?, 'fa-note-sticky', '#0ea5e9', '#2563eb')
+                deck_system, new_item_position, sort_order, icon, icon_color_from, icon_color_to
+            ) VALUES (?, NULL, 1, ?, 'grid', 1, 'end', ?, 'fa-note-sticky', '#0ea5e9', '#2563eb')
         ");
         $stmtCreate->execute([$userId, $sourceNameEncrypted, $nextSortOrder]);
         $newDirectoryId = (int)$pdo->lastInsertId();

@@ -48,6 +48,7 @@ try {
 
 try { $pdo->exec("ALTER TABLE users ADD COLUMN home_directory_id INT UNSIGNED NULL DEFAULT NULL AFTER copied_directory_id"); } catch (PDOException $e) {}
 try { $pdo->exec("ALTER TABLE users ADD COLUMN source_directory_id INT UNSIGNED NULL DEFAULT NULL AFTER home_directory_id"); } catch (PDOException $e) {}
+try { $pdo->exec("ALTER TABLE directories ADD COLUMN deck_system INT NOT NULL DEFAULT 0 AFTER deck_structure"); } catch (PDOException $e) {}
 
 function ensureSourceDirectory(PDO $pdo, int $user_id): int {
     $stmtUser = $pdo->prepare("SELECT source_directory_id FROM users WHERE id = ? LIMIT 1");
@@ -59,7 +60,7 @@ function ensureSourceDirectory(PDO $pdo, int $user_id): int {
         $stmtDir->execute([(int)$source_directory_id, $user_id]);
         if ($stmtDir->fetchColumn()) {
             $sourceNameEncrypted = Security::encryptData('Anotações');
-            $stmtEnsureLabel = $pdo->prepare("UPDATE directories SET name_encrypted = ?, icon = 'fa-note-sticky', icon_color_from = '#0ea5e9', icon_color_to = '#2563eb' WHERE id = ? AND user_id = ?");
+            $stmtEnsureLabel = $pdo->prepare("UPDATE directories SET name_encrypted = ?, deck_system = 1, icon = 'fa-note-sticky', icon_color_from = '#0ea5e9', icon_color_to = '#2563eb' WHERE id = ? AND user_id = ?");
             $stmtEnsureLabel->execute([$sourceNameEncrypted, (int)$source_directory_id, $user_id]);
             return (int)$source_directory_id;
         }
@@ -73,8 +74,8 @@ function ensureSourceDirectory(PDO $pdo, int $user_id): int {
     $stmtCreate = $pdo->prepare("
         INSERT INTO directories (
             user_id, parent_id, type, name_encrypted, default_view,
-            new_item_position, sort_order, icon, icon_color_from, icon_color_to
-        ) VALUES (?, NULL, 1, ?, 'grid', 'end', ?, 'fa-note-sticky', '#0ea5e9', '#2563eb')
+            deck_system, new_item_position, sort_order, icon, icon_color_from, icon_color_to
+        ) VALUES (?, NULL, 1, ?, 'grid', 1, 'end', ?, 'fa-note-sticky', '#0ea5e9', '#2563eb')
     ");
     $stmtCreate->execute([$user_id, $sourceNameEncrypted, $nextSortOrder]);
     $newDirectoryId = (int)$pdo->lastInsertId();
