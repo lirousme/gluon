@@ -27,18 +27,6 @@
 
     <main class="flex-1 px-4 py-6 max-w-4xl mx-auto w-full">
         <h3 id="tagFamilyMainTitle" class="-translate-y-3 text-1xl font-semibold text-center">Tag</h3>
-        <section id="subjectCardsSection" class="mb-6 rounded-xl border border-slate-700 bg-slate-950/70 p-4">
-          <div class="flex items-center justify-between gap-3 mb-3">
-            <div>
-              <h2 class="text-lg font-semibold text-slate-100">Cards vinculados</h2>
-              <p class="text-xs text-slate-400">Cards relacionados a esta tag pela tabela subjects_links.</p>
-            </div>
-            <span id="subjectCardsCount" class="shrink-0 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">0 card(s)</span>
-          </div>
-          <div id="subjectCardsList" class="space-y-3">
-            <p class="text-sm text-slate-400">Carregando cards...</p>
-          </div>
-        </section>
         <div id="relationTypeSections" class="space-y-4"></div>
     </main>
 
@@ -55,7 +43,7 @@
   </div>
 <script>
 const params = new URLSearchParams(window.location.search);
-const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: null, tags: [], family: {mothers:[], children:[]}, relationTypes: [], orphanTagsCount: 0, subjectCards: [] };
+const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: null, tags: [], family: {mothers:[], children:[]}, relationTypes: [], orphanTagsCount: 0 };
 const title = document.getElementById('tagFamilyMainTitle');
 title.textContent = state.tagName || 'Tag';
 
@@ -129,49 +117,6 @@ function goToOrphanTags(){
   window.location.href='/views/tags_sem_vinculos.html';
 }
 async function api(action,payload={}){payload.action=action;const r=await fetch('/api/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();if(!r.ok||j.status!=='success')throw new Error(j.message||'Erro');return j;}
-
-function getCardEditUrl(card = {}){
-  const deckId = Number(card?.directory_id || 0);
-  const cardId = Number(card?.id || 0);
-  if(!deckId || !cardId) return '';
-  const editParams = new URLSearchParams();
-  editParams.set('id', String(deckId));
-  editParams.set('edit_card_id', String(cardId));
-  editParams.set('from', window.location.pathname + window.location.search);
-  return `/ficha_do_card?${editParams.toString()}`;
-}
-function renderSubjectCards(){
-  const list=document.getElementById('subjectCardsList');
-  const count=document.getElementById('subjectCardsCount');
-  const cards=Array.isArray(state.subjectCards)?state.subjectCards:[];
-  if(count) count.textContent=`${cards.length} card(s)`;
-  if(!list) return;
-  if(!cards.length){
-    list.innerHTML='<p class="text-sm text-slate-400">Nenhum card encontrado para esta tag em subjects_links.</p>';
-    return;
-  }
-  list.innerHTML=cards.map((card)=>{
-    const front=String(card.front||'').trim()||'(sem frente)';
-    const back=String(card.back||'').trim()||'(sem verso)';
-    const deckName=String(card.directory_name||'').trim();
-    const editUrl=Number(card.can_edit||0)===1?getCardEditUrl(card):'';
-    const imageFront=card.image_front?`<img src="${esc(card.image_front)}" alt="Imagem da frente" class="mt-2 max-h-32 rounded-lg border border-slate-700 object-contain">`:'';
-    const imageBack=card.image_back?`<img src="${esc(card.image_back)}" alt="Imagem do verso" class="mt-2 max-h-32 rounded-lg border border-slate-700 object-contain">`:'';
-    return `<article class="rounded-lg border border-slate-700 bg-slate-900/60 p-3">
-      <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0">
-          <p class="text-sm text-slate-100 whitespace-pre-wrap break-words">${esc(front)}</p>
-          ${imageFront}
-          <p class="mt-2 text-xs text-slate-400 whitespace-pre-wrap break-words">${esc(back)}</p>
-          ${imageBack}
-          ${deckName?`<p class="mt-2 text-[11px] text-slate-500">Deck: ${esc(deckName)}</p>`:''}
-        </div>
-        ${editUrl?`<a href="${esc(editUrl)}" class="shrink-0 rounded-lg border border-violet-500/50 px-2.5 py-1 text-xs text-violet-200 hover:bg-violet-500/20">Editar</a>`:''}
-      </div>
-    </article>`;
-  }).join('');
-}
-
 function renderFooterTags(){
   document.getElementById('selectedRelationTypeLabel').textContent=`(${getRelationTypeLabel(state.selectedRelationType)})`;
 
@@ -325,7 +270,7 @@ function renderFamily(){
 }
 async function load(){
   if(!state.tagId) return;
-  const [tags,family,relationTypes,orphanTags,subjectCards]=await Promise.all([api('list_tags'), api('get_tag_family',{tag_id:state.tagId}), api('list_relation_types'), api('list_orphan_user_tags'), api('list_subject_cards_by_tag',{tag_id:state.tagId})]);
+  const [tags,family,relationTypes,orphanTags]=await Promise.all([api('list_tags'), api('get_tag_family',{tag_id:state.tagId}), api('list_relation_types'), api('list_orphan_user_tags')]);
   state.tags=tags.data||[];
   const subjectsCountByTagId = new Map(state.tags.map((tag)=>[Number(tag.id), getSubjectsCount(tag)]));
   state.family=family.data||{mothers:[],children:[]};
@@ -333,9 +278,7 @@ async function load(){
   state.family.mothers=(state.family.mothers||[]).map((tag)=>({...tag, subjects_count: subjectsCountByTagId.get(Number(tag.id)) || 0}));
   state.relationTypes=(relationTypes.data||[]).map((item)=>({id:Number(item.id),nome:String(item.nome||''),hierarquia:Number(item.hierarquia||0)}));
   state.orphanTagsCount=Number(orphanTags.count||0);
-  state.subjectCards=subjectCards.data||[];
   renderOrphanTagsButton();
-  renderSubjectCards();
   if(state.selectedRelationType===null){
     state.selectedRelationType=state.relationTypes.length?Number(state.relationTypes[0].id):0;
   }
