@@ -211,6 +211,7 @@ const app = {
   deckId: params.get('id'),
   from: params.get('from') || '/dashboard',
   editCardId: params.get('edit_card_id'),
+  initialSubjectTagId: Number(params.get('tag_id') || 0),
   activeTab: 'front',
   availableTags: [],
   sessionUserId: null,
@@ -396,6 +397,17 @@ const app = {
     const res = await this.api('list_tags');
     this.availableTags = res?.data || [];
     this.renderAllTagSelectors();
+  },
+  applyInitialSubjectTag() {
+    if (this.editCardId || !this.initialSubjectTagId) return;
+    const tagExists = this.getVisibleTags().some(tag => Number(tag.id) === this.initialSubjectTagId);
+    if (!tagExists) return;
+    const selectedIds = this.getSelectedTagIds('subject');
+    if (!selectedIds.includes(this.initialSubjectTagId)) {
+      selectedIds.push(this.initialSubjectTagId);
+      this.setSelectedTagIds('subject', selectedIds);
+      this.renderTagSelector('subject');
+    }
   },
   async loadSessionUserId() {
     try {
@@ -713,6 +725,7 @@ document.addEventListener('keydown', (e) => {
   app.setActiveTab('front');
   await app.loadSessionUserId();
   await app.loadTags();
+  app.applyInitialSubjectTag();
   await app.preloadEditCard();
 })();
 </script>
