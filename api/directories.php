@@ -390,6 +390,81 @@ function ensureDirectoriesCompletionColumn(PDO $pdo): void {
         $pdo->exec("CREATE INDEX idx_is_completed ON directories (is_completed)");
     }
 }
+function ensureGraphSystemDeckForDirectoriesApi(PDO $pdo, int $user_id): int {
+    try {
+        $pdo->exec("ALTER TABLE directories ADD COLUMN deck_mode VARCHAR(20) DEFAULT 'aleatorio' AFTER type");
+    } catch (PDOException $e) {}
+    try {
+        $pdo->exec("ALTER TABLE directories ADD COLUMN deck_system INT NOT NULL DEFAULT 0 AFTER deck_structure");
+    } catch (PDOException $e) {}
+
+    $stmtExisting = $pdo->prepare("
+        SELECT id
+        FROM directories
+        WHERE user_id = ?
+          AND parent_id IS NULL
+          AND type = 4
+          AND deck_system = 1
+          AND deck_mode = 'grafo'
+        ORDER BY id ASC
+        LIMIT 1
+    ");
+    $stmtExisting->execute([$user_id]);
+    $existingId = $stmtExisting->fetchColumn();
+
+    if ($existingId) {
+        return (int)$existingId;
+    }
+
+    $startedTransaction = !$pdo->inTransaction();
+    if ($startedTransaction) {
+        $pdo->beginTransaction();
+    }
+
+    try {
+        $stmtUserLock = $pdo->prepare("SELECT id FROM users WHERE id = ? FOR UPDATE");
+        $stmtUserLock->execute([$user_id]);
+
+        $stmtExisting->execute([$user_id]);
+        $existingId = $stmtExisting->fetchColumn();
+        if ($existingId) {
+            if ($startedTransaction) {
+                $pdo->commit();
+            }
+            return (int)$existingId;
+        }
+
+        $stmtRootOrder = $pdo->prepare("
+            SELECT COALESCE(MAX(sort_order), -1) + 1
+            FROM directories
+            WHERE user_id = ? AND parent_id IS NULL
+            FOR UPDATE
+        ");
+        $stmtRootOrder->execute([$user_id]);
+        $nextSortOrder = (int)$stmtRootOrder->fetchColumn();
+
+        $graphDeckNameEncrypted = Security::encryptData('Grafo');
+        $stmtCreate = $pdo->prepare("
+            INSERT INTO directories (
+                user_id, parent_id, type, name_encrypted, default_view,
+                deck_mode, deck_system, new_item_position, sort_order, icon, icon_color_from, icon_color_to
+            ) VALUES (?, NULL, 4, ?, 'grid', 'grafo', 1, 'end', ?, 'fa-diagram-project', '#8b5cf6', '#6366f1')
+        ");
+        $stmtCreate->execute([$user_id, $graphDeckNameEncrypted, $nextSortOrder]);
+        $newDirectoryId = (int)$pdo->lastInsertId();
+
+        if ($startedTransaction) {
+            $pdo->commit();
+        }
+
+        return $newDirectoryId;
+    } catch (Throwable $e) {
+        if ($startedTransaction && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
 // =========================================================================
 // ROTAS DA API
 // =========================================================================
@@ -401,6 +476,10 @@ if ($action === 'fetch') {
     $target_user_id = isset($input['target_user_id']) ? (int)$input['target_user_id'] : $user_id;
     $effective_target_user_id = $target_user_id;
     $is_owner_context = ($effective_target_user_id === (int)$user_id);
+
+    if ($parent_id === null && $is_owner_context) {
+        ensureGraphSystemDeckForDirectoriesApi($pdo, (int)$user_id);
+    }
 
     if ($parent_id !== null && $is_owner_context) {
         $stmtParentOwner = $pdo->prepare("SELECT user_id, is_public FROM directories WHERE id = ?");
