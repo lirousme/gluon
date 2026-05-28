@@ -91,7 +91,12 @@ function goBackToMarkedRoute(){
   window.location.href=getMarkedBackRoute();
 }
 function showLayerGroupMessage(){
-  console.log('Botão de grupo de camadas clicado.');
+  const params=new URLSearchParams();
+  if(state.tagId) params.set('tag_id', String(state.tagId));
+  if(state.tagName) params.set('tag_name', state.tagName);
+  params.set('from', encodeURIComponent(window.location.pathname+window.location.search));
+  const q=params.toString();
+  window.location.href=`/views/card_da_tag.html${q?`?${q}`:''}`;
 }
 function openTagFiltering(){
   const params=new URLSearchParams();
