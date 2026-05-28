@@ -81,11 +81,32 @@
       return json;
     }
 
-    function openCreateCardModal(){
-      const createCardParams = new URLSearchParams();
-      if(state.tagId) createCardParams.set('tag_id', String(state.tagId));
-      if(state.tagName) createCardParams.set('tag_name', state.tagName);
-      window.location.href = `/ficha_do_card${createCardParams.toString() ? `?${createCardParams.toString()}` : ''}`;
+    async function openCreateCardModal(){
+      const button = document.getElementById('btnOpenCreateCardModal');
+      const originalContent = button?.innerHTML || '';
+      if(button){
+        button.disabled = true;
+        button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+      }
+
+      try {
+        const response = await api('get_user_system_deck');
+        const deckId = Number(response?.deck_id || response?.data?.deck_id || 0);
+        if(!deckId) throw new Error('Deck de sistema não encontrado para criar o card.');
+
+        const createCardParams = new URLSearchParams();
+        createCardParams.set('id', String(deckId));
+        if(state.tagId) createCardParams.set('tag_id', String(state.tagId));
+        if(state.tagName) createCardParams.set('tag_name', state.tagName);
+        createCardParams.set('from', window.location.pathname + window.location.search);
+        window.location.href = `/ficha_do_card?${createCardParams.toString()}`;
+      } catch (error) {
+        setStatus(error.message || 'Erro ao abrir a ficha do card.', 'error');
+        if(button){
+          button.disabled = false;
+          button.innerHTML = originalContent;
+        }
+      }
     }
 
     function setStatus(message, type = 'info'){

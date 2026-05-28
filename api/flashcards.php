@@ -3441,6 +3441,26 @@ elseif ($action === 'list_relation_types') {
 }
 
 
+elseif ($action === 'get_user_system_deck') {
+    $stmt = $pdo->prepare("
+        SELECT id
+        FROM directories
+        WHERE user_id = ?
+          AND type = 4
+          AND deck_system = 1
+        ORDER BY id ASC
+        LIMIT 1
+    ");
+    $stmt->execute([$user_id]);
+    $deck_id = (int)($stmt->fetchColumn() ?: 0);
+
+    if ($deck_id <= 0) {
+        die(json_encode(['status' => 'error', 'message' => 'Deck de sistema não encontrado para este usuário.']));
+    }
+
+    echo json_encode(['status' => 'success', 'deck_id' => $deck_id, 'data' => ['deck_id' => $deck_id]]);
+}
+
 elseif ($action === 'create_relation_type') {
     ensureRelationTypeEncryptedNameCapacity($pdo);
 
