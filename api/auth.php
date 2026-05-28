@@ -45,6 +45,9 @@ if ($action === 'register') {
             $pdo->exec("ALTER TABLE users ADD COLUMN source_directory_id INT UNSIGNED DEFAULT NULL AFTER home_directory_id");
         } catch (PDOException $e) {}
         try {
+            $pdo->exec("ALTER TABLE directories ADD COLUMN deck_mode VARCHAR(20) DEFAULT 'aleatorio' AFTER type");
+        } catch (PDOException $e) {}
+        try {
             $pdo->exec("ALTER TABLE directories ADD COLUMN deck_system INT NOT NULL DEFAULT 0 AFTER deck_structure");
         } catch (PDOException $e) {}
 
@@ -61,6 +64,15 @@ if ($action === 'register') {
         ");
         $stmtDir->execute([$new_user_id, $source_name_encrypted]);
         $source_directory_id = (int)$pdo->lastInsertId();
+
+        $graph_deck_name_encrypted = Security::encryptData('Grafo');
+        $stmtGraphDeck = $pdo->prepare("
+            INSERT INTO directories (
+                user_id, parent_id, type, name_encrypted, default_view,
+                deck_mode, deck_system, new_item_position, sort_order, icon, icon_color_from, icon_color_to
+            ) VALUES (?, NULL, 4, ?, 'grid', 'grafo', 1, 'end', 1, 'fa-diagram-project', '#8b5cf6', '#6366f1')
+        ");
+        $stmtGraphDeck->execute([$new_user_id, $graph_deck_name_encrypted]);
 
         $stmtUser = $pdo->prepare("UPDATE users SET source_directory_id = ? WHERE id = ?");
         $stmtUser->execute([$source_directory_id, $new_user_id]);
