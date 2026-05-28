@@ -54,6 +54,13 @@ function getTagLabel(tag = {}, numeroPtBrCounts = null){
   }
   return namePtBr ? `${name} (${namePtBr})` : name;
 }
+function getSubjectsCount(tag = {}){
+  const value = Number(tag?.subjects_count ?? 0);
+  return Number.isFinite(value) && value >= 0 ? value : 0;
+}
+function renderTagButtonContent(tag = {}, numeroPtBrCounts = null){
+  return `${esc(getTagLabel(tag, numeroPtBrCounts))} <span class="text-[10px] text-slate-400">(${getSubjectsCount(tag)})</span>`;
+}
 
 function buildNumeroPtBrCounts(tags = []){
   const counts = new Map();
@@ -92,7 +99,7 @@ function renderFooterTags(){
   const filtered=state.tags.filter(t=>Number(t.id)!==state.tagId).filter(t=>String(t.name||'').toLowerCase().includes(q)||String(t.name_pt_br||'').toLowerCase().includes(q)||String(t.numero??'').toLowerCase().includes(q));
   if(!filtered.length){el.innerHTML='<span class="text-xs text-slate-400">Nenhuma tag encontrada.</span>';return;}
   const numeroPtBrCounts = buildNumeroPtBrCounts(filtered);
-  el.innerHTML=filtered.map(t=>`<button type="button" data-id="${Number(t.id)}" class="px-2.5 py-1 rounded-full text-xs border bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700">${esc(getTagLabel(t, numeroPtBrCounts))}</button>`).join('');
+  el.innerHTML=filtered.map(t=>`<button type="button" data-id="${Number(t.id)}" class="px-2.5 py-1 rounded-full text-xs border bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700">${renderTagButtonContent(t, numeroPtBrCounts)}</button>`).join('');
   el.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>addRelation(Number(b.dataset.id)));
 }
 function enforceSingleCreateTagCategorySelection(changedInput){
@@ -183,7 +190,7 @@ function renderFamily(){
   const mk=(arr)=>{
     if(!arr.length) return '<span class="text-xs text-slate-400">Nenhuma</span>';
     const numeroPtBrCounts = buildNumeroPtBrCounts(arr);
-    return arr.map(t=>`<button type="button" data-family-tag-id="${Number(t.id)}" data-relation-role="${t.__relationRole||'child'}" class="px-2 py-1 rounded-full text-xs border border-red-400/70 bg-red-500/10 text-red-200 hover:bg-red-500/20 transition-colors" title="Abrir família da tag">${esc(getTagLabel(t, numeroPtBrCounts))}</button>`).join('');
+    return arr.map(t=>`<button type="button" data-family-tag-id="${Number(t.id)}" data-relation-role="${t.__relationRole||'child'}" class="px-2 py-1 rounded-full text-xs border border-red-400/70 bg-red-500/10 text-red-200 hover:bg-red-500/20 transition-colors" title="Abrir família da tag">${renderTagButtonContent(t, numeroPtBrCounts)}</button>`).join('');
   };
   const familyTypes=[...new Set([...state.family.children,...state.family.mothers].map((tag)=>getTagRelationType(tag)))];
   const configuredTypes=state.relationTypes.map((item)=>Number(item.id));
@@ -221,7 +228,10 @@ async function load(){
   if(!state.tagId) return;
   const [tags,family,relationTypes]=await Promise.all([api('list_tags'), api('get_tag_family',{tag_id:state.tagId}), api('list_relation_types')]);
   state.tags=tags.data||[];
+  const subjectsCountByTagId = new Map(state.tags.map((tag)=>[Number(tag.id), getSubjectsCount(tag)]));
   state.family=family.data||{mothers:[],children:[]};
+  state.family.children=(state.family.children||[]).map((tag)=>({...tag, subjects_count: subjectsCountByTagId.get(Number(tag.id)) || 0}));
+  state.family.mothers=(state.family.mothers||[]).map((tag)=>({...tag, subjects_count: subjectsCountByTagId.get(Number(tag.id)) || 0}));
   state.relationTypes=(relationTypes.data||[]).map((item)=>({id:Number(item.id),nome:String(item.nome||''),hierarquia:Number(item.hierarquia||0)}));
   if(state.selectedRelationType===null){
     state.selectedRelationType=state.relationTypes.length?Number(state.relationTypes[0].id):0;
