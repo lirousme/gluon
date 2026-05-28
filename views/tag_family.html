@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Família da Tag</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 </head>
 <body class="bg-slate-900 text-white min-h-screen">
   <div class="min-h-screen flex flex-col">
@@ -14,6 +15,7 @@
       <div class="absolute right-4 flex items-center gap-2">
         <button id="orphanTagsBtn" type="button" onclick="goToOrphanTags()" class="h-9 px-3 rounded-lg border border-red-500 bg-red-600/80 text-sm text-white hover:bg-red-500 transition-colors" title="Tags sem vínculos">0</button>
         <button id="btnOpenTagFiltering" type="button" class="h-9 px-3 rounded-lg border border-sky-500/50 text-sky-300 hover:text-sky-200 hover:bg-sky-500/20 transition-colors text-sm font-medium" title="Abrir filtro de tags">Filtro</button>
+        <button id="btnShowLayerGroupMessage" type="button" class="h-9 w-9 rounded-lg border border-sky-500/50 text-sky-300 hover:text-sky-200 hover:bg-sky-500/20 transition-colors text-sm font-medium" title="Mostrar mensagem no console" aria-label="Mostrar mensagem no console"><i class="fa-solid fa-layer-group"></i></button>
         <button id="btnOpenCreateTagModal" type="button" class="h-9 w-9 rounded-lg border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors text-lg font-semibold" title="Criar nova tag">+</button>
         <button id="btnOpenCreateRelationTypeModal" type="button" class="h-9 w-9 rounded-lg border border-emerald-500/50 text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/20 transition-colors text-lg font-semibold" title="Criar novo tipo de relação">+</button>
       </div>
@@ -83,6 +85,9 @@ function getMarkedBackRoute(){
 function goBackToMarkedRoute(){
   if(window.history.length>1){window.history.back();return;}
   window.location.href=getMarkedBackRoute();
+}
+function showLayerGroupMessage(){
+  console.log('Botão de grupo de camadas clicado.');
 }
 function openTagFiltering(){
   const params=new URLSearchParams();
@@ -325,6 +330,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('btnOpenCreateTagModal').onclick=openCreateTagModal;
   document.getElementById('btnOpenCreateRelationTypeModal').onclick=openCreateRelationTypeModal;
   document.getElementById('btnOpenTagFiltering').onclick=openTagFiltering;
+  document.getElementById('btnShowLayerGroupMessage').onclick=showLayerGroupMessage;
   document.getElementById('btnCancelCreateTag').onclick=closeCreateTagModal;
   document.getElementById('btnCloseCreateTagModal').onclick=closeCreateTagModal;
   document.getElementById('createTagForm').addEventListener('submit',submitCreateTag);
