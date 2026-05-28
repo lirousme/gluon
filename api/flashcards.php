@@ -2920,76 +2920,12 @@ elseif ($action === 'add_single') {
         syncCardTagLinks($pdo, 'relation_links', $new_card_id, $relation_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'words_links', $new_card_id, $words_tag_ids, $user_id);
         syncCardIdiomaLinks($pdo, $new_card_id, $idioma_principal_tag_ids, $idioma_secundario_tag_ids, $user_id);
-        $front_language = normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR');
-        $back_language = normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB');
-        $deck_structure = normalizeDeckStructure($deck['deck_structure'] ?? 'traducoes', 'traducoes');
-
-        $generated_sides = [];
-        $failed_sides = [];
-
-        $front_clean = trim(strip_tags($front));
-        if ($front_clean !== '' && !cardTextContainsMathNotation($front_clean)) {
-            try {
-                $tts_error_details = null;
-                $ok_front = generateAndPersistCardAudio(
-                    $pdo,
-                    $user_id,
-                    $new_card_id,
-                    'front',
-                    $front_clean,
-                    $front_language,
-                    $deck_structure,
-                    $front_language,
-                    $back_language,
-                    $tts_error_details
-                );
-                if ($ok_front) $generated_sides[] = 'front';
-                else $failed_sides[] = 'front';
-            } catch (Throwable $e) {
-                $failed_sides[] = 'front';
-                error_log('[flashcards][add_single][front_audio] ' . $e->getMessage());
-            }
-        }
-
-        $back_clean = trim(strip_tags($back));
-        if ($back_clean !== '' && !cardTextContainsMathNotation($back_clean)) {
-            try {
-                $tts_error_details = null;
-                $ok_back = generateAndPersistCardAudio(
-                    $pdo,
-                    $user_id,
-                    $new_card_id,
-                    'back',
-                    $back_clean,
-                    $back_language,
-                    $deck_structure,
-                    $front_language,
-                    $back_language,
-                    $tts_error_details
-                );
-                if ($ok_back) $generated_sides[] = 'back';
-                else $failed_sides[] = 'back';
-            } catch (Throwable $e) {
-                $failed_sides[] = 'back';
-                error_log('[flashcards][add_single][back_audio] ' . $e->getMessage());
-            }
-        }
-
-        $message = 'Card adicionado.';
-        if (!empty($generated_sides) && empty($failed_sides)) {
-            $message .= ' Áudio gerado automaticamente.';
-        } elseif (!empty($generated_sides) && !empty($failed_sides)) {
-            $message .= ' Áudio parcial gerado automaticamente.';
-        } elseif (empty($generated_sides) && !empty($failed_sides)) {
-            $message .= ' Não foi possível gerar o áudio automaticamente.';
-        }
-
+        // O áudio não é mais gerado automaticamente ao criar um card.
+        // O usuário decide quando gerar áudio usando as ações manuais de TTS.
         echo json_encode([
             'status' => 'success',
-            'message' => $message,
-            'card_id' => $new_card_id,
-            'audio_generated_sides' => $generated_sides,
-            'audio_failed_sides' => $failed_sides
+            'message' => 'Card adicionado.',
+            'card_id' => $new_card_id
         ]);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
