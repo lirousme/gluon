@@ -181,7 +181,7 @@ function renderFamily(){
     const selectedClass=isSelected?'ring-2 ring-violet-400 border-violet-500/80':'border-slate-700/80';
     if(!relationTypeUsesHierarchy(type)){
       const merged=[...children,...mothers];
-      const uniqueMerged=[...new Map(merged.map((tag)=>[`${Number(tag.id)}-${tag.__relationRole}`,tag])).values()];
+      const uniqueMerged=[...new Map(merged.map((tag)=>[Number(tag.id),tag])).values()];
       return `<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer"><h3 class="text-sm font-semibold text-violet-200 mb-3">${esc(getRelationTypeLabel(type))}</h3><div><div class="flex flex-wrap gap-2">${mk(uniqueMerged)}</div></div></div>`;
     }
     return `<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer"><h3 class="text-sm font-semibold text-violet-200 mb-3">${esc(getRelationTypeLabel(type))}</h3><div class="grid md:grid-cols-2 gap-4"><div><p class="text-red-300 text-sm mb-2">Esta tag é mãe de:</p><div class="flex flex-wrap gap-2">${mk(children)}</div></div><div><p class="text-red-300 text-sm mb-2">Esta tag é filha de:</p><div class="flex flex-wrap gap-2">${mk(mothers)}</div></div></div></div>`;
@@ -227,7 +227,23 @@ document.getElementById('relationModeSwitch').addEventListener('click',()=>{stat
 const actionState={tag:null,relationType:null};
 function openActionModal(tag, relationType){actionState.tag=tag;actionState.relationType=relationType;document.getElementById('tagActionTitle').textContent=`Ações: ${getTagLabel(tag) || 'Tag'}`;const m=document.getElementById('tagActionModal');const c=document.getElementById('tagActionModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');},20);} 
 function closeActionModal(){const m=document.getElementById('tagActionModal');const c=document.getElementById('tagActionModalContent');m.classList.add('opacity-0');c.classList.add('scale-95');setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);} 
-async function removeRelation(){if(!actionState.tag) return;await api('remove_tag_family_relation',{tag_id:state.tagId,other_tag_id:Number(actionState.tag.id),relation_type:actionState.relationType,tipo_de_relacao:getTagRelationType(actionState.tag)});closeActionModal();await load();}
+async function removeRelation(){
+  if(!actionState.tag) return;
+  const relationTypeId=getTagRelationType(actionState.tag);
+  const usesHierarchy=relationTypeUsesHierarchy(relationTypeId);
+  if(usesHierarchy){
+    await api('remove_tag_family_relation',{tag_id:state.tagId,other_tag_id:Number(actionState.tag.id),relation_type:actionState.relationType,tipo_de_relacao:relationTypeId});
+  }else{
+    const payload={tag_id:state.tagId,other_tag_id:Number(actionState.tag.id),tipo_de_relacao:relationTypeId};
+    const attempts=[api('remove_tag_family_relation',{...payload,relation_type:'child'}),api('remove_tag_family_relation',{...payload,relation_type:'mother'})];
+    const results=await Promise.allSettled(attempts);
+    if(results.every((result)=>result.status==='rejected')){
+      throw results[0].reason||new Error('Não foi possível remover o vínculo.');
+    }
+  }
+  closeActionModal();
+  await load();
+}
 function openEditTagModal(tag){if(!tag) return;document.getElementById('editTagIdInput').value=String(tag.id);document.getElementById('editTagNameInput').value=String(tag.name||'');document.getElementById('editTagNamePtBrInput').value=String(tag.name_pt_br||'');document.getElementById('editTagNumeroInput').value=(tag.numero??'');const m=document.getElementById('editTagModal');const c=document.getElementById('editTagModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');},20);} 
 function closeEditTagModal(){const m=document.getElementById('editTagModal');const c=document.getElementById('editTagModalContent');m.classList.add('opacity-0');c.classList.add('scale-95');setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);} 
 async function submitEditTag(e){e.preventDefault();const id=Number(document.getElementById('editTagIdInput').value||0);const original=state.tags.find(t=>Number(t.id)===id)||{};await api('update_tag',{id,name:document.getElementById('editTagNameInput').value.trim(),name_pt_br:document.getElementById('editTagNamePtBrInput').value.trim(),numero:document.getElementById('editTagNumeroInput').value.trim(),is_book:Number(original.is_book||0),is_verb_tense:Number(original.is_verb_tense||0),is_sentence_type:Number(original.is_sentence_type||0),is_lexical_chunk:Number(original.is_lexical_chunk||0),is_relation_type:Number(original.is_relation_type||0),is_word:Number(original.is_word||0),is_month:Number(original.is_month||0),is_day:Number(original.is_day||0),is_year:Number(original.is_year||0)});closeEditTagModal();closeActionModal();await load();}
