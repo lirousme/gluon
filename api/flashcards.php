@@ -3440,9 +3440,11 @@ elseif ($action === 'add_tag_family_relation') {
     $other_tag_id = (int)($input['other_tag_id'] ?? 0);
     $mode = (string)($input['mode'] ?? 'child');
     $relation_type = (int)($input['tipo_de_relacao'] ?? 0);
-    $typeStmt = $pdo->prepare("SELECT id FROM tipo_de_relacao WHERE id = ? AND id_user IN (?, 5) LIMIT 1");
+    $typeStmt = $pdo->prepare("SELECT id, hierarquia FROM tipo_de_relacao WHERE id = ? AND id_user IN (?, 5) LIMIT 1");
     $typeStmt->execute([$relation_type, $user_id]);
-    if (!$typeStmt->fetchColumn()) die(json_encode(['status'=>'error','message'=>'Tipo de relação inválido.']));
+    $relationTypeRow = $typeStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$relationTypeRow) die(json_encode(['status'=>'error','message'=>'Tipo de relação inválido.']));
+    $relation_hierarchy = (int)($relationTypeRow['hierarquia'] ?? 0);
     if ($tag_id <= 0 || $other_tag_id <= 0 || $tag_id === $other_tag_id) die(json_encode(['status'=>'error','message'=>'Relação inválida.']));
 
     $valid = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id IN (?, ?) AND user_id IN (?, 5)");
@@ -3456,6 +3458,39 @@ elseif ($action === 'add_tag_family_relation') {
     $reverseStmt->execute([$user_id, $mother, $child, $relation_type]);
     if ($reverseStmt->fetchColumn()) {
         die(json_encode(['status'=>'error','message'=>'Já existe essa relação invertida para esse tipo de relacionamento.']));
+    }
+
+    if ($relation_hierarchy === 3) {
+        $graphStmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother FROM tag_family WHERE id_user IN (?, 5) AND tipo_de_relacao = ?");
+        $graphStmt->execute([$user_id, $relation_type]);
+        $adjacency = [];
+        foreach ($graphStmt->fetchAll(PDO::FETCH_ASSOC) as $edge) {
+            $a = (int)($edge['id_tag_child'] ?? 0);
+            $b = (int)($edge['id_tag_mother'] ?? 0);
+            if ($a <= 0 || $b <= 0 || $a === $b) continue;
+            if (!isset($adjacency[$a])) $adjacency[$a] = [];
+            if (!isset($adjacency[$b])) $adjacency[$b] = [];
+            $adjacency[$a][$b] = true;
+            $adjacency[$b][$a] = true;
+        }
+
+        if (isset($adjacency[$child]) && isset($adjacency[$mother])) {
+            $visited = [$child => true];
+            $queue = [$child];
+            while (!empty($queue)) {
+                $current = array_shift($queue);
+                foreach (array_keys($adjacency[$current] ?? []) as $neighbor) {
+                    $neighbor = (int)$neighbor;
+                    if ($neighbor <= 0 || isset($visited[$neighbor])) continue;
+                    $visited[$neighbor] = true;
+                    $queue[] = $neighbor;
+                }
+            }
+
+            if (isset($visited[$mother])) {
+                die(json_encode(['status'=>'error','message'=>'Essas tags já pertencem ao mesmo grupo desse tipo de relacionamento.']));
+            }
+        }
     }
 
     $stmt = $pdo->prepare("INSERT IGNORE INTO tag_family (id_user, id_tag_child, id_tag_mother, tipo_de_relacao) VALUES (?, ?, ?, ?)");
