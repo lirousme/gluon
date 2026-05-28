@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cards da Tag</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body class="bg-slate-900 text-white min-h-screen">
+  <div class="min-h-screen flex flex-col">
+    <header class="relative flex items-center justify-center border-b border-slate-700 px-4 py-7 bg-slate-950">
+      <div class="absolute left-4 flex items-center gap-2">
+        <button id="btnOpenCreateCardModal" type="button" class="h-9 w-9 rounded-lg border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors text-lg font-semibold" title="Criar novo card"><i class="fa-solid fa-plus"></i></button>
+      </div>
+
+      <h1 id="cardTagTitle" class="text-2xl font-semibold text-center">Cards da Tag</h1>
+
+      <div class="absolute right-4 flex items-center gap-2">
+        <button type="button" onclick="goBackToMarkedRoute()" class="h-9 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"><i class="fa-solid fa-left-long"></i></button>
+      </div>
+    </header>
+
+    <main class="flex-1 px-4 py-6 max-w-4xl mx-auto w-full">
+      <section class="rounded-xl border border-slate-700 bg-slate-950/70 p-5 text-center text-slate-300">
+        <h2 id="selectedTagName" class="text-lg font-semibold text-slate-100">Tag</h2>
+        <p class="mt-2 text-sm">Área reservada para os cards vinculados a esta tag.</p>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const state = {
+      tagId: Number(params.get('tag_id') || 0),
+      tagName: (params.get('tag_name') || '').trim()
+    };
+
+    function getMarkedBackRoute(){
+      const from = params.get('from');
+      return from ? decodeURIComponent(from) : '/views/tag_family.html';
+    }
+
+    function goBackToMarkedRoute(){
+      if(window.history.length > 1){ window.history.back(); return; }
+      window.location.href = getMarkedBackRoute();
+    }
+
+    function openCreateCardModal(){
+      const createCardParams = new URLSearchParams();
+      if(state.tagId) createCardParams.set('tag_id', String(state.tagId));
+      if(state.tagName) createCardParams.set('tag_name', state.tagName);
+      window.location.href = `/ficha_do_card${createCardParams.toString() ? `?${createCardParams.toString()}` : ''}`;
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const label = state.tagName || 'Tag';
+      document.getElementById('cardTagTitle').textContent = `Cards da Tag`;
+      document.getElementById('selectedTagName').textContent = label;
+      document.getElementById('btnOpenCreateCardModal').onclick = openCreateCardModal;
+    });
+  </script>
+</body>
+</html>
