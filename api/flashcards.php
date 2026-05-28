@@ -3333,15 +3333,32 @@ elseif ($action === 'list_relation_types') {
         $id = (int)($row['id'] ?? 0);
         if ($id <= 0) continue;
         if (!isset($merged[$id])) {
+            $nomeRaw = (string)($row['nome'] ?? '');
+            $nomeDec = $nomeRaw !== '' ? Security::decryptData($nomeRaw) : '';
             $merged[$id] = [
                 'id' => $id,
-                'nome' => (string)($row['nome'] ?? ''),
+                'nome' => $nomeDec !== false ? (string)$nomeDec : $nomeRaw,
                 'hierarquia' => (int)($row['hierarquia'] ?? 0)
             ];
         }
     }
 
     echo json_encode(['status' => 'success', 'data' => array_values($merged)]);
+}
+
+
+elseif ($action === 'create_relation_type') {
+    $nome = trim((string)($input['nome'] ?? ''));
+    $hierarquia = (int)($input['hierarquia'] ?? -1);
+
+    if ($nome === '') die(json_encode(['status'=>'error','message'=>'Nome é obrigatório.']));
+    if (!in_array($hierarquia, [0,1,2,3], true)) die(json_encode(['status'=>'error','message'=>'Hierarquia inválida.']));
+
+    $nomeEnc = Security::encryptData($nome);
+    $stmt = $pdo->prepare("INSERT INTO tipo_de_relacao (id_user, nome, hierarquia) VALUES (?, ?, ?)");
+    $stmt->execute([$user_id, $nomeEnc, $hierarquia]);
+
+    echo json_encode(['status'=>'success','message'=>'Tipo de relação criado com sucesso.', 'id'=>(int)$pdo->lastInsertId()]);
 }
 
 elseif ($action === 'get_tag_family') {

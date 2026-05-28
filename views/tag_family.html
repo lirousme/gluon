@@ -14,6 +14,7 @@
       <div class="absolute right-4 flex items-center gap-2">
         <button id="btnOpenTagFiltering" type="button" class="h-9 px-3 rounded-lg border border-sky-500/50 text-sky-300 hover:text-sky-200 hover:bg-sky-500/20 transition-colors text-sm font-medium" title="Abrir filtro de tags">Filtro</button>
         <button id="btnOpenCreateTagModal" type="button" class="h-9 w-9 rounded-lg border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors text-lg font-semibold" title="Criar nova tag">+</button>
+        <button id="btnOpenCreateRelationTypeModal" type="button" class="h-9 w-9 rounded-lg border border-emerald-500/50 text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/20 transition-colors text-lg font-semibold" title="Criar novo tipo de relação">+</button>
       </div>
     </header>
 
@@ -156,6 +157,20 @@ function relationTypeUsesHierarchy(type){
   const found=state.relationTypes.find((item)=>Number(item.id)===Number(type));
   return Number(found?.hierarquia||0)===1;
 }
+function openCreateRelationTypeModal(){
+  document.getElementById('createRelationTypeNameInput').value='';
+  document.getElementById('createRelationTypeHierarchyInput').value='0';
+  const m=document.getElementById('createRelationTypeModal');
+  const c=document.getElementById('createRelationTypeModalContent');
+  m.classList.remove('hidden');m.classList.add('flex');
+  setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');document.getElementById('createRelationTypeNameInput').focus();},20);
+}
+function closeCreateRelationTypeModal(){
+  const m=document.getElementById('createRelationTypeModal');
+  const c=document.getElementById('createRelationTypeModalContent');
+  m.classList.add('opacity-0');c.classList.add('scale-95');
+  setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);
+}
 function getTagRelationType(tag={}){
   const candidates=[tag?.tipo_de_relacao,tag?.relation_type,tag?.relation_type_id,tag?.tipo_relacao];
   for(const value of candidates){
@@ -217,6 +232,22 @@ async function load(){
   }
   renderFamily(); renderFooterTags();
 }
+async function submitCreateRelationType(e){
+  e.preventDefault();
+  const btn=document.getElementById('btnSubmitCreateRelationType');
+  btn.disabled=true;
+  try{
+    const res=await api('create_relation_type',{
+      nome:document.getElementById('createRelationTypeNameInput').value.trim(),
+      hierarquia:Number(document.getElementById('createRelationTypeHierarchyInput').value||0)
+    });
+    closeCreateRelationTypeModal();
+    await load();
+    if(res?.id) state.selectedRelationType=Number(res.id);
+    renderFamily(); renderFooterTags();
+  }finally{btn.disabled=false;}
+}
+
 async function addRelation(otherTagId){
   await api('add_tag_family_relation',{tag_id:state.tagId,other_tag_id:otherTagId,mode:state.mode,tipo_de_relacao:state.selectedRelationType});
   await load();
@@ -250,10 +281,14 @@ async function submitEditTag(e){e.preventDefault();const id=Number(document.getE
 async function deleteTag(){if(!actionState.tag) return;await api('delete_tag',{id:Number(actionState.tag.id)});closeActionModal();await load();}
 window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('btnOpenCreateTagModal').onclick=openCreateTagModal;
+  document.getElementById('btnOpenCreateRelationTypeModal').onclick=openCreateRelationTypeModal;
   document.getElementById('btnOpenTagFiltering').onclick=openTagFiltering;
   document.getElementById('btnCancelCreateTag').onclick=closeCreateTagModal;
   document.getElementById('btnCloseCreateTagModal').onclick=closeCreateTagModal;
   document.getElementById('createTagForm').addEventListener('submit',submitCreateTag);
+  document.getElementById('btnCancelCreateRelationType').onclick=closeCreateRelationTypeModal;
+  document.getElementById('btnCloseCreateRelationTypeModal').onclick=closeCreateRelationTypeModal;
+  document.getElementById('createRelationTypeForm').addEventListener('submit',submitCreateRelationType);
   document.querySelectorAll('#createTagForm input[data-tag-category]').forEach((input)=>input.addEventListener('change',()=>enforceSingleCreateTagCategorySelection(input)));
   document.getElementById('btnCloseActionModal').onclick=closeActionModal;
   document.getElementById('btnRemoveRelation').onclick=removeRelation;
@@ -318,6 +353,29 @@ window.addEventListener('DOMContentLoaded',()=>{
         <div class="flex justify-end gap-2 pt-2">
           <button id="btnCancelCreateTag" type="button" class="px-4 py-2 rounded-lg border border-slate-600">Cancelar</button>
           <button id="btnSubmitCreateTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500">Criar tag</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <div id="createRelationTypeModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 opacity-0 transition-opacity duration-200 p-4">
+    <div id="createRelationTypeModalContent" class="w-[92%] max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-4 scale-95 transition-transform duration-200">
+      <form id="createRelationTypeForm" class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold">Criar tipo de relação</h3>
+          <button id="btnCloseCreateRelationTypeModal" type="button" class="text-slate-400 hover:text-white text-xl">&times;</button>
+        </div>
+        <input id="createRelationTypeNameInput" type="text" required maxlength="120" placeholder="Nome do tipo de relação" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3">
+        <select id="createRelationTypeHierarchyInput" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3">
+          <option value="0">0 - Conjunto simples</option>
+          <option value="1">1 - Árvore parental</option>
+          <option value="2">2 - Sequência</option>
+          <option value="3">3 - Componente conexo</option>
+        </select>
+        <div class="flex justify-end gap-2 pt-2">
+          <button id="btnCancelCreateRelationType" type="button" class="px-4 py-2 rounded-lg border border-slate-600">Cancelar</button>
+          <button id="btnSubmitCreateRelationType" type="submit" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500">Criar relação</button>
         </div>
       </form>
     </div>
