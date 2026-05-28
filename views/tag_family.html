@@ -34,7 +34,7 @@
   </div>
 <script>
 const params = new URLSearchParams(window.location.search);
-const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: 0, tags: [], family: {mothers:[], children:[]} };
+const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: null, tags: [], family: {mothers:[], children:[]}, relationTypes: [] };
 const title = document.getElementById('tagFamilyTitle');
 title.textContent = state.tagName || 'Tag';
 
@@ -149,8 +149,12 @@ function openTagFamily(tag){
   window.location.href=`/views/tag_family.html?tag_id=${encodeURIComponent(nextTagId)}&tag_name=${encodeURIComponent(nextTagName)}`;
 }
 function getRelationTypeLabel(type){
-  const map={0:'Flexões da Palavra',1:'Apelidos e Siglas',3:'Hierarquia de Conhecimentos'};
-  return map[type]||`Tipo de relação ${type}`;
+  const found=state.relationTypes.find((item)=>Number(item.id)===Number(type));
+  return found?.nome || `Tipo de relação ${type}`;
+}
+function relationTypeUsesHierarchy(type){
+  const found=state.relationTypes.find((item)=>Number(item.id)===Number(type));
+  return Number(found?.hierarquia||0)===1;
 }
 function getTagRelationType(tag={}){
   const candidates=[tag?.tipo_de_relacao,tag?.relation_type,tag?.relation_type_id,tag?.tipo_relacao];
@@ -166,17 +170,16 @@ function renderFamily(){
     const numeroPtBrCounts = buildNumeroPtBrCounts(arr);
     return arr.map(t=>`<button type="button" data-family-tag-id="${Number(t.id)}" data-relation-role="${t.__relationRole||'child'}" class="px-2 py-1 rounded-full text-xs border border-red-400/70 bg-red-500/10 text-red-200 hover:bg-red-500/20 transition-colors" title="Abrir família da tag">${esc(getTagLabel(t, numeroPtBrCounts))}</button>`).join('');
   };
-  const noSplitTypes=new Set([0,1]);
-  const knownTypes=[0,1,3];
-  const foundTypes=[...new Set([...state.family.children,...state.family.mothers].map((tag)=>getTagRelationType(tag)))];
-  const types=[...new Set([...knownTypes,...foundTypes])].sort((a,b)=>a-b);
+  const familyTypes=[...new Set([...state.family.children,...state.family.mothers].map((tag)=>getTagRelationType(tag)))];
+  const configuredTypes=state.relationTypes.map((item)=>Number(item.id));
+  const types=[...new Set([...configuredTypes,...familyTypes])].sort((a,b)=>a-b);
   const container=document.getElementById('relationTypeSections');
   container.innerHTML=types.map((type)=>{
     const children=state.family.children.filter((tag)=>getTagRelationType(tag)===type).map((tag)=>({...tag,__relationRole:'child'}));
     const mothers=state.family.mothers.filter((tag)=>getTagRelationType(tag)===type).map((tag)=>({...tag,__relationRole:'mother'}));
     const isSelected=state.selectedRelationType===type;
     const selectedClass=isSelected?'ring-2 ring-violet-400 border-violet-500/80':'border-slate-700/80';
-    if(noSplitTypes.has(type)){
+    if(!relationTypeUsesHierarchy(type)){
       const merged=[...children,...mothers];
       const uniqueMerged=[...new Map(merged.map((tag)=>[`${Number(tag.id)}-${tag.__relationRole}`,tag])).values()];
       return `<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer"><h3 class="text-sm font-semibold text-violet-200 mb-3">${esc(getRelationTypeLabel(type))}</h3><div><div class="flex flex-wrap gap-2">${mk(uniqueMerged)}</div></div></div>`;
@@ -201,8 +204,17 @@ function renderFamily(){
 }
 async function load(){
   if(!state.tagId) return;
-  const [tags,family]=await Promise.all([api('list_tags'), api('get_tag_family',{tag_id:state.tagId})]);
-  state.tags=tags.data||[]; state.family=family.data||{mothers:[],children:[]};
+  const [tags,family,relationTypes]=await Promise.all([api('list_tags'), api('get_tag_family',{tag_id:state.tagId}), api('list_relation_types')]);
+  state.tags=tags.data||[];
+  state.family=family.data||{mothers:[],children:[]};
+  state.relationTypes=(relationTypes.data||[]).map((item)=>({id:Number(item.id),nome:String(item.nome||''),hierarquia:Number(item.hierarquia||0)}));
+  if(state.selectedRelationType===null){
+    state.selectedRelationType=state.relationTypes.length?Number(state.relationTypes[0].id):0;
+  }
+  const validTypes=new Set(state.relationTypes.map((item)=>Number(item.id)));
+  if(!validTypes.has(Number(state.selectedRelationType)) && state.relationTypes.length){
+    state.selectedRelationType=Number(state.relationTypes[0].id);
+  }
   renderFamily(); renderFooterTags();
 }
 async function addRelation(otherTagId){
