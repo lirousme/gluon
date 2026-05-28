@@ -84,6 +84,7 @@ deck_mode VARCHAR(20) DEFAULT 'aleatorio';
 deck_front_language VARCHAR(10) NOT NULL DEFAULT 'pt-BR', -- Idioma da frente do card (pt-BR | en-US | en-GB)
 deck_back_language VARCHAR(10) NOT NULL DEFAULT 'en-GB', -- Idioma do verso do card (pt-BR | en-US | en-GB)
 deck_structure VARCHAR(20) NOT NULL DEFAULT 'fatos', -- Estrutura da geração (fatos | perguntas | traducoes | parafrases)
+deck_system INT NOT NULL DEFAULT 0, -- 1 = deck/diretório de sistema criado automaticamente para o usuário
 name_encrypted TEXT NOT NULL,        -- Nome do diretório criptografado
 default_view VARCHAR(10) DEFAULT 'grid',
 open_mode VARCHAR(12) NOT NULL DEFAULT 'fullscreen', -- NOVO: Forma de abertura (fullscreen | preview)

@@ -44,6 +44,9 @@ if ($action === 'register') {
         try {
             $pdo->exec("ALTER TABLE users ADD COLUMN source_directory_id INT UNSIGNED DEFAULT NULL AFTER home_directory_id");
         } catch (PDOException $e) {}
+        try {
+            $pdo->exec("ALTER TABLE directories ADD COLUMN deck_system INT NOT NULL DEFAULT 0 AFTER deck_structure");
+        } catch (PDOException $e) {}
 
         $stmt = $pdo->prepare("INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)");
         $stmt->execute([$username, $email, $password_hash]);
@@ -53,8 +56,8 @@ if ($action === 'register') {
         $stmtDir = $pdo->prepare("
             INSERT INTO directories (
                 user_id, parent_id, type, name_encrypted, default_view,
-                new_item_position, sort_order, icon, icon_color_from, icon_color_to
-            ) VALUES (?, NULL, 1, ?, 'grid', 'end', 0, 'fa-note-sticky', '#0ea5e9', '#2563eb')
+                deck_system, new_item_position, sort_order, icon, icon_color_from, icon_color_to
+            ) VALUES (?, NULL, 1, ?, 'grid', 1, 'end', 0, 'fa-note-sticky', '#0ea5e9', '#2563eb')
         ");
         $stmtDir->execute([$new_user_id, $source_name_encrypted]);
         $source_directory_id = (int)$pdo->lastInsertId();
