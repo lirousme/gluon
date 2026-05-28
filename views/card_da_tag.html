@@ -52,14 +52,16 @@
       return String(value ?? '').replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
     }
 
-    function getMarkedBackRoute(){
-      const from = params.get('from');
-      return from ? decodeURIComponent(from) : '/views/tag_family.html';
+    function getTagFamilyRoute(){
+      const tagFamilyParams = new URLSearchParams();
+      if(state.tagId) tagFamilyParams.set('tag_id', String(state.tagId));
+      if(state.tagName) tagFamilyParams.set('tag_name', state.tagName);
+      const query = tagFamilyParams.toString();
+      return `/views/tag_family.html${query ? `?${query}` : ''}`;
     }
 
     function goBackToMarkedRoute(){
-      if(window.history.length > 1){ window.history.back(); return; }
-      window.location.href = getMarkedBackRoute();
+      window.location.href = getTagFamilyRoute();
     }
 
     async function api(action, payload = {}){
