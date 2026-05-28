@@ -51,6 +51,50 @@ function sanitizeTagIds($rawTagIds): array {
     return array_values(array_unique(array_filter(array_map('intval', $rawTagIds), static fn($id) => $id > 0)));
 }
 
+/**
+ * Garante que nomes criptografados de tipos de relação não sejam truncados.
+ *
+ * O AES-256-GCM é salvo em base64 e cresce conforme o tamanho do texto original;
+ * campos VARCHAR curtos conseguem armazenar nomes pequenos (ex.: "Documentação"),
+ * mas truncam nomes maiores com parênteses/listas, tornando a descriptografia impossível.
+ */
+function ensureRelationTypeEncryptedNameCapacity(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM tipo_de_relacao LIKE 'nome'");
+        $column = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
+        $type = strtolower((string)($column['Type'] ?? ''));
+
+        $needsAlter = true;
+        if (preg_match('/^(?:var)?char\((\d+)\)/', $type, $matches)) {
+            $needsAlter = (int)$matches[1] < 512;
+        } elseif (preg_match('/(?:text|blob|json|mediumtext|longtext)/', $type)) {
+            $needsAlter = false;
+        }
+
+        if ($needsAlter) {
+            $pdo->exec('ALTER TABLE tipo_de_relacao MODIFY nome TEXT NOT NULL');
+        }
+    } catch (Throwable $e) {
+        error_log('[flashcards][relation_types_schema] ' . $e->getMessage());
+    }
+}
+
+function looksLikeEncryptedRelationTypeName(string $value): bool
+{
+    $trimmed = trim($value);
+    if ($trimmed === '' || preg_match('/^[A-Za-z0-9+\/=\s]+$/', $trimmed) !== 1) return false;
+
+    $decoded = base64_decode(str_replace(' ', '+', $trimmed), true);
+    $ivLength = openssl_cipher_iv_length('aes-256-gcm');
+
+    return $decoded !== false && strlen($decoded) > ($ivLength + 16);
+}
+
 function tagCombinationAlreadyExists(PDO $pdo, int $userId, string $name, ?string $namePtBr, ?int $numero, ?int $excludeTagId = null): bool
 {
     $sql = "
@@ -3324,6 +3368,8 @@ elseif ($action === 'delete_tag') {
 
 
 elseif ($action === 'list_relation_types') {
+    ensureRelationTypeEncryptedNameCapacity($pdo);
+
     $stmt = $pdo->prepare("SELECT id, nome, hierarquia FROM tipo_de_relacao WHERE id_user IN (?, 5) ORDER BY id_user = 5 ASC, id ASC");
     $stmt->execute([$user_id]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -3337,7 +3383,7 @@ elseif ($action === 'list_relation_types') {
             $nomeDec = $nomeRaw !== '' ? Security::decryptData($nomeRaw) : '';
             $merged[$id] = [
                 'id' => $id,
-                'nome' => $nomeDec !== false ? (string)$nomeDec : $nomeRaw,
+                'nome' => $nomeDec !== false ? (string)$nomeDec : (looksLikeEncryptedRelationTypeName($nomeRaw) ? '' : $nomeRaw),
                 'hierarquia' => (int)($row['hierarquia'] ?? 0)
             ];
         }
@@ -3348,6 +3394,8 @@ elseif ($action === 'list_relation_types') {
 
 
 elseif ($action === 'create_relation_type') {
+    ensureRelationTypeEncryptedNameCapacity($pdo);
+
     $nome = trim((string)($input['nome'] ?? ''));
     $hierarquia = (int)($input['hierarquia'] ?? -1);
 
@@ -3358,7 +3406,18 @@ elseif ($action === 'create_relation_type') {
     $stmt = $pdo->prepare("INSERT INTO tipo_de_relacao (id_user, nome, hierarquia) VALUES (?, ?, ?)");
     $stmt->execute([$user_id, $nomeEnc, $hierarquia]);
 
-    echo json_encode(['status'=>'success','message'=>'Tipo de relação criado com sucesso.', 'id'=>(int)$pdo->lastInsertId()]);
+    $relationTypeId = (int)$pdo->lastInsertId();
+    $stmtCheck = $pdo->prepare("SELECT nome FROM tipo_de_relacao WHERE id = ? AND id_user = ? LIMIT 1");
+    $stmtCheck->execute([$relationTypeId, $user_id]);
+    $storedNome = (string)($stmtCheck->fetchColumn() ?: '');
+    if (Security::decryptData($storedNome) !== $nome) {
+        $stmtCleanup = $pdo->prepare("DELETE FROM tipo_de_relacao WHERE id = ? AND id_user = ? LIMIT 1");
+        $stmtCleanup->execute([$relationTypeId, $user_id]);
+        http_response_code(500);
+        die(json_encode(['status'=>'error','message'=>'Não foi possível salvar o nome criptografado completo do tipo de relação. Verifique o tamanho da coluna tipo_de_relacao.nome.']));
+    }
+
+    echo json_encode(['status'=>'success','message'=>'Tipo de relação criado com sucesso.', 'id'=>$relationTypeId]);
 }
 
 elseif ($action === 'get_tag_family') {
