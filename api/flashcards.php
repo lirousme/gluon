@@ -3322,6 +3322,28 @@ elseif ($action === 'delete_tag') {
 
 
 
+
+elseif ($action === 'list_relation_types') {
+    $stmt = $pdo->prepare("SELECT id, nome, hierarquia FROM tipo_de_relacao WHERE id_user IN (?, 5) ORDER BY id_user = 5 ASC, id ASC");
+    $stmt->execute([$user_id]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $merged = [];
+    foreach ($rows as $row) {
+        $id = (int)($row['id'] ?? 0);
+        if ($id <= 0) continue;
+        if (!isset($merged[$id])) {
+            $merged[$id] = [
+                'id' => $id,
+                'nome' => (string)($row['nome'] ?? ''),
+                'hierarquia' => (int)($row['hierarquia'] ?? 0)
+            ];
+        }
+    }
+
+    echo json_encode(['status' => 'success', 'data' => array_values($merged)]);
+}
+
 elseif ($action === 'get_tag_family') {
     $tag_id = (int)($input['tag_id'] ?? 0);
     if ($tag_id <= 0) die(json_encode(['status'=>'error','message'=>'Tag inválida.']));
@@ -3355,6 +3377,9 @@ elseif ($action === 'add_tag_family_relation') {
     $other_tag_id = (int)($input['other_tag_id'] ?? 0);
     $mode = (string)($input['mode'] ?? 'child');
     $relation_type = (int)($input['tipo_de_relacao'] ?? 0);
+    $typeStmt = $pdo->prepare("SELECT id FROM tipo_de_relacao WHERE id = ? AND id_user IN (?, 5) LIMIT 1");
+    $typeStmt->execute([$relation_type, $user_id]);
+    if (!$typeStmt->fetchColumn()) die(json_encode(['status'=>'error','message'=>'Tipo de relação inválido.']));
     if ($tag_id <= 0 || $other_tag_id <= 0 || $tag_id === $other_tag_id) die(json_encode(['status'=>'error','message'=>'Relação inválida.']));
 
     $valid = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id IN (?, ?) AND user_id IN (?, 5)");
