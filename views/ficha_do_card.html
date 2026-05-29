@@ -124,19 +124,7 @@
           <input id="tagNameInput" type="text" required maxlength="80" placeholder="Ex.: Gramática, Verbos, Trabalho..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
           <input id="tagNamePtBrInput" type="text" maxlength="80" placeholder="Nome em pt-BR (ex.: Cachorro)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
           <input id="tagNumeroInput" type="number" placeholder="Número (ex.: 2026)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
-          <p class="text-xs text-slate-400">A cor da tag é definida automaticamente conforme a categoria selecionada.</p>
-          <p class="text-xs text-amber-300">Selecione no máximo 1 categoria para a nova tag.</p>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-slate-300">
-          <label class="inline-flex items-center gap-2"><input id="tagIsBookInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500"><span>Esta tag representa um livro</span></label>
-          <label class="inline-flex items-center gap-2"><input id="tagIsVerbTenseInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500"><span>Esta tag representa um Tempo Verbal</span></label>
-          <label class="inline-flex items-center gap-2"><input id="tagIsSentenceTypeInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500"><span>Esta tag representa um Tipo Frasal</span></label>
-          <label class="inline-flex items-center gap-2"><input id="tagIsLexicalChunkInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500"><span>Esta tag representa um Lexical Chunk</span></label>
-          <label class="inline-flex items-center gap-2"><input id="tagIsRelationTypeInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500"><span>Esta tag representa um Tipo de Relação</span></label>
-          <label class="inline-flex items-center gap-2"><input id="tagIsWordInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500"><span>Esta tag representa uma Palavra</span></label>
-          <label class="inline-flex items-center gap-2"><input id="tagIsMonthInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500"><span>Esta tag representa um mês</span></label>
-          <label class="inline-flex items-center gap-2"><input id="tagIsDayInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500"><span>Esta tag representa um dia</span></label>
-          <label class="inline-flex items-center gap-2"><input id="tagIsYearInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500"><span>Esta tag representa um ano</span></label>
+          <p class="text-xs text-slate-400">Novas tags serão criadas automaticamente na categoria Palavra.</p>
         </div>
         <div class="flex justify-end gap-2">
           <button type="button" onclick="app.closeCreateTagModal()" class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white">Cancelar</button>
@@ -221,29 +209,12 @@ const app = {
   tagPanels: {
     subject: { selectedInputId: 'selectedSubjectTagIds', selectorId: 'subjectTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' }
   },
-  setupTagCategorySingleSelect() {
-    const ids = ['tagIsBookInput','tagIsVerbTenseInput','tagIsSentenceTypeInput','tagIsLexicalChunkInput','tagIsRelationTypeInput','tagIsWordInput','tagIsMonthInput','tagIsDayInput','tagIsYearInput'];
-    const inputs = ids.map(id => document.getElementById(id)).filter(Boolean);
-    inputs.forEach(input => input.addEventListener('change', () => {
-      if (!input.checked) return;
-      inputs.forEach(other => { if (other !== input) other.checked = false; });
-    }));
-  },
-
   setupEditTagCategorySingleSelect() {
     const ids = ['editTagIsBookInput','editTagIsVerbTenseInput','editTagIsSentenceTypeInput','editTagIsLexicalChunkInput','editTagIsRelationTypeInput','editTagIsWordInput','editTagIsMonthInput','editTagIsDayInput','editTagIsYearInput'];
     const inputs = ids.map(id => document.getElementById(id)).filter(Boolean);
     inputs.forEach(input => input.addEventListener('change', () => { if (!input.checked) return; inputs.forEach(other => { if (other !== input) other.checked = false; }); }));
   },
-  resetCreateTagCategoryDefaults() {
-    ['tagIsBookInput','tagIsVerbTenseInput','tagIsSentenceTypeInput','tagIsLexicalChunkInput','tagIsRelationTypeInput','tagIsWordInput','tagIsMonthInput','tagIsDayInput','tagIsYearInput'].forEach((id) => {
-      const input = document.getElementById(id);
-      if (input) input.checked = false;
-    });
-    tagIsWordInput.checked = true;
-  },
   openCreateTagModal() {
-    this.resetCreateTagCategoryDefaults();
     tagNameInput.value = '';
     tagNamePtBrInput.value = '';
     tagNumeroInput.value = '';
@@ -290,15 +261,15 @@ const app = {
         name: tagNameInput.value.trim(),
         name_pt_br: tagNamePtBrInput.value.trim(),
         numero: tagNumeroInput.value.trim(),
-        is_book: tagIsBookInput.checked ? 1 : 0,
-        is_verb_tense: tagIsVerbTenseInput.checked ? 1 : 0,
-        is_sentence_type: tagIsSentenceTypeInput.checked ? 1 : 0,
-        is_lexical_chunk: tagIsLexicalChunkInput.checked ? 1 : 0,
-        is_relation_type: tagIsRelationTypeInput.checked ? 1 : 0,
-        is_word: tagIsWordInput.checked ? 1 : 0,
-        is_month: tagIsMonthInput.checked ? 1 : 0,
-        is_day: tagIsDayInput.checked ? 1 : 0,
-        is_year: tagIsYearInput.checked ? 1 : 0
+        is_book: 0,
+        is_verb_tense: 0,
+        is_sentence_type: 0,
+        is_lexical_chunk: 0,
+        is_relation_type: 0,
+        is_word: 1,
+        is_month: 0,
+        is_day: 0,
+        is_year: 0
       });
       await this.loadTags();
       this.closeCreateTagModal();
@@ -720,7 +691,6 @@ subjectTagSearchInput.oninput = (e) => app.handleTagSearch('subject', e.target.v
 cardForm.onsubmit = (e) => app.save(e);
 tagForm.onsubmit = (e) => app.createTag(e);
 editTagForm.onsubmit = (e) => app.updateTag(e);
-app.setupTagCategorySingleSelect();
 app.setupEditTagCategorySingleSelect();
 app.setPageTitleWithDirectoryName();
 tagModal.onclick = (e) => { if (e.target === tagModal) app.closeCreateTagModal(); };
