@@ -320,10 +320,10 @@ function renderFamily(){
       const relationType=Number(el.closest('[data-relation-type]')?.dataset.relationType||0);
       const tag=[...state.family.children,...state.family.mothers].find((item)=>Number(item.id)===targetId&&getTagRelationType(item)===relationType);
       if(state.removalRelationType===relationType){
-        await removeFamilyTag(tag||{id:targetId,name:el.textContent||'',tipo_de_relacao:relationType}, relationRole, false);
+        await removeFamilyTag(tag||{id:targetId,name:el.textContent||'',tipo_de_relacao:relationType}, relationRole);
         return;
       }
-      openActionModal(tag||{id:targetId,name:el.textContent||''}, relationRole);
+      openTagFamily(tag||{id:targetId,name:el.textContent||''});
     };
   });
 }
@@ -371,13 +371,9 @@ async function addRelation(otherTagId){
 document.getElementById('footerTagSearch').addEventListener('input',renderFooterTags);
 
 document.getElementById('relationModeSwitch').addEventListener('click',()=>{state.mode=state.mode==='child'?'mother':'child';document.getElementById('relationModeSwitch').textContent=state.mode==='child'?'Adicionando filhas':'Adicionando mães';});
-const actionState={tag:null,relationType:null,isCurrent:false};
 function getCurrentTag(){return state.tags.find((item)=>Number(item.id)===state.tagId)||{id:state.tagId,name:state.tagName};}
-function updateActionModalButtons(){const isCurrent=!!actionState.isCurrent;document.getElementById('btnRemoveRelation').classList.toggle('hidden',isCurrent);document.getElementById('btnViewFamily').classList.toggle('hidden',isCurrent);}
-function openActionModal(tag, relationType, isCurrent=false){actionState.tag=tag;actionState.relationType=relationType;actionState.isCurrent=!!isCurrent;document.getElementById('tagActionTitle').textContent=`${actionState.isCurrent?'Tag atual':'Ações'}: ${getTagLabel(tag) || 'Tag'}`;updateActionModalButtons();const m=document.getElementById('tagActionModal');const c=document.getElementById('tagActionModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');},20);}
 function openCurrentTagEditModal(){if(!state.tagId) return;openEditTagModal(getCurrentTag());}
-function closeActionModal(){const m=document.getElementById('tagActionModal');const c=document.getElementById('tagActionModalContent');m.classList.add('opacity-0');c.classList.add('scale-95');setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);} 
-async function removeFamilyTag(tag, relationRole, shouldCloseModal=true){
+async function removeFamilyTag(tag, relationRole){
   if(!tag) return;
   const relationTypeId=getTagRelationType(tag);
   const usesHierarchy=relationTypeUsesHierarchy(relationTypeId);
@@ -391,20 +387,15 @@ async function removeFamilyTag(tag, relationRole, shouldCloseModal=true){
       throw results[0].reason||new Error('Não foi possível remover o vínculo.');
     }
   }
-  if(shouldCloseModal) closeActionModal();
   await load();
-}
-async function removeRelation(){
-  if(!actionState.tag) return;
-  await removeFamilyTag(actionState.tag, actionState.relationType, true);
 }
 function isTagPinned(tagId){return state.savedFilters.some((filter)=>Number(filter.id_tag)===Number(tagId));}
 function updatePinTagButton(){const btn=document.getElementById('btnTogglePinnedTag');if(!btn) return;const tagId=Number(document.getElementById('editTagIdInput').value||0);const pinned=isTagPinned(tagId);btn.classList.toggle('border-sky-400',pinned);btn.classList.toggle('bg-sky-600',pinned);btn.classList.toggle('text-white',pinned);btn.classList.toggle('hover:bg-sky-500',pinned);btn.classList.toggle('border-slate-600',!pinned);btn.classList.toggle('bg-slate-700',!pinned);btn.classList.toggle('text-slate-200',!pinned);btn.classList.toggle('hover:bg-slate-600',!pinned);btn.title=pinned?'Desfixar tag':'Fixar tag';btn.setAttribute('aria-label',btn.title);}
 async function togglePinnedTag(){const btn=document.getElementById('btnTogglePinnedTag');const tagId=Number(document.getElementById('editTagIdInput').value||0);if(!tagId||btn?.disabled) return;btn.disabled=true;try{if(isTagPinned(tagId)){await api('remove_saved_filter',{tag_id:tagId});}else{await api('toggle_saved_filter',{tag_id:tagId});}const savedFilters=await api('list_saved_filters');state.savedFilters=savedFilters.data||[];updatePinTagButton();}finally{btn.disabled=false;}}
 function openEditTagModal(tag){if(!tag) return;const normalizedTag=state.tags.find((item)=>Number(item.id)===Number(tag.id))||tag;document.getElementById('editTagIdInput').value=String(normalizedTag.id);document.getElementById('editTagNameInput').value=String(normalizedTag.name||'');document.getElementById('editTagNamePtBrInput').value=String(normalizedTag.name_pt_br||'');document.getElementById('editTagNumeroInput').value=(normalizedTag.numero??'');updatePinTagButton();const m=document.getElementById('editTagModal');const c=document.getElementById('editTagModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');document.getElementById('editTagNameInput').focus();},20);} 
 function closeEditTagModal(){const m=document.getElementById('editTagModal');const c=document.getElementById('editTagModalContent');m.classList.add('opacity-0');c.classList.add('scale-95');setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);} 
-async function submitEditTag(e){e.preventDefault();const id=Number(document.getElementById('editTagIdInput').value||0);const original=state.tags.find(t=>Number(t.id)===id)||{};const name=document.getElementById('editTagNameInput').value.trim();await api('update_tag',{id,name,name_pt_br:document.getElementById('editTagNamePtBrInput').value.trim(),numero:document.getElementById('editTagNumeroInput').value.trim(),is_book:Number(original.is_book||0),is_verb_tense:Number(original.is_verb_tense||0),is_sentence_type:Number(original.is_sentence_type||0),is_lexical_chunk:Number(original.is_lexical_chunk||0),is_relation_type:Number(original.is_relation_type||0),is_word:Number(original.is_word||0),is_month:Number(original.is_month||0),is_day:Number(original.is_day||0),is_year:Number(original.is_year||0)});if(id===state.tagId){state.tagName=name;title.textContent=state.tagName||'Tag';const url=new URL(window.location.href);url.searchParams.set('tag_name',state.tagName);window.history.replaceState({},'',url);}closeEditTagModal();closeActionModal();await load();}
-async function deleteTag(tagId=null){const id=Number(tagId||actionState.tag?.id||0);if(!id) return;const isCurrent=id===state.tagId;await api('delete_tag',{id});closeEditTagModal();closeActionModal();if(isCurrent){window.location.href=getMarkedBackRoute();return;}await load();}
+async function submitEditTag(e){e.preventDefault();const id=Number(document.getElementById('editTagIdInput').value||0);const original=state.tags.find(t=>Number(t.id)===id)||{};const name=document.getElementById('editTagNameInput').value.trim();await api('update_tag',{id,name,name_pt_br:document.getElementById('editTagNamePtBrInput').value.trim(),numero:document.getElementById('editTagNumeroInput').value.trim(),is_book:Number(original.is_book||0),is_verb_tense:Number(original.is_verb_tense||0),is_sentence_type:Number(original.is_sentence_type||0),is_lexical_chunk:Number(original.is_lexical_chunk||0),is_relation_type:Number(original.is_relation_type||0),is_word:Number(original.is_word||0),is_month:Number(original.is_month||0),is_day:Number(original.is_day||0),is_year:Number(original.is_year||0)});if(id===state.tagId){state.tagName=name;title.textContent=state.tagName||'Tag';const url=new URL(window.location.href);url.searchParams.set('tag_name',state.tagName);window.history.replaceState({},'',url);}closeEditTagModal();await load();}
+async function deleteTag(tagId=null){const id=Number(tagId||0);if(!id) return;const isCurrent=id===state.tagId;await api('delete_tag',{id});closeEditTagModal();if(isCurrent){window.location.href=getMarkedBackRoute();return;}await load();}
 function deleteEditedTag(){deleteTag(Number(document.getElementById('editTagIdInput').value||0));}
 window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('btnOpenCreateTagModal').onclick=openCreateTagModal;
@@ -419,9 +410,6 @@ window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('btnCloseCreateRelationTypeModal').onclick=closeCreateRelationTypeModal;
   document.getElementById('createRelationTypeForm').addEventListener('submit',submitCreateRelationType);
   document.querySelectorAll('#createTagForm input[data-tag-category]').forEach((input)=>input.addEventListener('change',()=>enforceSingleCreateTagCategorySelection(input)));
-  document.getElementById('btnCloseActionModal').onclick=closeActionModal;
-  document.getElementById('btnRemoveRelation').onclick=removeRelation;
-  document.getElementById('btnViewFamily').onclick=()=>{const t=actionState.tag;closeActionModal();openTagFamily(t)};
   document.getElementById('btnCancelEditTag').onclick=closeEditTagModal;
   document.getElementById('btnDeleteEditingTag').onclick=deleteEditedTag;
   document.getElementById('btnTogglePinnedTag').onclick=togglePinnedTag;
@@ -429,17 +417,6 @@ window.addEventListener('DOMContentLoaded',()=>{
   load();
 });
 </script>
-  <div id="tagActionModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 opacity-0 transition-opacity duration-200">
-    <div id="tagActionModalContent" class="w-[92%] max-w-sm rounded-xl border border-slate-700 bg-slate-900 p-4 scale-95 transition-transform duration-200">
-      <h3 class="text-lg font-semibold mb-3" id="tagActionTitle">Ações da tag</h3>
-      <div class="grid gap-2">
-        <button type="button" id="btnRemoveRelation" class="w-full text-left px-3 py-2 rounded-lg border border-slate-600 hover:bg-slate-800">Remover da família</button>
-        <button type="button" id="btnViewFamily" class="w-full text-left px-3 py-2 rounded-lg border border-slate-600 hover:bg-slate-800">Ver família</button>
-      </div>
-      <button type="button" id="btnCloseActionModal" class="mt-3 w-full px-3 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">Cancelar</button>
-    </div>
-  </div>
-
   <div id="editTagModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 opacity-0 transition-opacity duration-200">
     <div id="editTagModalContent" class="w-[92%] max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-4 scale-95 transition-transform duration-200">
       <div class="mb-3 flex items-center justify-between gap-3">
