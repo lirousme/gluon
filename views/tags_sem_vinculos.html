@@ -31,7 +31,22 @@
       </div>
       <span id="countBadge" class="rounded-lg border border-violet-500 bg-violet-600/80 px-3 py-2 text-sm">0</span>
     </div>
+    <section class="mb-4 bg-slate-800/60 border border-sky-500/40 rounded-xl p-4 shadow-lg shadow-sky-950/20">
+      <div class="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-base font-semibold text-sky-100">Tags fixadas</h2>
+          <p id="pinnedInfo" class="text-xs text-slate-400">Tags fixadas pelo usuário atual</p>
+        </div>
+        <span id="pinnedCountBadge" class="self-start rounded-lg border border-sky-500 bg-sky-600/70 px-2.5 py-1 text-xs text-sky-50 sm:self-auto">0</span>
+      </div>
+      <div id="pinnedTagsList" class="space-y-2"></div>
+    </section>
+
     <section class="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
+      <div class="mb-3">
+        <h2 class="text-base font-semibold text-slate-100">Todas as tags</h2>
+        <p class="text-xs text-slate-400">Lista paginada das tags do usuário atual</p>
+      </div>
       <div id="tagsList" class="space-y-2"></div>
       <div id="pagination" class="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-700 pt-4 hidden">
         <button id="prevPage" type="button" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40">Anterior</button>
@@ -99,6 +114,43 @@
     function goToTagFamily(tag = {}) {
       window.location.href = buildTagRoute('/views/tag_family.html', tag);
     }
+    function normalizePinnedTag(filter = {}) {
+      return { ...filter, id: Number(filter.id_tag || filter.id || 0) };
+    }
+    function renderTagArticle(tag, index, options = {}) {
+      const count = Number(tag.subjects_count || 0);
+      const label = count === 1 ? '1 card' : `${count} cards`;
+      const tagLabel = getTagLabel(tag);
+      const tagIndexAttr = options.tagIndexAttr || 'data-tag-index';
+      const cardIndexAttr = options.cardIndexAttr || 'data-card-index';
+      const articleClass = options.articleClass || 'border-slate-700 bg-slate-900/60 hover:border-violet-500/60 hover:bg-slate-900 focus:ring-violet-500/70';
+      const countClass = options.countClass || 'border-slate-600 bg-slate-800 text-slate-300 hover:border-sky-500/70 hover:bg-sky-500/20 hover:text-sky-100';
+      const countMarkup = options.showCount === false
+        ? ''
+        : `<button type="button" ${cardIndexAttr}="${index}" class="shrink-0 rounded-full border px-2.5 py-1 text-xs transition ${countClass}" aria-label="Ver ${esc(label)} da tag ${esc(tagLabel)}">${esc(label)}</button>`;
+      return `<article ${tagIndexAttr}="${index}" tabindex="0" role="link" class="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-3 transition focus:outline-none focus:ring-2 ${articleClass}"><p class="text-sm text-slate-100">${esc(tagLabel)}</p>${countMarkup}</article>`;
+    }
+    function bindTagNavigation(container, tags, options = {}) {
+      const tagSelector = `[${options.tagIndexAttr || 'data-tag-index'}]`;
+      const cardSelector = `[${options.cardIndexAttr || 'data-card-index'}]`;
+      container.querySelectorAll(cardSelector).forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.stopPropagation();
+          goToTagCards(tags[Number(button.getAttribute(options.cardIndexAttr || 'data-card-index'))] || {});
+        });
+      });
+      container.querySelectorAll(tagSelector).forEach((article) => {
+        const openFamily = () => goToTagFamily(tags[Number(article.getAttribute(options.tagIndexAttr || 'data-tag-index'))] || {});
+        article.addEventListener('click', openFamily);
+        article.addEventListener('keydown', (event) => {
+          if (event.target !== article) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openFamily();
+          }
+        });
+      });
+    }
     function renderPagination() {
       const pagination = document.getElementById('pagination');
       const prev = document.getElementById('prevPage');
@@ -112,6 +164,36 @@
       pageInfo.textContent = state.total
         ? `Mostrando ${Math.min(state.perPage, Math.max(0, state.total - ((state.page - 1) * state.perPage)))} de ${state.total} tags — menos cards em Subjects primeiro`
         : 'Nenhuma tag encontrada para o usuário atual';
+    }
+    async function loadPinnedTags(){
+      const el = document.getElementById('pinnedTagsList');
+      const info = document.getElementById('pinnedInfo');
+      const badge = document.getElementById('pinnedCountBadge');
+      el.innerHTML = '<p class="text-sm text-slate-400">Carregando tags fixadas...</p>';
+      try {
+        const res = await api('list_saved_filters');
+        const pinnedTags = (res.data || []).map(normalizePinnedTag).filter((tag) => Number(tag.id) > 0);
+        badge.textContent = String(pinnedTags.length);
+        info.textContent = pinnedTags.length
+          ? `${pinnedTags.length} tag${pinnedTags.length === 1 ? '' : 's'} fixada${pinnedTags.length === 1 ? '' : 's'} para o usuário atual`
+          : 'Nenhuma tag fixada para o usuário atual';
+        if (!pinnedTags.length) {
+          el.innerHTML = '<p class="text-sm text-slate-400">Nenhuma tag fixada para o usuário atual.</p>';
+          return;
+        }
+        el.innerHTML = pinnedTags.map((tag, index) => renderTagArticle(tag, index, {
+          tagIndexAttr: 'data-pinned-tag-index',
+          cardIndexAttr: 'data-pinned-card-index',
+          articleClass: 'border-sky-500/30 bg-sky-950/30 hover:border-sky-400/70 hover:bg-sky-950/50 focus:ring-sky-400/70',
+          countClass: 'border-sky-500/40 bg-sky-900/60 text-sky-100 hover:border-sky-300 hover:bg-sky-500/30 hover:text-white',
+          showCount: false
+        })).join('');
+        bindTagNavigation(el, pinnedTags, { tagIndexAttr: 'data-pinned-tag-index', cardIndexAttr: 'data-pinned-card-index' });
+      } catch (error) {
+        badge.textContent = '0';
+        info.textContent = 'Não foi possível carregar as tags fixadas';
+        el.innerHTML = `<p class="text-sm text-red-300">${esc(error.message || 'Erro ao carregar tags fixadas.')}</p>`;
+      }
     }
     async function load(page = state.page){
       const el = document.getElementById('tagsList');
@@ -129,29 +211,8 @@
           renderPagination();
           return;
         }
-        el.innerHTML = tags.map((t, index) => {
-          const count = Number(t.subjects_count || 0);
-          const label = count === 1 ? '1 card' : `${count} cards`;
-          const tagLabel = getTagLabel(t);
-          return `<article data-tag-index="${index}" tabindex="0" role="link" class="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-700 bg-slate-900/60 p-3 transition hover:border-violet-500/60 hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-500/70"><p class="text-sm text-slate-100">${esc(tagLabel)}</p><button type="button" data-card-index="${index}" class="shrink-0 rounded-full border border-slate-600 bg-slate-800 px-2.5 py-1 text-xs text-slate-300 transition hover:border-sky-500/70 hover:bg-sky-500/20 hover:text-sky-100" aria-label="Ver ${esc(label)} da tag ${esc(tagLabel)}">${esc(label)}</button></article>`;
-        }).join('');
-        el.querySelectorAll('[data-card-index]').forEach((button) => {
-          button.addEventListener('click', (event) => {
-            event.stopPropagation();
-            goToTagCards(tags[Number(button.dataset.cardIndex)] || {});
-          });
-        });
-        el.querySelectorAll('[data-tag-index]').forEach((article) => {
-          const openFamily = () => goToTagFamily(tags[Number(article.dataset.tagIndex)] || {});
-          article.addEventListener('click', openFamily);
-          article.addEventListener('keydown', (event) => {
-            if (event.target !== article) return;
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              openFamily();
-            }
-          });
-        });
+        el.innerHTML = tags.map((tag, index) => renderTagArticle(tag, index)).join('');
+        bindTagNavigation(el, tags);
         renderPagination();
       } catch (error) {
         el.innerHTML = `<p class="text-sm text-red-300">${esc(error.message || 'Erro ao carregar tags.')}</p>`;
@@ -159,7 +220,7 @@
     }
     document.getElementById('prevPage').addEventListener('click', () => { if (state.page > 1) load(state.page - 1); });
     document.getElementById('nextPage').addEventListener('click', () => { if (state.page < state.totalPages) load(state.page + 1); });
-    window.addEventListener('DOMContentLoaded', () => load(1));
+    window.addEventListener('DOMContentLoaded', () => { loadPinnedTags(); load(1); });
   </script>
 </body>
 </html>
