@@ -188,7 +188,80 @@ function resolveTagColorByCategory(array $tagFlags): string {
 }
 
 function getAllowedCardTagLinkTables(): array {
-    return ['flashcard_tag_links', 'subjects_links', 'objects_links', 'tipo_frasal_links', 'tense_links', 'lexical_chunks_links', 'relation_links', 'words_links', 'idiomas_links'];
+    return array_keys(getCardTagLinkColumnsByTable());
+}
+
+function getCardTagLinkColumnsByTable(): array {
+    return [
+        'flashcard_tag_links' => ['tag_id'],
+        'subjects_links' => ['tag_id'],
+        'objects_links' => ['tag_id'],
+        'tipo_frasal_links' => ['tag_id'],
+        'tense_links' => ['tag_id'],
+        'lexical_chunks_links' => ['tag_id'],
+        'relation_links' => ['tag_id'],
+        'words_links' => ['tag_id'],
+        'idiomas_links' => ['tag_id', 'segundo_idioma_tag_id'],
+    ];
+}
+
+function findCardIdsOrphanedByTagDeletion(PDO $pdo, int $tagId, int $userId, int $sampleLimit = 10): array {
+    $linkColumnsByTable = getCardTagLinkColumnsByTable();
+    $linkedCardIds = [];
+
+    foreach ($linkColumnsByTable as $table => $columns) {
+        foreach ($columns as $column) {
+            $stmt = $pdo->prepare("
+                SELECT DISTINCT l.flashcard_id
+                FROM {$table} l
+                INNER JOIN flashcards f ON f.id = l.flashcard_id
+                INNER JOIN directories d ON d.id = f.directory_id
+                WHERE l.{$column} = ? AND d.user_id = ?
+            ");
+            $stmt->execute([$tagId, $userId]);
+            foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $cardId) {
+                $cardId = (int)$cardId;
+                if ($cardId > 0) $linkedCardIds[$cardId] = true;
+            }
+        }
+    }
+
+    if (empty($linkedCardIds)) {
+        return ['count' => 0, 'sample_ids' => []];
+    }
+
+    $cardIdsWithOtherTags = [];
+    $candidateIds = array_map('intval', array_keys($linkedCardIds));
+    foreach (array_chunk($candidateIds, 500) as $chunk) {
+        $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+        foreach ($linkColumnsByTable as $table => $columns) {
+            foreach ($columns as $column) {
+                $stmt = $pdo->prepare("
+                    SELECT DISTINCT l.flashcard_id
+                    FROM {$table} l
+                    INNER JOIN flashcards f ON f.id = l.flashcard_id
+                    INNER JOIN directories d ON d.id = f.directory_id
+                    WHERE l.flashcard_id IN ($placeholders)
+                      AND d.user_id = ?
+                      AND l.{$column} IS NOT NULL
+                      AND l.{$column} <> ?
+                ");
+                $stmt->execute(array_merge($chunk, [$userId, $tagId]));
+                foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $cardId) {
+                    $cardId = (int)$cardId;
+                    if ($cardId > 0) $cardIdsWithOtherTags[$cardId] = true;
+                }
+            }
+        }
+    }
+
+    $orphanedIds = array_values(array_diff($candidateIds, array_map('intval', array_keys($cardIdsWithOtherTags))));
+    sort($orphanedIds, SORT_NUMERIC);
+
+    return [
+        'count' => count($orphanedIds),
+        'sample_ids' => array_slice($orphanedIds, 0, max(0, $sampleLimit)),
+    ];
 }
 
 /**
@@ -3420,16 +3493,39 @@ elseif ($action === 'delete_tag') {
         die(json_encode(['status' => 'error', 'message' => 'ID da tag inválido.']));
     }
 
-    $stmt = $pdo->prepare("DELETE FROM flashcard_tags WHERE id = ? AND user_id = ?");
-    $stmt->execute([$tag_id, $user_id]);
+    try {
+        $pdo->beginTransaction();
 
-    if ($stmt->rowCount() === 0) {
-        $checkStmt = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? LIMIT 1");
+        $checkStmt = $pdo->prepare("SELECT id, user_id FROM flashcard_tags WHERE id = ? LIMIT 1 FOR UPDATE");
         $checkStmt->execute([$tag_id]);
-        if ($checkStmt->fetchColumn()) {
+        $tag = $checkStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$tag) {
+            $pdo->rollBack();
+            die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada.']));
+        }
+        if ((int)$tag['user_id'] !== (int)$user_id) {
+            $pdo->rollBack();
             die(json_encode(['status' => 'error', 'message' => 'Você não tem permissão para excluir esta tag.']));
         }
-        die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada.']));
+
+        $orphanCheck = findCardIdsOrphanedByTagDeletion($pdo, $tag_id, (int)$user_id);
+        if ((int)$orphanCheck['count'] > 0) {
+            $pdo->rollBack();
+            die(json_encode([
+                'status' => 'error',
+                'message' => 'Esta tag não pode ser excluída porque deixaria cards sem nenhuma tag. Adicione outra tag a esses cards antes de excluir.',
+                'orphan_cards_count' => (int)$orphanCheck['count'],
+                'orphan_card_ids' => $orphanCheck['sample_ids'],
+            ]));
+        }
+
+        $stmt = $pdo->prepare("DELETE FROM flashcard_tags WHERE id = ? AND user_id = ?");
+        $stmt->execute([$tag_id, $user_id]);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('[flashcards][delete_tag] ' . $e->getMessage());
+        die(json_encode(['status' => 'error', 'message' => 'Erro interno ao excluir tag.']));
     }
 
     echo json_encode(['status' => 'success', 'message' => 'Tag excluída com sucesso.']);
