@@ -44,6 +44,37 @@ $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? ($_GET['action'] ?? '');
 
 /**
+ * Normaliza destinos de retorno recebidos do cliente para impedir redirects externos.
+ */
+function normalizeReturnTarget(?string $rawTarget): string {
+    $target = trim((string)$rawTarget);
+    if ($target === '') return '';
+
+    for ($i = 0; $i < 2; $i += 1) {
+        $decoded = rawurldecode($target);
+        if ($decoded === $target) break;
+        $target = $decoded;
+    }
+
+    $parts = parse_url($target);
+    if ($parts === false) return '';
+
+    if (isset($parts['scheme']) || isset($parts['host'])) {
+        $requestHost = strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
+        $targetHost = strtolower((string)($parts['host'] ?? ''));
+        if ($targetHost === '' || $requestHost === '' || $targetHost !== $requestHost) return '';
+    }
+
+    $path = (string)($parts['path'] ?? '');
+    if ($path === '' || $path[0] !== '/') return '';
+    if (str_starts_with($path, '//')) return '';
+
+    $query = isset($parts['query']) && $parts['query'] !== '' ? '?' . $parts['query'] : '';
+    $fragment = isset($parts['fragment']) && $parts['fragment'] !== '' ? '#' . $parts['fragment'] : '';
+    return $path . $query . $fragment;
+}
+
+/**
  * Função sanitizeTagIds: Normaliza uma lista de IDs de tags recebida na requisição, mantendo apenas inteiros positivos únicos.
  */
 function sanitizeTagIds($rawTagIds): array {
@@ -2913,7 +2944,8 @@ elseif ($action === 'add_single') {
         echo json_encode([
             'status' => 'success',
             'message' => 'Card adicionado.',
-            'card_id' => $new_card_id
+            'card_id' => $new_card_id,
+            'redirect_url' => normalizeReturnTarget($input['return_to'] ?? '')
         ]);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
