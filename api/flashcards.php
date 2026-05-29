@@ -2880,22 +2880,17 @@ elseif ($action === 'add_single') {
     $back = trim($input['back'] ?? '');
     $image_front = $input['image_front'] ?? null;
     $image_back = $input['image_back'] ?? null; 
-    $tag_ids = sanitizeTagIds($input['tag_ids'] ?? []);
+    $tag_ids = [];
     $subject_tag_ids = sanitizeTagIds($input['subject_tag_ids'] ?? []);
-    $object_tag_ids = sanitizeTagIds($input['object_tag_ids'] ?? []);
-    $tipo_frasal_tag_ids = sanitizeTagIds($input['tipo_frasal_tag_ids'] ?? []);
-    $tense_tag_ids = sanitizeTagIds($input['tense_tag_ids'] ?? []);
-    $lexical_chunks_tag_ids = sanitizeTagIds($input['lexical_chunks_tag_ids'] ?? []);
-    $relation_tag_ids = sanitizeTagIds($input['relation_tag_ids'] ?? []);
-    $words_tag_ids = sanitizeTagIds($input['words_tag_ids'] ?? []);
-    $idioma_principal_tag_ids = sanitizeTagIds($input['idioma_principal_tag_ids'] ?? ($input['idiomas_tag_ids'] ?? []));
-    $idioma_secundario_tag_ids = sanitizeTagIds($input['idioma_secundario_tag_ids'] ?? []);
 
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
 
     if ($deck_id === 0 || (!$has_front && !$has_back)) {
         die(json_encode(['status' => 'error', 'message' => 'Preencha pelo menos um lado do card com texto ou imagem.']));
+    }
+    if (empty($subject_tag_ids)) {
+        die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos 1 tag na categoria Subject para salvar o card.']));
     }
     $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
     if (!$deck) {
@@ -2913,13 +2908,6 @@ elseif ($action === 'add_single') {
         $new_card_id = (int)$pdo->lastInsertId();
         syncCardTagLinks($pdo, 'flashcard_tag_links', $new_card_id, $tag_ids, $user_id);
         syncCardTagLinks($pdo, 'subjects_links', $new_card_id, $subject_tag_ids, $user_id);
-        syncCardTagLinks($pdo, 'objects_links', $new_card_id, $object_tag_ids, $user_id);
-        syncCardTagLinks($pdo, 'tipo_frasal_links', $new_card_id, $tipo_frasal_tag_ids, $user_id);
-        syncCardTagLinks($pdo, 'tense_links', $new_card_id, $tense_tag_ids, $user_id);
-        syncCardTagLinks($pdo, 'lexical_chunks_links', $new_card_id, $lexical_chunks_tag_ids, $user_id);
-        syncCardTagLinks($pdo, 'relation_links', $new_card_id, $relation_tag_ids, $user_id);
-        syncCardTagLinks($pdo, 'words_links', $new_card_id, $words_tag_ids, $user_id);
-        syncCardIdiomaLinks($pdo, $new_card_id, $idioma_principal_tag_ids, $idioma_secundario_tag_ids, $user_id);
         // O áudio não é mais gerado automaticamente ao criar um card.
         // O usuário decide quando gerar áudio usando as ações manuais de TTS.
         echo json_encode([
@@ -2939,22 +2927,17 @@ elseif ($action === 'update_card') {
     $back = trim($input['back'] ?? '');
     $image_front = $input['image_front'] ?? null;
     $image_back = $input['image_back'] ?? null;
-    $tag_ids = sanitizeTagIds($input['tag_ids'] ?? []);
+    $tag_ids = [];
     $subject_tag_ids = sanitizeTagIds($input['subject_tag_ids'] ?? []);
-    $object_tag_ids = sanitizeTagIds($input['object_tag_ids'] ?? []);
-    $tipo_frasal_tag_ids = sanitizeTagIds($input['tipo_frasal_tag_ids'] ?? []);
-    $tense_tag_ids = sanitizeTagIds($input['tense_tag_ids'] ?? []);
-    $lexical_chunks_tag_ids = sanitizeTagIds($input['lexical_chunks_tag_ids'] ?? []);
-    $relation_tag_ids = sanitizeTagIds($input['relation_tag_ids'] ?? []);
-    $words_tag_ids = sanitizeTagIds($input['words_tag_ids'] ?? []);
-    $idioma_principal_tag_ids = sanitizeTagIds($input['idioma_principal_tag_ids'] ?? ($input['idiomas_tag_ids'] ?? []));
-    $idioma_secundario_tag_ids = sanitizeTagIds($input['idioma_secundario_tag_ids'] ?? []);
 
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
 
     if ($card_id === 0 || (!$has_front && !$has_back)) {
         die(json_encode(['status' => 'error', 'message' => 'Dados inválidos. Preencha pelo menos um lado do card com texto ou imagem.']));
+    }
+    if (empty($subject_tag_ids)) {
+        die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos 1 tag na categoria Subject para salvar o card.']));
     }
 
     if (!verifyCardOwnership($pdo, $card_id, $user_id)) {
@@ -2972,13 +2955,13 @@ elseif ($action === 'update_card') {
     if ($stmt->execute([$front_enc, $back_enc, $img_front_enc, $img_back_enc, $card_id])) {
         syncCardTagLinks($pdo, 'flashcard_tag_links', $card_id, $tag_ids, $user_id);
         syncCardTagLinks($pdo, 'subjects_links', $card_id, $subject_tag_ids, $user_id);
-        syncCardTagLinks($pdo, 'objects_links', $card_id, $object_tag_ids, $user_id);
-        syncCardTagLinks($pdo, 'tipo_frasal_links', $card_id, $tipo_frasal_tag_ids, $user_id);
-        syncCardTagLinks($pdo, 'tense_links', $card_id, $tense_tag_ids, $user_id);
-        syncCardTagLinks($pdo, 'lexical_chunks_links', $card_id, $lexical_chunks_tag_ids, $user_id);
-        syncCardTagLinks($pdo, 'relation_links', $card_id, $relation_tag_ids, $user_id);
-        syncCardTagLinks($pdo, 'words_links', $card_id, $words_tag_ids, $user_id);
-        syncCardIdiomaLinks($pdo, $card_id, $idioma_principal_tag_ids, $idioma_secundario_tag_ids, $user_id);
+        syncCardTagLinks($pdo, 'objects_links', $card_id, [], $user_id);
+        syncCardTagLinks($pdo, 'tipo_frasal_links', $card_id, [], $user_id);
+        syncCardTagLinks($pdo, 'tense_links', $card_id, [], $user_id);
+        syncCardTagLinks($pdo, 'lexical_chunks_links', $card_id, [], $user_id);
+        syncCardTagLinks($pdo, 'relation_links', $card_id, [], $user_id);
+        syncCardTagLinks($pdo, 'words_links', $card_id, [], $user_id);
+        syncCardIdiomaLinks($pdo, $card_id, [], [], $user_id);
         echo json_encode(['status' => 'success', 'message' => 'Card atualizado.']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar card.']);

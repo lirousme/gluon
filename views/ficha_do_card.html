@@ -23,6 +23,12 @@
     button {
       font-size: 16px !important;
     }
+
+    .tag-pill,
+    .tag-pill button {
+      font-size: 0.6875rem !important;
+      line-height: 0.875rem;
+    }
   </style>
 </head>
 <body class="min-h-[100dvh] bg-gluon-dark text-slate-100 selection:bg-blue-600/60">
@@ -42,21 +48,10 @@
     <form id="cardForm" class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl p-4 sm:p-5 space-y-5">
       <input type="hidden" id="editCardId" value="">
       <input type="hidden" id="selectedSubjectTagIds" value="[]">
-      <input type="hidden" id="selectedObjectTagIds" value="[]">
-      <input type="hidden" id="selectedTipoFrasalTagIds" value="[]">
-      <input type="hidden" id="selectedTenseTagIds" value="[]">
-      <input type="hidden" id="selectedLexicalChunksTagIds" value="[]">
-      <input type="hidden" id="selectedRelationTagIds" value="[]">
-      <input type="hidden" id="selectedWordsTagIds" value="[]">
-      <input type="hidden" id="selectedIdiomaPrincipalTagIds" value="[]">
-      <input type="hidden" id="selectedIdiomaSecundarioTagIds" value="[]">
 
       <div class="flex items-center gap-2 border-b border-slate-700 pb-3">
         <button type="button" id="tabFrontBtn" class="px-3 py-1.5 rounded-lg text-sm border border-blue-400 bg-blue-500/20 text-blue-200">Frente</button>
         <button type="button" id="tabBackBtn" class="px-3 py-1.5 rounded-lg text-sm border border-slate-600 bg-slate-800 text-slate-300">Verso</button>
-        <button type="button" id="btnTranslate" class="px-3 py-1.5 rounded-lg text-sm border border-fuchsia-400/40 text-fuchsia-300 hover:bg-fuchsia-400/10 hover:text-fuchsia-200 transition-colors inline-flex items-center gap-1.5">
-          <i class="fa-solid fa-language"></i> Traduzir via IA
-        </button>
       </div>
 
       <section id="singleFrontTabContent">
@@ -81,64 +76,8 @@
           <label class="block text-sm font-medium text-emerald-300">Subjects deste card (Base form)</label>
           <button type="button" onclick="app.openCreateTagModal()" class="h-7 w-7 rounded-md border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors" title="Criar nova tag">+</button>
         </div>
-        <div id="subjectTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
+        <div id="subjectTagSelector" class="flex flex-wrap gap-1.5 bg-slate-900/70 border border-slate-700 rounded-lg p-2 min-h-[44px]"></div>
         <input id="subjectTagSearchInput" type="text" placeholder="Pesquisar tag de subject por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
-      </section>
-
-      <section style="display: none;" id="ObjectTagsPanel" class="pt-3 border-t border-slate-700">
-        <div class="mb-2 flex items-center justify-between gap-2">
-          <label class="block text-sm font-medium text-amber-300">Objects deste card (Base form)</label>
-          <button type="button" onclick="app.openCreateTagModal()" class="h-7 w-7 rounded-md border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors" title="Criar nova tag">+</button>
-        </div>        <div id="objectTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>        <input id="objectTagSearchInput" type="text" placeholder="Pesquisar tag de object por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
-      </section>
-      
-      <section style="display: none;" id="TipoFrasalTagsPanel" class="pt-3 border-t border-slate-700">
-        <div class="mb-2 flex items-center justify-between gap-2">
-          <label class="block text-sm font-medium text-rose-300">Tipo frasal deste card</label>
-          <button type="button" onclick="app.openCreateTagModal()" class="h-7 w-7 rounded-md border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors" title="Criar nova tag">+</button>
-        </div>        <div id="tipoFrasalTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>        <input id="tipoFrasalTagSearchInput" type="text" placeholder="Pesquisar tag de object por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
-      </section>
-      
-      <section style="display: none;" id="TenseTagsPanel" class="pt-3 border-t border-slate-700">
-        <div class="mb-2 flex items-center justify-between gap-2">
-          <label class="block text-sm font-medium text-sky-300">Tense deste card</label>
-          <button type="button" onclick="app.openCreateTagModal()" class="h-7 w-7 rounded-md border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors" title="Criar nova tag">+</button>
-        </div>        <div id="tenseTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>        <input id="tenseTagSearchInput" type="text" placeholder="Pesquisar tag de object por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
-      </section>
-      
-      <section style="display: none;" id="LexicalChunksTagsPanel" class="pt-3 border-t border-slate-700">
-        <div class="mb-2 flex items-center justify-between gap-2">
-          <label class="block text-sm font-medium text-fuchsia-300">Lexical chunks deste card</label>
-          <button type="button" onclick="app.openCreateTagModal()" class="h-7 w-7 rounded-md border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors" title="Criar nova tag">+</button>
-        </div>        <div id="lexicalChunksTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>        <input id="lexicalChunksTagSearchInput" type="text" placeholder="Pesquisar tag de object por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
-      </section>
-      
-      <section style="display: none;" id="RelationTagsPanel" class="pt-3 border-t border-slate-700">
-        <div class="mb-2 flex items-center justify-between gap-2">
-          <label class="block text-sm font-medium text-cyan-300">Tipo de relação deste card</label>
-          <button type="button" onclick="app.openCreateTagModal()" class="h-7 w-7 rounded-md border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors" title="Criar nova tag">+</button>
-        </div>        <div id="relationTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>        <input id="relationTagSearchInput" type="text" placeholder="Pesquisar tag de object por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
-      </section>
-      
-      <section style="display: none;" id="WordsTagsPanel" class="pt-3 border-t border-slate-700">
-        <div class="mb-2 flex items-center justify-between gap-2">
-          <label class="block text-sm font-medium text-lime-300">Words deste card</label>
-          <button type="button" onclick="app.openCreateTagModal()" class="h-7 w-7 rounded-md border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors" title="Criar nova tag">+</button>
-        </div>        <div id="wordsTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>        <input id="wordsTagSearchInput" type="text" placeholder="Pesquisar tag de object por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
-      </section>
-      
-      <section style="display: none;" id="IdiomaPrincipalTagPanel" class="pt-3 border-t border-slate-700">
-        <div class="mb-2 flex items-center justify-between gap-2">
-          <label class="block text-sm font-medium text-indigo-300">Idioma principal deste card</label>
-          <button type="button" onclick="app.openCreateTagModal()" class="h-7 w-7 rounded-md border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors" title="Criar nova tag">+</button>
-        </div>        <div id="idiomaPrincipalTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>        <input id="idiomaPrincipalTagSearchInput" type="text" placeholder="Pesquisar tag do idioma principal por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
-      </section>
-
-      <section style="display: none;" id="IdiomaSecundarioTagPanel" class="pt-3 border-t border-slate-700">
-        <div class="mb-2 flex items-center justify-between gap-2">
-          <label class="block text-sm font-medium text-teal-300">Idioma secundário deste card</label>
-          <button type="button" onclick="app.openCreateTagModal()" class="h-7 w-7 rounded-md border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors" title="Criar nova tag">+</button>
-        </div>        <div id="idiomaSecundarioTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>        <input id="idiomaSecundarioTagSearchInput" type="text" placeholder="Pesquisar tag do idioma secundário por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
       </section>
 
       <div class="flex items-center justify-between gap-3 pt-2 border-t border-slate-700">
@@ -256,15 +195,7 @@ const app = {
   availableTags: [],
   sessionUserId: null,
   tagPanels: {
-    subject: { selectedInputId: 'selectedSubjectTagIds', selectorId: 'subjectTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' },
-    object: { selectedInputId: 'selectedObjectTagIds', selectorId: 'objectTagSelector', activeClass: 'bg-amber-500/20 text-amber-200 border-amber-400', searchQuery: '' },
-    tipoFrasal: { selectedInputId: 'selectedTipoFrasalTagIds', selectorId: 'tipoFrasalTagSelector', activeClass: 'bg-rose-500/20 text-rose-200 border-rose-400', searchQuery: '' },
-    tense: { selectedInputId: 'selectedTenseTagIds', selectorId: 'tenseTagSelector', activeClass: 'bg-sky-500/20 text-sky-200 border-sky-400', searchQuery: '' },
-    lexicalChunks: { selectedInputId: 'selectedLexicalChunksTagIds', selectorId: 'lexicalChunksTagSelector', activeClass: 'bg-fuchsia-500/20 text-fuchsia-200 border-fuchsia-400', searchQuery: '' },
-    relation: { selectedInputId: 'selectedRelationTagIds', selectorId: 'relationTagSelector', activeClass: 'bg-cyan-500/20 text-cyan-200 border-cyan-400', searchQuery: '' },
-    words: { selectedInputId: 'selectedWordsTagIds', selectorId: 'wordsTagSelector', activeClass: 'bg-lime-500/20 text-lime-200 border-lime-400', searchQuery: '' },
-    idiomaPrincipal: { selectedInputId: 'selectedIdiomaPrincipalTagIds', selectorId: 'idiomaPrincipalTagSelector', activeClass: 'bg-indigo-500/20 text-indigo-200 border-indigo-400', searchQuery: '', singleSelect: true },
-    idiomaSecundario: { selectedInputId: 'selectedIdiomaSecundarioTagIds', selectorId: 'idiomaSecundarioTagSelector', activeClass: 'bg-teal-500/20 text-teal-200 border-teal-400', searchQuery: '', singleSelect: true }
+    subject: { selectedInputId: 'selectedSubjectTagIds', selectorId: 'subjectTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' }
   },
   setupTagCategorySingleSelect() {
     const ids = ['tagIsBookInput','tagIsVerbTenseInput','tagIsSentenceTypeInput','tagIsLexicalChunkInput','tagIsRelationTypeInput','tagIsWordInput','tagIsMonthInput','tagIsDayInput','tagIsYearInput'];
@@ -570,7 +501,7 @@ const app = {
       });
       el.innerHTML = selectedTags.map(tag => {
         const id = Number(tag.id);
-        return `<div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border ${config.activeClass}"><button type="button" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button><button type="button" data-edit-tag-id="${id}" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button></div>`;
+        return `<div class="tag-pill inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${config.activeClass}"><button type="button" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button><button type="button" data-edit-tag-id="${id}" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button></div>`;
       }).join('');
       el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
       el.querySelectorAll('[data-edit-tag-id]').forEach(btn => btn.onclick = () => this.openEditTagModal(Number(btn.dataset.editTagId)));
@@ -591,7 +522,7 @@ const app = {
     if (!filtered.length) { el.innerHTML = '<span class="text-xs text-slate-400">Nenhuma tag para exibir.</span>'; return; }
     el.innerHTML = filtered.map(tag => {
       const id = Number(tag.id); const active = currentSelected.includes(id);
-      return `<div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border ${active ? config.activeClass : 'bg-slate-800 text-slate-300 border-slate-600'}"><button type="button" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button><button type="button" data-edit-tag-id="${id}" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button></div>`;
+      return `<div class="tag-pill inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${active ? config.activeClass : 'bg-slate-800 text-slate-300 border-slate-600'}"><button type="button" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button><button type="button" data-edit-tag-id="${id}" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button></div>`;
     }).join('');
     el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
     el.querySelectorAll('[data-edit-tag-id]').forEach(btn => btn.onclick = () => this.openEditTagModal(Number(btn.dataset.editTagId)));
@@ -608,51 +539,6 @@ const app = {
     statusMessage.className = 'text-sm ' + (tone==='error'?'text-red-400':tone==='success'?'text-emerald-300':'text-slate-400');
   },
 
-  getPrimaryAndSecondaryLanguageNames() {
-    const getTagNameById = (id) => {
-      const tag = this.availableTags.find(t => Number(t.id) === Number(id));
-      return String(tag?.name || '').trim();
-    };
-    const [principalId] = this.getSelectedTagIds('idiomaPrincipal');
-    const [secundarioId] = this.getSelectedTagIds('idiomaSecundario');
-    return {
-      principalLanguage: getTagNameById(principalId),
-      secondaryLanguage: getTagNameById(secundarioId)
-    };
-  },
-  async translateCard() {
-    const frontText = singleFront.value.trim();
-    const backText = singleBack.value.trim();
-    if (frontText && backText) return this.setStatus('Um dos campos deve estar vazio para poder traduzir para ele.', 'error');
-    if (!frontText && !backText) return this.setStatus('Preencha Frente ou Verso antes de traduzir.', 'error');
-
-    const { principalLanguage, secondaryLanguage } = this.getPrimaryAndSecondaryLanguageNames();
-    if (!principalLanguage || !secondaryLanguage) {
-      return this.setStatus('Selecione os idiomas principal e secundário para usar a tradução.', 'error');
-    }
-
-    const textToTranslate = frontText || backText;
-    const sourceLanguage = frontText ? principalLanguage : secondaryLanguage;
-    const targetLanguage = frontText ? secondaryLanguage : principalLanguage;
-    const targetEl = frontText ? singleBack : singleFront;
-
-    const original = btnTranslate.innerHTML;
-    btnTranslate.disabled = true;
-    btnTranslate.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Traduzindo...';
-    this.setStatus('Traduzindo texto via IA...');
-
-    try {
-      const res = await this.api('translate_text', { text: textToTranslate, source_language: sourceLanguage, target_language: targetLanguage });
-      if (!res || !res.translation) throw new Error('A API não retornou uma tradução válida.');
-      targetEl.value = res.translation;
-      this.setStatus('Tradução concluída com sucesso.', 'success');
-    } catch (err) {
-      this.setStatus('Falha ao traduzir: ' + (err.message || 'erro desconhecido.'), 'error');
-    } finally {
-      btnTranslate.disabled = false;
-      btnTranslate.innerHTML = original;
-    }
-  },
   setActiveTab(tab) {
     this.activeTab = tab === 'back' ? 'back' : 'front';
     const isFront = this.activeTab === 'front';
@@ -682,23 +568,7 @@ const app = {
     singleBack.value = String(card.back || '');
     if (card.image_front) this.setBase64ImagePreview('front', card.image_front);
     const subjectTags = Array.isArray(card.subject_tags) ? card.subject_tags.map(t => Number(t.id)).filter(Boolean) : [];
-    const objectTags = Array.isArray(card.object_tags) ? card.object_tags.map(t => Number(t.id)).filter(Boolean) : [];
-    const tipoFrasalTags = Array.isArray(card.tipo_frasal_tags) ? card.tipo_frasal_tags.map(t => Number(t.id)).filter(Boolean) : [];
-    const tenseTags = Array.isArray(card.tense_tags) ? card.tense_tags.map(t => Number(t.id)).filter(Boolean) : [];
-    const lexicalChunksTags = Array.isArray(card.lexical_chunks_tags) ? card.lexical_chunks_tags.map(t => Number(t.id)).filter(Boolean) : [];
-    const relationTags = Array.isArray(card.relation_tags) ? card.relation_tags.map(t => Number(t.id)).filter(Boolean) : [];
-    const wordsTags = Array.isArray(card.words_tags) ? card.words_tags.map(t => Number(t.id)).filter(Boolean) : [];
-    const idiomaPrincipalTags = Array.isArray(card.idioma_principal_tags) ? card.idioma_principal_tags.map(t => Number(t.id)).filter(Boolean) : (Array.isArray(card.idiomas_tags) ? card.idiomas_tags.map(t => Number(t.id)).filter(Boolean) : []);
-    const idiomaSecundarioTags = Array.isArray(card.idioma_secundario_tags) ? card.idioma_secundario_tags.map(t => Number(t.id)).filter(Boolean) : [];
     this.setSelectedTagIds('subject', subjectTags);
-    this.setSelectedTagIds('object', objectTags);
-    this.setSelectedTagIds('tipoFrasal', tipoFrasalTags);
-    this.setSelectedTagIds('tense', tenseTags);
-    this.setSelectedTagIds('lexicalChunks', lexicalChunksTags);
-    this.setSelectedTagIds('relation', relationTags);
-    this.setSelectedTagIds('words', wordsTags);
-    this.setSelectedTagIds('idiomaPrincipal', idiomaPrincipalTags);
-    this.setSelectedTagIds('idiomaSecundario', idiomaSecundarioTags);
     this.renderAllTagSelectors();
     this.setStatus('Você está editando um card.', 'neutral');
   },
@@ -709,20 +579,12 @@ const app = {
     const image_front = frontImageBase64.value;
     const image_back = null;
     const subject_tag_ids = this.getSelectedTagIds('subject');
-    const object_tag_ids = this.getSelectedTagIds('object');
-    const tipo_frasal_tag_ids = this.getSelectedTagIds('tipoFrasal');
-    const tense_tag_ids = this.getSelectedTagIds('tense');
-    const lexical_chunks_tag_ids = this.getSelectedTagIds('lexicalChunks');
-    const relation_tag_ids = this.getSelectedTagIds('relation');
-    const words_tag_ids = this.getSelectedTagIds('words');
-    const idioma_principal_tag_ids = this.getSelectedTagIds('idiomaPrincipal');
-    const idioma_secundario_tag_ids = this.getSelectedTagIds('idiomaSecundario');
     if (!front && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
     if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag na categoria Subject para salvar o card.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
-      const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids, object_tag_ids, tipo_frasal_tag_ids, tense_tag_ids, lexical_chunks_tag_ids, relation_tag_ids, words_tag_ids, idioma_principal_tag_ids, idioma_secundario_tag_ids };
+      const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
@@ -736,18 +598,9 @@ backLink.href = decodeURIComponent(app.from);
 if (!app.deckId) window.location.replace(backLink.href);
 tabFrontBtn.onclick = () => app.setActiveTab('front');
 tabBackBtn.onclick = () => app.setActiveTab('back');
-btnTranslate.onclick = () => app.translateCard();
 frontImageFile.onchange = (e) => app.handleCardImageUpload(e, 'front');
 btnRemoveFrontImage.onclick = () => app.removeCardImage('front');
 subjectTagSearchInput.oninput = (e) => app.handleTagSearch('subject', e.target.value);
-objectTagSearchInput.oninput = (e) => app.handleTagSearch('object', e.target.value);
-tipoFrasalTagSearchInput.oninput = (e) => app.handleTagSearch('tipoFrasal', e.target.value);
-tenseTagSearchInput.oninput = (e) => app.handleTagSearch('tense', e.target.value);
-lexicalChunksTagSearchInput.oninput = (e) => app.handleTagSearch('lexicalChunks', e.target.value);
-relationTagSearchInput.oninput = (e) => app.handleTagSearch('relation', e.target.value);
-wordsTagSearchInput.oninput = (e) => app.handleTagSearch('words', e.target.value);
-idiomaPrincipalTagSearchInput.oninput = (e) => app.handleTagSearch('idiomaPrincipal', e.target.value);
-idiomaSecundarioTagSearchInput.oninput = (e) => app.handleTagSearch('idiomaSecundario', e.target.value);
 cardForm.onsubmit = (e) => app.save(e);
 tagForm.onsubmit = (e) => app.createTag(e);
 editTagForm.onsubmit = (e) => app.updateTag(e);
