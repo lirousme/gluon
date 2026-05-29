@@ -400,8 +400,6 @@ window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('btnCloseActionModal').onclick=closeActionModal;
   document.getElementById('btnRemoveRelation').onclick=removeRelation;
   document.getElementById('btnViewFamily').onclick=()=>{const t=actionState.tag;closeActionModal();openTagFamily(t)};
-  document.getElementById('btnEditTag').onclick=()=>{const tag=actionState.tag;closeActionModal();openEditTagModal(tag);};
-  document.getElementById('btnDeleteTag').onclick=()=>deleteTag();
   document.getElementById('btnCancelEditTag').onclick=closeEditTagModal;
   document.getElementById('btnDeleteEditingTag').onclick=deleteEditedTag;
   document.getElementById('btnTogglePinnedTag').onclick=togglePinnedTag;
@@ -415,8 +413,6 @@ window.addEventListener('DOMContentLoaded',()=>{
       <div class="grid gap-2">
         <button type="button" id="btnRemoveRelation" class="w-full text-left px-3 py-2 rounded-lg border border-slate-600 hover:bg-slate-800">Remover da família</button>
         <button type="button" id="btnViewFamily" class="w-full text-left px-3 py-2 rounded-lg border border-slate-600 hover:bg-slate-800">Ver família</button>
-        <button type="button" id="btnEditTag" class="w-full text-left px-3 py-2 rounded-lg border border-slate-600 hover:bg-slate-800">Editar</button>
-        <button type="button" id="btnDeleteTag" class="w-full text-left px-3 py-2 rounded-lg border border-red-500/60 text-red-300 hover:bg-red-500/10">Excluir</button>
       </div>
       <button type="button" id="btnCloseActionModal" class="mt-3 w-full px-3 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">Cancelar</button>
     </div>
