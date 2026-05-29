@@ -3318,9 +3318,22 @@ elseif ($action === 'list_tag_family_relations') {
 
 elseif ($action === 'list_saved_filters') {
     $stmt = $pdo->prepare("
-        SELECT f.id, f.id_tag, f.ativo, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color
+        SELECT
+            f.id,
+            f.id_tag,
+            f.ativo,
+            t.name_encrypted,
+            t.name_pt_br_encrypted,
+            t.numero,
+            t.color,
+            COALESCE(subject_counts.subjects_count, 0) AS subjects_count
         FROM filtros f
         INNER JOIN flashcard_tags t ON t.id = f.id_tag
+        LEFT JOIN (
+            SELECT tag_id, COUNT(DISTINCT flashcard_id) AS subjects_count
+            FROM subjects_links
+            GROUP BY tag_id
+        ) subject_counts ON subject_counts.tag_id = t.id
         WHERE f.id_user = ? AND t.user_id IN (?, 5)
         ORDER BY f.id DESC
     ");
@@ -3333,6 +3346,7 @@ elseif ($action === 'list_saved_filters') {
         $row['ativo'] = (int)$row['ativo'];
         $row['id_tag'] = (int)$row['id_tag'];
         $row['id'] = (int)$row['id'];
+        $row['subjects_count'] = (int)($row['subjects_count'] ?? 0);
         unset($row['name_encrypted'], $row['name_pt_br_encrypted']);
         $parsed[] = $row;
     }
