@@ -448,18 +448,20 @@ const app = {
     if (!document.referrer) return '';
     return this.normalizeBackTarget(document.referrer);
   },
-  goBack() {
-    const fallback = '/dashboard';
+  getReturnTarget() {
     const current = this.getCurrentRoute();
     const target = this.getBackTarget();
-    if (target && target !== current) {
-      window.location.href = target;
-      return;
-    }
+    if (target && target !== current) return target;
 
     const referrerTarget = this.getReferrerBackTarget();
-    if (referrerTarget && referrerTarget !== current) {
-      window.location.href = referrerTarget;
+    if (referrerTarget && referrerTarget !== current) return referrerTarget;
+
+    return '';
+  },
+  goBack() {
+    const target = this.getReturnTarget();
+    if (target) {
+      window.location.href = target;
       return;
     }
 
@@ -467,7 +469,11 @@ const app = {
       window.history.back();
       return;
     }
-    window.location.href = fallback;
+    window.location.href = '/dashboard';
+  },
+  redirectAfterSave() {
+    const target = this.getReturnTarget() || '/dashboard';
+    window.location.replace(target);
   },
   async goToSourceDirectory() {
     try {
@@ -678,7 +684,7 @@ const app = {
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
-      setTimeout(() => this.goBack(), 260);
+      setTimeout(() => this.redirectAfterSave(), 260);
     } catch (err) { this.setStatus(err.message || 'Erro ao salvar card.', 'error'); }
     finally { btnSave.disabled = false; btnSave.innerHTML = original; }
   }
