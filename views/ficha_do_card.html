@@ -671,8 +671,8 @@ const app = {
     pageTitle.textContent = 'Editar ficha de card';
     editCardId.value = this.editCardId;
     this.setStatus('Carregando card para edição...');
-    const res = await this.api('fetch', { deck_id: this.deckId });
-    const card = (res?.data || []).find(c => String(c.id) === String(this.editCardId));
+    const res = await this.api('get_card_for_edit', { deck_id: this.deckId, card_id: this.editCardId });
+    const card = res?.data || null;
     if (!card) throw new Error('Card não encontrado para edição.');
     singleFront.value = card.front || '';
     singleBack.value = String(card.back || '');

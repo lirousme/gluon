@@ -2952,6 +2952,48 @@ elseif ($action === 'add_single') {
     }
 }
 
+// ==== Buscar Card para Edição ====
+elseif ($action === 'get_card_for_edit') {
+    $card_id = (int)($input['card_id'] ?? 0);
+    if ($card_id === 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID do card inválido.']));
+    }
+
+    $cardOwnership = verifyCardOwnership($pdo, $card_id, $user_id);
+    if (!$cardOwnership) {
+        die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT id, directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, has_audio_front, has_audio_back
+        FROM flashcards
+        WHERE id = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$card_id]);
+    $card = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$card) {
+        die(json_encode(['status' => 'error', 'message' => 'Card não encontrado para edição.']));
+    }
+
+    $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', [$card_id], $user_id);
+
+    echo json_encode([
+        'status' => 'success',
+        'data' => [
+            'id' => (int)$card['id'],
+            'directory_id' => (int)$card['directory_id'],
+            'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
+            'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
+            'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
+            'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
+            'has_audio_front' => (int)$card['has_audio_front'],
+            'has_audio_back' => (int)$card['has_audio_back'],
+            'subject_tags' => $subjectTagsByCard[$card_id] ?? []
+        ]
+    ]);
+}
+
 // ==== Editar Card Existente ====
 elseif ($action === 'update_card') {
     $card_id = (int)($input['card_id'] ?? 0);
