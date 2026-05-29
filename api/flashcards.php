@@ -205,62 +205,57 @@ function getCardTagLinkColumnsByTable(): array {
     ];
 }
 
-function findCardIdsOrphanedByTagDeletion(PDO $pdo, int $tagId, int $userId, int $sampleLimit = 10): array {
-    $linkColumnsByTable = getCardTagLinkColumnsByTable();
-    $linkedCardIds = [];
+function findSubjectCardIdsOrphanedByTagDeletion(PDO $pdo, int $tagId, int $userId, int $sampleLimit = 10): array {
+    $countStmt = $pdo->prepare("
+        SELECT COUNT(DISTINCT sl.flashcard_id)
+        FROM subjects_links sl
+        INNER JOIN flashcards f ON f.id = sl.flashcard_id
+        INNER JOIN directories d ON d.id = f.directory_id
+        WHERE sl.tag_id = ?
+          AND d.user_id = ?
+          AND NOT EXISTS (
+              SELECT 1
+              FROM subjects_links other_sl
+              WHERE other_sl.flashcard_id = sl.flashcard_id
+                AND other_sl.tag_id <> ?
+              LIMIT 1
+          )
+    ");
+    $countStmt->execute([$tagId, $userId, $tagId]);
+    $orphanedCount = (int)$countStmt->fetchColumn();
 
-    foreach ($linkColumnsByTable as $table => $columns) {
-        foreach ($columns as $column) {
-            $stmt = $pdo->prepare("
-                SELECT DISTINCT l.flashcard_id
-                FROM {$table} l
-                INNER JOIN flashcards f ON f.id = l.flashcard_id
-                INNER JOIN directories d ON d.id = f.directory_id
-                WHERE l.{$column} = ? AND d.user_id = ?
-            ");
-            $stmt->execute([$tagId, $userId]);
-            foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $cardId) {
-                $cardId = (int)$cardId;
-                if ($cardId > 0) $linkedCardIds[$cardId] = true;
-            }
-        }
-    }
-
-    if (empty($linkedCardIds)) {
+    if ($orphanedCount <= 0) {
         return ['count' => 0, 'sample_ids' => []];
     }
 
-    $cardIdsWithOtherTags = [];
-    $candidateIds = array_map('intval', array_keys($linkedCardIds));
-    foreach (array_chunk($candidateIds, 500) as $chunk) {
-        $placeholders = implode(',', array_fill(0, count($chunk), '?'));
-        foreach ($linkColumnsByTable as $table => $columns) {
-            foreach ($columns as $column) {
-                $stmt = $pdo->prepare("
-                    SELECT DISTINCT l.flashcard_id
-                    FROM {$table} l
-                    INNER JOIN flashcards f ON f.id = l.flashcard_id
-                    INNER JOIN directories d ON d.id = f.directory_id
-                    WHERE l.flashcard_id IN ($placeholders)
-                      AND d.user_id = ?
-                      AND l.{$column} IS NOT NULL
-                      AND l.{$column} <> ?
-                ");
-                $stmt->execute(array_merge($chunk, [$userId, $tagId]));
-                foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $cardId) {
-                    $cardId = (int)$cardId;
-                    if ($cardId > 0) $cardIdsWithOtherTags[$cardId] = true;
-                }
-            }
-        }
+    $limit = max(0, $sampleLimit);
+    if ($limit === 0) {
+        return ['count' => $orphanedCount, 'sample_ids' => []];
     }
 
-    $orphanedIds = array_values(array_diff($candidateIds, array_map('intval', array_keys($cardIdsWithOtherTags))));
-    sort($orphanedIds, SORT_NUMERIC);
+    $sampleStmt = $pdo->prepare("
+        SELECT DISTINCT sl.flashcard_id
+        FROM subjects_links sl
+        INNER JOIN flashcards f ON f.id = sl.flashcard_id
+        INNER JOIN directories d ON d.id = f.directory_id
+        WHERE sl.tag_id = ?
+          AND d.user_id = ?
+          AND NOT EXISTS (
+              SELECT 1
+              FROM subjects_links other_sl
+              WHERE other_sl.flashcard_id = sl.flashcard_id
+                AND other_sl.tag_id <> ?
+              LIMIT 1
+          )
+        ORDER BY sl.flashcard_id ASC
+        LIMIT {$limit}
+    ");
+    $sampleStmt->execute([$tagId, $userId, $tagId]);
+    $sampleIds = array_values(array_map('intval', $sampleStmt->fetchAll(PDO::FETCH_COLUMN)));
 
     return [
-        'count' => count($orphanedIds),
-        'sample_ids' => array_slice($orphanedIds, 0, max(0, $sampleLimit)),
+        'count' => $orphanedCount,
+        'sample_ids' => $sampleIds,
     ];
 }
 
@@ -3508,12 +3503,12 @@ elseif ($action === 'delete_tag') {
             die(json_encode(['status' => 'error', 'message' => 'Você não tem permissão para excluir esta tag.']));
         }
 
-        $orphanCheck = findCardIdsOrphanedByTagDeletion($pdo, $tag_id, (int)$user_id);
+        $orphanCheck = findSubjectCardIdsOrphanedByTagDeletion($pdo, $tag_id, (int)$user_id);
         if ((int)$orphanCheck['count'] > 0) {
             $pdo->rollBack();
             die(json_encode([
                 'status' => 'error',
-                'message' => 'Esta tag não pode ser excluída porque deixaria cards sem nenhuma tag. Adicione outra tag a esses cards antes de excluir.',
+                'message' => 'Esta tag não pode ser excluída porque deixaria cards sem nenhuma tag em subjects_links. Adicione outra tag de subject a esses cards antes de excluir.',
                 'orphan_cards_count' => (int)$orphanCheck['count'],
                 'orphan_card_ids' => $orphanCheck['sample_ids'],
             ]));
