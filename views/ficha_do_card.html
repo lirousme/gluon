@@ -35,12 +35,11 @@
   <main class="max-w-3xl mx-auto px-3 py-4 sm:px-4 sm:py-6">
     <div class="mb-4 flex items-center justify-between gap-3">
       <div class="flex items-center gap-2">
-        <a id="backLink" href="/dashboard" class="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm">
-          <i class="fa-solid fa-arrow-left"></i> Voltar
-        </a>
+        <button type="button" id="backLink" href="/dashboard" class="h-9 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"><i class="fa-solid fa-left-long"></i></button>
         <button type="button" onclick="app.goToSourceDirectory()" class="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" title="Abrir minhas Anotações">
-          <i class="fa-solid fa-thumbtack text-gluon-primary"></i> Anotações
+          <i class="fa-solid fa-thumbtack text-gluon-primary"></i>
         </button>
+        <button type="button" onclick="app.openCreateTagModal()" class="h-7 w-7 rounded-md border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors" title="Criar nova tag">+</button>
       </div>
       <h1 id="pageTitle" class="text-base sm:text-lg font-semibold">Criar ficha de card</h1>
     </div>
@@ -65,18 +64,16 @@
       </div>
 
       <section id="singleFrontTabContent">
-        <label class="block text-sm font-medium text-slate-300 mb-2">Frente (Obrigatório texto ou imagem)</label>
-        <textarea id="singleFront" rows="4" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white resize-none"></textarea>
+        <textarea id="singleFront" rows="4" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white resize-none" placeholder="Frente do flashcard"></textarea>
       </section>
 
       <section id="singleBackTabContent" class="hidden">
-        <label class="block text-sm font-medium text-slate-300 mb-2">Verso (Opcional)</label>
-        <textarea id="singleBack" rows="4" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white resize-none" placeholder="Se não quiser texto no verso, deixe vazio."></textarea>
+        <textarea id="singleBack" rows="4" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white resize-none" placeholder="Verso do flashcard"></textarea>
       </section>
 
       <section id="frontImageTabContent" class="hidden">
         <div class="bg-slate-800/50 p-3 rounded-lg border border-slate-700">
-          <label class="block text-xs font-medium text-slate-400 mb-2"><i class="fa-regular fa-image"></i> Imagem da Frente (Opcional, Máx: 4MB)</label>
+          <label class="block text-xs font-medium text-slate-400 mb-2"><i class="fa-regular fa-image"></i> Imagem da Frente (Máx: 4MB)</label>
           <input type="file" id="frontImageFile" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer bg-slate-900 border border-slate-600 rounded">
           <input type="hidden" id="frontImageBase64">
           <div id="frontImagePreview" class="mt-2 hidden w-full h-36 rounded bg-contain bg-center bg-no-repeat border border-slate-600"></div>
@@ -86,7 +83,7 @@
 
       <section id="backImageTabContent" class="hidden">
         <div class="bg-blue-900/10 p-3 rounded-lg border border-blue-900/50">
-          <label class="block text-xs font-medium text-blue-400 mb-2"><i class="fa-regular fa-image"></i> Imagem do Verso (Opcional, Máx: 4MB)</label>
+          <label class="block text-xs font-medium text-blue-400 mb-2"><i class="fa-regular fa-image"></i> Imagem do Verso (Máx: 4MB)</label>
           <input type="file" id="backImageFile" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-900 file:text-blue-200 hover:file:bg-blue-800 cursor-pointer bg-slate-900 border border-blue-900/50 rounded">
           <input type="hidden" id="backImageBase64">
           <div id="backImagePreview" class="mt-2 hidden w-full h-36 rounded bg-contain bg-center bg-no-repeat border border-blue-500/50"></div>
@@ -95,16 +92,15 @@
       </section>
 
       <section id="SubjectTagsPanel" class="pt-3 border-t border-slate-700">
-        <div class="mb-2 flex items-center justify-between gap-2">
-          <label class="block text-sm font-medium text-emerald-300">Subjects deste card (Base form)</label>
-          <button type="button" onclick="app.openCreateTagModal()" class="h-7 w-7 rounded-md border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors" title="Criar nova tag">+</button>
-        </div>
         <div id="subjectTagSelector" class="flex flex-wrap gap-1.5 bg-slate-900/70 border border-slate-700 rounded-lg p-2 min-h-[44px]"></div>
-        <input id="subjectTagSearchInput" type="text" placeholder="Pesquisar tag de subject por nome..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
+        <input id="subjectTagSearchInput" type="text" placeholder="Buscar..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
       </section>
 
       <div class="flex items-center justify-between gap-3 pt-2 border-t border-slate-700">
-        <p id="statusMessage" class="text-sm text-slate-400">Preencha a frente com texto ou imagem.</p>
+        <button type="button" id="btnInfoType" class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm border border-purple-500/50 bg-purple-950/40 text-purple-200" title="Tipo da Informação" aria-label="Tipo da Informação">
+            <i class="fa-regular fa-circle-question" aria-hidden="true"></i>
+            Pergunta
+        </button>
         <button type="submit" id="btnSave" class="inline-flex items-center gap-2 bg-gluon-primary hover:bg-blue-600 px-4 py-2 rounded-lg font-medium">
           <i class="fa-solid fa-check"></i> Salvar
         </button>
