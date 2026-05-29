@@ -49,15 +49,25 @@
       <input type="hidden" id="editCardId" value="">
       <input type="hidden" id="selectedSubjectTagIds" value="[]">
 
-      <div class="flex items-center gap-2 border-b border-slate-700 pb-3">
+      <div class="grid grid-cols-2 gap-2 border-b border-slate-700 pb-3 sm:flex sm:items-center">
         <button type="button" id="tabFrontBtn" class="px-3 py-1.5 rounded-lg text-sm border border-blue-400 bg-blue-500/20 text-blue-200">Frente</button>
         <button type="button" id="tabBackBtn" class="px-3 py-1.5 rounded-lg text-sm border border-slate-600 bg-slate-800 text-slate-300">Verso</button>
+        <button type="button" id="tabFrontImageBtn" class="px-3 py-1.5 rounded-lg text-sm border border-slate-600 bg-slate-800 text-slate-300">Imagem Frente</button>
+        <button type="button" id="tabBackImageBtn" class="px-3 py-1.5 rounded-lg text-sm border border-slate-600 bg-slate-800 text-slate-300">Imagem Verso</button>
       </div>
 
       <section id="singleFrontTabContent">
         <label class="block text-sm font-medium text-slate-300 mb-2">Frente (Obrigatório texto ou imagem)</label>
-        <textarea id="singleFront" rows="7" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white resize-none"></textarea>
-        <div class="mt-3 bg-slate-800/50 p-3 rounded-lg border border-slate-700">
+        <textarea id="singleFront" rows="4" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white resize-none"></textarea>
+      </section>
+
+      <section id="singleBackTabContent" class="hidden">
+        <label class="block text-sm font-medium text-slate-300 mb-2">Verso (Opcional)</label>
+        <textarea id="singleBack" rows="4" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white resize-none" placeholder="Se não quiser texto no verso, deixe vazio."></textarea>
+      </section>
+
+      <section id="frontImageTabContent" class="hidden">
+        <div class="bg-slate-800/50 p-3 rounded-lg border border-slate-700">
           <label class="block text-xs font-medium text-slate-400 mb-2"><i class="fa-regular fa-image"></i> Imagem da Frente (Opcional, Máx: 4MB)</label>
           <input type="file" id="frontImageFile" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer bg-slate-900 border border-slate-600 rounded">
           <input type="hidden" id="frontImageBase64">
@@ -66,9 +76,14 @@
         </div>
       </section>
 
-      <section id="singleBackTabContent" class="hidden">
-        <label class="block text-sm font-medium text-slate-300 mb-2">Verso (Opcional)</label>
-        <textarea id="singleBack" rows="7" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white resize-none" placeholder="Se não quiser texto no verso, deixe vazio."></textarea>
+      <section id="backImageTabContent" class="hidden">
+        <div class="bg-blue-900/10 p-3 rounded-lg border border-blue-900/50">
+          <label class="block text-xs font-medium text-blue-400 mb-2"><i class="fa-regular fa-image"></i> Imagem do Verso (Opcional, Máx: 4MB)</label>
+          <input type="file" id="backImageFile" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-900 file:text-blue-200 hover:file:bg-blue-800 cursor-pointer bg-slate-900 border border-blue-900/50 rounded">
+          <input type="hidden" id="backImageBase64">
+          <div id="backImagePreview" class="mt-2 hidden w-full h-36 rounded bg-contain bg-center bg-no-repeat border border-blue-500/50"></div>
+          <button type="button" id="btnRemoveBackImage" class="hidden mt-2 text-xs text-red-400 hover:text-red-300 flex items-center gap-1"><i class="fa-solid fa-trash"></i> Remover Imagem</button>
+        </div>
       </section>
 
       <section id="SubjectTagsPanel" class="pt-3 border-t border-slate-700">
@@ -540,12 +555,17 @@ const app = {
   },
 
   setActiveTab(tab) {
-    this.activeTab = tab === 'back' ? 'back' : 'front';
-    const isFront = this.activeTab === 'front';
-    singleFrontTabContent.classList.toggle('hidden', !isFront);
-    singleBackTabContent.classList.toggle('hidden', isFront);
-    tabFrontBtn.className = `px-3 py-1.5 rounded-lg text-sm border ${isFront ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`;
-    tabBackBtn.className = `px-3 py-1.5 rounded-lg text-sm border ${!isFront ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`;
+    const tabs = ['front', 'back', 'frontImage', 'backImage'];
+    this.activeTab = tabs.includes(tab) ? tab : 'front';
+    const buttonClass = (isActive) => `px-3 py-1.5 rounded-lg text-sm border ${isActive ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`;
+    singleFrontTabContent.classList.toggle('hidden', this.activeTab !== 'front');
+    singleBackTabContent.classList.toggle('hidden', this.activeTab !== 'back');
+    frontImageTabContent.classList.toggle('hidden', this.activeTab !== 'frontImage');
+    backImageTabContent.classList.toggle('hidden', this.activeTab !== 'backImage');
+    tabFrontBtn.className = buttonClass(this.activeTab === 'front');
+    tabBackBtn.className = buttonClass(this.activeTab === 'back');
+    tabFrontImageBtn.className = buttonClass(this.activeTab === 'frontImage');
+    tabBackImageBtn.className = buttonClass(this.activeTab === 'backImage');
   },
   async setPageTitleWithDirectoryName() {
     if (!this.deckId) return;
@@ -567,6 +587,7 @@ const app = {
     singleFront.value = card.front || '';
     singleBack.value = String(card.back || '');
     if (card.image_front) this.setBase64ImagePreview('front', card.image_front);
+    if (card.image_back) this.setBase64ImagePreview('back', card.image_back);
     const subjectTags = Array.isArray(card.subject_tags) ? card.subject_tags.map(t => Number(t.id)).filter(Boolean) : [];
     this.setSelectedTagIds('subject', subjectTags);
     this.renderAllTagSelectors();
@@ -577,7 +598,7 @@ const app = {
     const front = singleFront.value.trim();
     const back = singleBack.value.trim();
     const image_front = frontImageBase64.value;
-    const image_back = null;
+    const image_back = backImageBase64.value;
     const subject_tag_ids = this.getSelectedTagIds('subject');
     if (!front && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
     if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag na categoria Subject para salvar o card.', 'error');
@@ -598,8 +619,12 @@ backLink.href = decodeURIComponent(app.from);
 if (!app.deckId) window.location.replace(backLink.href);
 tabFrontBtn.onclick = () => app.setActiveTab('front');
 tabBackBtn.onclick = () => app.setActiveTab('back');
+tabFrontImageBtn.onclick = () => app.setActiveTab('frontImage');
+tabBackImageBtn.onclick = () => app.setActiveTab('backImage');
 frontImageFile.onchange = (e) => app.handleCardImageUpload(e, 'front');
 btnRemoveFrontImage.onclick = () => app.removeCardImage('front');
+backImageFile.onchange = (e) => app.handleCardImageUpload(e, 'back');
+btnRemoveBackImage.onclick = () => app.removeCardImage('back');
 subjectTagSearchInput.oninput = (e) => app.handleTagSearch('subject', e.target.value);
 cardForm.onsubmit = (e) => app.save(e);
 tagForm.onsubmit = (e) => app.createTag(e);
