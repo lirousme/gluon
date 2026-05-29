@@ -2451,7 +2451,7 @@
 
 
             openCardSheetView(editCardId = null) {
-                const from = encodeURIComponent(window.location.pathname + window.location.search);
+                const from = window.location.pathname + window.location.search;
                 const params = new URLSearchParams({ id: this.deckId, from });
                 if (editCardId) params.set('edit_card_id', String(editCardId));
                 window.location.href = `/ficha_do_card?${params.toString()}`;
