@@ -3118,34 +3118,64 @@ elseif ($action === 'list_tags') {
 
 
 
-elseif ($action === 'list_orphan_user_tags') {
+elseif ($action === 'list_user_tags_by_subject_card_count' || $action === 'list_orphan_user_tags') {
+    $page = max(1, (int)($input['page'] ?? ($_GET['page'] ?? 1)));
+    $perPage = (int)($input['per_page'] ?? ($_GET['per_page'] ?? 10));
+    if ($perPage < 1) $perPage = 10;
+    if ($perPage > 50) $perPage = 50;
+    $offset = ($page - 1) * $perPage;
+
+    $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM flashcard_tags WHERE user_id = ?");
+    $stmtCount->execute([$user_id]);
+    $total = (int)$stmtCount->fetchColumn();
+    $totalPages = max(1, (int)ceil($total / $perPage));
+    if ($page > $totalPages) {
+        $page = $totalPages;
+        $offset = ($page - 1) * $perPage;
+    }
+
     $sql = "
-        SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color
+        SELECT
+            t.id,
+            t.user_id,
+            t.name_encrypted,
+            t.name_pt_br_encrypted,
+            t.numero,
+            t.color,
+            COALESCE(subject_counts.subjects_count, 0) AS subjects_count
         FROM flashcard_tags t
+        LEFT JOIN (
+            SELECT tag_id, COUNT(DISTINCT flashcard_id) AS subjects_count
+            FROM subjects_links
+            GROUP BY tag_id
+        ) subject_counts ON subject_counts.tag_id = t.id
         WHERE t.user_id = ?
-          AND NOT EXISTS (SELECT 1 FROM flashcard_tag_links l WHERE l.tag_id = t.id)
-          AND NOT EXISTS (SELECT 1 FROM subjects_links l WHERE l.tag_id = t.id)
-          AND NOT EXISTS (SELECT 1 FROM objects_links l WHERE l.tag_id = t.id)
-          AND NOT EXISTS (SELECT 1 FROM tipo_frasal_links l WHERE l.tag_id = t.id)
-          AND NOT EXISTS (SELECT 1 FROM tense_links l WHERE l.tag_id = t.id)
-          AND NOT EXISTS (SELECT 1 FROM lexical_chunks_links l WHERE l.tag_id = t.id)
-          AND NOT EXISTS (SELECT 1 FROM relation_links l WHERE l.tag_id = t.id)
-          AND NOT EXISTS (SELECT 1 FROM words_links l WHERE l.tag_id = t.id)
-          AND NOT EXISTS (SELECT 1 FROM idiomas_links l WHERE l.tag_id = t.id OR l.segundo_idioma_tag_id = t.id)
-          AND NOT EXISTS (SELECT 1 FROM tag_family tf WHERE tf.id_user = ? AND (tf.id_tag_child = t.id OR tf.id_tag_mother = t.id))
-        ORDER BY t.id ASC
+        ORDER BY subjects_count ASC, t.id ASC
+        LIMIT ? OFFSET ?
     ";
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$user_id, $user_id]);
+    $stmt->bindValue(1, $user_id, PDO::PARAM_INT);
+    $stmt->bindValue(2, $perPage, PDO::PARAM_INT);
+    $stmt->bindValue(3, $offset, PDO::PARAM_INT);
+    $stmt->execute();
     $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $parsed = [];
     foreach ($tags as $tag) {
         $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
         $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
+        $tag['subjects_count'] = (int)($tag['subjects_count'] ?? 0);
         unset($tag['name_encrypted'], $tag['name_pt_br_encrypted']);
         $parsed[] = $tag;
     }
-    echo json_encode(['status' => 'success', 'count' => count($parsed), 'data' => $parsed]);
+    echo json_encode([
+        'status' => 'success',
+        'count' => count($parsed),
+        'total' => $total,
+        'page' => $page,
+        'per_page' => $perPage,
+        'total_pages' => $totalPages,
+        'data' => $parsed
+    ]);
 }
 
 elseif ($action === 'list_tag_family_relations') {
