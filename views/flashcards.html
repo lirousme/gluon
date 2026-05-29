@@ -500,46 +500,7 @@
                 <input id="tagNameInput" type="text" required maxlength="80" placeholder="Ex.: Gramática, Verbos, Trabalho..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
                 <input id="tagNamePtBrInput" type="text" maxlength="80" placeholder="Nome em pt-BR (ex.: Cachorro)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
                 <input id="tagNumeroInput" type="number" placeholder="Número (ex.: 2026)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
-                <p class="text-xs text-slate-400">A cor da tag é definida automaticamente conforme a categoria selecionada.</p>
-                <p class="text-xs text-amber-300">Selecione no máximo 1 categoria para a nova tag.</p>
-                <div class="space-y-2 text-sm text-slate-200">
-                    <label class="flex items-center gap-2">
-                        <input id="tagIsBookInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
-                        <span>Esta tag representa um livro</span>
-                    </label>
-                    <label class="flex items-center gap-2">
-                        <input id="tagIsVerbTenseInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
-                        <span>Esta tag representa um Tempo Verbal</span>
-                    </label>
-                    <label class="flex items-center gap-2">
-                        <input id="tagIsSentenceTypeInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
-                        <span>Esta tag representa um Tipo Frasal</span>
-                    </label>
-                    <label class="flex items-center gap-2">
-                        <input id="tagIsLexicalChunkInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
-                        <span>Esta tag representa um Lexical Chunk</span>
-                    </label>
-                    <label class="flex items-center gap-2">
-                        <input id="tagIsRelationTypeInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
-                        <span>Esta tag representa um Tipo de Relação</span>
-                    </label>
-                    <label class="flex items-center gap-2">
-                        <input id="tagIsWordInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
-                        <span>Esta tag representa uma Palavra</span>
-                    </label>
-                    <label class="flex items-center gap-2">
-                        <input id="tagIsMonthInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
-                        <span>Esta tag representa um mês</span>
-                    </label>
-                    <label class="flex items-center gap-2">
-                        <input id="tagIsDayInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
-                        <span>Esta tag representa um dia</span>
-                    </label>
-                    <label class="flex items-center gap-2">
-                        <input id="tagIsYearInput" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500">
-                        <span>Esta tag representa um ano</span>
-                    </label>
-                </div>
+                <p class="text-xs text-slate-400">Novas tags serão criadas automaticamente na categoria Palavra.</p>
                 <div class="flex justify-end gap-3">
                     <button type="button" onclick="flashcardApp.closeModals()" class="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-800">Cancelar</button>
                     <button id="btnSaveTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white">Criar tag</button>
@@ -799,54 +760,10 @@
 
                 this.setupKeyboardListeners();
                 this.setupBulkListener();
-                this.setupTagCategorySingleSelect();
                 this.applyStudyScopeUI();
                 await this.loadTags();
                 await this.loadDeck();
             },
-
-            setupTagCategorySingleSelect() {
-                const categoryInputs = [
-                    'tagIsBookInput',
-                    'tagIsVerbTenseInput',
-                    'tagIsSentenceTypeInput',
-                    'tagIsLexicalChunkInput',
-                    'tagIsRelationTypeInput',
-                    'tagIsWordInput',
-                    'tagIsMonthInput',
-                    'tagIsDayInput',
-                    'tagIsYearInput'
-                ].map(id => document.getElementById(id)).filter(Boolean);
-
-                categoryInputs.forEach(input => {
-                    input.addEventListener('change', () => {
-                        if (!input.checked) return;
-                        categoryInputs.forEach(otherInput => {
-                            if (otherInput !== input) otherInput.checked = false;
-                        });
-                    });
-                });
-            },
-            resetCreateTagCategoryDefaults() {
-                const categoryInputIds = [
-                    'tagIsBookInput',
-                    'tagIsVerbTenseInput',
-                    'tagIsSentenceTypeInput',
-                    'tagIsLexicalChunkInput',
-                    'tagIsRelationTypeInput',
-                    'tagIsWordInput',
-                    'tagIsMonthInput',
-                    'tagIsDayInput',
-                    'tagIsYearInput'
-                ];
-                categoryInputIds.forEach((id) => {
-                    const input = document.getElementById(id);
-                    if (input) input.checked = false;
-                });
-                const defaultWordInput = document.getElementById('tagIsWordInput');
-                if (defaultWordInput) defaultWordInput.checked = true;
-            },
-
 
             applyCardSheetEmbedLayout() {
                 if (!this.cardSheetEmbed) return;
@@ -955,7 +872,6 @@
             },
             openCreateTagFromPanel() {
                 this.closeRightPanel();
-                this.resetCreateTagCategoryDefaults();
                 const modal = document.getElementById('tagModal');
                 const content = document.getElementById('tagModalContent');
                 modal.classList.remove('hidden');
@@ -2633,43 +2549,24 @@
                 e.preventDefault();
                 const btn = document.getElementById('btnSaveTag');
                 btn.disabled = true;
-                const selectedCategoryCount = [
-                    'tagIsBookInput',
-                    'tagIsVerbTenseInput',
-                    'tagIsSentenceTypeInput',
-                    'tagIsLexicalChunkInput',
-                    'tagIsRelationTypeInput',
-                    'tagIsWordInput',
-                    'tagIsMonthInput',
-                    'tagIsDayInput',
-                    'tagIsYearInput'
-                ].map(id => document.getElementById(id)).filter(input => input && input.checked).length;
-
-                if (selectedCategoryCount > 1) {
-                    this.showToast('Selecione apenas 1 categoria para criar a tag.', 'warning');
-                    btn.disabled = false;
-                    return;
-                }
-
                 const res = await this.api('create_tag', {
                     name: document.getElementById('tagNameInput').value.trim(),
                     name_pt_br: document.getElementById('tagNamePtBrInput').value.trim(),
                     numero: document.getElementById('tagNumeroInput').value.trim(),
-                    is_book: document.getElementById('tagIsBookInput').checked ? 1 : 0,
-                    is_verb_tense: document.getElementById('tagIsVerbTenseInput').checked ? 1 : 0,
-                    is_sentence_type: document.getElementById('tagIsSentenceTypeInput').checked ? 1 : 0,
-                    is_lexical_chunk: document.getElementById('tagIsLexicalChunkInput').checked ? 1 : 0,
-                    is_relation_type: document.getElementById('tagIsRelationTypeInput').checked ? 1 : 0,
-                    is_word: document.getElementById('tagIsWordInput').checked ? 1 : 0,
-                    is_month: document.getElementById('tagIsMonthInput').checked ? 1 : 0,
-                    is_day: document.getElementById('tagIsDayInput').checked ? 1 : 0,
-                    is_year: document.getElementById('tagIsYearInput').checked ? 1 : 0
+                    is_book: 0,
+                    is_verb_tense: 0,
+                    is_sentence_type: 0,
+                    is_lexical_chunk: 0,
+                    is_relation_type: 0,
+                    is_word: 1,
+                    is_month: 0,
+                    is_day: 0,
+                    is_year: 0
                 });
                 btn.disabled = false;
                 if (res) {
                     this.showToast(res.message || 'Tag criada com sucesso!');
                     await this.loadTags();
-                    this.resetCreateTagCategoryDefaults();
                     const namePtBrInput = document.getElementById('tagNamePtBrInput');
                     const numeroInput = document.getElementById('tagNumeroInput');
                     if (namePtBrInput) namePtBrInput.value = '';
