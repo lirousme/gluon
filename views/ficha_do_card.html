@@ -109,6 +109,7 @@
           <i class="fa-solid fa-check"></i> Salvar
         </button>
       </div>
+      <p id="statusMessage" class="text-sm text-slate-400" role="status" aria-live="polite"></p>
     </form>
   </main>
   <div id="tagModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-[70] opacity-0 transition-opacity duration-300 p-4">
@@ -629,8 +630,10 @@ const app = {
   },
   escapeHTML(str='') { return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[s])); },
   setStatus(text, tone='neutral') {
-    statusMessage.textContent = text;
-    statusMessage.className = 'text-sm ' + (tone==='error'?'text-red-400':tone==='success'?'text-emerald-300':'text-slate-400');
+    const messageEl = document.getElementById('statusMessage');
+    if (!messageEl) return;
+    messageEl.textContent = text;
+    messageEl.className = 'text-sm ' + (tone==='error'?'text-red-400':tone==='success'?'text-emerald-300':'text-slate-400');
   },
 
   setActiveTab(tab) {
