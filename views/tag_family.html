@@ -35,6 +35,7 @@
       <h1 class="text-2xl font-semibold text-center"></h1>
       <div class="absolute right-4 flex items-center gap-2">
         <button id="btnOpenTagFiltering" type="button" class="h-9 px-3 rounded-lg border border-sky-500/50 text-sky-300 hover:text-sky-200 hover:bg-sky-500/20 transition-colors text-sm font-medium" title="Abrir filtro de tags">Filtro</button>
+        <button id="btnOpenCurrentTagActions" type="button" class="h-9 w-9 rounded-lg border border-amber-500/50 text-amber-300 hover:text-amber-200 hover:bg-amber-500/20 transition-colors text-sm font-medium" title="Editar ou excluir a tag atual" aria-label="Editar ou excluir a tag atual"><i class="fa-solid fa-pen-to-square"></i></button>
         <button id="btnOpenCreateTagModal" type="button" class="h-9 w-9 rounded-lg border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors text-lg font-semibold" title="Criar nova tag"><i class="fa-solid fa-plus"></i></button>
         <button id="btnOpenCreateRelationTypeModal" type="button" class="h-9 w-9 rounded-lg border border-emerald-500/50 text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/20 transition-colors text-lg font-semibold" title="Criar novo tipo de relação"><i class="fa-solid fa-folder-plus"></i></button>
       </div>
@@ -351,8 +352,11 @@ async function addRelation(otherTagId){
 document.getElementById('footerTagSearch').addEventListener('input',renderFooterTags);
 
 document.getElementById('relationModeSwitch').addEventListener('click',()=>{state.mode=state.mode==='child'?'mother':'child';document.getElementById('relationModeSwitch').textContent=state.mode==='child'?'Adicionando filhas':'Adicionando mães';});
-const actionState={tag:null,relationType:null};
-function openActionModal(tag, relationType){actionState.tag=tag;actionState.relationType=relationType;document.getElementById('tagActionTitle').textContent=`Ações: ${getTagLabel(tag) || 'Tag'}`;const m=document.getElementById('tagActionModal');const c=document.getElementById('tagActionModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');},20);} 
+const actionState={tag:null,relationType:null,isCurrent:false};
+function getCurrentTag(){return state.tags.find((item)=>Number(item.id)===state.tagId)||{id:state.tagId,name:state.tagName};}
+function updateActionModalButtons(){const isCurrent=!!actionState.isCurrent;document.getElementById('btnRemoveRelation').classList.toggle('hidden',isCurrent);document.getElementById('btnViewFamily').classList.toggle('hidden',isCurrent);}
+function openActionModal(tag, relationType, isCurrent=false){actionState.tag=tag;actionState.relationType=relationType;actionState.isCurrent=!!isCurrent;document.getElementById('tagActionTitle').textContent=`${actionState.isCurrent?'Tag atual':'Ações'}: ${getTagLabel(tag) || 'Tag'}`;updateActionModalButtons();const m=document.getElementById('tagActionModal');const c=document.getElementById('tagActionModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');},20);}
+function openCurrentTagActionModal(){if(!state.tagId) return;openActionModal(getCurrentTag(), null, true);}
 function closeActionModal(){const m=document.getElementById('tagActionModal');const c=document.getElementById('tagActionModalContent');m.classList.add('opacity-0');c.classList.add('scale-95');setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);} 
 async function removeRelation(){
   if(!actionState.tag) return;
@@ -373,12 +377,13 @@ async function removeRelation(){
 }
 function openEditTagModal(tag){if(!tag) return;document.getElementById('editTagIdInput').value=String(tag.id);document.getElementById('editTagNameInput').value=String(tag.name||'');document.getElementById('editTagNamePtBrInput').value=String(tag.name_pt_br||'');document.getElementById('editTagNumeroInput').value=(tag.numero??'');const m=document.getElementById('editTagModal');const c=document.getElementById('editTagModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');},20);} 
 function closeEditTagModal(){const m=document.getElementById('editTagModal');const c=document.getElementById('editTagModalContent');m.classList.add('opacity-0');c.classList.add('scale-95');setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);} 
-async function submitEditTag(e){e.preventDefault();const id=Number(document.getElementById('editTagIdInput').value||0);const original=state.tags.find(t=>Number(t.id)===id)||{};await api('update_tag',{id,name:document.getElementById('editTagNameInput').value.trim(),name_pt_br:document.getElementById('editTagNamePtBrInput').value.trim(),numero:document.getElementById('editTagNumeroInput').value.trim(),is_book:Number(original.is_book||0),is_verb_tense:Number(original.is_verb_tense||0),is_sentence_type:Number(original.is_sentence_type||0),is_lexical_chunk:Number(original.is_lexical_chunk||0),is_relation_type:Number(original.is_relation_type||0),is_word:Number(original.is_word||0),is_month:Number(original.is_month||0),is_day:Number(original.is_day||0),is_year:Number(original.is_year||0)});closeEditTagModal();closeActionModal();await load();}
-async function deleteTag(){if(!actionState.tag) return;await api('delete_tag',{id:Number(actionState.tag.id)});closeActionModal();await load();}
+async function submitEditTag(e){e.preventDefault();const id=Number(document.getElementById('editTagIdInput').value||0);const original=state.tags.find(t=>Number(t.id)===id)||{};const name=document.getElementById('editTagNameInput').value.trim();await api('update_tag',{id,name,name_pt_br:document.getElementById('editTagNamePtBrInput').value.trim(),numero:document.getElementById('editTagNumeroInput').value.trim(),is_book:Number(original.is_book||0),is_verb_tense:Number(original.is_verb_tense||0),is_sentence_type:Number(original.is_sentence_type||0),is_lexical_chunk:Number(original.is_lexical_chunk||0),is_relation_type:Number(original.is_relation_type||0),is_word:Number(original.is_word||0),is_month:Number(original.is_month||0),is_day:Number(original.is_day||0),is_year:Number(original.is_year||0)});if(id===state.tagId){state.tagName=name;title.textContent=state.tagName||'Tag';const url=new URL(window.location.href);url.searchParams.set('tag_name',state.tagName);window.history.replaceState({},'',url);}closeEditTagModal();closeActionModal();await load();}
+async function deleteTag(){if(!actionState.tag) return;const isCurrent=!!actionState.isCurrent;await api('delete_tag',{id:Number(actionState.tag.id)});closeActionModal();if(isCurrent){window.location.href=getMarkedBackRoute();return;}await load();}
 window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('btnOpenCreateTagModal').onclick=openCreateTagModal;
   document.getElementById('btnOpenCreateRelationTypeModal').onclick=openCreateRelationTypeModal;
   document.getElementById('btnOpenTagFiltering').onclick=openTagFiltering;
+  document.getElementById('btnOpenCurrentTagActions').onclick=openCurrentTagActionModal;
   document.getElementById('btnShowLayerGroupMessage').onclick=showLayerGroupMessage;
   document.getElementById('btnCancelCreateTag').onclick=closeCreateTagModal;
   document.getElementById('btnCloseCreateTagModal').onclick=closeCreateTagModal;
