@@ -29,12 +29,10 @@
         <button type="button" onclick="goBackToMarkedRoute()" class="h-9 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"><i class="fa-solid fa-left-long"></i></button>
         <button id="orphanTagsBtn" type="button" onclick="goToOrphanTags()" class="h-9 px-3 rounded-lg border border-red-500 bg-red-600/80 text-sm text-white hover:bg-red-500 transition-colors" title="Tags sem vínculos">0</button>
         <button id="btnShowLayerGroupMessage" type="button" class="h-9 w-9 rounded-lg border border-sky-500/50 text-sky-300 hover:text-sky-200 hover:bg-sky-500/20 transition-colors text-sm font-medium" title="Mostrar mensagem no console" aria-label="Mostrar mensagem no console"><i class="fa-solid fa-book"></i></button>
-        <button id="btnShowFavoritos" type="button" class="h-9 w-9 rounded-lg border border-sky-500/50 text-sky-300 hover:text-sky-200 hover:bg-sky-500/20 transition-colors text-sm font-medium" title="Mostrar favoritos" aria-label="Mostrar mensagem no console"><i class="fa-regular fa-circle-check"></i></button>
       </div>
       
       <h1 class="text-2xl font-semibold text-center"></h1>
       <div class="absolute right-4 flex items-center gap-2">
-        <button id="btnOpenTagFiltering" type="button" class="h-9 px-3 rounded-lg border border-sky-500/50 text-sky-300 hover:text-sky-200 hover:bg-sky-500/20 transition-colors text-sm font-medium" title="Abrir filtro de tags">Filtro</button>
         <button id="btnOpenCurrentTagActions" type="button" class="h-9 w-9 rounded-lg border border-amber-500/50 text-amber-300 hover:text-amber-200 hover:bg-amber-500/20 transition-colors text-sm font-medium" title="Editar a tag atual" aria-label="Editar a tag atual"><i class="fa-solid fa-pen-to-square"></i></button>
         <button id="btnOpenCreateTagModal" type="button" class="h-9 w-9 rounded-lg border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors text-lg font-semibold" title="Criar nova tag"><i class="fa-solid fa-plus"></i></button>
         <button id="btnOpenCreateRelationTypeModal" type="button" class="h-9 w-9 rounded-lg border border-emerald-500/50 text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/20 transition-colors text-lg font-semibold" title="Criar novo tipo de relação"><i class="fa-solid fa-folder-plus"></i></button>
@@ -388,7 +386,6 @@ function deleteEditedTag(){deleteTag(Number(document.getElementById('editTagIdIn
 window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('btnOpenCreateTagModal').onclick=openCreateTagModal;
   document.getElementById('btnOpenCreateRelationTypeModal').onclick=openCreateRelationTypeModal;
-  document.getElementById('btnOpenTagFiltering').onclick=openTagFiltering;
   document.getElementById('btnOpenCurrentTagActions').onclick=openCurrentTagEditModal;
   document.getElementById('btnShowLayerGroupMessage').onclick=showLayerGroupMessage;
   document.getElementById('btnCancelCreateTag').onclick=closeCreateTagModal;
