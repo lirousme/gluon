@@ -472,8 +472,18 @@ const app = {
     window.location.href = '/dashboard';
   },
   redirectAfterSave() {
-    const target = this.getReturnTarget() || '/dashboard';
-    window.location.replace(target);
+    const target = this.getReturnTarget();
+    if (target) {
+      window.location.replace(target);
+      return;
+    }
+
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    window.location.replace('/dashboard');
   },
   async goToSourceDirectory() {
     try {
