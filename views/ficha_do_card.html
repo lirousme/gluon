@@ -35,11 +35,15 @@
   <main class="max-w-3xl mx-auto px-3 py-4 sm:px-4 sm:py-6">
     <div class="mb-4 flex items-center justify-between gap-3">
       <div class="flex items-center gap-2">
-        <button type="button" id="backLink" href="/dashboard" class="h-9 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"><i class="fa-solid fa-left-long"></i></button>
-        <button type="button" onclick="app.goToSourceDirectory()" class="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200" title="Abrir minhas Anotações">
-          <i class="fa-solid fa-thumbtack text-gluon-primary"></i>
+        <button type="button" id="backLink" class="inline-flex h-9 items-center justify-center rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800" title="Voltar" aria-label="Voltar">
+          <i class="fa-solid fa-left-long" aria-hidden="true"></i>
         </button>
-        <button type="button" onclick="app.openCreateTagModal()" class="h-7 w-7 rounded-md border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors" title="Criar nova tag">+</button>
+        <button type="button" onclick="app.goToSourceDirectory()" class="inline-flex h-9 items-center justify-center rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800" title="Abrir minhas Anotações" aria-label="Abrir minhas Anotações">
+          <i class="fa-solid fa-thumbtack" aria-hidden="true"></i>
+        </button>
+        <button type="button" onclick="app.openCreateTagModal()" class="inline-flex h-9 items-center justify-center rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800" title="Criar nova tag" aria-label="Criar nova tag">
+          <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        </button>
       </div>
       <h1 id="pageTitle" class="text-base sm:text-lg font-semibold">Criar ficha de card</h1>
     </div>
@@ -412,6 +416,24 @@ const app = {
       if (Number.isInteger(parsedId) && parsedId > 0) this.sessionUserId = parsedId;
     } catch (_) {}
   },
+  getBackTarget() {
+    const fallback = '/dashboard';
+    const target = String(this.from || fallback).trim();
+    return target || fallback;
+  },
+  goBack() {
+    const target = this.getBackTarget();
+    const current = window.location.pathname + window.location.search;
+    if (target && target !== current) {
+      window.location.href = target;
+      return;
+    }
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    window.location.href = '/dashboard';
+  },
   async goToSourceDirectory() {
     try {
       const res = await fetch('/api/user', {
@@ -621,14 +643,14 @@ const app = {
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
-      setTimeout(() => window.location.href = backLink.href, 260);
+      setTimeout(() => this.goBack(), 260);
     } catch (err) { this.setStatus(err.message || 'Erro ao salvar card.', 'error'); }
     finally { btnSave.disabled = false; btnSave.innerHTML = original; }
   }
 };
 
-backLink.href = decodeURIComponent(app.from);
-if (!app.deckId) window.location.replace(backLink.href);
+backLink.onclick = () => app.goBack();
+if (!app.deckId) window.location.replace(app.getBackTarget());
 tabFrontBtn.onclick = () => app.setActiveTab('front');
 tabBackBtn.onclick = () => app.setActiveTab('back');
 tabFrontImageBtn.onclick = () => app.setActiveTab('frontImage');
