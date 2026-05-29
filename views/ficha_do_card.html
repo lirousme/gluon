@@ -49,11 +49,19 @@
       <input type="hidden" id="editCardId" value="">
       <input type="hidden" id="selectedSubjectTagIds" value="[]">
 
-      <div class="grid grid-cols-2 gap-2 border-b border-slate-700 pb-3 sm:flex sm:items-center">
-        <button type="button" id="tabFrontBtn" class="px-3 py-1.5 rounded-lg text-sm border border-blue-400 bg-blue-500/20 text-blue-200">Frente</button>
-        <button type="button" id="tabBackBtn" class="px-3 py-1.5 rounded-lg text-sm border border-slate-600 bg-slate-800 text-slate-300">Verso</button>
-        <button type="button" id="tabFrontImageBtn" class="px-3 py-1.5 rounded-lg text-sm border border-slate-600 bg-slate-800 text-slate-300">Imagem Frente</button>
-        <button type="button" id="tabBackImageBtn" class="px-3 py-1.5 rounded-lg text-sm border border-slate-600 bg-slate-800 text-slate-300">Imagem Verso</button>
+      <div class="grid grid-cols-4 gap-2 border-b border-slate-700 pb-3 sm:flex sm:items-center" aria-label="Abas da ficha do card">
+        <button type="button" id="tabFrontBtn" class="inline-flex items-center justify-center px-3 py-2 rounded-lg text-sm border border-blue-400 bg-blue-500/20 text-blue-200" title="Texto da frente" aria-label="Texto da frente">
+          <i class="fa-solid fa-align-left" aria-hidden="true"></i>
+        </button>
+        <button type="button" id="tabFrontImageBtn" class="inline-flex items-center justify-center px-3 py-2 rounded-lg text-sm border border-blue-500/50 bg-blue-950/40 text-blue-200" title="Imagem da frente" aria-label="Imagem da frente">
+          <i class="fa-regular fa-image" aria-hidden="true"></i>
+        </button>
+        <button type="button" id="tabBackBtn" class="inline-flex items-center justify-center px-3 py-2 rounded-lg text-sm border border-purple-500/50 bg-purple-950/40 text-purple-200" title="Texto do verso" aria-label="Texto do verso">
+          <i class="fa-solid fa-align-right" aria-hidden="true"></i>
+        </button>
+        <button type="button" id="tabBackImageBtn" class="inline-flex items-center justify-center px-3 py-2 rounded-lg text-sm border border-purple-500/50 bg-purple-950/40 text-purple-200" title="Imagem do verso" aria-label="Imagem do verso">
+          <i class="fa-solid fa-images" aria-hidden="true"></i>
+        </button>
       </div>
 
       <section id="singleFrontTabContent">
@@ -557,15 +565,23 @@ const app = {
   setActiveTab(tab) {
     const tabs = ['front', 'back', 'frontImage', 'backImage'];
     this.activeTab = tabs.includes(tab) ? tab : 'front';
-    const buttonClass = (isActive) => `px-3 py-1.5 rounded-lg text-sm border ${isActive ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`;
+    const getTabButtonClass = (tabKey) => {
+      const isFrontTab = ['front', 'frontImage'].includes(tabKey);
+      const isActive = this.activeTab === tabKey;
+      const baseClass = 'inline-flex items-center justify-center px-3 py-2 rounded-lg text-sm border transition-colors';
+      if (isFrontTab) {
+        return `${baseClass} ${isActive ? 'border-blue-300 bg-blue-500/30 text-blue-100 shadow-sm shadow-blue-500/20' : 'border-blue-500/50 bg-blue-950/40 text-blue-200 hover:bg-blue-900/50'}`;
+      }
+      return `${baseClass} ${isActive ? 'border-purple-300 bg-purple-500/30 text-purple-100 shadow-sm shadow-purple-500/20' : 'border-purple-500/50 bg-purple-950/40 text-purple-200 hover:bg-purple-900/50'}`;
+    };
     singleFrontTabContent.classList.toggle('hidden', this.activeTab !== 'front');
     singleBackTabContent.classList.toggle('hidden', this.activeTab !== 'back');
     frontImageTabContent.classList.toggle('hidden', this.activeTab !== 'frontImage');
     backImageTabContent.classList.toggle('hidden', this.activeTab !== 'backImage');
-    tabFrontBtn.className = buttonClass(this.activeTab === 'front');
-    tabBackBtn.className = buttonClass(this.activeTab === 'back');
-    tabFrontImageBtn.className = buttonClass(this.activeTab === 'frontImage');
-    tabBackImageBtn.className = buttonClass(this.activeTab === 'backImage');
+    tabFrontBtn.className = getTabButtonClass('front');
+    tabBackBtn.className = getTabButtonClass('back');
+    tabFrontImageBtn.className = getTabButtonClass('frontImage');
+    tabBackImageBtn.className = getTabButtonClass('backImage');
   },
   async setPageTitleWithDirectoryName() {
     if (!this.deckId) return;
