@@ -211,7 +211,7 @@
 const params = new URLSearchParams(window.location.search);
 const app = {
   deckId: params.get('id'),
-  from: params.get('from') || '/dashboard',
+  from: params.get('from') || '',
   editCardId: params.get('edit_card_id'),
   initialSubjectTagId: Number(params.get('tag_id') || 0),
   activeTab: 'front',
@@ -416,23 +416,58 @@ const app = {
       if (Number.isInteger(parsedId) && parsedId > 0) this.sessionUserId = parsedId;
     } catch (_) {}
   },
+  getCurrentRoute() {
+    return window.location.pathname + window.location.search + window.location.hash;
+  },
+  normalizeBackTarget(rawTarget = '') {
+    let target = String(rawTarget || '').trim();
+    if (!target) return '';
+
+    for (let i = 0; i < 2; i += 1) {
+      try {
+        const decoded = decodeURIComponent(target);
+        if (decoded === target) break;
+        target = decoded;
+      } catch (_) {
+        break;
+      }
+    }
+
+    try {
+      const url = new URL(target, window.location.origin);
+      if (url.origin !== window.location.origin) return '';
+      return url.pathname + url.search + url.hash;
+    } catch (_) {
+      return '';
+    }
+  },
   getBackTarget() {
-    const fallback = '/dashboard';
-    const target = String(this.from || fallback).trim();
-    return target || fallback;
+    return this.normalizeBackTarget(this.from);
+  },
+  getReferrerBackTarget() {
+    if (!document.referrer) return '';
+    return this.normalizeBackTarget(document.referrer);
   },
   goBack() {
+    const fallback = '/dashboard';
+    const current = this.getCurrentRoute();
     const target = this.getBackTarget();
-    const current = window.location.pathname + window.location.search;
     if (target && target !== current) {
       window.location.href = target;
       return;
     }
+
+    const referrerTarget = this.getReferrerBackTarget();
+    if (referrerTarget && referrerTarget !== current) {
+      window.location.href = referrerTarget;
+      return;
+    }
+
     if (window.history.length > 1) {
       window.history.back();
       return;
     }
-    window.location.href = '/dashboard';
+    window.location.href = fallback;
   },
   async goToSourceDirectory() {
     try {
@@ -650,7 +685,7 @@ const app = {
 };
 
 backLink.onclick = () => app.goBack();
-if (!app.deckId) window.location.replace(app.getBackTarget());
+if (!app.deckId) window.location.replace(app.getBackTarget() || '/dashboard');
 tabFrontBtn.onclick = () => app.setActiveTab('front');
 tabBackBtn.onclick = () => app.setActiveTab('back');
 tabFrontImageBtn.onclick = () => app.setActiveTab('frontImage');
