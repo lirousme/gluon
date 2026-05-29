@@ -471,10 +471,12 @@ const app = {
     }
     window.location.href = '/dashboard';
   },
-  redirectAfterSave() {
-    const target = this.getReturnTarget();
+  redirectAfterSave(preferredTarget = '') {
+    const apiTarget = this.normalizeBackTarget(preferredTarget);
+    const current = this.getCurrentRoute();
+    const target = apiTarget && apiTarget !== current ? apiTarget : this.getReturnTarget();
     if (target) {
-      window.location.replace(target);
+      window.location.href = target;
       return;
     }
 
@@ -690,11 +692,12 @@ const app = {
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
-      const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids };
+      const return_to = this.getReturnTarget();
+      const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids, return_to };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
-      setTimeout(() => this.redirectAfterSave(), 260);
+      setTimeout(() => this.redirectAfterSave(response?.redirect_url), 260);
     } catch (err) { this.setStatus(err.message || 'Erro ao salvar card.', 'error'); }
     finally { btnSave.disabled = false; btnSave.innerHTML = original; }
   }
