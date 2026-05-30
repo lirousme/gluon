@@ -156,6 +156,7 @@ function goToOrphanTags(){
   window.location.href='/views/tags_sem_vinculos.html';
 }
 async function api(action,payload={}){payload.action=action;const r=await fetch('/api/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();if(!r.ok||j.status!=='success')throw new Error(j.message||'Erro');return j;}
+async function translateTagFieldsWithGemini(nameInputId,namePtBrInputId,buttonId){const nameInput=document.getElementById(nameInputId);const namePtBrInput=document.getElementById(namePtBrInputId);const btn=document.getElementById(buttonId);const englishText=nameInput.value.trim();const ptBrText=namePtBrInput.value.trim();if(englishText&&ptBrText){alert('Deixe apenas um dos campos de texto da tag preenchido para traduzir para o outro.');return;}if(!englishText&&!ptBrText){alert('Preencha o nome em inglês ou em pt-BR para traduzir a tag.');return;}const originalHtml=btn.innerHTML;const translatingFromEnglish=Boolean(englishText);btn.innerHTML='<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> Traduzindo...';btn.disabled=true;try{const res=await api('translate_text_gemini',{text:translatingFromEnglish?englishText:ptBrText,source_language:translatingFromEnglish?'en-US':'pt-BR',target_language:translatingFromEnglish?'pt-BR':'en-US'});if(!res||!res.translation) throw new Error('A API não retornou uma tradução válida.');if(translatingFromEnglish) namePtBrInput.value=res.translation;else nameInput.value=res.translation;}catch(err){alert('Falha ao traduzir tag com Gemini: '+(err.message||'erro desconhecido'));}finally{btn.innerHTML=originalHtml;btn.disabled=false;}}
 function renderFooterTags(){
   document.getElementById('selectedRelationTypeLabel').textContent=`(${getRelationTypeLabel(state.selectedRelationType)})`;
 
@@ -390,12 +391,14 @@ window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('btnShowLayerGroupMessage').onclick=showLayerGroupMessage;
   document.getElementById('btnCancelCreateTag').onclick=closeCreateTagModal;
   document.getElementById('btnCloseCreateTagModal').onclick=closeCreateTagModal;
+  document.getElementById('btnTranslateCreateTagGemini').onclick=()=>translateTagFieldsWithGemini('createTagNameInput','createTagNamePtBrInput','btnTranslateCreateTagGemini');
   document.getElementById('createTagForm').addEventListener('submit',submitCreateTag);
   document.getElementById('btnCancelCreateRelationType').onclick=closeCreateRelationTypeModal;
   document.getElementById('btnCloseCreateRelationTypeModal').onclick=closeCreateRelationTypeModal;
   document.getElementById('createRelationTypeForm').addEventListener('submit',submitCreateRelationType);
   document.getElementById('btnCancelEditTag').onclick=closeEditTagModal;
   document.getElementById('btnDeleteEditingTag').onclick=deleteEditedTag;
+  document.getElementById('btnTranslateEditTagGemini').onclick=()=>translateTagFieldsWithGemini('editTagNameInput','editTagNamePtBrInput','btnTranslateEditTagGemini');
   document.getElementById('btnTogglePinnedTag').onclick=togglePinnedTag;
   document.getElementById('editTagForm').addEventListener('submit',submitEditTag);
   load();
@@ -404,7 +407,10 @@ window.addEventListener('DOMContentLoaded',()=>{
   <div id="editTagModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 opacity-0 transition-opacity duration-200">
     <div id="editTagModalContent" class="w-[92%] max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-4 scale-95 transition-transform duration-200">
       <div class="mb-3 flex items-center justify-between gap-3">
-        <button type="button" id="btnDeleteEditingTag" class="rounded-lg border border-red-500/60 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10">Excluir</button>
+        <div class="flex items-center gap-2">
+          <button type="button" id="btnDeleteEditingTag" class="rounded-lg border border-red-500/60 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10">Excluir</button>
+          <button type="button" id="btnTranslateEditTagGemini" class="rounded-lg border border-amber-300/40 px-3 py-2 text-sm text-amber-300 hover:bg-amber-300/10" title="Traduzir tag com Gemini"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Gemini</button>
+        </div>
         <button type="button" id="btnTogglePinnedTag" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-600 bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors" title="Fixar tag" aria-label="Fixar tag"><i class="fa-solid fa-thumbtack"></i></button>
       </div>
       <form id="editTagForm" class="space-y-3">
@@ -432,6 +438,7 @@ window.addEventListener('DOMContentLoaded',()=>{
         <p class="text-xs text-slate-400">Novas tags serão criadas automaticamente na categoria Palavra.</p>
         <div class="flex justify-end gap-2 pt-2">
           <button id="btnCancelCreateTag" type="button" class="px-4 py-2 rounded-lg border border-slate-600">Cancelar</button>
+          <button id="btnTranslateCreateTagGemini" type="button" class="px-4 py-2 rounded-lg border border-amber-300/40 text-amber-300 hover:bg-amber-300/10"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Gemini</button>
           <button id="btnSubmitCreateTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500">Criar tag</button>
         </div>
       </form>

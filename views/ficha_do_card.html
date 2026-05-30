@@ -140,6 +140,9 @@
         </div>
         <div class="flex justify-end gap-2">
           <button type="button" onclick="app.closeCreateTagModal()" class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white">Cancelar</button>
+          <button type="button" id="btnTranslateCreateTagGemini" onclick="app.translateCreateTagWithGemini()" class="px-4 py-2 rounded-lg border border-amber-300/30 text-amber-300 hover:bg-amber-300/10 hover:text-amber-200">
+            <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Gemini
+          </button>
           <button id="btnSaveTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white">Criar tag</button>
         </div>
       </form>
@@ -159,6 +162,9 @@
         <div class="flex flex-wrap justify-between gap-2">
           <button type="button" onclick="app.viewTagFamily()" class="px-4 py-2 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-800">Ver família</button>
           <div class="flex gap-2">
+            <button type="button" id="btnTranslateEditTagGemini" onclick="app.translateEditTagWithGemini()" class="px-4 py-2 rounded-lg border border-amber-300/30 text-amber-300 hover:bg-amber-300/10 hover:text-amber-200" title="Traduzir tag com Gemini">
+              <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Gemini
+            </button>
             <button type="button" id="btnDeleteTag" onclick="app.deleteTag()" class="px-4 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white">Excluir tag</button>
             <button type="button" onclick="app.closeEditTagModal()" class="px-4 py-2 rounded-lg bg-slate-700">Cancelar</button>
             <button id="btnUpdateTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600">Salvar</button>
@@ -303,6 +309,42 @@ const app = {
       await this.loadTags(); this.closeEditTagModal(); this.setStatus(res?.message || 'Tag atualizada com sucesso.', 'success');
     } catch (err) { this.setStatus(err.message || 'Erro ao atualizar tag.', 'error'); }
     finally { btnUpdateTag.disabled = false; }
+  },
+
+  async translateTagFieldsWithGemini(nameInput, namePtBrInput, button) {
+    const englishText = nameInput.value.trim();
+    const ptBrText = namePtBrInput.value.trim();
+    if (englishText && ptBrText) return this.setStatus('Deixe apenas um dos campos de texto da tag preenchido para traduzir para o outro.', 'error');
+    if (!englishText && !ptBrText) return this.setStatus('Preencha o nome em inglês ou em pt-BR para traduzir a tag.', 'error');
+
+    const originalHtml = button.innerHTML;
+    const translatingFromEnglish = Boolean(englishText);
+    button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> Traduzindo...';
+    button.disabled = true;
+    try {
+      const res = await this.api('translate_text_gemini', {
+        text: translatingFromEnglish ? englishText : ptBrText,
+        source_language: translatingFromEnglish ? 'en-US' : 'pt-BR',
+        target_language: translatingFromEnglish ? 'pt-BR' : 'en-US'
+      });
+      if (!res || !res.translation) throw new Error('A API não retornou uma tradução válida.');
+      if (translatingFromEnglish) namePtBrInput.value = res.translation;
+      else nameInput.value = res.translation;
+      this.setStatus('Tag traduzida com Gemini!', 'success');
+    } catch (err) {
+      this.setStatus('Falha ao traduzir tag com Gemini: ' + (err.message || 'erro desconhecido'), 'error');
+    } finally {
+      button.innerHTML = originalHtml;
+      button.disabled = false;
+    }
+  },
+
+  async translateCreateTagWithGemini() {
+    return this.translateTagFieldsWithGemini(tagNameInput, tagNamePtBrInput, btnTranslateCreateTagGemini);
+  },
+
+  async translateEditTagWithGemini() {
+    return this.translateTagFieldsWithGemini(editTagNameInput, editTagNamePtBrInput, btnTranslateEditTagGemini);
   },
 
   async deleteTag() {
