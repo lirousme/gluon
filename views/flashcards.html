@@ -497,7 +497,7 @@
                 <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <form onsubmit="flashcardApp.createTag(event)" class="p-5 space-y-4">
-                <input id="tagNameInput" type="text" required maxlength="80" placeholder="Ex.: Gramática, Verbos, Trabalho..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+                <input id="tagNameInput" type="text" maxlength="80" placeholder="Ex.: Gramática, Verbos, Trabalho..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
                 <input id="tagNamePtBrInput" type="text" maxlength="80" placeholder="Nome em pt-BR (ex.: Cachorro)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
                 <input id="tagNumeroInput" type="number" placeholder="Número (ex.: 2026)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
                 <p class="text-xs text-slate-400">Novas tags serão criadas automaticamente na categoria Palavra.</p>
@@ -2584,10 +2584,15 @@
             async createTag(e) {
                 e.preventDefault();
                 const btn = document.getElementById('btnSaveTag');
+                const nameInput = document.getElementById('tagNameInput');
+                const namePtBrInput = document.getElementById('tagNamePtBrInput');
+                const namePtBr = namePtBrInput.value.trim();
+                const name = nameInput.value.trim() || namePtBr;
+                if (!name) return this.showToast('Preencha o nome em inglês ou em pt-BR para criar a tag.', 'error');
                 btn.disabled = true;
                 const res = await this.api('create_tag', {
-                    name: document.getElementById('tagNameInput').value.trim(),
-                    name_pt_br: document.getElementById('tagNamePtBrInput').value.trim(),
+                    name,
+                    name_pt_br: namePtBr,
                     numero: document.getElementById('tagNumeroInput').value.trim(),
                     is_book: 0,
                     is_verb_tense: 0,
