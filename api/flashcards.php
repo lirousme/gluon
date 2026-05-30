@@ -1761,6 +1761,52 @@ function openaiJsonRequest($url, $payload) {
     return [$httpcode, $response, $curlError];
 }
 
+
+/**
+ * Função geminiJsonRequest: Executa requisição POST JSON para a API do Gemini e retorna HTTP code, resposta e erro cURL.
+ */
+function geminiJsonRequest($model, $payload) {
+    $safe_model = preg_replace('/[^a-zA-Z0-9._-]/', '', (string)$model);
+    if ($safe_model === '') {
+        return [0, '', 'Modelo Gemini inválido.'];
+    }
+
+    $base_url = rtrim(GEMINI_API_URL, '/');
+    $url = $base_url . '/' . rawurlencode($safe_model) . ':generateContent';
+
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'x-goog-api-key: ' . GEMINI_API_KEY
+    ]);
+    $response = curl_exec($ch);
+    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+    return [$httpcode, $response, $curlError];
+}
+
+/**
+ * Função extractGeminiText: Extrai o texto concatenado das partes retornadas pelo Gemini.
+ */
+function extractGeminiText($decoded) {
+    if (!is_array($decoded)) return '';
+
+    $parts = $decoded['candidates'][0]['content']['parts'] ?? [];
+    if (!is_array($parts)) return '';
+
+    $texts = [];
+    foreach ($parts as $part) {
+        $text = trim((string)($part['text'] ?? ''));
+        if ($text !== '') $texts[] = $text;
+    }
+
+    return trim(implode("\n", $texts));
+}
+
 /**
  * Função openaiGetRequest: Executa requisição GET para a OpenAI e retorna HTTP code, resposta e erro cURL.
  */
@@ -2764,6 +2810,64 @@ elseif ($action === 'translate_text') {
 
     if ($translation === '') {
         die(json_encode(['status' => 'error', 'message' => 'A API não retornou tradução válida.']));
+    }
+
+    echo json_encode(['status' => 'success', 'translation' => $translation]);
+}
+elseif ($action === 'translate_text_gemini') {
+    $text = trim($input['text'] ?? '');
+    $source_language = normalizeDeckLanguage($input['source_language'] ?? 'pt-BR', 'pt-BR');
+    $target_language = normalizeDeckLanguage($input['target_language'] ?? 'en-GB', 'en-GB');
+
+    if ($text === '') {
+        die(json_encode(['status' => 'error', 'message' => 'Texto inválido para tradução.']));
+    }
+
+    if ($source_language === $target_language) {
+        echo json_encode(['status' => 'success', 'translation' => $text]);
+        exit;
+    }
+
+    if (GEMINI_API_KEY === '') {
+        die(json_encode(['status' => 'error', 'message' => 'GEMINI_API_KEY não configurada no .env.']));
+    }
+
+    $prompt = sprintf(
+        "Traduza de %s para %s. Retorne exclusivamente a tradução, sem comentários, sem markdown e sem aspas extras.\n\nTexto:\n%s",
+        getLanguageLabel($source_language),
+        getLanguageLabel($target_language),
+        $text
+    );
+
+    $payload = [
+        'contents' => [
+            [
+                'role' => 'user',
+                'parts' => [
+                    ['text' => $prompt]
+                ]
+            ]
+        ],
+        'generationConfig' => [
+            'temperature' => 0.2
+        ]
+    ];
+
+    [$httpcode, $response, $curlError] = geminiJsonRequest(GEMINI_TRANSLATION_MODEL, $payload);
+
+    if ($httpcode !== 200 || !$response) {
+        $decoded_error = $response ? json_decode($response, true) : null;
+        $api_error = is_array($decoded_error) ? trim((string)($decoded_error['error']['message'] ?? '')) : '';
+        $details = $api_error !== '' ? $api_error : trim((string)$curlError);
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao traduzir com o Gemini.' . ($details !== '' ? (' Detalhes: ' . $details) : '')]));
+    }
+
+    $decoded = json_decode($response, true);
+    $translation = extractGeminiText($decoded);
+
+    if ($translation === '') {
+        $finish_reason = trim((string)($decoded['candidates'][0]['finishReason'] ?? ''));
+        die(json_encode(['status' => 'error', 'message' => 'A API do Gemini não retornou tradução válida.' . ($finish_reason !== '' ? (' Motivo: ' . $finish_reason) : '')]));
     }
 
     echo json_encode(['status' => 'success', 'translation' => $translation]);
