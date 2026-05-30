@@ -52,6 +52,10 @@
           <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
           <span class="ml-2 hidden sm:inline">Traduzir com Gemini</span>
         </button>
+        <button type="button" id="btnAnswerGemini" onclick="app.answerFrontQuestionWithGemini()" class="inline-flex h-9 items-center justify-center rounded-lg border border-emerald-300/30 px-3 py-2 text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-300/10 hover:text-emerald-200" title="Responder frente com Gemini" aria-label="Responder frente com Gemini">
+          <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
+          <span class="ml-2 hidden sm:inline">Responder com Gemini</span>
+        </button>
       </div>
       <h1 id="pageTitle" class="text-base sm:text-lg font-semibold">Criar ficha de card</h1>
     </div>
@@ -663,9 +667,32 @@ const app = {
       button: btnTranslateGemini,
       loadingLabel: 'Gemini...',
       successLabel: 'Tradução com Gemini concluída!',
-      frontSourceLanguage: 'en-GB',
+      frontSourceLanguage: 'en-US',
       backSourceLanguage: 'pt-BR'
     });
+  },
+  async answerFrontQuestionWithGemini() {
+    const frontText = singleFront.value.trim();
+
+    if (!frontText) return this.setStatus('Preencha a frente com uma pergunta para o Gemini responder.', 'error');
+
+    const originalHtml = btnAnswerGemini.innerHTML;
+    btnAnswerGemini.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i><span class="ml-2 hidden sm:inline">Respondendo...</span>';
+    btnAnswerGemini.disabled = true;
+
+    try {
+      const res = await this.api('answer_question_gemini', { question: frontText, answer_language: 'en-US' });
+      if (!res || !res.answer) throw new Error('A API não retornou uma resposta válida.');
+
+      singleBack.value = res.answer;
+      this.setActiveTab('back');
+      this.setStatus('Resposta do Gemini adicionada ao verso!', 'success');
+    } catch (err) {
+      this.setStatus('Falha ao responder com Gemini: ' + (err.message || 'erro desconhecido'), 'error');
+    } finally {
+      btnAnswerGemini.innerHTML = originalHtml;
+      btnAnswerGemini.disabled = false;
+    }
   },
   async translateCardWithProvider({ action, button, loadingLabel, successLabel, frontSourceLanguage, backSourceLanguage }) {
     const frontText = singleFront.value.trim();
