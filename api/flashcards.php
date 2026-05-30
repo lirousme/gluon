@@ -2874,6 +2874,62 @@ elseif ($action === 'translate_text_gemini') {
 }
 
 
+elseif ($action === 'answer_question_gemini') {
+    $question = trim($input['question'] ?? '');
+    $answer_language = normalizeDeckLanguage($input['answer_language'] ?? 'en-US', 'en-US');
+
+    if ($question === '') {
+        die(json_encode(['status' => 'error', 'message' => 'Texto inválido para pergunta.']));
+    }
+
+    if (GEMINI_API_KEY === '') {
+        die(json_encode(['status' => 'error', 'message' => 'GEMINI_API_KEY não configurada no .env.']));
+    }
+
+    $prompt = sprintf(
+        "Considere o texto abaixo como uma pergunta de flashcard. Responda em %s de forma direta, clara e útil para o verso do card. Retorne exclusivamente a resposta, sem comentários, sem markdown e sem aspas extras.
+
+Pergunta:
+%s",
+        getLanguageLabel($answer_language),
+        $question
+    );
+
+    $payload = [
+        'contents' => [
+            [
+                'role' => 'user',
+                'parts' => [
+                    ['text' => $prompt]
+                ]
+            ]
+        ],
+        'generationConfig' => [
+            'temperature' => 0.2
+        ]
+    ];
+
+    [$httpcode, $response, $curlError] = geminiJsonRequest(GEMINI_TRANSLATION_MODEL, $payload);
+
+    if ($httpcode !== 200 || !$response) {
+        $decoded_error = $response ? json_decode($response, true) : null;
+        $api_error = is_array($decoded_error) ? trim((string)($decoded_error['error']['message'] ?? '')) : '';
+        $details = $api_error !== '' ? $api_error : trim((string)$curlError);
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao responder com o Gemini.' . ($details !== '' ? (' Detalhes: ' . $details) : '')]));
+    }
+
+    $decoded = json_decode($response, true);
+    $answer = extractGeminiText($decoded);
+
+    if ($answer === '') {
+        $finish_reason = trim((string)($decoded['candidates'][0]['finishReason'] ?? ''));
+        die(json_encode(['status' => 'error', 'message' => 'A API do Gemini não retornou resposta válida.' . ($finish_reason !== '' ? (' Motivo: ' . $finish_reason) : '')]));
+    }
+
+    echo json_encode(['status' => 'success', 'answer' => $answer]);
+}
+
+
 elseif ($action === 'sync_back_phrase_dictionary') {
     $text = trim((string)($input['text'] ?? ''));
     $dictionary_parent_id = (int)($input['dictionary_parent_id'] ?? 6223);
