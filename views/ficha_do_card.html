@@ -48,6 +48,10 @@
           <i class="fa-solid fa-language" aria-hidden="true"></i>
           <span class="ml-2 hidden sm:inline">Traduzir via IA</span>
         </button>
+        <button type="button" id="btnTranslateGemini" onclick="app.translateCardWithGemini()" class="inline-flex h-9 items-center justify-center rounded-lg border border-amber-300/30 px-3 py-2 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-300/10 hover:text-amber-200" title="Traduzir com Gemini" aria-label="Traduzir com Gemini">
+          <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+          <span class="ml-2 hidden sm:inline">Traduzir com Gemini</span>
+        </button>
       </div>
       <h1 id="pageTitle" class="text-base sm:text-lg font-semibold">Criar ficha de card</h1>
     </div>
@@ -646,6 +650,22 @@ const app = {
     } catch (_) {}
   },
   async translateCard() {
+    return this.translateCardWithProvider({
+      action: 'translate_text',
+      button: btnTranslate,
+      loadingLabel: 'Traduzindo...',
+      successLabel: 'Tradução concluída!'
+    });
+  },
+  async translateCardWithGemini() {
+    return this.translateCardWithProvider({
+      action: 'translate_text_gemini',
+      button: btnTranslateGemini,
+      loadingLabel: 'Gemini...',
+      successLabel: 'Tradução com Gemini concluída!'
+    });
+  },
+  async translateCardWithProvider({ action, button, loadingLabel, successLabel }) {
     const frontText = singleFront.value.trim();
     const backText = singleBack.value.trim();
 
@@ -657,23 +677,23 @@ const app = {
     const targetTab = frontText ? 'back' : 'front';
     const sourceLanguage = frontText ? this.frontLanguage : this.backLanguage;
     const targetLanguage = frontText ? this.backLanguage : this.frontLanguage;
-    const originalHtml = btnTranslate.innerHTML;
+    const originalHtml = button.innerHTML;
 
-    btnTranslate.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i><span class="ml-2 hidden sm:inline">Traduzindo...</span>';
-    btnTranslate.disabled = true;
+    button.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i><span class="ml-2 hidden sm:inline">${loadingLabel}</span>`;
+    button.disabled = true;
 
     try {
-      const res = await this.api('translate_text', { text: textToTranslate, source_language: sourceLanguage, target_language: targetLanguage });
+      const res = await this.api(action, { text: textToTranslate, source_language: sourceLanguage, target_language: targetLanguage });
       if (!res || !res.translation) throw new Error('A API não retornou uma tradução válida.');
 
       targetEl.value = res.translation;
       this.setActiveTab(targetTab);
-      this.setStatus('Tradução concluída!', 'success');
+      this.setStatus(successLabel, 'success');
     } catch (err) {
       this.setStatus('Falha ao traduzir: ' + (err.message || 'erro desconhecido'), 'error');
     } finally {
-      btnTranslate.innerHTML = originalHtml;
-      btnTranslate.disabled = false;
+      button.innerHTML = originalHtml;
+      button.disabled = false;
     }
   },
   async preloadEditCard() {

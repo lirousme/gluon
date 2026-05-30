@@ -63,6 +63,9 @@ define('FISH_REFERENCE_ID_PT_BR', envValue('FISH_REFERENCE_ID_PT_BR', FISH_REFER
 define('FISH_REFERENCE_ID_EN_US', envValue('FISH_REFERENCE_ID_EN_US', FISH_REFERENCE_ID_BACK));
 define('FISH_REFERENCE_ID_EN_GB', envValue('FISH_REFERENCE_ID_EN_GB', FISH_REFERENCE_ID_BACK));
 define('OPENAI_API_KEY', envValue('OPENAI_API_KEY', ''));
+define('GEMINI_API_KEY', envValue('GEMINI_API_KEY', ''));
+define('GEMINI_API_URL', envValue('GEMINI_API_URL', 'https://generativelanguage.googleapis.com/v1beta/models'));
+define('GEMINI_TRANSLATION_MODEL', envValue('GEMINI_TRANSLATION_MODEL', 'gemini-2.5-flash'));
 define('DEEPL_API_KEY', envValue('DEEPL_API_KEY', ''));
 define('DEEPL_API_URL', envValue('DEEPL_API_URL', 'https://api-free.deepl.com/v2/translate'));
 define('OPENAI_TTS_VOICE_DEFAULT', envValue('OPENAI_TTS_VOICE_DEFAULT', 'alloy'));
