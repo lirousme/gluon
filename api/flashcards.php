@@ -3633,8 +3633,17 @@ elseif ($action === 'update_tag') {
     if ($tag_id <= 0 || $name === '') {
         die(json_encode(['status' => 'error', 'message' => 'Dados da tag inválidos.']));
     }
+
+    $tagOwnerStmt = $pdo->prepare("SELECT user_id FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5) LIMIT 1");
+    $tagOwnerStmt->execute([$tag_id, $user_id]);
+    $tagOwnerId = $tagOwnerStmt->fetchColumn();
+    if ($tagOwnerId === false) {
+        die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada.']));
+    }
+    $tagOwnerId = (int)$tagOwnerId;
+
     if ($name_pt_br === '') $name_pt_br = null;
-    if (tagCombinationAlreadyExists($pdo, $user_id, $name, $name_pt_br, $numero, $tag_id)) {
+    if (tagCombinationAlreadyExists($pdo, $tagOwnerId, $name, $name_pt_br, $numero, $tag_id)) {
         die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com essa combinação de nome, nome pt-br e número.']));
     }
 
@@ -3653,17 +3662,9 @@ elseif ($action === 'update_tag') {
     ]);
     $stmt = $pdo->prepare("UPDATE flashcard_tags SET name_encrypted = ?, name_pt_br_encrypted = ?, numero = ?, color = ?, is_book = ?, is_verb_tense = ?, is_sentence_type = ?, is_lexical_chunk = ?, is_relation_type = ?, is_word = ?, is_month = ?, is_day = ?, is_year = ? WHERE id = ? AND user_id = ?");
     try {
-        $stmt->execute([$name_enc, $name_pt_br_enc, $numero, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year, $tag_id, $user_id]);
+        $stmt->execute([$name_enc, $name_pt_br_enc, $numero, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year, $tag_id, $tagOwnerId]);
     } catch (PDOException $e) {
         die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com esse nome.']));
-    }
-
-    if ($stmt->rowCount() === 0) {
-        $checkStmt = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id = ? LIMIT 1");
-        $checkStmt->execute([$tag_id, $user_id]);
-        if (!$checkStmt->fetchColumn()) {
-            die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada.']));
-        }
     }
 
     echo json_encode(['status' => 'success', 'message' => 'Tag atualizada com sucesso.']);
