@@ -2816,14 +2816,17 @@ elseif ($action === 'translate_text') {
 }
 elseif ($action === 'translate_text_gemini') {
     $text = trim($input['text'] ?? '');
-    $source_language = normalizeDeckLanguage($input['source_language'] ?? 'pt-BR', 'pt-BR');
-    $target_language = normalizeDeckLanguage($input['target_language'] ?? 'en-GB', 'en-GB');
+    $raw_source_language = trim((string)($input['source_language'] ?? 'pt-BR'));
+    $raw_target_language = trim((string)($input['target_language'] ?? 'en-GB'));
+    $auto_opposite_language = !empty($input['auto_opposite_language']) || $raw_source_language === 'auto' || $raw_target_language === 'opposite';
+    $source_language = $auto_opposite_language ? 'auto' : normalizeDeckLanguage($raw_source_language, 'pt-BR');
+    $target_language = $auto_opposite_language ? 'opposite' : normalizeDeckLanguage($raw_target_language, 'en-GB');
 
     if ($text === '') {
         die(json_encode(['status' => 'error', 'message' => 'Texto inválido para tradução.']));
     }
 
-    if ($source_language === $target_language) {
+    if (!$auto_opposite_language && $source_language === $target_language) {
         echo json_encode(['status' => 'success', 'translation' => $text]);
         exit;
     }
@@ -2832,12 +2835,19 @@ elseif ($action === 'translate_text_gemini') {
         die(json_encode(['status' => 'error', 'message' => 'GEMINI_API_KEY não configurada no .env.']));
     }
 
-    $prompt = sprintf(
-        "Traduza de %s para %s. Retorne exclusivamente a tradução, sem comentários, sem markdown e sem aspas extras.\n\nTexto:\n%s",
-        getLanguageLabel($source_language),
-        getLanguageLabel($target_language),
-        $text
-    );
+    if ($auto_opposite_language) {
+        $prompt = sprintf(
+            "Identifique se o texto está predominantemente em inglês ou em português brasileiro. Se estiver em inglês, traduza para português brasileiro. Se estiver em português brasileiro, traduza para inglês natural. Se houver mistura de idiomas, use o idioma predominante para decidir o idioma oposto. Retorne exclusivamente a tradução, sem comentários, sem markdown e sem aspas extras.\n\nTexto:\n%s",
+            $text
+        );
+    } else {
+        $prompt = sprintf(
+            "Traduza de %s para %s. Retorne exclusivamente a tradução, sem comentários, sem markdown e sem aspas extras.\n\nTexto:\n%s",
+            getLanguageLabel($source_language),
+            getLanguageLabel($target_language),
+            $text
+        );
+    }
 
     $payload = [
         'contents' => [

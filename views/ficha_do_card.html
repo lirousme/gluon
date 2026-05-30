@@ -667,8 +667,7 @@ const app = {
       button: btnTranslateGemini,
       loadingLabel: 'Gemini...',
       successLabel: 'Tradução com Gemini concluída!',
-      frontSourceLanguage: 'en-US',
-      backSourceLanguage: 'pt-BR'
+      autoOppositeLanguage: true
     });
   },
   async answerFrontQuestionWithGemini() {
@@ -694,7 +693,7 @@ const app = {
       btnAnswerGemini.disabled = false;
     }
   },
-  async translateCardWithProvider({ action, button, loadingLabel, successLabel, frontSourceLanguage, backSourceLanguage }) {
+  async translateCardWithProvider({ action, button, loadingLabel, successLabel, frontSourceLanguage, backSourceLanguage, autoOppositeLanguage = false }) {
     const frontText = singleFront.value.trim();
     const backText = singleBack.value.trim();
 
@@ -704,15 +703,20 @@ const app = {
     const textToTranslate = frontText || backText;
     const targetEl = frontText ? singleBack : singleFront;
     const targetTab = frontText ? 'back' : 'front';
-    const sourceLanguage = frontText ? (frontSourceLanguage || this.frontLanguage) : (backSourceLanguage || this.backLanguage);
-    const targetLanguage = frontText ? (backSourceLanguage || this.backLanguage) : (frontSourceLanguage || this.frontLanguage);
+    const sourceLanguage = autoOppositeLanguage ? 'auto' : (frontText ? (frontSourceLanguage || this.frontLanguage) : (backSourceLanguage || this.backLanguage));
+    const targetLanguage = autoOppositeLanguage ? 'opposite' : (frontText ? (backSourceLanguage || this.backLanguage) : (frontSourceLanguage || this.frontLanguage));
     const originalHtml = button.innerHTML;
 
     button.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i><span class="ml-2 hidden sm:inline">${loadingLabel}</span>`;
     button.disabled = true;
 
     try {
-      const res = await this.api(action, { text: textToTranslate, source_language: sourceLanguage, target_language: targetLanguage });
+      const res = await this.api(action, {
+        text: textToTranslate,
+        source_language: sourceLanguage,
+        target_language: targetLanguage,
+        auto_opposite_language: autoOppositeLanguage
+      });
       if (!res || !res.translation) throw new Error('A API não retornou uma tradução válida.');
 
       targetEl.value = res.translation;
