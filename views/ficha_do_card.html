@@ -133,7 +133,7 @@
         </div>
         <div class="space-y-2">
           <label class="text-sm text-slate-300">Nome da tag</label>
-          <input id="tagNameInput" type="text" required maxlength="80" placeholder="Ex.: Gramática, Verbos, Trabalho..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+          <input id="tagNameInput" type="text" maxlength="80" placeholder="Ex.: Gramática, Verbos, Trabalho..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
           <input id="tagNamePtBrInput" type="text" maxlength="80" placeholder="Nome em pt-BR (ex.: Cachorro)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
           <input id="tagNumeroInput" type="number" placeholder="Número (ex.: 2026)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
           <p class="text-xs text-slate-400">Novas tags serão criadas automaticamente na categoria Palavra.</p>
@@ -153,7 +153,7 @@
       <form id="editTagForm" class="p-5 space-y-4">
         <input type="hidden" id="editTagIdInput">
         <div class="flex items-center justify-between"><h3 class="text-lg font-semibold text-white">Editar tag</h3><button type="button" onclick="app.closeEditTagModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button></div>
-        <input id="editTagNameInput" type="text" required maxlength="80" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+        <input id="editTagNameInput" type="text" maxlength="80" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
         <input id="editTagNamePtBrInput" type="text" maxlength="80" placeholder="Nome em pt-BR" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
         <input id="editTagNumeroInput" type="number" placeholder="Número (opcional)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-slate-300">
@@ -282,9 +282,12 @@ const app = {
     e.preventDefault();
     btnSaveTag.disabled = true;
     try {
+      const namePtBr = tagNamePtBrInput.value.trim();
+      const name = tagNameInput.value.trim() || namePtBr;
+      if (!name) return this.setStatus('Preencha o nome em inglês ou em pt-BR para criar a tag.', 'error');
       const res = await this.api('create_tag', {
-        name: tagNameInput.value.trim(),
-        name_pt_br: tagNamePtBrInput.value.trim(),
+        name,
+        name_pt_br: namePtBr,
         numero: tagNumeroInput.value.trim(),
         is_book: 0,
         is_verb_tense: 0,
@@ -313,7 +316,10 @@ const app = {
     if (!this.canEditTag(tag)) return this.setStatus('Você não tem permissão para editar esta tag.', 'error');
     btnUpdateTag.disabled = true;
     try {
-      const res = await this.api('update_tag', { id:Number(editTagIdInput.value), name:editTagNameInput.value.trim(), name_pt_br:editTagNamePtBrInput.value.trim(), numero:editTagNumeroInput.value.trim(), is_book:editTagIsBookInput.checked?1:0, is_verb_tense:editTagIsVerbTenseInput.checked?1:0, is_sentence_type:editTagIsSentenceTypeInput.checked?1:0, is_lexical_chunk:editTagIsLexicalChunkInput.checked?1:0, is_relation_type:editTagIsRelationTypeInput.checked?1:0, is_word:editTagIsWordInput.checked?1:0, is_month:editTagIsMonthInput.checked?1:0, is_day:editTagIsDayInput.checked?1:0, is_year:editTagIsYearInput.checked?1:0 });
+      const namePtBr = editTagNamePtBrInput.value.trim();
+      const name = editTagNameInput.value.trim() || namePtBr;
+      if (!name) return this.setStatus('Preencha o nome em inglês ou em pt-BR para editar a tag.', 'error');
+      const res = await this.api('update_tag', { id:Number(editTagIdInput.value), name, name_pt_br:namePtBr, numero:editTagNumeroInput.value.trim(), is_book:editTagIsBookInput.checked?1:0, is_verb_tense:editTagIsVerbTenseInput.checked?1:0, is_sentence_type:editTagIsSentenceTypeInput.checked?1:0, is_lexical_chunk:editTagIsLexicalChunkInput.checked?1:0, is_relation_type:editTagIsRelationTypeInput.checked?1:0, is_word:editTagIsWordInput.checked?1:0, is_month:editTagIsMonthInput.checked?1:0, is_day:editTagIsDayInput.checked?1:0, is_year:editTagIsYearInput.checked?1:0 });
       await this.loadTags(); this.closeEditTagModal(); this.setStatus(res?.message || 'Tag atualizada com sucesso.', 'success');
     } catch (err) { this.setStatus(err.message || 'Erro ao atualizar tag.', 'error'); }
     finally { btnUpdateTag.disabled = false; }

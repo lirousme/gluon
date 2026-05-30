@@ -202,9 +202,12 @@ async function submitCreateTag(e){
   const btn=document.getElementById('btnSubmitCreateTag');
   btn.disabled=true;
   try{
+    const namePtBr=document.getElementById('createTagNamePtBrInput').value.trim();
+    const name=document.getElementById('createTagNameInput').value.trim()||namePtBr;
+    if(!name){alert('Preencha o nome em inglês ou em pt-BR para criar a tag.');return;}
     await api('create_tag',{
-      name:document.getElementById('createTagNameInput').value.trim(),
-      name_pt_br:document.getElementById('createTagNamePtBrInput').value.trim(),
+      name,
+      name_pt_br:namePtBr,
       numero:document.getElementById('createTagNumeroInput').value.trim(),
       is_book:0,
       is_verb_tense:0,
@@ -379,7 +382,7 @@ function closeEditTagModal(){const m=document.getElementById('editTagModal');con
 function openTagDeletionBlockedModal(){const m=document.getElementById('tagDeletionBlockedModal');const c=document.getElementById('tagDeletionBlockedModalContent');if(!m||!c) return;m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');document.getElementById('btnCloseTagDeletionBlockedModal')?.focus();},20);}
 function closeTagDeletionBlockedModal(){const m=document.getElementById('tagDeletionBlockedModal');const c=document.getElementById('tagDeletionBlockedModalContent');if(!m||!c) return;m.classList.add('opacity-0');c.classList.add('scale-95');setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);}
 function isOrphanCardDeletionError(error){const response=error?.response||{};const count=Number(response.orphan_cards_count||0);const message=String(error?.message||response.message||'').toLowerCase();return count>0||message.includes('deixaria cards')||message.includes('cards sem nenhuma tag');}
-async function submitEditTag(e){e.preventDefault();const id=Number(document.getElementById('editTagIdInput').value||0);const original=state.tags.find(t=>Number(t.id)===id)||{};if(!canEditTag(original)) return;const name=document.getElementById('editTagNameInput').value.trim();await api('update_tag',{id,name,name_pt_br:document.getElementById('editTagNamePtBrInput').value.trim(),numero:document.getElementById('editTagNumeroInput').value.trim(),is_book:Number(original.is_book||0),is_verb_tense:Number(original.is_verb_tense||0),is_sentence_type:Number(original.is_sentence_type||0),is_lexical_chunk:Number(original.is_lexical_chunk||0),is_relation_type:Number(original.is_relation_type||0),is_word:Number(original.is_word||0),is_month:Number(original.is_month||0),is_day:Number(original.is_day||0),is_year:Number(original.is_year||0)});if(id===state.tagId){state.tagName=name;title.textContent=state.tagName||'Tag';const url=new URL(window.location.href);url.searchParams.set('tag_name',state.tagName);window.history.replaceState({},'',url);}closeEditTagModal();await load();}
+async function submitEditTag(e){e.preventDefault();const id=Number(document.getElementById('editTagIdInput').value||0);const original=state.tags.find(t=>Number(t.id)===id)||{};if(!canEditTag(original)) return;const namePtBr=document.getElementById('editTagNamePtBrInput').value.trim();const name=document.getElementById('editTagNameInput').value.trim()||namePtBr;if(!name){alert('Preencha o nome em inglês ou em pt-BR para editar a tag.');return;}await api('update_tag',{id,name,name_pt_br:namePtBr,numero:document.getElementById('editTagNumeroInput').value.trim(),is_book:Number(original.is_book||0),is_verb_tense:Number(original.is_verb_tense||0),is_sentence_type:Number(original.is_sentence_type||0),is_lexical_chunk:Number(original.is_lexical_chunk||0),is_relation_type:Number(original.is_relation_type||0),is_word:Number(original.is_word||0),is_month:Number(original.is_month||0),is_day:Number(original.is_day||0),is_year:Number(original.is_year||0)});if(id===state.tagId){state.tagName=name;title.textContent=state.tagName||'Tag';const url=new URL(window.location.href);url.searchParams.set('tag_name',state.tagName);window.history.replaceState({},'',url);}closeEditTagModal();await load();}
 async function deleteTag(tagId=null){const id=Number(tagId||0);if(!id) return;const original=state.tags.find(t=>Number(t.id)===id)||{};if(!canEditTag(original)) return;const isCurrent=id===state.tagId;const btn=document.getElementById('btnDeleteEditingTag');if(btn?.disabled) return;if(btn) btn.disabled=true;try{await api('delete_tag',{id});closeEditTagModal();if(isCurrent){window.location.href=getMarkedBackRoute();return;}await load();}catch(error){if(isOrphanCardDeletionError(error)){openTagDeletionBlockedModal();return;}alert(error.message||'Não foi possível excluir a tag.');}finally{if(btn) btn.disabled=false;}}
 function deleteEditedTag(){deleteTag(Number(document.getElementById('editTagIdInput').value||0));}
 window.addEventListener('DOMContentLoaded',async()=>{
@@ -416,7 +419,7 @@ window.addEventListener('DOMContentLoaded',async()=>{
       </div>
       <form id="editTagForm" class="space-y-3">
         <input id="editTagIdInput" type="hidden">
-        <input id="editTagNameInput" type="text" required maxlength="80" placeholder="Nome" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3">
+        <input id="editTagNameInput" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3">
         <input id="editTagNamePtBrInput" type="text" maxlength="80" placeholder="Nome pt-br" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3">
         <input id="editTagNumeroInput" type="number" placeholder="Número" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3">
         <div class="flex justify-end gap-2 pt-2">
@@ -449,7 +452,7 @@ window.addEventListener('DOMContentLoaded',async()=>{
           <h3 class="text-lg font-semibold">Criar nova tag</h3>
           <button id="btnCloseCreateTagModal" type="button" class="text-slate-400 hover:text-white text-xl">&times;</button>
         </div>
-        <input id="createTagNameInput" type="text" required maxlength="80" placeholder="Nome" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3">
+        <input id="createTagNameInput" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3">
         <input id="createTagNamePtBrInput" type="text" maxlength="80" placeholder="Nome pt-br" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3">
         <input id="createTagNumeroInput" type="number" placeholder="Número" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3">
         <p class="text-xs text-slate-400">Novas tags serão criadas automaticamente na categoria Palavra.</p>
