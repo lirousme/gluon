@@ -667,8 +667,8 @@ const app = {
       button: btnTranslateGemini,
       loadingLabel: 'Gemini...',
       successLabel: 'Tradução com Gemini concluída!',
-      frontSourceLanguage: 'en-US',
-      backSourceLanguage: 'pt-BR'
+      autoDetectOpposite: true,
+      replaceSource: true
     });
   },
   async answerFrontQuestionWithGemini() {
@@ -694,25 +694,35 @@ const app = {
       btnAnswerGemini.disabled = false;
     }
   },
-  async translateCardWithProvider({ action, button, loadingLabel, successLabel, frontSourceLanguage, backSourceLanguage }) {
+  async translateCardWithProvider({ action, button, loadingLabel, successLabel, frontSourceLanguage, backSourceLanguage, autoDetectOpposite = false, replaceSource = false }) {
     const frontText = singleFront.value.trim();
     const backText = singleBack.value.trim();
+    const activeTextField = this.activeTab === 'back' ? 'back' : this.activeTab === 'front' ? 'front' : '';
+    const fieldToTranslate = replaceSource
+      ? (activeTextField && (activeTextField === 'front' ? frontText : backText) ? activeTextField : (frontText && !backText ? 'front' : !frontText && backText ? 'back' : ''))
+      : (frontText && !backText ? 'front' : !frontText && backText ? 'back' : '');
 
-    if (frontText && backText) return this.setStatus('Um dos campos deve estar vazio para poder traduzir para ele.', 'error');
-    if (!frontText && !backText) return this.setStatus('Preencha um dos campos primeiro para ser traduzido.', 'error');
+    if (!fieldToTranslate) {
+      const message = replaceSource
+        ? 'Selecione a aba Frente ou Verso com texto para substituir pela tradução.'
+        : (frontText && backText ? 'Um dos campos deve estar vazio para poder traduzir para ele.' : 'Preencha um dos campos primeiro para ser traduzido.');
+      return this.setStatus(message, 'error');
+    }
 
-    const textToTranslate = frontText || backText;
-    const targetEl = frontText ? singleBack : singleFront;
-    const targetTab = frontText ? 'back' : 'front';
-    const sourceLanguage = frontText ? (frontSourceLanguage || this.frontLanguage) : (backSourceLanguage || this.backLanguage);
-    const targetLanguage = frontText ? (backSourceLanguage || this.backLanguage) : (frontSourceLanguage || this.frontLanguage);
+    const textToTranslate = fieldToTranslate === 'front' ? frontText : backText;
+    const targetEl = replaceSource ? (fieldToTranslate === 'front' ? singleFront : singleBack) : (fieldToTranslate === 'front' ? singleBack : singleFront);
+    const targetTab = replaceSource ? fieldToTranslate : (fieldToTranslate === 'front' ? 'back' : 'front');
+    const sourceLanguage = fieldToTranslate === 'front' ? (frontSourceLanguage || this.frontLanguage) : (backSourceLanguage || this.backLanguage);
+    const targetLanguage = fieldToTranslate === 'front' ? (backSourceLanguage || this.backLanguage) : (frontSourceLanguage || this.frontLanguage);
     const originalHtml = button.innerHTML;
 
     button.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i><span class="ml-2 hidden sm:inline">${loadingLabel}</span>`;
     button.disabled = true;
 
     try {
-      const res = await this.api(action, { text: textToTranslate, source_language: sourceLanguage, target_language: targetLanguage });
+      const payload = { text: textToTranslate, source_language: sourceLanguage, target_language: targetLanguage };
+      if (autoDetectOpposite) payload.auto_detect_opposite = true;
+      const res = await this.api(action, payload);
       if (!res || !res.translation) throw new Error('A API não retornou uma tradução válida.');
 
       targetEl.value = res.translation;
