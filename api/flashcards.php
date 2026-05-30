@@ -3402,8 +3402,37 @@ elseif ($action === 'list_cards_for_tag_filtering') {
 }
 
 elseif ($action === 'list_tags') {
-    $stmt = $pdo->prepare("SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year, (SELECT COUNT(*) FROM subjects_links sl WHERE sl.tag_id = flashcard_tags.id) AS subjects_count FROM flashcard_tags WHERE user_id IN (?, 5) ORDER BY id ASC");
-    $stmt->execute([$user_id]);
+    $stmt = $pdo->prepare("
+        SELECT
+            t.id,
+            t.user_id,
+            t.name_encrypted,
+            t.name_pt_br_encrypted,
+            t.numero,
+            t.color,
+            t.is_book,
+            t.is_verb_tense,
+            t.is_sentence_type,
+            t.is_lexical_chunk,
+            t.is_relation_type,
+            t.is_word,
+            t.is_month,
+            t.is_day,
+            t.is_year,
+            COALESCE(subject_counts.subjects_count, 0) AS subjects_count
+        FROM flashcard_tags t
+        LEFT JOIN (
+            SELECT sl.tag_id, COUNT(DISTINCT sl.flashcard_id) AS subjects_count
+            FROM subjects_links sl
+            INNER JOIN flashcards f ON f.id = sl.flashcard_id
+            INNER JOIN directories d ON d.id = f.directory_id
+            WHERE d.user_id = ?
+            GROUP BY sl.tag_id
+        ) subject_counts ON subject_counts.tag_id = t.id
+        WHERE t.user_id IN (?, 5)
+        ORDER BY t.id ASC
+    ");
+    $stmt->execute([$user_id, $user_id]);
     $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $parsed = [];
     foreach ($tags as $tag) {
@@ -3444,9 +3473,12 @@ elseif ($action === 'list_user_tags_by_subject_card_count' || $action === 'list_
             COALESCE(subject_counts.subjects_count, 0) AS subjects_count
         FROM flashcard_tags t
         LEFT JOIN (
-            SELECT tag_id, COUNT(DISTINCT flashcard_id) AS subjects_count
-            FROM subjects_links
-            GROUP BY tag_id
+            SELECT sl.tag_id, COUNT(DISTINCT sl.flashcard_id) AS subjects_count
+            FROM subjects_links sl
+            INNER JOIN flashcards f ON f.id = sl.flashcard_id
+            INNER JOIN directories d ON d.id = f.directory_id
+            WHERE d.user_id = ?
+            GROUP BY sl.tag_id
         ) subject_counts ON subject_counts.tag_id = t.id
         WHERE t.user_id = ?
         ORDER BY subjects_count ASC, t.id ASC
@@ -3454,8 +3486,9 @@ elseif ($action === 'list_user_tags_by_subject_card_count' || $action === 'list_
     ";
     $stmt = $pdo->prepare($sql);
     $stmt->bindValue(1, $user_id, PDO::PARAM_INT);
-    $stmt->bindValue(2, $perPage, PDO::PARAM_INT);
-    $stmt->bindValue(3, $offset, PDO::PARAM_INT);
+    $stmt->bindValue(2, $user_id, PDO::PARAM_INT);
+    $stmt->bindValue(3, $perPage, PDO::PARAM_INT);
+    $stmt->bindValue(4, $offset, PDO::PARAM_INT);
     $stmt->execute();
     $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $parsed = [];
@@ -3504,14 +3537,17 @@ elseif ($action === 'list_saved_filters') {
         FROM filtros f
         INNER JOIN flashcard_tags t ON t.id = f.id_tag
         LEFT JOIN (
-            SELECT tag_id, COUNT(DISTINCT flashcard_id) AS subjects_count
-            FROM subjects_links
-            GROUP BY tag_id
+            SELECT sl.tag_id, COUNT(DISTINCT sl.flashcard_id) AS subjects_count
+            FROM subjects_links sl
+            INNER JOIN flashcards fc ON fc.id = sl.flashcard_id
+            INNER JOIN directories d ON d.id = fc.directory_id
+            WHERE d.user_id = ?
+            GROUP BY sl.tag_id
         ) subject_counts ON subject_counts.tag_id = t.id
         WHERE f.id_user = ? AND t.user_id IN (?, 5)
         ORDER BY f.id DESC
     ");
-    $stmt->execute([$user_id, $user_id]);
+    $stmt->execute([$user_id, $user_id, $user_id]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $parsed = [];
     foreach ($rows as $row) {
