@@ -2816,6 +2816,7 @@ elseif ($action === 'translate_text') {
 }
 elseif ($action === 'translate_text_gemini') {
     $text = trim($input['text'] ?? '');
+    $auto_detect_opposite = !empty($input['auto_detect_opposite']);
     $source_language = normalizeDeckLanguage($input['source_language'] ?? 'pt-BR', 'pt-BR');
     $target_language = normalizeDeckLanguage($input['target_language'] ?? 'en-GB', 'en-GB');
 
@@ -2823,7 +2824,7 @@ elseif ($action === 'translate_text_gemini') {
         die(json_encode(['status' => 'error', 'message' => 'Texto inválido para tradução.']));
     }
 
-    if ($source_language === $target_language) {
+    if (!$auto_detect_opposite && $source_language === $target_language) {
         echo json_encode(['status' => 'success', 'translation' => $text]);
         exit;
     }
@@ -2832,12 +2833,25 @@ elseif ($action === 'translate_text_gemini') {
         die(json_encode(['status' => 'error', 'message' => 'GEMINI_API_KEY não configurada no .env.']));
     }
 
-    $prompt = sprintf(
-        "Traduza de %s para %s. Retorne exclusivamente a tradução, sem comentários, sem markdown e sem aspas extras.\n\nTexto:\n%s",
-        getLanguageLabel($source_language),
-        getLanguageLabel($target_language),
-        $text
-    );
+    if ($auto_detect_opposite) {
+        $prompt = sprintf(
+            "Identifique se o texto está principalmente em português brasileiro ou em inglês. Se estiver em português brasileiro, traduza para inglês natural. Se estiver em inglês, traduza para português brasileiro natural. Retorne exclusivamente o texto traduzido, sem comentários, sem markdown, sem rótulos de idioma e sem aspas extras.
+
+Texto:
+%s",
+            $text
+        );
+    } else {
+        $prompt = sprintf(
+            "Traduza de %s para %s. Retorne exclusivamente a tradução, sem comentários, sem markdown e sem aspas extras.
+
+Texto:
+%s",
+            getLanguageLabel($source_language),
+            getLanguageLabel($target_language),
+            $text
+        );
+    }
 
     $payload = [
         'contents' => [
