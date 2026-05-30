@@ -2586,9 +2586,15 @@
                 const btn = document.getElementById('btnSaveTag');
                 const nameInput = document.getElementById('tagNameInput');
                 const namePtBrInput = document.getElementById('tagNamePtBrInput');
-                const namePtBr = namePtBrInput.value.trim();
-                const name = nameInput.value.trim() || namePtBr;
+                let namePtBr = namePtBrInput.value.trim();
+                const nameFromEnglish = nameInput.value.trim();
+                const name = nameFromEnglish || namePtBr;
                 if (!name) return this.showToast('Preencha o nome em inglês ou em pt-BR para criar a tag.', 'error');
+                if (!nameFromEnglish) {
+                    nameInput.value = name;
+                    namePtBrInput.value = '';
+                    namePtBr = '';
+                }
                 btn.disabled = true;
                 const res = await this.api('create_tag', {
                     name,

@@ -282,9 +282,15 @@ const app = {
     e.preventDefault();
     btnSaveTag.disabled = true;
     try {
-      const namePtBr = tagNamePtBrInput.value.trim();
-      const name = tagNameInput.value.trim() || namePtBr;
+      let namePtBr = tagNamePtBrInput.value.trim();
+      const nameFromEnglish = tagNameInput.value.trim();
+      const name = nameFromEnglish || namePtBr;
       if (!name) return this.setStatus('Preencha o nome em inglês ou em pt-BR para criar a tag.', 'error');
+      if (!nameFromEnglish) {
+        tagNameInput.value = name;
+        tagNamePtBrInput.value = '';
+        namePtBr = '';
+      }
       const res = await this.api('create_tag', {
         name,
         name_pt_br: namePtBr,
@@ -316,9 +322,15 @@ const app = {
     if (!this.canEditTag(tag)) return this.setStatus('Você não tem permissão para editar esta tag.', 'error');
     btnUpdateTag.disabled = true;
     try {
-      const namePtBr = editTagNamePtBrInput.value.trim();
-      const name = editTagNameInput.value.trim() || namePtBr;
+      let namePtBr = editTagNamePtBrInput.value.trim();
+      const nameFromEnglish = editTagNameInput.value.trim();
+      const name = nameFromEnglish || namePtBr;
       if (!name) return this.setStatus('Preencha o nome em inglês ou em pt-BR para editar a tag.', 'error');
+      if (!nameFromEnglish) {
+        editTagNameInput.value = name;
+        editTagNamePtBrInput.value = '';
+        namePtBr = '';
+      }
       const res = await this.api('update_tag', { id:Number(editTagIdInput.value), name, name_pt_br:namePtBr, numero:editTagNumeroInput.value.trim(), is_book:editTagIsBookInput.checked?1:0, is_verb_tense:editTagIsVerbTenseInput.checked?1:0, is_sentence_type:editTagIsSentenceTypeInput.checked?1:0, is_lexical_chunk:editTagIsLexicalChunkInput.checked?1:0, is_relation_type:editTagIsRelationTypeInput.checked?1:0, is_word:editTagIsWordInput.checked?1:0, is_month:editTagIsMonthInput.checked?1:0, is_day:editTagIsDayInput.checked?1:0, is_year:editTagIsYearInput.checked?1:0 });
       await this.loadTags(); this.closeEditTagModal(); this.setStatus(res?.message || 'Tag atualizada com sucesso.', 'success');
     } catch (err) { this.setStatus(err.message || 'Erro ao atualizar tag.', 'error'); }
