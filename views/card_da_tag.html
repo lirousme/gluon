@@ -29,7 +29,7 @@
         <button type="button" onclick="goBackToMarkedRoute()" class="h-9 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"><i class="fa-solid fa-left-long"></i></button>
       </div>
 
-      <h1 id="cardTagTitle" class="text-2xl font-semibold text-center">Cards da Tag</h1>
+      <span id="subjectCardsCount" class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-sm text-emerald-200">0 card(s)</span>
 
       <div class="absolute right-4 flex items-center gap-2">
         <button id="btnOpenCreateCardModal" type="button" class="h-9 w-9 rounded-lg border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors text-lg font-semibold" title="Criar novo card"><i class="fa-solid fa-plus"></i></button>
@@ -43,7 +43,6 @@
             <h2 id="selectedTagName" class="text-lg font-semibold text-slate-100">Tag</h2>
             <p class="mt-2 text-sm text-slate-400">Cards vinculados a esta tag pela tabela <span class="font-mono text-slate-300">subjects_links</span>.</p>
           </div>
-          <span id="subjectCardsCount" class="shrink-0 self-start rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">0 card(s)</span>
         </div>
 
         <div id="subjectCardsStatus" class="mt-5 rounded-lg border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-300">
@@ -365,7 +364,6 @@
     window.addEventListener('DOMContentLoaded', () => {
       trackCardDaTagRouteVisit();
       const label = state.tagName || 'Tag';
-      document.getElementById('cardTagTitle').textContent = 'Cards da Tag';
       document.getElementById('selectedTagName').textContent = label;
       document.getElementById('btnOpenCreateCardModal').onclick = openCreateCardModal;
       loadSubjectCards();
