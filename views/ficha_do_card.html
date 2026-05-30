@@ -662,10 +662,12 @@ const app = {
       action: 'translate_text_gemini',
       button: btnTranslateGemini,
       loadingLabel: 'Gemini...',
-      successLabel: 'Tradução com Gemini concluída!'
+      successLabel: 'Tradução com Gemini concluída!',
+      frontSourceLanguage: 'en-GB',
+      backSourceLanguage: 'pt-BR'
     });
   },
-  async translateCardWithProvider({ action, button, loadingLabel, successLabel }) {
+  async translateCardWithProvider({ action, button, loadingLabel, successLabel, frontSourceLanguage, backSourceLanguage }) {
     const frontText = singleFront.value.trim();
     const backText = singleBack.value.trim();
 
@@ -675,8 +677,8 @@ const app = {
     const textToTranslate = frontText || backText;
     const targetEl = frontText ? singleBack : singleFront;
     const targetTab = frontText ? 'back' : 'front';
-    const sourceLanguage = frontText ? this.frontLanguage : this.backLanguage;
-    const targetLanguage = frontText ? this.backLanguage : this.frontLanguage;
+    const sourceLanguage = frontText ? (frontSourceLanguage || this.frontLanguage) : (backSourceLanguage || this.backLanguage);
+    const targetLanguage = frontText ? (backSourceLanguage || this.backLanguage) : (frontSourceLanguage || this.frontLanguage);
     const originalHtml = button.innerHTML;
 
     button.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i><span class="ml-2 hidden sm:inline">${loadingLabel}</span>`;
