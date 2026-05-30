@@ -44,6 +44,10 @@
         <button type="button" onclick="app.openCreateTagModal()" class="inline-flex h-9 items-center justify-center rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800" title="Criar nova tag" aria-label="Criar nova tag">
           <i class="fa-solid fa-plus" aria-hidden="true"></i>
         </button>
+        <button type="button" id="btnTranslate" onclick="app.translateCard()" class="inline-flex h-9 items-center justify-center rounded-lg border border-fuchsia-400/20 px-3 py-2 text-sm font-medium text-fuchsia-400 transition-colors hover:bg-fuchsia-400/10 hover:text-fuchsia-300" title="Traduzir via IA" aria-label="Traduzir via IA">
+          <i class="fa-solid fa-language" aria-hidden="true"></i>
+          <span class="ml-2 hidden sm:inline">Traduzir via IA</span>
+        </button>
       </div>
       <h1 id="pageTitle" class="text-base sm:text-lg font-semibold">Criar ficha de card</h1>
     </div>
@@ -204,6 +208,8 @@ const app = {
   editCardId: params.get('edit_card_id'),
   initialSubjectTagId: Number(params.get('tag_id') || 0),
   activeTab: 'front',
+  frontLanguage: 'pt-BR',
+  backLanguage: 'en-GB',
   availableTags: [],
   sessionUserId: null,
   tagPanels: {
@@ -632,10 +638,43 @@ const app = {
     if (!this.deckId) return;
     try {
       const res = await this.api('fetch', { deck_id: this.deckId });
+      this.frontLanguage = res?.deck_front_language || 'pt-BR';
+      this.backLanguage = res?.deck_back_language || 'en-GB';
       const directoryName = String(res?.deck_name || '').trim();
       if (!directoryName) return;
       pageTitle.textContent = this.editCardId ? `Editar ficha de card - ${directoryName}` : directoryName;
     } catch (_) {}
+  },
+  async translateCard() {
+    const frontText = singleFront.value.trim();
+    const backText = singleBack.value.trim();
+
+    if (frontText && backText) return this.setStatus('Um dos campos deve estar vazio para poder traduzir para ele.', 'error');
+    if (!frontText && !backText) return this.setStatus('Preencha um dos campos primeiro para ser traduzido.', 'error');
+
+    const textToTranslate = frontText || backText;
+    const targetEl = frontText ? singleBack : singleFront;
+    const targetTab = frontText ? 'back' : 'front';
+    const sourceLanguage = frontText ? this.frontLanguage : this.backLanguage;
+    const targetLanguage = frontText ? this.backLanguage : this.frontLanguage;
+    const originalHtml = btnTranslate.innerHTML;
+
+    btnTranslate.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i><span class="ml-2 hidden sm:inline">Traduzindo...</span>';
+    btnTranslate.disabled = true;
+
+    try {
+      const res = await this.api('translate_text', { text: textToTranslate, source_language: sourceLanguage, target_language: targetLanguage });
+      if (!res || !res.translation) throw new Error('A API não retornou uma tradução válida.');
+
+      targetEl.value = res.translation;
+      this.setActiveTab(targetTab);
+      this.setStatus('Tradução concluída!', 'success');
+    } catch (err) {
+      this.setStatus('Falha ao traduzir: ' + (err.message || 'erro desconhecido'), 'error');
+    } finally {
+      btnTranslate.innerHTML = originalHtml;
+      btnTranslate.disabled = false;
+    }
   },
   async preloadEditCard() {
     if (!this.editCardId) return;
@@ -692,7 +731,6 @@ cardForm.onsubmit = (e) => app.save(e);
 tagForm.onsubmit = (e) => app.createTag(e);
 editTagForm.onsubmit = (e) => app.updateTag(e);
 app.setupEditTagCategorySingleSelect();
-app.setPageTitleWithDirectoryName();
 tagModal.onclick = (e) => { if (e.target === tagModal) app.closeCreateTagModal(); };
 editTagModal.onclick = (e) => { if (e.target === editTagModal) app.closeEditTagModal(); };
 notesModal.onclick = (e) => { if (e.target === notesModal) app.closeNotesModal(); };
@@ -702,6 +740,7 @@ document.addEventListener('keydown', (e) => {
 
 (async () => {
   app.setActiveTab('front');
+  await app.setPageTitleWithDirectoryName();
   await app.loadSessionUserId();
   await app.loadTags();
   app.applyInitialSubjectTag();
