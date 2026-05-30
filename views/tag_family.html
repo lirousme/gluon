@@ -27,7 +27,7 @@
     <header class="relative flex items-center justify-center border-b border-slate-700 px-4 py-7 bg-slate-950">
       <div class="absolute left-4 flex items-center gap-2">
         <button type="button" onclick="goBackToMarkedRoute()" class="h-9 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"><i class="fa-solid fa-left-long"></i></button>
-        <button id="orphanTagsBtn" type="button" onclick="goToOrphanTags()" class="h-9 px-3 rounded-lg border border-red-500 bg-red-600/80 text-sm text-white hover:bg-red-500 transition-colors" title="Tags sem vínculos">0</button>
+        <button id="btnOpenOrphanTags" type="button" onclick="goToOrphanTags()" class="h-9 w-9 rounded-lg border border-purple-500/50 text-purple-300 hover:text-purple-200 hover:bg-purple-500/20 transition-colors text-sm font-medium" title="Tags sem vínculos" aria-label="Abrir tags sem vínculos"><i class="fa-solid fa-magnifying-glass-chart"></i></button>
         <button id="btnShowLayerGroupMessage" type="button" class="h-9 w-9 rounded-lg border border-sky-500/50 text-sky-300 hover:text-sky-200 hover:bg-sky-500/20 transition-colors text-sm font-medium" title="Mostrar mensagem no console" aria-label="Mostrar mensagem no console"><i class="fa-solid fa-book"></i></button>
       </div>
 
@@ -82,7 +82,7 @@
   }, { passive: false });
 })();
 const params = new URLSearchParams(window.location.search);
-const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: null, removalRelationType: null, tags: [], family: {mothers:[], children:[]}, relationTypes: [], orphanTagsCount: 0, savedFilters: [], sessionUserId: null };
+const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: null, removalRelationType: null, tags: [], family: {mothers:[], children:[]}, relationTypes: [], savedFilters: [], sessionUserId: null };
 const title = document.getElementById('tagFamilyMainTitle');
 title.textContent = state.tagName || 'Tag';
 
@@ -144,13 +144,6 @@ function openTagFiltering(){
   params.set('from', encodeURIComponent(window.location.pathname+window.location.search));
   const q=params.toString();
   window.location.href=`/views/tag_filtering.html${q?`?${q}`:''}`;
-}
-function renderOrphanTagsButton(){
-  const btn=document.getElementById('orphanTagsBtn');
-  if(!btn) return;
-  const count=Number(state.orphanTagsCount||0);
-  btn.innerHTML = `<i class="fa-solid fa-magnifying-glass-chart"></i> ${String(count)}`;
-  btn.title=`${count} tag(s) sem vínculos`;
 }
 function goToOrphanTags(){
   window.location.href='/views/tags_sem_vinculos.html';
@@ -319,7 +312,7 @@ function renderFamily(){
 }
 async function load(){
   if(!state.tagId) return;
-  const [tags,family,relationTypes,orphanTags,savedFilters]=await Promise.all([api('list_tags'), api('get_tag_family',{tag_id:state.tagId}), api('list_relation_types'), api('list_orphan_user_tags'), api('list_saved_filters')]);
+  const [tags,family,relationTypes,savedFilters]=await Promise.all([api('list_tags'), api('get_tag_family',{tag_id:state.tagId}), api('list_relation_types'), api('list_saved_filters')]);
   state.tags=tags.data||[];
   state.savedFilters=savedFilters.data||[];
   const subjectsCountByTagId = new Map(state.tags.map((tag)=>[Number(tag.id), getSubjectsCount(tag)]));
@@ -327,8 +320,6 @@ async function load(){
   state.family.children=(state.family.children||[]).map((tag)=>({...tag, subjects_count: subjectsCountByTagId.get(Number(tag.id)) || 0}));
   state.family.mothers=(state.family.mothers||[]).map((tag)=>({...tag, subjects_count: subjectsCountByTagId.get(Number(tag.id)) || 0}));
   state.relationTypes=(relationTypes.data||[]).map((item)=>({id:Number(item.id),nome:String(item.nome||''),hierarquia:Number(item.hierarquia||0)}));
-  state.orphanTagsCount=Number(orphanTags.count||0);
-  renderOrphanTagsButton();
   updateCurrentTagEditButton();
   if(state.selectedRelationType===null){
     state.selectedRelationType=state.relationTypes.length?Number(state.relationTypes[0].id):0;
