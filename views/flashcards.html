@@ -503,6 +503,9 @@
                 <p class="text-xs text-slate-400">Novas tags serão criadas automaticamente na categoria Palavra.</p>
                 <div class="flex justify-end gap-3">
                     <button type="button" onclick="flashcardApp.closeModals()" class="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-800">Cancelar</button>
+                    <button id="btnTranslateTagGemini" type="button" onclick="flashcardApp.translateTagWithGemini()" class="px-4 py-2 rounded-lg border border-amber-300/30 text-amber-300 hover:bg-amber-300/10 hover:text-amber-200">
+                        <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Gemini
+                    </button>
                     <button id="btnSaveTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white">Criar tag</button>
                 </div>
             </form>
@@ -2489,6 +2492,39 @@
                     this.showToast("Tradução concluída!", "success");
                 } catch (error) {
                     this.showToast("Falha ao traduzir: " + error.message, "error");
+                } finally {
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                }
+            },
+
+            async translateTagWithGemini() {
+                const nameInput = document.getElementById('tagNameInput');
+                const namePtBrInput = document.getElementById('tagNamePtBrInput');
+                const btn = document.getElementById('btnTranslateTagGemini');
+                const englishText = nameInput.value.trim();
+                const ptBrText = namePtBrInput.value.trim();
+
+                if (englishText && ptBrText) return this.showToast('Deixe apenas um dos campos de texto da tag preenchido para traduzir para o outro.', 'error');
+                if (!englishText && !ptBrText) return this.showToast('Preencha o nome em inglês ou em pt-BR para traduzir a tag.', 'error');
+
+                const originalHtml = btn.innerHTML;
+                const translatingFromEnglish = Boolean(englishText);
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>';
+                btn.disabled = true;
+
+                try {
+                    const res = await this.api('translate_text_gemini', {
+                        text: translatingFromEnglish ? englishText : ptBrText,
+                        source_language: translatingFromEnglish ? 'en-US' : 'pt-BR',
+                        target_language: translatingFromEnglish ? 'pt-BR' : 'en-US'
+                    });
+                    if (!res || !res.translation) throw new Error('A API não retornou uma tradução válida.');
+                    if (translatingFromEnglish) namePtBrInput.value = res.translation;
+                    else nameInput.value = res.translation;
+                    this.showToast('Tag traduzida com Gemini!', 'success');
+                } catch (error) {
+                    this.showToast('Falha ao traduzir tag com Gemini: ' + error.message, 'error');
                 } finally {
                     btn.innerHTML = originalHtml;
                     btn.disabled = false;
