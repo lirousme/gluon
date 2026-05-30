@@ -148,7 +148,7 @@ function openTagFiltering(){
 function goToOrphanTags(){
   window.location.href='/views/tags_sem_vinculos.html';
 }
-async function api(action,payload={}){payload.action=action;const r=await fetch('/api/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();if(!r.ok||j.status!=='success')throw new Error(j.message||'Erro');return j;}
+async function api(action,payload={}){payload.action=action;const r=await fetch('/api/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();if(!r.ok||j.status!=='success'){const error=new Error(j.message||'Erro');error.response=j;throw error;}return j;}
 async function loadSessionUserId(){try{const r=await fetch('/api/user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'get_session'})});if(!r.ok)return;const j=await r.json();const parsed=Number(j?.id??j?.data?.id);if(Number.isInteger(parsed)&&parsed>0)state.sessionUserId=parsed;}catch(_){}}
 function canEditTag(tag={}){const tagUserId=Number(tag?.user_id);const sessionId=Number(state.sessionUserId);return Number.isInteger(tagUserId)&&tagUserId>0&&Number.isInteger(sessionId)&&sessionId>0&&tagUserId===sessionId;}
 function updateCurrentTagEditButton(){const btn=document.getElementById('btnOpenCurrentTagActions');if(!btn)return;const current=getCurrentTag();btn.classList.toggle('hidden',!canEditTag(current));}
@@ -376,8 +376,11 @@ function updatePinTagButton(){const btn=document.getElementById('btnTogglePinned
 async function togglePinnedTag(){const btn=document.getElementById('btnTogglePinnedTag');const tagId=Number(document.getElementById('editTagIdInput').value||0);if(!tagId||btn?.disabled) return;btn.disabled=true;try{if(isTagPinned(tagId)){await api('remove_saved_filter',{tag_id:tagId});}else{await api('toggle_saved_filter',{tag_id:tagId});}const savedFilters=await api('list_saved_filters');state.savedFilters=savedFilters.data||[];updatePinTagButton();}finally{btn.disabled=false;}}
 function openEditTagModal(tag){if(!tag) return;const normalizedTag=state.tags.find((item)=>Number(item.id)===Number(tag.id))||tag;if(!canEditTag(normalizedTag)) return;document.getElementById('editTagIdInput').value=String(normalizedTag.id);document.getElementById('editTagNameInput').value=String(normalizedTag.name||'');document.getElementById('editTagNamePtBrInput').value=String(normalizedTag.name_pt_br||'');document.getElementById('editTagNumeroInput').value=(normalizedTag.numero??'');updatePinTagButton();const m=document.getElementById('editTagModal');const c=document.getElementById('editTagModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');document.getElementById('editTagNameInput').focus();},20);}
 function closeEditTagModal(){const m=document.getElementById('editTagModal');const c=document.getElementById('editTagModalContent');m.classList.add('opacity-0');c.classList.add('scale-95');setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);}
+function openTagDeletionBlockedModal(){const m=document.getElementById('tagDeletionBlockedModal');const c=document.getElementById('tagDeletionBlockedModalContent');if(!m||!c) return;m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');document.getElementById('btnCloseTagDeletionBlockedModal')?.focus();},20);}
+function closeTagDeletionBlockedModal(){const m=document.getElementById('tagDeletionBlockedModal');const c=document.getElementById('tagDeletionBlockedModalContent');if(!m||!c) return;m.classList.add('opacity-0');c.classList.add('scale-95');setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);}
+function isOrphanCardDeletionError(error){const response=error?.response||{};const count=Number(response.orphan_cards_count||0);const message=String(error?.message||response.message||'').toLowerCase();return count>0||message.includes('deixaria cards')||message.includes('cards sem nenhuma tag');}
 async function submitEditTag(e){e.preventDefault();const id=Number(document.getElementById('editTagIdInput').value||0);const original=state.tags.find(t=>Number(t.id)===id)||{};if(!canEditTag(original)) return;const name=document.getElementById('editTagNameInput').value.trim();await api('update_tag',{id,name,name_pt_br:document.getElementById('editTagNamePtBrInput').value.trim(),numero:document.getElementById('editTagNumeroInput').value.trim(),is_book:Number(original.is_book||0),is_verb_tense:Number(original.is_verb_tense||0),is_sentence_type:Number(original.is_sentence_type||0),is_lexical_chunk:Number(original.is_lexical_chunk||0),is_relation_type:Number(original.is_relation_type||0),is_word:Number(original.is_word||0),is_month:Number(original.is_month||0),is_day:Number(original.is_day||0),is_year:Number(original.is_year||0)});if(id===state.tagId){state.tagName=name;title.textContent=state.tagName||'Tag';const url=new URL(window.location.href);url.searchParams.set('tag_name',state.tagName);window.history.replaceState({},'',url);}closeEditTagModal();await load();}
-async function deleteTag(tagId=null){const id=Number(tagId||0);if(!id) return;const original=state.tags.find(t=>Number(t.id)===id)||{};if(!canEditTag(original)) return;const isCurrent=id===state.tagId;await api('delete_tag',{id});closeEditTagModal();if(isCurrent){window.location.href=getMarkedBackRoute();return;}await load();}
+async function deleteTag(tagId=null){const id=Number(tagId||0);if(!id) return;const original=state.tags.find(t=>Number(t.id)===id)||{};if(!canEditTag(original)) return;const isCurrent=id===state.tagId;const btn=document.getElementById('btnDeleteEditingTag');if(btn?.disabled) return;if(btn) btn.disabled=true;try{await api('delete_tag',{id});closeEditTagModal();if(isCurrent){window.location.href=getMarkedBackRoute();return;}await load();}catch(error){if(isOrphanCardDeletionError(error)){openTagDeletionBlockedModal();return;}alert(error.message||'Não foi possível excluir a tag.');}finally{if(btn) btn.disabled=false;}}
 function deleteEditedTag(){deleteTag(Number(document.getElementById('editTagIdInput').value||0));}
 window.addEventListener('DOMContentLoaded',async()=>{
   document.getElementById('btnOpenCreateTagModal').onclick=openCreateTagModal;
@@ -392,6 +395,8 @@ window.addEventListener('DOMContentLoaded',async()=>{
   document.getElementById('btnCloseCreateRelationTypeModal').onclick=closeCreateRelationTypeModal;
   document.getElementById('createRelationTypeForm').addEventListener('submit',submitCreateRelationType);
   document.getElementById('btnCancelEditTag').onclick=closeEditTagModal;
+  document.getElementById('btnCloseTagDeletionBlockedModal').onclick=closeTagDeletionBlockedModal;
+  document.getElementById('btnConfirmTagDeletionBlockedModal').onclick=closeTagDeletionBlockedModal;
   document.getElementById('btnDeleteEditingTag').onclick=deleteEditedTag;
   document.getElementById('btnTranslateEditTagGemini').onclick=()=>translateTagFieldsWithGemini('editTagNameInput','editTagNamePtBrInput','btnTranslateEditTagGemini');
   document.getElementById('btnTogglePinnedTag').onclick=togglePinnedTag;
@@ -421,6 +426,22 @@ window.addEventListener('DOMContentLoaded',async()=>{
       </form>
     </div>
   </div>
+  <div id="tagDeletionBlockedModal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/70 opacity-0 transition-opacity duration-200 p-4" role="dialog" aria-modal="true" aria-labelledby="tagDeletionBlockedTitle">
+    <div id="tagDeletionBlockedModalContent" class="w-[92%] max-w-md rounded-xl border border-red-500/40 bg-slate-900 p-5 scale-95 transition-transform duration-200">
+      <div class="mb-4 flex items-start justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-500/15 text-red-300"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i></span>
+          <h3 id="tagDeletionBlockedTitle" class="text-lg font-semibold text-red-200">Exclusão bloqueada</h3>
+        </div>
+        <button type="button" id="btnCloseTagDeletionBlockedModal" class="text-slate-400 hover:text-white text-xl" aria-label="Fechar">&times;</button>
+      </div>
+      <p class="text-sm leading-6 text-slate-200">Tag não pode ser excluída, pois deixará cards órfãos.</p>
+      <div class="mt-5 flex justify-end">
+        <button type="button" id="btnConfirmTagDeletionBlockedModal" class="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-500">Entendi</button>
+      </div>
+    </div>
+  </div>
+
   <div id="createTagModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 opacity-0 transition-opacity duration-200 p-4">
     <div id="createTagModalContent" class="w-[92%] max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-4 scale-95 transition-transform duration-200">
       <form id="createTagForm" class="space-y-3">
