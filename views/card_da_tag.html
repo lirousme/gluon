@@ -322,17 +322,18 @@
       if(status) status.classList.add('hidden');
       list.innerHTML = cards.map((card) => {
         const front = String(card.front || '').trim() || '(sem frente)';
-        const back = String(card.back || '').trim() || '(sem verso)';
+        const back = String(card.back || '').trim();
         const deckName = String(card.directory_name || '').trim();
         const editUrl = Number(card.can_edit || 0) === 1 ? getCardEditUrl(card) : '';
         const imageFront = card.image_front ? `<img src="${esc(card.image_front)}" alt="Imagem da frente" class="mt-2 max-h-40 rounded-lg border border-slate-700 object-contain">` : '';
+        const backContent = back ? `<p class="mt-3 text-xs leading-relaxed text-slate-400 whitespace-pre-wrap break-words">${esc(back)}</p>` : '';
         const imageBack = card.image_back ? `<img src="${esc(card.image_back)}" alt="Imagem do verso" class="mt-2 max-h-40 rounded-lg border border-slate-700 object-contain">` : '';
         return `<article class="rounded-lg border border-slate-700 bg-slate-900/60 p-4 shadow-sm">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 flex-1">
               <p class="text-sm font-medium text-slate-100 whitespace-pre-wrap break-words">${esc(front)}</p>
               ${imageFront}
-              <p class="mt-3 text-xs leading-relaxed text-slate-400 whitespace-pre-wrap break-words">${esc(back)}</p>
+              ${backContent}
               ${imageBack}
               ${deckName ? `<p class="mt-3 text-[11px] text-slate-500">Deck: ${esc(deckName)}</p>` : ''}
             </div>
