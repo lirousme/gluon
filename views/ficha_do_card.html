@@ -255,9 +255,14 @@ const app = {
     }, 200);
   },
 
+  canEditTag(tag = {}) {
+    const tagUserId = Number(tag?.user_id);
+    const sessionId = Number(this.sessionUserId);
+    return Number.isInteger(tagUserId) && tagUserId > 0 && Number.isInteger(sessionId) && sessionId > 0 && tagUserId === sessionId;
+  },
   openEditTagModal(tagId) {
     const tag = this.availableTags.find(item => Number(item.id) === Number(tagId));
-    if (!tag) return;
+    if (!tag || !this.canEditTag(tag)) return;
     editTagIdInput.value = String(tag.id || ''); editTagNameInput.value = String(tag.name || ''); editTagNameInput.dataset.tagName = String(tag.name || ''); editTagNamePtBrInput.value = String(tag.name_pt_br || ''); editTagNumeroInput.value = tag.numero ?? '';
     editTagIsBookInput.checked = Number(tag.is_book) === 1; editTagIsVerbTenseInput.checked = Number(tag.is_verb_tense) === 1; editTagIsSentenceTypeInput.checked = Number(tag.is_sentence_type) === 1; editTagIsLexicalChunkInput.checked = Number(tag.is_lexical_chunk) === 1; editTagIsRelationTypeInput.checked = Number(tag.is_relation_type) === 1; editTagIsWordInput.checked = Number(tag.is_word) === 1; editTagIsMonthInput.checked = Number(tag.is_month) === 1; editTagIsDayInput.checked = Number(tag.is_day) === 1; editTagIsYearInput.checked = Number(tag.is_year) === 1;
     editTagModal.classList.remove('hidden'); editTagModal.classList.add('flex');
@@ -303,7 +308,10 @@ const app = {
 
 
   async updateTag(e) {
-    e.preventDefault(); btnUpdateTag.disabled = true;
+    e.preventDefault();
+    const tag = this.availableTags.find(item => Number(item.id) === Number(editTagIdInput.value));
+    if (!this.canEditTag(tag)) return this.setStatus('Você não tem permissão para editar esta tag.', 'error');
+    btnUpdateTag.disabled = true;
     try {
       const res = await this.api('update_tag', { id:Number(editTagIdInput.value), name:editTagNameInput.value.trim(), name_pt_br:editTagNamePtBrInput.value.trim(), numero:editTagNumeroInput.value.trim(), is_book:editTagIsBookInput.checked?1:0, is_verb_tense:editTagIsVerbTenseInput.checked?1:0, is_sentence_type:editTagIsSentenceTypeInput.checked?1:0, is_lexical_chunk:editTagIsLexicalChunkInput.checked?1:0, is_relation_type:editTagIsRelationTypeInput.checked?1:0, is_word:editTagIsWordInput.checked?1:0, is_month:editTagIsMonthInput.checked?1:0, is_day:editTagIsDayInput.checked?1:0, is_year:editTagIsYearInput.checked?1:0 });
       await this.loadTags(); this.closeEditTagModal(); this.setStatus(res?.message || 'Tag atualizada com sucesso.', 'success');
@@ -350,6 +358,8 @@ const app = {
   async deleteTag() {
     const tagId = Number(editTagIdInput.value);
     if (!tagId) return;
+    const tag = this.availableTags.find(item => Number(item.id) === tagId);
+    if (!this.canEditTag(tag)) return this.setStatus('Você não tem permissão para excluir esta tag.', 'error');
     if (!confirm('Tem certeza que deseja excluir esta tag? Essa ação não pode ser desfeita.')) return;
     btnDeleteTag.disabled = true;
     try {
@@ -623,7 +633,8 @@ const app = {
       });
       el.innerHTML = selectedTags.map(tag => {
         const id = Number(tag.id);
-        return `<div class="tag-pill inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${config.activeClass}"><button type="button" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button><button type="button" data-edit-tag-id="${id}" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button></div>`;
+        const editButton = this.canEditTag(tag) ? `<button type="button" data-edit-tag-id="${id}" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button>` : '';
+        return `<div class="tag-pill inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${config.activeClass}"><button type="button" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button>${editButton}</div>`;
       }).join('');
       el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
       el.querySelectorAll('[data-edit-tag-id]').forEach(btn => btn.onclick = () => this.openEditTagModal(Number(btn.dataset.editTagId)));
@@ -644,7 +655,8 @@ const app = {
     if (!filtered.length) { el.innerHTML = '<span class="text-xs text-slate-400">Nenhuma tag para exibir.</span>'; return; }
     el.innerHTML = filtered.map(tag => {
       const id = Number(tag.id); const active = currentSelected.includes(id);
-      return `<div class="tag-pill inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${active ? config.activeClass : 'bg-slate-800 text-slate-300 border-slate-600'}"><button type="button" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button><button type="button" data-edit-tag-id="${id}" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button></div>`;
+      const editButton = this.canEditTag(tag) ? `<button type="button" data-edit-tag-id="${id}" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button>` : '';
+      return `<div class="tag-pill inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${active ? config.activeClass : 'bg-slate-800 text-slate-300 border-slate-600'}"><button type="button" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button>${editButton}</div>`;
     }).join('');
     el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
     el.querySelectorAll('[data-edit-tag-id]').forEach(btn => btn.onclick = () => this.openEditTagModal(Number(btn.dataset.editTagId)));

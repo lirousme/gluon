@@ -3806,11 +3806,11 @@ elseif ($action === 'get_tag_family') {
         $relationTypeHierarchy[$typeId] = (int)($typeRow['hierarquia'] ?? 0);
     }
 
-    $stmtChildren = $pdo->prepare("SELECT t.id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color, tf.tipo_de_relacao FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_child WHERE tf.id_user IN (?, 5) AND tf.id_tag_mother = ? AND t.user_id IN (?,5)");
+    $stmtChildren = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color, tf.tipo_de_relacao FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_child WHERE tf.id_user IN (?, 5) AND tf.id_tag_mother = ? AND t.user_id IN (?,5)");
     $stmtChildren->execute([$user_id, $tag_id, $user_id]);
     $children = $stmtChildren->fetchAll(PDO::FETCH_ASSOC);
 
-    $stmtMothers = $pdo->prepare("SELECT t.id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color, tf.tipo_de_relacao FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_mother WHERE tf.id_user IN (?, 5) AND tf.id_tag_child = ? AND t.user_id IN (?,5)");
+    $stmtMothers = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color, tf.tipo_de_relacao FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_mother WHERE tf.id_user IN (?, 5) AND tf.id_tag_child = ? AND t.user_id IN (?,5)");
     $stmtMothers->execute([$user_id, $tag_id, $user_id]);
     $mothers = $stmtMothers->fetchAll(PDO::FETCH_ASSOC);
 
@@ -3853,7 +3853,7 @@ elseif ($action === 'get_tag_family') {
             if (empty($connectedIds)) continue;
 
             $idPlaceholders = implode(',', array_fill(0, count($connectedIds), '?'));
-            $tagStmt = $pdo->prepare("SELECT id, name_encrypted, name_pt_br_encrypted, numero, color FROM flashcard_tags WHERE id IN ($idPlaceholders) AND user_id IN (?,5)");
+            $tagStmt = $pdo->prepare("SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, color FROM flashcard_tags WHERE id IN ($idPlaceholders) AND user_id IN (?,5)");
             $tagStmt->execute(array_merge($connectedIds, [$user_id]));
             foreach ($tagStmt->fetchAll(PDO::FETCH_ASSOC) as $connectedTag) {
                 $connectedTag['tipo_de_relacao'] = $relationTypeId;

@@ -30,10 +30,10 @@
         <button id="orphanTagsBtn" type="button" onclick="goToOrphanTags()" class="h-9 px-3 rounded-lg border border-red-500 bg-red-600/80 text-sm text-white hover:bg-red-500 transition-colors" title="Tags sem vínculos">0</button>
         <button id="btnShowLayerGroupMessage" type="button" class="h-9 w-9 rounded-lg border border-sky-500/50 text-sky-300 hover:text-sky-200 hover:bg-sky-500/20 transition-colors text-sm font-medium" title="Mostrar mensagem no console" aria-label="Mostrar mensagem no console"><i class="fa-solid fa-book"></i></button>
       </div>
-      
+
       <h1 class="text-2xl font-semibold text-center"></h1>
       <div class="absolute right-4 flex items-center gap-2">
-        <button id="btnOpenCurrentTagActions" type="button" class="h-9 w-9 rounded-lg border border-amber-500/50 text-amber-300 hover:text-amber-200 hover:bg-amber-500/20 transition-colors text-sm font-medium" title="Editar a tag atual" aria-label="Editar a tag atual"><i class="fa-solid fa-pen-to-square"></i></button>
+        <button id="btnOpenCurrentTagActions" type="button" class="hidden h-9 w-9 rounded-lg border border-amber-500/50 text-amber-300 hover:text-amber-200 hover:bg-amber-500/20 transition-colors text-sm font-medium" title="Editar a tag atual" aria-label="Editar a tag atual"><i class="fa-solid fa-pen-to-square"></i></button>
         <button id="btnOpenCreateTagModal" type="button" class="h-9 w-9 rounded-lg border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors text-lg font-semibold" title="Criar nova tag"><i class="fa-solid fa-plus"></i></button>
         <button id="btnOpenCreateRelationTypeModal" type="button" class="h-9 w-9 rounded-lg border border-emerald-500/50 text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/20 transition-colors text-lg font-semibold" title="Criar novo tipo de relação"><i class="fa-solid fa-folder-plus"></i></button>
       </div>
@@ -82,7 +82,7 @@
   }, { passive: false });
 })();
 const params = new URLSearchParams(window.location.search);
-const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: null, removalRelationType: null, tags: [], family: {mothers:[], children:[]}, relationTypes: [], orphanTagsCount: 0, savedFilters: [] };
+const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: null, removalRelationType: null, tags: [], family: {mothers:[], children:[]}, relationTypes: [], orphanTagsCount: 0, savedFilters: [], sessionUserId: null };
 const title = document.getElementById('tagFamilyMainTitle');
 title.textContent = state.tagName || 'Tag';
 
@@ -156,6 +156,9 @@ function goToOrphanTags(){
   window.location.href='/views/tags_sem_vinculos.html';
 }
 async function api(action,payload={}){payload.action=action;const r=await fetch('/api/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();if(!r.ok||j.status!=='success')throw new Error(j.message||'Erro');return j;}
+async function loadSessionUserId(){try{const r=await fetch('/api/user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'get_session'})});if(!r.ok)return;const j=await r.json();const parsed=Number(j?.id??j?.data?.id);if(Number.isInteger(parsed)&&parsed>0)state.sessionUserId=parsed;}catch(_){}}
+function canEditTag(tag={}){const tagUserId=Number(tag?.user_id);const sessionId=Number(state.sessionUserId);return Number.isInteger(tagUserId)&&tagUserId>0&&Number.isInteger(sessionId)&&sessionId>0&&tagUserId===sessionId;}
+function updateCurrentTagEditButton(){const btn=document.getElementById('btnOpenCurrentTagActions');if(!btn)return;const current=getCurrentTag();btn.classList.toggle('hidden',!canEditTag(current));}
 async function translateTagFieldsWithGemini(nameInputId,namePtBrInputId,buttonId){const nameInput=document.getElementById(nameInputId);const namePtBrInput=document.getElementById(namePtBrInputId);const btn=document.getElementById(buttonId);const englishText=nameInput.value.trim();const ptBrText=namePtBrInput.value.trim();if(englishText&&ptBrText){alert('Deixe apenas um dos campos de texto da tag preenchido para traduzir para o outro.');return;}if(!englishText&&!ptBrText){alert('Preencha o nome em inglês ou em pt-BR para traduzir a tag.');return;}const originalHtml=btn.innerHTML;const translatingFromEnglish=Boolean(englishText);btn.innerHTML='<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> Traduzindo...';btn.disabled=true;try{const res=await api('translate_text_gemini',{text:translatingFromEnglish?englishText:ptBrText,source_language:translatingFromEnglish?'en-US':'pt-BR',target_language:translatingFromEnglish?'pt-BR':'en-US'});if(!res||!res.translation) throw new Error('A API não retornou uma tradução válida.');if(translatingFromEnglish) namePtBrInput.value=res.translation;else nameInput.value=res.translation;}catch(err){alert('Falha ao traduzir tag com Gemini: '+(err.message||'erro desconhecido'));}finally{btn.innerHTML=originalHtml;btn.disabled=false;}}
 function renderFooterTags(){
   document.getElementById('selectedRelationTypeLabel').textContent=`(${getRelationTypeLabel(state.selectedRelationType)})`;
@@ -326,6 +329,7 @@ async function load(){
   state.relationTypes=(relationTypes.data||[]).map((item)=>({id:Number(item.id),nome:String(item.nome||''),hierarquia:Number(item.hierarquia||0)}));
   state.orphanTagsCount=Number(orphanTags.count||0);
   renderOrphanTagsButton();
+  updateCurrentTagEditButton();
   if(state.selectedRelationType===null){
     state.selectedRelationType=state.relationTypes.length?Number(state.relationTypes[0].id):0;
   }
@@ -359,7 +363,7 @@ document.getElementById('footerTagSearch').addEventListener('input',renderFooter
 
 document.getElementById('relationModeSwitch').addEventListener('click',()=>{state.mode=state.mode==='child'?'mother':'child';document.getElementById('relationModeSwitch').textContent=state.mode==='child'?'Adicionando filhas':'Adicionando mães';});
 function getCurrentTag(){return state.tags.find((item)=>Number(item.id)===state.tagId)||{id:state.tagId,name:state.tagName};}
-function openCurrentTagEditModal(){if(!state.tagId) return;openEditTagModal(getCurrentTag());}
+function openCurrentTagEditModal(){if(!state.tagId) return;const tag=getCurrentTag();if(!canEditTag(tag)) return;openEditTagModal(tag);}
 async function removeFamilyTag(tag, relationRole){
   if(!tag) return;
   const relationTypeId=getTagRelationType(tag);
@@ -379,12 +383,12 @@ async function removeFamilyTag(tag, relationRole){
 function isTagPinned(tagId){return state.savedFilters.some((filter)=>Number(filter.id_tag)===Number(tagId));}
 function updatePinTagButton(){const btn=document.getElementById('btnTogglePinnedTag');if(!btn) return;const tagId=Number(document.getElementById('editTagIdInput').value||0);const pinned=isTagPinned(tagId);btn.classList.toggle('border-sky-400',pinned);btn.classList.toggle('bg-sky-600',pinned);btn.classList.toggle('text-white',pinned);btn.classList.toggle('hover:bg-sky-500',pinned);btn.classList.toggle('border-slate-600',!pinned);btn.classList.toggle('bg-slate-700',!pinned);btn.classList.toggle('text-slate-200',!pinned);btn.classList.toggle('hover:bg-slate-600',!pinned);btn.title=pinned?'Desfixar tag':'Fixar tag';btn.setAttribute('aria-label',btn.title);}
 async function togglePinnedTag(){const btn=document.getElementById('btnTogglePinnedTag');const tagId=Number(document.getElementById('editTagIdInput').value||0);if(!tagId||btn?.disabled) return;btn.disabled=true;try{if(isTagPinned(tagId)){await api('remove_saved_filter',{tag_id:tagId});}else{await api('toggle_saved_filter',{tag_id:tagId});}const savedFilters=await api('list_saved_filters');state.savedFilters=savedFilters.data||[];updatePinTagButton();}finally{btn.disabled=false;}}
-function openEditTagModal(tag){if(!tag) return;const normalizedTag=state.tags.find((item)=>Number(item.id)===Number(tag.id))||tag;document.getElementById('editTagIdInput').value=String(normalizedTag.id);document.getElementById('editTagNameInput').value=String(normalizedTag.name||'');document.getElementById('editTagNamePtBrInput').value=String(normalizedTag.name_pt_br||'');document.getElementById('editTagNumeroInput').value=(normalizedTag.numero??'');updatePinTagButton();const m=document.getElementById('editTagModal');const c=document.getElementById('editTagModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');document.getElementById('editTagNameInput').focus();},20);} 
-function closeEditTagModal(){const m=document.getElementById('editTagModal');const c=document.getElementById('editTagModalContent');m.classList.add('opacity-0');c.classList.add('scale-95');setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);} 
-async function submitEditTag(e){e.preventDefault();const id=Number(document.getElementById('editTagIdInput').value||0);const original=state.tags.find(t=>Number(t.id)===id)||{};const name=document.getElementById('editTagNameInput').value.trim();await api('update_tag',{id,name,name_pt_br:document.getElementById('editTagNamePtBrInput').value.trim(),numero:document.getElementById('editTagNumeroInput').value.trim(),is_book:Number(original.is_book||0),is_verb_tense:Number(original.is_verb_tense||0),is_sentence_type:Number(original.is_sentence_type||0),is_lexical_chunk:Number(original.is_lexical_chunk||0),is_relation_type:Number(original.is_relation_type||0),is_word:Number(original.is_word||0),is_month:Number(original.is_month||0),is_day:Number(original.is_day||0),is_year:Number(original.is_year||0)});if(id===state.tagId){state.tagName=name;title.textContent=state.tagName||'Tag';const url=new URL(window.location.href);url.searchParams.set('tag_name',state.tagName);window.history.replaceState({},'',url);}closeEditTagModal();await load();}
-async function deleteTag(tagId=null){const id=Number(tagId||0);if(!id) return;const isCurrent=id===state.tagId;await api('delete_tag',{id});closeEditTagModal();if(isCurrent){window.location.href=getMarkedBackRoute();return;}await load();}
+function openEditTagModal(tag){if(!tag) return;const normalizedTag=state.tags.find((item)=>Number(item.id)===Number(tag.id))||tag;if(!canEditTag(normalizedTag)) return;document.getElementById('editTagIdInput').value=String(normalizedTag.id);document.getElementById('editTagNameInput').value=String(normalizedTag.name||'');document.getElementById('editTagNamePtBrInput').value=String(normalizedTag.name_pt_br||'');document.getElementById('editTagNumeroInput').value=(normalizedTag.numero??'');updatePinTagButton();const m=document.getElementById('editTagModal');const c=document.getElementById('editTagModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');document.getElementById('editTagNameInput').focus();},20);}
+function closeEditTagModal(){const m=document.getElementById('editTagModal');const c=document.getElementById('editTagModalContent');m.classList.add('opacity-0');c.classList.add('scale-95');setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');},180);}
+async function submitEditTag(e){e.preventDefault();const id=Number(document.getElementById('editTagIdInput').value||0);const original=state.tags.find(t=>Number(t.id)===id)||{};if(!canEditTag(original)) return;const name=document.getElementById('editTagNameInput').value.trim();await api('update_tag',{id,name,name_pt_br:document.getElementById('editTagNamePtBrInput').value.trim(),numero:document.getElementById('editTagNumeroInput').value.trim(),is_book:Number(original.is_book||0),is_verb_tense:Number(original.is_verb_tense||0),is_sentence_type:Number(original.is_sentence_type||0),is_lexical_chunk:Number(original.is_lexical_chunk||0),is_relation_type:Number(original.is_relation_type||0),is_word:Number(original.is_word||0),is_month:Number(original.is_month||0),is_day:Number(original.is_day||0),is_year:Number(original.is_year||0)});if(id===state.tagId){state.tagName=name;title.textContent=state.tagName||'Tag';const url=new URL(window.location.href);url.searchParams.set('tag_name',state.tagName);window.history.replaceState({},'',url);}closeEditTagModal();await load();}
+async function deleteTag(tagId=null){const id=Number(tagId||0);if(!id) return;const original=state.tags.find(t=>Number(t.id)===id)||{};if(!canEditTag(original)) return;const isCurrent=id===state.tagId;await api('delete_tag',{id});closeEditTagModal();if(isCurrent){window.location.href=getMarkedBackRoute();return;}await load();}
 function deleteEditedTag(){deleteTag(Number(document.getElementById('editTagIdInput').value||0));}
-window.addEventListener('DOMContentLoaded',()=>{
+window.addEventListener('DOMContentLoaded',async()=>{
   document.getElementById('btnOpenCreateTagModal').onclick=openCreateTagModal;
   document.getElementById('btnOpenCreateRelationTypeModal').onclick=openCreateRelationTypeModal;
   document.getElementById('btnOpenCurrentTagActions').onclick=openCurrentTagEditModal;
@@ -401,6 +405,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('btnTranslateEditTagGemini').onclick=()=>translateTagFieldsWithGemini('editTagNameInput','editTagNamePtBrInput','btnTranslateEditTagGemini');
   document.getElementById('btnTogglePinnedTag').onclick=togglePinnedTag;
   document.getElementById('editTagForm').addEventListener('submit',submitEditTag);
+  await loadSessionUserId();
   load();
 });
 </script>
