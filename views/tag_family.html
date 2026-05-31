@@ -239,9 +239,15 @@ function getRelationTypeLabel(type){
   const found=state.relationTypes.find((item)=>Number(item.id)===Number(type));
   return found?.nome || `Tipo de relação ${type}`;
 }
-function relationTypeUsesHierarchy(type){
+function getRelationTypeHierarchy(type){
   const found=state.relationTypes.find((item)=>Number(item.id)===Number(type));
-  return Number(found?.hierarquia||0)===1;
+  return Number(found?.hierarquia||0);
+}
+function relationTypeUsesHierarchy(type){
+  return getRelationTypeHierarchy(type)===1;
+}
+function relationTypeIsSimpleSet(type){
+  return getRelationTypeHierarchy(type)===0;
 }
 function openCreateRelationTypeModal(){
   document.getElementById('createRelationTypeNameInput').value='';
@@ -289,7 +295,7 @@ function renderFamily(){
     const mothers=state.family.mothers.filter((tag)=>getTagRelationType(tag)===type).map((tag)=>({...tag,__relationRole:'mother'}));
     const isSelected=state.selectedRelationType===type;
     const selectedClass=isSelected?'ring-2 ring-violet-400 border-violet-500/80':'border-slate-700/80';
-    if(!relationTypeUsesHierarchy(type)){
+    if(relationTypeIsSimpleSet(type)){
       const descendantsSection=`<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer">${buildSectionHeader(type,{labelPrefix:'(Descendentes) '})}<div><div class="flex flex-wrap gap-2">${mk(children,type)}</div></div></div>`;
       const ancestorsSection=`<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer">${buildSectionHeader(type,{labelPrefix:'(Ancestrais) ',showActions:false,allowRemoval:false})}<div><div class="flex flex-wrap gap-2">${mk(mothers,type,{allowRemoval:false})}</div></div></div>`;
       return `${descendantsSection}${ancestorsSection}`;
