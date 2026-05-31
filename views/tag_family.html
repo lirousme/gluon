@@ -82,7 +82,7 @@
   }, { passive: false });
 })();
 const params = new URLSearchParams(window.location.search);
-const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: null, removalRelationType: null, tags: [], family: {mothers:[], children:[]}, relationTypes: [], savedFilters: [], sessionUserId: null };
+const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: null, removalRelationType: null, tags: [], family: {mothers:[], children:[]}, relationTypes: [], savedFilters: [], sessionUserId: null, editingRelationTypeId: null };
 const title = document.getElementById('tagFamilyMainTitle');
 title.textContent = state.tagName || 'Tag';
 
@@ -151,6 +151,8 @@ function goToOrphanTags(){
 async function api(action,payload={}){payload.action=action;const r=await fetch('/api/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();if(!r.ok||j.status!=='success'){const error=new Error(j.message||'Erro');error.response=j;throw error;}return j;}
 async function loadSessionUserId(){try{const r=await fetch('/api/user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'get_session'})});if(!r.ok)return;const j=await r.json();const parsed=Number(j?.id??j?.data?.id);if(Number.isInteger(parsed)&&parsed>0)state.sessionUserId=parsed;}catch(_){}}
 function canEditTag(tag={}){const tagUserId=Number(tag?.user_id);const sessionId=Number(state.sessionUserId);return Number.isInteger(tagUserId)&&tagUserId>0&&Number.isInteger(sessionId)&&sessionId>0&&tagUserId===sessionId;}
+function canEditRelationType(relationType={}){const typeUserId=Number(relationType?.user_id);const sessionId=Number(state.sessionUserId);return Number.isInteger(typeUserId)&&typeUserId>0&&Number.isInteger(sessionId)&&sessionId>0&&typeUserId===sessionId;}
+function getRelationTypeById(type){return state.relationTypes.find((item)=>Number(item.id)===Number(type))||null;}
 function updateCurrentTagEditButton(){const btn=document.getElementById('btnOpenCurrentTagActions');if(!btn)return;const current=getCurrentTag();btn.classList.toggle('hidden',!canEditTag(current));}
 async function translateTagFieldsWithGemini(nameInputId,namePtBrInputId,buttonId){const nameInput=document.getElementById(nameInputId);const namePtBrInput=document.getElementById(namePtBrInputId);const btn=document.getElementById(buttonId);const englishText=nameInput.value.trim();const ptBrText=namePtBrInput.value.trim();if(englishText&&ptBrText){alert('Deixe apenas um dos campos de texto da tag preenchido para traduzir para o outro.');return;}if(!englishText&&!ptBrText){alert('Preencha o nome em inglês ou em pt-BR para traduzir a tag.');return;}const originalHtml=btn.innerHTML;const translatingFromEnglish=Boolean(englishText);btn.innerHTML='<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> Traduzindo...';btn.disabled=true;try{const res=await api('translate_text_gemini',{text:translatingFromEnglish?englishText:ptBrText,source_language:translatingFromEnglish?'en-US':'pt-BR',target_language:translatingFromEnglish?'pt-BR':'en-US'});if(!res||!res.translation) throw new Error('A API não retornou uma tradução válida.');if(translatingFromEnglish) namePtBrInput.value=res.translation;else nameInput.value=res.translation;}catch(err){alert('Falha ao traduzir tag com Gemini: '+(err.message||'erro desconhecido'));}finally{btn.innerHTML=originalHtml;btn.disabled=false;}}
 function renderFooterTags(){
@@ -271,8 +273,10 @@ function renderFamily(){
     return arr.map(t=>`<button type="button" data-family-tag-id="${Number(t.id)}" data-relation-role="${t.__relationRole||'child'}" class="px-2 py-1 rounded-full text-xs border ${isRemovalMode?'border-amber-300 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20 cursor-pointer':'border-red-400/70 bg-red-500/10 text-red-200 hover:bg-red-500/20'} transition-colors" title="${isRemovalMode?'Remover tag desta família':'Abrir família da tag'}">${renderTagButtonContent(t, numeroPtBrCounts)}</button>`).join('');
   };
   const buildSectionHeader=(type)=>{
+    const relationType=getRelationTypeById(type);
     const isRemovalMode=state.removalRelationType===type;
-    return `<div class="mb-3 flex items-start justify-between gap-3"><div><h3 class="text-sm font-semibold text-violet-200">${esc(getRelationTypeLabel(type))}</h3>${isRemovalMode?'<p class="mt-1 text-xs text-amber-300">Clique em uma tag desta sessão para removê-la daqui.</p>':''}</div><button type="button" data-toggle-removal-type="${type}" class="h-8 w-8 shrink-0 rounded-lg border ${isRemovalMode?'border-amber-300 bg-amber-500/20 text-amber-100':'border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white'} transition-colors" title="Remover tags desta sessão" aria-label="Remover tags desta sessão"><i class="fa-solid fa-folder-minus"></i></button></div>`;
+    const actionsButton=canEditRelationType(relationType)?`<button type="button" data-open-relation-type-actions="${type}" class="h-8 w-8 shrink-0 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors" title="Editar ou excluir esta sessão" aria-label="Editar ou excluir esta sessão"><i class="fa-solid fa-ellipsis-vertical"></i></button>`:'';
+    return `<div class="mb-3 flex items-start justify-between gap-3"><div><h3 class="text-sm font-semibold text-violet-200">${esc(getRelationTypeLabel(type))}</h3>${isRemovalMode?'<p class="mt-1 text-xs text-amber-300">Clique em uma tag desta sessão para removê-la daqui.</p>':''}</div><div class="flex shrink-0 items-center gap-2">${actionsButton}<button type="button" data-toggle-removal-type="${type}" class="h-8 w-8 shrink-0 rounded-lg border ${isRemovalMode?'border-amber-300 bg-amber-500/20 text-amber-100':'border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white'} transition-colors" title="Remover tags desta sessão" aria-label="Remover tags desta sessão"><i class="fa-solid fa-folder-minus"></i></button></div></div>`;
   };
   const familyTypes=[...new Set([...state.family.children,...state.family.mothers].map((tag)=>getTagRelationType(tag)))];
   const configuredTypes=state.relationTypes.map((item)=>Number(item.id));
@@ -296,9 +300,15 @@ function renderFamily(){
       renderFamily();
     });
   });
+  document.querySelectorAll('[data-open-relation-type-actions]').forEach((button)=>{
+    button.addEventListener('click',(ev)=>{
+      ev.stopPropagation();
+      openRelationTypeActionsModal(Number(button.dataset.openRelationTypeActions||0));
+    });
+  });
   document.querySelectorAll('.relation-type-card').forEach((card)=>{
     card.addEventListener('click',(ev)=>{
-      if(ev.target.closest('[data-family-tag-id],[data-toggle-removal-type]')) return;
+      if(ev.target.closest('[data-family-tag-id],[data-toggle-removal-type],[data-open-relation-type-actions]')) return;
       state.selectedRelationType=Number(card.dataset.relationType||0);
       renderFamily();
     });
@@ -326,7 +336,7 @@ async function load(){
   state.family=family.data||{mothers:[],children:[]};
   state.family.children=(state.family.children||[]).map((tag)=>({...tag, subjects_count: subjectsCountByTagId.get(Number(tag.id)) || 0}));
   state.family.mothers=(state.family.mothers||[]).map((tag)=>({...tag, subjects_count: subjectsCountByTagId.get(Number(tag.id)) || 0}));
-  state.relationTypes=(relationTypes.data||[]).map((item)=>({id:Number(item.id),nome:String(item.nome||''),hierarquia:Number(item.hierarquia||0)}));
+  state.relationTypes=(relationTypes.data||[]).map((item)=>({id:Number(item.id),nome:String(item.nome||''),user_id:Number(item.user_id||0),hierarquia:Number(item.hierarquia||0)}));
   updateCurrentTagEditButton();
   if(state.selectedRelationType===null){
     state.selectedRelationType=state.relationTypes.length?Number(state.relationTypes[0].id):0;
@@ -378,6 +388,10 @@ async function removeFamilyTag(tag, relationRole){
   }
   await load();
 }
+function openRelationTypeActionsModal(type){const relationType=getRelationTypeById(type);if(!canEditRelationType(relationType)) return;state.editingRelationTypeId=Number(relationType.id);document.getElementById('editRelationTypeNameInput').value=String(relationType.nome||'');const m=document.getElementById('editRelationTypeModal');const c=document.getElementById('editRelationTypeModalContent');m.classList.remove('hidden');m.classList.add('flex');setTimeout(()=>{m.classList.remove('opacity-0');c.classList.remove('scale-95');document.getElementById('editRelationTypeNameInput').focus();},20);}
+function closeRelationTypeActionsModal(){const m=document.getElementById('editRelationTypeModal');const c=document.getElementById('editRelationTypeModalContent');m.classList.add('opacity-0');c.classList.add('scale-95');setTimeout(()=>{m.classList.add('hidden');m.classList.remove('flex');state.editingRelationTypeId=null;},180);}
+async function submitEditRelationType(e){e.preventDefault();const id=Number(state.editingRelationTypeId||0);const relationType=getRelationTypeById(id);if(!canEditRelationType(relationType)) return;const name=document.getElementById('editRelationTypeNameInput').value.trim();if(!name){alert('Preencha o nome da sessão.');return;}const btn=document.getElementById('btnSubmitEditRelationType');if(btn?.disabled) return;if(btn) btn.disabled=true;try{await api('update_relation_type',{id,nome:name});closeRelationTypeActionsModal();await load();}finally{if(btn) btn.disabled=false;}}
+async function deleteEditingRelationType(){const id=Number(state.editingRelationTypeId||0);const relationType=getRelationTypeById(id);if(!canEditRelationType(relationType)) return;if(!confirm('Excluir esta sessão também removerá os vínculos dela. Deseja continuar?')) return;const btn=document.getElementById('btnDeleteRelationType');if(btn?.disabled) return;if(btn) btn.disabled=true;try{await api('delete_relation_type',{id});if(Number(state.selectedRelationType)===id) state.selectedRelationType=null;if(Number(state.removalRelationType)===id) state.removalRelationType=null;closeRelationTypeActionsModal();await load();}finally{if(btn) btn.disabled=false;}}
 function isTagPinned(tagId){return state.savedFilters.some((filter)=>Number(filter.id_tag)===Number(tagId));}
 function updatePinTagButton(){const btn=document.getElementById('btnTogglePinnedTag');if(!btn) return;const tagId=Number(document.getElementById('editTagIdInput').value||0);const pinned=isTagPinned(tagId);btn.classList.toggle('border-sky-400',pinned);btn.classList.toggle('bg-sky-600',pinned);btn.classList.toggle('text-white',pinned);btn.classList.toggle('hover:bg-sky-500',pinned);btn.classList.toggle('border-slate-600',!pinned);btn.classList.toggle('bg-slate-700',!pinned);btn.classList.toggle('text-slate-200',!pinned);btn.classList.toggle('hover:bg-slate-600',!pinned);btn.title=pinned?'Desfixar tag':'Fixar tag';btn.setAttribute('aria-label',btn.title);}
 async function togglePinnedTag(){const btn=document.getElementById('btnTogglePinnedTag');const tagId=Number(document.getElementById('editTagIdInput').value||0);if(!tagId||btn?.disabled) return;btn.disabled=true;try{if(isTagPinned(tagId)){await api('remove_saved_filter',{tag_id:tagId});}else{await api('toggle_saved_filter',{tag_id:tagId});}const savedFilters=await api('list_saved_filters');state.savedFilters=savedFilters.data||[];updatePinTagButton();}finally{btn.disabled=false;}}
@@ -402,6 +416,10 @@ window.addEventListener('DOMContentLoaded',async()=>{
   document.getElementById('btnCloseCreateRelationTypeModal').onclick=closeCreateRelationTypeModal;
   document.getElementById('createRelationTypeForm').addEventListener('submit',submitCreateRelationType);
   document.getElementById('btnCancelEditTag').onclick=closeEditTagModal;
+  document.getElementById('btnCancelEditRelationType').onclick=closeRelationTypeActionsModal;
+  document.getElementById('btnCloseEditRelationTypeModal').onclick=closeRelationTypeActionsModal;
+  document.getElementById('btnDeleteRelationType').onclick=deleteEditingRelationType;
+  document.getElementById('editRelationTypeForm').addEventListener('submit',submitEditRelationType);
   document.getElementById('btnCloseTagDeletionBlockedModal').onclick=closeTagDeletionBlockedModal;
   document.getElementById('btnConfirmTagDeletionBlockedModal').onclick=closeTagDeletionBlockedModal;
   document.getElementById('btnDeleteEditingTag').onclick=deleteEditedTag;
@@ -412,6 +430,28 @@ window.addEventListener('DOMContentLoaded',async()=>{
   load();
 });
 </script>
+  <div id="editRelationTypeModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 opacity-0 transition-opacity duration-200 p-4" role="dialog" aria-modal="true" aria-labelledby="editRelationTypeTitle">
+    <div id="editRelationTypeModalContent" class="w-[92%] max-w-md rounded-xl border border-slate-700 bg-slate-900 p-4 scale-95 transition-transform duration-200">
+      <form id="editRelationTypeForm" class="space-y-4">
+        <div class="flex items-center justify-between gap-3">
+          <h3 id="editRelationTypeTitle" class="text-lg font-semibold">Editar sessão</h3>
+          <button id="btnCloseEditRelationTypeModal" type="button" class="text-slate-400 hover:text-white text-xl" aria-label="Fechar">&times;</button>
+        </div>
+        <div>
+          <label for="editRelationTypeNameInput" class="mb-1 block text-sm text-slate-300">Nome da sessão</label>
+          <input id="editRelationTypeNameInput" type="text" maxlength="120" placeholder="Nome da sessão" class="w-full bg-slate-950 border border-slate-600 rounded-lg py-2 px-3">
+        </div>
+        <div class="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
+          <button type="button" id="btnDeleteRelationType" class="px-4 py-2 rounded-lg border border-red-500/60 text-red-300 hover:bg-red-500/10">Excluir sessão</button>
+          <div class="flex justify-end gap-2">
+            <button type="button" id="btnCancelEditRelationType" class="px-4 py-2 rounded-lg border border-slate-600">Cancelar</button>
+            <button type="submit" id="btnSubmitEditRelationType" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500">Salvar</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="editTagModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 opacity-0 transition-opacity duration-200">
     <div id="editTagModalContent" class="w-[92%] max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-4 scale-95 transition-transform duration-200">
       <div class="mb-3 flex items-center justify-between gap-3">

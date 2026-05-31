@@ -3756,7 +3756,7 @@ elseif ($action === 'delete_tag') {
 elseif ($action === 'list_relation_types') {
     ensureRelationTypeEncryptedNameCapacity($pdo);
 
-    $stmt = $pdo->prepare("SELECT id, nome, hierarquia FROM tipo_de_relacao WHERE id_user IN (?, 5) ORDER BY id_user = 5 ASC, id ASC");
+    $stmt = $pdo->prepare("SELECT id, id_user, nome, hierarquia FROM tipo_de_relacao WHERE id_user IN (?, 5) ORDER BY id_user = 5 ASC, id ASC");
     $stmt->execute([$user_id]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -3770,6 +3770,7 @@ elseif ($action === 'list_relation_types') {
             $merged[$id] = [
                 'id' => $id,
                 'nome' => $nomeDec !== false ? (string)$nomeDec : (looksLikeEncryptedRelationTypeName($nomeRaw) ? '' : $nomeRaw),
+                'user_id' => (int)($row['id_user'] ?? 0),
                 'hierarquia' => (int)($row['hierarquia'] ?? 0)
             ];
         }
@@ -3824,6 +3825,69 @@ elseif ($action === 'create_relation_type') {
     }
 
     echo json_encode(['status'=>'success','message'=>'Tipo de relação criado com sucesso.', 'id'=>$relationTypeId]);
+}
+
+elseif ($action === 'update_relation_type') {
+    ensureRelationTypeEncryptedNameCapacity($pdo);
+
+    $relationTypeId = (int)($input['id'] ?? 0);
+    $nome = trim((string)($input['nome'] ?? ''));
+    $nome = preg_replace('/\s+/u', ' ', $nome);
+
+    if ($relationTypeId <= 0) die(json_encode(['status'=>'error','message'=>'Sessão inválida.']));
+    if ($nome === '') die(json_encode(['status'=>'error','message'=>'Nome é obrigatório.']));
+
+    $nomeEnc = Security::encryptData($nome);
+    $stmt = $pdo->prepare("UPDATE tipo_de_relacao SET nome = ? WHERE id = ? AND id_user = ?");
+    $stmt->execute([$nomeEnc, $relationTypeId, $user_id]);
+
+    if ($stmt->rowCount() === 0) {
+        $checkStmt = $pdo->prepare("SELECT id FROM tipo_de_relacao WHERE id = ? AND id_user = ? LIMIT 1");
+        $checkStmt->execute([$relationTypeId, $user_id]);
+        if (!$checkStmt->fetchColumn()) {
+            die(json_encode(['status'=>'error','message'=>'Sessão não encontrada ou sem permissão.']));
+        }
+    }
+
+    $stmtCheck = $pdo->prepare("SELECT nome FROM tipo_de_relacao WHERE id = ? AND id_user = ? LIMIT 1");
+    $stmtCheck->execute([$relationTypeId, $user_id]);
+    $storedNome = (string)($stmtCheck->fetchColumn() ?: '');
+    if (Security::decryptData($storedNome) !== $nome) {
+        http_response_code(500);
+        die(json_encode(['status'=>'error','message'=>'Não foi possível salvar o nome criptografado completo da sessão. Verifique o tamanho da coluna tipo_de_relacao.nome.']));
+    }
+
+    echo json_encode(['status'=>'success','message'=>'Sessão atualizada com sucesso.']);
+}
+
+elseif ($action === 'delete_relation_type') {
+    $relationTypeId = (int)($input['id'] ?? 0);
+    if ($relationTypeId <= 0) die(json_encode(['status'=>'error','message'=>'Sessão inválida.']));
+
+    try {
+        $pdo->beginTransaction();
+
+        $checkStmt = $pdo->prepare("SELECT id FROM tipo_de_relacao WHERE id = ? AND id_user = ? LIMIT 1 FOR UPDATE");
+        $checkStmt->execute([$relationTypeId, $user_id]);
+        if (!$checkStmt->fetchColumn()) {
+            $pdo->rollBack();
+            die(json_encode(['status'=>'error','message'=>'Sessão não encontrada ou sem permissão.']));
+        }
+
+        $deleteRelations = $pdo->prepare("DELETE FROM tag_family WHERE id_user = ? AND tipo_de_relacao = ?");
+        $deleteRelations->execute([$user_id, $relationTypeId]);
+
+        $deleteType = $pdo->prepare("DELETE FROM tipo_de_relacao WHERE id = ? AND id_user = ? LIMIT 1");
+        $deleteType->execute([$relationTypeId, $user_id]);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('[flashcards][delete_relation_type] ' . $e->getMessage());
+        die(json_encode(['status'=>'error','message'=>'Erro interno ao excluir sessão.']));
+    }
+
+    echo json_encode(['status'=>'success','message'=>'Sessão excluída com sucesso.']);
 }
 
 elseif ($action === 'get_tag_family') {
