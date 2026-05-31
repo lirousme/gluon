@@ -239,15 +239,9 @@ function getRelationTypeLabel(type){
   const found=state.relationTypes.find((item)=>Number(item.id)===Number(type));
   return found?.nome || `Tipo de relação ${type}`;
 }
-function getRelationTypeHierarchy(type){
-  const found=state.relationTypes.find((item)=>Number(item.id)===Number(type));
-  return Number(found?.hierarquia||0);
-}
 function relationTypeUsesHierarchy(type){
-  return getRelationTypeHierarchy(type)===1;
-}
-function relationTypeIsSimpleSet(type){
-  return getRelationTypeHierarchy(type)===0;
+  const found=state.relationTypes.find((item)=>Number(item.id)===Number(type));
+  return Number(found?.hierarquia||0)===1;
 }
 function openCreateRelationTypeModal(){
   document.getElementById('createRelationTypeNameInput').value='';
@@ -272,19 +266,17 @@ function getTagRelationType(tag={}){
   return 0;
 }
 function renderFamily(){
-  const mk=(arr,type,{allowRemoval=true}={})=>{
+  const mk=(arr,type)=>{
     if(!arr.length) return '<span class="text-xs text-slate-400">Nenhuma</span>';
-    const isRemovalMode=allowRemoval&&state.removalRelationType===type;
+    const isRemovalMode=state.removalRelationType===type;
     const numeroPtBrCounts = buildNumeroPtBrCounts(arr);
-    return arr.map(t=>`<button type="button" data-family-tag-id="${Number(t.id)}" data-relation-role="${t.__relationRole||'child'}" data-family-removal-enabled="${isRemovalMode?'1':'0'}" class="px-2 py-1 rounded-full text-xs border ${isRemovalMode?'border-amber-300 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20 cursor-pointer':'border-red-400/70 bg-red-500/10 text-red-200 hover:bg-red-500/20'} transition-colors" title="${isRemovalMode?'Remover tag desta família':'Abrir família da tag'}">${renderTagButtonContent(t, numeroPtBrCounts)}</button>`).join('');
+    return arr.map(t=>`<button type="button" data-family-tag-id="${Number(t.id)}" data-relation-role="${t.__relationRole||'child'}" class="px-2 py-1 rounded-full text-xs border ${isRemovalMode?'border-amber-300 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20 cursor-pointer':'border-red-400/70 bg-red-500/10 text-red-200 hover:bg-red-500/20'} transition-colors" title="${isRemovalMode?'Remover tag desta família':'Abrir família da tag'}">${renderTagButtonContent(t, numeroPtBrCounts)}</button>`).join('');
   };
-  const buildSectionHeader=(type,{labelPrefix='',showActions=true,allowRemoval=true}={})=>{
+  const buildSectionHeader=(type)=>{
     const relationType=getRelationTypeById(type);
-    const isRemovalMode=allowRemoval&&state.removalRelationType===type;
-    const actionsButton=showActions&&canEditRelationType(relationType)?`<button type="button" data-open-relation-type-actions="${type}" class="h-8 w-8 shrink-0 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors" title="Editar ou excluir esta sessão" aria-label="Editar ou excluir esta sessão"><i class="fa-solid fa-ellipsis-vertical"></i></button>`:'';
-    const removalButton=showActions?`<button type="button" data-toggle-removal-type="${type}" class="h-8 w-8 shrink-0 rounded-lg border ${isRemovalMode?'border-amber-300 bg-amber-500/20 text-amber-100':'border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white'} transition-colors" title="Remover tags desta sessão" aria-label="Remover tags desta sessão"><i class="fa-solid fa-folder-minus"></i></button>`:'';
-    const actionsHtml=actionsButton||removalButton?`<div class="flex shrink-0 items-center gap-2">${actionsButton}${removalButton}</div>`:'';
-    return `<div class="mb-3 flex items-start justify-between gap-3"><div><h3 class="text-sm font-semibold text-violet-200">${esc(labelPrefix)}${esc(getRelationTypeLabel(type))}</h3>${isRemovalMode?'<p class="mt-1 text-xs text-amber-300">Clique em uma tag desta sessão para removê-la daqui.</p>':''}</div>${actionsHtml}</div>`;
+    const isRemovalMode=state.removalRelationType===type;
+    const actionsButton=canEditRelationType(relationType)?`<button type="button" data-open-relation-type-actions="${type}" class="h-8 w-8 shrink-0 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors" title="Editar ou excluir esta sessão" aria-label="Editar ou excluir esta sessão"><i class="fa-solid fa-ellipsis-vertical"></i></button>`:'';
+    return `<div class="mb-3 flex items-start justify-between gap-3"><div><h3 class="text-sm font-semibold text-violet-200">${esc(getRelationTypeLabel(type))}</h3>${isRemovalMode?'<p class="mt-1 text-xs text-amber-300">Clique em uma tag desta sessão para removê-la daqui.</p>':''}</div><div class="flex shrink-0 items-center gap-2">${actionsButton}<button type="button" data-toggle-removal-type="${type}" class="h-8 w-8 shrink-0 rounded-lg border ${isRemovalMode?'border-amber-300 bg-amber-500/20 text-amber-100':'border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white'} transition-colors" title="Remover tags desta sessão" aria-label="Remover tags desta sessão"><i class="fa-solid fa-folder-minus"></i></button></div></div>`;
   };
   const familyTypes=[...new Set([...state.family.children,...state.family.mothers].map((tag)=>getTagRelationType(tag)))];
   const configuredTypes=state.relationTypes.map((item)=>Number(item.id));
@@ -295,10 +287,8 @@ function renderFamily(){
     const mothers=state.family.mothers.filter((tag)=>getTagRelationType(tag)===type).map((tag)=>({...tag,__relationRole:'mother'}));
     const isSelected=state.selectedRelationType===type;
     const selectedClass=isSelected?'ring-2 ring-violet-400 border-violet-500/80':'border-slate-700/80';
-    if(relationTypeIsSimpleSet(type)){
-      const descendantsSection=`<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer">${buildSectionHeader(type,{labelPrefix:'(Descendentes) '})}<div><div class="flex flex-wrap gap-2">${mk(children,type)}</div></div></div>`;
-      const ancestorsSection=`<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer">${buildSectionHeader(type,{labelPrefix:'(Ancestrais) ',showActions:false,allowRemoval:false})}<div><div class="flex flex-wrap gap-2">${mk(mothers,type,{allowRemoval:false})}</div></div></div>`;
-      return `${descendantsSection}${ancestorsSection}`;
+    if(!relationTypeUsesHierarchy(type)){
+      return `<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer">${buildSectionHeader(type)}<div><div class="flex flex-wrap gap-2">${mk(children,type)}</div></div></div>`;
     }
     return `<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer">${buildSectionHeader(type)}<div class="grid md:grid-cols-2 gap-4"><div><p class="text-red-300 text-sm mb-2">Esta tag é mãe de:</p><div class="flex flex-wrap gap-2">${mk(children,type)}</div></div><div><p class="text-red-300 text-sm mb-2">Esta tag é filha de:</p><div class="flex flex-wrap gap-2">${mk(mothers,type)}</div></div></div></div>`;
   }).join('');
@@ -329,7 +319,7 @@ function renderFamily(){
       const relationRole=el.dataset.relationRole||'child';
       const relationType=Number(el.closest('[data-relation-type]')?.dataset.relationType||0);
       const tag=[...state.family.children,...state.family.mothers].find((item)=>Number(item.id)===targetId&&getTagRelationType(item)===relationType);
-      if(state.removalRelationType===relationType&&el.dataset.familyRemovalEnabled==='1'){
+      if(state.removalRelationType===relationType){
         await removeFamilyTag(tag||{id:targetId,name:el.textContent||'',tipo_de_relacao:relationType}, relationRole);
         return;
       }
