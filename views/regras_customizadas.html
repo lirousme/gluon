@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Regras Customizadas</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <style>
+    html,
+    body {
+      touch-action: pan-x pan-y;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+
+    input,
+    textarea,
+    select,
+    button {
+      font-size: 16px;
+    }
+
+    .tag-pill,
+    .tag-pill button {
+      font-size: 0.6875rem;
+      line-height: 0.875rem;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen">
+  <div class="min-h-screen flex flex-col">
+    <header class="relative flex items-center justify-center border-b border-slate-700 px-4 py-3 bg-slate-950">
+      <div class="absolute left-4 flex items-center gap-2">
+        <button id="btnBack" type="button" class="h-9 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800" title="Voltar" aria-label="Voltar">
+          <i class="fa-solid fa-left-long" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <h1 class="text-base font-semibold text-slate-100 sm:text-lg">Regras Customizadas</h1>
+    </header>
+
+    <main class="flex-1 px-4 py-6 max-w-4xl mx-auto w-full space-y-5">
+      <section class="rounded-xl border border-slate-700 bg-slate-950/70 p-5 shadow-xl">
+        <div class="mb-4 flex items-center gap-2 text-slate-100">
+          <i class="fa-solid fa-tags text-emerald-300" aria-hidden="true"></i>
+          <h2 class="text-lg font-semibold">Buscar tags</h2>
+        </div>
+        <input id="selectedSubjectTagIds" type="hidden" value="[]">
+        <div id="subjectTagSelector" class="flex flex-wrap gap-1.5 bg-slate-900/70 border border-slate-700 rounded-lg p-2 min-h-[44px]"></div>
+        <input id="subjectTagSearchInput" type="text" placeholder="Buscar..." class="w-full mt-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/20" autocomplete="off">
+        <p id="tagStatusMessage" class="mt-3 text-sm text-slate-400" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="rounded-xl border border-slate-700 bg-slate-950/70 p-5 shadow-xl">
+        <div class="mb-4 flex items-center gap-2 text-slate-100">
+          <i class="fa-solid fa-bridge-circle-exclamation text-violet-300" aria-hidden="true"></i>
+          <h2 class="text-lg font-semibold">Regra</h2>
+        </div>
+        <label for="customRuleSelect" class="mb-2 block text-sm font-medium text-slate-300">Selecione uma regra</label>
+        <div class="relative">
+          <select id="customRuleSelect" class="w-full appearance-none rounded-lg border border-slate-600 bg-slate-900 px-3 py-3 pr-10 text-slate-100 shadow-inner outline-none transition-colors hover:border-violet-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20">
+            <option>Regra 1</option>
+            <option>Regra 2</option>
+          </select>
+          <i class="fa-solid fa-chevron-down pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true"></i>
+        </div>
+        <button id="btnCreateRule" type="button" class="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 font-medium text-white transition-colors hover:bg-violet-500">
+          <i class="fa-solid fa-plus" aria-hidden="true"></i>
+          Criar regra
+        </button>
+      </section>
+    </main>
+  </div>
+
+  <script>
+(function lockMobileZoom(){
+  const viewport = document.querySelector('meta[name="viewport"]');
+  const lockedViewport = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+  if (viewport) viewport.setAttribute('content', lockedViewport);
+
+  const preventZoom = (event) => event.preventDefault();
+  document.addEventListener('gesturestart', preventZoom, { passive: false });
+  document.addEventListener('gesturechange', preventZoom, { passive: false });
+  document.addEventListener('gestureend', preventZoom, { passive: false });
+
+  document.addEventListener('touchmove', (event) => {
+    if (event.touches && event.touches.length > 1) event.preventDefault();
+  }, { passive: false });
+
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', (event) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) event.preventDefault();
+    lastTouchEnd = now;
+  }, { passive: false });
+
+  document.addEventListener('wheel', (event) => {
+    if (event.ctrlKey) event.preventDefault();
+  }, { passive: false });
+})();
+
+    const params = new URLSearchParams(window.location.search);
+
+    const app = {
+      availableTags: [],
+      sessionUserId: null,
+      tagPanels: {
+        subject: { selectedInputId: 'selectedSubjectTagIds', selectorId: 'subjectTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' }
+      },
+      normalizeRoute(rawRoute = '') {
+        let route = String(rawRoute || '').trim();
+        if (!route) return '';
+
+        for (let i = 0; i < 2; i += 1) {
+          try {
+            const decoded = decodeURIComponent(route);
+            if (decoded === route) break;
+            route = decoded;
+          } catch (_) {
+            break;
+          }
+        }
+
+        try {
+          const url = new URL(route, window.location.origin);
+          if (url.origin !== window.location.origin) return '';
+          return url.pathname + url.search + url.hash;
+        } catch (_) {
+          return '';
+        }
+      },
+      goBack() {
+        const from = this.normalizeRoute(params.get('from'));
+        const current = window.location.pathname + window.location.search + window.location.hash;
+        if (from && from !== current) {
+          window.location.href = from;
+          return;
+        }
+
+        if (window.history.length > 1) {
+          window.history.back();
+          return;
+        }
+
+        window.location.href = '/dashboard';
+      },
+      escapeHTML(str = '') {
+        return String(str).replace(/[&<>"']/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
+      },
+      setStatus(text, tone = 'neutral') {
+        const messageEl = document.getElementById('tagStatusMessage');
+        if (!messageEl) return;
+        messageEl.textContent = text;
+        messageEl.className = 'mt-3 text-sm ' + (tone === 'error' ? 'text-red-400' : tone === 'success' ? 'text-emerald-300' : 'text-slate-400');
+      },
+      async api(action, payload = {}) {
+        payload.action = action;
+        const response = await fetch('/api/flashcards', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const text = await response.text();
+        let json = null;
+        try {
+          json = text ? JSON.parse(text) : null;
+        } catch (_) {
+          throw new Error('A API retornou uma resposta inválida ao consultar tags.');
+        }
+        if (!json) throw new Error('A API retornou uma resposta vazia ao consultar tags.');
+        if (!response.ok || json.status !== 'success') throw new Error(json.message || 'Erro ao consultar tags.');
+        return json;
+      },
+      async loadSessionUserId() {
+        try {
+          const res = await fetch('/api/user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'get_session' })
+          });
+          if (!res.ok) return;
+          const data = await res.json();
+          const parsedId = Number(data?.id ?? data?.data?.id);
+          if (Number.isInteger(parsedId) && parsedId > 0) this.sessionUserId = parsedId;
+        } catch (_) {}
+      },
+      async loadTags() {
+        this.setStatus('Carregando tags...', 'neutral');
+        try {
+          const res = await this.api('list_tags');
+          this.availableTags = res?.data || [];
+          this.renderAllTagSelectors();
+          this.setStatus('Selecione uma ou mais tags para montar a regra.', 'neutral');
+        } catch (error) {
+          this.availableTags = [];
+          this.renderAllTagSelectors();
+          this.setStatus(error.message || 'Erro ao carregar tags.', 'error');
+        }
+      },
+      getVisibleTags() {
+        const sessionId = Number(this.sessionUserId);
+        return this.availableTags.filter((tag) => {
+          const tagUserId = Number(tag?.user_id);
+          if (!Number.isInteger(tagUserId) || tagUserId <= 0) return false;
+          return tagUserId === 5 || (Number.isInteger(sessionId) && sessionId > 0 && tagUserId === sessionId);
+        });
+      },
+      getPanelConfig(panel) {
+        return this.tagPanels[panel] || this.tagPanels.subject;
+      },
+      getSelectedTagIds(panel) {
+        const input = document.getElementById(this.getPanelConfig(panel).selectedInputId);
+        try {
+          return JSON.parse(input.value || '[]').map(Number).filter(Boolean);
+        } catch (_) {
+          return [];
+        }
+      },
+      setSelectedTagIds(panel, ids) {
+        document.getElementById(this.getPanelConfig(panel).selectedInputId).value = JSON.stringify(ids.map(Number).filter(Boolean));
+      },
+      handleTagSearch(panel, query = '') {
+        this.getPanelConfig(panel).searchQuery = query.trim().toLowerCase();
+        this.renderTagSelector(panel);
+      },
+      getTagLabel(tag = {}, numeroPtBrCounts = null) {
+        const numero = tag?.numero;
+        const hasNumero = numero !== null && numero !== undefined && String(numero).trim() !== '';
+        const name = String(tag?.name || '').trim();
+        const namePtBr = String(tag?.name_pt_br || '').trim();
+        if (hasNumero) {
+          const numeroKey = String(numero).trim();
+          const qtdTraducoes = numeroPtBrCounts?.get(numeroKey) || 0;
+          if (qtdTraducoes > 1 && namePtBr) return `${numeroKey} (${namePtBr})`;
+          return numeroKey;
+        }
+        return namePtBr ? `${name} (${namePtBr})` : name;
+      },
+      renderAllTagSelectors() {
+        Object.keys(this.tagPanels).forEach(panel => this.renderTagSelector(panel));
+      },
+      renderTagSelector(panel = 'subject', selectedIds = null) {
+        const config = this.getPanelConfig(panel);
+        const el = document.getElementById(config.selectorId);
+        const currentSelected = selectedIds ?? this.getSelectedTagIds(panel);
+        if (!el) return;
+        if (!this.availableTags.length) {
+          el.innerHTML = '<span class="text-xs text-slate-400">Sem tags cadastradas.</span>';
+          return;
+        }
+        const visibleTags = this.getVisibleTags();
+        if (!config.searchQuery) {
+          const selectedTags = visibleTags.filter(tag => currentSelected.includes(Number(tag.id)));
+          if (!selectedTags.length) {
+            el.innerHTML = '<span class="text-xs text-slate-400">Digite para buscar tags.</span>';
+            return;
+          }
+          this.renderTagPills(el, panel, selectedTags, currentSelected, true);
+          return;
+        }
+        const filtered = visibleTags.filter(t =>
+          String(t.name || '').toLowerCase().includes(config.searchQuery)
+          || String(t.name_pt_br || '').toLowerCase().includes(config.searchQuery)
+          || String(t.numero ?? '').toLowerCase().includes(config.searchQuery)
+        );
+        if (!filtered.length) {
+          el.innerHTML = '<span class="text-xs text-slate-400">Nenhuma tag para exibir.</span>';
+          return;
+        }
+        this.renderTagPills(el, panel, filtered, currentSelected, false);
+      },
+      renderTagPills(el, panel, tags, currentSelected, forceActive = false) {
+        const config = this.getPanelConfig(panel);
+        const numeroPtBrCounts = new Map();
+        tags.forEach(tag => {
+          const numero = tag?.numero;
+          const numeroKey = numero !== null && numero !== undefined ? String(numero).trim() : '';
+          const namePtBr = String(tag?.name_pt_br || '').trim();
+          if (numeroKey && namePtBr) numeroPtBrCounts.set(numeroKey, (numeroPtBrCounts.get(numeroKey) || 0) + 1);
+        });
+        el.innerHTML = tags.map(tag => {
+          const id = Number(tag.id);
+          const active = forceActive || currentSelected.includes(id);
+          return `<div class="tag-pill inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${active ? config.activeClass : 'bg-slate-800 text-slate-300 border-slate-600'}"><button type="button" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button></div>`;
+        }).join('');
+        el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
+      },
+      toggleTagSelection(panel, tagId) {
+        const ids = this.getSelectedTagIds(panel);
+        this.setSelectedTagIds(panel, ids.includes(tagId) ? ids.filter(id => id !== tagId) : [...ids, tagId]);
+        this.renderTagSelector(panel);
+      }
+    };
+
+    document.getElementById('btnBack').onclick = () => app.goBack();
+    document.getElementById('subjectTagSearchInput').oninput = (event) => app.handleTagSearch('subject', event.target.value);
+
+    (async () => {
+      await app.loadSessionUserId();
+      await app.loadTags();
+    })();
+  </script>
+</body>
+</html>

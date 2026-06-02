@@ -26,7 +26,8 @@
   <div class="min-h-screen flex flex-col">
     <header class="relative flex items-center justify-center border-b border-slate-700 px-4 py-3 bg-slate-950">
       <div class="absolute left-4 flex items-center gap-2">
-        <button type="button" onclick="goBackToMarkedRoute()" class="h-9 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"><i class="fa-solid fa-left-long"></i></button>
+        <button type="button" onclick="goBackToMarkedRoute()" class="h-9 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800" title="Voltar" aria-label="Voltar"><i class="fa-solid fa-left-long" aria-hidden="true"></i></button>
+        <button id="btnOpenCustomRules" type="button" class="h-9 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800" title="Regras customizadas" aria-label="Regras customizadas"><i class="fa-solid fa-bridge-circle-exclamation" aria-hidden="true"></i></button>
       </div>
 
       <span id="subjectCardsCount" class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-sm text-emerald-200">0 card(s)</span>
@@ -229,6 +230,14 @@
       window.location.href = getCardDaTagBackRoute();
     }
 
+    function openCustomRulesPage(){
+      const customRulesParams = new URLSearchParams();
+      customRulesParams.set('from', window.location.pathname + window.location.search);
+      if(state.tagId) customRulesParams.set('tag_id', String(state.tagId));
+      if(state.tagName) customRulesParams.set('tag_name', state.tagName);
+      window.location.href = `/views/regras_customizadas.html?${customRulesParams.toString()}`;
+    }
+
     async function api(action, payload = {}){
       payload.action = action;
       const response = await fetch('/api/flashcards', {
@@ -366,6 +375,7 @@
       const label = state.tagName || 'Tag';
       document.getElementById('selectedTagName').textContent = label;
       document.getElementById('btnOpenCreateCardModal').onclick = openCreateCardModal;
+      document.getElementById('btnOpenCustomRules').onclick = openCustomRulesPage;
       loadSubjectCards();
     });
   </script>
