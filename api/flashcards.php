@@ -3780,6 +3780,79 @@ elseif ($action === 'list_relation_types') {
 }
 
 
+elseif ($action === 'create_custom_rule') {
+    $numeroDaRegra = (int)($input['numero_da_regra'] ?? 0);
+    $idTipoDeRelacao = (int)($input['id_tipo_de_relacao'] ?? 0);
+    $parameterTagIds = sanitizeTagIds($input['parameter_tag_ids'] ?? []);
+    $relatedTagIds = sanitizeTagIds($input['related_tag_ids'] ?? []);
+    $allTagIds = array_values(array_unique(array_merge($parameterTagIds, $relatedTagIds)));
+
+    if ($numeroDaRegra <= 0) {
+        http_response_code(422);
+        die(json_encode(['status' => 'error', 'message' => 'Selecione uma regra válida.']));
+    }
+    if ($idTipoDeRelacao <= 0) {
+        http_response_code(422);
+        die(json_encode(['status' => 'error', 'message' => 'Selecione um tipo de relação válido.']));
+    }
+    if (!$allTagIds) {
+        http_response_code(422);
+        die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos uma tag.']));
+    }
+
+    $relationTypeStmt = $pdo->prepare("SELECT id FROM tipo_de_relacao WHERE id = ? AND id_user IN (?, 5) LIMIT 1");
+    $relationTypeStmt->execute([$idTipoDeRelacao, $user_id]);
+    if (!$relationTypeStmt->fetchColumn()) {
+        http_response_code(403);
+        die(json_encode(['status' => 'error', 'message' => 'Tipo de relação indisponível para este usuário.']));
+    }
+
+    $tagPlaceholders = implode(',', array_fill(0, count($allTagIds), '?'));
+    $tagStmt = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id IN ($tagPlaceholders) AND user_id IN (?, 5)");
+    $tagStmt->execute(array_merge($allTagIds, [$user_id]));
+    $allowedTagIds = array_map('intval', $tagStmt->fetchAll(PDO::FETCH_COLUMN));
+    $missingTagIds = array_diff($allTagIds, $allowedTagIds);
+    if ($missingTagIds) {
+        http_response_code(403);
+        die(json_encode(['status' => 'error', 'message' => 'Uma ou mais tags selecionadas não estão disponíveis para este usuário.']));
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $ruleStmt = $pdo->prepare("INSERT INTO regras_customizadas (id_user, numero_da_regra) VALUES (?, ?)");
+        $ruleStmt->execute([$user_id, $numeroDaRegra]);
+        $customRuleId = (int)$pdo->lastInsertId();
+
+        $ruleTagStmt = $pdo->prepare("INSERT INTO regras_tags (id_regra, id_tag, id_tipo_de_relacao, destino) VALUES (?, ?, ?, ?)");
+        foreach ($parameterTagIds as $tagId) {
+            $ruleTagStmt->execute([$customRuleId, $tagId, $idTipoDeRelacao, 0]);
+        }
+        foreach ($relatedTagIds as $tagId) {
+            $ruleTagStmt->execute([$customRuleId, $tagId, $idTipoDeRelacao, 1]);
+        }
+
+        $pdo->commit();
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Regra criada com sucesso.',
+            'data' => [
+                'id' => $customRuleId,
+                'numero_da_regra' => $numeroDaRegra,
+                'id_tipo_de_relacao' => $idTipoDeRelacao,
+                'parameter_tag_ids' => $parameterTagIds,
+                'related_tag_ids' => $relatedTagIds
+            ]
+        ]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('[flashcards][create_custom_rule] ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Erro ao criar regra customizada.']);
+    }
+}
+
+
 elseif ($action === 'get_user_system_deck') {
     $stmt = $pdo->prepare("
         SELECT id
