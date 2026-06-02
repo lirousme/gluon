@@ -54,6 +54,21 @@
 
       <section class="rounded-xl border border-slate-700 bg-slate-950/70 p-5 shadow-xl">
         <div class="mb-4 flex items-center gap-2 text-slate-100">
+          <i class="fa-solid fa-diagram-project text-sky-300" aria-hidden="true"></i>
+          <h2 class="text-lg font-semibold">Tipo de relação</h2>
+        </div>
+        <label for="relationTypeSelect" class="mb-2 block text-sm font-medium text-slate-300">Selecione um tipo de relação</label>
+        <div class="relative">
+          <select id="relationTypeSelect" class="w-full appearance-none rounded-lg border border-slate-600 bg-slate-900 px-3 py-3 pr-10 text-slate-100 shadow-inner outline-none transition-colors hover:border-sky-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20">
+            <option value="">Carregando tipos de relação...</option>
+          </select>
+          <i class="fa-solid fa-chevron-down pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true"></i>
+        </div>
+        <p id="relationTypeStatusMessage" class="mt-3 text-sm text-slate-400" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="rounded-xl border border-slate-700 bg-slate-950/70 p-5 shadow-xl">
+        <div class="mb-4 flex items-center gap-2 text-slate-100">
           <i class="fa-solid fa-bridge-circle-exclamation text-violet-300" aria-hidden="true"></i>
           <h2 class="text-lg font-semibold">Regra</h2>
         </div>
@@ -104,6 +119,8 @@
 
     const app = {
       availableTags: [],
+      relationTypes: [],
+      selectedRelationTypeId: null,
       sessionUserId: null,
       tagPanels: {
         subject: { selectedInputId: 'selectedSubjectTagIds', selectorId: 'subjectTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' }
@@ -154,6 +171,12 @@
         messageEl.textContent = text;
         messageEl.className = 'mt-3 text-sm ' + (tone === 'error' ? 'text-red-400' : tone === 'success' ? 'text-emerald-300' : 'text-slate-400');
       },
+      setRelationTypeStatus(text, tone = 'neutral') {
+        const messageEl = document.getElementById('relationTypeStatusMessage');
+        if (!messageEl) return;
+        messageEl.textContent = text;
+        messageEl.className = 'mt-3 text-sm ' + (tone === 'error' ? 'text-red-400' : tone === 'success' ? 'text-emerald-300' : 'text-slate-400');
+      },
       async api(action, payload = {}) {
         payload.action = action;
         const response = await fetch('/api/flashcards', {
@@ -166,10 +189,10 @@
         try {
           json = text ? JSON.parse(text) : null;
         } catch (_) {
-          throw new Error('A API retornou uma resposta inválida ao consultar tags.');
+          throw new Error('A API retornou uma resposta inválida.');
         }
-        if (!json) throw new Error('A API retornou uma resposta vazia ao consultar tags.');
-        if (!response.ok || json.status !== 'success') throw new Error(json.message || 'Erro ao consultar tags.');
+        if (!json) throw new Error('A API retornou uma resposta vazia.');
+        if (!response.ok || json.status !== 'success') throw new Error(json.message || 'Erro ao consultar dados.');
         return json;
       },
       async loadSessionUserId() {
@@ -197,6 +220,59 @@
           this.renderAllTagSelectors();
           this.setStatus(error.message || 'Erro ao carregar tags.', 'error');
         }
+      },
+      async loadRelationTypes() {
+        this.setRelationTypeStatus('Carregando tipos de relação...', 'neutral');
+        try {
+          const res = await this.api('list_relation_types');
+          this.relationTypes = (res?.data || []).map(item => ({
+            id: Number(item?.id),
+            nome: String(item?.nome || '').trim(),
+            user_id: Number(item?.user_id),
+            hierarquia: Number(item?.hierarquia ?? 0)
+          })).filter(item => Number.isInteger(item.id) && item.id > 0);
+          this.renderRelationTypeSelect();
+          this.setRelationTypeStatus(this.relationTypes.length ? 'Selecione o tipo de relação para a regra.' : 'Nenhum tipo de relação disponível.', 'neutral');
+        } catch (error) {
+          this.relationTypes = [];
+          this.renderRelationTypeSelect();
+          this.setRelationTypeStatus(error.message || 'Erro ao carregar tipos de relação.', 'error');
+        }
+      },
+      getVisibleRelationTypes() {
+        const sessionId = Number(this.sessionUserId);
+        return this.relationTypes.filter((relationType) => {
+          const relationUserId = Number(relationType?.user_id);
+          if (!Number.isInteger(relationUserId) || relationUserId <= 0) return false;
+          return relationUserId === 5 || (Number.isInteger(sessionId) && sessionId > 0 && relationUserId === sessionId);
+        });
+      },
+      getRelationTypeLabel(relationType = {}) {
+        const name = String(relationType?.nome || '').trim();
+        return name || `Tipo de relação ${Number(relationType?.id) || ''}`.trim();
+      },
+      renderRelationTypeSelect() {
+        const select = document.getElementById('relationTypeSelect');
+        if (!select) return;
+        const currentValue = Number(this.selectedRelationTypeId || select.value || 0);
+        const visibleTypes = this.getVisibleRelationTypes();
+        if (!visibleTypes.length) {
+          this.selectedRelationTypeId = null;
+          select.innerHTML = '<option value="">Nenhum tipo de relação disponível</option>';
+          select.disabled = true;
+          return;
+        }
+        select.disabled = false;
+        const selectedExists = visibleTypes.some(item => Number(item.id) === currentValue);
+        this.selectedRelationTypeId = selectedExists ? currentValue : Number(visibleTypes[0].id);
+        select.innerHTML = visibleTypes.map(item => {
+          const ownerLabel = Number(item.user_id) === 5 ? 'Global' : 'Meu';
+          return `<option value="${Number(item.id)}"${Number(item.id) === Number(this.selectedRelationTypeId) ? ' selected' : ''}>${this.escapeHTML(this.getRelationTypeLabel(item))} (${ownerLabel})</option>`;
+        }).join('');
+      },
+      handleRelationTypeSelection(value) {
+        const parsedId = Number(value);
+        this.selectedRelationTypeId = Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null;
       },
       getVisibleTags() {
         const sessionId = Number(this.sessionUserId);
@@ -295,10 +371,11 @@
 
     document.getElementById('btnBack').onclick = () => app.goBack();
     document.getElementById('subjectTagSearchInput').oninput = (event) => app.handleTagSearch('subject', event.target.value);
+    document.getElementById('relationTypeSelect').onchange = (event) => app.handleRelationTypeSelection(event.target.value);
 
     (async () => {
       await app.loadSessionUserId();
-      await app.loadTags();
+      await Promise.all([app.loadTags(), app.loadRelationTypes()]);
     })();
   </script>
 </body>
