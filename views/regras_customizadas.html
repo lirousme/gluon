@@ -44,7 +44,7 @@
       <section class="rounded-xl border border-slate-700 bg-slate-950/70 p-5 shadow-xl">
         <div class="mb-4 flex items-center gap-2 text-slate-100">
           <i class="fa-solid fa-tags text-emerald-300" aria-hidden="true"></i>
-          <h2 class="text-lg font-semibold">Tags Parâmetros</h2>
+          <h2 class="text-lg font-semibold">Tags Parâmetros (Mães)</h2>
         </div>
         <input id="selectedSubjectTagIds" type="hidden" value="[]">
         <div id="subjectTagSelector" class="flex flex-wrap gap-1.5 bg-slate-900/70 border border-slate-700 rounded-lg p-2 min-h-[44px]"></div>
@@ -55,11 +55,31 @@
       <section class="rounded-xl border border-slate-700 bg-slate-950/70 p-5 shadow-xl">
         <div class="mb-4 flex items-center gap-2 text-slate-100">
           <i class="fa-solid fa-tags text-emerald-300" aria-hidden="true"></i>
-          <h2 class="text-lg font-semibold">Tags à Relacionar</h2>
+          <h2 class="text-lg font-semibold">Tags Parâmetros (Filhas)</h2>
+        </div>
+        <input id="selectedSubjectChildTagIds" type="hidden" value="[]">
+        <div id="subjectChildTagSelector" class="flex flex-wrap gap-1.5 bg-slate-900/70 border border-slate-700 rounded-lg p-2 min-h-[44px]"></div>
+        <input id="subjectChildTagSearchInput" type="text" placeholder="Buscar..." class="w-full mt-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/20" autocomplete="off">
+      </section>
+
+      <section class="rounded-xl border border-slate-700 bg-slate-950/70 p-5 shadow-xl">
+        <div class="mb-4 flex items-center gap-2 text-slate-100">
+          <i class="fa-solid fa-tags text-emerald-300" aria-hidden="true"></i>
+          <h2 class="text-lg font-semibold">Tags à Relacionar (Mães)</h2>
         </div>
         <input id="selectedRelatedTagIds" type="hidden" value="[]">
         <div id="relatedTagSelector" class="flex flex-wrap gap-1.5 bg-slate-900/70 border border-slate-700 rounded-lg p-2 min-h-[44px]"></div>
         <input id="relatedTagSearchInput" type="text" placeholder="Buscar..." class="w-full mt-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/20" autocomplete="off">
+      </section>
+
+      <section class="rounded-xl border border-slate-700 bg-slate-950/70 p-5 shadow-xl">
+        <div class="mb-4 flex items-center gap-2 text-slate-100">
+          <i class="fa-solid fa-tags text-emerald-300" aria-hidden="true"></i>
+          <h2 class="text-lg font-semibold">Tags à Relacionar (Filhas)</h2>
+        </div>
+        <input id="selectedRelatedChildTagIds" type="hidden" value="[]">
+        <div id="relatedChildTagSelector" class="flex flex-wrap gap-1.5 bg-slate-900/70 border border-slate-700 rounded-lg p-2 min-h-[44px]"></div>
+        <input id="relatedChildTagSearchInput" type="text" placeholder="Buscar..." class="w-full mt-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/20" autocomplete="off">
       </section>
 
       <section class="rounded-xl border border-slate-700 bg-slate-950/70 p-5 shadow-xl">
@@ -135,7 +155,9 @@
       sessionUserId: null,
       tagPanels: {
         subject: { selectedInputId: 'selectedSubjectTagIds', selectorId: 'subjectTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' },
-        related: { selectedInputId: 'selectedRelatedTagIds', selectorId: 'relatedTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' }
+        subjectChild: { selectedInputId: 'selectedSubjectChildTagIds', selectorId: 'subjectChildTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' },
+        related: { selectedInputId: 'selectedRelatedTagIds', selectorId: 'relatedTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' },
+        relatedChild: { selectedInputId: 'selectedRelatedChildTagIds', selectorId: 'relatedChildTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' }
       },
       normalizeRoute(rawRoute = '') {
         let route = String(rawRoute || '').trim();
@@ -385,8 +407,8 @@
         const customRuleSelect = document.getElementById('customRuleSelect');
         const numeroDaRegra = Number(customRuleSelect?.value || 0);
         const idTipoDeRelacao = Number(this.selectedRelationTypeId || document.getElementById('relationTypeSelect')?.value || 0);
-        const parameterTagIds = this.getSelectedTagIds('subject');
-        const relatedTagIds = this.getSelectedTagIds('related');
+        const parameterTagIds = [...new Set([...this.getSelectedTagIds('subject'), ...this.getSelectedTagIds('subjectChild')])];
+        const relatedTagIds = [...new Set([...this.getSelectedTagIds('related'), ...this.getSelectedTagIds('relatedChild')])];
 
         if (!Number.isInteger(numeroDaRegra) || numeroDaRegra <= 0) {
           this.setCreateRuleStatus('Selecione uma regra válida.', 'error');
@@ -427,7 +449,9 @@
 
     document.getElementById('btnBack').onclick = () => app.goBack();
     document.getElementById('subjectTagSearchInput').oninput = (event) => app.handleTagSearch('subject', event.target.value);
+    document.getElementById('subjectChildTagSearchInput').oninput = (event) => app.handleTagSearch('subjectChild', event.target.value);
     document.getElementById('relatedTagSearchInput').oninput = (event) => app.handleTagSearch('related', event.target.value);
+    document.getElementById('relatedChildTagSearchInput').oninput = (event) => app.handleTagSearch('relatedChild', event.target.value);
     document.getElementById('relationTypeSelect').onchange = (event) => app.handleRelationTypeSelection(event.target.value);
     document.getElementById('btnCreateRule').onclick = () => app.createRule();
 
