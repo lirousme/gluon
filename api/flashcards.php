@@ -3783,9 +3783,16 @@ elseif ($action === 'list_relation_types') {
 elseif ($action === 'create_custom_rule') {
     $numeroDaRegra = (int)($input['numero_da_regra'] ?? 0);
     $idTipoDeRelacao = (int)($input['id_tipo_de_relacao'] ?? 0);
-    $parameterTagIds = sanitizeTagIds($input['parameter_tag_ids'] ?? []);
-    $relatedTagIds = sanitizeTagIds($input['related_tag_ids'] ?? []);
-    $allTagIds = array_values(array_unique(array_merge($parameterTagIds, $relatedTagIds)));
+    $parameterParentTagIds = sanitizeTagIds($input['parameter_parent_tag_ids'] ?? ($input['parameter_tag_ids'] ?? []));
+    $parameterChildTagIds = sanitizeTagIds($input['parameter_child_tag_ids'] ?? []);
+    $relatedParentTagIds = sanitizeTagIds($input['related_parent_tag_ids'] ?? ($input['related_tag_ids'] ?? []));
+    $relatedChildTagIds = sanitizeTagIds($input['related_child_tag_ids'] ?? []);
+    $allTagIds = array_values(array_unique(array_merge(
+        $parameterParentTagIds,
+        $parameterChildTagIds,
+        $relatedParentTagIds,
+        $relatedChildTagIds
+    )));
 
     if ($numeroDaRegra <= 0) {
         http_response_code(422);
@@ -3824,13 +3831,17 @@ elseif ($action === 'create_custom_rule') {
         $ruleStmt->execute([$user_id, $numeroDaRegra]);
         $customRuleId = (int)$pdo->lastInsertId();
 
-        $ruleTagStmt = $pdo->prepare("INSERT INTO regras_tags (id_regra, id_tag, id_tipo_de_relacao, destino) VALUES (?, ?, ?, ?)");
-        foreach ($parameterTagIds as $tagId) {
-            $ruleTagStmt->execute([$customRuleId, $tagId, $idTipoDeRelacao, 0]);
-        }
-        foreach ($relatedTagIds as $tagId) {
-            $ruleTagStmt->execute([$customRuleId, $tagId, $idTipoDeRelacao, 1]);
-        }
+        $ruleTagStmt = $pdo->prepare("INSERT INTO regras_tags (id_regra, id_tag, id_tipo_de_relacao, destino, parentesco) VALUES (?, ?, ?, ?, ?)");
+        $insertRuleTags = static function (array $tagIds, int $destino, int $parentesco) use ($ruleTagStmt, $customRuleId, $idTipoDeRelacao): void {
+            foreach ($tagIds as $tagId) {
+                $ruleTagStmt->execute([$customRuleId, $tagId, $idTipoDeRelacao, $destino, $parentesco]);
+            }
+        };
+
+        $insertRuleTags($parameterParentTagIds, 0, 0);
+        $insertRuleTags($parameterChildTagIds, 0, 1);
+        $insertRuleTags($relatedParentTagIds, 1, 0);
+        $insertRuleTags($relatedChildTagIds, 1, 1);
 
         $pdo->commit();
         echo json_encode([
@@ -3840,8 +3851,10 @@ elseif ($action === 'create_custom_rule') {
                 'id' => $customRuleId,
                 'numero_da_regra' => $numeroDaRegra,
                 'id_tipo_de_relacao' => $idTipoDeRelacao,
-                'parameter_tag_ids' => $parameterTagIds,
-                'related_tag_ids' => $relatedTagIds
+                'parameter_parent_tag_ids' => $parameterParentTagIds,
+                'parameter_child_tag_ids' => $parameterChildTagIds,
+                'related_parent_tag_ids' => $relatedParentTagIds,
+                'related_child_tag_ids' => $relatedChildTagIds
             ]
         ]);
     } catch (Throwable $e) {

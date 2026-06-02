@@ -407,8 +407,16 @@
         const customRuleSelect = document.getElementById('customRuleSelect');
         const numeroDaRegra = Number(customRuleSelect?.value || 0);
         const idTipoDeRelacao = Number(this.selectedRelationTypeId || document.getElementById('relationTypeSelect')?.value || 0);
-        const parameterTagIds = [...new Set([...this.getSelectedTagIds('subject'), ...this.getSelectedTagIds('subjectChild')])];
-        const relatedTagIds = [...new Set([...this.getSelectedTagIds('related'), ...this.getSelectedTagIds('relatedChild')])];
+        const parameterParentTagIds = [...new Set(this.getSelectedTagIds('subject'))];
+        const parameterChildTagIds = [...new Set(this.getSelectedTagIds('subjectChild'))];
+        const relatedParentTagIds = [...new Set(this.getSelectedTagIds('related'))];
+        const relatedChildTagIds = [...new Set(this.getSelectedTagIds('relatedChild'))];
+        const selectedTagIds = [
+          ...parameterParentTagIds,
+          ...parameterChildTagIds,
+          ...relatedParentTagIds,
+          ...relatedChildTagIds
+        ];
 
         if (!Number.isInteger(numeroDaRegra) || numeroDaRegra <= 0) {
           this.setCreateRuleStatus('Selecione uma regra válida.', 'error');
@@ -418,7 +426,7 @@
           this.setCreateRuleStatus('Selecione um tipo de relação válido.', 'error');
           return;
         }
-        if (!parameterTagIds.length && !relatedTagIds.length) {
+        if (!selectedTagIds.length) {
           this.setCreateRuleStatus('Selecione ao menos uma tag em Tags Parâmetros ou Tags à Relacionar.', 'error');
           return;
         }
@@ -429,8 +437,10 @@
           const res = await this.api('create_custom_rule', {
             numero_da_regra: numeroDaRegra,
             id_tipo_de_relacao: idTipoDeRelacao,
-            parameter_tag_ids: parameterTagIds,
-            related_tag_ids: relatedTagIds
+            parameter_parent_tag_ids: parameterParentTagIds,
+            parameter_child_tag_ids: parameterChildTagIds,
+            related_parent_tag_ids: relatedParentTagIds,
+            related_child_tag_ids: relatedChildTagIds
           });
           const ruleId = Number(res?.data?.id || 0);
           this.setCreateRuleStatus(ruleId ? `Regra criada com sucesso (ID ${ruleId}).` : 'Regra criada com sucesso.', 'success');
