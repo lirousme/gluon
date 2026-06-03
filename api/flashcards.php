@@ -126,6 +126,42 @@ function looksLikeEncryptedRelationTypeName(string $value): bool
     return $decoded !== false && strlen($decoded) > ($ivLength + 16);
 }
 
+function applyCustomRuleOneTagFamilyRelations(PDO $pdo, int $userId, int $newTagId): void
+{
+    if ($userId <= 0 || $newTagId <= 0) return;
+
+    $ruleStmt = $pdo->prepare("
+        SELECT id
+        FROM regras_customizadas
+        WHERE id_user = ?
+          AND numero_da_regra = 1
+    ");
+    $ruleStmt->execute([$userId]);
+    $customRuleIds = array_map('intval', $ruleStmt->fetchAll(PDO::FETCH_COLUMN));
+    if (!$customRuleIds) return;
+
+    $rulePlaceholders = implode(',', array_fill(0, count($customRuleIds), '?'));
+    $ruleTagStmt = $pdo->prepare("
+        SELECT id_tag, id_tipo_de_relacao
+        FROM regras_tags
+        WHERE id_regra IN ($rulePlaceholders)
+    ");
+    $ruleTagStmt->execute($customRuleIds);
+
+    $insertStmt = $pdo->prepare("
+        INSERT IGNORE INTO tag_family (id_user, id_tag_child, id_tag_mother, tipo_de_relacao)
+        VALUES (?, ?, ?, ?)
+    ");
+
+    foreach ($ruleTagStmt->fetchAll(PDO::FETCH_ASSOC) as $ruleTag) {
+        $motherTagId = (int)($ruleTag['id_tag'] ?? 0);
+        $relationTypeId = (int)($ruleTag['id_tipo_de_relacao'] ?? 0);
+        if ($motherTagId <= 0 || $relationTypeId <= 0 || $motherTagId === $newTagId) continue;
+
+        $insertStmt->execute([$userId, $newTagId, $motherTagId, $relationTypeId]);
+    }
+}
+
 function tagCombinationAlreadyExists(PDO $pdo, int $userId, string $name, ?string $namePtBr, ?int $numero, ?int $excludeTagId = null): bool
 {
     $sql = "
@@ -3640,12 +3676,26 @@ elseif ($action === 'create_tag') {
     $name_enc = Security::encryptData($name);
     $name_pt_br_enc = $name_pt_br !== null ? Security::encryptData($name_pt_br) : null;
     $stmt = $pdo->prepare("INSERT INTO flashcard_tags (user_id, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $tagId = 0;
     try {
+        $pdo->beginTransaction();
         $stmt->execute([$user_id, $name_enc, $name_pt_br_enc, $numero, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year]);
+        $tagId = (int)$pdo->lastInsertId();
+        applyCustomRuleOneTagFamilyRelations($pdo, $user_id, $tagId);
+        $pdo->commit();
     } catch (PDOException $e) {
-        die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com esse nome.']));
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        if ($tagId <= 0) {
+            die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com esse nome.']));
+        }
+        error_log('[flashcards][create_tag_custom_rule] ' . $e->getMessage());
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao criar relações automáticas da tag.']));
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('[flashcards][create_tag_custom_rule] ' . $e->getMessage());
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao criar relações automáticas da tag.']));
     }
-    echo json_encode(['status' => 'success', 'message' => 'Tag criada com sucesso.', 'tag_id' => (int)$pdo->lastInsertId()]);
+    echo json_encode(['status' => 'success', 'message' => 'Tag criada com sucesso.', 'tag_id' => $tagId]);
 }
 
 elseif ($action === 'update_tag') {
