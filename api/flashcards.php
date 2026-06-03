@@ -139,50 +139,40 @@ function executeTagCreationCustomRules(PDO $pdo, int $userId, int $newTagId): vo
 {
     if ($userId <= 0 || $newTagId <= 0) return;
 
-    $rulesByNumber = [
-        CUSTOM_RULE_AUTO_TAG_FAMILY_ON_TAG_CREATE => 'applyAutoTagFamilyCustomRule',
-    ];
+    $autoFamilyRuleId = fetchUserCustomRuleId($pdo, $userId, CUSTOM_RULE_AUTO_TAG_FAMILY_ON_TAG_CREATE);
+    if ($autoFamilyRuleId <= 0) return;
 
-    foreach ($rulesByNumber as $ruleNumber => $handler) {
-        $customRuleIds = fetchUserCustomRuleIds($pdo, $userId, (int)$ruleNumber);
-        if (!$customRuleIds || !is_callable($handler)) continue;
-
-        $handler($pdo, $userId, $newTagId, $customRuleIds);
-    }
+    applyAutoTagFamilyCustomRule($pdo, $userId, $newTagId, $autoFamilyRuleId);
 }
 
-function fetchUserCustomRuleIds(PDO $pdo, int $userId, int $ruleNumber): array
+function fetchUserCustomRuleId(PDO $pdo, int $userId, int $ruleNumber): int
 {
-    if ($userId <= 0 || $ruleNumber <= 0) return [];
+    if ($userId <= 0 || $ruleNumber <= 0) return 0;
 
     $ruleStmt = $pdo->prepare("
         SELECT id
         FROM regras_customizadas
         WHERE id_user = ?
           AND numero_da_regra = ?
+        ORDER BY id ASC
+        LIMIT 1
     ");
     $ruleStmt->execute([$userId, $ruleNumber]);
 
-    return array_values(array_unique(array_filter(
-        array_map('intval', $ruleStmt->fetchAll(PDO::FETCH_COLUMN)),
-        static fn($id) => $id > 0
-    )));
+    return (int)($ruleStmt->fetchColumn() ?: 0);
 }
 
-function applyAutoTagFamilyCustomRule(PDO $pdo, int $userId, int $newTagId, array $customRuleIds): void
+function applyAutoTagFamilyCustomRule(PDO $pdo, int $userId, int $newTagId, int $customRuleId): void
 {
-    if ($userId <= 0 || $newTagId <= 0 || !$customRuleIds) return;
+    if ($userId <= 0 || $newTagId <= 0 || $customRuleId <= 0) return;
 
-    $customRuleIds = array_values(array_unique(array_filter(array_map('intval', $customRuleIds), static fn($id) => $id > 0)));
-    if (!$customRuleIds) return;
-
-    $rulePlaceholders = implode(',', array_fill(0, count($customRuleIds), '?'));
     $ruleTagStmt = $pdo->prepare("
         SELECT id_tag, id_tipo_de_relacao, parentesco
         FROM regras_tags
-        WHERE id_regra IN ($rulePlaceholders)
+        WHERE id_regra = ?
+        ORDER BY id ASC
     ");
-    $ruleTagStmt->execute($customRuleIds);
+    $ruleTagStmt->execute([$customRuleId]);
 
     $insertStmt = $pdo->prepare("
         INSERT IGNORE INTO tag_family (id_user, id_tag_child, id_tag_mother, tipo_de_relacao)
