@@ -458,11 +458,11 @@ function isFlashcardDeckDirectoryType($type): bool {
  */
 function verifyDeckOwnership($pdo, $deck_id, $user_id, bool $allowPublicUserFive = false) {
     if ($allowPublicUserFive) {
-        $stmt = $pdo->prepare("SELECT id, type, name_encrypted, deck_mode, deck_front_language, deck_back_language, deck_structure, deck_generation_base_prompt FROM directories WHERE id = ? AND user_id IN (?, 5) AND type IN (4, 10)");
+        $stmt = $pdo->prepare("SELECT id, type, name_encrypted, deck_mode, deck_front_language, deck_back_language, deck_structure, id_tag_inicial, deck_generation_base_prompt FROM directories WHERE id = ? AND user_id IN (?, 5) AND type IN (4, 10)");
         $stmt->execute([$deck_id, $user_id]);
         return $stmt->fetch();
     }
-    $stmt = $pdo->prepare("SELECT id, type, name_encrypted, deck_mode, deck_front_language, deck_back_language, deck_structure, deck_generation_base_prompt FROM directories WHERE id = ? AND user_id = ? AND type IN (4, 10)");
+    $stmt = $pdo->prepare("SELECT id, type, name_encrypted, deck_mode, deck_front_language, deck_back_language, deck_structure, id_tag_inicial, deck_generation_base_prompt FROM directories WHERE id = ? AND user_id = ? AND type IN (4, 10)");
     $stmt->execute([$deck_id, $user_id]);
     return $stmt->fetch();
 }
@@ -2410,6 +2410,7 @@ if ($action === 'fetch') {
         'deck_front_language' => normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR'),
         'deck_back_language' => normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB'),
         'deck_structure' => normalizeDeckStructure($deck['deck_structure'] ?? 'traducoes', 'traducoes'),
+        'id_tag_inicial' => isset($deck['id_tag_inicial']) && (int)$deck['id_tag_inicial'] > 0 ? (int)$deck['id_tag_inicial'] : null,
         'generation_base_prompt_default' => $stored_base_prompt,
         'deck_percentage' => $deck_percentage,
         'book_completed_reads' => $book_completed_reads,
@@ -3209,11 +3210,24 @@ elseif ($action === 'update_settings') {
     $front_language = normalizeDeckLanguage($input['deck_front_language'] ?? 'pt-BR', 'pt-BR');
     $back_language = normalizeDeckLanguage($input['deck_back_language'] ?? 'en-GB', 'en-GB');
     $deck_structure = normalizeDeckStructure($input['deck_structure'] ?? 'traducoes', 'traducoes');
+    $initial_tag_id = isset($input['id_tag_inicial']) && $input['id_tag_inicial'] !== null && $input['id_tag_inicial'] !== ''
+        ? (int)$input['id_tag_inicial']
+        : null;
 
     if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
 
-    $stmt = $pdo->prepare("UPDATE directories SET deck_mode = ?, deck_front_language = ?, deck_back_language = ?, deck_structure = ? WHERE id = ?");
-    if ($stmt->execute([$mode, $front_language, $back_language, $deck_structure, $deck_id])) echo json_encode(['status' => 'success', 'message' => 'Configurações atualizadas.']);
+    if ($initial_tag_id !== null) {
+        if ($initial_tag_id <= 0) {
+            $initial_tag_id = null;
+        } else {
+            $stmtTag = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5) LIMIT 1");
+            $stmtTag->execute([$initial_tag_id, $user_id]);
+            if (!$stmtTag->fetchColumn()) die(json_encode(['status' => 'error', 'message' => 'Tag inicial inválida ou sem permissão.']));
+        }
+    }
+
+    $stmt = $pdo->prepare("UPDATE directories SET deck_mode = ?, deck_front_language = ?, deck_back_language = ?, deck_structure = ?, id_tag_inicial = ? WHERE id = ?");
+    if ($stmt->execute([$mode, $front_language, $back_language, $deck_structure, $initial_tag_id, $deck_id])) echo json_encode(['status' => 'success', 'message' => 'Configurações atualizadas.']);
     else echo json_encode(['status' => 'error', 'message' => 'Erro ao salvar.']);
 }
 
