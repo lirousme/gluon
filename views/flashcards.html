@@ -697,6 +697,7 @@
             randomNextReviewAt: null,
             cards: [],
             availableTags: [],
+            sessionUserId: null,
             tagSearchQuery: '',
             currentIndex: 0,
             isFlipped: false,
@@ -764,6 +765,7 @@
                 this.setupKeyboardListeners();
                 this.setupBulkListener();
                 this.applyStudyScopeUI();
+                await this.loadSessionUser();
                 await this.loadTags();
                 await this.loadDeck();
             },
@@ -881,6 +883,15 @@
                 modal.classList.add('flex');
                 setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); }, 20);
             },
+            async loadSessionUser() {
+                try {
+                    const res = await fetch('/api/user', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_session' }) });
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    const parsedId = Number(data?.id ?? data?.data?.id);
+                    if (Number.isInteger(parsedId) && parsedId > 0) this.sessionUserId = parsedId;
+                } catch (_) {}
+            },
             async loadTags() {
                 const res = await this.api('list_tags');
                 this.availableTags = res?.data || [];
@@ -889,6 +900,16 @@
             handleTagSearch(query = '') {
                 this.tagSearchQuery = (query || '').trim().toLowerCase();
                 this.renderTagSelector();
+            },
+            isUserOwnedTag(tag = {}) {
+                const tagUserId = Number(tag?.user_id);
+                const sessionId = Number(this.sessionUserId);
+                return Number.isInteger(tagUserId) && tagUserId > 0 && Number.isInteger(sessionId) && sessionId > 0 && tagUserId === sessionId;
+            },
+            getTagOwnershipClass(tag = {}) {
+                return this.isUserOwnedTag(tag)
+                    ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/80 hover:bg-emerald-500/25'
+                    : 'bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700';
             },
             getTagLabel(tag = {}, numeroPtBrCounts = null) {
                 const numero = tag?.numero;
@@ -933,11 +954,8 @@
                 }
                 el.innerHTML = filteredTags.map(tag => {
                     const active = currentSelected.includes(Number(tag.id));
-                    const safeColor = String(tag.color || '#334155');
-                    const selectedStyle = `background:${safeColor}33;border-color:${safeColor};color:#e2e8f0`;
-                    const defaultStyle = `background:#1e293b;border-color:${safeColor}99;color:#cbd5e1`;
                     const bookBadge = Number(tag.is_book) === 1 ? '<span class="ml-1 text-[10px] text-amber-300">📚</span>' : '';
-                    return `<button type="button" onclick="flashcardApp.toggleTagSelection(${Number(tag.id)})" class="px-2.5 py-1 rounded-full text-xs border transition ${active ? 'bg-violet-500/20 text-violet-200 border-violet-400' : 'bg-slate-800 text-slate-300 border-slate-600'}"><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:${tag.color || '#334155'}"></span>${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}${bookBadge}</button>`;
+                    return `<button type="button" onclick="flashcardApp.toggleTagSelection(${Number(tag.id)})" class="px-2.5 py-1 rounded-full text-xs border transition-colors ${this.getTagOwnershipClass(tag)} ${active ? 'ring-1 ring-emerald-300/60' : ''}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}${bookBadge}</button>`;
                 }).join('');
             },
             toggleTagSelection(tagId) {
@@ -1219,7 +1237,9 @@
                 const tagsList = document.getElementById('cardTagsList');
                 const normalizeTagArray = (value) => {
                     if (!Array.isArray(value)) return [];
-                    return value.filter(tag => tag && typeof tag === 'object' && Number(tag.id) > 0);
+                    return value
+                        .filter(tag => tag && typeof tag === 'object' && Number(tag.id) > 0)
+                        .map(tag => ({ ...(this.availableTags.find(availableTag => Number(availableTag.id) === Number(tag.id)) || {}), ...tag }));
                 };
                 const tagsByPanel = [
                     { label: 'Subjects', tags: normalizeTagArray(card.subject_tags) },
@@ -1246,8 +1266,7 @@
                     });
 
                     const buildTagButton = (tag) => {
-                        const safeColor = String(tag.color || '#334155');
-                        return `<button type="button" onclick="flashcardApp.viewTagFamily(${Number(tag.id)})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors hover:brightness-110" style="background:${safeColor}33;border-color:${safeColor};color:#e2e8f0" title="Ver família da tag"><span class="inline-block w-1.5 h-1.5 rounded-full" style="background:${safeColor}"></span>${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button>`;
+                        return `<button type="button" onclick="flashcardApp.viewTagFamily(${Number(tag.id)})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${this.getTagOwnershipClass(tag)}" title="Ver família da tag">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button>`;
                     };
 
                     tagsList.innerHTML = tagsByPanel.map(group => {
