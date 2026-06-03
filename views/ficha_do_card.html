@@ -260,6 +260,12 @@ const app = {
     const sessionId = Number(this.sessionUserId);
     return Number.isInteger(tagUserId) && tagUserId > 0 && Number.isInteger(sessionId) && sessionId > 0 && tagUserId === sessionId;
   },
+  isUserOwnedTag(tag = {}) { return this.canEditTag(tag); },
+  getTagOwnershipClass(tag = {}) {
+    return this.isUserOwnedTag(tag)
+      ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/80 hover:bg-emerald-500/25'
+      : 'bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700';
+  },
   openEditTagModal(tagId) {
     const tag = this.availableTags.find(item => Number(item.id) === Number(tagId));
     if (!tag || !this.canEditTag(tag)) return;
@@ -652,7 +658,7 @@ const app = {
       el.innerHTML = selectedTags.map(tag => {
         const id = Number(tag.id);
         const editButton = this.canEditTag(tag) ? `<button type="button" data-edit-tag-id="${id}" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button>` : '';
-        return `<div class="tag-pill inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${config.activeClass}"><button type="button" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button>${editButton}</div>`;
+        return `<div class="tag-pill inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${this.getTagOwnershipClass(tag)}"><button type="button" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button>${editButton}</div>`;
       }).join('');
       el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
       el.querySelectorAll('[data-edit-tag-id]').forEach(btn => btn.onclick = () => this.openEditTagModal(Number(btn.dataset.editTagId)));
@@ -674,7 +680,7 @@ const app = {
     el.innerHTML = filtered.map(tag => {
       const id = Number(tag.id); const active = currentSelected.includes(id);
       const editButton = this.canEditTag(tag) ? `<button type="button" data-edit-tag-id="${id}" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button>` : '';
-      return `<div class="tag-pill inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${active ? config.activeClass : 'bg-slate-800 text-slate-300 border-slate-600'}"><button type="button" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button>${editButton}</div>`;
+      return `<div class="tag-pill inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${this.getTagOwnershipClass(tag)} ${active ? 'ring-1 ring-emerald-300/60' : ''}"><button type="button" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button>${editButton}</div>`;
     }).join('');
     el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
     el.querySelectorAll('[data-edit-tag-id]').forEach(btn => btn.onclick = () => this.openEditTagModal(Number(btn.dataset.editTagId)));
