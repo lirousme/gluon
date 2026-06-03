@@ -126,18 +126,54 @@ function looksLikeEncryptedRelationTypeName(string $value): bool
     return $decoded !== false && strlen($decoded) > ($ivLength + 16);
 }
 
-function applyCustomRuleOneTagFamilyRelations(PDO $pdo, int $userId, int $newTagId): void
+const CUSTOM_RULE_AUTO_TAG_FAMILY_ON_TAG_CREATE = 1;
+
+/**
+ * Executor de Regras Customizadas para eventos de tags.
+ *
+ * Esta é a abstração central para regras identificadas por `numero_da_regra`:
+ * novas regras devem ganhar uma constante, uma função handler e uma entrada no
+ * dispatcher do evento correspondente (ex.: criação de tag).
+ */
+function executeTagCreationCustomRules(PDO $pdo, int $userId, int $newTagId): void
 {
     if ($userId <= 0 || $newTagId <= 0) return;
+
+    $rulesByNumber = [
+        CUSTOM_RULE_AUTO_TAG_FAMILY_ON_TAG_CREATE => 'applyAutoTagFamilyCustomRule',
+    ];
+
+    foreach ($rulesByNumber as $ruleNumber => $handler) {
+        $customRuleIds = fetchUserCustomRuleIds($pdo, $userId, (int)$ruleNumber);
+        if (!$customRuleIds || !is_callable($handler)) continue;
+
+        $handler($pdo, $userId, $newTagId, $customRuleIds);
+    }
+}
+
+function fetchUserCustomRuleIds(PDO $pdo, int $userId, int $ruleNumber): array
+{
+    if ($userId <= 0 || $ruleNumber <= 0) return [];
 
     $ruleStmt = $pdo->prepare("
         SELECT id
         FROM regras_customizadas
         WHERE id_user = ?
-          AND numero_da_regra = 1
+          AND numero_da_regra = ?
     ");
-    $ruleStmt->execute([$userId]);
-    $customRuleIds = array_map('intval', $ruleStmt->fetchAll(PDO::FETCH_COLUMN));
+    $ruleStmt->execute([$userId, $ruleNumber]);
+
+    return array_values(array_unique(array_filter(
+        array_map('intval', $ruleStmt->fetchAll(PDO::FETCH_COLUMN)),
+        static fn($id) => $id > 0
+    )));
+}
+
+function applyAutoTagFamilyCustomRule(PDO $pdo, int $userId, int $newTagId, array $customRuleIds): void
+{
+    if ($userId <= 0 || $newTagId <= 0 || !$customRuleIds) return;
+
+    $customRuleIds = array_values(array_unique(array_filter(array_map('intval', $customRuleIds), static fn($id) => $id > 0)));
     if (!$customRuleIds) return;
 
     $rulePlaceholders = implode(',', array_fill(0, count($customRuleIds), '?'));
@@ -3681,7 +3717,7 @@ elseif ($action === 'create_tag') {
         $pdo->beginTransaction();
         $stmt->execute([$user_id, $name_enc, $name_pt_br_enc, $numero, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year]);
         $tagId = (int)$pdo->lastInsertId();
-        applyCustomRuleOneTagFamilyRelations($pdo, $user_id, $tagId);
+        executeTagCreationCustomRules($pdo, $user_id, $tagId);
         $pdo->commit();
     } catch (PDOException $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
