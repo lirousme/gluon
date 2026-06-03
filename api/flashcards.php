@@ -178,7 +178,7 @@ function applyAutoTagFamilyCustomRule(PDO $pdo, int $userId, int $newTagId, arra
 
     $rulePlaceholders = implode(',', array_fill(0, count($customRuleIds), '?'));
     $ruleTagStmt = $pdo->prepare("
-        SELECT id_tag, id_tipo_de_relacao
+        SELECT id_tag, id_tipo_de_relacao, parentesco
         FROM regras_tags
         WHERE id_regra IN ($rulePlaceholders)
     ");
@@ -190,11 +190,20 @@ function applyAutoTagFamilyCustomRule(PDO $pdo, int $userId, int $newTagId, arra
     ");
 
     foreach ($ruleTagStmt->fetchAll(PDO::FETCH_ASSOC) as $ruleTag) {
-        $motherTagId = (int)($ruleTag['id_tag'] ?? 0);
+        $relatedTagId = (int)($ruleTag['id_tag'] ?? 0);
         $relationTypeId = (int)($ruleTag['id_tipo_de_relacao'] ?? 0);
-        if ($motherTagId <= 0 || $relationTypeId <= 0 || $motherTagId === $newTagId) continue;
+        $kinship = (int)($ruleTag['parentesco'] ?? 0);
+        if ($relatedTagId <= 0 || $relationTypeId <= 0 || $relatedTagId === $newTagId) continue;
 
-        $insertStmt->execute([$userId, $newTagId, $motherTagId, $relationTypeId]);
+        if ($kinship === 1) {
+            $childTagId = $relatedTagId;
+            $motherTagId = $newTagId;
+        } else {
+            $childTagId = $newTagId;
+            $motherTagId = $relatedTagId;
+        }
+
+        $insertStmt->execute([$userId, $childTagId, $motherTagId, $relationTypeId]);
     }
 }
 
