@@ -377,9 +377,10 @@
                 <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <form onsubmit="flashcardApp.saveSettings(event)" class="p-6 space-y-6">
-                <div class="flex items-center gap-2 border-b border-slate-700 pb-4">
+                <div id="deckSettingsTabs" class="flex items-center gap-2 border-b border-slate-700 pb-4">
                     <button type="button" data-settings-tab="general" onclick="flashcardApp.switchSettingsTab('general')" class="settings-tab-btn px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-700 text-white">Geral</button>
                     <button type="button" data-settings-tab="structure" onclick="flashcardApp.switchSettingsTab('structure')" class="settings-tab-btn px-3 py-1.5 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800">Estrutura</button>
+                    <button type="button" data-settings-tab="initialTag" onclick="flashcardApp.switchSettingsTab('initialTag')" class="settings-tab-btn px-3 py-1.5 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800">Tag inicial</button>
                 </div>
 
                 <div id="settingsTabGeneral" class="space-y-6">
@@ -477,6 +478,21 @@
                                 </div>
                             </label>
                         </div>
+                    </div>
+                </div>
+
+                <div id="settingsTabInitialTag" class="space-y-4 hidden">
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-sm font-medium text-indigo-300 mb-2">Tag inicial do deck</label>
+                            <p class="text-xs text-slate-400 mb-3">Selecione uma única tag para vir pré-selecionada ao criar novas fichas neste deck.</p>
+                            <input type="hidden" id="deckInitialTagId" value="">
+                            <div id="deckInitialTagSelector" class="flex flex-wrap gap-1.5 bg-slate-900/70 border border-slate-700 rounded-lg p-2 min-h-[44px]"></div>
+                            <input id="deckInitialTagSearchInput" type="text" placeholder="Buscar..." oninput="flashcardApp.handleInitialTagSearch(this.value)" class="w-full mt-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500" autocomplete="off">
+                        </div>
+                        <button type="button" id="btnRemoveInitialTag" onclick="flashcardApp.removeInitialTagSelection()" class="hidden text-sm text-red-300 hover:text-red-200 border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 rounded-lg px-3 py-2 transition-colors">
+                            <i class="fa-solid fa-trash-can mr-1"></i> Remover tag inicial
+                        </button>
                     </div>
                 </div>
                 
@@ -689,6 +705,7 @@
             frontLanguage: 'pt-BR',
             backLanguage: 'en-GB',
             deckStructure: 'fatos',
+            deckInitialTagId: null,
             deckPercentage: 0,
             totalCardsInDeck: 0,
             bookCompletedReads: 0,
@@ -699,6 +716,7 @@
             availableTags: [],
             sessionUserId: null,
             tagSearchQuery: '',
+            initialTagSearchQuery: '',
             currentIndex: 0,
             isFlipped: false,
             isRightPanelOpen: false,
@@ -896,6 +914,7 @@
                 const res = await this.api('list_tags');
                 this.availableTags = res?.data || [];
                 this.renderTagSelector();
+                this.renderInitialTagSelector();
             },
             handleTagSearch(query = '') {
                 this.tagSearchQuery = (query || '').trim().toLowerCase();
@@ -957,6 +976,75 @@
                     const bookBadge = Number(tag.is_book) === 1 ? '<span class="ml-1 text-[10px] text-amber-300">📚</span>' : '';
                     return `<button type="button" onclick="flashcardApp.toggleTagSelection(${Number(tag.id)})" class="px-2.5 py-1 rounded-full text-xs border transition-colors ${this.getTagOwnershipClass(tag)} ${active ? 'ring-1 ring-emerald-300/60' : ''}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}${bookBadge}</button>`;
                 }).join('');
+            },
+            handleInitialTagSearch(query = '') {
+                this.initialTagSearchQuery = (query || '').trim().toLowerCase();
+                this.renderInitialTagSelector();
+            },
+            getSelectedInitialTagId() {
+                const hidden = document.getElementById('deckInitialTagId');
+                const parsed = Number(hidden?.value || 0);
+                return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+            },
+            setSelectedInitialTagId(tagId = null) {
+                const hidden = document.getElementById('deckInitialTagId');
+                if (!hidden) return;
+                const parsed = Number(tagId || 0);
+                hidden.value = Number.isInteger(parsed) && parsed > 0 ? String(parsed) : '';
+                this.renderInitialTagSelector();
+            },
+            renderInitialTagSelector() {
+                const el = document.getElementById('deckInitialTagSelector');
+                if (!el) return;
+                const selectedId = this.getSelectedInitialTagId();
+                const removeBtn = document.getElementById('btnRemoveInitialTag');
+                if (removeBtn) removeBtn.classList.toggle('hidden', !selectedId);
+
+                if (!this.availableTags.length) {
+                    el.innerHTML = '<span class="text-xs text-slate-400">Sem tags. Crie uma no menu lateral.</span>';
+                    return;
+                }
+
+                const filteredTags = this.initialTagSearchQuery
+                    ? this.availableTags.filter(tag =>
+                        String(tag.name || '').toLowerCase().includes(this.initialTagSearchQuery)
+                        || String(tag.name_pt_br || '').toLowerCase().includes(this.initialTagSearchQuery)
+                        || String(tag.numero ?? '').toLowerCase().includes(this.initialTagSearchQuery)
+                    )
+                    : this.availableTags.filter(tag => selectedId && Number(tag.id) === selectedId);
+
+                const numeroPtBrCounts = new Map();
+                filteredTags.forEach(tag => {
+                    const numero = tag?.numero;
+                    const numeroKey = numero !== null && numero !== undefined ? String(numero).trim() : '';
+                    const namePtBr = String(tag?.name_pt_br || '').trim();
+                    if (numeroKey && namePtBr) numeroPtBrCounts.set(numeroKey, (numeroPtBrCounts.get(numeroKey) || 0) + 1);
+                });
+
+                if (!filteredTags.length) {
+                    el.innerHTML = this.initialTagSearchQuery
+                        ? '<span class="text-xs text-slate-400">Nenhuma tag encontrada para esta busca.</span>'
+                        : '<span class="text-xs text-slate-400">Nenhuma tag selecionada. Use a busca para escolher a tag inicial.</span>';
+                    return;
+                }
+
+                el.innerHTML = filteredTags.map(tag => {
+                    const id = Number(tag.id);
+                    const active = selectedId === id;
+                    const bookBadge = Number(tag.is_book) === 1 ? '<span class="ml-1 text-[10px] text-amber-300">📚</span>' : '';
+                    return `<button type="button" onclick="flashcardApp.toggleInitialTagSelection(${id})" class="px-2.5 py-1 rounded-full text-xs border transition-colors ${this.getTagOwnershipClass(tag)} ${active ? 'ring-1 ring-emerald-300/60' : ''}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}${bookBadge}</button>`;
+                }).join('');
+            },
+            toggleInitialTagSelection(tagId) {
+                const selectedId = this.getSelectedInitialTagId();
+                this.setSelectedInitialTagId(selectedId === tagId ? null : tagId);
+            },
+            removeInitialTagSelection() {
+                this.setSelectedInitialTagId(null);
+                const input = document.getElementById('deckInitialTagSearchInput');
+                if (input) input.value = '';
+                this.initialTagSearchQuery = '';
+                this.renderInitialTagSelector();
             },
             toggleTagSelection(tagId) {
                 const hidden = document.getElementById('selectedTagIds');
@@ -1066,6 +1154,8 @@
                     this.frontLanguage = res.deck_front_language || 'pt-BR';
                     this.backLanguage = res.deck_back_language || 'en-GB';
                     this.deckStructure = res.deck_structure || 'fatos';
+                    const parsedInitialTagId = Number(res.id_tag_inicial || 0);
+                    this.deckInitialTagId = Number.isInteger(parsedInitialTagId) && parsedInitialTagId > 0 ? parsedInitialTagId : null;
                     this.cards = res.data || [];
                     this.deckPercentage = res.deck_percentage || 0;
                     this.totalCardsInDeck = res.total_cards || 0;
@@ -1553,7 +1643,7 @@
                 document.getElementById('editCardId').value = card.id;
                 document.getElementById('singleFront').value = card.front;
                 document.getElementById('singleBack').value = card.back;
-                document.getElementById('selectedTagIds').value = JSON.stringify((card.tags || []).map(tag => Number(tag.id)));
+                document.getElementById('selectedTagIds').value = JSON.stringify((card.subject_tags || card.tags || []).map(tag => Number(tag.id)));
                 this.tagSearchQuery = '';
                 const tagSearchInput = document.getElementById('cardTagSearchInput');
                 if (tagSearchInput) tagSearchInput.value = '';
@@ -2287,10 +2377,12 @@
             switchSettingsTab(tab) {
                 const general = document.getElementById('settingsTabGeneral');
                 const structure = document.getElementById('settingsTabStructure');
+                const initialTag = document.getElementById('settingsTabInitialTag');
                 const buttons = document.querySelectorAll('.settings-tab-btn');
 
                 general.classList.toggle('hidden', tab !== 'general');
                 structure.classList.toggle('hidden', tab !== 'structure');
+                initialTag.classList.toggle('hidden', tab !== 'initialTag');
 
                 buttons.forEach(btn => {
                     const active = btn.dataset.settingsTab === tab;
@@ -2317,6 +2409,10 @@
                 for (let i = 0; i < structureRadios.length; i++) {
                     structureRadios[i].checked = (structureRadios[i].value === this.deckStructure);
                 }
+                this.initialTagSearchQuery = '';
+                const initialTagSearchInput = document.getElementById('deckInitialTagSearchInput');
+                if (initialTagSearchInput) initialTagSearchInput.value = '';
+                this.setSelectedInitialTagId(this.deckInitialTagId);
                 this.switchSettingsTab('general');
                 const modal = document.getElementById('settingsModal');
                 const content = document.getElementById('settingsModalContent');
@@ -2348,6 +2444,7 @@
             openCardSheetView(editCardId = null) {
                 const from = window.location.pathname + window.location.search;
                 const params = new URLSearchParams({ id: this.deckId, from });
+                if (!editCardId && this.deckInitialTagId) params.set('tag_id', String(this.deckInitialTagId));
                 if (editCardId) params.set('edit_card_id', String(editCardId));
                 window.location.href = `/ficha_do_card?${params.toString()}`;
             },
@@ -2364,7 +2461,7 @@
                 document.getElementById('editCardId').value = '';
                 document.getElementById('singleFront').value = '';
                 document.getElementById('singleBack').value = '';
-                document.getElementById('selectedTagIds').value = '[]';
+                document.getElementById('selectedTagIds').value = this.deckInitialTagId ? JSON.stringify([this.deckInitialTagId]) : '[]';
                 this.tagSearchQuery = '';
                 const tagSearchInput = document.getElementById('cardTagSearchInput');
                 if (tagSearchInput) tagSearchInput.value = '';
@@ -2468,12 +2565,14 @@
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
                 btn.disabled = true;
 
+                const initialTagId = this.getSelectedInitialTagId();
                 const res = await this.api('update_settings', {
                     deck_id: this.deckId,
                     deck_mode: selectedMode,
                     deck_front_language: frontLanguage,
                     deck_back_language: backLanguage,
-                    deck_structure: deckStructure
+                    deck_structure: deckStructure,
+                    id_tag_inicial: initialTagId
                 });
                 if (res) {
                     this.showToast(res.message, 'success');
@@ -2571,7 +2670,8 @@
                     back: backVal,
                     image_front: imageFront,
                     image_back: imageBack,
-                    tag_ids: tagIds
+                    tag_ids: tagIds,
+                    subject_tag_ids: tagIds
                 };
                 if (editId) payload.card_id = editId;
 
