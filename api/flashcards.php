@@ -525,7 +525,7 @@ function validatePhaseDeckUnlock($pdo, $deck_id, $user_id): ?string {
 /**
  * Função buildGraphCardsSequence: Monta uma sequência balanceada de cards por tags e score para estudo em lotes.
  */
-function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batchSize = 6, array $evenTagsSourcesByCard = []): array
+function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batchSize = 6, array $evenTagsSourcesByCard = [], ?int $initialTagId = null, array $initialTagSourcesByCard = []): array
 {
     // Se não existem cards disponíveis, não tem o que montar.
     // Então a função retorna uma lista vazia.
@@ -577,6 +577,32 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
 
             // Adiciona esse card dentro da lista de cards dessa tag.
             $cardsByTag[$tagId][] = (int)$cardId;
+        }
+    }
+
+    if ($initialTagId !== null && $initialTagId <= 0) {
+        $initialTagId = null;
+    }
+
+    if ($initialTagId !== null) {
+        $initialTagSourceGroups = array_merge([$seedTagsByCard], $evenTagsSourcesByCard, $initialTagSourcesByCard);
+
+        foreach ($initialTagSourceGroups as $tagsSourceByCard) {
+            foreach ($tagsSourceByCard as $cardId => $tags) {
+                foreach ($tags as $tag) {
+                    if ((int)($tag['id'] ?? 0) !== $initialTagId) continue;
+
+                    if (!isset($cardsByTag[$initialTagId])) {
+                        $cardsByTag[$initialTagId] = [];
+                    }
+
+                    $cardsByTag[$initialTagId][] = (int)$cardId;
+                }
+            }
+        }
+
+        if (isset($cardsByTag[$initialTagId])) {
+            $cardsByTag[$initialTagId] = array_values(array_unique(array_map('intval', $cardsByTag[$initialTagId])));
         }
     }
 
@@ -777,6 +803,10 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
         return null;
     };
 
+    if ($initialTagId !== null && empty($cardsByTag[$initialTagId])) {
+        return [];
+    }
+
     // Pega todos os IDs das tags existentes.
     $tagIds = array_keys($cardsByTag);
 
@@ -798,9 +828,10 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
         return ($sa <=> $sb) ?: ((int)$a <=> (int)$b);
     });
 
-    // A tag-base será a tag mais fraca,
-    // ou seja, a tag com menor soma de scores.
-    $baseTagId = (int)$tagIds[0];
+    // A tag-base será a tag inicial configurada, quando houver.
+    // Se não houver tag inicial, mantém o comportamento anterior:
+    // usa a tag mais fraca, ou seja, a tag com menor soma de scores.
+    $baseTagId = $initialTagId !== null ? $initialTagId : (int)$tagIds[0];
 
     // Lista final dos cards escolhidos.
     $chosen = [];
@@ -2351,6 +2382,15 @@ if ($action === 'fetch') {
                 $subjectTagsByCard,
                 $objectTagsByCard,
                 $wordsTagsByCard
+            ],
+            isset($deck['id_tag_inicial']) && (int)$deck['id_tag_inicial'] > 0 ? (int)$deck['id_tag_inicial'] : null,
+            [
+                $tipoFrasalTagsByCard,
+                $tenseTagsByCard,
+                $lexicalChunksTagsByCard,
+                $relationTagsByCard,
+                $idiomaPrincipalTagsByCard,
+                $idiomaSecundarioTagsByCard
             ]
         );
         if (!empty($graphCards)) {
