@@ -77,6 +77,11 @@ function normalizeReturnTarget(?string $rawTarget): string {
 /**
  * Função sanitizeTagIds: Normaliza uma lista de IDs de tags recebida na requisição, mantendo apenas inteiros positivos únicos.
  */
+function sanitizeInfoType($value): int {
+    $type = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['default' => 2]]);
+    return in_array($type, [0, 1, 2], true) ? $type : 2;
+}
+
 function sanitizeTagIds($rawTagIds): array {
     if (!is_array($rawTagIds)) return [];
     return array_values(array_unique(array_filter(array_map('intval', $rawTagIds), static fn($id) => $id > 0)));
@@ -2154,7 +2159,7 @@ if ($action === 'fetch') {
         $placeholders = implode(',', array_fill(0, count($deck_ids), '?'));
 
         $stmtCards = $pdo->prepare("
-            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score
             FROM flashcards f
             LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
             WHERE f.directory_id IN ($placeholders)
@@ -2272,7 +2277,7 @@ if ($action === 'fetch') {
             // No modo grafo, busca cards de qualquer deck do usuário
             // e também dos decks pertencentes ao usuário de id 5.
             $stmt = $pdo->prepare("
-                SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score 
+                SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score
                 FROM flashcards f
                 JOIN directories d ON d.id = f.directory_id
                 LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
@@ -2283,7 +2288,7 @@ if ($action === 'fetch') {
         } else {
             // No modo aleatório, mantém filtro por deck e cards vencidos.
             $stmt = $pdo->prepare("
-                SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score 
+                SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score
                 FROM flashcards f
                 LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
                 WHERE f.directory_id = ?
@@ -2307,7 +2312,7 @@ if ($action === 'fetch') {
         $random_next_review_at = $stmtNextRandomReview->fetchColumn() ?: null;
     } else {
         $stmt = $pdo->prepare("
-            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.has_audio_front, f.has_audio_back, 0 as score 
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.has_audio_front, f.has_audio_back, 0 as score
             FROM flashcards f
             WHERE f.directory_id = ? 
             ORDER BY f.sort_order ASC, f.id ASC
@@ -2418,6 +2423,7 @@ if ($action === 'fetch') {
             'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
             'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
             'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
+            'info_type' => sanitizeInfoType($card['info_type'] ?? 2),
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
             'score' => (int)$card['score'],
@@ -3280,6 +3286,7 @@ elseif ($action === 'add_single') {
     $image_back = $input['image_back'] ?? null; 
     $tag_ids = [];
     $subject_tag_ids = sanitizeTagIds($input['subject_tag_ids'] ?? []);
+    $info_type = sanitizeInfoType($input['info_type'] ?? 2);
 
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
@@ -3300,9 +3307,9 @@ elseif ($action === 'add_single') {
     $img_front_enc = !empty($image_front) ? Security::encryptData($image_front) : null;
     $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
 
-    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, 0, 0)");
+    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, ?, 0, 0)");
     
-    if ($stmt->execute([$deck_id, $front_enc, $back_enc, $img_front_enc, $img_back_enc])) {
+    if ($stmt->execute([$deck_id, $front_enc, $back_enc, $img_front_enc, $img_back_enc, $info_type])) {
         $new_card_id = (int)$pdo->lastInsertId();
         syncCardTagLinks($pdo, 'flashcard_tag_links', $new_card_id, $tag_ids, $user_id);
         syncCardTagLinks($pdo, 'subjects_links', $new_card_id, $subject_tag_ids, $user_id);
@@ -3332,7 +3339,7 @@ elseif ($action === 'get_card_for_edit') {
     }
 
     $stmt = $pdo->prepare("
-        SELECT id, directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, has_audio_front, has_audio_back
+        SELECT id, directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, has_audio_front, has_audio_back
         FROM flashcards
         WHERE id = ?
         LIMIT 1
@@ -3354,6 +3361,7 @@ elseif ($action === 'get_card_for_edit') {
             'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
             'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
             'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
+            'info_type' => sanitizeInfoType($card['info_type'] ?? 2),
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
             'subject_tags' => $subjectTagsByCard[$card_id] ?? []
@@ -3370,6 +3378,7 @@ elseif ($action === 'update_card') {
     $image_back = $input['image_back'] ?? null;
     $tag_ids = [];
     $subject_tag_ids = sanitizeTagIds($input['subject_tag_ids'] ?? []);
+    $info_type = sanitizeInfoType($input['info_type'] ?? 2);
 
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
@@ -3391,9 +3400,9 @@ elseif ($action === 'update_card') {
     $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
 
     // Mantém os áudios existentes. Eles só devem ser alterados quando o usuário solicitar nova geração.
-    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ? WHERE id = ?");
+    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, info_type = ? WHERE id = ?");
     
-    if ($stmt->execute([$front_enc, $back_enc, $img_front_enc, $img_back_enc, $card_id])) {
+    if ($stmt->execute([$front_enc, $back_enc, $img_front_enc, $img_back_enc, $info_type, $card_id])) {
         syncCardTagLinks($pdo, 'flashcard_tag_links', $card_id, $tag_ids, $user_id);
         syncCardTagLinks($pdo, 'subjects_links', $card_id, $subject_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'objects_links', $card_id, [], $user_id);
