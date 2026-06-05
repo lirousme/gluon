@@ -332,17 +332,17 @@
                     0 / 0
                 </span>
             </div>
-            <div class="flex items-center justify-center gap-3">
-                <button onclick="flashcardApp.prevCard()" id="btnPrev" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center text-base shadow-md transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Card anterior">
+            <div class="hidden sm:flex items-center justify-center gap-3">
+                <button onclick="flashcardApp.prevCard()" id="btnPrev" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center text-base shadow-md transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Card anterior" aria-label="Card anterior">
                     <i class="fa-solid fa-arrow-left"></i>
                 </button>
-                <button onclick="flashcardApp.nextCard()" id="btnNext" class="w-11 h-11 rounded-full bg-gluon-primary hover:bg-blue-600 text-white flex items-center justify-center text-base shadow-md shadow-blue-500/25 transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Próximo card">
+                <button onclick="flashcardApp.nextCard()" id="btnNext" class="w-11 h-11 rounded-full bg-gluon-primary hover:bg-blue-600 text-white flex items-center justify-center text-base shadow-md shadow-blue-500/25 transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Próximo card" aria-label="Próximo card">
                     <i class="fa-solid fa-arrow-right"></i>
                 </button>
             </div>
             <div class="flex items-center justify-end gap-2 overflow-x-auto no-scrollbar">
-                <div id="audioControlsFront" class="flex items-center gap-2 shrink-0"></div>
-                <div id="audioControlsBack" class="flex items-center gap-2 shrink-0"></div>
+                <div id="audioControlsFront" class="flex items-center gap-2 shrink-0" style="display: none;"></div>
+                <div id="audioControlsBack" class="flex items-center gap-2 shrink-0" style="display: none;"></div>
                 <div class="w-px h-7 bg-slate-700 mx-1 hidden sm:block"></div>
                 <button onclick="flashcardApp.editCurrentCard()" class="w-10 h-10 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center transition-colors shrink-0" title="Editar card" aria-label="Editar card"><i class="fa-solid fa-pen"></i></button>
                 <button onclick="flashcardApp.deleteCurrentCard()" class="w-10 h-10 rounded-lg bg-slate-800 hover:bg-rose-500/20 border border-slate-600 hover:border-rose-500/50 text-slate-400 hover:text-rose-300 flex items-center justify-center transition-colors shrink-0" title="Excluir card" aria-label="Excluir card"><i class="fa-solid fa-trash"></i></button>
@@ -1329,18 +1329,18 @@
                 if (card.has_audio_front === 1) {
                     audioFront.innerHTML = `
                         <div class="flex items-center gap-2">
-                            <button onclick="event.stopPropagation(); flashcardApp.playCardAudio(${card.id}, 'front')" class="text-xs bg-slate-800/80 hover:bg-slate-700 border border-slate-600 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-slate-300">
-                                <i class="fa-solid fa-play"></i> Ouvir
+                            <button onclick="event.stopPropagation(); flashcardApp.playCardAudio(${card.id}, 'front')" class="text-xs bg-slate-800/80 hover:bg-slate-700 border border-slate-600 w-9 h-9 rounded-lg flex items-center justify-center transition-colors text-slate-300" title="Ouvir áudio da frente" aria-label="Ouvir áudio da frente">
+                                <i class="fa-solid fa-play"></i>
                             </button>
-                            <button id="btnGenAudio_front_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'front')" class="text-xs bg-slate-800/80 hover:bg-slate-700 border border-slate-600 w-7 h-7 flex items-center justify-center rounded-lg transition-colors text-slate-400" title="Gerar novo áudio">
+                            <button id="btnGenAudio_front_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'front')" class="text-xs bg-slate-800/80 hover:bg-slate-700 border border-slate-600 w-9 h-9 flex items-center justify-center rounded-lg transition-colors text-slate-400" title="Gerar novo áudio da frente" aria-label="Gerar novo áudio da frente">
                                 <i class="fa-solid fa-rotate-right"></i>
                             </button>
                         </div>
                     `;
                 } else if(card.front && card.front.trim() !== '') {
                     audioFront.innerHTML = `
-                        <button id="btnGenAudio_front_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'front')" class="text-xs bg-slate-800/50 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-slate-400">
-                            <i class="fa-solid fa-wand-magic-sparkles"></i> Gerar Áudio
+                        <button id="btnGenAudio_front_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'front')" class="text-xs bg-slate-800/50 hover:bg-slate-700 border border-slate-700 w-9 h-9 rounded-lg flex items-center justify-center transition-colors text-slate-400" title="Gerar áudio da frente" aria-label="Gerar áudio da frente">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
                         </button>
                     `;
                 } else {
@@ -1357,18 +1357,18 @@
                     } else if (card.has_audio_back === 1) {
                         audioBack.innerHTML = `
                             <div class="flex items-center gap-2">
-                                <button onclick="event.stopPropagation(); flashcardApp.playCardAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-blue-200">
-                                    <i class="fa-solid fa-play"></i> Ouvir
+                                <button onclick="event.stopPropagation(); flashcardApp.playCardAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 w-9 h-9 rounded-lg flex items-center justify-center transition-colors text-blue-200" title="Ouvir áudio do verso" aria-label="Ouvir áudio do verso">
+                                    <i class="fa-solid fa-play"></i>
                                 </button>
-                                <button id="btnGenAudio_back_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 w-7 h-7 flex items-center justify-center rounded-lg transition-colors text-blue-300" title="Gerar novo áudio">
+                                <button id="btnGenAudio_back_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 w-9 h-9 flex items-center justify-center rounded-lg transition-colors text-blue-300" title="Gerar novo áudio do verso" aria-label="Gerar novo áudio do verso">
                                     <i class="fa-solid fa-rotate-right"></i>
                                 </button>
                             </div>
                         `;
                     } else if(card.back && card.back.trim() !== '') {
                         audioBack.innerHTML = `
-                            <button id="btnGenAudio_back_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'back')" class="text-xs bg-blue-900/50 hover:bg-blue-800 border border-blue-500/50 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-blue-300">
-                                <i class="fa-solid fa-wand-magic-sparkles"></i> Gerar Áudio
+                            <button id="btnGenAudio_back_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'back')" class="text-xs bg-blue-900/50 hover:bg-blue-800 border border-blue-500/50 w-9 h-9 rounded-lg flex items-center justify-center transition-colors text-blue-300" title="Gerar áudio do verso" aria-label="Gerar áudio do verso">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i>
                             </button>
                         `;
                     } else {
@@ -1382,18 +1382,18 @@
                     if (card.has_audio_back === 1) {
                         audioBack.innerHTML = `
                             <div class="flex items-center gap-2">
-                                <button onclick="event.stopPropagation(); flashcardApp.playCardAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-blue-200">
-                                    <i class="fa-solid fa-play"></i> Ouvir
+                                <button onclick="event.stopPropagation(); flashcardApp.playCardAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 w-9 h-9 rounded-lg flex items-center justify-center transition-colors text-blue-200" title="Ouvir áudio do verso" aria-label="Ouvir áudio do verso">
+                                    <i class="fa-solid fa-play"></i>
                                 </button>
-                                <button id="btnGenAudio_back_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 w-7 h-7 flex items-center justify-center rounded-lg transition-colors text-blue-300" title="Gerar novo áudio">
+                                <button id="btnGenAudio_back_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'back')" class="text-xs bg-blue-900/80 hover:bg-blue-800 border border-blue-500/50 w-9 h-9 flex items-center justify-center rounded-lg transition-colors text-blue-300" title="Gerar novo áudio do verso" aria-label="Gerar novo áudio do verso">
                                     <i class="fa-solid fa-rotate-right"></i>
                                 </button>
                             </div>
                         `;
                     } else if(card.back && card.back.trim() !== '') {
                         audioBack.innerHTML = `
-                            <button id="btnGenAudio_back_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'back')" class="text-xs bg-blue-900/50 hover:bg-blue-800 border border-blue-500/50 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-blue-300">
-                                <i class="fa-solid fa-wand-magic-sparkles"></i> Gerar Áudio
+                            <button id="btnGenAudio_back_${card.id}" onclick="event.stopPropagation(); flashcardApp.generateAudio(${card.id}, 'back')" class="text-xs bg-blue-900/50 hover:bg-blue-800 border border-blue-500/50 w-9 h-9 rounded-lg flex items-center justify-center transition-colors text-blue-300" title="Gerar áudio do verso" aria-label="Gerar áudio do verso">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i>
                             </button>
                         `;
                     } else {
@@ -1422,6 +1422,8 @@
                     cardEl.classList.remove('is-flipped');
                 }
 
+                this.updateAudioControlsVisibility();
+
                 document.getElementById('btnPrev').disabled = this.currentIndex === 0;
                 document.getElementById('btnNext').disabled = this.deckMode !== 'livro' && !['aleatorio', 'grafo'].includes(this.deckMode) && this.currentIndex === this.cards.length - 1;
             },
@@ -1432,6 +1434,18 @@
                 this.bookCompletedReads = Math.min(this.bookCompletedReads + 1, this.bookCompletedReadsMax);
                 this.deckPercentage = Math.round((this.bookCompletedReads / this.bookCompletedReadsMax) * 100);
                 this.api('increment_book_score', { deck_id: this.deckId }).catch(e => console.error(e));
+            },
+
+            updateAudioControlsVisibility() {
+                const audioFront = document.getElementById('audioControlsFront');
+                const audioBack = document.getElementById('audioControlsBack');
+                if (!audioFront || !audioBack) return;
+
+                const showFrontControls = !this.isFlipped && audioFront.innerHTML.trim() !== '';
+                const showBackControls = this.isFlipped && audioBack.innerHTML.trim() !== '';
+
+                audioFront.style.display = showFrontControls ? 'flex' : 'none';
+                audioBack.style.display = showBackControls ? 'flex' : 'none';
             },
 
             flipCard(e) {
@@ -1458,11 +1472,12 @@
 
                 if (this.isFlipped) {
                     cardEl.classList.add('is-flipped');
-                    this.handleAutoPlaybackAndFlow();
                 } else {
                     cardEl.classList.remove('is-flipped');
-                    this.handleAutoPlaybackAndFlow();
                 }
+
+                this.updateAudioControlsVisibility();
+                this.handleAutoPlaybackAndFlow();
             },
 
             async nextCard() {
