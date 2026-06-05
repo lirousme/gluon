@@ -221,6 +221,12 @@ const app = {
   from: params.get('from') || '',
   editCardId: params.get('edit_card_id'),
   initialSubjectTagId: Number(params.get('tag_id') || 0),
+  infoType: 2,
+  infoTypeOptions: {
+    0: { label: 'Afirmação', icon: 'fa-regular fa-circle-check', classes: 'border-blue-500/50 bg-blue-950/40 text-blue-200' },
+    1: { label: 'Tradução', icon: 'fa-solid fa-language', classes: 'border-orange-500/50 bg-orange-950/40 text-orange-200' },
+    2: { label: 'Pergunta', icon: 'fa-regular fa-circle-question', classes: 'border-purple-500/50 bg-purple-950/40 text-purple-200' }
+  },
   activeTab: 'front',
   frontLanguage: 'pt-BR',
   backLanguage: 'en-GB',
@@ -233,6 +239,24 @@ const app = {
     const ids = ['editTagIsBookInput','editTagIsVerbTenseInput','editTagIsSentenceTypeInput','editTagIsLexicalChunkInput','editTagIsRelationTypeInput','editTagIsWordInput','editTagIsMonthInput','editTagIsDayInput','editTagIsYearInput'];
     const inputs = ids.map(id => document.getElementById(id)).filter(Boolean);
     inputs.forEach(input => input.addEventListener('change', () => { if (!input.checked) return; inputs.forEach(other => { if (other !== input) other.checked = false; }); }));
+  },
+  normalizeInfoType(value) {
+    const type = Number(value);
+    return Object.prototype.hasOwnProperty.call(this.infoTypeOptions, type) ? type : 2;
+  },
+  setInfoType(value) {
+    this.infoType = this.normalizeInfoType(value);
+    const config = this.infoTypeOptions[this.infoType];
+    btnInfoType.className = `inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm border ${config.classes}`;
+    btnInfoType.innerHTML = `<i class="${config.icon}" aria-hidden="true"></i>${config.label}`;
+    btnInfoType.title = `Tipo da Informação: ${config.label}`;
+    btnInfoType.setAttribute('aria-label', `Tipo da Informação: ${config.label}`);
+  },
+  cycleInfoType() {
+    const sequence = [2, 0, 1];
+    const currentIndex = sequence.indexOf(this.infoType);
+    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % sequence.length;
+    this.setInfoType(sequence[nextIndex]);
   },
   openCreateTagModal() {
     tagNameInput.value = '';
@@ -825,6 +849,7 @@ const app = {
     singleBack.value = String(card.back || '');
     if (card.image_front) this.setBase64ImagePreview('front', card.image_front);
     if (card.image_back) this.setBase64ImagePreview('back', card.image_back);
+    this.setInfoType(card.info_type);
     const subjectTags = Array.isArray(card.subject_tags) ? card.subject_tags.map(t => Number(t.id)).filter(Boolean) : [];
     this.setSelectedTagIds('subject', subjectTags);
     this.renderAllTagSelectors();
@@ -843,7 +868,7 @@ const app = {
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
       const return_to = this.getReturnTarget();
-      const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids, return_to };
+      const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids, info_type: this.infoType, return_to };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
@@ -863,6 +888,7 @@ frontImageFile.onchange = (e) => app.handleCardImageUpload(e, 'front');
 btnRemoveFrontImage.onclick = () => app.removeCardImage('front');
 backImageFile.onchange = (e) => app.handleCardImageUpload(e, 'back');
 btnRemoveBackImage.onclick = () => app.removeCardImage('back');
+btnInfoType.onclick = () => app.cycleInfoType();
 subjectTagSearchInput.oninput = (e) => app.handleTagSearch('subject', e.target.value);
 cardForm.onsubmit = (e) => app.save(e);
 tagForm.onsubmit = (e) => app.createTag(e);
@@ -877,6 +903,7 @@ document.addEventListener('keydown', (e) => {
 
 (async () => {
   app.setActiveTab('front');
+  app.setInfoType(app.infoType);
   await app.setPageTitleWithDirectoryName();
   await app.loadSessionUserId();
   await app.loadTags();
