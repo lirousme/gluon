@@ -1273,6 +1273,13 @@
 
             updateGlobalProgressUI() {
                 const badge = document.getElementById('deckMasteryBadge');
+                if (this.deckMode === 'grafo') {
+                    badge.classList.add('hidden');
+                    badge.classList.remove('flex');
+                    badge.innerHTML = '';
+                    return;
+                }
+
                 badge.classList.remove('hidden');
                 badge.classList.add('flex');
                 
