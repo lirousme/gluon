@@ -349,23 +349,26 @@
             <span class="text-slate-400" id="loadingText">Descriptografando dados...</span>
         </div>
 
-        <!-- Controles Inferiores -->
-        <div class="absolute bottom-10 left-0 right-0 flex justify-center items-center gap-4 px-4 z-10" id="controls" style="display: none;">
-            <button onclick="flashcardApp.prevCard()" id="btnPrev" class="w-14 h-14 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center text-xl shadow-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+    </main>
+
+    <!-- Footer de navegação dos cards -->
+    <footer id="controls" class="shrink-0 hidden flex-col items-center border-t border-slate-700/70 bg-gluon-secondary/95 px-4 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-10px_30px_rgba(0,0,0,0.25)] backdrop-blur z-30" style="display: none;">
+        <div class="mx-auto flex w-full max-w-md items-center justify-center gap-3">
+            <button onclick="flashcardApp.prevCard()" id="btnPrev" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center text-base shadow-md transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Card anterior">
                 <i class="fa-solid fa-arrow-left"></i>
             </button>
-            <button id="btnRepeatCounter" class="hidden h-11 px-3 rounded-full bg-violet-600/90 text-white border border-violet-300/40 shadow-lg transition-all flex items-center gap-2 text-xs sm:text-sm font-medium" title="Repetição automática de áudio">
+            <button id="btnRepeatCounter" class="hidden h-9 px-3 rounded-full bg-violet-600/90 text-white border border-violet-300/40 shadow-md transition-all flex items-center gap-2 text-xs font-medium" title="Repetição automática de áudio">
                 <i class="fa-solid fa-repeat"></i>
                 <span id="repeatCounterLabel">108 restantes</span>
             </button>
-            <button onclick="flashcardApp.nextCard()" id="btnNext" class="w-14 h-14 rounded-full bg-gluon-primary hover:bg-blue-600 text-white flex items-center justify-center text-xl shadow-lg shadow-blue-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+            <button onclick="flashcardApp.nextCard()" id="btnNext" class="w-11 h-11 rounded-full bg-gluon-primary hover:bg-blue-600 text-white flex items-center justify-center text-base shadow-md shadow-blue-500/25 transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Próximo card">
                 <i class="fa-solid fa-arrow-right"></i>
             </button>
         </div>
-        <div class="absolute bottom-3 left-0 right-0 text-center pointer-events-none">
-            <span class="text-xs text-slate-500 font-medium hidden sm:inline">Use setas Direita/Esquerda ou Espaço</span>
+        <div class="mt-1 text-center pointer-events-none">
+            <span class="text-[11px] text-slate-500 font-medium hidden sm:inline">Use setas Direita/Esquerda ou Espaço</span>
         </div>
-    </main>
+    </footer>
 
     <!-- Modal: Configurações do Deck -->
     <div id="settingsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
