@@ -79,7 +79,7 @@ function normalizeReturnTarget(?string $rawTarget): string {
  */
 function sanitizeInfoType($value): int {
     $type = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['default' => 2]]);
-    return in_array($type, [0, 1, 2], true) ? $type : 2;
+    return in_array($type, [0, 1, 2, 3], true) ? $type : 2;
 }
 
 function sanitizeTagIds($rawTagIds): array {
