@@ -152,6 +152,7 @@
             .scene { height: 350px; }
             .card-text { font-size: 1.25rem; }
             .score-dot { width: 8px; height: 8px; }
+            #cardTagsPanel:not(.mobile-tags-open) { display: none !important; }
         }
     </style>
 </head>
@@ -172,6 +173,9 @@
         </div>
         
         <div class="flex items-center gap-2 sm:gap-3">
+            <button id="btnToggleMobileTags" onclick="flashcardApp.toggleMobileTags()" class="hidden sm:hidden w-10 h-10 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white items-center justify-center transition-colors" title="Exibir tags do card" aria-label="Exibir tags do card" aria-expanded="false">
+                <i class="fa-solid fa-tags"></i>
+            </button>
             <button id="btnGenerateCurrentAudioTop" data-current-audio-button="true" onclick="flashcardApp.generateCurrentCardAudio()" class="hidden w-10 h-10 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white items-center justify-center transition-colors" title="Gerar novo áudio" aria-label="Gerar novo áudio">
                 <i class="fa-solid fa-wand-magic-sparkles"></i>
             </button>
@@ -748,6 +752,7 @@
             currentIndex: 0,
             isFlipped: false,
             isRightPanelOpen: false,
+            mobileTagsVisible: false,
             autoPlayEnabled: false,
             suppressNextFlip: false,
             autoFlowEnabled: false,
@@ -1133,6 +1138,13 @@
                 document.getElementById('emptyState').style.display = 'none';
                 document.getElementById('cardScene').style.display = 'none';
                 document.getElementById('controls').style.display = 'none';
+                const tagsPanel = document.getElementById('cardTagsPanel');
+                if (tagsPanel) {
+                    tagsPanel.classList.add('hidden');
+                    tagsPanel.classList.remove('mobile-tags-open');
+                }
+                this.mobileTagsVisible = false;
+                this.updateMobileTagsToggleButton(false);
                 this.cards = [];
                 this.updateHeaderCardActions();
 
@@ -1205,6 +1217,13 @@
                 document.getElementById('emptyState').style.display = 'flex';
                 document.getElementById('deckMasteryBadge').classList.add('hidden');
                 document.getElementById('deckProgressBar').style.width = '0%';
+                const tagsPanel = document.getElementById('cardTagsPanel');
+                if (tagsPanel) {
+                    tagsPanel.classList.add('hidden');
+                    tagsPanel.classList.remove('mobile-tags-open');
+                }
+                this.mobileTagsVisible = false;
+                this.updateMobileTagsToggleButton(false);
                 this.updateHeaderCardActions();
                 
                 if (['aleatorio', 'grafo'].includes(this.deckMode) && this.totalCardsInDeck > 0) {
@@ -1296,6 +1315,30 @@
                 }
             },
 
+
+            updateMobileTagsToggleButton(hasVisibleTags = false) {
+                const button = document.getElementById('btnToggleMobileTags');
+                const tagsPanel = document.getElementById('cardTagsPanel');
+                if (!button) return;
+
+                const shouldShowButton = hasVisibleTags && this.deckMode === 'grafo';
+                button.classList.toggle('hidden', !shouldShowButton);
+                button.classList.toggle('flex', shouldShowButton);
+                button.setAttribute('aria-expanded', this.mobileTagsVisible ? 'true' : 'false');
+                button.setAttribute('title', this.mobileTagsVisible ? 'Ocultar tags do card' : 'Exibir tags do card');
+                button.setAttribute('aria-label', this.mobileTagsVisible ? 'Ocultar tags do card' : 'Exibir tags do card');
+                button.classList.toggle('text-violet-300', this.mobileTagsVisible);
+                button.classList.toggle('border-violet-500/60', this.mobileTagsVisible);
+                if (tagsPanel) tagsPanel.classList.toggle('mobile-tags-open', this.mobileTagsVisible && shouldShowButton);
+            },
+
+            toggleMobileTags() {
+                const tagsPanel = document.getElementById('cardTagsPanel');
+                if (!tagsPanel || tagsPanel.classList.contains('hidden')) return;
+                this.mobileTagsVisible = !this.mobileTagsVisible;
+                this.updateMobileTagsToggleButton(true);
+            },
+
             renderCurrentCard() {
                 if (this.cards.length === 0) return;
                 
@@ -1345,6 +1388,7 @@
                 ];
                 const allTags = tagsByPanel.reduce((acc, panel) => acc.concat(panel.tags), []);
                 const shouldShowTags = this.deckMode === 'grafo';
+                this.mobileTagsVisible = false;
                 if (shouldShowTags && allTags.length) {
                     tagsPanel.classList.remove('hidden');
                     const numeroPtBrCounts = new Map();
@@ -1363,9 +1407,12 @@
                         if (!group.tags.length) return '';
                         return `<section class="rounded-lg border border-slate-700/70 bg-slate-950/30 px-2.5 py-2"><p class="text-[10px] uppercase tracking-wide text-slate-400 mb-1">${group.label}</p><div class="flex flex-wrap gap-1.5">${group.tags.map(buildTagButton).join('')}</div></section>`;
                     }).filter(Boolean).join('');
+                    this.updateMobileTagsToggleButton(true);
                 } else {
                     tagsPanel.classList.add('hidden');
+                    tagsPanel.classList.remove('mobile-tags-open');
                     tagsList.innerHTML = '';
+                    this.updateMobileTagsToggleButton(false);
                 }
                 
                 const cardEl = document.getElementById('flashcard');
