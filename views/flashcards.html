@@ -1072,6 +1072,23 @@
                 }
                 return namePtBr ? `${name} (${namePtBr})` : name;
             },
+            getSubjectsCount(tag = {}) {
+                const value = Number(tag?.subjects_count ?? 0);
+                return Number.isFinite(value) && value >= 0 ? value : 0;
+            },
+            buildNumeroPtBrCounts(tags = []) {
+                const counts = new Map();
+                tags.forEach(tag => {
+                    const numero = tag?.numero;
+                    const numeroKey = numero !== null && numero !== undefined ? String(numero).trim() : '';
+                    const namePtBr = String(tag?.name_pt_br || '').trim();
+                    if (numeroKey && namePtBr) counts.set(numeroKey, (counts.get(numeroKey) || 0) + 1);
+                });
+                return counts;
+            },
+            renderTagButtonContent(tag = {}, numeroPtBrCounts = null) {
+                return `${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))} <span class="text-[10px] text-slate-400">(${this.getSubjectsCount(tag)})</span>`;
+            },
             renderTagSelector(selectedIds = null) {
                 const el = document.getElementById('cardTagSelector');
                 if (!el) return;
@@ -1087,13 +1104,7 @@
                         || String(tag.numero ?? '').toLowerCase().includes(this.tagSearchQuery)
                     )
                     : this.availableTags.filter(tag => currentSelected.includes(Number(tag.id)));
-                const numeroPtBrCounts = new Map();
-                filteredTags.forEach(tag => {
-                    const numero = tag?.numero;
-                    const numeroKey = numero !== null && numero !== undefined ? String(numero).trim() : '';
-                    const namePtBr = String(tag?.name_pt_br || '').trim();
-                    if (numeroKey && namePtBr) numeroPtBrCounts.set(numeroKey, (numeroPtBrCounts.get(numeroKey) || 0) + 1);
-                });
+                const numeroPtBrCounts = this.buildNumeroPtBrCounts(filteredTags);
                 if (!filteredTags.length) {
                     el.innerHTML = this.tagSearchQuery
                         ? '<span class="text-xs text-slate-400">Nenhuma tag encontrada para esta busca.</span>'
@@ -1103,7 +1114,7 @@
                 el.innerHTML = filteredTags.map(tag => {
                     const active = currentSelected.includes(Number(tag.id));
                     const bookBadge = Number(tag.is_book) === 1 ? '<span class="ml-1 text-[10px] text-amber-300">📚</span>' : '';
-                    return `<button type="button" onclick="flashcardApp.toggleTagSelection(${Number(tag.id)})" class="px-2.5 py-1 rounded-full text-xs border transition-colors ${this.getTagOwnershipClass(tag)} ${active ? 'ring-1 ring-emerald-300/60' : ''}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}${bookBadge}</button>`;
+                    return `<button type="button" onclick="flashcardApp.toggleTagSelection(${Number(tag.id)})" class="px-2.5 py-1 rounded-full text-xs border transition-colors ${this.getTagOwnershipClass(tag)} ${active ? 'ring-1 ring-emerald-300/60' : ''}">${this.renderTagButtonContent(tag, numeroPtBrCounts)}${bookBadge}</button>`;
                 }).join('');
             },
             handleInitialTagSearch(query = '') {
@@ -1142,13 +1153,7 @@
                     )
                     : this.availableTags.filter(tag => selectedId && Number(tag.id) === selectedId);
 
-                const numeroPtBrCounts = new Map();
-                filteredTags.forEach(tag => {
-                    const numero = tag?.numero;
-                    const numeroKey = numero !== null && numero !== undefined ? String(numero).trim() : '';
-                    const namePtBr = String(tag?.name_pt_br || '').trim();
-                    if (numeroKey && namePtBr) numeroPtBrCounts.set(numeroKey, (numeroPtBrCounts.get(numeroKey) || 0) + 1);
-                });
+                const numeroPtBrCounts = this.buildNumeroPtBrCounts(filteredTags);
 
                 if (!filteredTags.length) {
                     el.innerHTML = this.initialTagSearchQuery
@@ -1161,7 +1166,7 @@
                     const id = Number(tag.id);
                     const active = selectedId === id;
                     const bookBadge = Number(tag.is_book) === 1 ? '<span class="ml-1 text-[10px] text-amber-300">📚</span>' : '';
-                    return `<button type="button" onclick="flashcardApp.toggleInitialTagSelection(${id})" class="px-2.5 py-1 rounded-full text-xs border transition-colors ${this.getTagOwnershipClass(tag)} ${active ? 'ring-1 ring-emerald-300/60' : ''}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}${bookBadge}</button>`;
+                    return `<button type="button" onclick="flashcardApp.toggleInitialTagSelection(${id})" class="px-2.5 py-1 rounded-full text-xs border transition-colors ${this.getTagOwnershipClass(tag)} ${active ? 'ring-1 ring-emerald-300/60' : ''}">${this.renderTagButtonContent(tag, numeroPtBrCounts)}${bookBadge}</button>`;
                 }).join('');
             },
             toggleInitialTagSelection(tagId) {
@@ -1592,16 +1597,10 @@
                 this.mobileTagsVisible = false;
                 if (shouldShowTags && allTags.length) {
                     tagsPanel.classList.remove('hidden');
-                    const numeroPtBrCounts = new Map();
-                    allTags.forEach(tag => {
-                        const numero = tag?.numero;
-                        const numeroKey = numero !== null && numero !== undefined ? String(numero).trim() : '';
-                        const namePtBr = String(tag?.name_pt_br || '').trim();
-                        if (numeroKey && namePtBr) numeroPtBrCounts.set(numeroKey, (numeroPtBrCounts.get(numeroKey) || 0) + 1);
-                    });
+                    const numeroPtBrCounts = this.buildNumeroPtBrCounts(allTags);
 
                     const buildTagButton = (tag) => {
-                        return `<button type="button" onclick="flashcardApp.viewTagFamily(${Number(tag.id)})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${this.getTagOwnershipClass(tag)}" title="Ver família da tag">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button>`;
+                        return `<button type="button" onclick="flashcardApp.viewTagFamily(${Number(tag.id)})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${this.getTagOwnershipClass(tag)}" title="Ver família da tag">${this.renderTagButtonContent(tag, numeroPtBrCounts)}</button>`;
                     };
 
                     tagsList.innerHTML = tagsByPanel.map(group => {
