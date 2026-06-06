@@ -53,6 +53,9 @@
         <button type="button" id="btnAnswerGemini" onclick="app.answerFrontQuestionWithGemini()" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-emerald-300/30 p-2 text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-300/10 hover:text-emerald-200" title="Responder frente com Gemini" aria-label="Responder frente com Gemini">
           <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
         </button>
+        <button type="button" id="btnGenerateTagSentenceGemini" onclick="app.generateSentenceFromFirstSelectedTagWithGemini()" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-400/40 p-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200" title="Gerar frase da primeira tag com Gemini" aria-label="Gerar frase da primeira tag com Gemini">
+          <i class="fa-solid fa-quote-right" aria-hidden="true"></i>
+        </button>
       </div>
       <h1 id="pageTitle" class="text-base sm:text-lg font-semibold">Criar ficha de card</h1>
     </div>
@@ -797,6 +800,38 @@ const app = {
     } finally {
       btnAnswerGemini.innerHTML = originalHtml;
       btnAnswerGemini.disabled = false;
+    }
+  },
+  getFirstSelectedSubjectTag() {
+    const [firstSelectedTagId] = this.getSelectedTagIds('subject');
+    if (!firstSelectedTagId) return null;
+    return this.availableTags.find(tag => Number(tag.id) === Number(firstSelectedTagId)) || null;
+  },
+  async generateSentenceFromFirstSelectedTagWithGemini() {
+    const tag = this.getFirstSelectedSubjectTag();
+    const tagTextEn = String(tag?.name || '').trim();
+    const tagTextPtBr = String(tag?.name_pt_br || '').trim();
+
+    if (!tag) return this.setStatus('Selecione ao menos 1 tag para gerar a frase com Gemini.', 'error');
+    if (!tagTextEn || !tagTextPtBr) return this.setStatus('A primeira tag selecionada precisa ter texto em inglês e em pt-BR.', 'error');
+
+    const originalHtml = btnGenerateTagSentenceGemini.innerHTML;
+    btnGenerateTagSentenceGemini.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>';
+    btnGenerateTagSentenceGemini.disabled = true;
+
+    try {
+      const res = await this.api('generate_tag_sentence_gemini', { tag_text_en: tagTextEn, tag_text_pt_br: tagTextPtBr });
+      if (!res || !res.english || !res.pt_br) throw new Error('A API não retornou uma frase válida.');
+
+      singleFront.value = res.english;
+      singleBack.value = res.pt_br;
+      this.setActiveTab('front');
+      this.setStatus('Frase gerada com Gemini a partir da primeira tag selecionada!', 'success');
+    } catch (err) {
+      this.setStatus('Falha ao gerar frase com Gemini: ' + (err.message || 'erro desconhecido'), 'error');
+    } finally {
+      btnGenerateTagSentenceGemini.innerHTML = originalHtml;
+      btnGenerateTagSentenceGemini.disabled = false;
     }
   },
   async translateCardWithProvider({ action, button, loadingLabel, successLabel, frontSourceLanguage, backSourceLanguage, autoDetectOpposite = false, replaceSource = false }) {

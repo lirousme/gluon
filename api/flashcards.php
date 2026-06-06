@@ -3007,6 +3007,73 @@ Texto:
 }
 
 
+elseif ($action === 'generate_tag_sentence_gemini') {
+    $tag_text_en = trim($input['tag_text_en'] ?? '');
+    $tag_text_pt_br = trim($input['tag_text_pt_br'] ?? '');
+
+    if ($tag_text_en === '' || $tag_text_pt_br === '') {
+        die(json_encode(['status' => 'error', 'message' => 'Texto da tag inválido para gerar frase.']));
+    }
+
+    if (GEMINI_API_KEY === '') {
+        die(json_encode(['status' => 'error', 'message' => 'GEMINI_API_KEY não configurada no .env.']));
+    }
+
+    $prompt_template = <<<'PROMPT'
+Gere 1 frase em ingles com tradução para pt-br que tenha "%s" traduzido como "%s"
+
+Retorne exclusivamente um JSON válido neste formato: {"english":"frase em inglês","pt_br":"tradução em pt-BR"}. Não use markdown, comentários ou texto fora do JSON.
+PROMPT;
+    $prompt = sprintf($prompt_template, $tag_text_en, $tag_text_pt_br);
+
+    $payload = [
+        'contents' => [
+            [
+                'role' => 'user',
+                'parts' => [
+                    ['text' => $prompt]
+                ]
+            ]
+        ],
+        'generationConfig' => [
+            'temperature' => 0.4,
+            'responseMimeType' => 'application/json'
+        ]
+    ];
+
+    [$httpcode, $response, $curlError] = geminiJsonRequest(GEMINI_TRANSLATION_MODEL, $payload);
+
+    if ($httpcode !== 200 || !$response) {
+        $decoded_error = $response ? json_decode($response, true) : null;
+        $api_error = is_array($decoded_error) ? trim((string)($decoded_error['error']['message'] ?? '')) : '';
+        $details = $api_error !== '' ? $api_error : trim((string)$curlError);
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao gerar frase com o Gemini.' . ($details !== '' ? (' Detalhes: ' . $details) : '')]));
+    }
+
+    $decoded = json_decode($response, true);
+    $sentence_json = extractGeminiText($decoded);
+    $sentence_data = json_decode($sentence_json, true);
+
+    if (!is_array($sentence_data)) {
+        $json_start = strpos($sentence_json, '{');
+        $json_end = strrpos($sentence_json, '}');
+        if ($json_start !== false && $json_end !== false && $json_end > $json_start) {
+            $sentence_data = json_decode(substr($sentence_json, $json_start, $json_end - $json_start + 1), true);
+        }
+    }
+
+    $english = is_array($sentence_data) ? trim((string)($sentence_data['english'] ?? '')) : '';
+    $pt_br = is_array($sentence_data) ? trim((string)($sentence_data['pt_br'] ?? '')) : '';
+
+    if ($english === '' || $pt_br === '') {
+        $finish_reason = trim((string)($decoded['candidates'][0]['finishReason'] ?? ''));
+        die(json_encode(['status' => 'error', 'message' => 'A API do Gemini não retornou frase válida.' . ($finish_reason !== '' ? (' Motivo: ' . $finish_reason) : '')]));
+    }
+
+    echo json_encode(['status' => 'success', 'english' => $english, 'pt_br' => $pt_br]);
+}
+
+
 elseif ($action === 'answer_question_gemini') {
     $question = trim($input['question'] ?? '');
     $answer_language = normalizeDeckLanguage($input['answer_language'] ?? 'en-US', 'en-US');
