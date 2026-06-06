@@ -346,6 +346,9 @@
                 <button onclick="flashcardApp.prevCard()" id="btnPrev" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center text-base shadow-md transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Card anterior" aria-label="Card anterior">
                     <i class="fa-solid fa-arrow-left"></i>
                 </button>
+                <button onclick="event.stopPropagation(); flashcardApp.playCurrentCardAudio()" id="btnPlayCurrentAudio" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center text-base shadow-md transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Ouvir áudio do card" aria-label="Ouvir áudio do card" disabled>
+                    <i class="fa-solid fa-play"></i>
+                </button>
                 <button onclick="flashcardApp.nextCard()" id="btnNext" class="w-11 h-11 rounded-full bg-gluon-primary hover:bg-blue-600 text-white flex items-center justify-center text-base shadow-md shadow-blue-500/25 transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Próximo card" aria-label="Próximo card">
                     <i class="fa-solid fa-arrow-right"></i>
                 </button>
@@ -1429,13 +1432,44 @@
             updateAudioControlsVisibility() {
                 const audioFront = document.getElementById('audioControlsFront');
                 const audioBack = document.getElementById('audioControlsBack');
-                if (!audioFront || !audioBack) return;
+                if (audioFront) audioFront.style.display = 'none';
+                if (audioBack) audioBack.style.display = 'none';
 
-                const showFrontControls = !this.isFlipped && audioFront.innerHTML.trim() !== '';
-                const showBackControls = this.isFlipped && audioBack.innerHTML.trim() !== '';
+                this.updateCurrentAudioButton();
+            },
 
-                audioFront.style.display = showFrontControls ? 'flex' : 'none';
-                audioBack.style.display = showBackControls ? 'flex' : 'none';
+            updateCurrentAudioButton() {
+                const btnPlay = document.getElementById('btnPlayCurrentAudio');
+                const card = this.cards[this.currentIndex];
+                if (!btnPlay || !card) return;
+
+                const side = this.getCurrentAudioSide(card);
+                const hasAudio = side === 'back' ? card.has_audio_back === 1 : card.has_audio_front === 1;
+                const sideLabel = side === 'back' ? 'verso' : 'frente';
+                const canPlay = Boolean(side && hasAudio);
+
+                btnPlay.disabled = !canPlay;
+                btnPlay.title = canPlay ? `Ouvir áudio do ${sideLabel}` : 'Este lado do card não possui áudio';
+                btnPlay.setAttribute('aria-label', btnPlay.title);
+                btnPlay.classList.toggle('bg-blue-900/80', canPlay && side === 'back');
+                btnPlay.classList.toggle('hover:bg-blue-800', canPlay && side === 'back');
+                btnPlay.classList.toggle('border-blue-500/50', canPlay && side === 'back');
+                btnPlay.classList.toggle('text-blue-200', canPlay && side === 'back');
+                btnPlay.classList.toggle('bg-slate-800', !canPlay || side !== 'back');
+                btnPlay.classList.toggle('hover:bg-slate-700', !canPlay || side !== 'back');
+                btnPlay.classList.toggle('border-slate-600', !canPlay || side !== 'back');
+                btnPlay.classList.toggle('text-slate-300', !canPlay || side !== 'back');
+            },
+
+            playCurrentCardAudio() {
+                const card = this.cards[this.currentIndex];
+                if (!card) return;
+
+                const side = this.getCurrentAudioSide(card);
+                const hasAudio = side === 'back' ? card.has_audio_back === 1 : card.has_audio_front === 1;
+                if (!side || !hasAudio) return;
+
+                this.playCardAudio(card.id, side);
             },
 
             updateHeaderCardActions() {
