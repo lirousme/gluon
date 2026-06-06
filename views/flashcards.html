@@ -149,7 +149,12 @@
         }
 
         @media (max-width: 640px) {
-            .scene { height: 350px; }
+            #flashcardsMain { --mobile-tags-scene-offset: 0px; }
+            .scene {
+                height: calc(95% - var(--mobile-tags-scene-offset, 0px));
+                max-height: none;
+                min-height: 0;
+            }
             .card-text { font-size: 1.25rem; }
             .score-dot { width: 8px; height: 8px; }
             #cardTagsPanel:not(.mobile-tags-open) { display: none !important; }
@@ -316,7 +321,7 @@
     </div>
 
     <!-- Main Content -->
-    <main class="flex-1 w-full flex flex-col items-center justify-center p-4 relative">
+    <main id="flashcardsMain" class="flex-1 min-h-0 w-full flex flex-col items-center justify-center p-4 relative">
         
         <span id="deckName" class="absolute top-1 left-4 right-4 text-center text-[14px] sm:text-xs font-normal text-slate-400 tracking-wide truncate z-10">Carregando...</span>
 
@@ -350,7 +355,7 @@
 
             </div>
         </div>
-        <div id="cardTagsPanel" class="hidden w-full max-w-sm mt-3 mx-auto rounded-xl border border-slate-700/80 bg-slate-900/80 px-3 py-2 shadow-lg shadow-black/20">
+        <div id="cardTagsPanel" class="hidden w-full max-w-sm mt-3 mx-auto rounded-xl border border-slate-700/80 bg-slate-900/80 px-3 py-2 shadow-lg shadow-black/20 shrink-0 max-h-[30dvh] overflow-y-auto no-scrollbar">
             <div class="text-[11px] text-slate-400 mb-1.5 uppercase tracking-wide">Tags deste card</div>
             <div id="cardTagsList" class="flex flex-wrap gap-1.5"></div>
         </div>
@@ -806,6 +811,7 @@
                 this.setupKeyboardListeners();
                 this.setupSwipeListeners();
                 this.setupBulkListener();
+                window.addEventListener('resize', () => this.updateMobileSceneHeight());
                 this.applyStudyScopeUI();
                 await this.loadSessionUser();
                 await this.loadTags();
@@ -1330,6 +1336,32 @@
                 button.classList.toggle('text-violet-300', this.mobileTagsVisible);
                 button.classList.toggle('border-violet-500/60', this.mobileTagsVisible);
                 if (tagsPanel) tagsPanel.classList.toggle('mobile-tags-open', this.mobileTagsVisible && shouldShowButton);
+                this.updateMobileSceneHeight();
+            },
+
+            updateMobileSceneHeight() {
+                const main = document.getElementById('flashcardsMain');
+                const tagsPanel = document.getElementById('cardTagsPanel');
+                if (!main) return;
+
+                const isMobile = window.matchMedia('(max-width: 640px)').matches;
+                const isTagsOpen = isMobile
+                    && tagsPanel
+                    && !tagsPanel.classList.contains('hidden')
+                    && tagsPanel.classList.contains('mobile-tags-open');
+
+                if (!isTagsOpen) {
+                    main.style.setProperty('--mobile-tags-scene-offset', '0px');
+                    return;
+                }
+
+                requestAnimationFrame(() => {
+                    const styles = window.getComputedStyle(tagsPanel);
+                    const marginTop = parseFloat(styles.marginTop) || 0;
+                    const marginBottom = parseFloat(styles.marginBottom) || 0;
+                    const occupiedHeight = Math.ceil(tagsPanel.offsetHeight + marginTop + marginBottom);
+                    main.style.setProperty('--mobile-tags-scene-offset', `${Math.ceil(occupiedHeight * 0.95)}px`);
+                });
             },
 
             toggleMobileTags() {
