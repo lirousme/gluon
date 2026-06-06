@@ -117,9 +117,14 @@
             <i class="fa-regular fa-circle-question" aria-hidden="true"></i>
             Pergunta
         </button>
-        <button type="submit" id="btnSave" class="inline-flex items-center gap-2 bg-gluon-primary hover:bg-blue-600 px-4 py-2 rounded-lg font-medium">
-          <i class="fa-solid fa-check"></i> Salvar
-        </button>
+        <div class="flex items-center gap-2">
+          <button type="button" id="btnDeleteCard" class="hidden inline-flex items-center gap-2 bg-red-700 hover:bg-red-600 px-4 py-2 rounded-lg font-medium text-white">
+            <i class="fa-solid fa-trash"></i> Excluir card
+          </button>
+          <button type="submit" id="btnSave" class="inline-flex items-center gap-2 bg-gluon-primary hover:bg-blue-600 px-4 py-2 rounded-lg font-medium">
+            <i class="fa-solid fa-check"></i> Salvar
+          </button>
+        </div>
       </div>
       <p id="statusMessage" class="text-sm text-slate-400" role="status" aria-live="polite"></p>
     </form>
@@ -854,7 +859,24 @@ const app = {
     const subjectTags = Array.isArray(card.subject_tags) ? card.subject_tags.map(t => Number(t.id)).filter(Boolean) : [];
     this.setSelectedTagIds('subject', subjectTags);
     this.renderAllTagSelectors();
+    btnDeleteCard.classList.remove('hidden');
     this.setStatus('Você está editando um card.', 'neutral');
+  },
+  async deleteCard() {
+    if (!this.editCardId) return;
+    if (!confirm('Atenção: Tem certeza que deseja excluir permanentemente este card?')) return;
+    const original = btnDeleteCard.innerHTML;
+    btnDeleteCard.disabled = true;
+    btnDeleteCard.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Excluindo...';
+    try {
+      const response = await this.api('delete_card', { card_id: this.editCardId, return_to: this.getReturnTarget() });
+      this.setStatus(response?.message || 'Card excluído com sucesso.', 'success');
+      setTimeout(() => this.redirectAfterSave(response?.redirect_url), 260);
+    } catch (err) {
+      this.setStatus(err.message || 'Erro ao excluir card.', 'error');
+      btnDeleteCard.disabled = false;
+      btnDeleteCard.innerHTML = original;
+    }
   },
   async save(e) {
     e.preventDefault();
@@ -890,6 +912,7 @@ btnRemoveFrontImage.onclick = () => app.removeCardImage('front');
 backImageFile.onchange = (e) => app.handleCardImageUpload(e, 'back');
 btnRemoveBackImage.onclick = () => app.removeCardImage('back');
 btnInfoType.onclick = () => app.cycleInfoType();
+btnDeleteCard.onclick = () => app.deleteCard();
 subjectTagSearchInput.oninput = (e) => app.handleTagSearch('subject', e.target.value);
 cardForm.onsubmit = (e) => app.save(e);
 tagForm.onsubmit = (e) => app.createTag(e);
