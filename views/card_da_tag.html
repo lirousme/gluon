@@ -27,6 +27,7 @@
     <header class="relative flex items-center justify-center border-b border-slate-700 px-4 py-3 bg-slate-950">
       <div class="absolute left-4 flex items-center gap-2">
         <button type="button" onclick="goBackToMarkedRoute()" class="h-9 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800" title="Voltar" aria-label="Voltar"><i class="fa-solid fa-left-long" aria-hidden="true"></i></button>
+        <button id="btnOpenOrphanTags" type="button" onclick="goToOrphanTags()" class="h-9 w-9 rounded-lg border border-purple-500/50 text-purple-300 hover:text-purple-200 hover:bg-purple-500/20 transition-colors text-sm font-medium" title="Tags sem vínculos" aria-label="Abrir tags sem vínculos"><i class="fa-solid fa-magnifying-glass-chart" aria-hidden="true"></i></button>
         <button id="btnOpenCustomRules" type="button" class="h-9 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800" title="Regras customizadas" aria-label="Regras customizadas"><i class="fa-solid fa-bridge-circle-exclamation" aria-hidden="true"></i></button>
       </div>
 
@@ -236,6 +237,10 @@
       if(state.tagId) customRulesParams.set('tag_id', String(state.tagId));
       if(state.tagName) customRulesParams.set('tag_name', state.tagName);
       window.location.href = `/views/regras_customizadas.html?${customRulesParams.toString()}`;
+    }
+
+    function goToOrphanTags(){
+      window.location.href = '/views/tags_sem_vinculos.html';
     }
 
     async function api(action, payload = {}){
