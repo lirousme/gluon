@@ -3586,18 +3586,11 @@ elseif ($action === 'list_user_tags_by_subject_card_count' || $action === 'list_
     $perPage = (int)($input['per_page'] ?? ($_GET['per_page'] ?? 10));
     if ($perPage < 1) $perPage = 10;
     if ($perPage > 50) $perPage = 50;
-    $offset = ($page - 1) * $perPage;
+    $search = trim((string)($input['search'] ?? ($_GET['search'] ?? '')));
+    $searchNormalized = mb_strtolower($search, 'UTF-8');
+    $hasSearch = $searchNormalized !== '';
 
-    $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM flashcard_tags WHERE user_id = ?");
-    $stmtCount->execute([$user_id]);
-    $total = (int)$stmtCount->fetchColumn();
-    $totalPages = max(1, (int)ceil($total / $perPage));
-    if ($page > $totalPages) {
-        $page = $totalPages;
-        $offset = ($page - 1) * $perPage;
-    }
-
-    $sql = "
+    $baseSql = "
         SELECT
             t.id,
             t.user_id,
@@ -3617,23 +3610,59 @@ elseif ($action === 'list_user_tags_by_subject_card_count' || $action === 'list_
         ) subject_counts ON subject_counts.tag_id = t.id
         WHERE t.user_id = ?
         ORDER BY subjects_count ASC, t.id ASC
-        LIMIT ? OFFSET ?
     ";
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindValue(1, $user_id, PDO::PARAM_INT);
-    $stmt->bindValue(2, $user_id, PDO::PARAM_INT);
-    $stmt->bindValue(3, $perPage, PDO::PARAM_INT);
-    $stmt->bindValue(4, $offset, PDO::PARAM_INT);
-    $stmt->execute();
-    $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
     $parsed = [];
-    foreach ($tags as $tag) {
-        $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
-        $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
-        $tag['subjects_count'] = (int)($tag['subjects_count'] ?? 0);
-        unset($tag['name_encrypted'], $tag['name_pt_br_encrypted']);
-        $parsed[] = $tag;
+    if ($hasSearch) {
+        $stmt = $pdo->prepare($baseSql);
+        $stmt->bindValue(1, $user_id, PDO::PARAM_INT);
+        $stmt->bindValue(2, $user_id, PDO::PARAM_INT);
+        $stmt->execute();
+        $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($tags as $tag) {
+            $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
+            $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
+            $tag['subjects_count'] = (int)($tag['subjects_count'] ?? 0);
+            unset($tag['name_encrypted'], $tag['name_pt_br_encrypted']);
+
+            $numero = trim((string)($tag['numero'] ?? ''));
+            $name = trim((string)($tag['name'] ?? ''));
+            $namePtBr = trim((string)($tag['name_pt_br'] ?? ''));
+            $label = $numero !== '' ? $numero : (($name !== '' && $namePtBr !== '' && mb_strtolower($name, 'UTF-8') !== mb_strtolower($namePtBr, 'UTF-8')) ? "$name ($namePtBr)" : ($name !== '' ? $name : $namePtBr));
+            $haystack = mb_strtolower(trim($label . ' ' . $name . ' ' . $namePtBr . ' ' . $numero), 'UTF-8');
+            if (mb_strpos($haystack, $searchNormalized, 0, 'UTF-8') !== false) {
+                $parsed[] = $tag;
+            }
+        }
+        $total = count($parsed);
+        $totalPages = max(1, (int)ceil($total / $perPage));
+        if ($page > $totalPages) $page = $totalPages;
+        $offset = ($page - 1) * $perPage;
+        $parsed = array_slice($parsed, $offset, $perPage);
+    } else {
+        $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM flashcard_tags WHERE user_id = ?");
+        $stmtCount->execute([$user_id]);
+        $total = (int)$stmtCount->fetchColumn();
+        $totalPages = max(1, (int)ceil($total / $perPage));
+        if ($page > $totalPages) $page = $totalPages;
+        $offset = ($page - 1) * $perPage;
+
+        $stmt = $pdo->prepare($baseSql . " LIMIT ? OFFSET ?");
+        $stmt->bindValue(1, $user_id, PDO::PARAM_INT);
+        $stmt->bindValue(2, $user_id, PDO::PARAM_INT);
+        $stmt->bindValue(3, $perPage, PDO::PARAM_INT);
+        $stmt->bindValue(4, $offset, PDO::PARAM_INT);
+        $stmt->execute();
+        $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($tags as $tag) {
+            $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
+            $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
+            $tag['subjects_count'] = (int)($tag['subjects_count'] ?? 0);
+            unset($tag['name_encrypted'], $tag['name_pt_br_encrypted']);
+            $parsed[] = $tag;
+        }
     }
+
     echo json_encode([
         'status' => 'success',
         'count' => count($parsed),
@@ -3641,6 +3670,7 @@ elseif ($action === 'list_user_tags_by_subject_card_count' || $action === 'list_
         'page' => $page,
         'per_page' => $perPage,
         'total_pages' => $totalPages,
+        'search' => $search,
         'data' => $parsed
     ]);
 }

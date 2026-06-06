@@ -42,10 +42,15 @@
       <div id="pinnedTagsList" class="space-y-2"></div>
     </section>
 
-    <section class="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
+    <section id="allTagsSection" class="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
       <div class="mb-3">
         <h2 class="text-base font-semibold text-slate-100">Todas as tags</h2>
         <p class="text-xs text-slate-400">Lista paginada das tags do usuário atual</p>
+        <label for="tagSearchInput" class="sr-only">Pesquisar tags</label>
+        <div class="mt-3">
+          <input id="tagSearchInput" type="search" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/30" placeholder="Pesquisar tags por nome, tradução ou número..." autocomplete="off">
+          <p id="tagSearchHelp" class="mt-1 text-xs text-slate-500">Digite para filtrar as tags em todas as páginas.</p>
+        </div>
       </div>
       <div id="tagsList" class="space-y-2"></div>
       <div id="pagination" class="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-700 pt-4 hidden">
@@ -81,7 +86,7 @@
     if (event.ctrlKey) event.preventDefault();
   }, { passive: false });
 })();
-    const state = { page: 1, perPage: 10, total: 0, totalPages: 1 };
+    const state = { page: 1, perPage: 10, total: 0, totalPages: 1, search: '' };
     function esc(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
     async function api(action, payload = {}) {
       payload.action = action;
@@ -161,9 +166,10 @@
       prev.disabled = state.page <= 1;
       next.disabled = state.page >= state.totalPages;
       label.textContent = `Página ${state.page} de ${state.totalPages}`;
+      const searchSuffix = state.search ? ` filtrada${state.total === 1 ? '' : 's'} por \"${state.search}\"` : '';
       pageInfo.textContent = state.total
-        ? `Mostrando ${Math.min(state.perPage, Math.max(0, state.total - ((state.page - 1) * state.perPage)))} de ${state.total} tags — menos cards em Subjects primeiro`
-        : 'Nenhuma tag encontrada para o usuário atual';
+        ? `Mostrando ${Math.min(state.perPage, Math.max(0, state.total - ((state.page - 1) * state.perPage)))} de ${state.total} tag${state.total === 1 ? '' : 's'}${searchSuffix} — menos cards em Subjects primeiro`
+        : (state.search ? `Nenhuma tag encontrada para \"${state.search}\"` : 'Nenhuma tag encontrada para o usuário atual');
     }
     async function loadPinnedTags(){
       const el = document.getElementById('pinnedTagsList');
@@ -198,7 +204,7 @@
       const el = document.getElementById('tagsList');
       el.innerHTML = '<p class="text-sm text-slate-400">Carregando tags...</p>';
       try {
-        const res = await api('list_user_tags_by_subject_card_count', { page, per_page: state.perPage });
+        const res = await api('list_user_tags_by_subject_card_count', { page, per_page: state.perPage, search: state.search });
         const tags = res.data || [];
         state.page = Number(res.page || page || 1);
         state.perPage = Number(res.per_page || state.perPage);
@@ -206,7 +212,9 @@
         state.totalPages = Number(res.total_pages || 1);
         document.getElementById('countBadge').textContent = String(state.total);
         if (!tags.length) {
-          el.innerHTML = '<p class="text-sm text-slate-400">Nenhuma tag encontrada para o usuário atual.</p>';
+          el.innerHTML = state.search
+            ? `<p class="text-sm text-slate-400">Nenhuma tag encontrada para "${esc(state.search)}".</p>`
+            : '<p class="text-sm text-slate-400">Nenhuma tag encontrada para o usuário atual.</p>';
           renderPagination();
           return;
         }
@@ -219,6 +227,11 @@
     }
     document.getElementById('prevPage').addEventListener('click', () => { if (state.page > 1) load(state.page - 1); });
     document.getElementById('nextPage').addEventListener('click', () => { if (state.page < state.totalPages) load(state.page + 1); });
+    document.getElementById('tagSearchInput').addEventListener('input', (event) => {
+      state.search = event.target.value.trim();
+      clearTimeout(window.tagSearchTimer);
+      window.tagSearchTimer = setTimeout(() => load(1), 250);
+    });
     window.addEventListener('DOMContentLoaded', () => { loadPinnedTags(); load(1); });
   </script>
 </body>
