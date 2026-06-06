@@ -44,17 +44,14 @@
         <button type="button" onclick="app.openCreateTagModal()" class="inline-flex h-9 items-center justify-center rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800" title="Criar nova tag" aria-label="Criar nova tag">
           <i class="fa-solid fa-plus" aria-hidden="true"></i>
         </button>
-        <button type="button" id="btnTranslate" onclick="app.translateCard()" class="inline-flex h-9 items-center justify-center rounded-lg border border-fuchsia-400/20 px-3 py-2 text-sm font-medium text-fuchsia-400 transition-colors hover:bg-fuchsia-400/10 hover:text-fuchsia-300" title="Traduzir via IA" aria-label="Traduzir via IA">
+        <button type="button" id="btnTranslate" onclick="app.translateCard()" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-fuchsia-400/20 p-2 text-sm font-medium text-fuchsia-400 transition-colors hover:bg-fuchsia-400/10 hover:text-fuchsia-300" title="Traduzir via IA" aria-label="Traduzir via IA">
           <i class="fa-solid fa-language" aria-hidden="true"></i>
-          <span class="ml-2 hidden sm:inline">Traduzir via IA</span>
         </button>
-        <button type="button" id="btnTranslateGemini" onclick="app.translateCardWithGemini()" class="inline-flex h-9 items-center justify-center rounded-lg border border-amber-300/30 px-3 py-2 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-300/10 hover:text-amber-200" title="Traduzir com Gemini" aria-label="Traduzir com Gemini">
+        <button type="button" id="btnTranslateGemini" onclick="app.translateCardWithGemini()" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-300/30 p-2 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-300/10 hover:text-amber-200" title="Traduzir com Gemini" aria-label="Traduzir com Gemini">
           <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
-          <span class="ml-2 hidden sm:inline">Traduzir com Gemini</span>
         </button>
-        <button type="button" id="btnAnswerGemini" onclick="app.answerFrontQuestionWithGemini()" class="inline-flex h-9 items-center justify-center rounded-lg border border-emerald-300/30 px-3 py-2 text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-300/10 hover:text-emerald-200" title="Responder frente com Gemini" aria-label="Responder frente com Gemini">
+        <button type="button" id="btnAnswerGemini" onclick="app.answerFrontQuestionWithGemini()" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-emerald-300/30 p-2 text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-300/10 hover:text-emerald-200" title="Responder frente com Gemini" aria-label="Responder frente com Gemini">
           <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
-          <span class="ml-2 hidden sm:inline">Responder com Gemini</span>
         </button>
       </div>
       <h1 id="pageTitle" class="text-base sm:text-lg font-semibold">Criar ficha de card</h1>
@@ -785,7 +782,7 @@ const app = {
     if (!frontText) return this.setStatus('Preencha a frente com uma pergunta para o Gemini responder.', 'error');
 
     const originalHtml = btnAnswerGemini.innerHTML;
-    btnAnswerGemini.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i><span class="ml-2 hidden sm:inline">Respondendo...</span>';
+    btnAnswerGemini.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>';
     btnAnswerGemini.disabled = true;
 
     try {
@@ -824,7 +821,7 @@ const app = {
     const targetLanguage = fieldToTranslate === 'front' ? (backSourceLanguage || this.backLanguage) : (frontSourceLanguage || this.frontLanguage);
     const originalHtml = button.innerHTML;
 
-    button.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i><span class="ml-2 hidden sm:inline">${loadingLabel}</span>`;
+    button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>';
     button.disabled = true;
 
     try {
