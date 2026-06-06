@@ -2217,6 +2217,7 @@ if ($action === 'fetch') {
                 'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
                 'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
                 'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
+                'info_type' => sanitizeInfoType($card['info_type'] ?? 2),
                 'has_audio_front' => (int)$card['has_audio_front'],
                 'has_audio_back' => (int)$card['has_audio_back'],
                 'score' => (int)$card['score'],
