@@ -130,6 +130,106 @@
         .score-dot.half-filled { background: linear-gradient(to right, #22c55e 50%, #334155 50%) !important; box-shadow: 0 0 3px rgba(34, 197, 94, 0.3); }
         .card-back .score-dot.half-filled { background: linear-gradient(to right, #10b981 50%, #2563eb 50%) !important; box-shadow: 0 0 3px rgba(16, 185, 129, 0.3); }
 
+        body {
+            --card-type-rgb: 59, 130, 246;
+            --card-type-accent: #3b82f6;
+            --card-type-accent-strong: #2563eb;
+            --card-type-accent-soft: rgba(59, 130, 246, 0.16);
+            --card-type-accent-muted: rgba(59, 130, 246, 0.28);
+            --card-type-surface: rgba(30, 41, 59, 0.95);
+            --card-type-surface-strong: rgba(15, 23, 42, 0.98);
+            --card-type-text: #bfdbfe;
+            --card-type-text-strong: #eff6ff;
+            background:
+                radial-gradient(circle at 20% 0%, rgba(var(--card-type-rgb), 0.22), transparent 34rem),
+                linear-gradient(135deg, var(--card-type-surface-strong), #020617 58%, rgba(var(--card-type-rgb), 0.16));
+            transition: background 0.35s ease, color 0.35s ease;
+        }
+
+        body #flashcardsMain {
+            background: radial-gradient(circle at center, rgba(var(--card-type-rgb), 0.12), transparent 42rem);
+            transition: background 0.35s ease;
+        }
+
+        body nav,
+        body footer,
+        body #rightPanel {
+            background: linear-gradient(135deg, var(--card-type-surface), rgba(var(--card-type-rgb), 0.12)) !important;
+            border-color: rgba(var(--card-type-rgb), 0.34) !important;
+            box-shadow: 0 18px 45px rgba(var(--card-type-rgb), 0.12);
+            transition: background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+        }
+
+        body #deckProgressBar,
+        body #btnNext:not(:disabled) {
+            background: linear-gradient(90deg, var(--card-type-accent), var(--card-type-accent-strong)) !important;
+            box-shadow: 0 0 18px rgba(var(--card-type-rgb), 0.35);
+        }
+
+        body #btnNext:not(:disabled),
+        body #btnPlayCurrentAudio:not(:disabled),
+        body #btnGenerateCurrentAudioTop:not(.hidden),
+        body #btnEditCurrentTop:not(.hidden),
+        body #btnAddSingleTop,
+        body #btnRightPanel,
+        body #btnToggleMobileTags:not(.hidden) {
+            border-color: rgba(var(--card-type-rgb), 0.45) !important;
+        }
+
+        body #btnPlayCurrentAudio:not(:disabled) {
+            background: rgba(var(--card-type-rgb), 0.22) !important;
+            color: var(--card-type-text-strong) !important;
+            box-shadow: 0 0 16px rgba(var(--card-type-rgb), 0.2);
+        }
+
+        body #deckName,
+        body #cardCounter,
+        body #loadingText,
+        body #emptyStateTitle {
+            color: var(--card-type-text) !important;
+        }
+
+        body #cardCounter,
+        body #cardTagsPanel,
+        body #deckMasteryBadge {
+            background: rgba(var(--card-type-rgb), 0.10) !important;
+            border-color: rgba(var(--card-type-rgb), 0.34) !important;
+        }
+
+        .card-front {
+            background: linear-gradient(145deg, rgba(var(--card-type-rgb), 0.22), #0f172a 58%, rgba(var(--card-type-rgb), 0.13));
+            border-color: rgba(var(--card-type-rgb), 0.45);
+            box-shadow: 0 20px 45px rgba(var(--card-type-rgb), 0.18), 0 16px 30px rgba(0, 0, 0, 0.28);
+        }
+
+        .card-back {
+            background: linear-gradient(145deg, var(--card-type-accent), var(--card-type-accent-strong));
+            border-color: rgba(var(--card-type-rgb), 0.72);
+            box-shadow: 0 20px 45px rgba(var(--card-type-rgb), 0.28), 0 16px 30px rgba(0, 0, 0, 0.26);
+        }
+
+        .card-type-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            max-width: calc(100% - 6.5rem);
+            border: 1px solid rgba(var(--card-type-rgb), 0.45);
+            background: rgba(var(--card-type-rgb), 0.14);
+            color: var(--card-type-text);
+            box-shadow: 0 0 18px rgba(var(--card-type-rgb), 0.12);
+            backdrop-filter: blur(8px);
+        }
+
+        .card-back .card-type-badge {
+            border-color: rgba(255, 255, 255, 0.34);
+            background: rgba(15, 23, 42, 0.20);
+            color: #ffffff;
+        }
+
+        .card-back .score-dot { background-color: rgba(255, 255, 255, 0.28); }
+        .score-dot.half-filled { background: linear-gradient(to right, #22c55e 50%, rgba(var(--card-type-rgb), 0.18) 50%) !important; }
+        .card-back .score-dot.half-filled { background: linear-gradient(to right, #10b981 50%, rgba(255, 255, 255, 0.28) 50%) !important; }
+
         @media (min-width: 1024px) {
             #cardTagsPanel {
                 position: absolute;
@@ -331,7 +431,7 @@
                 
                 <!-- Frente -->
                 <div class="card-face card-front relative">
-                    <span id="frontLabel" class="absolute top-4 left-4 text-xs font-bold text-slate-500 tracking-wider uppercase">Frente</span>
+                    <span id="frontLabel" class="card-type-badge absolute top-4 left-4 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase">Frente</span>
                     
                     <div class="absolute top-4 right-4 z-30 flex items-center gap-3">
                         <i id="flipIconFront" class="fa-solid fa-rotate text-slate-600 opacity-50 hidden sm:block"></i>
@@ -343,7 +443,7 @@
 
                 <!-- Verso -->
                 <div class="card-face card-back relative">
-                    <span class="absolute top-4 left-4 text-xs font-bold text-blue-200 tracking-wider uppercase">Verso</span>
+                    <span id="backLabel" class="card-type-badge absolute top-4 left-4 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase">Verso</span>
                     
                     <div class="absolute top-4 right-4 z-30 flex items-center gap-3">
                         <i id="flipIconBack" class="fa-solid fa-rotate text-blue-300 opacity-50 hidden sm:block"></i>
@@ -1371,10 +1471,79 @@
                 this.updateMobileTagsToggleButton(true);
             },
 
+            getInfoTypeTheme(infoType) {
+                const themes = {
+                    0: {
+                        label: 'AFIRMAÇÃO',
+                        icon: 'fa-regular fa-circle-check',
+                        accent: '#3b82f6',
+                        accentStrong: '#1d4ed8',
+                        rgb: '59, 130, 246',
+                        text: '#bfdbfe',
+                        textStrong: '#eff6ff'
+                    },
+                    1: {
+                        label: 'TRADUÇÃO',
+                        icon: 'fa-solid fa-language',
+                        accent: '#f97316',
+                        accentStrong: '#c2410c',
+                        rgb: '249, 115, 22',
+                        text: '#fed7aa',
+                        textStrong: '#fff7ed'
+                    },
+                    2: {
+                        label: 'PERGUNTA',
+                        icon: 'fa-regular fa-circle-question',
+                        accent: '#a855f7',
+                        accentStrong: '#7e22ce',
+                        rgb: '168, 85, 247',
+                        text: '#e9d5ff',
+                        textStrong: '#faf5ff'
+                    },
+                    3: {
+                        label: 'FRASE DE EXEMPLO',
+                        icon: 'fa-solid fa-circle-info',
+                        accent: '#14b8a6',
+                        accentStrong: '#0f766e',
+                        rgb: '20, 184, 166',
+                        text: '#99f6e4',
+                        textStrong: '#f0fdfa'
+                    }
+                };
+                const parsed = Number(infoType);
+                return themes[parsed] || themes[2];
+            },
+
+            applyInfoTypeTheme(infoType) {
+                const theme = this.getInfoTypeTheme(infoType);
+                const body = document.body;
+                if (!body) return theme;
+
+                body.style.setProperty('--card-type-rgb', theme.rgb);
+                body.style.setProperty('--card-type-accent', theme.accent);
+                body.style.setProperty('--card-type-accent-strong', theme.accentStrong);
+                body.style.setProperty('--card-type-text', theme.text);
+                body.style.setProperty('--card-type-text-strong', theme.textStrong);
+                const parsedInfoType = Number(infoType);
+                body.dataset.cardInfoType = Number.isInteger(parsedInfoType) ? String(parsedInfoType) : '2';
+                return theme;
+            },
+
+            renderInfoTypeBadge(elementId, theme) {
+                const el = document.getElementById(elementId);
+                if (!el) return;
+                el.innerHTML = `<i class="${theme.icon}" aria-hidden="true"></i><span>${this.escapeHTML(theme.label)}</span>`;
+                el.title = `Tipo do card: ${theme.label}`;
+                el.setAttribute('aria-label', `Tipo do card: ${theme.label}`);
+            },
+
             renderCurrentCard() {
                 if (this.cards.length === 0) return;
                 
                 const card = this.cards[this.currentIndex];
+                const infoTypeTheme = this.applyInfoTypeTheme(card.info_type);
+                this.renderInfoTypeBadge('frontLabel', infoTypeTheme);
+                this.renderInfoTypeBadge('backLabel', infoTypeTheme);
                 const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
                 const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
                 const isBackOnlyCard = !hasFront && hasBack;
@@ -1466,7 +1635,6 @@
 
                 const audioBack = document.getElementById('audioControlsBack');
                 if (!hasBack || isBackOnlyCard) {
-                    document.getElementById('frontLabel').innerText = this.deckMode === 'livro' ? 'Página' : 'Card Único';
                     document.getElementById('flipIconFront').style.display = 'none';
                     cardEl.style.cursor = 'default';
                     if (!hasBack) {
@@ -1485,7 +1653,6 @@
                         audioBack.innerHTML = '';
                     }
                 } else {
-                    document.getElementById('frontLabel').innerText = 'Frente';
                     document.getElementById('flipIconFront').style.display = 'block';
                     cardEl.style.cursor = 'pointer';
 
