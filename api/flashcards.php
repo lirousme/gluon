@@ -1252,10 +1252,10 @@ function getFishReferenceIdByLanguage($language) {
  */
 function getGoogleTtsVoiceByLanguage($language) {
     switch ($language) {
-        case 'pt-BR': return 'pt-BR-Chirp3-HD-Fenrir'; //Algenib* //Charon //Enceladus** //Fenrir** //Iapetus //Vindemiatrix*FEMME //Pulcherrima*FEMME
-        case 'en-US': return 'en-US-Chirp3-HD-Fenrir';
+        case 'pt-BR': return 'pt-BR-Chirp3-HD-Algieba'; //Algenib* //Charon //Enceladus** //Fenrir** //Iapetus //Vindemiatrix*FEMME //Pulcherrima*FEMME
+        case 'en-US': return 'en-US-Chirp3-HD-Algieba';
         case 'en-GB': return 'en-GB-Chirp3-HD-Fenrir';
-        default: return 'en-US-Chirp3-HD-Fenrir';
+        default: return 'en-US-Chirp3-HD-Algieba';
     }
 }
 
@@ -1264,7 +1264,7 @@ function getGoogleTtsVoiceByLanguage($language) {
  */
 function getGoogleTtsAlternateVoiceByLanguage($language) {
     switch ($language) {
-        case 'pt-BR': return 'pt-BR-Chirp3-HD-Fenrir';
+        case 'pt-BR': return 'pt-BR-Chirp3-HD-Algieba';
         case 'en-US': return 'en-US-Chirp3-HD-Enceladus';
         case 'en-GB': return 'en-GB-Chirp3-HD-Fenrir';
         default: return 'en-US-Chirp3-HD-Enceladus';
@@ -1285,7 +1285,7 @@ function getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $fro
         && $normalized_back === 'en-GB'
     ) {
         if ($side === 'front') {
-            return 'pt-BR-Chirp3-HD-Algenib';
+            return 'pt-BR-Chirp3-HD-Algieba';
         }
 
         if ($side === 'back') {
@@ -1299,11 +1299,11 @@ function getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $fro
         && $normalized_back === 'pt-BR'
     ) {
         if ($side === 'front') {
-            return 'pt-BR-Chirp3-HD-Fenrir'; //pt-BR-Chirp3-HD-Rasalgethi
+            return 'pt-BR-Chirp3-HD-Algieba'; //pt-BR-Chirp3-HD-Rasalgethi
         }
 
         if ($side === 'back') {
-            return 'pt-BR-Chirp3-HD-Fenrir';//pt-BR-Chirp3-HD-Algenib //pt-BR-Chirp3-HD-Zubenelgenubi
+            return 'pt-BR-Chirp3-HD-Algieba';//pt-BR-Chirp3-HD-Algenib //pt-BR-Chirp3-HD-Zubenelgenubi
         }
     }
 
@@ -3586,11 +3586,18 @@ elseif ($action === 'list_user_tags_by_subject_card_count' || $action === 'list_
     $perPage = (int)($input['per_page'] ?? ($_GET['per_page'] ?? 10));
     if ($perPage < 1) $perPage = 10;
     if ($perPage > 50) $perPage = 50;
-    $search = trim((string)($input['search'] ?? ($_GET['search'] ?? '')));
-    $searchNormalized = mb_strtolower($search, 'UTF-8');
-    $hasSearch = $searchNormalized !== '';
+    $offset = ($page - 1) * $perPage;
 
-    $baseSql = "
+    $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM flashcard_tags WHERE user_id = ?");
+    $stmtCount->execute([$user_id]);
+    $total = (int)$stmtCount->fetchColumn();
+    $totalPages = max(1, (int)ceil($total / $perPage));
+    if ($page > $totalPages) {
+        $page = $totalPages;
+        $offset = ($page - 1) * $perPage;
+    }
+
+    $sql = "
         SELECT
             t.id,
             t.user_id,
@@ -3610,59 +3617,23 @@ elseif ($action === 'list_user_tags_by_subject_card_count' || $action === 'list_
         ) subject_counts ON subject_counts.tag_id = t.id
         WHERE t.user_id = ?
         ORDER BY subjects_count ASC, t.id ASC
+        LIMIT ? OFFSET ?
     ";
-
+    $stmt = $pdo->prepare($sql);
+    $stmt->bindValue(1, $user_id, PDO::PARAM_INT);
+    $stmt->bindValue(2, $user_id, PDO::PARAM_INT);
+    $stmt->bindValue(3, $perPage, PDO::PARAM_INT);
+    $stmt->bindValue(4, $offset, PDO::PARAM_INT);
+    $stmt->execute();
+    $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $parsed = [];
-    if ($hasSearch) {
-        $stmt = $pdo->prepare($baseSql);
-        $stmt->bindValue(1, $user_id, PDO::PARAM_INT);
-        $stmt->bindValue(2, $user_id, PDO::PARAM_INT);
-        $stmt->execute();
-        $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        foreach ($tags as $tag) {
-            $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
-            $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
-            $tag['subjects_count'] = (int)($tag['subjects_count'] ?? 0);
-            unset($tag['name_encrypted'], $tag['name_pt_br_encrypted']);
-
-            $numero = trim((string)($tag['numero'] ?? ''));
-            $name = trim((string)($tag['name'] ?? ''));
-            $namePtBr = trim((string)($tag['name_pt_br'] ?? ''));
-            $label = $numero !== '' ? $numero : (($name !== '' && $namePtBr !== '' && mb_strtolower($name, 'UTF-8') !== mb_strtolower($namePtBr, 'UTF-8')) ? "$name ($namePtBr)" : ($name !== '' ? $name : $namePtBr));
-            $haystack = mb_strtolower(trim($label . ' ' . $name . ' ' . $namePtBr . ' ' . $numero), 'UTF-8');
-            if (mb_strpos($haystack, $searchNormalized, 0, 'UTF-8') !== false) {
-                $parsed[] = $tag;
-            }
-        }
-        $total = count($parsed);
-        $totalPages = max(1, (int)ceil($total / $perPage));
-        if ($page > $totalPages) $page = $totalPages;
-        $offset = ($page - 1) * $perPage;
-        $parsed = array_slice($parsed, $offset, $perPage);
-    } else {
-        $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM flashcard_tags WHERE user_id = ?");
-        $stmtCount->execute([$user_id]);
-        $total = (int)$stmtCount->fetchColumn();
-        $totalPages = max(1, (int)ceil($total / $perPage));
-        if ($page > $totalPages) $page = $totalPages;
-        $offset = ($page - 1) * $perPage;
-
-        $stmt = $pdo->prepare($baseSql . " LIMIT ? OFFSET ?");
-        $stmt->bindValue(1, $user_id, PDO::PARAM_INT);
-        $stmt->bindValue(2, $user_id, PDO::PARAM_INT);
-        $stmt->bindValue(3, $perPage, PDO::PARAM_INT);
-        $stmt->bindValue(4, $offset, PDO::PARAM_INT);
-        $stmt->execute();
-        $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        foreach ($tags as $tag) {
-            $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
-            $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
-            $tag['subjects_count'] = (int)($tag['subjects_count'] ?? 0);
-            unset($tag['name_encrypted'], $tag['name_pt_br_encrypted']);
-            $parsed[] = $tag;
-        }
+    foreach ($tags as $tag) {
+        $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
+        $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
+        $tag['subjects_count'] = (int)($tag['subjects_count'] ?? 0);
+        unset($tag['name_encrypted'], $tag['name_pt_br_encrypted']);
+        $parsed[] = $tag;
     }
-
     echo json_encode([
         'status' => 'success',
         'count' => count($parsed),
@@ -3670,7 +3641,6 @@ elseif ($action === 'list_user_tags_by_subject_card_count' || $action === 'list_
         'page' => $page,
         'per_page' => $perPage,
         'total_pages' => $totalPages,
-        'search' => $search,
         'data' => $parsed
     ]);
 }
