@@ -28,7 +28,7 @@
             perspective: 1000px;
             width: 100%;
             max-width: 600px;
-            height: 400px; 
+            height: 80%; 
             margin: 0 auto;
             flex-shrink: 0; 
         }
@@ -1379,7 +1379,7 @@
                 const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
                 const isBackOnlyCard = !hasFront && hasBack;
 
-                const frontImageHtml = card.image_front ? `<img src="${card.image_front}" onclick="event.stopPropagation(); flashcardApp.openImageModal('${card.image_front}')" class="max-h-40 max-w-full object-contain cursor-zoom-in ${card.front ? 'mt-4' : ''} rounded-lg shadow-md border border-slate-600/50 hover:opacity-90 transition-opacity" title="Clique para ampliar">` : '';
+                const frontImageHtml = card.image_front ? `<img src="${card.image_front}" onclick="event.stopPropagation(); flashcardApp.openImageModal('${card.image_front}')" class="max-h-full max-w-full object-contain cursor-zoom-in ${card.front ? 'mt-4' : ''} rounded-lg shadow-md border border-slate-600/50 hover:opacity-90 transition-opacity" title="Clique para ampliar">` : '';
                 document.getElementById('cardFrontText').innerHTML = `
                     <div class="flex flex-col items-center justify-center w-full h-full">
                         ${card.front ? `<div class="text-center w-full">${this.escapeHTML(card.front)}</div>` : ''}
@@ -1388,7 +1388,7 @@
                 `;
                 this.renderMathInElement(document.getElementById('cardFrontText'));
 
-                const backImageHtml = card.image_back ? `<img src="${card.image_back}" onclick="event.stopPropagation(); flashcardApp.openImageModal('${card.image_back}')" class="max-h-40 max-w-full object-contain cursor-zoom-in ${card.back ? 'mt-4' : ''} rounded-lg shadow-md border border-blue-500/50 hover:opacity-90 transition-opacity" title="Clique para ampliar">` : '';
+                const backImageHtml = card.image_back ? `<img src="${card.image_back}" onclick="event.stopPropagation(); flashcardApp.openImageModal('${card.image_back}')" class="max-h-full max-w-full object-contain cursor-zoom-in ${card.back ? 'mt-4' : ''} rounded-lg shadow-md border border-blue-500/50 hover:opacity-90 transition-opacity" title="Clique para ampliar">` : '';
                 document.getElementById('cardBackText').innerHTML = `
                     <div class="flex flex-col items-center justify-center w-full h-full">
                         ${card.back ? `<div class="text-center w-full">${this.escapeHTML(card.back)}</div>` : ''}
