@@ -2153,30 +2153,35 @@
             async generateAudio(cardId, side) {
                 const btn = document.getElementById(`btnGenAudio_${side}_${cardId}`) || document.querySelector('[data-current-audio-button="true"]');
                 if (!btn) return;
-                
+
                 const originalHtml = btn.innerHTML;
                 btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i>`;
                 btn.disabled = true;
+                btn.setAttribute('aria-busy', 'true');
 
-                const res = await this.api('generate_audio', { card_id: cardId, side: side });
-                
-                if (res) {
+                try {
+                    const res = await this.api('generate_audio', { card_id: cardId, side: side });
+
+                    if (!res) return;
+
                     const cardIndex = this.cards.findIndex(c => c.id === cardId);
                     if (cardIndex !== -1) {
                         if (side === 'front') this.cards[cardIndex].has_audio_front = 1;
                         if (side === 'back') this.cards[cardIndex].has_audio_back = 1;
-                        
-                        this.renderCurrentCard(); 
-                        
+
+                        this.renderCurrentCard();
+
                         if(this.autoPlayEnabled || this.autoFlowEnabled) {
                             this.handleAutoPlaybackAndFlow();
                         } else {
                             this.showToast(res.message, 'success');
                         }
                     }
-                } else {
+                } finally {
                     btn.innerHTML = originalHtml;
                     btn.disabled = false;
+                    btn.removeAttribute('aria-busy');
+                    this.updateHeaderCardActions();
                 }
             },
 
