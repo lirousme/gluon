@@ -1059,6 +1059,14 @@
                     ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/80 hover:bg-emerald-500/25'
                     : 'bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700';
             },
+            getCardTagDisplayClass(tag = {}, decisionTagId = null) {
+                const tagId = Number(tag?.id);
+                const decisionId = Number(decisionTagId);
+                if (Number.isInteger(tagId) && tagId > 0 && Number.isInteger(decisionId) && decisionId > 0 && tagId === decisionId) {
+                    return 'bg-red-500/20 text-red-100 border-red-400/90 hover:bg-red-500/30 ring-1 ring-red-300/50';
+                }
+                return this.getTagOwnershipClass(tag);
+            },
             getTagLabel(tag = {}, numeroPtBrCounts = null) {
                 const numero = tag?.numero;
                 const hasNumero = numero !== null && numero !== undefined && String(numero).trim() !== '';
@@ -1599,8 +1607,12 @@
                     tagsPanel.classList.remove('hidden');
                     const numeroPtBrCounts = this.buildNumeroPtBrCounts(allTags);
 
+                    const decisionTagId = Number(card.graph_decision_tag_id || 0);
                     const buildTagButton = (tag) => {
-                        return `<button type="button" onclick="flashcardApp.viewTagFamily(${Number(tag.id)})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${this.getTagOwnershipClass(tag)}" title="Ver família da tag">${this.renderTagButtonContent(tag, numeroPtBrCounts)}</button>`;
+                        const tagId = Number(tag.id);
+                        const isDecisionTag = decisionTagId > 0 && tagId === decisionTagId;
+                        const title = isDecisionTag ? 'Tag responsável por encontrar este card' : 'Ver família da tag';
+                        return `<button type="button" onclick="flashcardApp.viewTagFamily(${tagId})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${this.getCardTagDisplayClass(tag, decisionTagId)}" title="${title}">${this.renderTagButtonContent(tag, numeroPtBrCounts)}</button>`;
                     };
 
                     tagsList.innerHTML = tagsByPanel.map(group => {
