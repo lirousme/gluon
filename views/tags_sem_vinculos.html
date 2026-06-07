@@ -49,7 +49,7 @@
         <label for="tagSearchInput" class="sr-only">Pesquisar tags</label>
         <div class="mt-3">
           <input id="tagSearchInput" type="search" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/30" placeholder="Pesquisar tags por nome, tradução ou número..." autocomplete="off">
-          <p id="tagSearchHelp" class="mt-1 text-xs text-slate-500">Digite para filtrar as tags em todas as páginas.</p>
+          <p id="tagSearchHelp" class="mt-1 text-xs text-slate-500">Digite para ver sugestões de tags que começam com o texto informado.</p>
         </div>
       </div>
       <div id="tagsList" class="space-y-2"></div>
@@ -86,7 +86,7 @@
     if (event.ctrlKey) event.preventDefault();
   }, { passive: false });
 })();
-    const state = { page: 1, perPage: 10, total: 0, totalPages: 1, search: '' };
+    const state = { page: 1, perPage: 10, total: 0, totalPages: 1, search: '', allTags: null, searchRequestId: 0 };
     function esc(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
     async function api(action, payload = {}) {
       payload.action = action;
@@ -121,6 +121,41 @@
     }
     function normalizePinnedTag(filter = {}) {
       return { ...filter, id: Number(filter.id_tag || filter.id || 0) };
+    }
+    function normalizeSearchText(value = '') {
+      return String(value)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase();
+    }
+    function getTagSearchFields(tag = {}) {
+      const fields = [getTagLabel(tag), tag?.name, tag?.name_pt_br, tag?.numero]
+        .map((value) => normalizeSearchText(value))
+        .filter(Boolean);
+      return [...new Set(fields)];
+    }
+    function tagStartsWithSearch(tag = {}, search = '') {
+      const normalizedSearch = normalizeSearchText(search);
+      if (!normalizedSearch) return false;
+      return getTagSearchFields(tag).some((field) => field.startsWith(normalizedSearch));
+    }
+    function sortTagsBySuggestionText(tags = []) {
+      return [...tags].sort((a, b) => getTagLabel(a).localeCompare(getTagLabel(b), 'pt-BR', { numeric: true, sensitivity: 'base' }));
+    }
+    async function getAllTagsForSearch() {
+      if (state.allTags) return state.allTags;
+      const res = await api('list_tags');
+      state.allTags = (res.data || []).filter((tag) => Number(tag.id) > 0);
+      return state.allTags;
+    }
+    function renderSearchPagination() {
+      const pagination = document.getElementById('pagination');
+      const pageInfo = document.getElementById('pageInfo');
+      pagination.classList.add('hidden');
+      pageInfo.textContent = state.total
+        ? `${state.total} sugestão${state.total === 1 ? '' : 'ões'} para "${state.search}" — tags que começam com o texto digitado`
+        : `Nenhuma tag encontrada começando com "${state.search}"`;
     }
     function renderTagArticle(tag, index, options = {}) {
       const count = Number(tag.subjects_count || 0);
@@ -204,7 +239,7 @@
       const el = document.getElementById('tagsList');
       el.innerHTML = '<p class="text-sm text-slate-400">Carregando tags...</p>';
       try {
-        const res = await api('list_user_tags_by_subject_card_count', { page, per_page: state.perPage, search: state.search });
+        const res = await api('list_user_tags_by_subject_card_count', { page, per_page: state.perPage });
         const tags = res.data || [];
         state.page = Number(res.page || page || 1);
         state.perPage = Number(res.per_page || state.perPage);
@@ -212,9 +247,7 @@
         state.totalPages = Number(res.total_pages || 1);
         document.getElementById('countBadge').textContent = String(state.total);
         if (!tags.length) {
-          el.innerHTML = state.search
-            ? `<p class="text-sm text-slate-400">Nenhuma tag encontrada para "${esc(state.search)}".</p>`
-            : '<p class="text-sm text-slate-400">Nenhuma tag encontrada para o usuário atual.</p>';
+          el.innerHTML = '<p class="text-sm text-slate-400">Nenhuma tag encontrada para o usuário atual.</p>';
           renderPagination();
           return;
         }
@@ -225,12 +258,42 @@
         el.innerHTML = `<p class="text-sm text-red-300">${esc(error.message || 'Erro ao carregar tags.')}</p>`;
       }
     }
+    async function renderSearchSuggestions(){
+      const el = document.getElementById('tagsList');
+      const requestId = ++state.searchRequestId;
+      const search = state.search;
+      if (!search) {
+        load(1);
+        return;
+      }
+      el.innerHTML = '<p class="text-sm text-slate-400">Buscando sugestões...</p>';
+      try {
+        const allTags = await getAllTagsForSearch();
+        if (requestId !== state.searchRequestId || search !== state.search) return;
+        const tags = sortTagsBySuggestionText(allTags.filter((tag) => tagStartsWithSearch(tag, search)));
+        state.page = 1;
+        state.total = tags.length;
+        state.totalPages = 1;
+        document.getElementById('countBadge').textContent = String(tags.length);
+        if (!tags.length) {
+          el.innerHTML = `<p class="text-sm text-slate-400">Nenhuma tag começa com "${esc(search)}".</p>`;
+          renderSearchPagination();
+          return;
+        }
+        el.innerHTML = tags.map((tag, index) => renderTagArticle(tag, index, { showCount: false })).join('');
+        bindTagNavigation(el, tags);
+        renderSearchPagination();
+      } catch (error) {
+        if (requestId !== state.searchRequestId) return;
+        el.innerHTML = `<p class="text-sm text-red-300">${esc(error.message || 'Erro ao buscar sugestões de tags.')}</p>`;
+      }
+    }
     document.getElementById('prevPage').addEventListener('click', () => { if (state.page > 1) load(state.page - 1); });
     document.getElementById('nextPage').addEventListener('click', () => { if (state.page < state.totalPages) load(state.page + 1); });
     document.getElementById('tagSearchInput').addEventListener('input', (event) => {
       state.search = event.target.value.trim();
       clearTimeout(window.tagSearchTimer);
-      window.tagSearchTimer = setTimeout(() => load(1), 250);
+      window.tagSearchTimer = setTimeout(renderSearchSuggestions, 80);
     });
     window.addEventListener('DOMContentLoaded', () => { loadPinnedTags(); load(1); });
   </script>
