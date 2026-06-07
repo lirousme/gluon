@@ -1915,6 +1915,44 @@ function extractGeminiText($decoded) {
 }
 
 /**
+ * Normaliza frases para detectar duplicatas ignorando caixa, pontuação e espaços extras.
+ */
+function normalizeSentenceForDuplicateCheck(string $text): string {
+    $normalized = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $normalized = function_exists('mb_strtolower') ? mb_strtolower($normalized, 'UTF-8') : strtolower($normalized);
+    $normalized = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $normalized);
+    return trim(preg_replace('/\s+/u', ' ', (string)$normalized));
+}
+
+/**
+ * Busca somente frases de cards do usuário público 5 para evitar enviar dados privados de outros usuários ao Gemini.
+ */
+function fetchUserFiveSubjectCardSentences(PDO $pdo, int $tag_id): array {
+    $stmt = $pdo->prepare("
+        SELECT DISTINCT f.front_encrypted
+        FROM subjects_links sl
+        INNER JOIN flashcards f ON f.id = sl.flashcard_id
+        INNER JOIN directories d ON d.id = f.directory_id
+        WHERE sl.tag_id = ?
+          AND d.user_id = 5
+        ORDER BY f.id DESC
+    ");
+    $stmt->execute([$tag_id]);
+
+    $sentences = [];
+    $seen = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $card) {
+        $sentence = !empty($card['front_encrypted']) ? trim(strip_tags(Security::decryptData($card['front_encrypted']))) : '';
+        $normalized = normalizeSentenceForDuplicateCheck($sentence);
+        if ($sentence === '' || $normalized === '' || isset($seen[$normalized])) continue;
+        $seen[$normalized] = true;
+        $sentences[] = $sentence;
+    }
+
+    return $sentences;
+}
+
+/**
  * Função openaiGetRequest: Executa requisição GET para a OpenAI e retorna HTTP code, resposta e erro cURL.
  */
 function openaiGetRequest($url) {
@@ -3008,23 +3046,47 @@ Texto:
 
 
 elseif ($action === 'generate_tag_sentence_gemini') {
+    $tag_id = (int)($input['tag_id'] ?? 0);
     $tag_text_en = trim($input['tag_text_en'] ?? '');
     $tag_text_pt_br = trim($input['tag_text_pt_br'] ?? '');
 
+    if ($tag_id <= 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID da tag inválido para gerar frase.']));
+    }
+
     if ($tag_text_en === '' || $tag_text_pt_br === '') {
         die(json_encode(['status' => 'error', 'message' => 'Texto da tag inválido para gerar frase.']));
+    }
+
+    $stmtTag = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5) LIMIT 1");
+    $stmtTag->execute([$tag_id, $user_id]);
+    if (!$stmtTag->fetchColumn()) {
+        die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada ou sem permissão.']));
     }
 
     if (GEMINI_API_KEY === '') {
         die(json_encode(['status' => 'error', 'message' => 'GEMINI_API_KEY não configurada no .env.']));
     }
 
+    $existing_sentences = fetchUserFiveSubjectCardSentences($pdo, $tag_id);
+    $existing_sentences_block = '';
+    if (!empty($existing_sentences)) {
+        $existing_sentences_block = "
+
+Frases em inglês que já existem para essa tag nos cards do usuário 5 (não gere nenhuma igual nem quase idêntica):
+";
+        foreach ($existing_sentences as $index => $sentence) {
+            $existing_sentences_block .= ($index + 1) . '. ' . $sentence . "
+";
+        }
+    }
+
     $prompt_template = <<<'PROMPT'
-Gere 1 frase em ingles com tradução para pt-br que tenha "%s" traduzido como "%s"
+Gere 1 frase em ingles com tradução para pt-br que tenha "%s" traduzido como "%s"%s
 
 Retorne exclusivamente um JSON válido neste formato: {"english":"frase em inglês","pt_br":"tradução em pt-BR"}. Não use markdown, comentários ou texto fora do JSON.
 PROMPT;
-    $prompt = sprintf($prompt_template, $tag_text_en, $tag_text_pt_br);
+    $prompt = sprintf($prompt_template, $tag_text_en, $tag_text_pt_br, $existing_sentences_block);
 
     $payload = [
         'contents' => [
@@ -3068,6 +3130,13 @@ PROMPT;
     if ($english === '' || $pt_br === '') {
         $finish_reason = trim((string)($decoded['candidates'][0]['finishReason'] ?? ''));
         die(json_encode(['status' => 'error', 'message' => 'A API do Gemini não retornou frase válida.' . ($finish_reason !== '' ? (' Motivo: ' . $finish_reason) : '')]));
+    }
+
+    $normalized_english = normalizeSentenceForDuplicateCheck($english);
+    foreach ($existing_sentences as $existing_sentence) {
+        if ($normalized_english !== '' && $normalized_english === normalizeSentenceForDuplicateCheck($existing_sentence)) {
+            die(json_encode(['status' => 'error', 'message' => 'O Gemini gerou uma frase que já existe para essa tag. Tente gerar novamente.']));
+        }
     }
 
     echo json_encode(['status' => 'success', 'english' => $english, 'pt_br' => $pt_br]);

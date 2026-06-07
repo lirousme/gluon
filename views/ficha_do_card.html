@@ -820,7 +820,7 @@ const app = {
     btnGenerateTagSentenceGemini.disabled = true;
 
     try {
-      const res = await this.api('generate_tag_sentence_gemini', { tag_text_en: tagTextEn, tag_text_pt_br: tagTextPtBr });
+      const res = await this.api('generate_tag_sentence_gemini', { tag_id: Number(tag.id), tag_text_en: tagTextEn, tag_text_pt_br: tagTextPtBr });
       if (!res || !res.english || !res.pt_br) throw new Error('A API não retornou uma frase válida.');
 
       singleFront.value = res.english;
