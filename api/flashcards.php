@@ -250,6 +250,66 @@ function tagCombinationAlreadyExists(PDO $pdo, int $userId, string $name, ?strin
  * Função getAllowedCardTagLinkTables: Retorna a lista branca das tabelas de vínculo entre cards e tags permitidas para consultas e escrita.
  */
 
+
+function normalizeLexicalChunkLookupValue(string $value): string
+{
+    $value = preg_replace('/\s+/u', ' ', trim($value));
+    return function_exists('mb_strtolower') ? mb_strtolower($value ?? '', 'UTF-8') : strtolower($value ?? '');
+}
+
+function findOrCreateLexicalChunkTag(PDO $pdo, int $userId, string $name, string $namePtBr): array
+{
+    $name = preg_replace('/\s+/u', ' ', trim($name));
+    $namePtBr = preg_replace('/\s+/u', ' ', trim($namePtBr));
+    if ($name === '' || $namePtBr === '') {
+        throw new InvalidArgumentException('Lexical chunk inválido.');
+    }
+
+    $stmt = $pdo->prepare("\n        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, is_lexical_chunk\n        FROM flashcard_tags\n        WHERE user_id IN (?, 5)\n        ORDER BY CASE WHEN user_id = ? THEN 0 ELSE 1 END, id ASC\n    ");
+    $stmt->execute([$userId, $userId]);
+    $targetName = normalizeLexicalChunkLookupValue($name);
+    $targetPtBr = normalizeLexicalChunkLookupValue($namePtBr);
+
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        if ((int)($row['is_lexical_chunk'] ?? 0) !== 1) continue;
+        $rowName = !empty($row['name_encrypted']) ? Security::decryptData((string)$row['name_encrypted']) : '';
+        $rowPtBr = !empty($row['name_pt_br_encrypted']) ? Security::decryptData((string)$row['name_pt_br_encrypted']) : '';
+        if (normalizeLexicalChunkLookupValue((string)$rowName) === $targetName && normalizeLexicalChunkLookupValue((string)$rowPtBr) === $targetPtBr) {
+            return [
+                'tag_id' => (int)$row['id'],
+                'en' => trim((string)$rowName),
+                'pt_br' => trim((string)$rowPtBr),
+                'created' => false,
+            ];
+        }
+    }
+
+    $color = resolveTagColorByCategory(['is_lexical_chunk' => 1]);
+    $nameEnc = Security::encryptData($name);
+    $namePtBrEnc = Security::encryptData($namePtBr);
+    $insert = $pdo->prepare("\n        INSERT INTO flashcard_tags\n            (user_id, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year)\n        VALUES (?, ?, ?, NULL, ?, 0, 0, 0, 1, 0, 0, 0, 0, 0)\n    ");
+
+    $tagId = 0;
+    try {
+        $pdo->beginTransaction();
+        $insert->execute([$userId, $nameEnc, $namePtBrEnc, $color]);
+        $tagId = (int)$pdo->lastInsertId();
+        executeTagCreationCustomRules($pdo, $userId, $tagId);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('[flashcards][create_lexical_chunk_tag] ' . $e->getMessage());
+        throw $e;
+    }
+
+    return [
+        'tag_id' => $tagId,
+        'en' => $name,
+        'pt_br' => $namePtBr,
+        'created' => true,
+    ];
+}
+
 function resolveTagColorByCategory(array $tagFlags): string {
     if (($tagFlags['is_book'] ?? 0) === 1) return '#f59e0b';
     if (($tagFlags['is_verb_tense'] ?? 0) === 1) return '#38bdf8';
@@ -3140,6 +3200,118 @@ PROMPT;
     }
 
     echo json_encode(['status' => 'success', 'english' => $english, 'pt_br' => $pt_br]);
+}
+
+
+elseif ($action === 'generate_sentence_lexical_chunks_gemini') {
+    $english_input = trim((string)($input['english'] ?? ''));
+    $pt_br_input = trim((string)($input['pt_br'] ?? ''));
+
+    if (GEMINI_API_KEY === '') {
+        die(json_encode(['status' => 'error', 'message' => 'GEMINI_API_KEY não configurada no .env.']));
+    }
+
+    if ($english_input !== '' && $pt_br_input !== '') {
+        $prompt = sprintf(<<<'PROMPT'
+Divida esta frase em inglês em lexical chunks e alinhe cada chunk à tradução exata em pt-BR.
+
+Frase em inglês: "%s"
+Tradução exata: "%s"
+
+Retorne exclusivamente JSON válido neste formato:
+{"english":"frase em inglês","pt_br":"tradução exata em pt-BR","chunks":[{"en":"lexical chunk em inglês","pt_br":"tradução desse chunk de acordo com a tradução exata"}]}
+
+Regras:
+- Mantenha english e pt_br exatamente como recebidos.
+- Os chunks precisam cobrir a frase inteira em ordem natural.
+- Use traduções curtas entre os chunks, como em: I saw them (Eu vi eles) at the park (no parque) yesterday (ontem).
+- Não use markdown, comentários ou texto fora do JSON.
+PROMPT, $english_input, $pt_br_input);
+    } else {
+        $seed = $english_input !== '' ? "Use esta frase em inglês como base e gere a tradução exata em pt-BR: \"{$english_input}\"" : ($pt_br_input !== '' ? "Use esta frase em pt-BR como base e gere a frase natural em inglês: \"{$pt_br_input}\"" : 'Gere uma frase curta e natural em inglês para estudo, com tradução exata em pt-BR.');
+        $prompt = <<<PROMPT
+{$seed}
+
+Depois, divida a frase em inglês em lexical chunks e alinhe cada chunk à tradução exata em pt-BR.
+
+Retorne exclusivamente JSON válido neste formato:
+{"english":"frase em inglês","pt_br":"tradução exata em pt-BR","chunks":[{"en":"lexical chunk em inglês","pt_br":"tradução desse chunk de acordo com a tradução exata"}]}
+
+Regras:
+- A frase deve ser útil para estudante de inglês e conter de 3 a 7 lexical chunks.
+- Os chunks precisam cobrir a frase inteira em ordem natural.
+- Use traduções curtas entre os chunks, como em: I saw them (Eu vi eles) at the park (no parque) yesterday (ontem).
+- Não use markdown, comentários ou texto fora do JSON.
+PROMPT;
+    }
+
+    $payload = [
+        'contents' => [
+            [
+                'role' => 'user',
+                'parts' => [
+                    ['text' => $prompt]
+                ]
+            ]
+        ],
+        'generationConfig' => [
+            'temperature' => 0.35,
+            'responseMimeType' => 'application/json'
+        ]
+    ];
+
+    [$httpcode, $response, $curlError] = geminiJsonRequest(GEMINI_TRANSLATION_MODEL, $payload);
+
+    if ($httpcode !== 200 || !$response) {
+        $decoded_error = $response ? json_decode($response, true) : null;
+        $api_error = is_array($decoded_error) ? trim((string)($decoded_error['error']['message'] ?? '')) : '';
+        $details = $api_error !== '' ? $api_error : trim((string)$curlError);
+        die(json_encode(['status' => 'error', 'message' => 'Erro ao gerar lexical chunks com o Gemini.' . ($details !== '' ? (' Detalhes: ' . $details) : '')]));
+    }
+
+    $decoded = json_decode($response, true);
+    $chunk_json = extractGeminiText($decoded);
+    $chunk_data = json_decode($chunk_json, true);
+
+    if (!is_array($chunk_data)) {
+        $json_start = strpos($chunk_json, '{');
+        $json_end = strrpos($chunk_json, '}');
+        if ($json_start !== false && $json_end !== false && $json_end > $json_start) {
+            $chunk_data = json_decode(substr($chunk_json, $json_start, $json_end - $json_start + 1), true);
+        }
+    }
+
+    $english = is_array($chunk_data) ? trim((string)($chunk_data['english'] ?? '')) : '';
+    $pt_br = is_array($chunk_data) ? trim((string)($chunk_data['pt_br'] ?? '')) : '';
+    $chunks_raw = is_array($chunk_data) && isset($chunk_data['chunks']) && is_array($chunk_data['chunks']) ? $chunk_data['chunks'] : [];
+
+    if ($english === '' || $pt_br === '' || empty($chunks_raw)) {
+        $finish_reason = trim((string)($decoded['candidates'][0]['finishReason'] ?? ''));
+        die(json_encode(['status' => 'error', 'message' => 'A API do Gemini não retornou frase e lexical chunks válidos.' . ($finish_reason !== '' ? (' Motivo: ' . $finish_reason) : '')]));
+    }
+
+    $chunks = [];
+    $seen = [];
+    foreach ($chunks_raw as $chunk) {
+        if (!is_array($chunk)) continue;
+        $chunk_en = preg_replace('/\s+/u', ' ', trim((string)($chunk['en'] ?? $chunk['english'] ?? $chunk['name'] ?? '')));
+        $chunk_pt_br = preg_replace('/\s+/u', ' ', trim((string)($chunk['pt_br'] ?? $chunk['ptBr'] ?? $chunk['translation'] ?? $chunk['name_pt_br'] ?? '')));
+        if ($chunk_en === '' || $chunk_pt_br === '') continue;
+        $dedupe_key = normalizeLexicalChunkLookupValue($chunk_en) . '|' . normalizeLexicalChunkLookupValue($chunk_pt_br);
+        if (isset($seen[$dedupe_key])) continue;
+        $seen[$dedupe_key] = true;
+        try {
+            $chunks[] = findOrCreateLexicalChunkTag($pdo, (int)$user_id, $chunk_en, $chunk_pt_br);
+        } catch (Throwable $e) {
+            die(json_encode(['status' => 'error', 'message' => 'Erro ao criar tag de lexical chunk: ' . $chunk_en]));
+        }
+    }
+
+    if (empty($chunks)) {
+        die(json_encode(['status' => 'error', 'message' => 'Nenhum lexical chunk válido foi retornado pelo Gemini.']));
+    }
+
+    echo json_encode(['status' => 'success', 'english' => $english, 'pt_br' => $pt_br, 'chunks' => $chunks]);
 }
 
 
