@@ -1985,19 +1985,62 @@ function normalizeSentenceForDuplicateCheck(string $text): string {
 }
 
 /**
+ * Localiza tags equivalentes do usuário público 5 pelo mesmo texto inglês/pt-BR da tag escolhida.
+ * Isso permite evitar frases públicas repetidas mesmo quando o usuário seleciona a própria cópia da tag.
+ */
+function findEquivalentUserFiveTagIds(PDO $pdo, int $tag_id, string $tag_text_en, string $tag_text_pt_br): array {
+    $ids = [];
+
+    $stmtSelected = $pdo->prepare("SELECT user_id FROM flashcard_tags WHERE id = ? LIMIT 1");
+    $stmtSelected->execute([$tag_id]);
+    if ((int)$stmtSelected->fetchColumn() === 5) {
+        $ids[] = $tag_id;
+    }
+
+    $targetName = normalizeLexicalChunkLookupValue($tag_text_en);
+    $targetPtBr = normalizeLexicalChunkLookupValue($tag_text_pt_br);
+    if ($targetName === '' && $targetPtBr === '') {
+        return array_values(array_unique(array_filter(array_map('intval', $ids))));
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT id, name_encrypted, name_pt_br_encrypted
+        FROM flashcard_tags
+        WHERE user_id = 5
+    ");
+    $stmt->execute();
+
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $rowName = !empty($row['name_encrypted']) ? Security::decryptData((string)$row['name_encrypted']) : '';
+        $rowPtBr = !empty($row['name_pt_br_encrypted']) ? Security::decryptData((string)$row['name_pt_br_encrypted']) : '';
+        if (normalizeLexicalChunkLookupValue((string)$rowName) === $targetName
+            && normalizeLexicalChunkLookupValue((string)$rowPtBr) === $targetPtBr) {
+            $ids[] = (int)$row['id'];
+        }
+    }
+
+    return array_values(array_unique(array_filter(array_map('intval', $ids))));
+}
+
+/**
  * Busca somente frases de cards do usuário público 5 para evitar enviar dados privados de outros usuários ao Gemini.
  */
-function fetchUserFiveSubjectCardSentences(PDO $pdo, int $tag_id): array {
+function fetchUserFiveSubjectCardSentences(PDO $pdo, $tag_ids): array {
+    $tagIds = is_array($tag_ids) ? $tag_ids : [$tag_ids];
+    $tagIds = array_values(array_unique(array_filter(array_map('intval', $tagIds))));
+    if (empty($tagIds)) return [];
+
+    $placeholders = implode(',', array_fill(0, count($tagIds), '?'));
     $stmt = $pdo->prepare("
-        SELECT DISTINCT f.front_encrypted
+        SELECT DISTINCT f.front_encrypted, f.id
         FROM subjects_links sl
         INNER JOIN flashcards f ON f.id = sl.flashcard_id
         INNER JOIN directories d ON d.id = f.directory_id
-        WHERE sl.tag_id = ?
+        WHERE sl.tag_id IN ($placeholders)
           AND d.user_id = 5
         ORDER BY f.id DESC
     ");
-    $stmt->execute([$tag_id]);
+    $stmt->execute($tagIds);
 
     $sentences = [];
     $seen = [];
@@ -3128,7 +3171,7 @@ elseif ($action === 'generate_tag_sentence_gemini') {
         die(json_encode(['status' => 'error', 'message' => 'GEMINI_API_KEY não configurada no .env.']));
     }
 
-    $existing_sentences = fetchUserFiveSubjectCardSentences($pdo, $tag_id);
+    $existing_sentences = fetchUserFiveSubjectCardSentences($pdo, findEquivalentUserFiveTagIds($pdo, $tag_id, $tag_text_en, $tag_text_pt_br));
     $existing_sentences_block = '';
     if (!empty($existing_sentences)) {
         $existing_sentences_block = "
@@ -3199,7 +3242,7 @@ PROMPT;
         }
     }
 
-    echo json_encode(['status' => 'success', 'english' => $english, 'pt_br' => $pt_br]);
+    echo json_encode(['status' => 'success', 'english' => $english, 'pt_br' => $pt_br, 'existing_sentences_count' => count($existing_sentences)]);
 }
 
 
@@ -3226,7 +3269,7 @@ elseif ($action === 'generate_sentence_lexical_chunks_gemini') {
         die(json_encode(['status' => 'error', 'message' => 'GEMINI_API_KEY não configurada no .env.']));
     }
 
-    $existing_sentences = fetchUserFiveSubjectCardSentences($pdo, $tag_id);
+    $existing_sentences = fetchUserFiveSubjectCardSentences($pdo, findEquivalentUserFiveTagIds($pdo, $tag_id, $tag_text_en, $tag_text_pt_br));
     $existing_sentences_block = '';
     if (!empty($existing_sentences)) {
         $existing_sentences_block = "
@@ -3328,7 +3371,7 @@ PROMPT, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $tag_text_en, 
         die(json_encode(['status' => 'error', 'message' => 'Nenhum lexical chunk válido foi retornado pelo Gemini.']));
     }
 
-    echo json_encode(['status' => 'success', 'english' => $english, 'pt_br' => $pt_br, 'chunks' => $chunks]);
+    echo json_encode(['status' => 'success', 'english' => $english, 'pt_br' => $pt_br, 'chunks' => $chunks, 'existing_sentences_count' => count($existing_sentences)]);
 }
 
 
