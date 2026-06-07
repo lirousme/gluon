@@ -864,8 +864,12 @@ const app = {
       this.setSelectedTagIds('subject', Array.from(new Set([...selectedIds, Number(tag.id), ...chunkTagIds])));
       this.renderTagSelector('subject');
       this.renderGeneratedLexicalChunks(res.chunks);
+      const createdCount = res.chunks.filter(chunk => Number(chunk.created || 0) === 1).length;
+      const existingCount = res.chunks.length - createdCount;
+      const duplicateContext = Number(res.existing_sentences_count || 0);
+      const duplicateText = duplicateContext > 0 ? ` ${duplicateContext} frase(s) pública(s) existente(s) foram enviadas ao Gemini para evitar repetição.` : '';
       this.setActiveTab('front');
-      this.setStatus('Frase, tradução e lexical chunks gerados com Gemini a partir da primeira tag selecionada!', 'success');
+      this.setStatus(`Frase, tradução e lexical chunks gerados com Gemini: ${existingCount} tag(s) existente(s) selecionada(s), ${createdCount} tag(s) criada(s).${duplicateText}`, 'success');
     } catch (err) {
       this.setStatus('Falha ao gerar lexical chunks com Gemini: ' + (err.message || 'erro desconhecido'), 'error');
     } finally {
@@ -891,8 +895,11 @@ const app = {
 
       singleFront.value = res.english;
       singleBack.value = res.pt_br;
+      this.renderGeneratedLexicalChunks([]);
+      const duplicateContext = Number(res.existing_sentences_count || 0);
+      const duplicateText = duplicateContext > 0 ? ` ${duplicateContext} frase(s) pública(s) existente(s) foram enviadas ao Gemini para evitar repetição.` : '';
       this.setActiveTab('front');
-      this.setStatus('Frase gerada com Gemini a partir da primeira tag selecionada!', 'success');
+      this.setStatus(`Frase gerada com Gemini a partir da primeira tag selecionada!${duplicateText}`, 'success');
     } catch (err) {
       this.setStatus('Falha ao gerar frase com Gemini: ' + (err.message || 'erro desconhecido'), 'error');
     } finally {
