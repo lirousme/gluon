@@ -837,14 +837,23 @@ const app = {
     resultEl.classList.remove('hidden');
   },
   async generateSentenceWithLexicalChunksGemini() {
-    const frontText = singleFront.value.trim();
-    const backText = singleBack.value.trim();
+    const tag = this.getFirstSelectedSubjectTag();
+    const tagTextEn = String(tag?.name || '').trim();
+    const tagTextPtBr = String(tag?.name_pt_br || '').trim();
+
+    if (!tag) return this.setStatus('Selecione ao menos 1 tag para gerar a frase e os lexical chunks com Gemini.', 'error');
+    if (!tagTextEn || !tagTextPtBr) return this.setStatus('A primeira tag selecionada precisa ter texto em inglês e em pt-BR.', 'error');
+
     const originalHtml = btnGenerateLexicalChunksGemini.innerHTML;
     btnGenerateLexicalChunksGemini.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>';
     btnGenerateLexicalChunksGemini.disabled = true;
 
     try {
-      const res = await this.api('generate_sentence_lexical_chunks_gemini', { english: frontText, pt_br: backText });
+      const res = await this.api('generate_sentence_lexical_chunks_gemini', {
+        tag_id: Number(tag.id),
+        tag_text_en: tagTextEn,
+        tag_text_pt_br: tagTextPtBr
+      });
       if (!res || !res.english || !res.pt_br || !Array.isArray(res.chunks)) throw new Error('A API não retornou frase e lexical chunks válidos.');
 
       singleFront.value = res.english;
@@ -852,11 +861,11 @@ const app = {
       const chunkTagIds = (res.chunks || []).map(chunk => Number(chunk.tag_id)).filter(Boolean);
       await this.loadTags();
       const selectedIds = this.getSelectedTagIds('subject');
-      this.setSelectedTagIds('subject', Array.from(new Set([...selectedIds, ...chunkTagIds])));
+      this.setSelectedTagIds('subject', Array.from(new Set([...selectedIds, Number(tag.id), ...chunkTagIds])));
       this.renderTagSelector('subject');
       this.renderGeneratedLexicalChunks(res.chunks);
       this.setActiveTab('front');
-      this.setStatus('Frase, tradução e lexical chunks gerados com Gemini!', 'success');
+      this.setStatus('Frase, tradução e lexical chunks gerados com Gemini a partir da primeira tag selecionada!', 'success');
     } catch (err) {
       this.setStatus('Falha ao gerar lexical chunks com Gemini: ' + (err.message || 'erro desconhecido'), 'error');
     } finally {

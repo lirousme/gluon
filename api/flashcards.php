@@ -3204,46 +3204,56 @@ PROMPT;
 
 
 elseif ($action === 'generate_sentence_lexical_chunks_gemini') {
-    $english_input = trim((string)($input['english'] ?? ''));
-    $pt_br_input = trim((string)($input['pt_br'] ?? ''));
+    $tag_id = (int)($input['tag_id'] ?? 0);
+    $tag_text_en = trim((string)($input['tag_text_en'] ?? ''));
+    $tag_text_pt_br = trim((string)($input['tag_text_pt_br'] ?? ''));
+
+    if ($tag_id <= 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID da tag inválido para gerar frase e lexical chunks.']));
+    }
+
+    if ($tag_text_en === '' || $tag_text_pt_br === '') {
+        die(json_encode(['status' => 'error', 'message' => 'Texto da tag inválido para gerar frase e lexical chunks.']));
+    }
+
+    $stmtTag = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5) LIMIT 1");
+    $stmtTag->execute([$tag_id, $user_id]);
+    if (!$stmtTag->fetchColumn()) {
+        die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada ou sem permissão.']));
+    }
 
     if (GEMINI_API_KEY === '') {
         die(json_encode(['status' => 'error', 'message' => 'GEMINI_API_KEY não configurada no .env.']));
     }
 
-    if ($english_input !== '' && $pt_br_input !== '') {
-        $prompt = sprintf(<<<'PROMPT'
-Divida esta frase em inglês em lexical chunks e alinhe cada chunk à tradução exata em pt-BR.
+    $existing_sentences = fetchUserFiveSubjectCardSentences($pdo, $tag_id);
+    $existing_sentences_block = '';
+    if (!empty($existing_sentences)) {
+        $existing_sentences_block = "
 
-Frase em inglês: "%s"
-Tradução exata: "%s"
-
-Retorne exclusivamente JSON válido neste formato:
-{"english":"frase em inglês","pt_br":"tradução exata em pt-BR","chunks":[{"en":"lexical chunk em inglês","pt_br":"tradução desse chunk de acordo com a tradução exata"}]}
-
-Regras:
-- Mantenha english e pt_br exatamente como recebidos.
-- Os chunks precisam cobrir a frase inteira em ordem natural.
-- Use traduções curtas entre os chunks, como em: I saw them (Eu vi eles) at the park (no parque) yesterday (ontem).
-- Não use markdown, comentários ou texto fora do JSON.
-PROMPT, $english_input, $pt_br_input);
-    } else {
-        $seed = $english_input !== '' ? "Use esta frase em inglês como base e gere a tradução exata em pt-BR: \"{$english_input}\"" : ($pt_br_input !== '' ? "Use esta frase em pt-BR como base e gere a frase natural em inglês: \"{$pt_br_input}\"" : 'Gere uma frase curta e natural em inglês para estudo, com tradução exata em pt-BR.');
-        $prompt = <<<PROMPT
-{$seed}
-
-Depois, divida a frase em inglês em lexical chunks e alinhe cada chunk à tradução exata em pt-BR.
-
-Retorne exclusivamente JSON válido neste formato:
-{"english":"frase em inglês","pt_br":"tradução exata em pt-BR","chunks":[{"en":"lexical chunk em inglês","pt_br":"tradução desse chunk de acordo com a tradução exata"}]}
-
-Regras:
-- A frase deve ser útil para estudante de inglês e conter de 3 a 7 lexical chunks.
-- Os chunks precisam cobrir a frase inteira em ordem natural.
-- Use traduções curtas entre os chunks, como em: I saw them (Eu vi eles) at the park (no parque) yesterday (ontem).
-- Não use markdown, comentários ou texto fora do JSON.
-PROMPT;
+Frases em inglês que já existem para essa tag nos cards do usuário 5 (não gere nenhuma igual nem quase idêntica):
+";
+        foreach ($existing_sentences as $index => $sentence) {
+            $existing_sentences_block .= ($index + 1) . '. ' . $sentence . "
+";
+        }
     }
+
+    $prompt = sprintf(<<<'PROMPT'
+Gere 1 frase natural em inglês para estudante de inglês que contenha o lexical chunk "%s" traduzido como "%s". Gere também a tradução exata dessa frase em pt-BR.%s
+
+Depois, divida essa frase em lexical chunks e coloque a tradução de cada lexical chunk de acordo com a tradução exata, entre parênteses.
+
+Retorne exclusivamente JSON válido neste formato:
+{"english":"frase em inglês","pt_br":"tradução exata em pt-BR","chunks":[{"en":"lexical chunk em inglês","pt_br":"tradução desse chunk de acordo com a tradução exata"}]}
+
+Regras:
+- A frase deve conter o lexical chunk "%s" em inglês e a tradução deve usar "%s" para esse trecho.
+- Inclua esse lexical chunk como um dos itens de chunks, com o texto em inglês e pt-BR exatamente como informado.
+- A frase deve conter de 3 a 7 lexical chunks, cobrindo a frase inteira em ordem natural.
+- Use traduções curtas entre os chunks, como em: I saw them (Eu vi eles) at the park (no parque) yesterday (ontem).
+- Não use markdown, comentários ou texto fora do JSON.
+PROMPT, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $tag_text_en, $tag_text_pt_br);
 
     $payload = [
         'contents' => [
@@ -3288,6 +3298,13 @@ PROMPT;
     if ($english === '' || $pt_br === '' || empty($chunks_raw)) {
         $finish_reason = trim((string)($decoded['candidates'][0]['finishReason'] ?? ''));
         die(json_encode(['status' => 'error', 'message' => 'A API do Gemini não retornou frase e lexical chunks válidos.' . ($finish_reason !== '' ? (' Motivo: ' . $finish_reason) : '')]));
+    }
+
+    $normalized_english = normalizeSentenceForDuplicateCheck($english);
+    foreach ($existing_sentences as $existing_sentence) {
+        if ($normalized_english !== '' && $normalized_english === normalizeSentenceForDuplicateCheck($existing_sentence)) {
+            die(json_encode(['status' => 'error', 'message' => 'O Gemini gerou uma frase que já existe para essa tag. Tente gerar novamente.']));
+        }
     }
 
     $chunks = [];
