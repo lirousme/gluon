@@ -3294,6 +3294,7 @@ Regras:
 - A frase deve conter o lexical chunk "%s" em inglês e a tradução deve usar "%s" para esse trecho.
 - Inclua esse lexical chunk como um dos itens de chunks, com o texto em inglês e pt-BR exatamente como informado.
 - A frase deve conter de 3 a 7 lexical chunks, cobrindo a frase inteira em ordem natural.
+- Quando houver possibilidade de contração 've 'd 't 's 'm, utilize.
 - Use traduções curtas entre os chunks, como em: I saw them (Eu vi eles) at the park (no parque) yesterday (ontem).
 - Não use markdown, comentários ou texto fora do JSON.
 PROMPT, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $tag_text_en, $tag_text_pt_br);
