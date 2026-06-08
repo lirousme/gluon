@@ -823,6 +823,12 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
     // tag 2 tem card 10
     $cardsByTag = [];
 
+    // Índice puro de subjects usado para calcular a pontuação/sensibilidade
+    // das tags. Mesmo quando uma tag é usada para encontrar cards pares como
+    // object ou lexical chunk, a força dessa tag deve vir apenas dos cards em
+    // que ela aparece como subject.
+    $subjectCardsByTag = [];
+
     // Índice separado para os cards pares. Assim, o card principal/ímpar
     // continua nascendo das tags seed (subjects), mas a busca do card par
     // pode usar somente as fontes configuradas em $evenTagsSourcesByCard.
@@ -856,7 +862,16 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
 
             // Adiciona esse card dentro da lista de cards dessa tag.
             $cardsByTag[$tagId][] = (int)$cardId;
+
+            if (!isset($subjectCardsByTag[$tagId])) {
+                $subjectCardsByTag[$tagId] = [];
+            }
+            $subjectCardsByTag[$tagId][] = (int)$cardId;
         }
+    }
+
+    foreach ($subjectCardsByTag as $tagId => $linkedCardIds) {
+        $subjectCardsByTag[$tagId] = array_values(array_unique(array_map('intval', $linkedCardIds)));
     }
 
     $evenIndexSourcesByCard = !empty($evenTagsSourcesByCard) ? $evenTagsSourcesByCard : [$seedTagsByCard];
@@ -942,10 +957,10 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
     // card 12 score 1
     //
     // sensibilidade da tag 5 = 2 + 4 + 1 = 7
-    $calcTagSens = static function (int $tagId, ?array $tagIndex = null) use (&$cardsByTag, &$scoreByCard): int {
+    $calcTagSens = static function (int $tagId, ?array $tagIndex = null) use (&$subjectCardsByTag, &$scoreByCard): int {
         // Começa a soma em zero.
         $sum = 0;
-        $sourceIndex = $tagIndex ?? $cardsByTag;
+        $sourceIndex = $tagIndex ?? $subjectCardsByTag;
 
         // Percorre todos os cards que pertencem a essa tag.
         foreach ($sourceIndex[$tagId] ?? [] as $cid) {
@@ -1282,7 +1297,7 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
         $maxLinkedTagScore = null;
 
         foreach ($linkedTagIds as $tid) {
-            $tagScore = $calcTagSens((int)$tid, $evenCardsByTag);
+            $tagScore = $calcTagSens((int)$tid);
             if ($maxLinkedTagScore === null || $tagScore > $maxLinkedTagScore) {
                 $maxLinkedTagScore = $tagScore;
             }
@@ -1297,7 +1312,7 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
 
                 foreach ($linkedTagIds as $tid) {
                     $tagId = (int)$tid;
-                    $tagScore = $calcTagSens($tagId, $evenCardsByTag);
+                    $tagScore = $calcTagSens($tagId);
 
                     // Fora da faixa atual: desconsidera.
                     if ($tagScore >= $limit) continue;
