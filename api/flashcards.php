@@ -1034,35 +1034,20 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
         );
     }
 
-    // Função interna que calcula a "força" ou "sensibilidade" de uma tag.
-    //
-    // Ela soma os scores de todos os cards daquela tag.
-    //
-    // Exemplo:
-    // tag 5 tem cards 10, 11 e 12
-    // card 10 score 2
-    // card 11 score 4
-    // card 12 score 1
-    //
-    // sensibilidade da tag 5 = 2 + 4 + 1 = 7
+    // Função interna que resolve qual índice de cards uma tag deve usar para
+    // buscar o card par. A pontuação da tag não depende mais desse índice; ele
+    // permanece apenas para preservar a regra de seleção dos cards.
     $resolveEvenTagIndex = static function (string $role) use (&$cardsByTag, &$evenCardsByRoleAndTag): array {
         return $role === 'subject' ? $cardsByTag : ($evenCardsByRoleAndTag[$role] ?? []);
     };
 
-    $calcTagSens = static function (int $tagId, ?array $tagIndex = null) use (&$cardsByTag, &$scoreByCard, &$tagScoreByTag): int {
-        // Começa com a pontuação própria da tag para o usuário.
-        $sum = (int)($tagScoreByTag[$tagId] ?? 0);
-        $sourceIndex = $tagIndex ?? $cardsByTag;
-
-        // Percorre todos os cards que pertencem a essa tag.
-        foreach ($sourceIndex[$tagId] ?? [] as $cid) {
-            // Soma o score desse card.
-            // Se não existir score para ele, usa 0.
-            $sum += (int)($scoreByCard[$cid] ?? 0);
-        }
-
-        // Retorna a soma total dos scores dos cards dessa tag.
-        return $sum;
+    // Função interna que calcula a "força" ou "sensibilidade" de uma tag.
+    //
+    // A pontuação da tag vem exclusivamente da tabela flashcard_tag_scores para
+    // o usuário atual. Os scores dos cards continuam sendo usados para escolher
+    // o card dentro da tag, mas não entram mais na pontuação da própria tag.
+    $calcTagSens = static function (int $tagId, ?array $tagIndex = null) use (&$tagScoreByTag): int {
+        return (int)($tagScoreByTag[$tagId] ?? 0);
     };
 
     // Função interna que escolhe o card mais fraco dentro de uma tag.
