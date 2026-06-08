@@ -34,6 +34,7 @@
       <span id="subjectCardsCount" class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-sm text-emerald-200">0 card(s)</span>
 
       <div class="absolute right-4 flex items-center gap-2">
+        <button id="btnGenerateExampleCards" type="button" class="h-9 w-9 rounded-lg border border-cyan-300/50 text-cyan-200 hover:text-cyan-100 hover:bg-cyan-400/20 transition-colors text-sm font-medium" title="Gerar 10 frases de exemplo com lexical chunks" aria-label="Gerar 10 frases de exemplo com lexical chunks"><i class="fa-solid fa-tags"></i></button>
         <button id="btnOpenCreateCardModal" type="button" class="h-9 w-9 rounded-lg border border-violet-500/50 text-violet-300 hover:text-violet-200 hover:bg-violet-500/20 transition-colors text-lg font-semibold" title="Criar novo card"><i class="fa-solid fa-plus"></i></button>
       </div>
     </header>
@@ -85,6 +86,7 @@
     const state = {
       tagId: Number(params.get('tag_id') || 0),
       tagName: (params.get('tag_name') || '').trim(),
+      selectedTag: null,
       subjectCards: []
     };
 
@@ -262,6 +264,56 @@
       return json;
     }
 
+    async function loadSelectedTag(){
+      if(!state.tagId) return null;
+      if(state.selectedTag) return state.selectedTag;
+      const response = await api('list_tags');
+      const tags = Array.isArray(response.data) ? response.data : [];
+      state.selectedTag = tags.find(tag => Number(tag.id) === Number(state.tagId)) || null;
+      return state.selectedTag;
+    }
+
+    async function generateExampleCards(){
+      const button = document.getElementById('btnGenerateExampleCards');
+      const originalContent = button?.innerHTML || '';
+      if(button){
+        button.disabled = true;
+        button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+      }
+
+      try {
+        const [deckResponse, tag] = await Promise.all([api('get_user_system_deck'), loadSelectedTag()]);
+        const deckId = Number(deckResponse?.deck_id || deckResponse?.data?.deck_id || 0);
+        if(!deckId) throw new Error('Deck de sistema não encontrado para criar os cards.');
+        if(!tag) throw new Error('Tag não encontrada para gerar as frases de exemplo.');
+
+        const tagTextEn = String(tag.name || '').trim();
+        const tagTextPtBr = String(tag.name_pt_br || '').trim();
+        if(!tagTextEn || !tagTextPtBr) throw new Error('A tag precisa ter texto em inglês e em pt-BR para gerar as frases de exemplo.');
+
+        setStatus('Gerando 10 frases de exemplo e lexical chunks com Gemini...', 'info');
+        const response = await api('generate_sentence_lexical_chunks_gemini', {
+          tag_id: state.tagId,
+          tag_text_en: tagTextEn,
+          tag_text_pt_br: tagTextPtBr,
+          count: 10,
+          create_cards: true,
+          deck_id: deckId,
+          info_type: 2
+        });
+        const createdCards = Number(response.created_cards_count || 0);
+        setStatus(`${createdCards || 0} card(s) de frases de exemplo criado(s) com lexical chunks.`, createdCards ? 'empty' : 'info');
+        await loadSubjectCards();
+      } catch (error) {
+        setStatus(error.message || 'Erro ao gerar frases de exemplo.', 'error');
+      } finally {
+        if(button){
+          button.disabled = false;
+          button.innerHTML = originalContent;
+        }
+      }
+    }
+
     async function openCreateCardModal(){
       const button = document.getElementById('btnOpenCreateCardModal');
       const originalContent = button?.innerHTML || '';
@@ -380,7 +432,14 @@
       const label = state.tagName || 'Tag';
       document.getElementById('selectedTagName').textContent = label;
       document.getElementById('btnOpenCreateCardModal').onclick = openCreateCardModal;
+      document.getElementById('btnGenerateExampleCards').onclick = generateExampleCards;
       document.getElementById('btnOpenCustomRules').onclick = openCustomRulesPage;
+      loadSelectedTag().then((tag) => {
+        if(tag){
+          state.tagName = String(tag.name || state.tagName || '').trim();
+          document.getElementById('selectedTagName').textContent = state.tagName || label;
+        }
+      }).catch(() => {});
       loadSubjectCards();
     });
   </script>
