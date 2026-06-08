@@ -271,6 +271,66 @@ function ensureSentenceEndsWithPeriod(string $value): string
     return trim((string)$value) . '.' . $closing;
 }
 
+function contractEnglishSentenceText(string $value): string
+{
+    $value = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $value = str_replace(["\r", "\n", "\t"], ' ', $value);
+    $value = preg_replace('/\s+/u', ' ', trim((string)$value));
+    if ($value === '') return '';
+
+    $subjectContractions = [
+        '/\b(I)\s+am\b/iu' => '$1\'m',
+        '/\b(I|you|we|they)\s+are\b/iu' => '$1\'re',
+        '/\b(he|she|it|that|there|here|what|who|where|when|why|how)\s+is\b/iu' => '$1\'s',
+        '/\b(I|you|we|they|he|she|it|that|there|here|what|who|where|when|why|how)\s+will\b/iu' => '$1\'ll',
+        '/\b(I|you|we|they|he|she|it)\s+would\b/iu' => '$1\'d',
+        '/\b(I|you|we|they|he|she|it)\s+had\b/iu' => '$1\'d',
+        '/\b(I|you|we|they)\s+have\b/iu' => '$1\'ve',
+        '/\b(he|she|it)\s+has\b/iu' => '$1\'s',
+    ];
+    $value = preg_replace(array_keys($subjectContractions), array_values($subjectContractions), $value);
+
+    $notContractions = [
+        '/\bcan\s+not\b/iu' => "can't",
+        '/\bwill\s+not\b/iu' => "won't",
+        '/\bshall\s+not\b/iu' => "shan't",
+        '/\b(are|is|was|were|do|does|did|have|has|had|would|should|could|must|need|dare)\s+not\b/iu' => '$1n\'t',
+    ];
+    $value = preg_replace(array_keys($notContractions), array_values($notContractions), (string)$value);
+
+    return preg_replace('/\s+/u', ' ', trim((string)$value));
+}
+
+function expandEnglishContractionsForLexicalChunkTag(string $value): string
+{
+    $value = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $value = str_replace(["\r", "\n", "\t"], ' ', $value);
+    $value = preg_replace('/[’`´]/u', "'", (string)$value);
+    $value = preg_replace('/\s+/u', ' ', trim((string)$value));
+    if ($value === '') return '';
+
+    $value = preg_replace('/\b(can)\'t\b/iu', '$1 not', (string)$value);
+    $value = preg_replace('/\b(won)\'t\b/iu', 'will not', (string)$value);
+    $value = preg_replace('/\b(shan)\'t\b/iu', 'shall not', (string)$value);
+    $value = preg_replace('/\b([A-Za-z]+)n\'t\b/u', '$1 not', (string)$value);
+
+    $apostropheExpansions = [
+        "'ve" => ' have',
+        "'re" => ' are',
+        "'m" => ' am',
+        "'ll" => ' will',
+    ];
+    $value = str_ireplace(array_keys($apostropheExpansions), array_values($apostropheExpansions), (string)$value);
+
+    // The prompt only requests decontracting grammar tags. Keep possessive nouns
+    // intact as much as possible; expand 's/'d where they follow common pronouns
+    // and sentence placeholders that Gemini typically contracts.
+    $value = preg_replace('/\b(I|you|we|they|he|she|it|that|there|here|what|who|where|when|why|how)\'s\b/iu', '$1 is', (string)$value);
+    $value = preg_replace('/\b(I|you|we|they|he|she|it)\'d\b/iu', '$1 would', (string)$value);
+
+    return preg_replace('/\s+/u', ' ', trim((string)$value));
+}
+
 function cleanLexicalChunkTagText(string $value): string
 {
     $value = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
@@ -3356,9 +3416,10 @@ Regras:
 - Inclua esse lexical chunk como um dos itens de chunks de cada frase, com o texto em inglês e pt-BR exatamente como informado.
 - Cada frase deve conter de 3 a 7 lexical chunks, cobrindo a frase inteira em ordem natural.
 - Não repita o mesmo lexical chunk com o mesmo par de texto em inglês e tradução pt-BR dentro dos chunks da mesma frase.
-- Não coloque vírgula, ponto final ou outra pontuação de frase dentro dos textos de tags dos chunks; preserve apóstrofos de contrações.
-- A única exceção para pontos é quando o próprio lexical chunk for um padrão com reticências, como "Whether ... or ..." ("Seja ... ou ..."). Use esse tipo de chunk quando fizer sentido.
-- Quando houver possibilidade de contração have > 've, had > 'd, not > n't, has > 's, is > 's, am > 'm, are > 're, would > 'd, will > 'll, shall > 'll, utilize a forma contraída por regra absoluta.
+- No texto das frases em inglês, quando houver possibilidade de contração have > 've, had > 'd, not > n't, has > 's, is > 's, am > 'm, are > 're, would > 'd, will > 'll, shall > 'll, utilize a forma contraída por regra absoluta.
+- Nos textos de tags dos chunks, faça o oposto: use forma descontraída/expandida (have, had, not, has, is, am, are, would, will, shall) e não use as contrações 've, 'd, n't, 's, 'm, 're, 'll.
+- Não coloque vírgula, ponto final ou outra pontuação de frase dentro dos textos de tags dos chunks.
+- A única exceção para pontos em tags é quando o próprio lexical chunk for um padrão com reticências, como "Whether ... or ..." ("Seja ... ou ..."). Use esse tipo de chunk quando fizer sentido.
 - Use traduções curtas entre os chunks, como em: I saw them (Eu vi eles) at the park (no parque) yesterday (ontem).
 - Não use markdown, comentários ou texto fora do JSON.
 PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $example_count, $tag_text_en, $tag_text_pt_br);
@@ -3415,7 +3476,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
     $seen_sentences = [];
     foreach ($examples_raw as $example_raw) {
         if (!is_array($example_raw)) continue;
-        $english = ensureSentenceEndsWithPeriod((string)($example_raw['english'] ?? ''));
+        $english = ensureSentenceEndsWithPeriod(contractEnglishSentenceText((string)($example_raw['english'] ?? '')));
         $pt_br = ensureSentenceEndsWithPeriod((string)($example_raw['pt_br'] ?? ''));
         $chunks_raw = isset($example_raw['chunks']) && is_array($example_raw['chunks']) ? $example_raw['chunks'] : [];
         if ($english === '' || $pt_br === '' || empty($chunks_raw)) continue;
@@ -3433,7 +3494,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         $seen_chunks = [];
         foreach ($chunks_raw as $chunk) {
             if (!is_array($chunk)) continue;
-            $chunk_en = cleanLexicalChunkTagText((string)($chunk['en'] ?? $chunk['english'] ?? $chunk['name'] ?? ''));
+            $chunk_en = cleanLexicalChunkTagText(expandEnglishContractionsForLexicalChunkTag((string)($chunk['en'] ?? $chunk['english'] ?? $chunk['name'] ?? '')));
             $chunk_pt_br = cleanLexicalChunkTagText((string)($chunk['pt_br'] ?? $chunk['ptBr'] ?? $chunk['translation'] ?? $chunk['name_pt_br'] ?? ''));
             if ($chunk_en === '' || $chunk_pt_br === '') continue;
             $dedupe_key = normalizeLexicalChunkLookupValue($chunk_en) . '|' . normalizeLexicalChunkLookupValue($chunk_pt_br);
