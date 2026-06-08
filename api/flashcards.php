@@ -790,7 +790,7 @@ function validatePhaseDeckUnlock($pdo, $deck_id, $user_id): ?string {
 /**
  * Função buildGraphCardsSequence: Monta uma sequência balanceada de cards por tags e score para estudo em lotes.
  */
-function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batchSize = 6, array $evenTagsSourcesByCard = [], ?int $initialTagId = null, array $initialTagSourcesByCard = []): array
+function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batchSize = 6, array $evenTagsSourcesByCard = [], ?int $initialTagId = null, array $initialTagSourcesByCard = [], array $evenTagSourceRoles = []): array
 {
     // Se não existem cards disponíveis, não tem o que montar.
     // Então a função retorna uma lista vazia.
@@ -823,10 +823,13 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
     // tag 2 tem card 10
     $cardsByTag = [];
 
-    // Índice separado para os cards pares. Assim, o card principal/ímpar
+    // Índices separados para os cards pares. Assim, o card principal/ímpar
     // continua nascendo das tags seed (subjects), mas a busca do card par
-    // pode usar somente as fontes configuradas em $evenTagsSourcesByCard.
-    $evenCardsByTag = [];
+    // pode usar fontes diferentes por papel:
+    // - subject: considera apenas cards em que a tag é subject;
+    // - lexical_chunk: considera apenas cards em que a tag é lexical chunk;
+    // - self: considera a própria fonte informada.
+    $evenCardsByRoleAndTag = [];
 
     // Guarda quais tags pertencem ao próprio usuário.
     // Tags globais do usuário 5 continuam disponíveis, mas não recebem
@@ -859,21 +862,32 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
         }
     }
 
-    $evenIndexSourcesByCard = !empty($evenTagsSourcesByCard) ? $evenTagsSourcesByCard : [$seedTagsByCard];
-    foreach ($evenIndexSourcesByCard as $tagsSourceByCard) {
+    $evenIndexSourcesByCard = !empty($evenTagsSourcesByCard) ? array_values($evenTagsSourcesByCard) : [$seedTagsByCard];
+    $evenTagSourceRoles = array_values($evenTagSourceRoles);
+    foreach ($evenIndexSourcesByCard as $sourceIndex => $tagsSourceByCard) {
+        $role = (string)($evenTagSourceRoles[$sourceIndex] ?? 'self');
+        if ($role === '') $role = 'self';
+        if ($role === 'subject') continue;
+
+        if (!isset($evenCardsByRoleAndTag[$role])) {
+            $evenCardsByRoleAndTag[$role] = [];
+        }
+
         foreach ($tagsSourceByCard as $cardId => $tags) {
             foreach ($tags as $tag) {
                 $tagId = (int)($tag['id'] ?? 0);
                 if ($tagId <= 0) continue;
-                if (!isset($evenCardsByTag[$tagId])) {
-                    $evenCardsByTag[$tagId] = [];
+                if (!isset($evenCardsByRoleAndTag[$role][$tagId])) {
+                    $evenCardsByRoleAndTag[$role][$tagId] = [];
                 }
-                $evenCardsByTag[$tagId][] = (int)$cardId;
+                $evenCardsByRoleAndTag[$role][$tagId][] = (int)$cardId;
             }
         }
     }
-    foreach ($evenCardsByTag as $tagId => $linkedCardIds) {
-        $evenCardsByTag[$tagId] = array_values(array_unique(array_map('intval', $linkedCardIds)));
+    foreach ($evenCardsByRoleAndTag as $role => $cardsByRoleTag) {
+        foreach ($cardsByRoleTag as $tagId => $linkedCardIds) {
+            $evenCardsByRoleAndTag[$role][$tagId] = array_values(array_unique(array_map('intval', $linkedCardIds)));
+        }
     }
 
     if ($initialTagId !== null && $initialTagId <= 0) {
@@ -942,6 +956,10 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
     // card 12 score 1
     //
     // sensibilidade da tag 5 = 2 + 4 + 1 = 7
+    $resolveEvenTagIndex = static function (string $role) use (&$cardsByTag, &$evenCardsByRoleAndTag): array {
+        return $role === 'subject' ? $cardsByTag : ($evenCardsByRoleAndTag[$role] ?? []);
+    };
+
     $calcTagSens = static function (int $tagId, ?array $tagIndex = null) use (&$cardsByTag, &$scoreByCard): int {
         // Começa a soma em zero.
         $sum = 0;
@@ -1215,32 +1233,29 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
         // para aqui.
         if (count($chosen) >= $batchSize) break;
 
-        // Pega todas as tags ligadas ao card principal escolhido.
-        //
-        // Exemplo:
-        // card 10 tem tags 1, 2 e 3
-        //
-        // então:
-        // $linkedTagIds = [1, 2, 3]
-        $linkedTagIds = [];
+        // Pega todas as tags ligadas ao card principal escolhido e guarda o
+        // papel que deve ser usado para pontuar/buscar o card par. Tags vindas
+        // de object usam o índice de subjects; tags vindas de lexical chunk usam
+        // exclusivamente o índice de lexical chunks.
+        $linkedTagRoles = [];
 
-        foreach ($evenIndexSourcesByCard as $tagsSourceByCard) {
-            $linkedTagIds = array_merge(
-                $linkedTagIds,
-                array_map(
-                    static fn($t) => (int)$t['id'],
-                    $tagsSourceByCard[$oddCard] ?? []
-                )
-            );
+        foreach ($evenIndexSourcesByCard as $sourceIndex => $tagsSourceByCard) {
+            $role = (string)($evenTagSourceRoles[$sourceIndex] ?? 'self');
+            if ($role === '') $role = 'self';
+
+            foreach ($tagsSourceByCard[$oddCard] ?? [] as $tag) {
+                $tagId = (int)($tag['id'] ?? 0);
+                if ($tagId <= 0) continue;
+
+                // Se a mesma tag estiver presente como lexical chunk, esse papel
+                // tem precedência para evitar misturar cards de subject/object.
+                if (!isset($linkedTagRoles[$tagId]) || $role === 'lexical_chunk') {
+                    $linkedTagRoles[$tagId] = $role;
+                }
+            }
         }
 
-        // Remove tags repetidas e tags inválidas.
-        $linkedTagIds = array_values(
-            array_filter(
-                array_unique($linkedTagIds),
-                static fn($tid) => $tid > 0
-            )
-        );
+        $linkedTagIds = array_keys($linkedTagRoles);
 
         // Se esse card não possui nenhuma tag válida,
         // pula para a próxima rodada.
@@ -1282,7 +1297,7 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
         $maxLinkedTagScore = null;
 
         foreach ($linkedTagIds as $tid) {
-            $tagScore = $calcTagSens((int)$tid, $evenCardsByTag);
+            $tagScore = $calcTagSens((int)$tid, $resolveEvenTagIndex((string)($linkedTagRoles[(int)$tid] ?? 'self')));
             if ($maxLinkedTagScore === null || $tagScore > $maxLinkedTagScore) {
                 $maxLinkedTagScore = $tagScore;
             }
@@ -1297,7 +1312,7 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
 
                 foreach ($linkedTagIds as $tid) {
                     $tagId = (int)$tid;
-                    $tagScore = $calcTagSens($tagId, $evenCardsByTag);
+                    $tagScore = $calcTagSens($tagId, $resolveEvenTagIndex((string)($linkedTagRoles[$tagId] ?? 'self')));
 
                     // Fora da faixa atual: desconsidera.
                     if ($tagScore >= $limit) continue;
@@ -1326,7 +1341,7 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
         // Dentro dessa tag mais forte, escolhe um card forte.
         //
         // Esse será o segundo card da rodada.
-        $evenCard = $pickMaxCardInTag($strongestTagId, $used, $evenCardsByTag);
+        $evenCard = $pickMaxCardInTag($strongestTagId, $used, $resolveEvenTagIndex((string)($linkedTagRoles[$strongestTagId] ?? 'self')));
 
         // Se não encontrou card disponível nessa tag,
         // pula para a próxima rodada.
@@ -2776,6 +2791,10 @@ if ($action === 'fetch') {
                 $relationTagsByCard,
                 $idiomaPrincipalTagsByCard,
                 $idiomaSecundarioTagsByCard
+            ],
+            [
+                'subject',
+                'lexical_chunk'
             ]
         );
         if (!empty($graphCards)) {
