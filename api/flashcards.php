@@ -251,16 +251,42 @@ function tagCombinationAlreadyExists(PDO $pdo, int $userId, string $name, ?strin
  */
 
 
+function cleanLexicalChunkTagText(string $value): string
+{
+    $value = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $value = str_replace(["\r", "\n", "\t"], ' ', $value);
+    $value = preg_replace('/[“”„«»]/u', '"', (string)$value);
+    $value = preg_replace("/[‘’`´]/u", "'", (string)$value);
+    $value = preg_replace('/\s+/u', ' ', trim((string)$value));
+    if ($value === '') return '';
+
+    $ellipsisToken = '__GLUON_ELLIPSIS__';
+    $value = str_replace('…', '...', $value);
+    $value = preg_replace('/\.{3,}/u', $ellipsisToken, (string)$value);
+
+    // Lexical-chunk tags should not carry sentence punctuation copied from Gemini output.
+    // Preserve apostrophes for contractions and preserve ellipsis placeholders such as
+    // "Whether ... or ...", but remove commas and sentence-ending punctuation.
+    $value = preg_replace('/[,;:!?]+/u', '', (string)$value);
+    $value = str_replace('.', '', (string)$value);
+    $value = str_replace($ellipsisToken, '...', (string)$value);
+    $value = preg_replace('/\s+([.]{3})/u', ' $1', (string)$value);
+    $value = preg_replace('/([.]{3})\s*/u', '$1 ', (string)$value);
+    $value = preg_replace('/\s+/u', ' ', trim((string)$value));
+    $value = trim((string)$value, " \t\n\r\0\x0B\"()[]{}<>/\\|-–—");
+    return preg_replace('/\s+/u', ' ', trim((string)$value));
+}
+
 function normalizeLexicalChunkLookupValue(string $value): string
 {
-    $value = preg_replace('/\s+/u', ' ', trim($value));
+    $value = cleanLexicalChunkTagText($value);
     return function_exists('mb_strtolower') ? mb_strtolower($value ?? '', 'UTF-8') : strtolower($value ?? '');
 }
 
 function findOrCreateLexicalChunkTag(PDO $pdo, int $userId, string $name, string $namePtBr): array
 {
-    $name = preg_replace('/\s+/u', ' ', trim($name));
-    $namePtBr = preg_replace('/\s+/u', ' ', trim($namePtBr));
+    $name = cleanLexicalChunkTagText($name);
+    $namePtBr = cleanLexicalChunkTagText($namePtBr);
     if ($name === '' || $namePtBr === '') {
         throw new InvalidArgumentException('Lexical chunk inválido.');
     }
@@ -3297,6 +3323,8 @@ Regras:
 - Inclua esse lexical chunk como um dos itens de chunks, com o texto em inglês e pt-BR exatamente como informado.
 - A frase deve conter de 3 a 7 lexical chunks, cobrindo a frase inteira em ordem natural.
 - Não repita o mesmo lexical chunk com o mesmo par de texto em inglês e tradução pt-BR dentro de chunks.
+- Não coloque vírgula, ponto final ou outra pontuação de frase dentro dos textos de tags dos chunks; preserve apóstrofos de contrações.
+- A única exceção para pontos é quando o próprio lexical chunk for um padrão com reticências, como "Whether ... or ..." ("Seja ... ou ..."). Use esse tipo de chunk quando fizer sentido.
 - Quando houver possibilidade de contração 've 'd 't 's 'm, utilize.
 - Use traduções curtas entre os chunks, como em: I saw them (Eu vi eles) at the park (no parque) yesterday (ontem).
 - Não use markdown, comentários ou texto fora do JSON.
@@ -3358,8 +3386,8 @@ PROMPT, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $tag_text_en, 
     $seen = [];
     foreach ($chunks_raw as $chunk) {
         if (!is_array($chunk)) continue;
-        $chunk_en = preg_replace('/\s+/u', ' ', trim((string)($chunk['en'] ?? $chunk['english'] ?? $chunk['name'] ?? '')));
-        $chunk_pt_br = preg_replace('/\s+/u', ' ', trim((string)($chunk['pt_br'] ?? $chunk['ptBr'] ?? $chunk['translation'] ?? $chunk['name_pt_br'] ?? '')));
+        $chunk_en = cleanLexicalChunkTagText((string)($chunk['en'] ?? $chunk['english'] ?? $chunk['name'] ?? ''));
+        $chunk_pt_br = cleanLexicalChunkTagText((string)($chunk['pt_br'] ?? $chunk['ptBr'] ?? $chunk['translation'] ?? $chunk['name_pt_br'] ?? ''));
         if ($chunk_en === '' || $chunk_pt_br === '') continue;
         $dedupe_key = normalizeLexicalChunkLookupValue($chunk_en) . '|' . normalizeLexicalChunkLookupValue($chunk_pt_br);
         if (isset($seen[$dedupe_key])) continue;
