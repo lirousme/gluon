@@ -2437,7 +2437,6 @@
             registerScore(card) {
                 if (!card || !card.id) return Promise.resolve();
                 if (this.scoredCardIds.has(card.id)) return Promise.resolve();
-                if (card.score >= 20) return Promise.resolve();
 
                 const nextScore = Math.min(card.score + 1, 20);
                 card.score = nextScore;
@@ -2460,7 +2459,7 @@
                     if (backDots) backDots.innerHTML = dotsHtml;
                 }
 
-                return this.api('update_score', { card_id: card.id }).catch(e => {
+                return this.api('update_score', { card_id: card.id, decision_tag_id: Number(card.graph_decision_tag_id || 0) }).catch(e => {
                     this.scoredCardIds.delete(card.id);
                     console.error(e);
                 });

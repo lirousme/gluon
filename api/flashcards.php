@@ -537,6 +537,95 @@ function getCardTagLinkColumnsByTable(): array {
     ];
 }
 
+function ensureFlashcardTagScoresTable(PDO $pdo): void {
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS flashcard_tag_scores (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NOT NULL,
+            tag_id INT UNSIGNED NOT NULL,
+            score INT UNSIGNED NOT NULL DEFAULT 0,
+            last_reviewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_user_tag (user_id, tag_id),
+            INDEX idx_user_tag_score (user_id, tag_id, score),
+            CONSTRAINT fk_flashcard_tag_scores_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            CONSTRAINT fk_flashcard_tag_scores_tag FOREIGN KEY (tag_id) REFERENCES flashcard_tags(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+}
+
+function collectTagIdsFromTagGroups(array ...$tagGroupsByCardList): array {
+    $tagIds = [];
+    foreach ($tagGroupsByCardList as $tagGroupsByCard) {
+        foreach ($tagGroupsByCard as $tags) {
+            foreach ($tags as $tag) {
+                $tagId = (int)($tag['id'] ?? 0);
+                if ($tagId > 0) $tagIds[$tagId] = true;
+            }
+        }
+    }
+    return array_keys($tagIds);
+}
+
+function fetchFlashcardTagScores(PDO $pdo, int $userId, array $tagIds): array {
+    $tagIds = array_values(array_unique(array_filter(array_map('intval', $tagIds), static fn($id) => $id > 0)));
+    if ($userId <= 0 || empty($tagIds)) return [];
+
+    ensureFlashcardTagScoresTable($pdo);
+    $placeholders = implode(',', array_fill(0, count($tagIds), '?'));
+    $stmt = $pdo->prepare("
+        SELECT tag_id, score
+        FROM flashcard_tag_scores
+        WHERE user_id = ? AND tag_id IN ($placeholders)
+    ");
+    $stmt->execute(array_merge([$userId], $tagIds));
+
+    $scores = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $scores[(int)$row['tag_id']] = (int)$row['score'];
+    }
+    return $scores;
+}
+
+function cardHasLinkedTag(PDO $pdo, int $cardId, int $tagId, int $userId): bool {
+    if ($cardId <= 0 || $tagId <= 0 || $userId <= 0) return false;
+
+    $existsStmt = $pdo->prepare("
+        SELECT id
+        FROM flashcard_tags
+        WHERE id = ? AND user_id IN (?, 5)
+        LIMIT 1
+    ");
+    $existsStmt->execute([$tagId, $userId]);
+    if (!$existsStmt->fetchColumn()) return false;
+
+    foreach (getCardTagLinkColumnsByTable() as $table => $columns) {
+        foreach ($columns as $column) {
+            $stmt = $pdo->prepare("SELECT 1 FROM {$table} WHERE flashcard_id = ? AND {$column} = ? LIMIT 1");
+            $stmt->execute([$cardId, $tagId]);
+            if ($stmt->fetchColumn()) return true;
+        }
+    }
+    return false;
+}
+
+function incrementFlashcardTagScore(PDO $pdo, int $userId, int $cardId, int $tagId): void {
+    if (!cardHasLinkedTag($pdo, $cardId, $tagId, $userId)) return;
+
+    ensureFlashcardTagScoresTable($pdo);
+    $stmt = $pdo->prepare("
+        INSERT INTO flashcard_tag_scores (user_id, tag_id, score)
+        VALUES (?, ?, 1)
+        ON DUPLICATE KEY UPDATE
+            score = score + 1,
+            last_reviewed_at = CURRENT_TIMESTAMP
+    ");
+    $stmt->execute([$userId, $tagId]);
+}
+
 function findSubjectCardIdsOrphanedByTagDeletion(PDO $pdo, int $tagId, int $userId, int $sampleLimit = 10): array {
     $countStmt = $pdo->prepare("
         SELECT COUNT(DISTINCT sl.flashcard_id)
@@ -790,7 +879,7 @@ function validatePhaseDeckUnlock($pdo, $deck_id, $user_id): ?string {
 /**
  * Função buildGraphCardsSequence: Monta uma sequência balanceada de cards por tags e score para estudo em lotes.
  */
-function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batchSize = 6, array $evenTagsSourcesByCard = [], ?int $initialTagId = null, array $initialTagSourcesByCard = [], array $evenTagSourceRoles = []): array
+function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batchSize = 6, array $evenTagsSourcesByCard = [], ?int $initialTagId = null, array $initialTagSourcesByCard = [], array $evenTagSourceRoles = [], array $tagScoreByTag = []): array
 {
     // Se não existem cards disponíveis, não tem o que montar.
     // Então a função retorna uma lista vazia.
@@ -960,9 +1049,9 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
         return $role === 'subject' ? $cardsByTag : ($evenCardsByRoleAndTag[$role] ?? []);
     };
 
-    $calcTagSens = static function (int $tagId, ?array $tagIndex = null) use (&$cardsByTag, &$scoreByCard): int {
-        // Começa a soma em zero.
-        $sum = 0;
+    $calcTagSens = static function (int $tagId, ?array $tagIndex = null) use (&$cardsByTag, &$scoreByCard, &$tagScoreByTag): int {
+        // Começa com a pontuação própria da tag para o usuário.
+        $sum = (int)($tagScoreByTag[$tagId] ?? 0);
         $sourceIndex = $tagIndex ?? $cardsByTag;
 
         // Percorre todos os cards que pertencem a essa tag.
@@ -2774,6 +2863,18 @@ if ($action === 'fetch') {
         $idiomaPrincipalTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'tag_id', $cardIds, $user_id);
         $idiomaSecundarioTagsByCard = fetchLinkedTagsByCardColumn($pdo, 'idiomas_links', 'segundo_idioma_tag_id', $cardIds, $user_id);
         
+        $graphTagIds = collectTagIdsFromTagGroups(
+            $subjectTagsByCard,
+            $objectTagsByCard,
+            $tipoFrasalTagsByCard,
+            $tenseTagsByCard,
+            $lexicalChunksTagsByCard,
+            $relationTagsByCard,
+            $idiomaPrincipalTagsByCard,
+            $idiomaSecundarioTagsByCard
+        );
+        $graphTagScoresByTag = fetchFlashcardTagScores($pdo, $user_id, $graphTagIds);
+
         //entre colchetes estão as tags que serão consideradas nos evenCards/cards pares
         $graphCards = buildGraphCardsSequence(
             $cards,
@@ -2795,7 +2896,8 @@ if ($action === 'fetch') {
             [
                 'subject',
                 'lexical_chunk'
-            ]
+            ],
+            $graphTagScoresByTag
         );
         if (!empty($graphCards)) {
             $cardsById = [];
@@ -3896,6 +3998,7 @@ elseif ($action === 'sync_back_phrase_dictionary') {
 
 elseif ($action === 'update_score') {
     $card_id = (int)($input['card_id'] ?? 0);
+    $decision_tag_id = (int)($input['decision_tag_id'] ?? 0);
     if ($card_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do card inválido.']));
 
     if (!verifyCardOwnership($pdo, $card_id, $user_id, true)) {
@@ -3911,8 +4014,12 @@ elseif ($action === 'update_score') {
             next_review_at = DATE_ADD(NOW(), INTERVAL (LEAST(score + 1, 20) * 24) HOUR)
     ");
     
-    if ($stmt->execute([$user_id, $card_id])) echo json_encode(['status' => 'success']);
-    else echo json_encode(['status' => 'error']);
+    if ($stmt->execute([$user_id, $card_id])) {
+        if ($decision_tag_id > 0) {
+            incrementFlashcardTagScore($pdo, $user_id, $card_id, $decision_tag_id);
+        }
+        echo json_encode(['status' => 'success']);
+    } else echo json_encode(['status' => 'error']);
 }
 
 elseif ($action === 'update_progress') {
@@ -3980,7 +4087,9 @@ elseif ($action === 'reset_book_score') {
                   AND d.deck_mode = 'grafo'
             ");
             $stmt->execute([$user_id]);
-            echo json_encode(['status' => 'success', 'message' => 'Pontuação de todos os cards em modo grafo foi zerada.']);
+            ensureFlashcardTagScoresTable($pdo);
+            $pdo->prepare("DELETE FROM flashcard_tag_scores WHERE user_id = ?")->execute([$user_id]);
+            echo json_encode(['status' => 'success', 'message' => 'Pontuação de todos os cards e tags em modo grafo foi zerada.']);
         } else {
             $stmt = $pdo->prepare("
                 DELETE fs FROM flashcard_scores fs
