@@ -419,9 +419,24 @@ function findOrCreateLexicalChunkTag(PDO $pdo, int $userId, string $name, string
 }
 
 
+
+function removeLeadingArticlesFromWordTagText(string $value, string $language = 'en'): string
+{
+    $value = preg_replace('/\s+/u', ' ', trim((string)$value));
+    if ($value === '') return '';
+
+    if ($language === 'pt') {
+        $value = preg_replace('/^(o|a|os|as|um|uma|uns|umas)\s+/iu', '', (string)$value);
+    } else {
+        $value = preg_replace('/^(the|a|an)\s+/iu', '', (string)$value);
+    }
+
+    return preg_replace('/\s+/u', ' ', trim((string)$value));
+}
+
 function cleanWordTagText(string $value): string
 {
-    return cleanLexicalChunkTagText(expandEnglishContractionsForLexicalChunkTag($value));
+    return removeLeadingArticlesFromWordTagText(cleanLexicalChunkTagText(expandEnglishContractionsForLexicalChunkTag($value)), 'en');
 }
 
 function normalizeWordTagLookupValue(string $value): string
@@ -433,7 +448,7 @@ function normalizeWordTagLookupValue(string $value): string
 function findOrCreateWordTag(PDO $pdo, int $userId, string $name, string $namePtBr): array
 {
     $name = cleanWordTagText($name);
-    $namePtBr = cleanLexicalChunkTagText($namePtBr);
+    $namePtBr = removeLeadingArticlesFromWordTagText(cleanLexicalChunkTagText($namePtBr), 'pt');
     if ($name === '' || $namePtBr === '') {
         throw new InvalidArgumentException('Tag de palavra inválida.');
     }
@@ -3476,25 +3491,28 @@ elseif ($action === 'generate_sentence_lexical_chunks_gemini') {
     $prompt = sprintf(<<<'PROMPT'
 Gere %d frases naturais em inglês para estudante de inglês. Cada frase deve conter o lexical chunk "%s" traduzido como "%s". Gere também a tradução exata de cada frase em pt-BR.%s
 
-Para cada frase, identifique o sujeito, os objetos/verbos e padrões de lexical chunks com reticências.
+Para cada frase, identifique o sujeito, os objetos/verbos e poucos lexical chunks sucintos.
 
 Retorne exclusivamente JSON válido neste formato:
-{"examples":[{"english":"frase em inglês","pt_br":"tradução exata em pt-BR","subject":{"en":"sujeito da frase em inglês","pt_br":"sujeito em pt-BR"},"objects":[{"en":"substantivo não sujeito ou verbo em inglês","pt_br":"tradução em pt-BR"}],"chunks":[{"en":"estrutura lexical com reticências","pt_br":"tradução desse padrão"}]}]}
+{"examples":[{"english":"frase em inglês","pt_br":"tradução exata em pt-BR","subject":{"en":"sujeito da frase em inglês sem artigo","pt_br":"sujeito em pt-BR sem artigo"},"objects":[{"en":"substantivo não sujeito sem artigo ou verbo em inglês","pt_br":"tradução em pt-BR sem artigo quando for substantivo"}],"chunks":[{"en":"lexical chunk curto e útil","pt_br":"tradução desse chunk"}]}]}
 
 Regras:
 - Retorne exatamente %d item(ns) em examples.
 - Cada frase deve ser diferente das outras e diferente das frases existentes listadas.
 - Cada frase deve conter o lexical chunk "%s" em inglês e a tradução deve usar "%s" para esse trecho.
 - Todas as frases em inglês e em pt-BR devem terminar com ponto final. Não termine frases com interrogação, exclamação ou sem pontuação.
-- Para cada frase, preencha subject com o sujeito gramatical principal da frase.
-- Para cada frase, preencha objects com todos os substantivos que não são sujeito e também os verbos principais da frase. Exemplo: em "The dog barked at the cat on the avenue", subject é "the dog"; objects inclui "barked", "the cat" e "the avenue".
-- Em chunks, crie estruturas com reticências substituindo sujeito, verbo e/ou objetos, no estilo "The dog barked at the ... on the avenue", "The dog ... at the cat on the avenue", "The dog ... at the ... on the avenue", "The dog ... at the ... on the ...".
-- Cada frase deve ter pelo menos 5 chunks com reticências, e eles devem ser úteis para treinar padrões lexicais da frase.
-- Inclua o lexical chunk "%s" também em chunks quando ele puder ser representado como padrão útil; se não tiver reticências, ainda inclua-o exatamente como informado.
-- Não repita o mesmo chunk com o mesmo par de texto em inglês e tradução pt-BR dentro dos chunks da mesma frase.
+- Para cada frase, preencha subject com o sujeito gramatical principal da frase, sem artigos iniciais. Exemplo: em "The dog barked at the cat on the avenue", subject é "dog", não "the dog".
+- Para cada frase, preencha objects com todos os substantivos que não são sujeito e também os verbos principais da frase. Substantivos em objects também devem vir sem artigos iniciais. Exemplo: em "The dog barked at the cat on the avenue", objects inclui "barked", "cat" e "avenue", não "the cat" nem "the avenue".
+- Em chunks, gere somente chunks sucintos: verbos ou expressões verbais, expressões de lugar, tempo, modo, causa, finalidade, intensidade, comparação, condição, afirmação, negação, dúvida ou frequência.
+- Em chunks, prefira trechos curtos como "barked", "at", "on the avenue", "every morning", "because of ...". Não crie muitas variações com mudanças mínimas e não inclua o sujeito ou substantivos soltos como lexical chunks.
+- Cada frase deve ter de 2 a 4 chunks no máximo. Gere menos chunks, desde que sejam os mais úteis e naturais da frase.
+- Use reticências somente quando elas realmente deixarem o chunk mais reutilizável, como "because of ..." ou "whether ... or ...". Não force reticências em todos os chunks.
+- Inclua o lexical chunk "%s" também em chunks quando ele for verbo, expressão verbal, preposição/expressão de lugar/tempo/modo etc. Não inclua se ele for apenas sujeito ou substantivo solto.
+- Não repita o mesmo chunk com o mesmo par de texto em inglês e tradução pt-BR dentro dos chunks da mesma frase nem gere variações quase iguais.
 - No texto das frases em inglês, quando houver possibilidade de contração have > 've, had > 'd, not > n't, has > 's, is > 's, am > 'm, are > 're, would > 'd, will > 'll, shall > 'll, utilize a forma contraída por regra absoluta.
 - Nos textos de tags de subject, objects e chunks, faça o oposto: use forma descontraída/expandida (have, had, not, has, is, am, are, would, will, shall) e não use as contrações 've, 'd, n't, 's, 'm, 're, 'll.
 - Não coloque vírgula, ponto final ou outra pontuação de frase dentro dos textos das tags.
+- Não use artigos iniciais nas tags de subject e nas tags de substantivos em objects: use "dog", "cat", "avenue", não "the dog", "the cat", "the avenue".
 - A única exceção para pontos em tags é quando o próprio lexical chunk for um padrão com reticências, como "Whether ... or ..." ("Seja ... ou ..."). Use reticências apenas nos chunks, nunca em subject ou objects.
 - Use traduções curtas para as tags e mantenha a ordem natural dos chunks.
 - Não use markdown, comentários ou texto fora do JSON.
@@ -3607,6 +3625,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
             $seen_chunks[$dedupe_key] = true;
             try {
                 $chunks[] = findOrCreateLexicalChunkTag($pdo, (int)$user_id, $chunk_en, $chunk_pt_br);
+                if (count($chunks) >= 4) break;
             } catch (Throwable $e) {
                 die(json_encode(['status' => 'error', 'message' => 'Erro ao criar tag de lexical chunk: ' . $chunk_en]));
             }
