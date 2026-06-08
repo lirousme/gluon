@@ -265,13 +265,15 @@ function findOrCreateLexicalChunkTag(PDO $pdo, int $userId, string $name, string
         throw new InvalidArgumentException('Lexical chunk inválido.');
     }
 
-    $stmt = $pdo->prepare("\n        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, is_lexical_chunk\n        FROM flashcard_tags\n        WHERE user_id IN (?, 5)\n        ORDER BY CASE WHEN user_id = ? THEN 0 ELSE 1 END, id ASC\n    ");
+    $stmt = $pdo->prepare("\n        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, is_lexical_chunk\n        FROM flashcard_tags\n        WHERE user_id IN (?, 5)\n        ORDER BY
+            CASE WHEN is_lexical_chunk = 1 THEN 0 ELSE 1 END,
+            CASE WHEN user_id = ? THEN 0 ELSE 1 END,
+            id ASC\n    ");
     $stmt->execute([$userId, $userId]);
     $targetName = normalizeLexicalChunkLookupValue($name);
     $targetPtBr = normalizeLexicalChunkLookupValue($namePtBr);
 
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-        if ((int)($row['is_lexical_chunk'] ?? 0) !== 1) continue;
         $rowName = !empty($row['name_encrypted']) ? Security::decryptData((string)$row['name_encrypted']) : '';
         $rowPtBr = !empty($row['name_pt_br_encrypted']) ? Security::decryptData((string)$row['name_pt_br_encrypted']) : '';
         if (normalizeLexicalChunkLookupValue((string)$rowName) === $targetName && normalizeLexicalChunkLookupValue((string)$rowPtBr) === $targetPtBr) {
@@ -3294,6 +3296,7 @@ Regras:
 - A frase deve conter o lexical chunk "%s" em inglês e a tradução deve usar "%s" para esse trecho.
 - Inclua esse lexical chunk como um dos itens de chunks, com o texto em inglês e pt-BR exatamente como informado.
 - A frase deve conter de 3 a 7 lexical chunks, cobrindo a frase inteira em ordem natural.
+- Não repita o mesmo lexical chunk com o mesmo par de texto em inglês e tradução pt-BR dentro de chunks.
 - Quando houver possibilidade de contração 've 'd 't 's 'm, utilize.
 - Use traduções curtas entre os chunks, como em: I saw them (Eu vi eles) at the park (no parque) yesterday (ontem).
 - Não use markdown, comentários ou texto fora do JSON.
