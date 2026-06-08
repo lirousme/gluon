@@ -3509,7 +3509,9 @@ Regras:
 - Use reticências somente quando elas realmente deixarem o chunk mais reutilizável, como "because of ..." ou "whether ... or ...". Não force reticências em todos os chunks.
 - Inclua o lexical chunk "%s" também em chunks quando ele for verbo, expressão verbal, preposição/expressão de lugar/tempo/modo etc. Não inclua se ele for apenas sujeito ou substantivo solto.
 - Não repita o mesmo chunk com o mesmo par de texto em inglês e tradução pt-BR dentro dos chunks da mesma frase nem gere variações quase iguais.
-- No texto das frases em inglês, quando houver possibilidade de contração have > 've, had > 'd, not > n't, has > 's, is > 's, am > 'm, are > 're, would > 'd, will > 'll, shall > 'll, utilize a forma contraída por regra absoluta.
+- No texto das frases em inglês, prefira frases simples e naturais; não adicione auxiliares, modais, negativas ou estruturas com have/had/not/has/is/am/are/would/will/shall apenas para criar contrações.
+- Quando uma contração for realmente natural e necessária para a frase escolhida, use a forma contraída: have > 've, had > 'd, not > n't, has > 's, is > 's, am > 'm, are > 're, would > 'd, will > 'll, shall > 'll.
+- Se a frase puder ser mais simples sem essas estruturas, escreva a frase simples em vez de forçar contração.
 - Nos textos de tags de subject, objects e chunks, faça o oposto: use forma descontraída/expandida (have, had, not, has, is, am, are, would, will, shall) e não use as contrações 've, 'd, n't, 's, 'm, 're, 'll.
 - Não coloque vírgula, ponto final ou outra pontuação de frase dentro dos textos das tags.
 - Não use artigos iniciais nas tags de subject e nas tags de substantivos em objects: use "dog", "cat", "avenue", não "the dog", "the cat", "the avenue".
@@ -3570,7 +3572,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
     $seen_sentences = [];
     foreach ($examples_raw as $example_raw) {
         if (!is_array($example_raw)) continue;
-        $english = ensureSentenceEndsWithPeriod(contractEnglishSentenceText((string)($example_raw['english'] ?? '')));
+        $english = ensureSentenceEndsWithPeriod((string)($example_raw['english'] ?? ''));
         $pt_br = ensureSentenceEndsWithPeriod((string)($example_raw['pt_br'] ?? ''));
         $chunks_raw = isset($example_raw['chunks']) && is_array($example_raw['chunks']) ? $example_raw['chunks'] : [];
         $subject_raw = isset($example_raw['subject']) && is_array($example_raw['subject']) ? $example_raw['subject'] : [];
