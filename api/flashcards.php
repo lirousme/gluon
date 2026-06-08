@@ -600,7 +600,7 @@ function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int 
 
     $tagPlaceholders = implode(',', array_fill(0, count($cardIds), '?'));
     $stmtTags = $pdo->prepare("
-        SELECT l.flashcard_id, t.id AS tag_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color
+        SELECT l.flashcard_id, t.id AS tag_id, t.user_id AS tag_user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color
         FROM {$linkTable} l
         JOIN flashcard_tags t ON t.id = l.tag_id
         WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id IN (?, 5)
@@ -614,6 +614,8 @@ function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int 
         if (!isset($linkedTagsByCard[$flashcardId])) $linkedTagsByCard[$flashcardId] = [];
         $linkedTagsByCard[$flashcardId][] = [
             'id' => (int)$tagRow['tag_id'],
+            'user_id' => (int)$tagRow['tag_user_id'],
+            'is_user_owned' => ((int)$tagRow['tag_user_id'] === $user_id),
             'name' => !empty($tagRow['name_encrypted']) ? Security::decryptData($tagRow['name_encrypted']) : '',
             'name_pt_br' => !empty($tagRow['name_pt_br_encrypted']) ? Security::decryptData($tagRow['name_pt_br_encrypted']) : null,
             'numero' => isset($tagRow['numero']) ? (int)$tagRow['numero'] : null,
@@ -633,7 +635,7 @@ function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagCol
 
     $tagPlaceholders = implode(',', array_fill(0, count($cardIds), '?'));
     $stmtTags = $pdo->prepare("
-        SELECT l.flashcard_id, t.id AS tag_id, t.name_encrypted, t.color
+        SELECT l.flashcard_id, t.id AS tag_id, t.user_id AS tag_user_id, t.name_encrypted, t.color
         FROM {$linkTable} l
         JOIN flashcard_tags t ON t.id = l.{$tagColumn}
         WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id IN (?, 5)
@@ -647,6 +649,8 @@ function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagCol
         if (!isset($linkedTagsByCard[$flashcardId])) $linkedTagsByCard[$flashcardId] = [];
         $linkedTagsByCard[$flashcardId][] = [
             'id' => (int)$tagRow['tag_id'],
+            'user_id' => (int)$tagRow['tag_user_id'],
+            'is_user_owned' => ((int)$tagRow['tag_user_id'] === $user_id),
             'name' => !empty($tagRow['name_encrypted']) ? Security::decryptData($tagRow['name_encrypted']) : '',
             'color' => $tagRow['color']
         ];
@@ -819,6 +823,11 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
     // tag 2 tem card 10
     $cardsByTag = [];
 
+    // Guarda quais tags pertencem ao próprio usuário.
+    // Tags globais do usuário 5 continuam disponíveis, mas não recebem
+    // preferência automática para iniciar o primeiro card ímpar.
+    $userOwnedTagIds = [];
+
     // Percorre o array que diz quais tags cada card possui.
     foreach ($seedTagsByCard as $cardId => $tags) {
         // Percorre todas as tags daquele card.
@@ -829,6 +838,10 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
 
             // Se a tag for inválida, pula para a próxima.
             if ($tagId <= 0) continue;
+
+            if (!empty($tag['is_user_owned'])) {
+                $userOwnedTagIds[$tagId] = true;
+            }
 
             // Se ainda não existir uma lista para essa tag,
             // cria uma lista vazia.
@@ -1090,9 +1103,18 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
     });
 
     // A tag-base será a tag inicial configurada, quando houver.
-    // Se não houver tag inicial, mantém o comportamento anterior:
-    // usa a tag mais fraca, ou seja, a tag com menor soma de scores.
+    // Se não houver tag inicial, dá preferência a tags criadas pelo próprio
+    // usuário para o primeiro card ímpar. Se o usuário não tiver nenhuma tag
+    // própria disponível, mantém o comportamento anterior: usa a tag mais fraca.
     $baseTagId = $initialTagId !== null ? $initialTagId : (int)$tagIds[0];
+    if ($initialTagId === null && !empty($userOwnedTagIds)) {
+        foreach ($tagIds as $tagId) {
+            if (!empty($userOwnedTagIds[(int)$tagId])) {
+                $baseTagId = (int)$tagId;
+                break;
+            }
+        }
+    }
 
     // Lista final dos cards escolhidos.
     $chosen = [];
