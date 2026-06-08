@@ -360,6 +360,19 @@
       status.classList.remove('hidden');
     }
 
+
+    function getTagLabel(tag = {}){
+      const name = String(tag.name || '').trim();
+      const ptBr = String(tag.name_pt_br || '').trim();
+      return ptBr ? `${name} (${ptBr})` : name;
+    }
+
+    function renderTagGroup(label, tags = [], colorClass = 'border-slate-600 bg-slate-800 text-slate-200'){
+      const validTags = Array.isArray(tags) ? tags.filter(tag => getTagLabel(tag)) : [];
+      if(!validTags.length) return '';
+      return `<div class="mt-3"><div class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">${esc(label)}</div><div class="flex flex-wrap gap-1.5">${validTags.map(tag => `<span class="rounded-full border px-2 py-0.5 text-[11px] ${colorClass}">${esc(getTagLabel(tag))}</span>`).join('')}</div></div>`;
+    }
+
     function getCardEditUrl(card = {}){
       const deckId = Number(card?.directory_id || 0);
       const cardId = Number(card?.id || 0);
@@ -394,6 +407,9 @@
         const imageFront = card.image_front ? `<img src="${esc(card.image_front)}" alt="Imagem da frente" class="mt-2 max-h-40 rounded-lg border border-slate-700 object-contain">` : '';
         const backContent = back ? `<p class="mt-3 text-xs leading-relaxed text-slate-400 whitespace-pre-wrap break-words">${esc(back)}</p>` : '';
         const imageBack = card.image_back ? `<img src="${esc(card.image_back)}" alt="Imagem do verso" class="mt-2 max-h-40 rounded-lg border border-slate-700 object-contain">` : '';
+        const subjectTags = renderTagGroup('Subjects', card.subject_tags, 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100');
+        const objectTags = renderTagGroup('Objects / verbos', card.object_tags, 'border-sky-400/40 bg-sky-500/10 text-sky-100');
+        const lexicalChunkTags = renderTagGroup('Lexical chunks', card.lexical_chunks_tags, 'border-cyan-400/40 bg-cyan-500/10 text-cyan-100');
         return `<article class="rounded-lg border border-slate-700 bg-slate-900/60 p-4 shadow-sm">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 flex-1">
@@ -401,6 +417,9 @@
               ${imageFront}
               ${backContent}
               ${imageBack}
+              ${subjectTags}
+              ${objectTags}
+              ${lexicalChunkTags}
               ${deckName ? `<p class="mt-3 text-[11px] text-slate-500">Deck: ${esc(deckName)}</p>` : ''}
             </div>
             ${editUrl ? `<a href="${esc(editUrl)}" class="shrink-0 rounded-lg border border-violet-500/50 px-2.5 py-1 text-xs text-violet-200 hover:bg-violet-500/20">Editar</a>` : ''}

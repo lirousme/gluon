@@ -418,6 +418,79 @@ function findOrCreateLexicalChunkTag(PDO $pdo, int $userId, string $name, string
     ];
 }
 
+
+function cleanWordTagText(string $value): string
+{
+    return cleanLexicalChunkTagText(expandEnglishContractionsForLexicalChunkTag($value));
+}
+
+function normalizeWordTagLookupValue(string $value): string
+{
+    $value = cleanWordTagText($value);
+    return function_exists('mb_strtolower') ? mb_strtolower($value ?? '', 'UTF-8') : strtolower($value ?? '');
+}
+
+function findOrCreateWordTag(PDO $pdo, int $userId, string $name, string $namePtBr): array
+{
+    $name = cleanWordTagText($name);
+    $namePtBr = cleanLexicalChunkTagText($namePtBr);
+    if ($name === '' || $namePtBr === '') {
+        throw new InvalidArgumentException('Tag de palavra inválida.');
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, is_word
+        FROM flashcard_tags
+        WHERE user_id IN (?, 5)
+        ORDER BY
+            CASE WHEN is_word = 1 THEN 0 ELSE 1 END,
+            CASE WHEN user_id = ? THEN 0 ELSE 1 END,
+            id ASC
+    ");
+    $stmt->execute([$userId, $userId]);
+    $targetName = normalizeWordTagLookupValue($name);
+    $targetPtBr = normalizeLexicalChunkLookupValue($namePtBr);
+
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $rowName = !empty($row['name_encrypted']) ? Security::decryptData((string)$row['name_encrypted']) : '';
+        $rowPtBr = !empty($row['name_pt_br_encrypted']) ? Security::decryptData((string)$row['name_pt_br_encrypted']) : '';
+        if (normalizeWordTagLookupValue((string)$rowName) === $targetName && normalizeLexicalChunkLookupValue((string)$rowPtBr) === $targetPtBr) {
+            return [
+                'tag_id' => (int)$row['id'],
+                'en' => trim((string)$rowName),
+                'pt_br' => trim((string)$rowPtBr),
+                'created' => false,
+            ];
+        }
+    }
+
+    $color = resolveTagColorByCategory(['is_word' => 1]);
+    $insert = $pdo->prepare("
+        INSERT INTO flashcard_tags
+            (user_id, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year)
+        VALUES (?, ?, ?, NULL, ?, 0, 0, 0, 0, 0, 1, 0, 0, 0)
+    ");
+
+    try {
+        $pdo->beginTransaction();
+        $insert->execute([$userId, Security::encryptData($name), Security::encryptData($namePtBr), $color]);
+        $tagId = (int)$pdo->lastInsertId();
+        executeTagCreationCustomRules($pdo, $userId, $tagId);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('[flashcards][create_word_tag] ' . $e->getMessage());
+        throw $e;
+    }
+
+    return [
+        'tag_id' => $tagId,
+        'en' => $name,
+        'pt_br' => $namePtBr,
+        'created' => true,
+    ];
+}
+
 function resolveTagColorByCategory(array $tagFlags): string {
     if (($tagFlags['is_book'] ?? 0) === 1) return '#f59e0b';
     if (($tagFlags['is_verb_tense'] ?? 0) === 1) return '#38bdf8';
@@ -3403,26 +3476,29 @@ elseif ($action === 'generate_sentence_lexical_chunks_gemini') {
     $prompt = sprintf(<<<'PROMPT'
 Gere %d frases naturais em inglês para estudante de inglês. Cada frase deve conter o lexical chunk "%s" traduzido como "%s". Gere também a tradução exata de cada frase em pt-BR.%s
 
-Depois, para cada frase, divida a frase inteira em lexical chunks e coloque a tradução de cada lexical chunk de acordo com a tradução exata, entre parênteses.
+Para cada frase, identifique o sujeito, os objetos/verbos e padrões de lexical chunks com reticências.
 
 Retorne exclusivamente JSON válido neste formato:
-{"examples":[{"english":"frase em inglês","pt_br":"tradução exata em pt-BR","chunks":[{"en":"lexical chunk em inglês","pt_br":"tradução desse chunk de acordo com a tradução exata"}]}]}
+{"examples":[{"english":"frase em inglês","pt_br":"tradução exata em pt-BR","subject":{"en":"sujeito da frase em inglês","pt_br":"sujeito em pt-BR"},"objects":[{"en":"substantivo não sujeito ou verbo em inglês","pt_br":"tradução em pt-BR"}],"chunks":[{"en":"estrutura lexical com reticências","pt_br":"tradução desse padrão"}]}]}
 
 Regras:
 - Retorne exatamente %d item(ns) em examples.
 - Cada frase deve ser diferente das outras e diferente das frases existentes listadas.
 - Cada frase deve conter o lexical chunk "%s" em inglês e a tradução deve usar "%s" para esse trecho.
 - Todas as frases em inglês e em pt-BR devem terminar com ponto final. Não termine frases com interrogação, exclamação ou sem pontuação.
-- Inclua esse lexical chunk como um dos itens de chunks de cada frase, com o texto em inglês e pt-BR exatamente como informado.
-- Cada frase deve conter de 3 a 7 lexical chunks, cobrindo a frase inteira em ordem natural.
-- Não repita o mesmo lexical chunk com o mesmo par de texto em inglês e tradução pt-BR dentro dos chunks da mesma frase.
+- Para cada frase, preencha subject com o sujeito gramatical principal da frase.
+- Para cada frase, preencha objects com todos os substantivos que não são sujeito e também os verbos principais da frase. Exemplo: em "The dog barked at the cat on the avenue", subject é "the dog"; objects inclui "barked", "the cat" e "the avenue".
+- Em chunks, crie estruturas com reticências substituindo sujeito, verbo e/ou objetos, no estilo "The dog barked at the ... on the avenue", "The dog ... at the cat on the avenue", "The dog ... at the ... on the avenue", "The dog ... at the ... on the ...".
+- Cada frase deve ter pelo menos 5 chunks com reticências, e eles devem ser úteis para treinar padrões lexicais da frase.
+- Inclua o lexical chunk "%s" também em chunks quando ele puder ser representado como padrão útil; se não tiver reticências, ainda inclua-o exatamente como informado.
+- Não repita o mesmo chunk com o mesmo par de texto em inglês e tradução pt-BR dentro dos chunks da mesma frase.
 - No texto das frases em inglês, quando houver possibilidade de contração have > 've, had > 'd, not > n't, has > 's, is > 's, am > 'm, are > 're, would > 'd, will > 'll, shall > 'll, utilize a forma contraída por regra absoluta.
-- Nos textos de tags dos chunks, faça o oposto: use forma descontraída/expandida (have, had, not, has, is, am, are, would, will, shall) e não use as contrações 've, 'd, n't, 's, 'm, 're, 'll.
-- Não coloque vírgula, ponto final ou outra pontuação de frase dentro dos textos de tags dos chunks.
-- A única exceção para pontos em tags é quando o próprio lexical chunk for um padrão com reticências, como "Whether ... or ..." ("Seja ... ou ..."). Use esse tipo de chunk quando fizer sentido.
-- Use traduções curtas entre os chunks, como em: I saw them (Eu vi eles) at the park (no parque) yesterday (ontem).
+- Nos textos de tags de subject, objects e chunks, faça o oposto: use forma descontraída/expandida (have, had, not, has, is, am, are, would, will, shall) e não use as contrações 've, 'd, n't, 's, 'm, 're, 'll.
+- Não coloque vírgula, ponto final ou outra pontuação de frase dentro dos textos das tags.
+- A única exceção para pontos em tags é quando o próprio lexical chunk for um padrão com reticências, como "Whether ... or ..." ("Seja ... ou ..."). Use reticências apenas nos chunks, nunca em subject ou objects.
+- Use traduções curtas para as tags e mantenha a ordem natural dos chunks.
 - Não use markdown, comentários ou texto fora do JSON.
-PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $example_count, $tag_text_en, $tag_text_pt_br);
+PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $example_count, $tag_text_en, $tag_text_pt_br, $tag_text_en);
 
     $payload = [
         'contents' => [
@@ -3479,7 +3555,9 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         $english = ensureSentenceEndsWithPeriod(contractEnglishSentenceText((string)($example_raw['english'] ?? '')));
         $pt_br = ensureSentenceEndsWithPeriod((string)($example_raw['pt_br'] ?? ''));
         $chunks_raw = isset($example_raw['chunks']) && is_array($example_raw['chunks']) ? $example_raw['chunks'] : [];
-        if ($english === '' || $pt_br === '' || empty($chunks_raw)) continue;
+        $subject_raw = isset($example_raw['subject']) && is_array($example_raw['subject']) ? $example_raw['subject'] : [];
+        $objects_raw = isset($example_raw['objects']) && is_array($example_raw['objects']) ? $example_raw['objects'] : [];
+        if ($english === '' || $pt_br === '' || empty($chunks_raw) || empty($subject_raw)) continue;
 
         $normalized_english = normalizeSentenceForDuplicateCheck($english);
         if ($normalized_english === '' || isset($seen_sentences[$normalized_english])) continue;
@@ -3487,6 +3565,33 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         foreach ($existing_sentences as $existing_sentence) {
             if ($normalized_english === normalizeSentenceForDuplicateCheck($existing_sentence)) {
                 continue 2;
+            }
+        }
+
+        try {
+            $subject = findOrCreateWordTag(
+                $pdo,
+                (int)$user_id,
+                (string)($subject_raw['en'] ?? $subject_raw['english'] ?? $subject_raw['name'] ?? ''),
+                (string)($subject_raw['pt_br'] ?? $subject_raw['ptBr'] ?? $subject_raw['translation'] ?? $subject_raw['name_pt_br'] ?? '')
+            );
+        } catch (Throwable $e) {
+            continue;
+        }
+
+        $objects = [];
+        $seen_objects = [];
+        foreach ($objects_raw as $object_raw) {
+            if (!is_array($object_raw)) continue;
+            $object_en = (string)($object_raw['en'] ?? $object_raw['english'] ?? $object_raw['name'] ?? '');
+            $object_pt_br = (string)($object_raw['pt_br'] ?? $object_raw['ptBr'] ?? $object_raw['translation'] ?? $object_raw['name_pt_br'] ?? '');
+            $object_key = normalizeWordTagLookupValue($object_en) . '|' . normalizeLexicalChunkLookupValue($object_pt_br);
+            if ($object_key === '|' || isset($seen_objects[$object_key])) continue;
+            $seen_objects[$object_key] = true;
+            try {
+                $objects[] = findOrCreateWordTag($pdo, (int)$user_id, $object_en, $object_pt_br);
+            } catch (Throwable $e) {
+                continue;
             }
         }
 
@@ -3512,6 +3617,8 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         $examples[] = [
             'english' => $english,
             'pt_br' => $pt_br,
+            'subject' => $subject,
+            'objects' => $objects,
             'chunks' => $chunks
         ];
         if (count($examples) >= $example_count) break;
@@ -3535,8 +3642,11 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
             }
             $new_card_id = (int)$pdo->lastInsertId();
             $chunk_tag_ids = array_values(array_filter(array_map(static fn($chunk) => (int)($chunk['tag_id'] ?? 0), $example['chunks'])));
+            $subject_tag_ids = array_values(array_filter([(int)($example['subject']['tag_id'] ?? 0), $tag_id]));
+            $object_tag_ids = array_values(array_filter(array_map(static fn($object) => (int)($object['tag_id'] ?? 0), $example['objects'] ?? [])));
             syncCardTagLinks($pdo, 'flashcard_tag_links', $new_card_id, [], $user_id);
-            syncCardTagLinks($pdo, 'subjects_links', $new_card_id, array_values(array_unique(array_merge([$tag_id], $chunk_tag_ids))), $user_id);
+            syncCardTagLinks($pdo, 'subjects_links', $new_card_id, array_values(array_unique($subject_tag_ids)), $user_id);
+            syncCardTagLinks($pdo, 'objects_links', $new_card_id, array_values(array_unique($object_tag_ids)), $user_id);
             syncCardTagLinks($pdo, 'lexical_chunks_links', $new_card_id, array_values(array_unique($chunk_tag_ids)), $user_id);
             $example['card_id'] = $new_card_id;
         }
@@ -3838,6 +3948,8 @@ elseif ($action === 'add_single') {
     $image_back = $input['image_back'] ?? null; 
     $tag_ids = [];
     $subject_tag_ids = sanitizeTagIds($input['subject_tag_ids'] ?? []);
+    $object_tag_ids = sanitizeTagIds($input['object_tag_ids'] ?? []);
+    $lexical_chunk_tag_ids = sanitizeTagIds($input['lexical_chunk_tag_ids'] ?? []);
     $info_type = sanitizeInfoType($input['info_type'] ?? 2);
 
     $has_front = !empty($front) || !empty($image_front);
@@ -3865,6 +3977,8 @@ elseif ($action === 'add_single') {
         $new_card_id = (int)$pdo->lastInsertId();
         syncCardTagLinks($pdo, 'flashcard_tag_links', $new_card_id, $tag_ids, $user_id);
         syncCardTagLinks($pdo, 'subjects_links', $new_card_id, $subject_tag_ids, $user_id);
+        syncCardTagLinks($pdo, 'objects_links', $new_card_id, $object_tag_ids, $user_id);
+        syncCardTagLinks($pdo, 'lexical_chunks_links', $new_card_id, $lexical_chunk_tag_ids, $user_id);
         // O áudio não é mais gerado automaticamente ao criar um card.
         // O usuário decide quando gerar áudio usando as ações manuais de TTS.
         echo json_encode([
@@ -3903,6 +4017,8 @@ elseif ($action === 'get_card_for_edit') {
     }
 
     $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', [$card_id], $user_id);
+    $objectTagsByCard = fetchLinkedTagsByCard($pdo, 'objects_links', [$card_id], $user_id);
+    $lexicalChunksTagsByCard = fetchLinkedTagsByCard($pdo, 'lexical_chunks_links', [$card_id], $user_id);
 
     echo json_encode([
         'status' => 'success',
@@ -3916,7 +4032,9 @@ elseif ($action === 'get_card_for_edit') {
             'info_type' => sanitizeInfoType($card['info_type'] ?? 2),
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
-            'subject_tags' => $subjectTagsByCard[$card_id] ?? []
+            'subject_tags' => $subjectTagsByCard[$card_id] ?? [],
+            'object_tags' => $objectTagsByCard[$card_id] ?? [],
+            'lexical_chunks_tags' => $lexicalChunksTagsByCard[$card_id] ?? []
         ]
     ]);
 }
@@ -3930,6 +4048,8 @@ elseif ($action === 'update_card') {
     $image_back = $input['image_back'] ?? null;
     $tag_ids = [];
     $subject_tag_ids = sanitizeTagIds($input['subject_tag_ids'] ?? []);
+    $object_tag_ids = sanitizeTagIds($input['object_tag_ids'] ?? []);
+    $lexical_chunk_tag_ids = sanitizeTagIds($input['lexical_chunk_tag_ids'] ?? []);
     $info_type = sanitizeInfoType($input['info_type'] ?? 2);
 
     $has_front = !empty($front) || !empty($image_front);
@@ -3957,10 +4077,10 @@ elseif ($action === 'update_card') {
     if ($stmt->execute([$front_enc, $back_enc, $img_front_enc, $img_back_enc, $info_type, $card_id])) {
         syncCardTagLinks($pdo, 'flashcard_tag_links', $card_id, $tag_ids, $user_id);
         syncCardTagLinks($pdo, 'subjects_links', $card_id, $subject_tag_ids, $user_id);
-        syncCardTagLinks($pdo, 'objects_links', $card_id, [], $user_id);
+        syncCardTagLinks($pdo, 'objects_links', $card_id, $object_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'tipo_frasal_links', $card_id, [], $user_id);
         syncCardTagLinks($pdo, 'tense_links', $card_id, [], $user_id);
-        syncCardTagLinks($pdo, 'lexical_chunks_links', $card_id, [], $user_id);
+        syncCardTagLinks($pdo, 'lexical_chunks_links', $card_id, $lexical_chunk_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'relation_links', $card_id, [], $user_id);
         syncCardTagLinks($pdo, 'words_links', $card_id, [], $user_id);
         syncCardIdiomaLinks($pdo, $card_id, [], [], $user_id);
@@ -4023,8 +4143,15 @@ elseif ($action === 'list_subject_cards_by_tag') {
     ");
     $stmt->execute([$tag_id, $user_id]);
 
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $cardIds = array_map(static fn($card) => (int)$card['id'], $rows);
+    $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', $cardIds, $user_id);
+    $objectTagsByCard = fetchLinkedTagsByCard($pdo, 'objects_links', $cardIds, $user_id);
+    $lexicalChunksTagsByCard = fetchLinkedTagsByCard($pdo, 'lexical_chunks_links', $cardIds, $user_id);
+
     $cards = [];
-    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $card) {
+    foreach ($rows as $card) {
+        $cardId = (int)$card['id'];
         $cards[] = [
             'id' => (int)$card['id'],
             'directory_id' => (int)$card['directory_id'],
@@ -4033,7 +4160,10 @@ elseif ($action === 'list_subject_cards_by_tag') {
             'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
             'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
             'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
-            'can_edit' => (int)$card['directory_user_id'] === (int)$user_id ? 1 : 0
+            'can_edit' => (int)$card['directory_user_id'] === (int)$user_id ? 1 : 0,
+            'subject_tags' => $subjectTagsByCard[$cardId] ?? [],
+            'object_tags' => $objectTagsByCard[$cardId] ?? [],
+            'lexical_chunks_tags' => $lexicalChunksTagsByCard[$cardId] ?? []
         ];
     }
 
