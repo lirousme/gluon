@@ -299,7 +299,7 @@
           count: 10,
           create_cards: true,
           deck_id: deckId,
-          info_type: 2
+          info_type: 3
         });
         const createdCards = Number(response.created_cards_count || 0);
         setStatus(`${createdCards || 0} card(s) de frases de exemplo criado(s) com lexical chunks.`, createdCards ? 'empty' : 'info');

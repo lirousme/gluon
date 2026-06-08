@@ -251,6 +251,26 @@ function tagCombinationAlreadyExists(PDO $pdo, int $userId, string $name, ?strin
  */
 
 
+
+function ensureSentenceEndsWithPeriod(string $value): string
+{
+    $value = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $value = str_replace(["\r", "\n", "\t"], ' ', $value);
+    $value = preg_replace('/\s+/u', ' ', trim((string)$value));
+    if ($value === '') return '';
+
+    // Example-card sentences must finish with a period, while lexical-chunk tag
+    // cleaning remains stricter and removes punctuation separately.
+    $closing = '';
+    if (preg_match('/(["\'”’\)\]}>]+)$/u', $value, $matches)) {
+        $closing = $matches[1];
+        $value = substr($value, 0, -strlen($closing));
+        $value = rtrim($value);
+    }
+    $value = preg_replace('/[\s\.。!！?？]+$/u', '', (string)$value);
+    return trim((string)$value) . '.' . $closing;
+}
+
 function cleanLexicalChunkTagText(string $value): string
 {
     $value = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
@@ -3332,6 +3352,7 @@ Regras:
 - Retorne exatamente %d item(ns) em examples.
 - Cada frase deve ser diferente das outras e diferente das frases existentes listadas.
 - Cada frase deve conter o lexical chunk "%s" em inglês e a tradução deve usar "%s" para esse trecho.
+- Todas as frases em inglês e em pt-BR devem terminar com ponto final. Não termine frases com interrogação, exclamação ou sem pontuação.
 - Inclua esse lexical chunk como um dos itens de chunks de cada frase, com o texto em inglês e pt-BR exatamente como informado.
 - Cada frase deve conter de 3 a 7 lexical chunks, cobrindo a frase inteira em ordem natural.
 - Não repita o mesmo lexical chunk com o mesmo par de texto em inglês e tradução pt-BR dentro dos chunks da mesma frase.
@@ -3394,8 +3415,8 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
     $seen_sentences = [];
     foreach ($examples_raw as $example_raw) {
         if (!is_array($example_raw)) continue;
-        $english = trim((string)($example_raw['english'] ?? ''));
-        $pt_br = trim((string)($example_raw['pt_br'] ?? ''));
+        $english = ensureSentenceEndsWithPeriod((string)($example_raw['english'] ?? ''));
+        $pt_br = ensureSentenceEndsWithPeriod((string)($example_raw['pt_br'] ?? ''));
         $chunks_raw = isset($example_raw['chunks']) && is_array($example_raw['chunks']) ? $example_raw['chunks'] : [];
         if ($english === '' || $pt_br === '' || empty($chunks_raw)) continue;
 
@@ -3455,6 +3476,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
             $chunk_tag_ids = array_values(array_filter(array_map(static fn($chunk) => (int)($chunk['tag_id'] ?? 0), $example['chunks'])));
             syncCardTagLinks($pdo, 'flashcard_tag_links', $new_card_id, [], $user_id);
             syncCardTagLinks($pdo, 'subjects_links', $new_card_id, array_values(array_unique(array_merge([$tag_id], $chunk_tag_ids))), $user_id);
+            syncCardTagLinks($pdo, 'lexical_chunks_links', $new_card_id, array_values(array_unique($chunk_tag_ids)), $user_id);
             $example['card_id'] = $new_card_id;
         }
         unset($example);

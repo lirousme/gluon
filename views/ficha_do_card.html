@@ -865,9 +865,9 @@ const app = {
         tag_text_en: tagTextEn,
         tag_text_pt_br: tagTextPtBr,
         count: 10,
-        create_cards: !this.editCardId,
+        create_cards: true,
         deck_id: Number(this.deckId || 0),
-        info_type: this.infoType
+        info_type: 3
       });
       if (!res || !res.english || !res.pt_br || !Array.isArray(res.chunks)) throw new Error('A API não retornou frase e lexical chunks válidos.');
 
@@ -889,7 +889,7 @@ const app = {
       const duplicateText = duplicateContext > 0 ? ` ${duplicateContext} frase(s) pública(s) existente(s) foram enviadas ao Gemini para evitar repetição.` : '';
       const createdCards = Number(res.created_cards_count || 0);
       const examplesCount = Array.isArray(res.examples) ? res.examples.length : 1;
-      const cardText = createdCards > 0 ? ` ${createdCards} card(s) de frases de exemplo criado(s).` : ` ${examplesCount} frase(s) gerada(s); salve manualmente se estiver editando um card existente.`;
+      const cardText = createdCards > 0 ? ` ${createdCards} card(s) de frases de exemplo criado(s).` : ` ${examplesCount} frase(s) gerada(s), mas nenhum card foi criado.`;
       this.setActiveTab('front');
       this.setStatus(`Frases, traduções e lexical chunks gerados com Gemini: ${existingCount} tag(s) existente(s) selecionada(s), ${createdCount} tag(s) criada(s).${cardText}${duplicateText}`, 'success');
     } catch (err) {
