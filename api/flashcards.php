@@ -920,6 +920,11 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
     // - self: considera a própria fonte informada.
     $evenCardsByRoleAndTag = [];
 
+    // Guarda quais tags pertencem ao próprio usuário.
+    // Tags globais do usuário 5 continuam disponíveis, mas não recebem
+    // preferência automática para iniciar o primeiro card ímpar.
+    $userOwnedTagIds = [];
+
     // Percorre o array que diz quais tags cada card possui.
     foreach ($seedTagsByCard as $cardId => $tags) {
         // Percorre todas as tags daquele card.
@@ -930,6 +935,10 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
 
             // Se a tag for inválida, pula para a próxima.
             if ($tagId <= 0) continue;
+
+            if (!empty($tag['is_user_owned'])) {
+                $userOwnedTagIds[$tagId] = true;
+            }
 
             // Se ainda não existir uma lista para essa tag,
             // cria uma lista vazia.
@@ -1206,43 +1215,37 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
     // Pega todos os IDs das tags existentes.
     $tagIds = array_keys($cardsByTag);
 
-    // Ordena as tags pela sensibilidade atual.
+    // Ordena as tags pela sensibilidade.
     //
-    // A sensibilidade considera a pontuação própria do usuário na tag
-    // (flashcard_tag_scores) somada aos scores dos cards em que essa tag aparece
-    // como subject. Como os scores locais mudam durante a montagem do lote,
-    // esta ordenação precisa ser refeita sempre que uma nova tag-base for
-    // escolhida quando não há tag inicial fixada.
-    $sortTagIdsBySensitivity = static function (array $candidateTagIds) use ($calcTagSens): array {
-        $candidateTagIds = array_values(array_unique(array_map('intval', $candidateTagIds)));
-        usort($candidateTagIds, static function ($a, $b) use ($calcTagSens) {
-            $sa = $calcTagSens((int)$a);
-            $sb = $calcTagSens((int)$b);
+    // A tag com menor soma de scores vem primeiro.
+    //
+    // Se duas tags tiverem a mesma soma,
+    // a tag com menor ID vem primeiro.
+    usort($tagIds, static function ($a, $b) use ($calcTagSens) {
+        // Calcula a soma dos scores da tag A.
+        $sa = $calcTagSens((int)$a);
 
-            return ($sa <=> $sb) ?: ((int)$a <=> (int)$b);
-        });
+        // Calcula a soma dos scores da tag B.
+        $sb = $calcTagSens((int)$b);
 
-        return $candidateTagIds;
-    };
+        // Ordena primeiro pela menor soma.
+        // Se empatar, ordena pelo menor ID da tag.
+        return ($sa <=> $sb) ?: ((int)$a <=> (int)$b);
+    });
 
-    // Quando o usuário não fixa uma tag inicial, cada card ímpar deve nascer da
-    // tag menos pontuada no momento, já considerando flashcard_tag_scores e as
-    // simulações locais do lote. Isso evita travar a sequência inteira na
-    // primeira tag calculada e faz a primeira e as demais tags respeitarem a
-    // pontuação própria da tag no banco.
-    $pickBaseTagId = static function (array $avoidCards = []) use (&$tagIds, $sortTagIdsBySensitivity, $pickMinCardInTag): ?int {
-        foreach ($sortTagIdsBySensitivity($tagIds) as $tagId) {
-            if ($pickMinCardInTag((int)$tagId, $avoidCards) !== null) {
-                return (int)$tagId;
+    // A tag-base será a tag inicial configurada, quando houver.
+    // Se não houver tag inicial, dá preferência a tags criadas pelo próprio
+    // usuário para o primeiro card ímpar. Se o usuário não tiver nenhuma tag
+    // própria disponível, mantém o comportamento anterior: usa a tag mais fraca.
+    $baseTagId = $initialTagId !== null ? $initialTagId : (int)$tagIds[0];
+    if ($initialTagId === null && !empty($userOwnedTagIds)) {
+        foreach ($tagIds as $tagId) {
+            if (!empty($userOwnedTagIds[(int)$tagId])) {
+                $baseTagId = (int)$tagId;
+                break;
             }
         }
-
-        return null;
-    };
-
-    // A tag-base será fixa apenas quando o deck tiver uma tag inicial configurada.
-    // Sem tag inicial, ela será escolhida de novo a cada rodada pelo helper acima.
-    $fixedBaseTagId = $initialTagId !== null ? $initialTagId : null;
+    }
 
     // Lista final dos cards escolhidos.
     $chosen = [];
@@ -1260,16 +1263,6 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
     // Enquanto a quantidade de cards escolhidos for menor que o tamanho do lote,
     // continua montando a sequência.
     while (count($chosen) < $batchSize) {
-        // Escolhe a tag-base desta rodada.
-        //
-        // Se existe tag inicial fixada, usa sempre ela. Caso contrário, escolhe
-        // a tag menos pontuada disponível agora, considerando também a pontuação
-        // própria do usuário em flashcard_tag_scores.
-        $baseTagId = $fixedBaseTagId ?? $pickBaseTagId($used);
-
-        // Se não existe tag com card disponível, encerra o loop.
-        if ($baseTagId === null) break;
-
         // Escolhe o card mais fraco da tag-base.
         //
         // Esse é o card principal da rodada.
@@ -1324,7 +1317,6 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
         // "se esse card já foi escolhido agora,
         // ele fica um pouco menos prioritário nas próximas escolhas".
         $scoreByCard[$oddCard] = (int)$scoreByCard[$oddCard] + 1;
-        $tagScoreByTag[$baseTagId] = (int)($tagScoreByTag[$baseTagId] ?? 0) + 1;
 
         // Se já atingiu o tamanho máximo do lote,
         // para aqui.
@@ -1478,7 +1470,6 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
         // isso não salva no banco.
         // Só muda a pontuação durante a montagem desse lote.
         $scoreByCard[$evenCard] = (int)$scoreByCard[$evenCard] + 1;
-        $tagScoreByTag[$strongestTagId] = (int)($tagScoreByTag[$strongestTagId] ?? 0) + 1;
     }
 
     // Retorna a sequência final de cards escolhidos.
