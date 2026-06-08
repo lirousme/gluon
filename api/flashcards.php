@@ -3337,7 +3337,7 @@ Regras:
 - Não repita o mesmo lexical chunk com o mesmo par de texto em inglês e tradução pt-BR dentro dos chunks da mesma frase.
 - Não coloque vírgula, ponto final ou outra pontuação de frase dentro dos textos de tags dos chunks; preserve apóstrofos de contrações.
 - A única exceção para pontos é quando o próprio lexical chunk for um padrão com reticências, como "Whether ... or ..." ("Seja ... ou ..."). Use esse tipo de chunk quando fizer sentido.
-- Quando houver possibilidade de contração 've 'd 't 's 'm, utilize.
+- Quando houver possibilidade de contração have > 've, had > 'd, not > n't, has > 's, is > 's, am > 'm, are > 're, would > 'd, will > 'll, utilize.
 - Use traduções curtas entre os chunks, como em: I saw them (Eu vi eles) at the park (no parque) yesterday (ontem).
 - Não use markdown, comentários ou texto fora do JSON.
 PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $example_count, $tag_text_en, $tag_text_pt_br);
