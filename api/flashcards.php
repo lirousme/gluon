@@ -823,6 +823,11 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
     // tag 2 tem card 10
     $cardsByTag = [];
 
+    // Índice separado para os cards pares. Assim, o card principal/ímpar
+    // continua nascendo das tags seed (subjects), mas a busca do card par
+    // pode usar somente as fontes configuradas em $evenTagsSourcesByCard.
+    $evenCardsByTag = [];
+
     // Guarda quais tags pertencem ao próprio usuário.
     // Tags globais do usuário 5 continuam disponíveis, mas não recebem
     // preferência automática para iniciar o primeiro card ímpar.
@@ -852,6 +857,23 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
             // Adiciona esse card dentro da lista de cards dessa tag.
             $cardsByTag[$tagId][] = (int)$cardId;
         }
+    }
+
+    $evenIndexSourcesByCard = !empty($evenTagsSourcesByCard) ? $evenTagsSourcesByCard : [$seedTagsByCard];
+    foreach ($evenIndexSourcesByCard as $tagsSourceByCard) {
+        foreach ($tagsSourceByCard as $cardId => $tags) {
+            foreach ($tags as $tag) {
+                $tagId = (int)($tag['id'] ?? 0);
+                if ($tagId <= 0) continue;
+                if (!isset($evenCardsByTag[$tagId])) {
+                    $evenCardsByTag[$tagId] = [];
+                }
+                $evenCardsByTag[$tagId][] = (int)$cardId;
+            }
+        }
+    }
+    foreach ($evenCardsByTag as $tagId => $linkedCardIds) {
+        $evenCardsByTag[$tagId] = array_values(array_unique(array_map('intval', $linkedCardIds)));
     }
 
     if ($initialTagId !== null && $initialTagId <= 0) {
@@ -920,12 +942,13 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
     // card 12 score 1
     //
     // sensibilidade da tag 5 = 2 + 4 + 1 = 7
-    $calcTagSens = static function (int $tagId) use (&$cardsByTag, &$scoreByCard): int {
+    $calcTagSens = static function (int $tagId, ?array $tagIndex = null) use (&$cardsByTag, &$scoreByCard): int {
         // Começa a soma em zero.
         $sum = 0;
+        $sourceIndex = $tagIndex ?? $cardsByTag;
 
         // Percorre todos os cards que pertencem a essa tag.
-        foreach ($cardsByTag[$tagId] ?? [] as $cid) {
+        foreach ($sourceIndex[$tagId] ?? [] as $cid) {
             // Soma o score desse card.
             // Se não existir score para ele, usa 0.
             $sum += (int)($scoreByCard[$cid] ?? 0);
@@ -987,12 +1010,13 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
     // depois menor que 10,
     // depois menor que 15,
     // e assim por diante.
-    $pickMaxCardInTag = static function (int $tagId, array $avoidCards = []) use (&$cardsByTag, &$scoreByCard): ?int {
+    $pickMaxCardInTag = static function (int $tagId, array $avoidCards = [], ?array $tagIndex = null) use (&$cardsByTag, &$scoreByCard): ?int {
         // Lista dos cards candidatos.
         $candidateIds = [];
+        $sourceIndex = $tagIndex ?? $cardsByTag;
 
         // Percorre todos os cards dessa tag.
-        foreach ($cardsByTag[$tagId] ?? [] as $cid) {
+        foreach ($sourceIndex[$tagId] ?? [] as $cid) {
             // Se o card já foi usado ou deve ser evitado, pula.
             if (isset($avoidCards[$cid])) continue;
 
@@ -1198,12 +1222,9 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
         //
         // então:
         // $linkedTagIds = [1, 2, 3]
-        $linkedTagIds = array_map(
-            static fn($t) => (int)$t['id'],
-            $seedTagsByCard[$oddCard] ?? []
-        );
+        $linkedTagIds = [];
 
-        foreach ($evenTagsSourcesByCard as $tagsSourceByCard) {
+        foreach ($evenIndexSourcesByCard as $tagsSourceByCard) {
             $linkedTagIds = array_merge(
                 $linkedTagIds,
                 array_map(
@@ -1261,7 +1282,7 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
         $maxLinkedTagScore = null;
 
         foreach ($linkedTagIds as $tid) {
-            $tagScore = $calcTagSens((int)$tid);
+            $tagScore = $calcTagSens((int)$tid, $evenCardsByTag);
             if ($maxLinkedTagScore === null || $tagScore > $maxLinkedTagScore) {
                 $maxLinkedTagScore = $tagScore;
             }
@@ -1276,7 +1297,7 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
 
                 foreach ($linkedTagIds as $tid) {
                     $tagId = (int)$tid;
-                    $tagScore = $calcTagSens($tagId);
+                    $tagScore = $calcTagSens($tagId, $evenCardsByTag);
 
                     // Fora da faixa atual: desconsidera.
                     if ($tagScore >= $limit) continue;
@@ -1305,7 +1326,7 @@ function buildGraphCardsSequence(array $cards, array $seedTagsByCard, int $batch
         // Dentro dessa tag mais forte, escolhe um card forte.
         //
         // Esse será o segundo card da rodada.
-        $evenCard = $pickMaxCardInTag($strongestTagId, $used);
+        $evenCard = $pickMaxCardInTag($strongestTagId, $used, $evenCardsByTag);
 
         // Se não encontrou card disponível nessa tag,
         // pula para a próxima rodada.
@@ -2744,9 +2765,8 @@ if ($action === 'fetch') {
             $subjectTagsByCard,
             6,
             [
-                $subjectTagsByCard,
                 $objectTagsByCard,
-                $wordsTagsByCard
+                $lexicalChunksTagsByCard
             ],
             isset($deck['id_tag_inicial']) && (int)$deck['id_tag_inicial'] > 0 ? (int)$deck['id_tag_inicial'] : null,
             [
