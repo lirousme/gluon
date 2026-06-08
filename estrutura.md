@@ -190,6 +190,21 @@ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ======================================================================
 
+TABELA: flashcard_tag_scores
+id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+user_id INT UNSIGNED NOT NULL,
+tag_id INT UNSIGNED NOT NULL,
+score INT UNSIGNED NOT NULL DEFAULT 0,
+last_reviewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+UNIQUE KEY unique_user_tag (user_id, tag_id),
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+FOREIGN KEY (tag_id) REFERENCES flashcard_tags(id) ON DELETE CASCADE,
+INDEX idx_user_tag_score (user_id, tag_id, score)
+ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+======================================================================
+
 REGRA DE PROGRESSÃO DE FASE (TRILHA/Fase)
 - Tipo 8 (Trilha = Matéria) aceita apenas filhos do tipo 10 (Fase = Sub-matéria).
 - Tipo 9 (Mapa) ficou legado; novos mapas não são mais criados manualmente.
