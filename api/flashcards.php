@@ -3278,6 +3278,11 @@ elseif ($action === 'generate_sentence_lexical_chunks_gemini') {
     $tag_id = (int)($input['tag_id'] ?? 0);
     $tag_text_en = trim((string)($input['tag_text_en'] ?? ''));
     $tag_text_pt_br = trim((string)($input['tag_text_pt_br'] ?? ''));
+    $requested_count = (int)($input['count'] ?? 1);
+    $example_count = max(1, min(10, $requested_count));
+    $create_cards = !empty($input['create_cards']);
+    $deck_id = (int)($input['deck_id'] ?? 0);
+    $info_type = sanitizeInfoType($input['info_type'] ?? 2);
 
     if ($tag_id <= 0) {
         die(json_encode(['status' => 'error', 'message' => 'ID da tag inválido para gerar frase e lexical chunks.']));
@@ -3293,6 +3298,15 @@ elseif ($action === 'generate_sentence_lexical_chunks_gemini') {
         die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada ou sem permissão.']));
     }
 
+    if ($create_cards) {
+        if ($deck_id <= 0) {
+            die(json_encode(['status' => 'error', 'message' => 'Deck inválido para criar as frases de exemplo.']));
+        }
+        if (!verifyDeckOwnership($pdo, $deck_id, $user_id)) {
+            die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado para criar as frases de exemplo.']));
+        }
+    }
+
     if (GEMINI_API_KEY === '') {
         die(json_encode(['status' => 'error', 'message' => 'GEMINI_API_KEY não configurada no .env.']));
     }
@@ -3300,35 +3314,33 @@ elseif ($action === 'generate_sentence_lexical_chunks_gemini') {
     $existing_sentences = fetchUserFiveSubjectCardSentences($pdo, findEquivalentUserFiveTagIds($pdo, $tag_id, $tag_text_en, $tag_text_pt_br));
     $existing_sentences_block = '';
     if (!empty($existing_sentences)) {
-        $existing_sentences_block = "
-
-Frases em inglês que já existem para essa tag nos cards do usuário 5 (não gere nenhuma igual nem quase idêntica):
-";
+        $existing_sentences_block = "\n\nFrases em inglês que já existem para essa tag nos cards do usuário 5 (não gere nenhuma igual nem quase idêntica):\n";
         foreach ($existing_sentences as $index => $sentence) {
-            $existing_sentences_block .= ($index + 1) . '. ' . $sentence . "
-";
+            $existing_sentences_block .= ($index + 1) . '. ' . $sentence . "\n";
         }
     }
 
     $prompt = sprintf(<<<'PROMPT'
-Gere 1 frase natural em inglês para estudante de inglês que contenha o lexical chunk "%s" traduzido como "%s". Gere também a tradução exata dessa frase em pt-BR.%s
+Gere %d frases naturais em inglês para estudante de inglês. Cada frase deve conter o lexical chunk "%s" traduzido como "%s". Gere também a tradução exata de cada frase em pt-BR.%s
 
-Depois, divida essa frase em lexical chunks e coloque a tradução de cada lexical chunk de acordo com a tradução exata, entre parênteses.
+Depois, para cada frase, divida a frase inteira em lexical chunks e coloque a tradução de cada lexical chunk de acordo com a tradução exata, entre parênteses.
 
 Retorne exclusivamente JSON válido neste formato:
-{"english":"frase em inglês","pt_br":"tradução exata em pt-BR","chunks":[{"en":"lexical chunk em inglês","pt_br":"tradução desse chunk de acordo com a tradução exata"}]}
+{"examples":[{"english":"frase em inglês","pt_br":"tradução exata em pt-BR","chunks":[{"en":"lexical chunk em inglês","pt_br":"tradução desse chunk de acordo com a tradução exata"}]}]}
 
 Regras:
-- A frase deve conter o lexical chunk "%s" em inglês e a tradução deve usar "%s" para esse trecho.
-- Inclua esse lexical chunk como um dos itens de chunks, com o texto em inglês e pt-BR exatamente como informado.
-- A frase deve conter de 3 a 7 lexical chunks, cobrindo a frase inteira em ordem natural.
-- Não repita o mesmo lexical chunk com o mesmo par de texto em inglês e tradução pt-BR dentro de chunks.
+- Retorne exatamente %d item(ns) em examples.
+- Cada frase deve ser diferente das outras e diferente das frases existentes listadas.
+- Cada frase deve conter o lexical chunk "%s" em inglês e a tradução deve usar "%s" para esse trecho.
+- Inclua esse lexical chunk como um dos itens de chunks de cada frase, com o texto em inglês e pt-BR exatamente como informado.
+- Cada frase deve conter de 3 a 7 lexical chunks, cobrindo a frase inteira em ordem natural.
+- Não repita o mesmo lexical chunk com o mesmo par de texto em inglês e tradução pt-BR dentro dos chunks da mesma frase.
 - Não coloque vírgula, ponto final ou outra pontuação de frase dentro dos textos de tags dos chunks; preserve apóstrofos de contrações.
 - A única exceção para pontos é quando o próprio lexical chunk for um padrão com reticências, como "Whether ... or ..." ("Seja ... ou ..."). Use esse tipo de chunk quando fizer sentido.
 - Quando houver possibilidade de contração 've 'd 't 's 'm, utilize.
 - Use traduções curtas entre os chunks, como em: I saw them (Eu vi eles) at the park (no parque) yesterday (ontem).
 - Não use markdown, comentários ou texto fora do JSON.
-PROMPT, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $tag_text_en, $tag_text_pt_br);
+PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $example_count, $tag_text_en, $tag_text_pt_br);
 
     $payload = [
         'contents' => [
@@ -3340,7 +3352,7 @@ PROMPT, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $tag_text_en, 
             ]
         ],
         'generationConfig' => [
-            'temperature' => 0.35,
+            'temperature' => 0.45,
             'responseMimeType' => 'application/json'
         ]
     ];
@@ -3366,45 +3378,101 @@ PROMPT, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $tag_text_en, 
         }
     }
 
-    $english = is_array($chunk_data) ? trim((string)($chunk_data['english'] ?? '')) : '';
-    $pt_br = is_array($chunk_data) ? trim((string)($chunk_data['pt_br'] ?? '')) : '';
-    $chunks_raw = is_array($chunk_data) && isset($chunk_data['chunks']) && is_array($chunk_data['chunks']) ? $chunk_data['chunks'] : [];
+    $examples_raw = [];
+    if (is_array($chunk_data) && isset($chunk_data['examples']) && is_array($chunk_data['examples'])) {
+        $examples_raw = $chunk_data['examples'];
+    } elseif (is_array($chunk_data) && isset($chunk_data['english'], $chunk_data['pt_br'], $chunk_data['chunks'])) {
+        $examples_raw = [$chunk_data];
+    }
 
-    if ($english === '' || $pt_br === '' || empty($chunks_raw)) {
+    if (empty($examples_raw)) {
         $finish_reason = trim((string)($decoded['candidates'][0]['finishReason'] ?? ''));
-        die(json_encode(['status' => 'error', 'message' => 'A API do Gemini não retornou frase e lexical chunks válidos.' . ($finish_reason !== '' ? (' Motivo: ' . $finish_reason) : '')]));
+        die(json_encode(['status' => 'error', 'message' => 'A API do Gemini não retornou frases e lexical chunks válidos.' . ($finish_reason !== '' ? (' Motivo: ' . $finish_reason) : '')]));
     }
 
-    $normalized_english = normalizeSentenceForDuplicateCheck($english);
-    foreach ($existing_sentences as $existing_sentence) {
-        if ($normalized_english !== '' && $normalized_english === normalizeSentenceForDuplicateCheck($existing_sentence)) {
-            die(json_encode(['status' => 'error', 'message' => 'O Gemini gerou uma frase que já existe para essa tag. Tente gerar novamente.']));
+    $examples = [];
+    $seen_sentences = [];
+    foreach ($examples_raw as $example_raw) {
+        if (!is_array($example_raw)) continue;
+        $english = trim((string)($example_raw['english'] ?? ''));
+        $pt_br = trim((string)($example_raw['pt_br'] ?? ''));
+        $chunks_raw = isset($example_raw['chunks']) && is_array($example_raw['chunks']) ? $example_raw['chunks'] : [];
+        if ($english === '' || $pt_br === '' || empty($chunks_raw)) continue;
+
+        $normalized_english = normalizeSentenceForDuplicateCheck($english);
+        if ($normalized_english === '' || isset($seen_sentences[$normalized_english])) continue;
+
+        foreach ($existing_sentences as $existing_sentence) {
+            if ($normalized_english === normalizeSentenceForDuplicateCheck($existing_sentence)) {
+                continue 2;
+            }
         }
-    }
 
-    $chunks = [];
-    $seen = [];
-    foreach ($chunks_raw as $chunk) {
-        if (!is_array($chunk)) continue;
-        $chunk_en = cleanLexicalChunkTagText((string)($chunk['en'] ?? $chunk['english'] ?? $chunk['name'] ?? ''));
-        $chunk_pt_br = cleanLexicalChunkTagText((string)($chunk['pt_br'] ?? $chunk['ptBr'] ?? $chunk['translation'] ?? $chunk['name_pt_br'] ?? ''));
-        if ($chunk_en === '' || $chunk_pt_br === '') continue;
-        $dedupe_key = normalizeLexicalChunkLookupValue($chunk_en) . '|' . normalizeLexicalChunkLookupValue($chunk_pt_br);
-        if (isset($seen[$dedupe_key])) continue;
-        $seen[$dedupe_key] = true;
-        try {
-            $chunks[] = findOrCreateLexicalChunkTag($pdo, (int)$user_id, $chunk_en, $chunk_pt_br);
-        } catch (Throwable $e) {
-            die(json_encode(['status' => 'error', 'message' => 'Erro ao criar tag de lexical chunk: ' . $chunk_en]));
+        $chunks = [];
+        $seen_chunks = [];
+        foreach ($chunks_raw as $chunk) {
+            if (!is_array($chunk)) continue;
+            $chunk_en = cleanLexicalChunkTagText((string)($chunk['en'] ?? $chunk['english'] ?? $chunk['name'] ?? ''));
+            $chunk_pt_br = cleanLexicalChunkTagText((string)($chunk['pt_br'] ?? $chunk['ptBr'] ?? $chunk['translation'] ?? $chunk['name_pt_br'] ?? ''));
+            if ($chunk_en === '' || $chunk_pt_br === '') continue;
+            $dedupe_key = normalizeLexicalChunkLookupValue($chunk_en) . '|' . normalizeLexicalChunkLookupValue($chunk_pt_br);
+            if (isset($seen_chunks[$dedupe_key])) continue;
+            $seen_chunks[$dedupe_key] = true;
+            try {
+                $chunks[] = findOrCreateLexicalChunkTag($pdo, (int)$user_id, $chunk_en, $chunk_pt_br);
+            } catch (Throwable $e) {
+                die(json_encode(['status' => 'error', 'message' => 'Erro ao criar tag de lexical chunk: ' . $chunk_en]));
+            }
         }
+
+        if (empty($chunks)) continue;
+        $seen_sentences[$normalized_english] = true;
+        $examples[] = [
+            'english' => $english,
+            'pt_br' => $pt_br,
+            'chunks' => $chunks
+        ];
+        if (count($examples) >= $example_count) break;
     }
 
-    if (empty($chunks)) {
-        die(json_encode(['status' => 'error', 'message' => 'Nenhum lexical chunk válido foi retornado pelo Gemini.']));
+    if (empty($examples)) {
+        die(json_encode(['status' => 'error', 'message' => 'Nenhuma frase com lexical chunks válidos foi retornada pelo Gemini.']));
     }
 
-    echo json_encode(['status' => 'success', 'english' => $english, 'pt_br' => $pt_br, 'chunks' => $chunks, 'existing_sentences_count' => count($existing_sentences)]);
+    if (count($examples) < $example_count) {
+        die(json_encode(['status' => 'error', 'message' => 'O Gemini retornou apenas ' . count($examples) . ' frase(s) válida(s), mas eram necessárias ' . $example_count . '. Tente gerar novamente.']));
+    }
+
+    if ($create_cards) {
+        $stmtInsertCard = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, has_audio_front, has_audio_back) VALUES (?, ?, ?, NULL, NULL, ?, 0, 0)");
+        foreach ($examples as &$example) {
+            $front_enc = Security::encryptData($example['english']);
+            $back_enc = Security::encryptData($example['pt_br']);
+            if (!$stmtInsertCard->execute([$deck_id, $front_enc, $back_enc, $info_type])) {
+                die(json_encode(['status' => 'error', 'message' => 'Erro ao criar card de frase de exemplo.']));
+            }
+            $new_card_id = (int)$pdo->lastInsertId();
+            $chunk_tag_ids = array_values(array_filter(array_map(static fn($chunk) => (int)($chunk['tag_id'] ?? 0), $example['chunks'])));
+            syncCardTagLinks($pdo, 'flashcard_tag_links', $new_card_id, [], $user_id);
+            syncCardTagLinks($pdo, 'subjects_links', $new_card_id, array_values(array_unique(array_merge([$tag_id], $chunk_tag_ids))), $user_id);
+            $example['card_id'] = $new_card_id;
+        }
+        unset($example);
+    }
+
+    $first_example = $examples[0];
+    $created_cards_count = count(array_filter($examples, static fn($example) => !empty($example['card_id'])));
+    echo json_encode([
+        'status' => 'success',
+        'english' => $first_example['english'],
+        'pt_br' => $first_example['pt_br'],
+        'chunks' => $first_example['chunks'],
+        'examples' => $examples,
+        'created_cards_count' => $created_cards_count,
+        'existing_sentences_count' => count($existing_sentences)
+    ]);
 }
+
 
 
 elseif ($action === 'answer_question_gemini') {
