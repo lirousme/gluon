@@ -3822,10 +3822,12 @@ Regras:
 - Use reticências somente quando elas realmente deixarem o chunk mais reutilizável, como "because of ..." ou "whether ... or ...". Não force reticências em todos os chunks.
 - Inclua o lexical chunk "%s" também em chunks quando ele for verbo, expressão verbal, preposição/expressão de lugar/tempo/modo etc. Não inclua se ele for apenas sujeito ou substantivo solto.
 - Não repita o mesmo chunk com o mesmo par de texto em inglês e tradução pt-BR dentro dos chunks da mesma frase nem gere variações quase iguais.
-- No texto das frases em inglês, prefira frases simples e naturais; não adicione auxiliares, modais, negativas ou estruturas com have/had/not/has/is/am/are/would/will/shall apenas para criar contrações.
+- No texto das frases em inglês, prefira frases ordinárias, cotidianas e naturais; não adicione auxiliares, modais, negativas ou estruturas com have/had/not/has/is/am/are/would/will/shall apenas para criar contrações.
 - Quando uma contração for realmente natural e necessária para a frase escolhida, use a forma contraída: have > 've, had > 'd, not > n't, has > 's, is > 's, am > 'm, are > 're, would > 'd, will > 'll, shall > 'll.
-- Se a frase puder ser mais simples sem essas estruturas, escreva a frase simples em vez de forçar contração.
+- Repare na regra acima, se couber contração na frase, é muito importante que contráia, se não couber, não precisa contrair, mas se for natural para um americano falar aquela frase contraindo, então a faça contraída.
 - Nos textos de tags de subject, objects e chunks, faça o oposto: use forma descontraída/expandida (have, had, not, has, is, am, are, would, will, shall) e não use as contrações 've, 'd, n't, 's, 'm, 're, 'll.
+- Faça cada frase em um tempo verbal, explore versões negativas, afirmativas fala em um diálogo comum, afirmativa estilo notícia de jornal, interrogativas, condicionais.
+- Repare na regra acima, frases com tempos verbais diferentes entre elas.
 - Não coloque vírgula, ponto final ou outra pontuação de frase dentro dos textos das tags.
 - Não use artigos iniciais nas tags de subject e nas tags de substantivos em objects: use "dog", "cat", "avenue", não "the dog", "the cat", "the avenue".
 - A única exceção para pontos em tags é quando o próprio lexical chunk for um padrão com reticências, como "Whether ... or ..." ("Seja ... ou ..."). Use reticências apenas nos chunks, nunca em subject ou objects.
