@@ -44,8 +44,8 @@
         <button type="button" onclick="app.openCreateTagModal()" class="inline-flex h-9 items-center justify-center rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800" title="Criar nova tag" aria-label="Criar nova tag">
           <i class="fa-solid fa-plus" aria-hidden="true"></i>
         </button>
-        <button type="button" id="btnTranslate" onclick="app.translateCard()" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-fuchsia-400/20 p-2 text-sm font-medium text-fuchsia-400 transition-colors hover:bg-fuchsia-400/10 hover:text-fuchsia-300" title="Traduzir via IA" aria-label="Traduzir via IA">
-          <i class="fa-solid fa-language" aria-hidden="true"></i>
+        <button type="button" id="btnGenerateFrontTagsGemini" onclick="app.generateFrontSentenceTagsWithGemini()" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-fuchsia-400/20 p-2 text-sm font-medium text-fuchsia-400 transition-colors hover:bg-fuchsia-400/10 hover:text-fuchsia-300" title="Gerar tags da frase da frente com Gemini" aria-label="Gerar tags da frase da frente com Gemini">
+          <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
         </button>
         <button type="button" id="btnTranslateGemini" onclick="app.translateCardWithGemini()" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-300/30 p-2 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-300/10 hover:text-amber-200" title="Traduzir com Gemini" aria-label="Traduzir com Gemini">
           <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
@@ -197,6 +197,27 @@
       </form>
     </div>
   </div>
+
+  <div id="properNounOwnerModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-[78] opacity-0 transition-opacity duration-300 p-4">
+    <div id="properNounOwnerModalContent" class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg transform scale-95 transition-transform duration-300">
+      <div class="p-5 space-y-4">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-lg font-semibold text-white">Dono dos nomes próprios</h3>
+          <button type="button" onclick="app.closeProperNounOwnerModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <p class="text-sm text-slate-300">O Gemini encontrou nomes próprios na frase da frente. Escolha se essas tags serão suas ou públicas (usuário 5).</p>
+        <div id="properNounOwnerList" class="flex flex-wrap gap-2 rounded-lg border border-slate-700 bg-slate-900/70 p-3 text-sm text-slate-100"></div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <button type="button" id="btnCreateProperNounsAsUser" onclick="app.confirmFrontSentenceTagsOwner('user')" class="px-4 py-2 rounded-lg border border-emerald-400/40 text-emerald-200 hover:bg-emerald-400/10">
+            <i class="fa-solid fa-user" aria-hidden="true"></i> Criar como minhas
+          </button>
+          <button type="button" id="btnCreateProperNounsAsPublic" onclick="app.confirmFrontSentenceTagsOwner('public')" class="px-4 py-2 rounded-lg border border-cyan-300/40 text-cyan-200 hover:bg-cyan-400/10">
+            <i class="fa-solid fa-users" aria-hidden="true"></i> Criar como públicas
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
   <div id="notesModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center z-[80] opacity-0 transition-opacity duration-200 p-2 sm:p-4">
     <div id="notesModalContent" class="w-full h-full max-w-6xl max-h-[95dvh] bg-gluon-secondary border border-slate-700 rounded-xl overflow-hidden shadow-2xl transform scale-95 transition-transform duration-200 flex flex-col">
       <div class="h-12 px-3 border-b border-slate-700 flex items-center justify-between shrink-0">
@@ -257,6 +278,7 @@ const app = {
   backLanguage: 'en-GB',
   availableTags: [],
   sessionUserId: null,
+  pendingFrontSentenceTagCandidates: null,
   tagPanels: {
     subject: { selectedInputId: 'selectedSubjectTagIds', selectorId: 'subjectTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' },
     object: { selectedInputId: 'selectedObjectTagIds', selectorId: 'objectTagSelector', activeClass: 'bg-sky-500/20 text-sky-200 border-sky-400', searchQuery: '' },
@@ -782,13 +804,87 @@ const app = {
       pageTitle.textContent = this.editCardId ? `Editar ficha de card - ${directoryName}` : directoryName;
     } catch (_) {}
   },
-  async translateCard() {
-    return this.translateCardWithProvider({
-      action: 'translate_text',
-      button: btnTranslate,
-      loadingLabel: 'Traduzindo...',
-      successLabel: 'Tradução concluída!'
-    });
+  openProperNounOwnerModal(properNouns = []) {
+    const listEl = document.getElementById('properNounOwnerList');
+    if (listEl) {
+      listEl.innerHTML = properNouns.length
+        ? properNouns.map(item => `<span class="inline-flex rounded-full border border-fuchsia-300/40 bg-fuchsia-500/10 px-2 py-1">${this.escapeHTML(item.en || '')}${item.pt_br ? ` (${this.escapeHTML(item.pt_br)})` : ''}</span>`).join('')
+        : '<span class="text-slate-400">Nenhum nome próprio listado.</span>';
+    }
+    properNounOwnerModal.classList.remove('hidden');
+    properNounOwnerModal.classList.add('flex');
+    setTimeout(() => {
+      properNounOwnerModal.classList.remove('opacity-0');
+      properNounOwnerModalContent.classList.remove('scale-95');
+    }, 20);
+  },
+  closeProperNounOwnerModal() {
+    properNounOwnerModal.classList.add('opacity-0');
+    properNounOwnerModalContent.classList.add('scale-95');
+    setTimeout(() => {
+      properNounOwnerModal.classList.add('hidden');
+      properNounOwnerModal.classList.remove('flex');
+    }, 200);
+  },
+  async generateFrontSentenceTagsWithGemini() {
+    const sentence = singleFront.value.trim();
+    if (!sentence) return this.setStatus('Preencha a frente do card com uma frase para gerar as tags com Gemini.', 'error');
+
+    const originalHtml = btnGenerateFrontTagsGemini.innerHTML;
+    btnGenerateFrontTagsGemini.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>';
+    btnGenerateFrontTagsGemini.disabled = true;
+
+    try {
+      const res = await this.api('generate_front_sentence_tags_gemini', { sentence });
+      if (!res || !res.candidates) throw new Error('A API não retornou tags válidas.');
+      this.pendingFrontSentenceTagCandidates = res.candidates;
+      if (res.needs_ownership_choice) {
+        this.openProperNounOwnerModal(res.proper_nouns || []);
+        this.setStatus('Escolha o dono dos nomes próprios para concluir a criação das tags.', 'neutral');
+        return;
+      }
+      await this.createFrontSentenceTags('public');
+    } catch (err) {
+      this.setStatus('Falha ao gerar tags com Gemini: ' + (err.message || 'erro desconhecido'), 'error');
+    } finally {
+      btnGenerateFrontTagsGemini.innerHTML = originalHtml;
+      btnGenerateFrontTagsGemini.disabled = false;
+    }
+  },
+  async confirmFrontSentenceTagsOwner(owner) {
+    await this.createFrontSentenceTags(owner);
+  },
+  async createFrontSentenceTags(owner = 'public') {
+    const candidates = this.pendingFrontSentenceTagCandidates;
+    if (!candidates) return this.setStatus('Nenhuma sugestão de tag pendente para criar.', 'error');
+
+    const buttons = [btnCreateProperNounsAsUser, btnCreateProperNounsAsPublic].filter(Boolean);
+    buttons.forEach(button => { button.disabled = true; });
+    try {
+      const res = await this.api('generate_front_sentence_tags_gemini', {
+        sentence: singleFront.value.trim(),
+        create: true,
+        proper_noun_owner: owner,
+        candidates
+      });
+      const subjectTagIds = (res.subjects || []).map(tag => Number(tag.tag_id)).filter(Boolean);
+      const objectTagIds = (res.objects || []).map(tag => Number(tag.tag_id)).filter(Boolean);
+      const chunkTagIds = (res.chunks || []).map(tag => Number(tag.tag_id)).filter(Boolean);
+      await this.loadTags();
+      this.setSelectedTagIds('subject', Array.from(new Set([...this.getSelectedTagIds('subject'), ...subjectTagIds])));
+      this.setSelectedTagIds('object', Array.from(new Set([...this.getSelectedTagIds('object'), ...objectTagIds])));
+      this.setSelectedTagIds('lexicalChunk', Array.from(new Set([...this.getSelectedTagIds('lexicalChunk'), ...chunkTagIds])));
+      this.renderAllTagSelectors();
+      this.renderGeneratedLexicalChunks(res.chunks || []);
+      this.pendingFrontSentenceTagCandidates = null;
+      this.closeProperNounOwnerModal();
+      const ownerText = owner === 'user' ? ' Nomes próprios criados como tags suas.' : ' Nomes próprios criados como tags públicas.';
+      this.setStatus(`Tags geradas com Gemini: ${Number(res.created_count || 0)} criada(s), ${Number(res.existing_count || 0)} existente(s) selecionada(s).${ownerText}`, 'success');
+    } catch (err) {
+      this.setStatus('Falha ao criar tags com Gemini: ' + (err.message || 'erro desconhecido'), 'error');
+    } finally {
+      buttons.forEach(button => { button.disabled = false; });
+    }
   },
   async translateCardWithGemini() {
     return this.translateCardWithProvider({

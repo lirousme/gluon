@@ -420,6 +420,68 @@ function findOrCreateLexicalChunkTag(PDO $pdo, int $userId, string $name, string
 
 
 
+
+function findOrCreateLexicalChunkTagForOwner(PDO $pdo, int $ownerUserId, string $name, string $namePtBr): array
+{
+    $ownerUserId = $ownerUserId === 5 ? 5 : $ownerUserId;
+    $name = cleanLexicalChunkTagText(expandEnglishContractionsForLexicalChunkTag($name));
+    $namePtBr = cleanLexicalChunkTagText($namePtBr);
+    if ($ownerUserId <= 0 || $name === '' || $namePtBr === '') {
+        throw new InvalidArgumentException('Lexical chunk inválido.');
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, is_lexical_chunk
+        FROM flashcard_tags
+        WHERE user_id = ?
+        ORDER BY CASE WHEN is_lexical_chunk = 1 THEN 0 ELSE 1 END, id ASC
+    ");
+    $stmt->execute([$ownerUserId]);
+    $targetName = normalizeLexicalChunkLookupValue($name);
+    $targetPtBr = normalizeLexicalChunkLookupValue($namePtBr);
+
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $rowName = !empty($row['name_encrypted']) ? Security::decryptData((string)$row['name_encrypted']) : '';
+        $rowPtBr = !empty($row['name_pt_br_encrypted']) ? Security::decryptData((string)$row['name_pt_br_encrypted']) : '';
+        if (normalizeLexicalChunkLookupValue((string)$rowName) === $targetName && normalizeLexicalChunkLookupValue((string)$rowPtBr) === $targetPtBr) {
+            return [
+                'tag_id' => (int)$row['id'],
+                'en' => trim((string)$rowName),
+                'pt_br' => trim((string)$rowPtBr),
+                'user_id' => (int)$row['user_id'],
+                'created' => false,
+            ];
+        }
+    }
+
+    $color = resolveTagColorByCategory(['is_lexical_chunk' => 1]);
+    $insert = $pdo->prepare("
+        INSERT INTO flashcard_tags
+            (user_id, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year)
+        VALUES (?, ?, ?, NULL, ?, 0, 0, 0, 1, 0, 0, 0, 0, 0)
+    ");
+
+    try {
+        $pdo->beginTransaction();
+        $insert->execute([$ownerUserId, Security::encryptData($name), Security::encryptData($namePtBr), $color]);
+        $tagId = (int)$pdo->lastInsertId();
+        executeTagCreationCustomRules($pdo, $ownerUserId, $tagId);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('[flashcards][create_lexical_chunk_tag_for_owner] ' . $e->getMessage());
+        throw $e;
+    }
+
+    return [
+        'tag_id' => $tagId,
+        'en' => $name,
+        'pt_br' => $namePtBr,
+        'user_id' => $ownerUserId,
+        'created' => true,
+    ];
+}
+
 function removeLeadingArticlesFromWordTagText(string $value, string $language = 'en'): string
 {
     $value = preg_replace('/\s+/u', ' ', trim((string)$value));
@@ -504,6 +566,109 @@ function findOrCreateWordTag(PDO $pdo, int $userId, string $name, string $namePt
         'pt_br' => $namePtBr,
         'created' => true,
     ];
+}
+
+
+function findOrCreateWordTagForOwner(PDO $pdo, int $ownerUserId, string $name, string $namePtBr): array
+{
+    $ownerUserId = $ownerUserId === 5 ? 5 : $ownerUserId;
+    $name = cleanWordTagText($name);
+    $namePtBr = removeLeadingArticlesFromWordTagText(cleanLexicalChunkTagText($namePtBr), 'pt');
+    if ($ownerUserId <= 0 || $name === '' || $namePtBr === '') {
+        throw new InvalidArgumentException('Tag de palavra inválida.');
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, is_word
+        FROM flashcard_tags
+        WHERE user_id = ?
+        ORDER BY CASE WHEN is_word = 1 THEN 0 ELSE 1 END, id ASC
+    ");
+    $stmt->execute([$ownerUserId]);
+    $targetName = normalizeWordTagLookupValue($name);
+    $targetPtBr = normalizeLexicalChunkLookupValue($namePtBr);
+
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $rowName = !empty($row['name_encrypted']) ? Security::decryptData((string)$row['name_encrypted']) : '';
+        $rowPtBr = !empty($row['name_pt_br_encrypted']) ? Security::decryptData((string)$row['name_pt_br_encrypted']) : '';
+        if (normalizeWordTagLookupValue((string)$rowName) === $targetName && normalizeLexicalChunkLookupValue((string)$rowPtBr) === $targetPtBr) {
+            return [
+                'tag_id' => (int)$row['id'],
+                'en' => trim((string)$rowName),
+                'pt_br' => trim((string)$rowPtBr),
+                'user_id' => (int)$row['user_id'],
+                'created' => false,
+            ];
+        }
+    }
+
+    $color = resolveTagColorByCategory(['is_word' => 1]);
+    $insert = $pdo->prepare("
+        INSERT INTO flashcard_tags
+            (user_id, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year)
+        VALUES (?, ?, ?, NULL, ?, 0, 0, 0, 0, 0, 1, 0, 0, 0)
+    ");
+
+    try {
+        $pdo->beginTransaction();
+        $insert->execute([$ownerUserId, Security::encryptData($name), Security::encryptData($namePtBr), $color]);
+        $tagId = (int)$pdo->lastInsertId();
+        executeTagCreationCustomRules($pdo, $ownerUserId, $tagId);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('[flashcards][create_word_tag_for_owner] ' . $e->getMessage());
+        throw $e;
+    }
+
+    return [
+        'tag_id' => $tagId,
+        'en' => $name,
+        'pt_br' => $namePtBr,
+        'user_id' => $ownerUserId,
+        'created' => true,
+    ];
+}
+
+function normalizeGeminiTagKind(string $kind): string
+{
+    $kind = strtolower(trim($kind));
+    return in_array($kind, ['common_noun', 'proper_noun', 'verb', 'other'], true) ? $kind : 'common_noun';
+}
+
+function normalizeFrontSentenceTagCandidate(array $raw, string $panel): ?array
+{
+    $en = cleanWordTagText((string)($raw['en'] ?? $raw['english'] ?? $raw['name'] ?? ''));
+    $ptBr = removeLeadingArticlesFromWordTagText(cleanLexicalChunkTagText((string)($raw['pt_br'] ?? $raw['ptBr'] ?? $raw['translation'] ?? $raw['name_pt_br'] ?? '')), 'pt');
+    if ($en === '' || $ptBr === '') return null;
+
+    return [
+        'panel' => in_array($panel, ['subject', 'object'], true) ? $panel : 'object',
+        'en' => $en,
+        'pt_br' => $ptBr,
+        'kind' => normalizeGeminiTagKind((string)($raw['kind'] ?? $raw['type'] ?? 'common_noun')),
+    ];
+}
+
+function normalizeFrontSentenceChunkCandidate(array $raw): ?array
+{
+    $en = cleanLexicalChunkTagText(expandEnglishContractionsForLexicalChunkTag((string)($raw['en'] ?? $raw['english'] ?? $raw['name'] ?? '')));
+    $ptBr = cleanLexicalChunkTagText((string)($raw['pt_br'] ?? $raw['ptBr'] ?? $raw['translation'] ?? $raw['name_pt_br'] ?? ''));
+    if ($en === '' || $ptBr === '') return null;
+    return ['en' => $en, 'pt_br' => $ptBr];
+}
+
+function dedupeFrontSentenceCandidates(array $candidates, string $type): array
+{
+    $seen = [];
+    $deduped = [];
+    foreach ($candidates as $candidate) {
+        $key = ($candidate['panel'] ?? $type) . '|' . normalizeLexicalChunkLookupValue((string)($candidate['en'] ?? '')) . '|' . normalizeLexicalChunkLookupValue((string)($candidate['pt_br'] ?? ''));
+        if ($key === '||' || isset($seen[$key])) continue;
+        $seen[$key] = true;
+        $deduped[] = $candidate;
+    }
+    return $deduped;
 }
 
 function resolveTagColorByCategory(array $tagFlags): string {
@@ -3832,6 +3997,166 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         'examples' => $examples,
         'created_cards_count' => $created_cards_count,
         'existing_sentences_count' => count($existing_sentences)
+    ]);
+}
+
+
+
+
+elseif ($action === 'generate_front_sentence_tags_gemini') {
+    $sentence = trim((string)($input['sentence'] ?? ''));
+    $create = !empty($input['create']);
+    $candidatesInput = $input['candidates'] ?? null;
+    $properOwner = (string)($input['proper_noun_owner'] ?? '');
+
+    if ($sentence === '') {
+        die(json_encode(['status' => 'error', 'message' => 'Preencha a frente do card com uma frase para gerar as tags.']));
+    }
+
+    $wordCandidates = [];
+    $chunkCandidates = [];
+
+    if ($create && is_array($candidatesInput)) {
+        $rawSubjects = isset($candidatesInput['subjects']) && is_array($candidatesInput['subjects']) ? $candidatesInput['subjects'] : [];
+        $rawObjects = isset($candidatesInput['objects']) && is_array($candidatesInput['objects']) ? $candidatesInput['objects'] : [];
+        $rawChunks = isset($candidatesInput['chunks']) && is_array($candidatesInput['chunks']) ? $candidatesInput['chunks'] : [];
+        foreach ($rawSubjects as $raw) {
+            if (is_array($raw) && ($candidate = normalizeFrontSentenceTagCandidate($raw, 'subject'))) $wordCandidates[] = $candidate;
+        }
+        foreach ($rawObjects as $raw) {
+            if (is_array($raw) && ($candidate = normalizeFrontSentenceTagCandidate($raw, 'object'))) $wordCandidates[] = $candidate;
+        }
+        foreach ($rawChunks as $raw) {
+            if (is_array($raw) && ($candidate = normalizeFrontSentenceChunkCandidate($raw))) $chunkCandidates[] = $candidate;
+        }
+    } else {
+        if (GEMINI_API_KEY === '') {
+            die(json_encode(['status' => 'error', 'message' => 'GEMINI_API_KEY não configurada no .env.']));
+        }
+
+        $prompt = sprintf(<<<'PROMPT'
+Analise a frase em inglês abaixo e extraia tags para um flashcard.
+
+Frase:
+%s
+
+Retorne somente JSON válido neste formato:
+{"subjects":[{"en":"sujeito sem artigo","pt_br":"tradução curta sem artigo","kind":"common_noun|proper_noun|verb|other"}],"objects":[{"en":"substantivo não sujeito ou verbo principal sem artigo","pt_br":"tradução curta sem artigo","kind":"common_noun|proper_noun|verb|other"}],"chunks":[{"en":"lexical chunk curto","pt_br":"tradução curta"}]}
+
+Regras:
+- subjects deve conter o sujeito gramatical principal da frase, sem artigos iniciais.
+- objects deve conter substantivos relevantes que não são sujeito e verbos principais úteis. Substantivos devem vir sem artigos iniciais.
+- Use kind="proper_noun" para nomes próprios de pessoas, empresas, marcas, lugares, sistemas, produtos, obras e instituições.
+- Use kind="common_noun" para substantivos comuns.
+- Use kind="verb" para verbos.
+- chunks deve conter de 2 a 6 lexical chunks curtos e reutilizáveis: verbos ou expressões verbais, preposições, expressões de lugar, tempo, modo, causa, finalidade, frequência, comparação, condição, afirmação, negação ou dúvida.
+- Não inclua o sujeito ou substantivos soltos como lexical chunks.
+- Nas tags, remova pontuação de frase e expanda contrações: use "do not", "is", "are", "will", etc.
+- Não use markdown, comentários ou texto fora do JSON.
+PROMPT, $sentence);
+
+        $payload = [
+            'contents' => [[
+                'role' => 'user',
+                'parts' => [['text' => $prompt]]
+            ]],
+            'generationConfig' => [
+                'temperature' => 0.25,
+                'responseMimeType' => 'application/json'
+            ]
+        ];
+
+        [$httpcode, $response, $curlError] = geminiJsonRequest(GEMINI_TRANSLATION_MODEL, $payload);
+        if ($httpcode !== 200 || !$response) {
+            $decoded_error = $response ? json_decode($response, true) : null;
+            $api_error = is_array($decoded_error) ? trim((string)($decoded_error['error']['message'] ?? '')) : '';
+            $details = $api_error !== '' ? $api_error : trim((string)$curlError);
+            die(json_encode(['status' => 'error', 'message' => 'Erro ao gerar tags com o Gemini.' . ($details !== '' ? (' Detalhes: ' . $details) : '')]));
+        }
+
+        $decoded = json_decode($response, true);
+        $tagJson = extractGeminiText($decoded);
+        $tagData = json_decode($tagJson, true);
+        if (!is_array($tagData)) {
+            $json_start = strpos($tagJson, '{');
+            $json_end = strrpos($tagJson, '}');
+            if ($json_start !== false && $json_end !== false && $json_end > $json_start) {
+                $tagData = json_decode(substr($tagJson, $json_start, $json_end - $json_start + 1), true);
+            }
+        }
+        if (!is_array($tagData)) {
+            $finish_reason = trim((string)($decoded['candidates'][0]['finishReason'] ?? ''));
+            die(json_encode(['status' => 'error', 'message' => 'A API do Gemini não retornou tags válidas.' . ($finish_reason !== '' ? (' Motivo: ' . $finish_reason) : '')]));
+        }
+
+        foreach (($tagData['subjects'] ?? []) as $raw) {
+            if (is_array($raw) && ($candidate = normalizeFrontSentenceTagCandidate($raw, 'subject'))) $wordCandidates[] = $candidate;
+        }
+        foreach (($tagData['objects'] ?? []) as $raw) {
+            if (is_array($raw) && ($candidate = normalizeFrontSentenceTagCandidate($raw, 'object'))) $wordCandidates[] = $candidate;
+        }
+        foreach (($tagData['chunks'] ?? []) as $raw) {
+            if (is_array($raw) && ($candidate = normalizeFrontSentenceChunkCandidate($raw))) $chunkCandidates[] = $candidate;
+        }
+    }
+
+    $wordCandidates = dedupeFrontSentenceCandidates($wordCandidates, 'word');
+    $chunkCandidates = dedupeFrontSentenceCandidates($chunkCandidates, 'chunk');
+
+    if (empty($wordCandidates) && empty($chunkCandidates)) {
+        die(json_encode(['status' => 'error', 'message' => 'Nenhuma tag válida foi encontrada para a frase.']));
+    }
+
+    $properNouns = array_values(array_filter($wordCandidates, static fn($candidate) => ($candidate['kind'] ?? '') === 'proper_noun'));
+    if (!$create) {
+        echo json_encode([
+            'status' => 'success',
+            'needs_ownership_choice' => !empty($properNouns),
+            'proper_nouns' => $properNouns,
+            'candidates' => [
+                'subjects' => array_values(array_filter($wordCandidates, static fn($candidate) => ($candidate['panel'] ?? '') === 'subject')),
+                'objects' => array_values(array_filter($wordCandidates, static fn($candidate) => ($candidate['panel'] ?? '') === 'object')),
+                'chunks' => $chunkCandidates,
+            ],
+        ]);
+        exit;
+    }
+
+    if (!empty($properNouns) && !in_array($properOwner, ['user', 'public'], true)) {
+        die(json_encode(['status' => 'error', 'message' => 'Escolha o dono dos nomes próprios antes de criar as tags.']));
+    }
+
+    $createdSubjects = [];
+    $createdObjects = [];
+    $createdChunks = [];
+
+    foreach ($wordCandidates as $candidate) {
+        $ownerId = (($candidate['kind'] ?? '') === 'proper_noun' && $properOwner === 'user') ? (int)$user_id : 5;
+        try {
+            $tag = findOrCreateWordTagForOwner($pdo, $ownerId, (string)$candidate['en'], (string)$candidate['pt_br']);
+            $tag['kind'] = $candidate['kind'];
+            if (($candidate['panel'] ?? '') === 'subject') $createdSubjects[] = $tag;
+            else $createdObjects[] = $tag;
+        } catch (Throwable $e) {
+            die(json_encode(['status' => 'error', 'message' => 'Erro ao criar tag de palavra: ' . (string)$candidate['en']]));
+        }
+    }
+
+    foreach ($chunkCandidates as $candidate) {
+        try {
+            $createdChunks[] = findOrCreateLexicalChunkTagForOwner($pdo, 5, (string)$candidate['en'], (string)$candidate['pt_br']);
+        } catch (Throwable $e) {
+            die(json_encode(['status' => 'error', 'message' => 'Erro ao criar tag de lexical chunk: ' . (string)$candidate['en']]));
+        }
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'subjects' => $createdSubjects,
+        'objects' => $createdObjects,
+        'chunks' => $createdChunks,
+        'created_count' => count(array_filter(array_merge($createdSubjects, $createdObjects, $createdChunks), static fn($tag) => !empty($tag['created']))),
+        'existing_count' => count(array_filter(array_merge($createdSubjects, $createdObjects, $createdChunks), static fn($tag) => empty($tag['created']))),
     ]);
 }
 
