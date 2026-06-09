@@ -249,7 +249,7 @@ function normalizeGeneratedTagMetadata(string $rawName, string $rawNamePtBr, $ra
         }
     }
     $siglaSimbolo = normalizeNullableTagMetadataText($rawSiglaSimbolo);
-    if ($numero !== null && ($numberCameFromTagText || trim($rawName) === '' || trim($rawNamePtBr) === '')) {
+    if ($numero !== null) {
         $words = tagNumberToWords($numero);
         $rawName = $words['en'];
         $rawNamePtBr = $words['pt_br'];
@@ -357,17 +357,70 @@ function tagIntegerToEnglishWords(string $digits): string
     $count = count($groups);
     foreach ($groups as $i => $group) {
         if ($group === 0) continue;
-        $scale = $scales[$count - $i - 1] ?? ('10^' . (($count - $i - 1) * 3));
+        $scaleIndex = $count - $i - 1;
+        $scale = $scales[$scaleIndex] ?? ('10^' . ($scaleIndex * 3));
         $parts[] = trim($under1000($group) . ' ' . $scale);
     }
-    return implode(' ', $parts);
+    $text = implode(' ', $parts);
+    $lastGroup = end($groups);
+    if (count($parts) > 1 && is_int($lastGroup) && $lastGroup > 0 && $lastGroup < 100) {
+        $lastPart = array_pop($parts);
+        $text = implode(' ', $parts) . ' and ' . $lastPart;
+    }
+    return $text;
 }
 
 function tagIntegerToPortugueseWords(string $digits): string
 {
     $digits = ltrim($digits, '0') ?: '0';
     if ($digits === '0') return 'zero';
-    return tagDigitsToWords($digits, 'pt');
+
+    $under1000 = static function(int $n): string {
+        $ones = ['', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove'];
+        $teens = [10 => 'dez', 11 => 'onze', 12 => 'doze', 13 => 'treze', 14 => 'catorze', 15 => 'quinze', 16 => 'dezesseis', 17 => 'dezessete', 18 => 'dezoito', 19 => 'dezenove'];
+        $tens = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa'];
+        $hundreds = ['', 'cento', 'duzentos', 'trezentos', 'quatrocentos', 'quinhentos', 'seiscentos', 'setecentos', 'oitocentos', 'novecentos'];
+        if ($n === 100) return 'cem';
+        $parts = [];
+        if ($n >= 100) {
+            $parts[] = $hundreds[intdiv($n, 100)];
+            $n %= 100;
+        }
+        if ($n >= 20) {
+            $ten = $tens[intdiv($n, 10)];
+            $unit = $n % 10;
+            $parts[] = $unit ? $ten . ' e ' . $ones[$unit] : $ten;
+        } elseif ($n >= 10) {
+            $parts[] = $teens[$n];
+        } elseif ($n > 0) {
+            $parts[] = $ones[$n];
+        }
+        return implode(' e ', $parts);
+    };
+
+    $scaleSingular = ['', 'mil', 'milhão', 'bilhão', 'trilhão', 'quadrilhão', 'quintilhão'];
+    $scalePlural = ['', 'mil', 'milhões', 'bilhões', 'trilhões', 'quadrilhões', 'quintilhões'];
+    $groups = [];
+    while ($digits !== '') { array_unshift($groups, (int)substr($digits, -3)); $digits = substr($digits, 0, -3); }
+    $parts = [];
+    $count = count($groups);
+    foreach ($groups as $i => $group) {
+        if ($group === 0) continue;
+        $scaleIndex = $count - $i - 1;
+        if ($scaleIndex === 1 && $group === 1) {
+            $parts[] = 'mil';
+            continue;
+        }
+        $scale = $group === 1 ? ($scaleSingular[$scaleIndex] ?? ('10^' . ($scaleIndex * 3))) : ($scalePlural[$scaleIndex] ?? ('10^' . ($scaleIndex * 3)));
+        $parts[] = trim($under1000($group) . ' ' . $scale);
+    }
+    if (count($parts) > 1) {
+        $lastGroup = end($groups);
+        $joiner = (is_int($lastGroup) && ($lastGroup < 100 || $lastGroup % 100 === 0)) ? ' e ' : ' ';
+        $lastPart = array_pop($parts);
+        return implode(' ', $parts) . $joiner . $lastPart;
+    }
+    return implode(' ', $parts);
 }
 
 
@@ -4042,6 +4095,7 @@ Regras:
 - A única exceção para pontos em tags é quando o próprio lexical chunk for um padrão com reticências, como "Whether ... or ..." ("Seja ... ou ..."). Use reticências apenas nos chunks, nunca em subject ou objects.
 - Use traduções curtas para as tags e mantenha a ordem natural dos chunks.
 - Quando a tag for um número, valor, medida ou quantidade (ex.: "2010", "R$42,40", "U$10,15", "1,60m", "49kg", "1.000.000.000"), coloque o valor literal em numero e coloque os textos por extenso em en e pt_br.
+- Para tags numéricas, nunca mantenha preposições ou contexto junto do texto da tag: em uma frase como "I went to the zoo in 2014", a tag do número deve ser en="two thousand and fourteen", pt_br="dois mil e catorze", numero="2014", não en="in 2014" nem pt_br="em 2014".
 - Quando existir sigla ou símbolo conhecido (ex.: "°C", "π", "TCU"), coloque-o em sigla_simbolo. Caso não exista, use null ou omita.
 - Não use markdown, comentários ou texto fora do JSON.
 PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $example_count, $tag_text_en, $tag_text_pt_br, $tag_text_en);
@@ -4279,6 +4333,7 @@ Regras:
 - Não inclua o sujeito ou substantivos soltos como lexical chunks.
 - Nas tags, remova pontuação de frase e expanda contrações: use "do not", "is", "are", "will", etc.
 - Quando a tag for um número, valor, medida ou quantidade (ex.: "2010", "R$42,40", "U$10,15", "1,60m", "49kg", "1.000.000.000"), coloque o valor literal em numero e coloque os textos por extenso em en e pt_br.
+- Para tags numéricas, nunca mantenha preposições ou contexto junto do texto da tag: em uma frase como "I went to the zoo in 2014", a tag do número deve ser en="two thousand and fourteen", pt_br="dois mil e catorze", numero="2014", não en="in 2014" nem pt_br="em 2014".
 - Quando existir sigla ou símbolo conhecido (ex.: "°C", "π", "TCU"), coloque-o em sigla_simbolo. Caso não exista, use null ou omita.
 - Não use markdown, comentários ou texto fora do JSON.
 PROMPT, $sentence);
