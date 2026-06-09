@@ -232,7 +232,50 @@ function looksLikeQuantifiedNumberTag(string $value): bool
 {
     $value = trim($value);
     if ($value === '') return false;
-    return preg_match('/^(?:[Rr]\$|[Uu]\$|US\$|\$|€|£)?\s*[+-]?\s*\d[\d\s.,]*(?:\s*(?:m|cm|mm|km|kg|g|mg|°\s*C|°\s*F|%))?$/u', $value) === 1;
+    return preg_match('/^(?:[Rr]\$|[Uu]\$|US\$|\$|€|£)?\s*[+-]?\s*\d[\d\s.,]*(?:st|nd|rd|th)?(?:\s*(?:mg|kg|cm|mm|km|m|g|°\s*C|°\s*F|%))?$/iu', $value) === 1;
+}
+
+function normalizeExtractedNumberLiteral(string $value): string
+{
+    $value = preg_replace('/\s+/u', ' ', trim($value));
+    $value = trim((string)$value, " \t\n\r\0\x0B.,;:!?()[]{}<>\"'“”‘’");
+    return preg_replace('/\s+/u', '', (string)$value);
+}
+
+function extractQuantifiedNumberLiteralsFromText(string $text): array
+{
+    $text = trim($text);
+    if ($text === '') return [];
+
+    preg_match_all('/(?<![\pL\pN])(?:[Rr]\$|[Uu]\$|US\$|\$|€|£)?\s*[+-]?\s*\d[\d\s.,]*(?:st|nd|rd|th)?(?:\s*(?:mg|kg|cm|mm|km|m|g|°\s*C|°\s*F|%))?(?![\pL\pN])/iu', $text, $matches);
+    $literals = [];
+    foreach (($matches[0] ?? []) as $match) {
+        $literal = normalizeExtractedNumberLiteral((string)$match);
+        if ($literal === '' || !looksLikeQuantifiedNumberTag($literal)) continue;
+        $key = function_exists('mb_strtolower') ? mb_strtolower($literal, 'UTF-8') : strtolower($literal);
+        $literals[$key] = $literal;
+    }
+    return array_values($literals);
+}
+
+function buildNumberTagCandidatesFromText(string ...$texts): array
+{
+    $candidates = [];
+    foreach ($texts as $text) {
+        foreach (extractQuantifiedNumberLiteralsFromText($text) as $literal) {
+            $key = function_exists('mb_strtolower') ? mb_strtolower($literal, 'UTF-8') : strtolower($literal);
+            if (isset($candidates[$key])) continue;
+            $words = tagNumberToWords($literal);
+            $candidates[$key] = [
+                'en' => $words['en'],
+                'pt_br' => $words['pt_br'],
+                'numero' => $literal,
+                'sigla_simbolo' => null,
+                'kind' => 'other',
+            ];
+        }
+    }
+    return array_values($candidates);
 }
 
 function normalizeGeneratedTagMetadata(string $rawName, string $rawNamePtBr, $rawNumero = null, $rawSiglaSimbolo = null): array
@@ -246,6 +289,12 @@ function normalizeGeneratedTagMetadata(string $rawName, string $rawNamePtBr, $ra
         } elseif (looksLikeQuantifiedNumberTag($rawNamePtBr)) {
             $numero = trim($rawNamePtBr);
             $numberCameFromTagText = true;
+        } else {
+            $embeddedNumbers = buildNumberTagCandidatesFromText($rawName, $rawNamePtBr);
+            if (count($embeddedNumbers) === 1) {
+                $numero = $embeddedNumbers[0]['numero'];
+                $numberCameFromTagText = true;
+            }
         }
     }
     $siglaSimbolo = normalizeNullableTagMetadataText($rawSiglaSimbolo);
@@ -263,6 +312,7 @@ function tagNumberToWords(string $raw): array
     $lower = function_exists('mb_strtolower') ? mb_strtolower($compact, 'UTF-8') : strtolower($compact);
     if (preg_match('/^([+-]?)(?:R\$)(\d[\d.]*)(?:,(\d+))?$/iu', $compact, $m)) return tagCurrencyToWords($m[1] ?? '', $m[2] ?? '0', $m[3] ?? '', 'real');
     if (preg_match('/^([+-]?)(?:U\$|US\$|\$)(\d[\d,]*)(?:[,.](\d+))?$/iu', $compact, $m)) return tagCurrencyToWords($m[1] ?? '', $m[2] ?? '0', $m[3] ?? '', 'dollar');
+    if (preg_match('/^(\d+)(st|nd|rd|th)$/iu', $compact, $m)) return tagOrdinalToWords($m[1] ?? '0');
     if (preg_match('/^([+-]?)(\d[\d.,]*)(kg|g|mg|km|cm|mm|m|%|°c|°f)$/iu', $lower, $m)) return tagMeasurementToWords($m[1] ?? '', $m[2] ?? '0', $m[3] ?? '');
     if (preg_match('/^[+-]?\d[\d.,]*$/u', $compact)) return tagGenericNumberToWords($compact);
     return ['en' => 'number ' . $raw, 'pt_br' => 'número ' . $raw];
@@ -281,6 +331,17 @@ function tagIntegerPartsFromLocalizedNumber(string $number): array
     $integer = preg_replace('/\D/u', '', $number);
     $integer = ltrim((string)$integer, '0');
     return [$negative, $integer === '' ? '0' : $integer, $decimal];
+}
+
+function tagOrdinalToWords(string $digits): array
+{
+    $n = (int)ltrim($digits, '0');
+    $enMap = [1=>'first',2=>'second',3=>'third',4=>'fourth',5=>'fifth',6=>'sixth',7=>'seventh',8=>'eighth',9=>'ninth',10=>'tenth',11=>'eleventh',12=>'twelfth',13=>'thirteenth',14=>'fourteenth',15=>'fifteenth',16=>'sixteenth',17=>'seventeenth',18=>'eighteenth',19=>'nineteenth',20=>'twentieth',21=>'twenty-first',22=>'twenty-second',23=>'twenty-third',24=>'twenty-fourth',25=>'twenty-fifth',26=>'twenty-sixth',27=>'twenty-seventh',28=>'twenty-eighth',29=>'twenty-ninth',30=>'thirtieth',31=>'thirty-first'];
+    $ptMap = [1=>'primeiro',2=>'segundo',3=>'terceiro',4=>'quarto',5=>'quinto',6=>'sexto',7=>'sétimo',8=>'oitavo',9=>'nono',10=>'décimo',11=>'décimo primeiro',12=>'décimo segundo',13=>'décimo terceiro',14=>'décimo quarto',15=>'décimo quinto',16=>'décimo sexto',17=>'décimo sétimo',18=>'décimo oitavo',19=>'décimo nono',20=>'vigésimo',21=>'vigésimo primeiro',22=>'vigésimo segundo',23=>'vigésimo terceiro',24=>'vigésimo quarto',25=>'vigésimo quinto',26=>'vigésimo sexto',27=>'vigésimo sétimo',28=>'vigésimo oitavo',29=>'vigésimo nono',30=>'trigésimo',31=>'trigésimo primeiro'];
+    if (isset($enMap[$n], $ptMap[$n])) return ['en' => $enMap[$n], 'pt_br' => $ptMap[$n]];
+
+    $cardinal = tagGenericNumberToWords($digits);
+    return ['en' => 'ordinal ' . $cardinal['en'], 'pt_br' => $cardinal['pt_br'] . ' ordinal'];
 }
 
 function tagGenericNumberToWords(string $number): array
@@ -4096,6 +4157,7 @@ Regras:
 - Use traduções curtas para as tags e mantenha a ordem natural dos chunks.
 - Quando a tag for um número, valor, medida ou quantidade (ex.: "2010", "R$42,40", "U$10,15", "1,60m", "49kg", "1.000.000.000"), coloque o valor literal em numero e coloque os textos por extenso em en e pt_br.
 - Para tags numéricas, nunca mantenha preposições ou contexto junto do texto da tag: em uma frase como "I went to the zoo in 2014", a tag do número deve ser en="two thousand and fourteen", pt_br="dois mil e catorze", numero="2014", não en="in 2014" nem pt_br="em 2014".
+- Se qualquer frase gerada tiver ano, número, valor, medida ou quantidade, crie obrigatoriamente uma tag isolada para cada valor numérico literal encontrado, mesmo que o número também apareça dentro de um chunk maior como "in 2014".
 - Quando existir sigla ou símbolo conhecido (ex.: "°C", "π", "TCU"), coloque-o em sigla_simbolo. Caso não exista, use null ou omita.
 - Não use markdown, comentários ou texto fora do JSON.
 PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $example_count, $tag_text_en, $tag_text_pt_br, $tag_text_en);
@@ -4197,6 +4259,25 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
             $seen_objects[$object_key] = true;
             try {
                 $objects[] = findOrCreateWordTag($pdo, (int)$user_id, $object_en, $object_pt_br, $objectMetadata['numero'], $objectMetadata['sigla_simbolo']);
+            } catch (Throwable $e) {
+                continue;
+            }
+        }
+
+        foreach (buildNumberTagCandidatesFromText($english) as $numberCandidate) {
+            $numberMetadata = normalizeGeneratedTagMetadata(
+                (string)$numberCandidate['en'],
+                (string)$numberCandidate['pt_br'],
+                $numberCandidate['numero'] ?? null,
+                $numberCandidate['sigla_simbolo'] ?? null
+            );
+            $number_en = (string)$numberMetadata['name'];
+            $number_pt_br = (string)$numberMetadata['name_pt_br'];
+            $number_key = normalizeWordTagLookupValue($number_en) . '|' . normalizeLexicalChunkLookupValue($number_pt_br) . '|' . normalizeNullableTagMetadataText($numberMetadata['numero']) . '|' . normalizeNullableTagMetadataText($numberMetadata['sigla_simbolo']);
+            if ($number_key === '|' || isset($seen_objects[$number_key])) continue;
+            $seen_objects[$number_key] = true;
+            try {
+                $objects[] = findOrCreateWordTag($pdo, (int)$user_id, $number_en, $number_pt_br, $numberMetadata['numero'], $numberMetadata['sigla_simbolo']);
             } catch (Throwable $e) {
                 continue;
             }
@@ -4315,7 +4396,7 @@ elseif ($action === 'generate_front_sentence_tags_gemini') {
         }
 
         $prompt = sprintf(<<<'PROMPT'
-Analise a frase em inglês abaixo e extraia tags para um flashcard.
+Analise a frase abaixo e extraia tags para um flashcard. A frase pode estar em qualquer idioma; se não estiver em inglês, traduza mentalmente para inglês antes de identificar subjects, objects e chunks, e retorne os campos en sempre em inglês.
 
 Frase:
 %s
@@ -4324,6 +4405,7 @@ Retorne somente JSON válido neste formato:
 {"subjects":[{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional","kind":"common_noun|proper_noun|verb|other"}],"objects":[{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional","kind":"common_noun|proper_noun|verb|other"}],"chunks":[{"en":"lexical chunk curto ou texto por extenso em inglês","pt_br":"tradução curta ou texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional"}]}
 
 Regras:
+- Se a frase original estiver em outro idioma, extraia os chunks a partir da tradução natural em inglês, não a partir da ordem literal do idioma original.
 - subjects deve conter o sujeito gramatical principal da frase, sem artigos iniciais.
 - objects deve conter substantivos relevantes que não são sujeito e verbos principais úteis. Substantivos devem vir sem artigos iniciais.
 - Use kind="proper_noun" para nomes próprios de pessoas, empresas, marcas, lugares, sistemas, produtos, obras e instituições.
@@ -4334,6 +4416,7 @@ Regras:
 - Nas tags, remova pontuação de frase e expanda contrações: use "do not", "is", "are", "will", etc.
 - Quando a tag for um número, valor, medida ou quantidade (ex.: "2010", "R$42,40", "U$10,15", "1,60m", "49kg", "1.000.000.000"), coloque o valor literal em numero e coloque os textos por extenso em en e pt_br.
 - Para tags numéricas, nunca mantenha preposições ou contexto junto do texto da tag: em uma frase como "I went to the zoo in 2014", a tag do número deve ser en="two thousand and fourteen", pt_br="dois mil e catorze", numero="2014", não en="in 2014" nem pt_br="em 2014".
+- Se qualquer frase gerada tiver ano, número, valor, medida ou quantidade, crie obrigatoriamente uma tag isolada para cada valor numérico literal encontrado, mesmo que o número também apareça dentro de um chunk maior como "in 2014".
 - Quando existir sigla ou símbolo conhecido (ex.: "°C", "π", "TCU"), coloque-o em sigla_simbolo. Caso não exista, use null ou omita.
 - Não use markdown, comentários ou texto fora do JSON.
 PROMPT, $sentence);
@@ -4381,6 +4464,11 @@ PROMPT, $sentence);
         foreach (($tagData['chunks'] ?? []) as $raw) {
             if (is_array($raw) && ($candidate = normalizeFrontSentenceChunkCandidate($raw))) $chunkCandidates[] = $candidate;
         }
+    }
+
+    foreach (buildNumberTagCandidatesFromText($sentence) as $numberCandidate) {
+        $numberCandidate['panel'] = 'object';
+        $wordCandidates[] = $numberCandidate;
     }
 
     $wordCandidates = dedupeFrontSentenceCandidates($wordCandidates, 'word');
