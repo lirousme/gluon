@@ -39,6 +39,7 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $pdo = Database::getConnection();
+ensureFlashcardTagsNumericMetadataSchema($pdo);
 $user_id = $_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? ($_GET['action'] ?? '');
@@ -202,10 +203,178 @@ function applyAutoTagFamilyCustomRule(PDO $pdo, int $userId, int $newTagId, int 
     }
 }
 
-function tagCombinationAlreadyExists(PDO $pdo, int $userId, string $name, ?string $namePtBr, ?int $numero, ?int $excludeTagId = null): bool
+function ensureFlashcardTagsNumericMetadataSchema(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $numeroColumn = $pdo->query("SHOW COLUMNS FROM flashcard_tags LIKE 'numero'")->fetch(PDO::FETCH_ASSOC) ?: [];
+        $numeroType = strtolower((string)($numeroColumn['Type'] ?? ''));
+        if ($numeroType !== '' && !preg_match('/(?:char|text|blob|json)/', $numeroType)) {
+            $pdo->exec('ALTER TABLE flashcard_tags MODIFY numero VARCHAR(191) NULL');
+        }
+        $siglaColumn = $pdo->query("SHOW COLUMNS FROM flashcard_tags LIKE 'sigla_simbolo'")->fetch(PDO::FETCH_ASSOC);
+        if (!$siglaColumn) $pdo->exec('ALTER TABLE flashcard_tags ADD COLUMN sigla_simbolo VARCHAR(191) NULL AFTER numero');
+    } catch (Throwable $e) {
+        error_log('[flashcards][flashcard_tags_numeric_metadata_schema] ' . $e->getMessage());
+    }
+}
+
+function normalizeNullableTagMetadataText($value): ?string
+{
+    if ($value === null) return null;
+    $text = preg_replace('/\s+/u', ' ', trim((string)$value));
+    return $text === '' ? null : $text;
+}
+
+function looksLikeQuantifiedNumberTag(string $value): bool
+{
+    $value = trim($value);
+    if ($value === '') return false;
+    return preg_match('/^(?:[Rr]\$|[Uu]\$|US\$|\$|€|£)?\s*[+-]?\s*\d[\d\s.,]*(?:\s*(?:m|cm|mm|km|kg|g|mg|°\s*C|°\s*F|%))?$/u', $value) === 1;
+}
+
+function normalizeGeneratedTagMetadata(string $rawName, string $rawNamePtBr, $rawNumero = null, $rawSiglaSimbolo = null): array
+{
+    $numero = normalizeNullableTagMetadataText($rawNumero);
+    $numberCameFromTagText = false;
+    if ($numero === null) {
+        if (looksLikeQuantifiedNumberTag($rawName)) {
+            $numero = trim($rawName);
+            $numberCameFromTagText = true;
+        } elseif (looksLikeQuantifiedNumberTag($rawNamePtBr)) {
+            $numero = trim($rawNamePtBr);
+            $numberCameFromTagText = true;
+        }
+    }
+    $siglaSimbolo = normalizeNullableTagMetadataText($rawSiglaSimbolo);
+    if ($numero !== null && ($numberCameFromTagText || trim($rawName) === '' || trim($rawNamePtBr) === '')) {
+        $words = tagNumberToWords($numero);
+        $rawName = $words['en'];
+        $rawNamePtBr = $words['pt_br'];
+    }
+    return ['name'=>$rawName, 'name_pt_br'=>$rawNamePtBr, 'numero'=>$numero, 'sigla_simbolo'=>$siglaSimbolo];
+}
+
+function tagNumberToWords(string $raw): array
+{
+    $compact = preg_replace('/\s+/u', '', trim($raw));
+    $lower = function_exists('mb_strtolower') ? mb_strtolower($compact, 'UTF-8') : strtolower($compact);
+    if (preg_match('/^([+-]?)(?:R\$)(\d[\d.]*)(?:,(\d+))?$/iu', $compact, $m)) return tagCurrencyToWords($m[1] ?? '', $m[2] ?? '0', $m[3] ?? '', 'real');
+    if (preg_match('/^([+-]?)(?:U\$|US\$|\$)(\d[\d,]*)(?:[,.](\d+))?$/iu', $compact, $m)) return tagCurrencyToWords($m[1] ?? '', $m[2] ?? '0', $m[3] ?? '', 'dollar');
+    if (preg_match('/^([+-]?)(\d[\d.,]*)(kg|g|mg|km|cm|mm|m|%|°c|°f)$/iu', $lower, $m)) return tagMeasurementToWords($m[1] ?? '', $m[2] ?? '0', $m[3] ?? '');
+    if (preg_match('/^[+-]?\d[\d.,]*$/u', $compact)) return tagGenericNumberToWords($compact);
+    return ['en' => 'number ' . $raw, 'pt_br' => 'número ' . $raw];
+}
+
+function tagIntegerPartsFromLocalizedNumber(string $number): array
+{
+    $number = preg_replace('/\s+/u', '', trim($number));
+    $negative = str_starts_with($number, '-');
+    $number = ltrim($number, '+-');
+    $decimal = '';
+    if (preg_match('/[,\.]\d{1,}$/', $number, $m) && !preg_match('/^\d{1,3}(?:[\.,]\d{3})+$/', $number)) {
+        $decimal = substr($m[0], 1);
+        $number = substr($number, 0, -strlen($m[0]));
+    }
+    $integer = preg_replace('/\D/u', '', $number);
+    $integer = ltrim((string)$integer, '0');
+    return [$negative, $integer === '' ? '0' : $integer, $decimal];
+}
+
+function tagGenericNumberToWords(string $number): array
+{
+    [$negative, $integer, $decimal] = tagIntegerPartsFromLocalizedNumber($number);
+    $en = tagIntegerToEnglishWords($integer);
+    $pt = tagIntegerToPortugueseWords($integer);
+    if ($negative) { $en = 'negative ' . $en; $pt = 'menos ' . $pt; }
+    if ($decimal !== '') {
+        $en .= ' point ' . tagDigitsToWords($decimal, 'en');
+        $pt .= ' vírgula ' . tagDigitsToWords($decimal, 'pt');
+    }
+    return ['en'=>$en, 'pt_br'=>$pt];
+}
+
+function tagCurrencyToWords(string $sign, string $integerRaw, string $decimal, string $currency): array
+{
+    $integer = ltrim(preg_replace('/\D/u', '', $integerRaw), '0') ?: '0';
+    $negativeEn = $sign === '-' ? 'negative ' : '';
+    $negativePt = $sign === '-' ? 'menos ' : '';
+    $enCurrency = $currency === 'real' ? ((int)$integer === 1 ? 'real' : 'reais') : ((int)$integer === 1 ? 'dollar' : 'dollars');
+    $ptCurrency = $currency === 'real' ? ((int)$integer === 1 ? 'real' : 'reais') : ((int)$integer === 1 ? 'dólar' : 'dólares');
+    $en = $negativeEn . tagIntegerToEnglishWords($integer) . ' ' . $enCurrency;
+    $pt = $negativePt . tagIntegerToPortugueseWords($integer) . ' ' . $ptCurrency;
+    if ($decimal !== '') {
+        $cents = substr(str_pad(preg_replace('/\D/u', '', $decimal), 2, '0'), 0, 2);
+        $centInt = (int)$cents;
+        if ($centInt > 0) {
+            $en .= ' and ' . tagIntegerToEnglishWords((string)$centInt) . ($centInt === 1 ? ' cent' : ' cents');
+            $pt .= ' e ' . tagIntegerToPortugueseWords((string)$centInt) . ($centInt === 1 ? ' centavo' : ' centavos');
+        }
+    }
+    return ['en'=>$en, 'pt_br'=>$pt];
+}
+
+function tagMeasurementToWords(string $sign, string $numberRaw, string $unit): array
+{
+    $words = tagGenericNumberToWords(($sign === '-' ? '-' : '') . $numberRaw);
+    $unit = str_replace(' ', '', function_exists('mb_strtolower') ? mb_strtolower($unit, 'UTF-8') : strtolower($unit));
+    $map = [
+        'kg'=>['kilograms','quilos'], 'g'=>['grams','gramas'], 'mg'=>['milligrams','miligramas'],
+        'km'=>['kilometers','quilômetros'], 'cm'=>['centimeters','centímetros'], 'mm'=>['millimeters','milímetros'],
+        'm'=>['meters','metros'], '%'=>['percent','por cento'], '°c'=>['degrees Celsius','graus Celsius'], '°f'=>['degrees Fahrenheit','graus Fahrenheit'],
+    ];
+    $labels = $map[$unit] ?? [$unit, $unit];
+    return ['en'=>$words['en'] . ' ' . $labels[0], 'pt_br'=>$words['pt_br'] . ' ' . $labels[1]];
+}
+
+function tagDigitsToWords(string $digits, string $language): string
+{
+    $en = ['zero','one','two','three','four','five','six','seven','eight','nine'];
+    $pt = ['zero','um','dois','três','quatro','cinco','seis','sete','oito','nove'];
+    $map = $language === 'pt' ? $pt : $en;
+    return implode(' ', array_map(static fn($d) => $map[(int)$d] ?? $d, str_split($digits)));
+}
+
+function tagIntegerToEnglishWords(string $digits): string
+{
+    $digits = ltrim($digits, '0') ?: '0';
+    if ($digits === '0') return 'zero';
+    $ones = ['', 'one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+    $tens = ['', '', 'twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+    $under1000 = function(int $n) use ($ones, $tens): string {
+        $parts = [];
+        if ($n >= 100) { $parts[] = $ones[intdiv($n,100)] . ' hundred'; $n %= 100; }
+        if ($n >= 20) { $parts[] = $tens[intdiv($n,10)] . (($n % 10) ? '-' . $ones[$n % 10] : ''); }
+        elseif ($n > 0) { $parts[] = $ones[$n]; }
+        return implode(' ', $parts);
+    };
+    $scales = ['', 'thousand', 'million', 'billion', 'trillion', 'quadrillion', 'quintillion'];
+    $groups = [];
+    while ($digits !== '') { array_unshift($groups, (int)substr($digits, -3)); $digits = substr($digits, 0, -3); }
+    $parts = [];
+    $count = count($groups);
+    foreach ($groups as $i => $group) {
+        if ($group === 0) continue;
+        $scale = $scales[$count - $i - 1] ?? ('10^' . (($count - $i - 1) * 3));
+        $parts[] = trim($under1000($group) . ' ' . $scale);
+    }
+    return implode(' ', $parts);
+}
+
+function tagIntegerToPortugueseWords(string $digits): string
+{
+    $digits = ltrim($digits, '0') ?: '0';
+    if ($digits === '0') return 'zero';
+    return tagDigitsToWords($digits, 'pt');
+}
+
+
+function tagCombinationAlreadyExists(PDO $pdo, int $userId, string $name, ?string $namePtBr, ?string $numero, ?string $siglaSimbolo = null, ?int $excludeTagId = null): bool
 {
     $sql = "
-        SELECT id, name_encrypted, name_pt_br_encrypted, numero
+        SELECT id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo
         FROM flashcard_tags
         WHERE user_id = ?
     ";
@@ -237,9 +406,10 @@ function tagCombinationAlreadyExists(PDO $pdo, int $userId, string $name, ?strin
         $rowName = trim($rowName);
         $rowNamePtBr = $rowNamePtBr === null ? null : trim($rowNamePtBr);
         if ($rowNamePtBr === '') $rowNamePtBr = null;
-        $rowNumero = ($row['numero'] === null || $row['numero'] === '') ? null : (int)$row['numero'];
+        $rowNumero = normalizeNullableTagMetadataText($row['numero'] ?? null);
+        $rowSiglaSimbolo = normalizeNullableTagMetadataText($row['sigla_simbolo'] ?? null);
 
-        if ($rowName === $name && $rowNamePtBr === $namePtBr && $rowNumero === $numero) {
+        if ($rowName === $name && $rowNamePtBr === $namePtBr && $rowNumero === $numero && $rowSiglaSimbolo === $siglaSimbolo) {
             return true;
         }
     }
@@ -363,15 +533,17 @@ function normalizeLexicalChunkLookupValue(string $value): string
     return function_exists('mb_strtolower') ? mb_strtolower($value ?? '', 'UTF-8') : strtolower($value ?? '');
 }
 
-function findOrCreateLexicalChunkTag(PDO $pdo, int $userId, string $name, string $namePtBr): array
+function findOrCreateLexicalChunkTag(PDO $pdo, int $userId, string $name, string $namePtBr, ?string $numero = null, ?string $siglaSimbolo = null): array
 {
     $name = cleanLexicalChunkTagText($name);
     $namePtBr = cleanLexicalChunkTagText($namePtBr);
+    $numero = normalizeNullableTagMetadataText($numero);
+    $siglaSimbolo = normalizeNullableTagMetadataText($siglaSimbolo);
     if ($name === '' || $namePtBr === '') {
         throw new InvalidArgumentException('Lexical chunk inválido.');
     }
 
-    $stmt = $pdo->prepare("\n        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, is_lexical_chunk\n        FROM flashcard_tags\n        WHERE user_id IN (?, 5)\n        ORDER BY
+    $stmt = $pdo->prepare("\n        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, is_lexical_chunk\n        FROM flashcard_tags\n        WHERE user_id IN (?, 5)\n        ORDER BY
             CASE WHEN is_lexical_chunk = 1 THEN 0 ELSE 1 END,
             CASE WHEN user_id = ? THEN 0 ELSE 1 END,
             id ASC\n    ");
@@ -382,11 +554,13 @@ function findOrCreateLexicalChunkTag(PDO $pdo, int $userId, string $name, string
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
         $rowName = !empty($row['name_encrypted']) ? Security::decryptData((string)$row['name_encrypted']) : '';
         $rowPtBr = !empty($row['name_pt_br_encrypted']) ? Security::decryptData((string)$row['name_pt_br_encrypted']) : '';
-        if (normalizeLexicalChunkLookupValue((string)$rowName) === $targetName && normalizeLexicalChunkLookupValue((string)$rowPtBr) === $targetPtBr) {
+        if (normalizeLexicalChunkLookupValue((string)$rowName) === $targetName && normalizeLexicalChunkLookupValue((string)$rowPtBr) === $targetPtBr && normalizeNullableTagMetadataText($row['numero'] ?? null) === $numero && normalizeNullableTagMetadataText($row['sigla_simbolo'] ?? null) === $siglaSimbolo) {
             return [
                 'tag_id' => (int)$row['id'],
                 'en' => trim((string)$rowName),
                 'pt_br' => trim((string)$rowPtBr),
+                'numero' => normalizeNullableTagMetadataText($row['numero'] ?? null),
+                'sigla_simbolo' => normalizeNullableTagMetadataText($row['sigla_simbolo'] ?? null),
                 'created' => false,
             ];
         }
@@ -395,12 +569,12 @@ function findOrCreateLexicalChunkTag(PDO $pdo, int $userId, string $name, string
     $color = resolveTagColorByCategory(['is_lexical_chunk' => 1]);
     $nameEnc = Security::encryptData($name);
     $namePtBrEnc = Security::encryptData($namePtBr);
-    $insert = $pdo->prepare("\n        INSERT INTO flashcard_tags\n            (user_id, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year)\n        VALUES (?, ?, ?, NULL, ?, 0, 0, 0, 1, 0, 0, 0, 0, 0)\n    ");
+    $insert = $pdo->prepare("\n        INSERT INTO flashcard_tags\n            (user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year)\n        VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 1, 0, 0, 0, 0, 0)\n    ");
 
     $tagId = 0;
     try {
         $pdo->beginTransaction();
-        $insert->execute([$userId, $nameEnc, $namePtBrEnc, $color]);
+        $insert->execute([$userId, $nameEnc, $namePtBrEnc, $numero, $siglaSimbolo, $color]);
         $tagId = (int)$pdo->lastInsertId();
         executeTagCreationCustomRules($pdo, $userId, $tagId);
         $pdo->commit();
@@ -414,6 +588,8 @@ function findOrCreateLexicalChunkTag(PDO $pdo, int $userId, string $name, string
         'tag_id' => $tagId,
         'en' => $name,
         'pt_br' => $namePtBr,
+        'numero' => $numero,
+        'sigla_simbolo' => $siglaSimbolo,
         'created' => true,
     ];
 }
@@ -421,17 +597,19 @@ function findOrCreateLexicalChunkTag(PDO $pdo, int $userId, string $name, string
 
 
 
-function findOrCreateLexicalChunkTagForOwner(PDO $pdo, int $ownerUserId, string $name, string $namePtBr): array
+function findOrCreateLexicalChunkTagForOwner(PDO $pdo, int $ownerUserId, string $name, string $namePtBr, ?string $numero = null, ?string $siglaSimbolo = null): array
 {
     $ownerUserId = $ownerUserId === 5 ? 5 : $ownerUserId;
     $name = cleanLexicalChunkTagText(expandEnglishContractionsForLexicalChunkTag($name));
     $namePtBr = cleanLexicalChunkTagText($namePtBr);
+    $numero = normalizeNullableTagMetadataText($numero);
+    $siglaSimbolo = normalizeNullableTagMetadataText($siglaSimbolo);
     if ($ownerUserId <= 0 || $name === '' || $namePtBr === '') {
         throw new InvalidArgumentException('Lexical chunk inválido.');
     }
 
     $stmt = $pdo->prepare("
-        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, is_lexical_chunk
+        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, is_lexical_chunk
         FROM flashcard_tags
         WHERE user_id = ?
         ORDER BY CASE WHEN is_lexical_chunk = 1 THEN 0 ELSE 1 END, id ASC
@@ -443,11 +621,13 @@ function findOrCreateLexicalChunkTagForOwner(PDO $pdo, int $ownerUserId, string 
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
         $rowName = !empty($row['name_encrypted']) ? Security::decryptData((string)$row['name_encrypted']) : '';
         $rowPtBr = !empty($row['name_pt_br_encrypted']) ? Security::decryptData((string)$row['name_pt_br_encrypted']) : '';
-        if (normalizeLexicalChunkLookupValue((string)$rowName) === $targetName && normalizeLexicalChunkLookupValue((string)$rowPtBr) === $targetPtBr) {
+        if (normalizeLexicalChunkLookupValue((string)$rowName) === $targetName && normalizeLexicalChunkLookupValue((string)$rowPtBr) === $targetPtBr && normalizeNullableTagMetadataText($row['numero'] ?? null) === $numero && normalizeNullableTagMetadataText($row['sigla_simbolo'] ?? null) === $siglaSimbolo) {
             return [
                 'tag_id' => (int)$row['id'],
                 'en' => trim((string)$rowName),
                 'pt_br' => trim((string)$rowPtBr),
+                'numero' => normalizeNullableTagMetadataText($row['numero'] ?? null),
+                'sigla_simbolo' => normalizeNullableTagMetadataText($row['sigla_simbolo'] ?? null),
                 'user_id' => (int)$row['user_id'],
                 'created' => false,
             ];
@@ -457,13 +637,13 @@ function findOrCreateLexicalChunkTagForOwner(PDO $pdo, int $ownerUserId, string 
     $color = resolveTagColorByCategory(['is_lexical_chunk' => 1]);
     $insert = $pdo->prepare("
         INSERT INTO flashcard_tags
-            (user_id, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year)
-        VALUES (?, ?, ?, NULL, ?, 0, 0, 0, 1, 0, 0, 0, 0, 0)
+            (user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year)
+        VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 1, 0, 0, 0, 0, 0)
     ");
 
     try {
         $pdo->beginTransaction();
-        $insert->execute([$ownerUserId, Security::encryptData($name), Security::encryptData($namePtBr), $color]);
+        $insert->execute([$ownerUserId, Security::encryptData($name), Security::encryptData($namePtBr), $numero, $siglaSimbolo, $color]);
         $tagId = (int)$pdo->lastInsertId();
         executeTagCreationCustomRules($pdo, $ownerUserId, $tagId);
         $pdo->commit();
@@ -477,6 +657,8 @@ function findOrCreateLexicalChunkTagForOwner(PDO $pdo, int $ownerUserId, string 
         'tag_id' => $tagId,
         'en' => $name,
         'pt_br' => $namePtBr,
+        'numero' => $numero,
+        'sigla_simbolo' => $siglaSimbolo,
         'user_id' => $ownerUserId,
         'created' => true,
     ];
@@ -507,16 +689,18 @@ function normalizeWordTagLookupValue(string $value): string
     return function_exists('mb_strtolower') ? mb_strtolower($value ?? '', 'UTF-8') : strtolower($value ?? '');
 }
 
-function findOrCreateWordTag(PDO $pdo, int $userId, string $name, string $namePtBr): array
+function findOrCreateWordTag(PDO $pdo, int $userId, string $name, string $namePtBr, ?string $numero = null, ?string $siglaSimbolo = null): array
 {
     $name = cleanWordTagText($name);
     $namePtBr = removeLeadingArticlesFromWordTagText(cleanLexicalChunkTagText($namePtBr), 'pt');
+    $numero = normalizeNullableTagMetadataText($numero);
+    $siglaSimbolo = normalizeNullableTagMetadataText($siglaSimbolo);
     if ($name === '' || $namePtBr === '') {
         throw new InvalidArgumentException('Tag de palavra inválida.');
     }
 
     $stmt = $pdo->prepare("
-        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, is_word
+        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, is_word
         FROM flashcard_tags
         WHERE user_id IN (?, 5)
         ORDER BY
@@ -531,11 +715,13 @@ function findOrCreateWordTag(PDO $pdo, int $userId, string $name, string $namePt
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
         $rowName = !empty($row['name_encrypted']) ? Security::decryptData((string)$row['name_encrypted']) : '';
         $rowPtBr = !empty($row['name_pt_br_encrypted']) ? Security::decryptData((string)$row['name_pt_br_encrypted']) : '';
-        if (normalizeWordTagLookupValue((string)$rowName) === $targetName && normalizeLexicalChunkLookupValue((string)$rowPtBr) === $targetPtBr) {
+        if (normalizeWordTagLookupValue((string)$rowName) === $targetName && normalizeLexicalChunkLookupValue((string)$rowPtBr) === $targetPtBr && normalizeNullableTagMetadataText($row['numero'] ?? null) === $numero && normalizeNullableTagMetadataText($row['sigla_simbolo'] ?? null) === $siglaSimbolo) {
             return [
                 'tag_id' => (int)$row['id'],
                 'en' => trim((string)$rowName),
                 'pt_br' => trim((string)$rowPtBr),
+                'numero' => normalizeNullableTagMetadataText($row['numero'] ?? null),
+                'sigla_simbolo' => normalizeNullableTagMetadataText($row['sigla_simbolo'] ?? null),
                 'created' => false,
             ];
         }
@@ -544,13 +730,13 @@ function findOrCreateWordTag(PDO $pdo, int $userId, string $name, string $namePt
     $color = resolveTagColorByCategory(['is_word' => 1]);
     $insert = $pdo->prepare("
         INSERT INTO flashcard_tags
-            (user_id, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year)
-        VALUES (?, ?, ?, NULL, ?, 0, 0, 0, 0, 0, 1, 0, 0, 0)
+            (user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year)
+        VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 1, 0, 0, 0)
     ");
 
     try {
         $pdo->beginTransaction();
-        $insert->execute([$userId, Security::encryptData($name), Security::encryptData($namePtBr), $color]);
+        $insert->execute([$userId, Security::encryptData($name), Security::encryptData($namePtBr), $numero, $siglaSimbolo, $color]);
         $tagId = (int)$pdo->lastInsertId();
         executeTagCreationCustomRules($pdo, $userId, $tagId);
         $pdo->commit();
@@ -564,22 +750,26 @@ function findOrCreateWordTag(PDO $pdo, int $userId, string $name, string $namePt
         'tag_id' => $tagId,
         'en' => $name,
         'pt_br' => $namePtBr,
+        'numero' => $numero,
+        'sigla_simbolo' => $siglaSimbolo,
         'created' => true,
     ];
 }
 
 
-function findOrCreateWordTagForOwner(PDO $pdo, int $ownerUserId, string $name, string $namePtBr): array
+function findOrCreateWordTagForOwner(PDO $pdo, int $ownerUserId, string $name, string $namePtBr, ?string $numero = null, ?string $siglaSimbolo = null): array
 {
     $ownerUserId = $ownerUserId === 5 ? 5 : $ownerUserId;
     $name = cleanWordTagText($name);
     $namePtBr = removeLeadingArticlesFromWordTagText(cleanLexicalChunkTagText($namePtBr), 'pt');
+    $numero = normalizeNullableTagMetadataText($numero);
+    $siglaSimbolo = normalizeNullableTagMetadataText($siglaSimbolo);
     if ($ownerUserId <= 0 || $name === '' || $namePtBr === '') {
         throw new InvalidArgumentException('Tag de palavra inválida.');
     }
 
     $stmt = $pdo->prepare("
-        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, is_word
+        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, is_word
         FROM flashcard_tags
         WHERE user_id = ?
         ORDER BY CASE WHEN is_word = 1 THEN 0 ELSE 1 END, id ASC
@@ -591,11 +781,13 @@ function findOrCreateWordTagForOwner(PDO $pdo, int $ownerUserId, string $name, s
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
         $rowName = !empty($row['name_encrypted']) ? Security::decryptData((string)$row['name_encrypted']) : '';
         $rowPtBr = !empty($row['name_pt_br_encrypted']) ? Security::decryptData((string)$row['name_pt_br_encrypted']) : '';
-        if (normalizeWordTagLookupValue((string)$rowName) === $targetName && normalizeLexicalChunkLookupValue((string)$rowPtBr) === $targetPtBr) {
+        if (normalizeWordTagLookupValue((string)$rowName) === $targetName && normalizeLexicalChunkLookupValue((string)$rowPtBr) === $targetPtBr && normalizeNullableTagMetadataText($row['numero'] ?? null) === $numero && normalizeNullableTagMetadataText($row['sigla_simbolo'] ?? null) === $siglaSimbolo) {
             return [
                 'tag_id' => (int)$row['id'],
                 'en' => trim((string)$rowName),
                 'pt_br' => trim((string)$rowPtBr),
+                'numero' => normalizeNullableTagMetadataText($row['numero'] ?? null),
+                'sigla_simbolo' => normalizeNullableTagMetadataText($row['sigla_simbolo'] ?? null),
                 'user_id' => (int)$row['user_id'],
                 'created' => false,
             ];
@@ -605,13 +797,13 @@ function findOrCreateWordTagForOwner(PDO $pdo, int $ownerUserId, string $name, s
     $color = resolveTagColorByCategory(['is_word' => 1]);
     $insert = $pdo->prepare("
         INSERT INTO flashcard_tags
-            (user_id, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year)
-        VALUES (?, ?, ?, NULL, ?, 0, 0, 0, 0, 0, 1, 0, 0, 0)
+            (user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year)
+        VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 1, 0, 0, 0)
     ");
 
     try {
         $pdo->beginTransaction();
-        $insert->execute([$ownerUserId, Security::encryptData($name), Security::encryptData($namePtBr), $color]);
+        $insert->execute([$ownerUserId, Security::encryptData($name), Security::encryptData($namePtBr), $numero, $siglaSimbolo, $color]);
         $tagId = (int)$pdo->lastInsertId();
         executeTagCreationCustomRules($pdo, $ownerUserId, $tagId);
         $pdo->commit();
@@ -625,6 +817,8 @@ function findOrCreateWordTagForOwner(PDO $pdo, int $ownerUserId, string $name, s
         'tag_id' => $tagId,
         'en' => $name,
         'pt_br' => $namePtBr,
+        'numero' => $numero,
+        'sigla_simbolo' => $siglaSimbolo,
         'user_id' => $ownerUserId,
         'created' => true,
     ];
@@ -638,24 +832,38 @@ function normalizeGeminiTagKind(string $kind): string
 
 function normalizeFrontSentenceTagCandidate(array $raw, string $panel): ?array
 {
-    $en = cleanWordTagText((string)($raw['en'] ?? $raw['english'] ?? $raw['name'] ?? ''));
-    $ptBr = removeLeadingArticlesFromWordTagText(cleanLexicalChunkTagText((string)($raw['pt_br'] ?? $raw['ptBr'] ?? $raw['translation'] ?? $raw['name_pt_br'] ?? '')), 'pt');
+    $metadata = normalizeGeneratedTagMetadata(
+        (string)($raw['en'] ?? $raw['english'] ?? $raw['name'] ?? ''),
+        (string)($raw['pt_br'] ?? $raw['ptBr'] ?? $raw['translation'] ?? $raw['name_pt_br'] ?? ''),
+        $raw['numero'] ?? $raw['number'] ?? null,
+        $raw['sigla_simbolo'] ?? $raw['symbol'] ?? $raw['abbreviation'] ?? null
+    );
+    $en = cleanWordTagText((string)$metadata['name']);
+    $ptBr = removeLeadingArticlesFromWordTagText(cleanLexicalChunkTagText((string)$metadata['name_pt_br']), 'pt');
     if ($en === '' || $ptBr === '') return null;
 
     return [
         'panel' => in_array($panel, ['subject', 'object'], true) ? $panel : 'object',
         'en' => $en,
         'pt_br' => $ptBr,
+        'numero' => $metadata['numero'],
+        'sigla_simbolo' => $metadata['sigla_simbolo'],
         'kind' => normalizeGeminiTagKind((string)($raw['kind'] ?? $raw['type'] ?? 'common_noun')),
     ];
 }
 
 function normalizeFrontSentenceChunkCandidate(array $raw): ?array
 {
-    $en = cleanLexicalChunkTagText(expandEnglishContractionsForLexicalChunkTag((string)($raw['en'] ?? $raw['english'] ?? $raw['name'] ?? '')));
-    $ptBr = cleanLexicalChunkTagText((string)($raw['pt_br'] ?? $raw['ptBr'] ?? $raw['translation'] ?? $raw['name_pt_br'] ?? ''));
+    $metadata = normalizeGeneratedTagMetadata(
+        expandEnglishContractionsForLexicalChunkTag((string)($raw['en'] ?? $raw['english'] ?? $raw['name'] ?? '')),
+        (string)($raw['pt_br'] ?? $raw['ptBr'] ?? $raw['translation'] ?? $raw['name_pt_br'] ?? ''),
+        $raw['numero'] ?? $raw['number'] ?? null,
+        $raw['sigla_simbolo'] ?? $raw['symbol'] ?? $raw['abbreviation'] ?? null
+    );
+    $en = cleanLexicalChunkTagText((string)$metadata['name']);
+    $ptBr = cleanLexicalChunkTagText((string)$metadata['name_pt_br']);
     if ($en === '' || $ptBr === '') return null;
-    return ['en' => $en, 'pt_br' => $ptBr];
+    return ['en' => $en, 'pt_br' => $ptBr, 'numero' => $metadata['numero'], 'sigla_simbolo' => $metadata['sigla_simbolo']];
 }
 
 function dedupeFrontSentenceCandidates(array $candidates, string $type): array
@@ -663,7 +871,7 @@ function dedupeFrontSentenceCandidates(array $candidates, string $type): array
     $seen = [];
     $deduped = [];
     foreach ($candidates as $candidate) {
-        $key = ($candidate['panel'] ?? $type) . '|' . normalizeLexicalChunkLookupValue((string)($candidate['en'] ?? '')) . '|' . normalizeLexicalChunkLookupValue((string)($candidate['pt_br'] ?? ''));
+        $key = ($candidate['panel'] ?? $type) . '|' . normalizeLexicalChunkLookupValue((string)($candidate['en'] ?? '')) . '|' . normalizeLexicalChunkLookupValue((string)($candidate['pt_br'] ?? '')) . '|' . normalizeNullableTagMetadataText($candidate['numero'] ?? null) . '|' . normalizeNullableTagMetadataText($candidate['sigla_simbolo'] ?? null);
         if ($key === '||' || isset($seen[$key])) continue;
         $seen[$key] = true;
         $deduped[] = $candidate;
@@ -854,7 +1062,7 @@ function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int 
 
     $tagPlaceholders = implode(',', array_fill(0, count($cardIds), '?'));
     $stmtTags = $pdo->prepare("
-        SELECT l.flashcard_id, t.id AS tag_id, t.user_id AS tag_user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color
+        SELECT l.flashcard_id, t.id AS tag_id, t.user_id AS tag_user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo, t.color
         FROM {$linkTable} l
         JOIN flashcard_tags t ON t.id = l.tag_id
         WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id IN (?, 5)
@@ -872,7 +1080,8 @@ function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int 
             'is_user_owned' => ((int)$tagRow['tag_user_id'] === $user_id),
             'name' => !empty($tagRow['name_encrypted']) ? Security::decryptData($tagRow['name_encrypted']) : '',
             'name_pt_br' => !empty($tagRow['name_pt_br_encrypted']) ? Security::decryptData($tagRow['name_pt_br_encrypted']) : null,
-            'numero' => isset($tagRow['numero']) ? (int)$tagRow['numero'] : null,
+            'numero' => normalizeNullableTagMetadataText($tagRow['numero'] ?? null),
+            'sigla_simbolo' => normalizeNullableTagMetadataText($tagRow['sigla_simbolo'] ?? null),
             'color' => $tagRow['color']
         ];
     }
@@ -3807,7 +4016,7 @@ Gere %d frases naturais em inglês para estudante de inglês. Cada frase deve co
 Para cada frase, identifique o sujeito, os objetos/verbos e poucos lexical chunks sucintos.
 
 Retorne exclusivamente JSON válido neste formato:
-{"examples":[{"english":"frase em inglês","pt_br":"tradução exata em pt-BR","subject":{"en":"sujeito da frase em inglês sem artigo","pt_br":"sujeito em pt-BR sem artigo"},"objects":[{"en":"substantivo não sujeito sem artigo ou verbo em inglês","pt_br":"tradução em pt-BR sem artigo quando for substantivo"}],"chunks":[{"en":"lexical chunk curto e útil","pt_br":"tradução desse chunk"}]}]}
+{"examples":[{"english":"frase em inglês","pt_br":"tradução exata em pt-BR","subject":{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional"},"objects":[{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional"}],"chunks":[{"en":"lexical chunk curto e útil ou texto por extenso em inglês","pt_br":"tradução ou texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional"}]}]}
 
 Regras:
 - Retorne exatamente %d item(ns) em examples.
@@ -3832,6 +4041,8 @@ Regras:
 - Não use artigos iniciais nas tags de subject e nas tags de substantivos em objects: use "dog", "cat", "avenue", não "the dog", "the cat", "the avenue".
 - A única exceção para pontos em tags é quando o próprio lexical chunk for um padrão com reticências, como "Whether ... or ..." ("Seja ... ou ..."). Use reticências apenas nos chunks, nunca em subject ou objects.
 - Use traduções curtas para as tags e mantenha a ordem natural dos chunks.
+- Quando a tag for um número, valor, medida ou quantidade (ex.: "2010", "R$42,40", "U$10,15", "1,60m", "49kg", "1.000.000.000"), coloque o valor literal em numero e coloque os textos por extenso em en e pt_br.
+- Quando existir sigla ou símbolo conhecido (ex.: "°C", "π", "TCU"), coloque-o em sigla_simbolo. Caso não exista, use null ou omita.
 - Não use markdown, comentários ou texto fora do JSON.
 PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $example_count, $tag_text_en, $tag_text_pt_br, $tag_text_en);
 
@@ -3904,12 +4115,13 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         }
 
         try {
-            $subject = findOrCreateWordTag(
-                $pdo,
-                (int)$user_id,
+            $subjectMetadata = normalizeGeneratedTagMetadata(
                 (string)($subject_raw['en'] ?? $subject_raw['english'] ?? $subject_raw['name'] ?? ''),
-                (string)($subject_raw['pt_br'] ?? $subject_raw['ptBr'] ?? $subject_raw['translation'] ?? $subject_raw['name_pt_br'] ?? '')
+                (string)($subject_raw['pt_br'] ?? $subject_raw['ptBr'] ?? $subject_raw['translation'] ?? $subject_raw['name_pt_br'] ?? ''),
+                $subject_raw['numero'] ?? $subject_raw['number'] ?? null,
+                $subject_raw['sigla_simbolo'] ?? $subject_raw['symbol'] ?? $subject_raw['abbreviation'] ?? null
             );
+            $subject = findOrCreateWordTag($pdo, (int)$user_id, (string)$subjectMetadata['name'], (string)$subjectMetadata['name_pt_br'], $subjectMetadata['numero'], $subjectMetadata['sigla_simbolo']);
         } catch (Throwable $e) {
             continue;
         }
@@ -3918,13 +4130,19 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         $seen_objects = [];
         foreach ($objects_raw as $object_raw) {
             if (!is_array($object_raw)) continue;
-            $object_en = (string)($object_raw['en'] ?? $object_raw['english'] ?? $object_raw['name'] ?? '');
-            $object_pt_br = (string)($object_raw['pt_br'] ?? $object_raw['ptBr'] ?? $object_raw['translation'] ?? $object_raw['name_pt_br'] ?? '');
-            $object_key = normalizeWordTagLookupValue($object_en) . '|' . normalizeLexicalChunkLookupValue($object_pt_br);
+            $objectMetadata = normalizeGeneratedTagMetadata(
+                (string)($object_raw['en'] ?? $object_raw['english'] ?? $object_raw['name'] ?? ''),
+                (string)($object_raw['pt_br'] ?? $object_raw['ptBr'] ?? $object_raw['translation'] ?? $object_raw['name_pt_br'] ?? ''),
+                $object_raw['numero'] ?? $object_raw['number'] ?? null,
+                $object_raw['sigla_simbolo'] ?? $object_raw['symbol'] ?? $object_raw['abbreviation'] ?? null
+            );
+            $object_en = (string)$objectMetadata['name'];
+            $object_pt_br = (string)$objectMetadata['name_pt_br'];
+            $object_key = normalizeWordTagLookupValue($object_en) . '|' . normalizeLexicalChunkLookupValue($object_pt_br) . '|' . normalizeNullableTagMetadataText($objectMetadata['numero']) . '|' . normalizeNullableTagMetadataText($objectMetadata['sigla_simbolo']);
             if ($object_key === '|' || isset($seen_objects[$object_key])) continue;
             $seen_objects[$object_key] = true;
             try {
-                $objects[] = findOrCreateWordTag($pdo, (int)$user_id, $object_en, $object_pt_br);
+                $objects[] = findOrCreateWordTag($pdo, (int)$user_id, $object_en, $object_pt_br, $objectMetadata['numero'], $objectMetadata['sigla_simbolo']);
             } catch (Throwable $e) {
                 continue;
             }
@@ -3934,14 +4152,20 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         $seen_chunks = [];
         foreach ($chunks_raw as $chunk) {
             if (!is_array($chunk)) continue;
-            $chunk_en = cleanLexicalChunkTagText(expandEnglishContractionsForLexicalChunkTag((string)($chunk['en'] ?? $chunk['english'] ?? $chunk['name'] ?? '')));
-            $chunk_pt_br = cleanLexicalChunkTagText((string)($chunk['pt_br'] ?? $chunk['ptBr'] ?? $chunk['translation'] ?? $chunk['name_pt_br'] ?? ''));
+            $chunkMetadata = normalizeGeneratedTagMetadata(
+                expandEnglishContractionsForLexicalChunkTag((string)($chunk['en'] ?? $chunk['english'] ?? $chunk['name'] ?? '')),
+                (string)($chunk['pt_br'] ?? $chunk['ptBr'] ?? $chunk['translation'] ?? $chunk['name_pt_br'] ?? ''),
+                $chunk['numero'] ?? $chunk['number'] ?? null,
+                $chunk['sigla_simbolo'] ?? $chunk['symbol'] ?? $chunk['abbreviation'] ?? null
+            );
+            $chunk_en = cleanLexicalChunkTagText((string)$chunkMetadata['name']);
+            $chunk_pt_br = cleanLexicalChunkTagText((string)$chunkMetadata['name_pt_br']);
             if ($chunk_en === '' || $chunk_pt_br === '') continue;
-            $dedupe_key = normalizeLexicalChunkLookupValue($chunk_en) . '|' . normalizeLexicalChunkLookupValue($chunk_pt_br);
+            $dedupe_key = normalizeLexicalChunkLookupValue($chunk_en) . '|' . normalizeLexicalChunkLookupValue($chunk_pt_br) . '|' . normalizeNullableTagMetadataText($chunkMetadata['numero']) . '|' . normalizeNullableTagMetadataText($chunkMetadata['sigla_simbolo']);
             if (isset($seen_chunks[$dedupe_key])) continue;
             $seen_chunks[$dedupe_key] = true;
             try {
-                $chunks[] = findOrCreateLexicalChunkTag($pdo, (int)$user_id, $chunk_en, $chunk_pt_br);
+                $chunks[] = findOrCreateLexicalChunkTag($pdo, (int)$user_id, $chunk_en, $chunk_pt_br, $chunkMetadata['numero'], $chunkMetadata['sigla_simbolo']);
                 if (count($chunks) >= 4) break;
             } catch (Throwable $e) {
                 die(json_encode(['status' => 'error', 'message' => 'Erro ao criar tag de lexical chunk: ' . $chunk_en]));
@@ -4043,7 +4267,7 @@ Frase:
 %s
 
 Retorne somente JSON válido neste formato:
-{"subjects":[{"en":"sujeito sem artigo","pt_br":"tradução curta sem artigo","kind":"common_noun|proper_noun|verb|other"}],"objects":[{"en":"substantivo não sujeito ou verbo principal sem artigo","pt_br":"tradução curta sem artigo","kind":"common_noun|proper_noun|verb|other"}],"chunks":[{"en":"lexical chunk curto","pt_br":"tradução curta"}]}
+{"subjects":[{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional","kind":"common_noun|proper_noun|verb|other"}],"objects":[{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional","kind":"common_noun|proper_noun|verb|other"}],"chunks":[{"en":"lexical chunk curto ou texto por extenso em inglês","pt_br":"tradução curta ou texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional"}]}
 
 Regras:
 - subjects deve conter o sujeito gramatical principal da frase, sem artigos iniciais.
@@ -4054,6 +4278,8 @@ Regras:
 - chunks deve conter de 2 a 6 lexical chunks curtos e reutilizáveis: verbos ou expressões verbais, preposições, expressões de lugar, tempo, modo, causa, finalidade, frequência, comparação, condição, afirmação, negação ou dúvida.
 - Não inclua o sujeito ou substantivos soltos como lexical chunks.
 - Nas tags, remova pontuação de frase e expanda contrações: use "do not", "is", "are", "will", etc.
+- Quando a tag for um número, valor, medida ou quantidade (ex.: "2010", "R$42,40", "U$10,15", "1,60m", "49kg", "1.000.000.000"), coloque o valor literal em numero e coloque os textos por extenso em en e pt_br.
+- Quando existir sigla ou símbolo conhecido (ex.: "°C", "π", "TCU"), coloque-o em sigla_simbolo. Caso não exista, use null ou omita.
 - Não use markdown, comentários ou texto fora do JSON.
 PROMPT, $sentence);
 
@@ -4135,7 +4361,7 @@ PROMPT, $sentence);
     foreach ($wordCandidates as $candidate) {
         $ownerId = (($candidate['kind'] ?? '') === 'proper_noun' && $properOwner === 'user') ? (int)$user_id : 5;
         try {
-            $tag = findOrCreateWordTagForOwner($pdo, $ownerId, (string)$candidate['en'], (string)$candidate['pt_br']);
+            $tag = findOrCreateWordTagForOwner($pdo, $ownerId, (string)$candidate['en'], (string)$candidate['pt_br'], normalizeNullableTagMetadataText($candidate['numero'] ?? null), normalizeNullableTagMetadataText($candidate['sigla_simbolo'] ?? null));
             $tag['kind'] = $candidate['kind'];
             if (($candidate['panel'] ?? '') === 'subject') $createdSubjects[] = $tag;
             else $createdObjects[] = $tag;
@@ -4146,7 +4372,7 @@ PROMPT, $sentence);
 
     foreach ($chunkCandidates as $candidate) {
         try {
-            $createdChunks[] = findOrCreateLexicalChunkTagForOwner($pdo, 5, (string)$candidate['en'], (string)$candidate['pt_br']);
+            $createdChunks[] = findOrCreateLexicalChunkTagForOwner($pdo, 5, (string)$candidate['en'], (string)$candidate['pt_br'], normalizeNullableTagMetadataText($candidate['numero'] ?? null), normalizeNullableTagMetadataText($candidate['sigla_simbolo'] ?? null));
         } catch (Throwable $e) {
             die(json_encode(['status' => 'error', 'message' => 'Erro ao criar tag de lexical chunk: ' . (string)$candidate['en']]));
         }
@@ -4728,6 +4954,7 @@ elseif ($action === 'list_tags') {
             t.name_encrypted,
             t.name_pt_br_encrypted,
             t.numero,
+            t.sigla_simbolo,
             t.color,
             t.is_book,
             t.is_verb_tense,
@@ -4788,6 +5015,7 @@ elseif ($action === 'list_user_tags_by_subject_card_count' || $action === 'list_
             t.name_encrypted,
             t.name_pt_br_encrypted,
             t.numero,
+            t.sigla_simbolo,
             t.color,
             COALESCE(subject_counts.subjects_count, 0) AS subjects_count
         FROM flashcard_tags t
@@ -4851,6 +5079,7 @@ elseif ($action === 'list_saved_filters') {
             t.name_encrypted,
             t.name_pt_br_encrypted,
             t.numero,
+            t.sigla_simbolo,
             t.color,
             COALESCE(subject_counts.subjects_count, 0) AS subjects_count
         FROM filtros f
@@ -4927,8 +5156,8 @@ elseif ($action === 'remove_saved_filter') {
 elseif ($action === 'create_tag') {
     $name = trim((string)($input['name'] ?? ''));
     $name_pt_br = trim((string)($input['name_pt_br'] ?? ''));
-    $numeroRaw = $input['numero'] ?? null;
-    $numero = ($numeroRaw === '' || $numeroRaw === null) ? null : (int)$numeroRaw;
+    $numero = normalizeNullableTagMetadataText($input['numero'] ?? null);
+    $siglaSimbolo = normalizeNullableTagMetadataText($input['sigla_simbolo'] ?? null);
     $is_book = !empty($input['is_book']) ? 1 : 0;
     $is_verb_tense = !empty($input['is_verb_tense']) ? 1 : 0;
     $is_sentence_type = !empty($input['is_sentence_type']) ? 1 : 0;
@@ -4940,7 +5169,7 @@ elseif ($action === 'create_tag') {
     $is_year = !empty($input['is_year']) ? 1 : 0;
     if ($name === '') die(json_encode(['status' => 'error', 'message' => 'Nome da tag é obrigatório.']));
     if ($name_pt_br === '') $name_pt_br = null;
-    if (tagCombinationAlreadyExists($pdo, $user_id, $name, $name_pt_br, $numero)) {
+    if (tagCombinationAlreadyExists($pdo, $user_id, $name, $name_pt_br, $numero, $siglaSimbolo)) {
         die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com essa combinação de nome, nome pt-br e número.']));
     }
 
@@ -4958,11 +5187,11 @@ elseif ($action === 'create_tag') {
 
     $name_enc = Security::encryptData($name);
     $name_pt_br_enc = $name_pt_br !== null ? Security::encryptData($name_pt_br) : null;
-    $stmt = $pdo->prepare("INSERT INTO flashcard_tags (user_id, name_encrypted, name_pt_br_encrypted, numero, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $pdo->prepare("INSERT INTO flashcard_tags (user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $tagId = 0;
     try {
         $pdo->beginTransaction();
-        $stmt->execute([$user_id, $name_enc, $name_pt_br_enc, $numero, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year]);
+        $stmt->execute([$user_id, $name_enc, $name_pt_br_enc, $numero, $siglaSimbolo, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year]);
         $tagId = (int)$pdo->lastInsertId();
         executeTagCreationCustomRules($pdo, $user_id, $tagId);
         $pdo->commit();
@@ -4985,8 +5214,13 @@ elseif ($action === 'update_tag') {
     $tag_id = (int)($input['id'] ?? 0);
     $name = trim((string)($input['name'] ?? ''));
     $name_pt_br = trim((string)($input['name_pt_br'] ?? ''));
-    $numeroRaw = $input['numero'] ?? null;
-    $numero = ($numeroRaw === '' || $numeroRaw === null) ? null : (int)$numeroRaw;
+    $numero = normalizeNullableTagMetadataText($input['numero'] ?? null);
+    $siglaSimbolo = normalizeNullableTagMetadataText($input['sigla_simbolo'] ?? null);
+    if (!array_key_exists('sigla_simbolo', $input) && $tag_id > 0) {
+        $currentMetaStmt = $pdo->prepare('SELECT sigla_simbolo FROM flashcard_tags WHERE id = ? AND user_id = ? LIMIT 1');
+        $currentMetaStmt->execute([$tag_id, $user_id]);
+        $siglaSimbolo = normalizeNullableTagMetadataText($currentMetaStmt->fetchColumn() ?: null);
+    }
     $name = preg_replace('/\s+/u', ' ', $name);
     $name_pt_br = preg_replace('/\s+/u', ' ', $name_pt_br);
     $is_book = !empty($input['is_book']) ? 1 : 0;
@@ -5003,7 +5237,7 @@ elseif ($action === 'update_tag') {
         die(json_encode(['status' => 'error', 'message' => 'Dados da tag inválidos.']));
     }
     if ($name_pt_br === '') $name_pt_br = null;
-    if (tagCombinationAlreadyExists($pdo, $user_id, $name, $name_pt_br, $numero, $tag_id)) {
+    if (tagCombinationAlreadyExists($pdo, $user_id, $name, $name_pt_br, $numero, $siglaSimbolo, $tag_id)) {
         die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com essa combinação de nome, nome pt-br e número.']));
     }
 
@@ -5020,9 +5254,9 @@ elseif ($action === 'update_tag') {
         'is_day' => $is_day,
         'is_year' => $is_year
     ]);
-    $stmt = $pdo->prepare("UPDATE flashcard_tags SET name_encrypted = ?, name_pt_br_encrypted = ?, numero = ?, color = ?, is_book = ?, is_verb_tense = ?, is_sentence_type = ?, is_lexical_chunk = ?, is_relation_type = ?, is_word = ?, is_month = ?, is_day = ?, is_year = ? WHERE id = ? AND user_id = ?");
+    $stmt = $pdo->prepare("UPDATE flashcard_tags SET name_encrypted = ?, name_pt_br_encrypted = ?, numero = ?, sigla_simbolo = ?, color = ?, is_book = ?, is_verb_tense = ?, is_sentence_type = ?, is_lexical_chunk = ?, is_relation_type = ?, is_word = ?, is_month = ?, is_day = ?, is_year = ? WHERE id = ? AND user_id = ?");
     try {
-        $stmt->execute([$name_enc, $name_pt_br_enc, $numero, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year, $tag_id, $user_id]);
+        $stmt->execute([$name_enc, $name_pt_br_enc, $numero, $siglaSimbolo, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year, $tag_id, $user_id]);
     } catch (PDOException $e) {
         die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com esse nome.']));
     }
@@ -5325,11 +5559,11 @@ elseif ($action === 'get_tag_family') {
         $relationTypeHierarchy[$typeId] = (int)($typeRow['hierarquia'] ?? 0);
     }
 
-    $stmtChildren = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color, tf.tipo_de_relacao FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_child WHERE tf.id_user IN (?, 5) AND tf.id_tag_mother = ? AND t.user_id IN (?,5)");
+    $stmtChildren = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo, t.color, tf.tipo_de_relacao FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_child WHERE tf.id_user IN (?, 5) AND tf.id_tag_mother = ? AND t.user_id IN (?,5)");
     $stmtChildren->execute([$user_id, $tag_id, $user_id]);
     $children = $stmtChildren->fetchAll(PDO::FETCH_ASSOC);
 
-    $stmtMothers = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.color, tf.tipo_de_relacao FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_mother WHERE tf.id_user IN (?, 5) AND tf.id_tag_child = ? AND t.user_id IN (?,5)");
+    $stmtMothers = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo, t.color, tf.tipo_de_relacao FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_mother WHERE tf.id_user IN (?, 5) AND tf.id_tag_child = ? AND t.user_id IN (?,5)");
     $stmtMothers->execute([$user_id, $tag_id, $user_id]);
     $mothers = $stmtMothers->fetchAll(PDO::FETCH_ASSOC);
 
@@ -5372,7 +5606,7 @@ elseif ($action === 'get_tag_family') {
             if (empty($connectedIds)) continue;
 
             $idPlaceholders = implode(',', array_fill(0, count($connectedIds), '?'));
-            $tagStmt = $pdo->prepare("SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, color FROM flashcard_tags WHERE id IN ($idPlaceholders) AND user_id IN (?,5)");
+            $tagStmt = $pdo->prepare("SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, color FROM flashcard_tags WHERE id IN ($idPlaceholders) AND user_id IN (?,5)");
             $tagStmt->execute(array_merge($connectedIds, [$user_id]));
             foreach ($tagStmt->fetchAll(PDO::FETCH_ASSOC) as $connectedTag) {
                 $connectedTag['tipo_de_relacao'] = $relationTypeId;
