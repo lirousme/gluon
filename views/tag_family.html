@@ -24,7 +24,7 @@
     .sequence-reorder-list {
       align-items: center;
       min-height: 2.25rem;
-      transition: background-color 160ms ease, box-shadow 160ms ease;
+      transition: background-color 240ms ease, box-shadow 240ms ease, padding 240ms ease, margin 240ms ease;
     }
 
     .sequence-reorder-list.sequence-drag-active {
@@ -36,7 +36,7 @@
     }
 
     .sequence-tag-chip {
-      transition: transform 160ms ease, opacity 160ms ease, box-shadow 160ms ease, margin 160ms ease;
+      transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, box-shadow 260ms ease, margin 260ms ease;
     }
 
     .sequence-tag-chip.sequence-dragging {
@@ -46,12 +46,25 @@
 
     .sequence-drop-placeholder {
       flex: 0 0 auto;
+      width: var(--sequence-placeholder-width, 0px);
+      height: var(--sequence-placeholder-height, 0px);
+      margin-inline: var(--sequence-placeholder-margin, 0px);
+      opacity: var(--sequence-placeholder-opacity, 0);
       border: 1px dashed rgba(125, 211, 252, 0.92);
       border-radius: 9999px;
       background: rgba(14, 165, 233, 0.16);
       box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.08);
-      animation: sequenceDropPulse 900ms ease-in-out infinite;
+      animation: sequenceDropPulse 1200ms ease-in-out infinite;
       pointer-events: none;
+      transform: scaleX(var(--sequence-placeholder-scale, 0.55));
+      transform-origin: center;
+      transition: width 340ms cubic-bezier(0.22, 1, 0.36, 1), height 260ms ease, margin 340ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, transform 340ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .sequence-drop-placeholder.sequence-drop-placeholder-visible {
+      --sequence-placeholder-opacity: 1;
+      --sequence-placeholder-margin: 0.375rem;
+      --sequence-placeholder-scale: 1;
     }
 
     @keyframes sequenceDropPulse {
@@ -121,7 +134,7 @@
   }, { passive: false });
 })();
 const params = new URLSearchParams(window.location.search);
-const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: null, removalRelationType: null, tags: [], family: {mothers:[], children:[]}, relationTypes: [], savedFilters: [], sessionUserId: null, editingRelationTypeId: null, reorderRelationType: null, draggedSequenceTagId: null, sequenceDropTargetId: null, sequenceDropPosition: 'before' };
+const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: null, removalRelationType: null, tags: [], family: {mothers:[], children:[]}, relationTypes: [], savedFilters: [], sessionUserId: null, editingRelationTypeId: null, reorderRelationType: null, draggedSequenceTagId: null, sequenceDropTargetId: null, sequenceDropPosition: 'before', sequenceDropPreviewTargetId: null, sequenceDropPreviewPosition: 'before', sequenceDropPreviewFrame: null };
 const title = document.getElementById('tagFamilyMainTitle');
 title.textContent = state.tagName || 'Tag';
 
@@ -323,47 +336,84 @@ function getSequenceDropPlaceholder(){
 }
 function clearSequenceDragPreview(){
   const placeholder=document.getElementById('sequenceDropPlaceholder');
-  if(placeholder) placeholder.remove();
+  if(state.sequenceDropPreviewFrame){
+    cancelAnimationFrame(state.sequenceDropPreviewFrame);
+    state.sequenceDropPreviewFrame=null;
+  }
+  if(placeholder){
+    placeholder.classList.remove('sequence-drop-placeholder-visible');
+    placeholder.style.setProperty('--sequence-placeholder-width','0px');
+    placeholder.style.setProperty('--sequence-placeholder-height','0px');
+    setTimeout(()=>{if(!placeholder.classList.contains('sequence-drop-placeholder-visible')) placeholder.remove();},220);
+  }
   document.querySelectorAll('.sequence-dragging').forEach((el)=>el.classList.remove('sequence-dragging'));
   document.querySelectorAll('.sequence-drag-active').forEach((el)=>el.classList.remove('sequence-drag-active'));
   state.draggedSequenceTagId=null;
   state.sequenceDropTargetId=null;
   state.sequenceDropPosition='before';
+  state.sequenceDropPreviewTargetId=null;
+  state.sequenceDropPreviewPosition='before';
+}
+function setSequencePlaceholderSize(placeholder,width,height,{animateOpen=false}={}){
+  if(animateOpen) placeholder.classList.remove('sequence-drop-placeholder-visible');
+  placeholder.style.setProperty('--sequence-placeholder-width',`${Math.max(width,48)}px`);
+  placeholder.style.setProperty('--sequence-placeholder-height',`${Math.max(height,28)}px`);
+  requestAnimationFrame(()=>placeholder.classList.add('sequence-drop-placeholder-visible'));
 }
 function updateSequenceDropPreview(list,targetEl,event){
-  const relationType=Number(list?.dataset.sequenceList||0);
-  if(!list||state.reorderRelationType!==relationType||!state.draggedSequenceTagId) return;
-  list.classList.add('sequence-drag-active');
-  const placeholder=getSequenceDropPlaceholder();
-  const draggedEl=list.querySelector(`[data-family-tag-id="${state.draggedSequenceTagId}"]`);
-  const referenceEl=targetEl?.closest?.('[data-family-tag-id]');
-  if(referenceEl===draggedEl) return;
-  if(referenceEl){
-    const rect=referenceEl.getBoundingClientRect();
-    const isAfter=event.clientX>rect.left+(rect.width/2);
-    placeholder.style.width=`${Math.max(rect.width, 48)}px`;
-    placeholder.style.height=`${Math.max(rect.height, 28)}px`;
-    state.sequenceDropTargetId=Number(referenceEl.dataset.familyTagId||0);
-    state.sequenceDropPosition=isAfter?'after':'before';
-    referenceEl.insertAdjacentElement(isAfter?'afterend':'beforebegin',placeholder);
-    return;
-  }
-  const chips=[...list.querySelectorAll('[data-family-tag-id]')].filter((chip)=>chip!==draggedEl);
-  const lastChip=chips[chips.length-1];
-  if(lastChip){
-    const rect=lastChip.getBoundingClientRect();
-    placeholder.style.width=`${Math.max(rect.width, 48)}px`;
-    placeholder.style.height=`${Math.max(rect.height, 28)}px`;
-    lastChip.insertAdjacentElement('afterend',placeholder);
-    state.sequenceDropTargetId=Number(lastChip.dataset.familyTagId||0);
-    state.sequenceDropPosition='after';
-  }else{
-    placeholder.style.width='4rem';
-    placeholder.style.height='1.75rem';
-    list.appendChild(placeholder);
-    state.sequenceDropTargetId=state.draggedSequenceTagId;
-    state.sequenceDropPosition='before';
-  }
+  if(state.sequenceDropPreviewFrame) cancelAnimationFrame(state.sequenceDropPreviewFrame);
+  state.sequenceDropPreviewFrame=requestAnimationFrame(()=>{
+    state.sequenceDropPreviewFrame=null;
+    const relationType=Number(list?.dataset.sequenceList||0);
+    if(!list||state.reorderRelationType!==relationType||!state.draggedSequenceTagId) return;
+    list.classList.add('sequence-drag-active');
+    const placeholder=getSequenceDropPlaceholder();
+    if(targetEl?.closest?.('#sequenceDropPlaceholder')) return;
+    const draggedEl=list.querySelector(`[data-family-tag-id="${state.draggedSequenceTagId}"]`);
+    const referenceEl=targetEl?.closest?.('[data-family-tag-id]');
+    if(referenceEl===draggedEl) return;
+    let targetId=0;
+    let dropPosition='before';
+    let insertMode='beforebegin';
+    let anchorEl=referenceEl;
+    if(referenceEl){
+      const rect=referenceEl.getBoundingClientRect();
+      const horizontalAfter=event.clientX>rect.left+(rect.width/2);
+      const verticalAfter=event.clientY>rect.top+(rect.height/2);
+      const isAfter=Math.abs(event.clientY-(rect.top+(rect.height/2)))>Math.max(rect.height*0.45,14)?verticalAfter:horizontalAfter;
+      targetId=Number(referenceEl.dataset.familyTagId||0);
+      dropPosition=isAfter?'after':'before';
+      insertMode=isAfter?'afterend':'beforebegin';
+      const previewChanged=state.sequenceDropPreviewTargetId!==targetId||state.sequenceDropPreviewPosition!==dropPosition;
+      setSequencePlaceholderSize(placeholder,rect.width,rect.height,{animateOpen:previewChanged});
+    }else{
+      const chips=[...list.querySelectorAll('[data-family-tag-id]')].filter((chip)=>chip!==draggedEl);
+      anchorEl=chips[chips.length-1]||null;
+      if(anchorEl){
+        const rect=anchorEl.getBoundingClientRect();
+        targetId=Number(anchorEl.dataset.familyTagId||0);
+        dropPosition='after';
+        insertMode='afterend';
+        const previewChanged=state.sequenceDropPreviewTargetId!==targetId||state.sequenceDropPreviewPosition!==dropPosition;
+        setSequencePlaceholderSize(placeholder,rect.width,rect.height,{animateOpen:previewChanged});
+      }else{
+        targetId=state.draggedSequenceTagId;
+        const previewChanged=state.sequenceDropPreviewTargetId!==targetId||state.sequenceDropPreviewPosition!==dropPosition;
+        setSequencePlaceholderSize(placeholder,64,28,{animateOpen:previewChanged});
+      }
+    }
+    if(!targetId) return;
+    state.sequenceDropTargetId=targetId;
+    state.sequenceDropPosition=dropPosition;
+    const previewChanged=state.sequenceDropPreviewTargetId!==targetId||state.sequenceDropPreviewPosition!==dropPosition;
+    state.sequenceDropPreviewTargetId=targetId;
+    state.sequenceDropPreviewPosition=dropPosition;
+    if(anchorEl){
+      if(previewChanged || placeholder.parentElement!==list) anchorEl.insertAdjacentElement(insertMode,placeholder);
+    }else if(previewChanged || placeholder.parentElement!==list){
+      list.appendChild(placeholder);
+    }
+  });
 }
 function renderFamily(){
   const mk=(arr,type,{allowRemoval=true,sequenceMode=false}={})=>{
