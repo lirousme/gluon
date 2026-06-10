@@ -272,10 +272,6 @@ function getTagRelationType(tag={}){
   return 0;
 }
 function renderFamily(){
-  const relationTypeHasZeroHierarchy=(type)=>{
-    const found=getRelationTypeById(type);
-    return Boolean(found) && Number(found.hierarquia)===0;
-  };
   const mk=(arr,type,{allowRemoval=true}={})=>{
     if(!arr.length) return '<span class="text-xs text-slate-400">Nenhuma</span>';
     const isRemovalMode=allowRemoval && state.removalRelationType===type;
@@ -299,11 +295,6 @@ function renderFamily(){
     const mothers=state.family.mothers.filter((tag)=>getTagRelationType(tag)===type).map((tag)=>({...tag,__relationRole:'mother'}));
     const isSelected=state.selectedRelationType===type;
     const selectedClass=isSelected?'ring-2 ring-violet-400 border-violet-500/80':'border-slate-700/80';
-    if(relationTypeHasZeroHierarchy(type)){
-      const descendantsSection=`<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer">${buildSectionHeader(type,{labelPrefix:'(Descendentes) '})}<div><div class="flex flex-wrap gap-2">${mk(children,type)}</div></div></div>`;
-      const ancestorsSection=`<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer">${buildSectionHeader(type,{labelPrefix:'(Ancestrais) ',showActions:false,showRemovalButton:false})}<div><div class="flex flex-wrap gap-2">${mk(mothers,type,{allowRemoval:false})}</div></div></div>`;
-      return `${descendantsSection}${ancestorsSection}`;
-    }
     if(!relationTypeUsesHierarchy(type)){
       return `<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer">${buildSectionHeader(type)}<div><div class="flex flex-wrap gap-2">${mk(children,type)}</div></div></div>`;
     }
