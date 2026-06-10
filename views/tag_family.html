@@ -83,7 +83,7 @@
   }, { passive: false });
 })();
 const params = new URLSearchParams(window.location.search);
-const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: null, removalRelationType: null, tags: [], family: {mothers:[], children:[]}, relationTypes: [], savedFilters: [], sessionUserId: null, editingRelationTypeId: null };
+const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: null, removalRelationType: null, tags: [], family: {mothers:[], children:[]}, relationTypes: [], savedFilters: [], sessionUserId: null, editingRelationTypeId: null, reorderRelationType: null, draggedSequenceTagId: null };
 const title = document.getElementById('tagFamilyMainTitle');
 title.textContent = state.tagName || 'Tag';
 
@@ -245,10 +245,12 @@ function getRelationTypeLabel(type){
   const found=state.relationTypes.find((item)=>Number(item.id)===Number(type));
   return found?.nome || `Tipo de relação ${type}`;
 }
-function relationTypeUsesHierarchy(type){
+function getRelationTypeHierarchy(type){
   const found=state.relationTypes.find((item)=>Number(item.id)===Number(type));
-  return Number(found?.hierarquia||0)===1;
+  return Number(found?.hierarquia||0);
 }
+function relationTypeUsesHierarchy(type){return getRelationTypeHierarchy(type)===1;}
+function relationTypeUsesSequence(type){return getRelationTypeHierarchy(type)===2;}
 function openCreateRelationTypeModal(){
   document.getElementById('createRelationTypeNameInput').value='';
   document.getElementById('createRelationTypeHierarchyInput').value='0';
@@ -272,19 +274,24 @@ function getTagRelationType(tag={}){
   return 0;
 }
 function renderFamily(){
-  const mk=(arr,type,{allowRemoval=true}={})=>{
+  const mk=(arr,type,{allowRemoval=true,sequenceMode=false}={})=>{
     if(!arr.length) return '<span class="text-xs text-slate-400">Nenhuma</span>';
     const isRemovalMode=allowRemoval && state.removalRelationType===type;
+    const isReorderMode=sequenceMode && state.reorderRelationType===type;
     const numeroPtBrCounts = buildNumeroPtBrCounts(arr);
-    return arr.map(t=>`<button type="button" data-family-tag-id="${Number(t.id)}" data-relation-role="${t.__relationRole||'child'}" data-family-allow-removal="${allowRemoval?'1':'0'}" class="px-2 py-1 rounded-full text-xs border transition-colors ${getTagOwnershipClass(t,{removalMode:isRemovalMode})} ${isRemovalMode?'cursor-pointer':''}" title="${isRemovalMode?'Remover tag desta família':'Abrir família da tag'}">${renderTagButtonContent(t, numeroPtBrCounts)}</button>`).join('');
+    return arr.map((t,index)=>`<button type="button" data-family-tag-id="${Number(t.id)}" data-relation-role="${t.__relationRole||'child'}" data-family-allow-removal="${allowRemoval?'1':'0'}" data-sequence-index="${index}" draggable="${isReorderMode?'true':'false'}" class="px-2 py-1 rounded-full text-xs border transition-colors ${getTagOwnershipClass(t,{removalMode:isRemovalMode})} ${isRemovalMode?'cursor-pointer':''} ${isReorderMode?'cursor-move ring-1 ring-sky-300/70':''}" title="${isReorderMode?'Arraste para reordenar a sequência':(isRemovalMode?'Remover tag desta família':'Abrir família da tag')}">${isReorderMode?'<i class="fa-solid fa-grip-vertical mr-1 text-sky-200"></i>':''}${renderTagButtonContent(t, numeroPtBrCounts)}</button>`).join('');
   };
-  const buildSectionHeader=(type,{labelPrefix='',showActions=true,showRemovalButton=true}={})=>{
+  const buildSectionHeader=(type,{labelPrefix='',showActions=true,showRemovalButton=true,sequenceChildren=[]}={})=>{
     const relationType=getRelationTypeById(type);
     const isRemovalMode=showRemovalButton && state.removalRelationType===type;
+    const isSequence=relationTypeUsesSequence(type);
+    const isReorderMode=isSequence && state.reorderRelationType===type;
+    const canReorder=isSequence && showRemovalButton && sequenceChildren.length>1 && sequenceChildren.every((tag)=>Number(tag.family_user_id||0)===Number(state.sessionUserId||0));
     const actionsButton=showActions&&canEditRelationType(relationType)?`<button type="button" data-open-relation-type-actions="${type}" class="h-8 w-8 shrink-0 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors" title="Editar ou excluir esta sessão" aria-label="Editar ou excluir esta sessão"><i class="fa-solid fa-ellipsis-vertical"></i></button>`:'';
+    const reorderButton=canReorder?`<button type="button" data-toggle-reorder-type="${type}" class="hidden md:inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${isReorderMode?'border-sky-300 bg-sky-500/20 text-sky-100':'border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white'} transition-colors" title="Reordenar tags desta sequência" aria-label="Reordenar tags desta sequência"><i class="fa-solid fa-arrow-up-wide-short"></i></button>`:'';
     const removalButton=showRemovalButton?`<button type="button" data-toggle-removal-type="${type}" class="h-8 w-8 shrink-0 rounded-lg border ${isRemovalMode?'border-amber-300 bg-amber-500/20 text-amber-100':'border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white'} transition-colors" title="Remover tags desta sessão" aria-label="Remover tags desta sessão"><i class="fa-solid fa-folder-minus"></i></button>`:'';
-    const actionGroup=actionsButton||removalButton?`<div class="flex shrink-0 items-center gap-2">${actionsButton}${removalButton}</div>`:'';
-    return `<div class="mb-3 flex items-start justify-between gap-3"><div><h3 class="text-sm font-semibold text-violet-200">${esc(`${labelPrefix}${getRelationTypeLabel(type)}`)}</h3>${isRemovalMode?'<p class="mt-1 text-xs text-amber-300">Clique em uma tag desta sessão para removê-la daqui.</p>':''}</div>${actionGroup}</div>`;
+    const actionGroup=actionsButton||reorderButton||removalButton?`<div class="flex shrink-0 items-center gap-2">${actionsButton}${reorderButton}${removalButton}</div>`:'';
+    return `<div class="mb-3 flex items-start justify-between gap-3"><div><h3 class="text-sm font-semibold text-violet-200">${esc(`${labelPrefix}${getRelationTypeLabel(type)}`)}</h3>${isRemovalMode?'<p class="mt-1 text-xs text-amber-300">Clique em uma tag desta sessão para removê-la daqui.</p>':''}${isReorderMode?'<p class="mt-1 hidden text-xs text-sky-300 md:block">Arraste as tags para ajustar a ordem desta sequência.</p>':''}</div>${actionGroup}</div>`;
   };
   const familyTypes=[...new Set([...state.family.children,...state.family.mothers].map((tag)=>getTagRelationType(tag)))];
   const configuredTypes=state.relationTypes.map((item)=>Number(item.id));
@@ -295,6 +302,9 @@ function renderFamily(){
     const mothers=state.family.mothers.filter((tag)=>getTagRelationType(tag)===type).map((tag)=>({...tag,__relationRole:'mother'}));
     const isSelected=state.selectedRelationType===type;
     const selectedClass=isSelected?'ring-2 ring-violet-400 border-violet-500/80':'border-slate-700/80';
+    if(relationTypeUsesSequence(type)){
+      return `<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer">${buildSectionHeader(type,{sequenceChildren:children})}<div data-sequence-list="${type}" class="flex flex-wrap gap-2">${mk(children,type,{sequenceMode:true})}</div></div>`;
+    }
     if(!relationTypeUsesHierarchy(type)){
       return `<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer">${buildSectionHeader(type)}<div><div class="flex flex-wrap gap-2">${mk(children,type)}</div></div></div>`;
     }
@@ -305,6 +315,16 @@ function renderFamily(){
       ev.stopPropagation();
       const type=Number(button.dataset.toggleRemovalType||0);
       state.removalRelationType=state.removalRelationType===type?null:type;
+      if(state.removalRelationType===type) state.reorderRelationType=null;
+      renderFamily();
+    });
+  });
+  document.querySelectorAll('[data-toggle-reorder-type]').forEach((button)=>{
+    button.addEventListener('click',(ev)=>{
+      ev.stopPropagation();
+      const type=Number(button.dataset.toggleReorderType||0);
+      state.reorderRelationType=state.reorderRelationType===type?null:type;
+      if(state.reorderRelationType===type) state.removalRelationType=null;
       renderFamily();
     });
   });
@@ -316,17 +336,38 @@ function renderFamily(){
   });
   document.querySelectorAll('.relation-type-card').forEach((card)=>{
     card.addEventListener('click',(ev)=>{
-      if(ev.target.closest('[data-family-tag-id],[data-toggle-removal-type],[data-open-relation-type-actions]')) return;
+      if(ev.target.closest('[data-family-tag-id],[data-toggle-removal-type],[data-toggle-reorder-type],[data-open-relation-type-actions]')) return;
       state.selectedRelationType=Number(card.dataset.relationType||0);
       renderFamily();
     });
   });
+  document.querySelectorAll('[data-sequence-list]').forEach((list)=>{
+    list.addEventListener('dragover',(ev)=>{if(state.reorderRelationType===Number(list.dataset.sequenceList||0)) ev.preventDefault();});
+  });
   document.querySelectorAll('[data-family-tag-id]').forEach((el)=>{
+    el.addEventListener('dragstart',(ev)=>{
+      const relationType=Number(el.closest('[data-relation-type]')?.dataset.relationType||0);
+      if(state.reorderRelationType!==relationType){ev.preventDefault();return;}
+      state.draggedSequenceTagId=Number(el.dataset.familyTagId||0);
+      ev.dataTransfer.effectAllowed='move';
+      ev.dataTransfer.setData('text/plain', String(state.draggedSequenceTagId));
+    });
+    el.addEventListener('dragover',(ev)=>{
+      const relationType=Number(el.closest('[data-relation-type]')?.dataset.relationType||0);
+      if(state.reorderRelationType===relationType) ev.preventDefault();
+    });
+    el.addEventListener('drop',async(ev)=>{
+      const relationType=Number(el.closest('[data-relation-type]')?.dataset.relationType||0);
+      if(state.reorderRelationType!==relationType) return;
+      ev.preventDefault();ev.stopPropagation();
+      await reorderSequenceTag(relationType,state.draggedSequenceTagId||Number(ev.dataTransfer.getData('text/plain')||0),Number(el.dataset.familyTagId||0));
+    });
     el.onclick=async()=>{
       const targetId=Number(el.dataset.familyTagId);
       const relationRole=el.dataset.relationRole||'child';
       const relationType=Number(el.closest('[data-relation-type]')?.dataset.relationType||0);
       const tag=[...state.family.children,...state.family.mothers].find((item)=>Number(item.id)===targetId&&getTagRelationType(item)===relationType);
+      if(state.reorderRelationType===relationType) return;
       if(el.dataset.familyAllowRemoval!=='0' && state.removalRelationType===relationType){
         await removeFamilyTag(tag||{id:targetId,name:el.textContent||'',tipo_de_relacao:relationType}, relationRole);
         return;
@@ -334,6 +375,24 @@ function renderFamily(){
       openTagFamily(tag||{id:targetId,name:el.textContent||''});
     };
   });
+}
+async function reorderSequenceTag(relationType, draggedId, targetId){
+  draggedId=Number(draggedId||0);targetId=Number(targetId||0);
+  if(!draggedId||!targetId||draggedId===targetId) return;
+  const current=state.family.children.filter((tag)=>getTagRelationType(tag)===relationType).map((tag)=>Number(tag.id));
+  const from=current.indexOf(draggedId);
+  const to=current.indexOf(targetId);
+  if(from<0||to<0) return;
+  const ordered=[...current];
+  const [moved]=ordered.splice(from,1);
+  ordered.splice(to,0,moved);
+  await api('reorder_tag_family_sequence',{tag_id:state.tagId,tipo_de_relacao:relationType,ordered_tag_ids:ordered});
+  state.family.children.sort((a,b)=>{
+    const typeA=getTagRelationType(a), typeB=getTagRelationType(b);
+    if(typeA!==relationType || typeB!==relationType) return 0;
+    return ordered.indexOf(Number(a.id))-ordered.indexOf(Number(b.id));
+  });
+  await load();
 }
 async function load(){
   if(!state.tagId) return;
