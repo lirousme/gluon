@@ -41,8 +41,17 @@
     }
 
     .sequence-tag-chip.sequence-dragging {
-      opacity: 0.35;
-      transform: scale(0.96);
+      display: none;
+    }
+
+    .sequence-drag-image {
+      position: fixed;
+      top: -1000px;
+      left: -1000px;
+      z-index: -1;
+      pointer-events: none;
+      opacity: 1;
+      transform: none;
     }
 
     .sequence-drop-placeholder {
@@ -331,8 +340,25 @@ function getSequenceDropPlaceholder(){
   }
   return placeholder;
 }
+function clearSequenceDragImage(){
+  document.querySelectorAll('.sequence-drag-image').forEach((el)=>el.remove());
+}
+function createSequenceDragImage(el,event){
+  clearSequenceDragImage();
+  const clone=el.cloneNode(true);
+  const rect=el.getBoundingClientRect();
+  clone.classList.remove('sequence-dragging');
+  clone.classList.add('sequence-drag-image');
+  clone.style.width=`${rect.width}px`;
+  clone.style.height=`${rect.height}px`;
+  document.body.appendChild(clone);
+  if(event.dataTransfer?.setDragImage){
+    event.dataTransfer.setDragImage(clone, Math.max(0,event.clientX-rect.left), Math.max(0,event.clientY-rect.top));
+  }
+}
 function clearSequenceDragPreview(){
   const placeholder=document.getElementById('sequenceDropPlaceholder');
+  clearSequenceDragImage();
   if(state.sequenceDropPreviewFrame){
     cancelAnimationFrame(state.sequenceDropPreviewFrame);
     state.sequenceDropPreviewFrame=null;
@@ -552,10 +578,13 @@ function renderFamily(){
       state.draggedSequenceTagId=Number(el.dataset.familyTagId||0);
       state.sequenceDropTargetId=null;
       state.sequenceDropPosition='before';
-      el.classList.add('sequence-dragging');
+      createSequenceDragImage(el,ev);
       el.closest('[data-sequence-list]')?.classList.add('sequence-drag-active');
       ev.dataTransfer.effectAllowed='move';
       ev.dataTransfer.setData('text/plain', String(state.draggedSequenceTagId));
+      requestAnimationFrame(()=>{
+        if(state.draggedSequenceTagId===Number(el.dataset.familyTagId||0)) el.classList.add('sequence-dragging');
+      });
     });
     el.addEventListener('dragover',(ev)=>{
       const relationType=Number(el.closest('[data-relation-type]')?.dataset.relationType||0);
