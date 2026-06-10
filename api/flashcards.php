@@ -1040,6 +1040,17 @@ function normalizeFrontSentenceTagCandidate(array $raw, string $panel): ?array
     ];
 }
 
+
+function getProperNounOwnerChoiceKey(array $candidate): string
+{
+    return hash('sha256', implode('|', [
+        normalizeWordTagLookupValue((string)($candidate['en'] ?? '')),
+        normalizeLexicalChunkLookupValue((string)($candidate['pt_br'] ?? '')),
+        normalizeNullableTagMetadataText($candidate['numero'] ?? null),
+        normalizeNullableTagMetadataText($candidate['sigla_simbolo'] ?? null),
+    ]));
+}
+
 function normalizeFrontSentenceChunkCandidate(array $raw): ?array
 {
     [$rawEn, $rawPtBr] = normalizeDateLexicalChunkTexts(
@@ -4319,7 +4330,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
                 $subject_raw['numero'] ?? $subject_raw['number'] ?? null,
                 $subject_raw['sigla_simbolo'] ?? $subject_raw['symbol'] ?? $subject_raw['abbreviation'] ?? null
             );
-            $subject = findOrCreateWordTag($pdo, (int)$user_id, (string)$subjectMetadata['name'], (string)$subjectMetadata['name_pt_br'], $subjectMetadata['numero'], $subjectMetadata['sigla_simbolo']);
+            $subject = findOrCreateWordTagForOwner($pdo, 5, (string)$subjectMetadata['name'], (string)$subjectMetadata['name_pt_br'], $subjectMetadata['numero'], $subjectMetadata['sigla_simbolo']);
         } catch (Throwable $e) {
             continue;
         }
@@ -4340,7 +4351,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
             if ($object_key === '|' || isset($seen_objects[$object_key])) continue;
             $seen_objects[$object_key] = true;
             try {
-                $objects[] = findOrCreateWordTag($pdo, (int)$user_id, $object_en, $object_pt_br, $objectMetadata['numero'], $objectMetadata['sigla_simbolo']);
+                $objects[] = findOrCreateWordTagForOwner($pdo, 5, $object_en, $object_pt_br, $objectMetadata['numero'], $objectMetadata['sigla_simbolo']);
             } catch (Throwable $e) {
                 continue;
             }
@@ -4359,7 +4370,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
             if ($number_key === '|' || isset($seen_objects[$number_key])) continue;
             $seen_objects[$number_key] = true;
             try {
-                $objects[] = findOrCreateWordTag($pdo, (int)$user_id, $number_en, $number_pt_br, $numberMetadata['numero'], $numberMetadata['sigla_simbolo']);
+                $objects[] = findOrCreateWordTagForOwner($pdo, 5, $number_en, $number_pt_br, $numberMetadata['numero'], $numberMetadata['sigla_simbolo']);
             } catch (Throwable $e) {
                 continue;
             }
@@ -4386,7 +4397,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
             if (isset($seen_chunks[$dedupe_key])) continue;
             $seen_chunks[$dedupe_key] = true;
             try {
-                $chunks[] = findOrCreateLexicalChunkTag($pdo, (int)$user_id, $chunk_en, $chunk_pt_br, $chunkMetadata['numero'], $chunkMetadata['sigla_simbolo']);
+                $chunks[] = findOrCreateLexicalChunkTagForOwner($pdo, 5, $chunk_en, $chunk_pt_br, $chunkMetadata['numero'], $chunkMetadata['sigla_simbolo']);
                 if (count($chunks) >= 4) break;
             } catch (Throwable $e) {
                 die(json_encode(['status' => 'error', 'message' => 'Erro ao criar tag de lexical chunk: ' . $chunk_en]));
@@ -4455,6 +4466,7 @@ elseif ($action === 'generate_front_sentence_tags_gemini') {
     $create = !empty($input['create']);
     $candidatesInput = $input['candidates'] ?? null;
     $properOwner = (string)($input['proper_noun_owner'] ?? '');
+    $properOwnerChoices = isset($input['proper_noun_owners']) && is_array($input['proper_noun_owners']) ? $input['proper_noun_owners'] : [];
 
     if ($sentence === '') {
         die(json_encode(['status' => 'error', 'message' => 'Preencha a frente do card com uma frase para gerar as tags.']));
@@ -4572,6 +4584,10 @@ PROMPT, $sentence);
     }
 
     $properNouns = array_values(array_filter($wordCandidates, static fn($candidate) => ($candidate['kind'] ?? '') === 'proper_noun'));
+    foreach ($properNouns as &$properNoun) {
+        $properNoun['choice_key'] = getProperNounOwnerChoiceKey($properNoun);
+    }
+    unset($properNoun);
     if (!$create) {
         echo json_encode([
             'status' => 'success',
@@ -4587,16 +4603,37 @@ PROMPT, $sentence);
         exit;
     }
 
-    if (!empty($properNouns) && !in_array($properOwner, ['user', 'public'], true)) {
-        die(json_encode(['status' => 'error', 'message' => 'Escolha o dono dos nomes próprios antes de criar as tags.']));
+    if (!empty($properNouns)) {
+        $hasPerTagChoices = !empty($properOwnerChoices);
+        if (!$hasPerTagChoices && !in_array($properOwner, ['user', 'public'], true)) {
+            die(json_encode(['status' => 'error', 'message' => 'Escolha o dono de cada nome próprio antes de criar as tags.']));
+        }
+        if ($hasPerTagChoices) {
+            foreach ($properNouns as $properNoun) {
+                $choiceKey = getProperNounOwnerChoiceKey($properNoun);
+                if (!in_array((string)($properOwnerChoices[$choiceKey] ?? ''), ['user', 'public'], true)) {
+                    die(json_encode(['status' => 'error', 'message' => 'Escolha o dono de todos os nomes próprios antes de criar as tags.']));
+                }
+            }
+        }
     }
+
+    $properUserCount = 0;
+    $properPublicCount = 0;
 
     $createdSubjects = [];
     $createdObjects = [];
     $createdChunks = [];
 
     foreach ($wordCandidates as $candidate) {
-        $ownerId = (($candidate['kind'] ?? '') === 'proper_noun' && $properOwner === 'user') ? (int)$user_id : 5;
+        $ownerId = 5;
+        if (($candidate['kind'] ?? '') === 'proper_noun') {
+            $choiceKey = getProperNounOwnerChoiceKey($candidate);
+            $ownerChoice = (string)($properOwnerChoices[$choiceKey] ?? $properOwner);
+            $ownerId = $ownerChoice === 'user' ? (int)$user_id : 5;
+            if ($ownerId === (int)$user_id) $properUserCount++;
+            else $properPublicCount++;
+        }
         try {
             $tag = findOrCreateWordTagForOwner($pdo, $ownerId, (string)$candidate['en'], (string)$candidate['pt_br'], normalizeNullableTagMetadataText($candidate['numero'] ?? null), normalizeNullableTagMetadataText($candidate['sigla_simbolo'] ?? null));
             $tag['kind'] = $candidate['kind'];
@@ -4622,6 +4659,8 @@ PROMPT, $sentence);
         'chunks' => $createdChunks,
         'created_count' => count(array_filter(array_merge($createdSubjects, $createdObjects, $createdChunks), static fn($tag) => !empty($tag['created']))),
         'existing_count' => count(array_filter(array_merge($createdSubjects, $createdObjects, $createdChunks), static fn($tag) => empty($tag['created']))),
+        'proper_user_count' => $properUserCount,
+        'proper_public_count' => $properPublicCount,
     ]);
 }
 

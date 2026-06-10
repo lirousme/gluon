@@ -207,15 +207,14 @@
           <h3 class="text-lg font-semibold text-white">Dono dos nomes próprios</h3>
           <button type="button" onclick="app.closeProperNounOwnerModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
         </div>
-        <p class="text-sm text-slate-300">O Gemini encontrou nomes próprios na frase da frente. Escolha se essas tags serão suas ou públicas (usuário 5).</p>
-        <div id="properNounOwnerList" class="flex flex-wrap gap-2 rounded-lg border border-slate-700 bg-slate-900/70 p-3 text-sm text-slate-100"></div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <button type="button" id="btnCreateProperNounsAsUser" onclick="app.confirmFrontSentenceTagsOwner('user')" class="px-4 py-2 rounded-lg border border-emerald-400/40 text-emerald-200 hover:bg-emerald-400/10">
-            <i class="fa-solid fa-user" aria-hidden="true"></i> Criar como minhas
+        <p class="text-sm text-slate-300">O Gemini encontrou nomes próprios. Escolha o dono de cada tag individualmente: sua conta ou o usuário público da plataforma (usuário 5).</p>
+        <div id="properNounOwnerList" class="space-y-2 rounded-lg border border-slate-700 bg-slate-900/70 p-3 text-sm text-slate-100"></div>
+        <div class="flex justify-end gap-2">
+          <button type="button" onclick="app.closeProperNounOwnerModal()" class="px-4 py-2 rounded-lg bg-slate-700 text-slate-100 hover:bg-slate-600">Cancelar</button>
+          <button type="button" id="btnCreateProperNounsAsUser" onclick="app.confirmFrontSentenceTagsOwner()" class="px-4 py-2 rounded-lg border border-emerald-400/40 text-emerald-200 hover:bg-emerald-400/10">
+            <i class="fa-solid fa-check" aria-hidden="true"></i> Criar tags
           </button>
-          <button type="button" id="btnCreateProperNounsAsPublic" onclick="app.confirmFrontSentenceTagsOwner('public')" class="px-4 py-2 rounded-lg border border-cyan-300/40 text-cyan-200 hover:bg-cyan-400/10">
-            <i class="fa-solid fa-users" aria-hidden="true"></i> Criar como públicas
-          </button>
+          <button type="button" id="btnCreateProperNounsAsPublic" onclick="app.confirmFrontSentenceTagsOwner()" class="hidden px-4 py-2 rounded-lg border border-cyan-300/40 text-cyan-200 hover:bg-cyan-400/10">Criar tags</button>
         </div>
       </div>
     </div>
@@ -813,11 +812,25 @@ const app = {
       pageTitle.textContent = this.editCardId ? `Editar ficha de card - ${directoryName}` : directoryName;
     } catch (_) {}
   },
+  getProperNounChoiceKey(item) {
+    return String(item?.choice_key || `${item?.en || ''}|${item?.pt_br || ''}|${item?.numero || ''}|${item?.sigla_simbolo || ''}`);
+  },
   openProperNounOwnerModal(properNouns = []) {
+    this.pendingProperNounOwnerItems = properNouns;
     const listEl = document.getElementById('properNounOwnerList');
     if (listEl) {
       listEl.innerHTML = properNouns.length
-        ? properNouns.map(item => `<span class="inline-flex rounded-full border border-fuchsia-300/40 bg-fuchsia-500/10 px-2 py-1">${this.escapeHTML(item.en || '')}${item.pt_br ? ` (${this.escapeHTML(item.pt_br)})` : ''}</span>`).join('')
+        ? properNouns.map((item, index) => {
+            const key = this.escapeHTML(this.getProperNounChoiceKey(item));
+            const label = `${this.escapeHTML(item.en || '')}${item.pt_br ? ` (${this.escapeHTML(item.pt_br)})` : ''}`;
+            return `<div class="rounded-lg border border-fuchsia-300/20 bg-fuchsia-500/5 p-3">
+              <div class="mb-2 font-medium text-fuchsia-100">${label}</div>
+              <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <label class="inline-flex items-center gap-2 rounded-lg border border-emerald-400/30 px-3 py-2 text-emerald-100 hover:bg-emerald-400/10"><input type="radio" name="proper_noun_owner_${index}" data-proper-noun-owner data-choice-key="${key}" value="user" class="h-4 w-4"> Minha tag</label>
+                <label class="inline-flex items-center gap-2 rounded-lg border border-cyan-300/30 px-3 py-2 text-cyan-100 hover:bg-cyan-400/10"><input type="radio" name="proper_noun_owner_${index}" data-proper-noun-owner data-choice-key="${key}" value="public" class="h-4 w-4" checked> Pública (usuário 5)</label>
+              </div>
+            </div>`;
+          }).join('')
         : '<span class="text-slate-400">Nenhum nome próprio listado.</span>';
     }
     properNounOwnerModal.classList.remove('hidden');
@@ -855,7 +868,7 @@ const app = {
         this.setStatus('Escolha o dono dos nomes próprios para concluir a criação das tags.', 'neutral');
         return;
       }
-      await this.createFrontSentenceTags('public');
+      await this.createFrontSentenceTags({});
     } catch (err) {
       this.setStatus('Falha ao gerar tags com Gemini: ' + (err.message || 'erro desconhecido'), 'error');
     } finally {
@@ -863,10 +876,17 @@ const app = {
       btnGenerateFrontTagsGemini.disabled = false;
     }
   },
-  async confirmFrontSentenceTagsOwner(owner) {
-    await this.createFrontSentenceTags(owner);
+  getProperNounOwnerChoices() {
+    const choices = {};
+    document.querySelectorAll('[data-proper-noun-owner]:checked').forEach(input => {
+      choices[String(input.dataset.choiceKey || '')] = input.value === 'user' ? 'user' : 'public';
+    });
+    return choices;
   },
-  async createFrontSentenceTags(owner = 'public') {
+  async confirmFrontSentenceTagsOwner() {
+    await this.createFrontSentenceTags(this.getProperNounOwnerChoices());
+  },
+  async createFrontSentenceTags(ownerChoices = {}) {
     const candidates = this.pendingFrontSentenceTagCandidates;
     if (!candidates) return this.setStatus('Nenhuma sugestão de tag pendente para criar.', 'error');
 
@@ -876,7 +896,7 @@ const app = {
       const res = await this.api('generate_front_sentence_tags_gemini', {
         sentence: singleFront.value.trim(),
         create: true,
-        proper_noun_owner: owner,
+        proper_noun_owners: ownerChoices,
         candidates
       });
       const subjectTagIds = (res.subjects || []).map(tag => Number(tag.tag_id)).filter(Boolean);
@@ -890,7 +910,9 @@ const app = {
       this.renderGeneratedLexicalChunks(res.chunks || []);
       this.pendingFrontSentenceTagCandidates = null;
       this.closeProperNounOwnerModal();
-      const ownerText = owner === 'user' ? ' Nomes próprios criados como tags suas.' : ' Nomes próprios criados como tags públicas.';
+      const ownerText = Number(res.proper_user_count || 0) || Number(res.proper_public_count || 0)
+        ? ` Nomes próprios: ${Number(res.proper_user_count || 0)} sua(s), ${Number(res.proper_public_count || 0)} pública(s).`
+        : '';
       this.setStatus(`Tags geradas com Gemini: ${Number(res.created_count || 0)} criada(s), ${Number(res.existing_count || 0)} existente(s) selecionada(s).${ownerText}`, 'success');
     } catch (err) {
       this.setStatus('Falha ao criar tags com Gemini: ' + (err.message || 'erro desconhecido'), 'error');
