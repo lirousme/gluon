@@ -1008,6 +1008,16 @@ function normalizeGeminiTagKind(string $kind): string
     return in_array($kind, ['common_noun', 'proper_noun', 'verb', 'other'], true) ? $kind : 'common_noun';
 }
 
+
+function normalizeTranslatedEnglishFrontSentence($value): string
+{
+    $text = html_entity_decode(strip_tags((string)$value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $text = str_replace(["\r", "\n", "\t"], ' ', $text);
+    $text = preg_replace('/\s+/u', ' ', trim((string)$text));
+    if ($text === '') return '';
+    return contractEnglishSentenceText(ensureSentenceEndsWithPeriod($text));
+}
+
 function normalizeFrontSentenceTagCandidate(array $raw, string $panel): ?array
 {
     $metadata = normalizeGeneratedTagMetadata(
@@ -4452,6 +4462,7 @@ elseif ($action === 'generate_front_sentence_tags_gemini') {
 
     $wordCandidates = [];
     $chunkCandidates = [];
+    $englishSentence = '';
 
     if ($create && is_array($candidatesInput)) {
         $rawSubjects = isset($candidatesInput['subjects']) && is_array($candidatesInput['subjects']) ? $candidatesInput['subjects'] : [];
@@ -4472,15 +4483,16 @@ elseif ($action === 'generate_front_sentence_tags_gemini') {
         }
 
         $prompt = sprintf(<<<'PROMPT'
-Analise a frase abaixo e extraia tags para um flashcard. A frase pode estar em qualquer idioma; se não estiver em inglês, traduza mentalmente para inglês antes de identificar subjects, objects e chunks, e retorne os campos en sempre em inglês.
+Analise a frase abaixo e extraia tags para um flashcard. A frase pode estar em qualquer idioma; se não estiver em inglês, traduza para uma frase natural em inglês antes de identificar subjects, objects e chunks, e retorne essa tradução no campo english_sentence.
 
 Frase:
 %s
 
 Retorne somente JSON válido neste formato:
-{"subjects":[{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional","kind":"common_noun|proper_noun|verb|other"}],"objects":[{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional","kind":"common_noun|proper_noun|verb|other"}],"chunks":[{"en":"lexical chunk curto ou texto por extenso em inglês","pt_br":"tradução curta ou texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional"}]}
+{"english_sentence":"frase completa e natural em inglês","subjects":[{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional","kind":"common_noun|proper_noun|verb|other"}],"objects":[{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional","kind":"common_noun|proper_noun|verb|other"}],"chunks":[{"en":"lexical chunk curto ou texto por extenso em inglês","pt_br":"tradução curta ou texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional"}]}
 
 Regras:
+- english_sentence deve ser sempre uma frase completa, natural e idiomática em inglês. Se a frase original já estiver em inglês, retorne a própria frase revisada apenas o necessário. Se estiver em outro idioma, traduza para inglês e use essa tradução como base para todas as tags.
 - Se a frase original estiver em outro idioma, extraia os chunks a partir da tradução natural em inglês, não a partir da ordem literal do idioma original.
 - subjects deve conter o sujeito gramatical principal da frase, sem artigos iniciais.
 - objects deve conter substantivos relevantes que não são sujeito e verbos principais úteis. Substantivos devem vir sem artigos iniciais.
@@ -4532,6 +4544,8 @@ PROMPT, $sentence);
             die(json_encode(['status' => 'error', 'message' => 'A API do Gemini não retornou tags válidas.' . ($finish_reason !== '' ? (' Motivo: ' . $finish_reason) : '')]));
         }
 
+        $englishSentence = normalizeTranslatedEnglishFrontSentence($tagData['english_sentence'] ?? $tagData['translated_sentence'] ?? $tagData['translation_en'] ?? '');
+
         foreach (($tagData['subjects'] ?? []) as $raw) {
             if (is_array($raw) && ($candidate = normalizeFrontSentenceTagCandidate($raw, 'subject'))) $wordCandidates[] = $candidate;
         }
@@ -4543,7 +4557,9 @@ PROMPT, $sentence);
         }
     }
 
-    foreach (buildNumberTagCandidatesFromText($sentence) as $numberCandidate) {
+    $numberSourceTexts = [$sentence];
+    if ($englishSentence !== '') $numberSourceTexts[] = $englishSentence;
+    foreach (buildNumberTagCandidatesFromText(...$numberSourceTexts) as $numberCandidate) {
         $numberCandidate['panel'] = 'object';
         $wordCandidates[] = $numberCandidate;
     }
@@ -4561,6 +4577,7 @@ PROMPT, $sentence);
             'status' => 'success',
             'needs_ownership_choice' => !empty($properNouns),
             'proper_nouns' => $properNouns,
+            'english_sentence' => $englishSentence,
             'candidates' => [
                 'subjects' => array_values(array_filter($wordCandidates, static fn($candidate) => ($candidate['panel'] ?? '') === 'subject')),
                 'objects' => array_values(array_filter($wordCandidates, static fn($candidate) => ($candidate['panel'] ?? '') === 'object')),
