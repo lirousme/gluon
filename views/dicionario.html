@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Gluon - Dicionário</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = { theme: { extend: { colors: { gluon: { dark: '#0f172a', primary: '#3b82f6', secondary: '#1e293b' } } } } };
+  </script>
+</head>
+<body class="min-h-[100dvh] bg-gluon-dark text-slate-100 selection:bg-blue-600/60 flex flex-col">
+  <header class="sticky top-0 z-40 border-b border-slate-700/70 bg-gluon-secondary/95 backdrop-blur">
+    <div class="mx-auto flex h-16 w-full max-w-5xl items-center justify-between gap-3 px-4 sm:px-6">
+      <button type="button" onclick="goBack()" class="inline-flex items-center gap-2 rounded-lg border border-slate-600 px-3 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-800" title="Voltar" aria-label="Voltar">
+        <i class="fa-solid fa-left-long" aria-hidden="true"></i>
+        <span>Voltar</span>
+      </button>
+      <h1 class="text-base font-semibold sm:text-lg">Dicionário</h1>
+      <div class="h-9 w-[88px]" aria-hidden="true"></div>
+    </div>
+  </header>
+
+  <main class="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
+    <section class="rounded-2xl border border-slate-700 bg-gluon-secondary p-6 shadow-2xl shadow-slate-950/30 sm:p-8">
+      <div class="mb-6 flex items-center gap-3">
+        <div class="flex h-12 w-12 items-center justify-center rounded-xl border border-blue-400/30 bg-blue-500/10 text-blue-300">
+          <i class="fa-solid fa-book-open text-xl" aria-hidden="true"></i>
+        </div>
+        <div>
+          <h2 class="text-xl font-semibold text-white">Dicionário</h2>
+          <p class="text-sm text-slate-400">Consulte e organize palavras importantes para seus estudos.</p>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-dashed border-slate-600 bg-slate-900/60 p-6 text-center text-slate-300">
+        <p class="font-medium text-slate-100">Conteúdo do dicionário em construção.</p>
+        <p class="mt-2 text-sm text-slate-400">Esta página já está pronta para receber buscas, definições e vocabulário.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-slate-800 bg-slate-950/40 py-4 text-center text-xs text-slate-500">
+    <p>Gluon · Dicionário</p>
+  </footer>
+
+  <script>
+    function goBack() {
+      if (window.history.length > 1) window.history.back();
+      else window.location.href = '/dashboard';
+    }
+  </script>
+</body>
+</html>
