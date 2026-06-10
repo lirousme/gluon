@@ -146,15 +146,19 @@ function executeTagCreationCustomRules(PDO $pdo, int $userId, int $newTagId): vo
 {
     if ($userId <= 0 || $newTagId <= 0) return;
 
-    $autoFamilyRuleId = fetchUserCustomRuleId($pdo, $userId, CUSTOM_RULE_AUTO_TAG_FAMILY_ON_TAG_CREATE);
-    if ($autoFamilyRuleId <= 0) return;
-
-    applyAutoTagFamilyCustomRule($pdo, $userId, $newTagId, $autoFamilyRuleId);
+    applyAutoTagFamilyCustomRulesForTags($pdo, $userId, [$newTagId]);
 }
 
-function fetchUserCustomRuleId(PDO $pdo, int $userId, int $ruleNumber): int
+function executeTagFamilyRelationCustomRules(PDO $pdo, int $userId, array $candidateTagIds): void
 {
-    if ($userId <= 0 || $ruleNumber <= 0) return 0;
+    if ($userId <= 0) return;
+
+    applyAutoTagFamilyCustomRulesForTags($pdo, $userId, $candidateTagIds);
+}
+
+function fetchUserCustomRuleIds(PDO $pdo, int $userId, int $ruleNumber): array
+{
+    if ($userId <= 0 || $ruleNumber <= 0) return [];
 
     $ruleStmt = $pdo->prepare("
         SELECT id
@@ -162,45 +166,139 @@ function fetchUserCustomRuleId(PDO $pdo, int $userId, int $ruleNumber): int
         WHERE id_user = ?
           AND numero_da_regra = ?
         ORDER BY id ASC
-        LIMIT 1
     ");
     $ruleStmt->execute([$userId, $ruleNumber]);
 
-    return (int)($ruleStmt->fetchColumn() ?: 0);
+    return array_values(array_unique(array_filter(array_map('intval', $ruleStmt->fetchAll(PDO::FETCH_COLUMN)), static fn($id) => $id > 0)));
 }
 
-function applyAutoTagFamilyCustomRule(PDO $pdo, int $userId, int $newTagId, int $customRuleId): void
+function fetchUserCustomRuleId(PDO $pdo, int $userId, int $ruleNumber): int
 {
-    if ($userId <= 0 || $newTagId <= 0 || $customRuleId <= 0) return;
+    $ruleIds = fetchUserCustomRuleIds($pdo, $userId, $ruleNumber);
+    return (int)($ruleIds[0] ?? 0);
+}
+
+function applyAutoTagFamilyCustomRulesForTags(PDO $pdo, int $userId, array $candidateTagIds): void
+{
+    if ($userId <= 0) return;
+
+    $candidateTagIds = array_values(array_unique(array_filter(array_map('intval', $candidateTagIds), static fn($id) => $id > 0)));
+    if (!$candidateTagIds) return;
+
+    foreach (fetchUserCustomRuleIds($pdo, $userId, CUSTOM_RULE_AUTO_TAG_FAMILY_ON_TAG_CREATE) as $customRuleId) {
+        foreach ($candidateTagIds as $candidateTagId) {
+            applyAutoTagFamilyCustomRule($pdo, $userId, $candidateTagId, $customRuleId);
+        }
+    }
+}
+
+function candidateMatchesAutoTagFamilyParameters(PDO $pdo, int $userId, int $candidateTagId, array $parameterRuleTags): bool
+{
+    if ($userId <= 0 || $candidateTagId <= 0 || !$parameterRuleTags) return false;
+
+    $existsStmt = $pdo->prepare("
+        SELECT 1
+        FROM tag_family
+        WHERE id_user IN (?, 5)
+          AND id_tag_child = ?
+          AND id_tag_mother = ?
+          AND tipo_de_relacao = ?
+        LIMIT 1
+    ");
+
+    foreach ($parameterRuleTags as $ruleTag) {
+        $parameterTagId = (int)($ruleTag['id_tag'] ?? 0);
+        $relationTypeId = (int)($ruleTag['id_tipo_de_relacao'] ?? 0);
+        $kinship = (int)($ruleTag['parentesco'] ?? 0);
+        if ($parameterTagId <= 0 || $relationTypeId <= 0 || $parameterTagId === $candidateTagId) return false;
+
+        if ($kinship === 1) {
+            $childTagId = $parameterTagId;
+            $motherTagId = $candidateTagId;
+        } else {
+            $childTagId = $candidateTagId;
+            $motherTagId = $parameterTagId;
+        }
+
+        $existsStmt->execute([$userId, $childTagId, $motherTagId, $relationTypeId]);
+        if (!$existsStmt->fetchColumn()) return false;
+    }
+
+    return true;
+}
+
+function nextTagFamilyOrder(PDO $pdo, int $userId, int $motherTagId, int $relationTypeId): int
+{
+    if ($userId <= 0 || $motherTagId <= 0 || $relationTypeId <= 0) return 0;
+
+    $typeStmt = $pdo->prepare("SELECT hierarquia FROM tipo_de_relacao WHERE id = ? AND id_user IN (?, 5) LIMIT 1");
+    $typeStmt->execute([$relationTypeId, $userId]);
+    if ((int)($typeStmt->fetchColumn() ?: 0) !== 2) return 0;
+
+    $orderStmt = $pdo->prepare("SELECT COALESCE(MAX(ordem), 0) + 1 FROM tag_family WHERE id_user = ? AND id_tag_mother = ? AND tipo_de_relacao = ?");
+    $orderStmt->execute([$userId, $motherTagId, $relationTypeId]);
+    return (int)($orderStmt->fetchColumn() ?: 1);
+}
+
+function applyAutoTagFamilyCustomRule(PDO $pdo, int $userId, int $candidateTagId, int $customRuleId): void
+{
+    if ($userId <= 0 || $candidateTagId <= 0 || $customRuleId <= 0) return;
 
     $ruleTagStmt = $pdo->prepare("
-        SELECT id_tag, id_tipo_de_relacao, parentesco
+        SELECT id_regra, id_tag, id_tipo_de_relacao, destino, parentesco
         FROM regras_tags
         WHERE id_regra = ?
         ORDER BY id ASC
     ");
     $ruleTagStmt->execute([$customRuleId]);
 
+    $parameterRuleTags = [];
+    $destinationRuleTags = [];
+    foreach ($ruleTagStmt->fetchAll(PDO::FETCH_ASSOC) as $ruleTag) {
+        if ((int)($ruleTag['id_regra'] ?? 0) !== $customRuleId) continue;
+
+        $destination = (int)($ruleTag['destino'] ?? 0);
+        if ($destination === 1) {
+            $destinationRuleTags[] = $ruleTag;
+        } else {
+            $parameterRuleTags[] = $ruleTag;
+        }
+    }
+
+    if (!$destinationRuleTags || !candidateMatchesAutoTagFamilyParameters($pdo, $userId, $candidateTagId, $parameterRuleTags)) return;
+
     $insertStmt = $pdo->prepare("
-        INSERT IGNORE INTO tag_family (id_user, id_tag_child, id_tag_mother, tipo_de_relacao)
-        VALUES (?, ?, ?, ?)
+        INSERT IGNORE INTO tag_family (id_user, id_tag_child, id_tag_mother, tipo_de_relacao, ordem)
+        VALUES (?, ?, ?, ?, ?)
+    ");
+    $reverseStmt = $pdo->prepare("
+        SELECT 1
+        FROM tag_family
+        WHERE id_user IN (?, 5)
+          AND id_tag_child = ?
+          AND id_tag_mother = ?
+          AND tipo_de_relacao = ?
+        LIMIT 1
     ");
 
-    foreach ($ruleTagStmt->fetchAll(PDO::FETCH_ASSOC) as $ruleTag) {
+    foreach ($destinationRuleTags as $ruleTag) {
         $relatedTagId = (int)($ruleTag['id_tag'] ?? 0);
         $relationTypeId = (int)($ruleTag['id_tipo_de_relacao'] ?? 0);
         $kinship = (int)($ruleTag['parentesco'] ?? 0);
-        if ($relatedTagId <= 0 || $relationTypeId <= 0 || $relatedTagId === $newTagId) continue;
+        if ($relatedTagId <= 0 || $relationTypeId <= 0 || $relatedTagId === $candidateTagId) continue;
 
         if ($kinship === 1) {
             $childTagId = $relatedTagId;
-            $motherTagId = $newTagId;
+            $motherTagId = $candidateTagId;
         } else {
-            $childTagId = $newTagId;
+            $childTagId = $candidateTagId;
             $motherTagId = $relatedTagId;
         }
 
-        $insertStmt->execute([$userId, $childTagId, $motherTagId, $relationTypeId]);
+        $reverseStmt->execute([$userId, $motherTagId, $childTagId, $relationTypeId]);
+        if ($reverseStmt->fetchColumn()) continue;
+
+        $insertStmt->execute([$userId, $childTagId, $motherTagId, $relationTypeId, nextTagFamilyOrder($pdo, $userId, $motherTagId, $relationTypeId)]);
     }
 }
 
@@ -5994,6 +6092,7 @@ elseif ($action === 'add_tag_family_relation') {
 
     $stmt = $pdo->prepare("INSERT IGNORE INTO tag_family (id_user, id_tag_child, id_tag_mother, tipo_de_relacao, ordem) VALUES (?, ?, ?, ?, ?)");
     $stmt->execute([$user_id, $child, $mother, $relation_type, $nextOrder]);
+    executeTagFamilyRelationCustomRules($pdo, $user_id, [$child, $mother]);
     echo json_encode(['status'=>'success','message'=>'Relação salva com sucesso.']);
 }
 
