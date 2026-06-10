@@ -24,7 +24,7 @@
     .sequence-reorder-list {
       align-items: center;
       min-height: 2.25rem;
-      transition: background-color 240ms ease, box-shadow 240ms ease, padding 240ms ease, margin 240ms ease;
+      transition: background-color 320ms ease, box-shadow 320ms ease, padding 320ms ease, margin 320ms ease;
     }
 
     .sequence-reorder-list.sequence-drag-active {
@@ -36,7 +36,8 @@
     }
 
     .sequence-tag-chip {
-      transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, box-shadow 260ms ease, margin 260ms ease;
+      transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1), opacity 260ms ease, box-shadow 320ms ease, margin 420ms cubic-bezier(0.16, 1, 0.3, 1);
+      will-change: transform, opacity;
     }
 
     .sequence-tag-chip.sequence-dragging {
@@ -47,6 +48,7 @@
     .sequence-drop-placeholder {
       flex: 0 0 auto;
       width: var(--sequence-placeholder-width, 0px);
+      min-width: var(--sequence-placeholder-width, 0px);
       height: var(--sequence-placeholder-height, 0px);
       margin-inline: var(--sequence-placeholder-margin, 0px);
       opacity: var(--sequence-placeholder-opacity, 0);
@@ -54,16 +56,17 @@
       border-radius: 9999px;
       background: rgba(14, 165, 233, 0.16);
       box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.08);
-      animation: sequenceDropPulse 1200ms ease-in-out infinite;
+      animation: sequenceDropPulse 1800ms ease-in-out infinite;
       pointer-events: none;
-      transform: scaleX(var(--sequence-placeholder-scale, 0.55));
+      transform: scaleX(var(--sequence-placeholder-scale, 0.35));
       transform-origin: center;
-      transition: width 340ms cubic-bezier(0.22, 1, 0.36, 1), height 260ms ease, margin 340ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, transform 340ms cubic-bezier(0.22, 1, 0.36, 1);
+      will-change: width, min-width, margin, opacity, transform;
+      transition: width 620ms cubic-bezier(0.16, 1, 0.3, 1), min-width 620ms cubic-bezier(0.16, 1, 0.3, 1), height 420ms ease, margin 620ms cubic-bezier(0.16, 1, 0.3, 1), opacity 300ms ease, transform 620ms cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .sequence-drop-placeholder.sequence-drop-placeholder-visible {
       --sequence-placeholder-opacity: 1;
-      --sequence-placeholder-margin: 0.375rem;
+      --sequence-placeholder-margin: 0.5rem;
       --sequence-placeholder-scale: 1;
     }
 
@@ -355,9 +358,24 @@ function clearSequenceDragPreview(){
   state.sequenceDropPreviewPosition='before';
 }
 function setSequencePlaceholderSize(placeholder,width,height,{animateOpen=false}={}){
-  if(animateOpen) placeholder.classList.remove('sequence-drop-placeholder-visible');
-  placeholder.style.setProperty('--sequence-placeholder-width',`${Math.max(width,48)}px`);
-  placeholder.style.setProperty('--sequence-placeholder-height',`${Math.max(height,28)}px`);
+  const nextWidth=Math.max(width,48);
+  const nextHeight=Math.max(height,28);
+  if(animateOpen){
+    placeholder.classList.remove('sequence-drop-placeholder-visible');
+    placeholder.style.setProperty('--sequence-placeholder-width','0px');
+    placeholder.style.setProperty('--sequence-placeholder-height',`${nextHeight}px`);
+    // Force the browser to paint the closed slot first, then open it slowly so the
+    // surrounding chips visibly make room instead of jumping instantly.
+    placeholder.getBoundingClientRect();
+    requestAnimationFrame(()=>{
+      placeholder.style.setProperty('--sequence-placeholder-width',`${nextWidth}px`);
+      placeholder.style.setProperty('--sequence-placeholder-height',`${nextHeight}px`);
+      placeholder.classList.add('sequence-drop-placeholder-visible');
+    });
+    return;
+  }
+  placeholder.style.setProperty('--sequence-placeholder-width',`${nextWidth}px`);
+  placeholder.style.setProperty('--sequence-placeholder-height',`${nextHeight}px`);
   requestAnimationFrame(()=>placeholder.classList.add('sequence-drop-placeholder-visible'));
 }
 function updateSequenceDropPreview(list,targetEl,event){
@@ -378,12 +396,18 @@ function updateSequenceDropPreview(list,targetEl,event){
     let anchorEl=referenceEl;
     if(referenceEl){
       const rect=referenceEl.getBoundingClientRect();
-      const horizontalAfter=event.clientX>rect.left+(rect.width/2);
-      const verticalAfter=event.clientY>rect.top+(rect.height/2);
-      const isAfter=Math.abs(event.clientY-(rect.top+(rect.height/2)))>Math.max(rect.height*0.45,14)?verticalAfter:horizontalAfter;
       targetId=Number(referenceEl.dataset.familyTagId||0);
-      dropPosition=isAfter?'after':'before';
-      insertMode=isAfter?'afterend':'beforebegin';
+      const previousPosition=state.sequenceDropPreviewTargetId===targetId?state.sequenceDropPreviewPosition:null;
+      const isWrappedRow=Math.abs(event.clientY-(rect.top+(rect.height/2)))>Math.max(rect.height*0.45,14);
+      const axisStart=isWrappedRow?rect.top:rect.left;
+      const axisSize=isWrappedRow?rect.height:rect.width;
+      const pointerPosition=isWrappedRow?event.clientY:event.clientX;
+      const axisRatio=axisSize>0?(pointerPosition-axisStart)/axisSize:0.5;
+      // Use a small dead zone around the middle of the chip. This avoids the
+      // placeholder rapidly flipping before/after while the user drags slowly.
+      if(previousPosition && axisRatio>0.35 && axisRatio<0.65) dropPosition=previousPosition;
+      else dropPosition=axisRatio>=0.5?'after':'before';
+      insertMode=dropPosition==='after'?'afterend':'beforebegin';
       const previewChanged=state.sequenceDropPreviewTargetId!==targetId||state.sequenceDropPreviewPosition!==dropPosition;
       setSequencePlaceholderSize(placeholder,rect.width,rect.height,{animateOpen:previewChanged});
     }else{
