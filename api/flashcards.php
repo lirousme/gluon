@@ -306,6 +306,70 @@ function normalizeGeneratedTagMetadata(string $rawName, string $rawNamePtBr, $ra
     return ['name'=>$rawName, 'name_pt_br'=>$rawNamePtBr, 'numero'=>$numero, 'sigla_simbolo'=>$siglaSimbolo];
 }
 
+
+function normalizeDateLexicalChunkTexts(string $en, string $ptBr = ''): array
+{
+    $originalEn = preg_replace('/\s+/u', ' ', trim($en));
+    $originalPtBr = preg_replace('/\s+/u', ' ', trim($ptBr));
+    if ($originalEn === '') return [$originalEn, $originalPtBr];
+
+    $monthMap = [
+        'january' => 'janeiro', 'jan' => 'janeiro',
+        'february' => 'fevereiro', 'feb' => 'fevereiro',
+        'march' => 'março', 'mar' => 'março',
+        'april' => 'abril', 'apr' => 'abril',
+        'may' => 'maio',
+        'june' => 'junho', 'jun' => 'junho',
+        'july' => 'julho', 'jul' => 'julho',
+        'august' => 'agosto', 'aug' => 'agosto',
+        'september' => 'setembro', 'sep' => 'setembro', 'sept' => 'setembro',
+        'october' => 'outubro', 'oct' => 'outubro',
+        'november' => 'novembro', 'nov' => 'novembro',
+        'december' => 'dezembro', 'dec' => 'dezembro',
+    ];
+    $months = 'January|Jan|February|Feb|March|Mar|April|Apr|May|June|Jun|July|Jul|August|Aug|September|Sept|Sep|October|Oct|November|Nov|December|Dec';
+
+    if (preg_match('/^(?:(on|in)\s+)?(' . $months . ')\s+(\d{1,2})(st|nd|rd|th)?(?:,?\s+\d{4})?$/iu', $originalEn, $m)) {
+        $preposition = strtolower((string)($m[1] ?? ''));
+        $month = (string)$m[2];
+        $suffix = strtolower((string)($m[4] ?? ''));
+        if ($suffix === '') $suffix = 'th';
+        $normalizedEn = ($preposition !== '' ? $preposition . ' ' : '') . $month . ' ...' . $suffix;
+        $monthKey = function_exists('mb_strtolower') ? mb_strtolower($month, 'UTF-8') : strtolower($month);
+        $ptMonth = $monthMap[$monthKey] ?? $monthKey;
+        $normalizedPtBr = ($preposition !== '' ? 'em ' : '') . $ptMonth . ' ...';
+        return [$normalizedEn, $normalizedPtBr];
+    }
+
+    if (preg_match('/^(?:(on|in)\s+)?(' . $months . ')\s+\d{4}$/iu', $originalEn, $m)) {
+        $preposition = strtolower((string)($m[1] ?? ''));
+        $month = (string)$m[2];
+        $normalizedEn = ($preposition !== '' ? $preposition . ' ' : '') . $month;
+        $monthKey = function_exists('mb_strtolower') ? mb_strtolower($month, 'UTF-8') : strtolower($month);
+        $ptMonth = $monthMap[$monthKey] ?? $monthKey;
+        $normalizedPtBr = ($preposition !== '' ? 'em ' : '') . $ptMonth;
+        return [$normalizedEn, $normalizedPtBr];
+    }
+
+    return [$originalEn, $originalPtBr];
+}
+
+function containsUnrealisticFutureYear(string $text, array $allowedYearLiterals = []): bool
+{
+    $currentYear = (int)date('Y');
+    $allowed = [];
+    foreach ($allowedYearLiterals as $year) {
+        $year = trim((string)$year);
+        if (preg_match('/^\d{4}$/', $year)) $allowed[$year] = true;
+    }
+    preg_match_all('/(?<!\d)(\d{4})(?!\d)/', $text, $matches);
+    foreach (($matches[1] ?? []) as $yearText) {
+        $year = (int)$yearText;
+        if ($year > $currentYear && !isset($allowed[$yearText])) return true;
+    }
+    return false;
+}
+
 function tagNumberToWords(string $raw): array
 {
     $compact = preg_replace('/\s+/u', '', trim($raw));
@@ -968,9 +1032,13 @@ function normalizeFrontSentenceTagCandidate(array $raw, string $panel): ?array
 
 function normalizeFrontSentenceChunkCandidate(array $raw): ?array
 {
-    $metadata = normalizeGeneratedTagMetadata(
+    [$rawEn, $rawPtBr] = normalizeDateLexicalChunkTexts(
         expandEnglishContractionsForLexicalChunkTag((string)($raw['en'] ?? $raw['english'] ?? $raw['name'] ?? '')),
-        (string)($raw['pt_br'] ?? $raw['ptBr'] ?? $raw['translation'] ?? $raw['name_pt_br'] ?? ''),
+        (string)($raw['pt_br'] ?? $raw['ptBr'] ?? $raw['translation'] ?? $raw['name_pt_br'] ?? '')
+    );
+    $metadata = normalizeGeneratedTagMetadata(
+        $rawEn,
+        $rawPtBr,
         $raw['numero'] ?? $raw['number'] ?? null,
         $raw['sigla_simbolo'] ?? $raw['symbol'] ?? $raw['abbreviation'] ?? null
     );
@@ -4155,6 +4223,8 @@ Regras:
 - Não use artigos iniciais nas tags de subject e nas tags de substantivos em objects: use "dog", "cat", "avenue", não "the dog", "the cat", "the avenue".
 - A única exceção para pontos em tags é quando o próprio lexical chunk for um padrão com reticências, como "Whether ... or ..." ("Seja ... ou ..."). Use reticências apenas nos chunks, nunca em subject ou objects.
 - Use traduções curtas para as tags e mantenha a ordem natural dos chunks.
+- Não gere frases com anos futuros aleatórios ou distantes (ex.: 2034, 2040). Só use ano futuro se o próprio lexical chunk solicitado for exatamente esse ano; caso contrário, prefira anos realistas até o ano atual.
+- Para datas completas em chunks, não inclua o ano nem o número literal do dia dentro do chunk: em vez de "on June 8th 2026", use "on June ...th". O ano e o dia devem aparecer como tags numéricas isoladas.
 - Quando a tag for um número, valor, medida ou quantidade (ex.: "2010", "R$42,40", "U$10,15", "1,60m", "49kg", "1.000.000.000"), coloque o valor literal em numero e coloque os textos por extenso em en e pt_br.
 - Para tags numéricas, nunca mantenha preposições ou contexto junto do texto da tag: em uma frase como "I went to the zoo in 2014", a tag do número deve ser en="two thousand and fourteen", pt_br="dois mil e catorze", numero="2014", não en="in 2014" nem pt_br="em 2014".
 - Se qualquer frase gerada tiver ano, número, valor, medida ou quantidade, crie obrigatoriamente uma tag isolada para cada valor numérico literal encontrado, mesmo que o número também apareça dentro de um chunk maior como "in 2014".
@@ -4212,6 +4282,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
 
     $examples = [];
     $seen_sentences = [];
+    $allowedFutureYears = extractQuantifiedNumberLiteralsFromText($tag_text_en . ' ' . $tag_text_pt_br);
     foreach ($examples_raw as $example_raw) {
         if (!is_array($example_raw)) continue;
         $english = ensureSentenceEndsWithPeriod((string)($example_raw['english'] ?? ''));
@@ -4220,6 +4291,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         $subject_raw = isset($example_raw['subject']) && is_array($example_raw['subject']) ? $example_raw['subject'] : [];
         $objects_raw = isset($example_raw['objects']) && is_array($example_raw['objects']) ? $example_raw['objects'] : [];
         if ($english === '' || $pt_br === '' || empty($chunks_raw) || empty($subject_raw)) continue;
+        if (containsUnrealisticFutureYear($english . ' ' . $pt_br, $allowedFutureYears)) continue;
 
         $normalized_english = normalizeSentenceForDuplicateCheck($english);
         if ($normalized_english === '' || isset($seen_sentences[$normalized_english])) continue;
@@ -4287,9 +4359,13 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         $seen_chunks = [];
         foreach ($chunks_raw as $chunk) {
             if (!is_array($chunk)) continue;
-            $chunkMetadata = normalizeGeneratedTagMetadata(
+            [$rawChunkEn, $rawChunkPtBr] = normalizeDateLexicalChunkTexts(
                 expandEnglishContractionsForLexicalChunkTag((string)($chunk['en'] ?? $chunk['english'] ?? $chunk['name'] ?? '')),
-                (string)($chunk['pt_br'] ?? $chunk['ptBr'] ?? $chunk['translation'] ?? $chunk['name_pt_br'] ?? ''),
+                (string)($chunk['pt_br'] ?? $chunk['ptBr'] ?? $chunk['translation'] ?? $chunk['name_pt_br'] ?? '')
+            );
+            $chunkMetadata = normalizeGeneratedTagMetadata(
+                $rawChunkEn,
+                $rawChunkPtBr,
                 $chunk['numero'] ?? $chunk['number'] ?? null,
                 $chunk['sigla_simbolo'] ?? $chunk['symbol'] ?? $chunk['abbreviation'] ?? null
             );
@@ -4414,6 +4490,7 @@ Regras:
 - chunks deve conter de 2 a 6 lexical chunks curtos e reutilizáveis: verbos ou expressões verbais, preposições, expressões de lugar, tempo, modo, causa, finalidade, frequência, comparação, condição, afirmação, negação ou dúvida.
 - Não inclua o sujeito ou substantivos soltos como lexical chunks.
 - Nas tags, remova pontuação de frase e expanda contrações: use "do not", "is", "are", "will", etc.
+- Para datas completas em chunks, não inclua o ano nem o número literal do dia dentro do chunk: em vez de "on June 8th 2026", use "on June ...th". O ano e o dia devem aparecer como tags numéricas isoladas.
 - Quando a tag for um número, valor, medida ou quantidade (ex.: "2010", "R$42,40", "U$10,15", "1,60m", "49kg", "1.000.000.000"), coloque o valor literal em numero e coloque os textos por extenso em en e pt_br.
 - Para tags numéricas, nunca mantenha preposições ou contexto junto do texto da tag: em uma frase como "I went to the zoo in 2014", a tag do número deve ser en="two thousand and fourteen", pt_br="dois mil e catorze", numero="2014", não en="in 2014" nem pt_br="em 2014".
 - Se qualquer frase gerada tiver ano, número, valor, medida ou quantidade, crie obrigatoriamente uma tag isolada para cada valor numérico literal encontrado, mesmo que o número também apareça dentro de um chunk maior como "in 2014".
