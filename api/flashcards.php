@@ -40,6 +40,7 @@ if (!isset($_SESSION['user_id'])) {
 
 $pdo = Database::getConnection();
 ensureFlashcardTagsNumericMetadataSchema($pdo);
+ensureTagFamilyOrderSchema($pdo);
 $user_id = $_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? ($_GET['action'] ?? '');
@@ -218,6 +219,22 @@ function ensureFlashcardTagsNumericMetadataSchema(PDO $pdo): void
         if (!$siglaColumn) $pdo->exec('ALTER TABLE flashcard_tags ADD COLUMN sigla_simbolo VARCHAR(191) NULL AFTER numero');
     } catch (Throwable $e) {
         error_log('[flashcards][flashcard_tags_numeric_metadata_schema] ' . $e->getMessage());
+    }
+}
+
+
+function ensureTagFamilyOrderSchema(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $orderColumn = $pdo->query("SHOW COLUMNS FROM tag_family LIKE 'ordem'")->fetch(PDO::FETCH_ASSOC);
+        if (!$orderColumn) {
+            $pdo->exec('ALTER TABLE tag_family ADD COLUMN ordem INT NOT NULL DEFAULT 0 AFTER tipo_de_relacao');
+        }
+    } catch (Throwable $e) {
+        error_log('[flashcards][tag_family_order_schema] ' . $e->getMessage());
     }
 }
 
@@ -5835,18 +5852,18 @@ elseif ($action === 'get_tag_family') {
         $relationTypeHierarchy[$typeId] = (int)($typeRow['hierarquia'] ?? 0);
     }
 
-    $stmtChildren = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo, t.color, tf.tipo_de_relacao FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_child WHERE tf.id_user IN (?, 5) AND tf.id_tag_mother = ? AND t.user_id IN (?,5)");
-    $stmtChildren->execute([$user_id, $tag_id, $user_id]);
+    $stmtChildren = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo, t.color, tf.tipo_de_relacao, tf.id_user AS family_user_id, tf.ordem FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_child LEFT JOIN tipo_de_relacao tr ON tr.id = tf.tipo_de_relacao WHERE tf.id_user IN (?, 5) AND tf.id_tag_mother = ? AND t.user_id IN (?,5) ORDER BY (tf.id_user = ?) DESC, CASE WHEN COALESCE(tr.hierarquia, 0) = 2 THEN tf.ordem ELSE 0 END ASC, t.id ASC");
+    $stmtChildren->execute([$user_id, $tag_id, $user_id, $user_id]);
     $children = $stmtChildren->fetchAll(PDO::FETCH_ASSOC);
 
-    $stmtMothers = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo, t.color, tf.tipo_de_relacao FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_mother WHERE tf.id_user IN (?, 5) AND tf.id_tag_child = ? AND t.user_id IN (?,5)");
-    $stmtMothers->execute([$user_id, $tag_id, $user_id]);
+    $stmtMothers = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo, t.color, tf.tipo_de_relacao, tf.id_user AS family_user_id, tf.ordem FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_mother WHERE tf.id_user IN (?, 5) AND tf.id_tag_child = ? AND t.user_id IN (?,5) ORDER BY (tf.id_user = ?) DESC, t.id ASC");
+    $stmtMothers->execute([$user_id, $tag_id, $user_id, $user_id]);
     $mothers = $stmtMothers->fetchAll(PDO::FETCH_ASSOC);
 
     $hierarquiaTresTypes = array_keys(array_filter($relationTypeHierarchy, function($hierarquia){ return (int)$hierarquia === 3; }));
     if (!empty($hierarquiaTresTypes)) {
         $placeholders = implode(',', array_fill(0, count($hierarquiaTresTypes), '?'));
-        $graphStmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother, tipo_de_relacao FROM tag_family WHERE id_user IN (?, 5) AND tipo_de_relacao IN ($placeholders)");
+        $graphStmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother, tipo_de_relacao, id_user AS family_user_id, ordem FROM tag_family WHERE id_user IN (?, 5) AND tipo_de_relacao IN ($placeholders)");
         $graphStmt->execute(array_merge([$user_id], $hierarquiaTresTypes));
         $graphRows = $graphStmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -5968,9 +5985,52 @@ elseif ($action === 'add_tag_family_relation') {
         }
     }
 
-    $stmt = $pdo->prepare("INSERT IGNORE INTO tag_family (id_user, id_tag_child, id_tag_mother, tipo_de_relacao) VALUES (?, ?, ?, ?)");
-    $stmt->execute([$user_id, $child, $mother, $relation_type]);
+    $nextOrder = 0;
+    if ($relation_hierarchy === 2) {
+        $orderStmt = $pdo->prepare("SELECT COALESCE(MAX(ordem), 0) + 1 FROM tag_family WHERE id_user = ? AND id_tag_mother = ? AND tipo_de_relacao = ?");
+        $orderStmt->execute([$user_id, $mother, $relation_type]);
+        $nextOrder = (int)($orderStmt->fetchColumn() ?: 1);
+    }
+
+    $stmt = $pdo->prepare("INSERT IGNORE INTO tag_family (id_user, id_tag_child, id_tag_mother, tipo_de_relacao, ordem) VALUES (?, ?, ?, ?, ?)");
+    $stmt->execute([$user_id, $child, $mother, $relation_type, $nextOrder]);
     echo json_encode(['status'=>'success','message'=>'Relação salva com sucesso.']);
+}
+
+
+elseif ($action === 'reorder_tag_family_sequence') {
+    $tag_id = (int)($input['tag_id'] ?? 0);
+    $relation_type = (int)($input['tipo_de_relacao'] ?? 0);
+    $ordered_tag_ids = sanitizeTagIds($input['ordered_tag_ids'] ?? []);
+    if ($tag_id <= 0 || $relation_type <= 0 || empty($ordered_tag_ids)) die(json_encode(['status'=>'error','message'=>'Ordem inválida.']));
+
+    $typeStmt = $pdo->prepare("SELECT id FROM tipo_de_relacao WHERE id = ? AND id_user IN (?, 5) AND hierarquia = 2 LIMIT 1");
+    $typeStmt->execute([$relation_type, $user_id]);
+    if (!$typeStmt->fetchColumn()) die(json_encode(['status'=>'error','message'=>'Esta sessão não é do tipo Sequência.']));
+
+    $placeholders = implode(',', array_fill(0, count($ordered_tag_ids), '?'));
+    $currentStmt = $pdo->prepare("SELECT id_tag_child FROM tag_family WHERE id_user = ? AND id_tag_mother = ? AND tipo_de_relacao = ? AND id_tag_child IN ($placeholders)");
+    $currentStmt->execute(array_merge([$user_id, $tag_id, $relation_type], $ordered_tag_ids));
+    $currentIds = array_map('intval', $currentStmt->fetchAll(PDO::FETCH_COLUMN));
+    sort($currentIds);
+    $expectedIds = $ordered_tag_ids;
+    sort($expectedIds);
+    if ($currentIds !== $expectedIds) die(json_encode(['status'=>'error','message'=>'A ordem contém tags que não pertencem a esta sequência ou sem permissão.']));
+
+    try {
+        $pdo->beginTransaction();
+        $updateStmt = $pdo->prepare("UPDATE tag_family SET ordem = ? WHERE id_user = ? AND id_tag_mother = ? AND tipo_de_relacao = ? AND id_tag_child = ? LIMIT 1");
+        foreach ($ordered_tag_ids as $index => $childId) {
+            $updateStmt->execute([$index + 1, $user_id, $tag_id, $relation_type, $childId]);
+        }
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('[flashcards][reorder_tag_family_sequence] ' . $e->getMessage());
+        die(json_encode(['status'=>'error','message'=>'Erro interno ao reordenar sequência.']));
+    }
+
+    echo json_encode(['status'=>'success','message'=>'Sequência reordenada com sucesso.']);
 }
 
 
