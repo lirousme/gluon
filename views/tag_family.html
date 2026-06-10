@@ -20,6 +20,44 @@
     button {
       font-size: 16px;
     }
+
+    .sequence-reorder-list {
+      align-items: center;
+      min-height: 2.25rem;
+      transition: background-color 160ms ease, box-shadow 160ms ease;
+    }
+
+    .sequence-reorder-list.sequence-drag-active {
+      border-radius: 0.75rem;
+      background: rgba(14, 165, 233, 0.08);
+      box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.26);
+      padding: 0.25rem;
+      margin: -0.25rem;
+    }
+
+    .sequence-tag-chip {
+      transition: transform 160ms ease, opacity 160ms ease, box-shadow 160ms ease, margin 160ms ease;
+    }
+
+    .sequence-tag-chip.sequence-dragging {
+      opacity: 0.35;
+      transform: scale(0.96);
+    }
+
+    .sequence-drop-placeholder {
+      flex: 0 0 auto;
+      border: 1px dashed rgba(125, 211, 252, 0.92);
+      border-radius: 9999px;
+      background: rgba(14, 165, 233, 0.16);
+      box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.08);
+      animation: sequenceDropPulse 900ms ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes sequenceDropPulse {
+      0%, 100% { opacity: 0.7; }
+      50% { opacity: 1; }
+    }
   </style>
 </head>
 <body class="bg-slate-900 text-white min-h-screen">
@@ -83,7 +121,7 @@
   }, { passive: false });
 })();
 const params = new URLSearchParams(window.location.search);
-const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: null, removalRelationType: null, tags: [], family: {mothers:[], children:[]}, relationTypes: [], savedFilters: [], sessionUserId: null, editingRelationTypeId: null, reorderRelationType: null, draggedSequenceTagId: null };
+const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: null, removalRelationType: null, tags: [], family: {mothers:[], children:[]}, relationTypes: [], savedFilters: [], sessionUserId: null, editingRelationTypeId: null, reorderRelationType: null, draggedSequenceTagId: null, sequenceDropTargetId: null, sequenceDropPosition: 'before' };
 const title = document.getElementById('tagFamilyMainTitle');
 title.textContent = state.tagName || 'Tag';
 
@@ -273,13 +311,67 @@ function getTagRelationType(tag={}){
   }
   return 0;
 }
+function getSequenceDropPlaceholder(){
+  let placeholder=document.getElementById('sequenceDropPlaceholder');
+  if(!placeholder){
+    placeholder=document.createElement('span');
+    placeholder.id='sequenceDropPlaceholder';
+    placeholder.className='sequence-drop-placeholder';
+    placeholder.setAttribute('aria-hidden','true');
+  }
+  return placeholder;
+}
+function clearSequenceDragPreview(){
+  const placeholder=document.getElementById('sequenceDropPlaceholder');
+  if(placeholder) placeholder.remove();
+  document.querySelectorAll('.sequence-dragging').forEach((el)=>el.classList.remove('sequence-dragging'));
+  document.querySelectorAll('.sequence-drag-active').forEach((el)=>el.classList.remove('sequence-drag-active'));
+  state.draggedSequenceTagId=null;
+  state.sequenceDropTargetId=null;
+  state.sequenceDropPosition='before';
+}
+function updateSequenceDropPreview(list,targetEl,event){
+  const relationType=Number(list?.dataset.sequenceList||0);
+  if(!list||state.reorderRelationType!==relationType||!state.draggedSequenceTagId) return;
+  list.classList.add('sequence-drag-active');
+  const placeholder=getSequenceDropPlaceholder();
+  const draggedEl=list.querySelector(`[data-family-tag-id="${state.draggedSequenceTagId}"]`);
+  const referenceEl=targetEl?.closest?.('[data-family-tag-id]');
+  if(referenceEl===draggedEl) return;
+  if(referenceEl){
+    const rect=referenceEl.getBoundingClientRect();
+    const isAfter=event.clientX>rect.left+(rect.width/2);
+    placeholder.style.width=`${Math.max(rect.width, 48)}px`;
+    placeholder.style.height=`${Math.max(rect.height, 28)}px`;
+    state.sequenceDropTargetId=Number(referenceEl.dataset.familyTagId||0);
+    state.sequenceDropPosition=isAfter?'after':'before';
+    referenceEl.insertAdjacentElement(isAfter?'afterend':'beforebegin',placeholder);
+    return;
+  }
+  const chips=[...list.querySelectorAll('[data-family-tag-id]')].filter((chip)=>chip!==draggedEl);
+  const lastChip=chips[chips.length-1];
+  if(lastChip){
+    const rect=lastChip.getBoundingClientRect();
+    placeholder.style.width=`${Math.max(rect.width, 48)}px`;
+    placeholder.style.height=`${Math.max(rect.height, 28)}px`;
+    lastChip.insertAdjacentElement('afterend',placeholder);
+    state.sequenceDropTargetId=Number(lastChip.dataset.familyTagId||0);
+    state.sequenceDropPosition='after';
+  }else{
+    placeholder.style.width='4rem';
+    placeholder.style.height='1.75rem';
+    list.appendChild(placeholder);
+    state.sequenceDropTargetId=state.draggedSequenceTagId;
+    state.sequenceDropPosition='before';
+  }
+}
 function renderFamily(){
   const mk=(arr,type,{allowRemoval=true,sequenceMode=false}={})=>{
     if(!arr.length) return '<span class="text-xs text-slate-400">Nenhuma</span>';
     const isRemovalMode=allowRemoval && state.removalRelationType===type;
     const isReorderMode=sequenceMode && state.reorderRelationType===type;
     const numeroPtBrCounts = buildNumeroPtBrCounts(arr);
-    return arr.map((t,index)=>`<button type="button" data-family-tag-id="${Number(t.id)}" data-relation-role="${t.__relationRole||'child'}" data-family-allow-removal="${allowRemoval?'1':'0'}" data-sequence-index="${index}" draggable="${isReorderMode?'true':'false'}" class="px-2 py-1 rounded-full text-xs border transition-colors ${getTagOwnershipClass(t,{removalMode:isRemovalMode})} ${isRemovalMode?'cursor-pointer':''} ${isReorderMode?'cursor-move ring-1 ring-sky-300/70':''}" title="${isReorderMode?'Arraste para reordenar a sequência':(isRemovalMode?'Remover tag desta família':'Abrir família da tag')}">${isReorderMode?'<i class="fa-solid fa-grip-vertical mr-1 text-sky-200"></i>':''}${renderTagButtonContent(t, numeroPtBrCounts)}</button>`).join('');
+    return arr.map((t,index)=>`<button type="button" data-family-tag-id="${Number(t.id)}" data-relation-role="${t.__relationRole||'child'}" data-family-allow-removal="${allowRemoval?'1':'0'}" data-sequence-index="${index}" draggable="${isReorderMode?'true':'false'}" class="sequence-tag-chip px-2 py-1 rounded-full text-xs border transition-colors ${getTagOwnershipClass(t,{removalMode:isRemovalMode})} ${isRemovalMode?'cursor-pointer':''} ${isReorderMode?'cursor-move ring-1 ring-sky-300/70':''}" title="${isReorderMode?'Arraste para reordenar a sequência':(isRemovalMode?'Remover tag desta família':'Abrir família da tag')}">${isReorderMode?'<i class="fa-solid fa-grip-vertical mr-1 text-sky-200"></i>':''}${renderTagButtonContent(t, numeroPtBrCounts)}</button>`).join('');
   };
   const buildSectionHeader=(type,{labelPrefix='',showActions=true,showRemovalButton=true,sequenceChildren=[]}={})=>{
     const relationType=getRelationTypeById(type);
@@ -303,7 +395,7 @@ function renderFamily(){
     const isSelected=state.selectedRelationType===type;
     const selectedClass=isSelected?'ring-2 ring-violet-400 border-violet-500/80':'border-slate-700/80';
     if(relationTypeUsesSequence(type)){
-      return `<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer">${buildSectionHeader(type,{sequenceChildren:children})}<div data-sequence-list="${type}" class="flex flex-wrap gap-2">${mk(children,type,{sequenceMode:true})}</div></div>`;
+      return `<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer">${buildSectionHeader(type,{sequenceChildren:children})}<div data-sequence-list="${type}" class="sequence-reorder-list flex flex-wrap gap-2">${mk(children,type,{sequenceMode:true})}</div></div>`;
     }
     if(!relationTypeUsesHierarchy(type)){
       return `<div data-relation-type="${type}" class="relation-type-card ${selectedClass} border rounded-lg p-3 bg-slate-900/40 cursor-pointer">${buildSectionHeader(type)}<div><div class="flex flex-wrap gap-2">${mk(children,type)}</div></div></div>`;
@@ -342,26 +434,55 @@ function renderFamily(){
     });
   });
   document.querySelectorAll('[data-sequence-list]').forEach((list)=>{
-    list.addEventListener('dragover',(ev)=>{if(state.reorderRelationType===Number(list.dataset.sequenceList||0)) ev.preventDefault();});
+    list.addEventListener('dragover',(ev)=>{
+      if(state.reorderRelationType!==Number(list.dataset.sequenceList||0)) return;
+      ev.preventDefault();
+      updateSequenceDropPreview(list,ev.target,ev);
+    });
+    list.addEventListener('drop',async(ev)=>{
+      const relationType=Number(list.dataset.sequenceList||0);
+      if(state.reorderRelationType!==relationType) return;
+      ev.preventDefault();ev.stopPropagation();
+      const draggedId=state.draggedSequenceTagId||Number(ev.dataTransfer.getData('text/plain')||0);
+      const targetId=state.sequenceDropTargetId||Number(ev.target.closest?.('[data-family-tag-id]')?.dataset.familyTagId||0);
+      const dropPosition=state.sequenceDropPosition||'before';
+      clearSequenceDragPreview();
+      await reorderSequenceTag(relationType,draggedId,targetId,dropPosition);
+    });
+    list.addEventListener('dragleave',(ev)=>{
+      if(!list.contains(ev.relatedTarget)) list.classList.remove('sequence-drag-active');
+    });
   });
   document.querySelectorAll('[data-family-tag-id]').forEach((el)=>{
     el.addEventListener('dragstart',(ev)=>{
       const relationType=Number(el.closest('[data-relation-type]')?.dataset.relationType||0);
       if(state.reorderRelationType!==relationType){ev.preventDefault();return;}
       state.draggedSequenceTagId=Number(el.dataset.familyTagId||0);
+      state.sequenceDropTargetId=null;
+      state.sequenceDropPosition='before';
+      el.classList.add('sequence-dragging');
+      el.closest('[data-sequence-list]')?.classList.add('sequence-drag-active');
       ev.dataTransfer.effectAllowed='move';
       ev.dataTransfer.setData('text/plain', String(state.draggedSequenceTagId));
     });
     el.addEventListener('dragover',(ev)=>{
       const relationType=Number(el.closest('[data-relation-type]')?.dataset.relationType||0);
-      if(state.reorderRelationType===relationType) ev.preventDefault();
+      if(state.reorderRelationType===relationType){
+        ev.preventDefault();
+        updateSequenceDropPreview(el.closest('[data-sequence-list]'),el,ev);
+      }
     });
     el.addEventListener('drop',async(ev)=>{
       const relationType=Number(el.closest('[data-relation-type]')?.dataset.relationType||0);
       if(state.reorderRelationType!==relationType) return;
       ev.preventDefault();ev.stopPropagation();
-      await reorderSequenceTag(relationType,state.draggedSequenceTagId||Number(ev.dataTransfer.getData('text/plain')||0),Number(el.dataset.familyTagId||0));
+      const draggedId=state.draggedSequenceTagId||Number(ev.dataTransfer.getData('text/plain')||0);
+      const targetId=state.sequenceDropTargetId||Number(el.dataset.familyTagId||0);
+      const dropPosition=state.sequenceDropPosition||'before';
+      clearSequenceDragPreview();
+      await reorderSequenceTag(relationType,draggedId,targetId,dropPosition);
     });
+    el.addEventListener('dragend',clearSequenceDragPreview);
     el.onclick=async()=>{
       const targetId=Number(el.dataset.familyTagId);
       const relationRole=el.dataset.relationRole||'child';
@@ -376,7 +497,7 @@ function renderFamily(){
     };
   });
 }
-async function reorderSequenceTag(relationType, draggedId, targetId){
+async function reorderSequenceTag(relationType, draggedId, targetId, dropPosition='before'){
   draggedId=Number(draggedId||0);targetId=Number(targetId||0);
   if(!draggedId||!targetId||draggedId===targetId) return;
   const current=state.family.children.filter((tag)=>getTagRelationType(tag)===relationType).map((tag)=>Number(tag.id));
@@ -385,7 +506,9 @@ async function reorderSequenceTag(relationType, draggedId, targetId){
   if(from<0||to<0) return;
   const ordered=[...current];
   const [moved]=ordered.splice(from,1);
-  ordered.splice(to,0,moved);
+  let insertIndex=to+(dropPosition==='after'?1:0);
+  if(from<insertIndex) insertIndex-=1;
+  ordered.splice(Math.max(0,Math.min(insertIndex,ordered.length)),0,moved);
   await api('reorder_tag_family_sequence',{tag_id:state.tagId,tipo_de_relacao:relationType,ordered_tag_ids:ordered});
   state.family.children.sort((a,b)=>{
     const typeA=getTagRelationType(a), typeB=getTagRelationType(b);
