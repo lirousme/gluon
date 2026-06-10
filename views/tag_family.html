@@ -36,7 +36,7 @@
     }
 
     .sequence-tag-chip {
-      transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1), opacity 260ms ease, box-shadow 320ms ease, margin 420ms cubic-bezier(0.16, 1, 0.3, 1);
+      transition: transform 360ms ease, opacity 260ms ease, box-shadow 320ms ease;
       will-change: transform, opacity;
     }
 
@@ -56,23 +56,17 @@
       border-radius: 9999px;
       background: rgba(14, 165, 233, 0.16);
       box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.08);
-      animation: sequenceDropPulse 1800ms ease-in-out infinite;
       pointer-events: none;
-      transform: scaleX(var(--sequence-placeholder-scale, 0.35));
+      transform: scaleX(var(--sequence-placeholder-scale, 0.4));
       transform-origin: center;
       will-change: width, min-width, margin, opacity, transform;
-      transition: width 620ms cubic-bezier(0.16, 1, 0.3, 1), min-width 620ms cubic-bezier(0.16, 1, 0.3, 1), height 420ms ease, margin 620ms cubic-bezier(0.16, 1, 0.3, 1), opacity 300ms ease, transform 620ms cubic-bezier(0.16, 1, 0.3, 1);
+      transition: width 520ms ease, min-width 520ms ease, height 360ms ease, margin 520ms ease, opacity 260ms ease, transform 520ms ease;
     }
 
     .sequence-drop-placeholder.sequence-drop-placeholder-visible {
       --sequence-placeholder-opacity: 1;
       --sequence-placeholder-margin: 0.5rem;
       --sequence-placeholder-scale: 1;
-    }
-
-    @keyframes sequenceDropPulse {
-      0%, 100% { opacity: 0.7; }
-      50% { opacity: 1; }
     }
   </style>
 </head>
@@ -137,7 +131,7 @@
   }, { passive: false });
 })();
 const params = new URLSearchParams(window.location.search);
-const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: null, removalRelationType: null, tags: [], family: {mothers:[], children:[]}, relationTypes: [], savedFilters: [], sessionUserId: null, editingRelationTypeId: null, reorderRelationType: null, draggedSequenceTagId: null, sequenceDropTargetId: null, sequenceDropPosition: 'before', sequenceDropPreviewTargetId: null, sequenceDropPreviewPosition: 'before', sequenceDropPreviewFrame: null };
+const state = { tagId: Number(params.get('tag_id') || 0), tagName: (params.get('tag_name') || '').trim(), mode: 'child', selectedRelationType: null, removalRelationType: null, tags: [], family: {mothers:[], children:[]}, relationTypes: [], savedFilters: [], sessionUserId: null, editingRelationTypeId: null, reorderRelationType: null, draggedSequenceTagId: null, sequenceDropTargetId: null, sequenceDropPosition: 'before', sequenceDropPreviewTargetId: null, sequenceDropPreviewPosition: 'before', sequenceDropPreviewKey: null, sequenceDropPreviewFrame: null };
 const title = document.getElementById('tagFamilyMainTitle');
 title.textContent = state.tagName || 'Tag';
 
@@ -356,87 +350,111 @@ function clearSequenceDragPreview(){
   state.sequenceDropPosition='before';
   state.sequenceDropPreviewTargetId=null;
   state.sequenceDropPreviewPosition='before';
+  state.sequenceDropPreviewKey=null;
 }
 function setSequencePlaceholderSize(placeholder,width,height,{animateOpen=false}={}){
   const nextWidth=Math.max(width,48);
   const nextHeight=Math.max(height,28);
+  placeholder.style.setProperty('--sequence-placeholder-height',`${nextHeight}px`);
   if(animateOpen){
     placeholder.classList.remove('sequence-drop-placeholder-visible');
     placeholder.style.setProperty('--sequence-placeholder-width','0px');
-    placeholder.style.setProperty('--sequence-placeholder-height',`${nextHeight}px`);
-    // Force the browser to paint the closed slot first, then open it slowly so the
-    // surrounding chips visibly make room instead of jumping instantly.
     placeholder.getBoundingClientRect();
     requestAnimationFrame(()=>{
       placeholder.style.setProperty('--sequence-placeholder-width',`${nextWidth}px`);
-      placeholder.style.setProperty('--sequence-placeholder-height',`${nextHeight}px`);
       placeholder.classList.add('sequence-drop-placeholder-visible');
     });
     return;
   }
   placeholder.style.setProperty('--sequence-placeholder-width',`${nextWidth}px`);
-  placeholder.style.setProperty('--sequence-placeholder-height',`${nextHeight}px`);
-  requestAnimationFrame(()=>placeholder.classList.add('sequence-drop-placeholder-visible'));
+  placeholder.classList.add('sequence-drop-placeholder-visible');
 }
-function updateSequenceDropPreview(list,targetEl,event){
-  if(state.sequenceDropPreviewFrame) cancelAnimationFrame(state.sequenceDropPreviewFrame);
+function getSequenceDropCandidate(list,event){
+  const draggedEl=list.querySelector(`[data-family-tag-id="${state.draggedSequenceTagId}"]`);
+  const chips=[...list.querySelectorAll('[data-family-tag-id]')].filter((chip)=>chip!==draggedEl);
+  if(!chips.length){
+    return {targetId:state.draggedSequenceTagId,dropPosition:'before',anchorEl:null,insertMode:'beforeend',width:64,height:28};
+  }
+  const pointerX=event.clientX;
+  const pointerY=event.clientY;
+  const rows=[];
+  chips.forEach((chip)=>{
+    const rect=chip.getBoundingClientRect();
+    let row=rows.find((item)=>Math.abs(item.top-rect.top)<Math.max(8,rect.height/2));
+    if(!row){
+      row={top:rect.top,bottom:rect.bottom,chips:[]};
+      rows.push(row);
+    }
+    row.top=Math.min(row.top,rect.top);
+    row.bottom=Math.max(row.bottom,rect.bottom);
+    row.chips.push({chip,rect});
+  });
+  rows.sort((a,b)=>a.top-b.top);
+  rows.forEach((row)=>row.chips.sort((a,b)=>a.rect.left-b.rect.left));
+  let row=rows.find((item)=>pointerY>=item.top-10 && pointerY<=item.bottom+10);
+  if(!row) row=pointerY<rows[0].top?rows[0]:rows[rows.length-1];
+  const rowChips=row.chips;
+  const first=rowChips[0];
+  const last=rowChips[rowChips.length-1];
+  let chosen=last;
+  let dropPosition='after';
+  if(pointerX<=first.rect.left){
+    chosen=first;
+    dropPosition='before';
+  }else if(pointerX>=last.rect.right){
+    chosen=last;
+    dropPosition='after';
+  }else{
+    const over=rowChips.find((item)=>pointerX>=item.rect.left && pointerX<=item.rect.right);
+    if(over){
+      const previousPosition=state.sequenceDropPreviewTargetId===Number(over.chip.dataset.familyTagId||0)?state.sequenceDropPreviewPosition:null;
+      const ratio=over.rect.width>0?(pointerX-over.rect.left)/over.rect.width:0.5;
+      chosen=over;
+      // Wide hysteresis: while the pointer is near the middle of a chip, keep the
+      // previous side. This stops the gap from flickering open/closed during slow drags.
+      if(previousPosition && ratio>0.25 && ratio<0.75) dropPosition=previousPosition;
+      else dropPosition=ratio>=0.5?'after':'before';
+    }else{
+      const before=rowChips.find((item)=>pointerX<item.rect.left+(item.rect.width/2));
+      if(before){
+        chosen=before;
+        dropPosition='before';
+      }
+    }
+  }
+  return {
+    targetId:Number(chosen.chip.dataset.familyTagId||0),
+    dropPosition,
+    anchorEl:chosen.chip,
+    insertMode:dropPosition==='after'?'afterend':'beforebegin',
+    width:chosen.rect.width,
+    height:chosen.rect.height
+  };
+}
+function updateSequenceDropPreview(list,event){
+  if(state.sequenceDropPreviewFrame) return;
   state.sequenceDropPreviewFrame=requestAnimationFrame(()=>{
     state.sequenceDropPreviewFrame=null;
     const relationType=Number(list?.dataset.sequenceList||0);
     if(!list||state.reorderRelationType!==relationType||!state.draggedSequenceTagId) return;
     list.classList.add('sequence-drag-active');
     const placeholder=getSequenceDropPlaceholder();
-    if(targetEl?.closest?.('#sequenceDropPlaceholder')) return;
-    const draggedEl=list.querySelector(`[data-family-tag-id="${state.draggedSequenceTagId}"]`);
-    const referenceEl=targetEl?.closest?.('[data-family-tag-id]');
-    if(referenceEl===draggedEl) return;
-    let targetId=0;
-    let dropPosition='before';
-    let insertMode='beforebegin';
-    let anchorEl=referenceEl;
-    if(referenceEl){
-      const rect=referenceEl.getBoundingClientRect();
-      targetId=Number(referenceEl.dataset.familyTagId||0);
-      const previousPosition=state.sequenceDropPreviewTargetId===targetId?state.sequenceDropPreviewPosition:null;
-      const isWrappedRow=Math.abs(event.clientY-(rect.top+(rect.height/2)))>Math.max(rect.height*0.45,14);
-      const axisStart=isWrappedRow?rect.top:rect.left;
-      const axisSize=isWrappedRow?rect.height:rect.width;
-      const pointerPosition=isWrappedRow?event.clientY:event.clientX;
-      const axisRatio=axisSize>0?(pointerPosition-axisStart)/axisSize:0.5;
-      // Use a small dead zone around the middle of the chip. This avoids the
-      // placeholder rapidly flipping before/after while the user drags slowly.
-      if(previousPosition && axisRatio>0.35 && axisRatio<0.65) dropPosition=previousPosition;
-      else dropPosition=axisRatio>=0.5?'after':'before';
-      insertMode=dropPosition==='after'?'afterend':'beforebegin';
-      const previewChanged=state.sequenceDropPreviewTargetId!==targetId||state.sequenceDropPreviewPosition!==dropPosition;
-      setSequencePlaceholderSize(placeholder,rect.width,rect.height,{animateOpen:previewChanged});
-    }else{
-      const chips=[...list.querySelectorAll('[data-family-tag-id]')].filter((chip)=>chip!==draggedEl);
-      anchorEl=chips[chips.length-1]||null;
-      if(anchorEl){
-        const rect=anchorEl.getBoundingClientRect();
-        targetId=Number(anchorEl.dataset.familyTagId||0);
-        dropPosition='after';
-        insertMode='afterend';
-        const previewChanged=state.sequenceDropPreviewTargetId!==targetId||state.sequenceDropPreviewPosition!==dropPosition;
-        setSequencePlaceholderSize(placeholder,rect.width,rect.height,{animateOpen:previewChanged});
-      }else{
-        targetId=state.draggedSequenceTagId;
-        const previewChanged=state.sequenceDropPreviewTargetId!==targetId||state.sequenceDropPreviewPosition!==dropPosition;
-        setSequencePlaceholderSize(placeholder,64,28,{animateOpen:previewChanged});
-      }
-    }
-    if(!targetId) return;
-    state.sequenceDropTargetId=targetId;
-    state.sequenceDropPosition=dropPosition;
-    const previewChanged=state.sequenceDropPreviewTargetId!==targetId||state.sequenceDropPreviewPosition!==dropPosition;
-    state.sequenceDropPreviewTargetId=targetId;
-    state.sequenceDropPreviewPosition=dropPosition;
-    if(anchorEl){
-      if(previewChanged || placeholder.parentElement!==list) anchorEl.insertAdjacentElement(insertMode,placeholder);
-    }else if(previewChanged || placeholder.parentElement!==list){
+    const candidate=getSequenceDropCandidate(list,event);
+    if(!candidate?.targetId) return;
+    const previewKey=`${candidate.targetId}:${candidate.dropPosition}`;
+    const previewChanged=state.sequenceDropPreviewKey!==previewKey;
+    state.sequenceDropTargetId=candidate.targetId;
+    state.sequenceDropPosition=candidate.dropPosition;
+    state.sequenceDropPreviewTargetId=candidate.targetId;
+    state.sequenceDropPreviewPosition=candidate.dropPosition;
+    state.sequenceDropPreviewKey=previewKey;
+    const needsFirstOpen=placeholder.parentElement!==list;
+    if(candidate.anchorEl){
+      if(previewChanged || needsFirstOpen) candidate.anchorEl.insertAdjacentElement(candidate.insertMode,placeholder);
+    }else if(previewChanged || needsFirstOpen){
       list.appendChild(placeholder);
     }
+    setSequencePlaceholderSize(placeholder,candidate.width,candidate.height,{animateOpen:needsFirstOpen});
   });
 }
 function renderFamily(){
@@ -511,7 +529,7 @@ function renderFamily(){
     list.addEventListener('dragover',(ev)=>{
       if(state.reorderRelationType!==Number(list.dataset.sequenceList||0)) return;
       ev.preventDefault();
-      updateSequenceDropPreview(list,ev.target,ev);
+      updateSequenceDropPreview(list,ev);
     });
     list.addEventListener('drop',async(ev)=>{
       const relationType=Number(list.dataset.sequenceList||0);
@@ -543,7 +561,7 @@ function renderFamily(){
       const relationType=Number(el.closest('[data-relation-type]')?.dataset.relationType||0);
       if(state.reorderRelationType===relationType){
         ev.preventDefault();
-        updateSequenceDropPreview(el.closest('[data-sequence-list]'),el,ev);
+        updateSequenceDropPreview(el.closest('[data-sequence-list]'),ev);
       }
     });
     el.addEventListener('drop',async(ev)=>{
