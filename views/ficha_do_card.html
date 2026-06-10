@@ -846,6 +846,9 @@ const app = {
     try {
       const res = await this.api('generate_front_sentence_tags_gemini', { sentence });
       if (!res || !res.candidates) throw new Error('A API não retornou tags válidas.');
+      if (res.english_sentence && String(res.english_sentence).trim()) {
+        singleFront.value = String(res.english_sentence).trim();
+      }
       this.pendingFrontSentenceTagCandidates = res.candidates;
       if (res.needs_ownership_choice) {
         this.openProperNounOwnerModal(res.proper_nouns || []);
