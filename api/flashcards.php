@@ -1326,6 +1326,23 @@ function getCardTagLinkColumnsByTable(): array {
     ];
 }
 
+function getSubjectObjectLexicalChunkCardCountSubquery(string $alias = 'subjects_count'): string {
+    return "
+        SELECT linked.tag_id, COUNT(DISTINCT linked.flashcard_id) AS {$alias}
+        FROM (
+            SELECT tag_id, flashcard_id FROM subjects_links
+            UNION ALL
+            SELECT tag_id, flashcard_id FROM objects_links
+            UNION ALL
+            SELECT tag_id, flashcard_id FROM lexical_chunks_links
+        ) linked
+        INNER JOIN flashcards f ON f.id = linked.flashcard_id
+        INNER JOIN directories d ON d.id = f.directory_id
+        WHERE d.user_id = ?
+        GROUP BY linked.tag_id
+    ";
+}
+
 function ensureFlashcardTagScoresTable(PDO $pdo): void {
     static $checked = false;
     if ($checked) return;
@@ -5034,14 +5051,19 @@ elseif ($action === 'list_subject_cards_by_tag') {
             f.image_back_encrypted,
             d.user_id AS directory_user_id,
             d.name_encrypted AS directory_name_encrypted
-        FROM subjects_links sl
-        INNER JOIN flashcards f ON f.id = sl.flashcard_id
+        FROM (
+            SELECT flashcard_id FROM subjects_links WHERE tag_id = ?
+            UNION
+            SELECT flashcard_id FROM objects_links WHERE tag_id = ?
+            UNION
+            SELECT flashcard_id FROM lexical_chunks_links WHERE tag_id = ?
+        ) linked
+        INNER JOIN flashcards f ON f.id = linked.flashcard_id
         INNER JOIN directories d ON d.id = f.directory_id
-        WHERE sl.tag_id = ?
-          AND d.user_id IN (?, 5)
+        WHERE d.user_id IN (?, 5)
         ORDER BY f.id DESC
     ");
-    $stmt->execute([$tag_id, $user_id]);
+    $stmt->execute([$tag_id, $tag_id, $tag_id, $user_id]);
 
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $cardIds = array_map(static fn($card) => (int)$card['id'], $rows);
@@ -5139,12 +5161,7 @@ elseif ($action === 'list_tags') {
             COALESCE(subject_counts.subjects_count, 0) AS subjects_count
         FROM flashcard_tags t
         LEFT JOIN (
-            SELECT sl.tag_id, COUNT(DISTINCT sl.flashcard_id) AS subjects_count
-            FROM subjects_links sl
-            INNER JOIN flashcards f ON f.id = sl.flashcard_id
-            INNER JOIN directories d ON d.id = f.directory_id
-            WHERE d.user_id = ?
-            GROUP BY sl.tag_id
+" . getSubjectObjectLexicalChunkCardCountSubquery() . "
         ) subject_counts ON subject_counts.tag_id = t.id
         WHERE t.user_id IN (?, 5)
         ORDER BY t.id ASC
@@ -5191,12 +5208,7 @@ elseif ($action === 'list_user_tags_by_subject_card_count' || $action === 'list_
             COALESCE(subject_counts.subjects_count, 0) AS subjects_count
         FROM flashcard_tags t
         LEFT JOIN (
-            SELECT sl.tag_id, COUNT(DISTINCT sl.flashcard_id) AS subjects_count
-            FROM subjects_links sl
-            INNER JOIN flashcards f ON f.id = sl.flashcard_id
-            INNER JOIN directories d ON d.id = f.directory_id
-            WHERE d.user_id = ?
-            GROUP BY sl.tag_id
+" . getSubjectObjectLexicalChunkCardCountSubquery() . "
         ) subject_counts ON subject_counts.tag_id = t.id
         WHERE t.user_id = ?
         ORDER BY subjects_count ASC, t.id ASC
@@ -5256,12 +5268,7 @@ elseif ($action === 'list_saved_filters') {
         FROM filtros f
         INNER JOIN flashcard_tags t ON t.id = f.id_tag
         LEFT JOIN (
-            SELECT sl.tag_id, COUNT(DISTINCT sl.flashcard_id) AS subjects_count
-            FROM subjects_links sl
-            INNER JOIN flashcards fc ON fc.id = sl.flashcard_id
-            INNER JOIN directories d ON d.id = fc.directory_id
-            WHERE d.user_id = ?
-            GROUP BY sl.tag_id
+" . getSubjectObjectLexicalChunkCardCountSubquery() . "
         ) subject_counts ON subject_counts.tag_id = t.id
         WHERE f.id_user = ? AND t.user_id IN (?, 5)
         ORDER BY f.id DESC
