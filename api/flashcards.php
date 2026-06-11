@@ -409,6 +409,45 @@ function generatedTagLooksVerbLike(array $tag): bool
     return !empty($tag['is_verb']) || !empty($tag['verb']);
 }
 
+
+function generatedTagTextMatchesSelected(array $tag, string $selectedEn, string $selectedPtBr): bool
+{
+    $tagEn = (string)($tag['en'] ?? $tag['english'] ?? $tag['name'] ?? '');
+    $tagPtBr = (string)($tag['pt_br'] ?? $tag['ptBr'] ?? $tag['translation'] ?? $tag['name_pt_br'] ?? '');
+    if ($tagEn === '' || $tagPtBr === '') return false;
+
+    return normalizeLexicalChunkLookupValue($tagEn) === normalizeLexicalChunkLookupValue($selectedEn)
+        && normalizeLexicalChunkLookupValue($tagPtBr) === normalizeLexicalChunkLookupValue($selectedPtBr);
+}
+
+function normalizeSelectedGeneratedTagRole($role): string
+{
+    $role = function_exists('mb_strtolower') ? mb_strtolower(trim((string)$role), 'UTF-8') : strtolower(trim((string)$role));
+    $role = str_replace(['-', ' '], '_', $role);
+    if (in_array($role, ['subject', 'sujeito'], true)) return 'subject';
+    if (in_array($role, ['object', 'objects', 'objeto', 'objetos', 'noun', 'substantivo'], true)) return 'object';
+    if (in_array($role, ['chunk', 'chunks', 'lexical_chunk', 'lexical_chunks', 'lexical', 'expressao', 'expressão', 'verb', 'verbo', 'verb_phrase', 'phrasal_verb'], true)) return 'chunk';
+    return '';
+}
+
+function determineSelectedGeneratedTagRole(array $exampleRaw, array $subjectRaw, array $objectsRaw, array $chunksRaw, string $selectedEn, string $selectedPtBr): string
+{
+    $declaredRole = normalizeSelectedGeneratedTagRole($exampleRaw['selected_tag_role'] ?? $exampleRaw['tag_role'] ?? $exampleRaw['selected_role'] ?? '');
+    if ($declaredRole !== '') return $declaredRole;
+
+    foreach ($chunksRaw as $chunkRaw) {
+        if (is_array($chunkRaw) && generatedTagTextMatchesSelected($chunkRaw, $selectedEn, $selectedPtBr)) return 'chunk';
+    }
+    foreach ($objectsRaw as $objectRaw) {
+        if (is_array($objectRaw) && generatedTagTextMatchesSelected($objectRaw, $selectedEn, $selectedPtBr)) return generatedTagLooksVerbLike($objectRaw) ? 'chunk' : 'object';
+    }
+    if (!empty($subjectRaw) && generatedTagTextMatchesSelected($subjectRaw, $selectedEn, $selectedPtBr)) {
+        return generatedTagLooksVerbLike($subjectRaw) ? 'chunk' : 'subject';
+    }
+
+    return '';
+}
+
 function normalizeGeneratedTagMetadata(string $rawName, string $rawNamePtBr, $rawNumero = null, $rawSiglaSimbolo = null): array
 {
     $numero = normalizeNullableTagMetadataText($rawNumero);
@@ -4387,18 +4426,19 @@ Gere %d frases naturais em inglês para estudante de inglês. Cada frase deve co
 
 A tradução "%s" define o sentido obrigatório da tag "%s". Ignore outros sentidos possíveis da mesma palavra em inglês: se a mesma palavra puder ter várias traduções, use somente o sentido indicado por "%s".
 
-Para cada frase, identifique o sujeito, somente os objetos diretos e poucos lexical chunks sucintos.
+Para cada frase, identifique o sujeito gramatical real, substantivos relevantes da frase em objects (exceto o sujeito) e poucos lexical chunks sucintos. Também classifique onde a tag solicitada foi usada em selected_tag_role: "subject", "object" ou "chunk".
 
 Retorne exclusivamente JSON válido neste formato:
-{"examples":[{"english":"frase em inglês","pt_br":"tradução exata em pt-BR","subject":{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional"},"objects":[{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional"}],"chunks":[{"en":"lexical chunk curto e útil ou texto por extenso em inglês","pt_br":"tradução ou texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional"}]}]}
+{"examples":[{"english":"frase em inglês","pt_br":"tradução exata em pt-BR","selected_tag_role":"subject|object|chunk","subject":{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional","kind":"common_noun|proper_noun|pronoun|verb|expression|other"},"objects":[{"en":"substantivo da frase que não é sujeito","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional","kind":"common_noun|proper_noun|number|other"}],"chunks":[{"en":"lexical chunk curto e útil ou texto por extenso em inglês","pt_br":"tradução ou texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional","kind":"verb|verb_phrase|phrasal_verb|prepositional_phrase|expression|other"}]}]}
 
 Regras:
 - Retorne exatamente %d item(ns) em examples.
 - Cada frase deve ser diferente das outras e diferente das frases existentes listadas.
-- Cada frase deve conter o lexical chunk "%s" em inglês e a tradução deve usar "%s" para esse trecho.
+- Cada frase deve conter a tag solicitada "%s" em inglês e a tradução deve usar "%s" para esse trecho, exatamente no sentido indicado.
 - Todas as frases em inglês e em pt-BR devem terminar com ponto final. Não termine frases com interrogação, exclamação ou sem pontuação.
-- Para cada frase, preencha subject com o sujeito gramatical principal da frase, sem artigos iniciais. Exemplo: em "The dog barked at the cat on the avenue", subject é "dog", não "the dog".
-- Para cada frase, preencha objects somente com os objetos diretos do verbo principal, sem verbos, sem sujeito e sem substantivos que aparecem apenas em expressões preposicionais/adverbiais. Substantivos em objects também devem vir sem artigos iniciais. Exemplo: em "The dog chased the cat on the avenue", objects inclui somente "cat", não "chased", não "dog" nem "avenue". Em "The dog barked at the cat on the avenue", objects deve ser [] porque não há objeto direto.
+- Para cada frase, preencha subject com o sujeito gramatical principal real da frase, sem artigos iniciais. Exemplo: em "The dog barked at the cat on the avenue", subject é "dog", não "the dog".
+- Nunca coloque a tag solicitada em subject só porque ela foi a tag inicial escolhida. Se a tag solicitada for verbo, lexical chunk, expressão, preposição, lugar, tempo ou modo, ela deve ser realocada para chunks e selected_tag_role deve ser "chunk". Se ela for um substantivo da frase mas não for o sujeito real, coloque-a em objects e selected_tag_role deve ser "object". Use selected_tag_role="subject" somente quando a tag solicitada for de fato o sujeito gramatical real da frase.
+- Para cada frase, preencha objects com 1 a 4 substantivos relevantes que aparecem na frase e não são o sujeito: objetos diretos, substantivos essenciais de complementos ou substantivos de expressões preposicionais importantes. Objects nunca deve ficar vazio. Sem verbos, sem sujeito e sem artigos iniciais. Exemplo: em "The dog chased the cat on the avenue", objects inclui "cat" e pode incluir "avenue", não "chased" nem "dog". Em "The dog barked at the cat on the avenue", objects inclui "cat" e/ou "avenue" porque são substantivos da frase que não são o sujeito.
 - Em chunks, gere somente chunks sucintos: verbos principais, verbos frasais ou expressões verbais, expressões de lugar, tempo, modo, causa, finalidade, intensidade, comparação, condição, afirmação, negação, dúvida ou frequência.
 - Em chunks, prefira trechos curtos como "chased", "barked", "at", "on the avenue", "every morning", "because of ...". Todo verbo principal que antes iria para objects deve ir para chunks. Não crie muitas variações com mudanças mínimas e não inclua o sujeito ou substantivos soltos como lexical chunks.
 - Cada frase deve ter de 2 a 4 chunks no máximo. Gere menos chunks, desde que sejam os mais úteis e naturais da frase.
@@ -4482,7 +4522,8 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         $chunks_raw = isset($example_raw['chunks']) && is_array($example_raw['chunks']) ? $example_raw['chunks'] : [];
         $subject_raw = isset($example_raw['subject']) && is_array($example_raw['subject']) ? $example_raw['subject'] : [];
         $objects_raw = isset($example_raw['objects']) && is_array($example_raw['objects']) ? $example_raw['objects'] : [];
-        if ($english === '' || $pt_br === '' || empty($chunks_raw) || empty($subject_raw)) continue;
+        $selected_tag_role = determineSelectedGeneratedTagRole($example_raw, $subject_raw, $objects_raw, $chunks_raw, $tag_text_en, $tag_text_pt_br);
+        if ($english === '' || $pt_br === '' || $selected_tag_role === '' || empty($chunks_raw) || empty($subject_raw) || empty($objects_raw)) continue;
         if (!textContainsExactNormalizedPhrase($english, $tag_text_en)) continue;
         if (!textContainsExactNormalizedPhrase($pt_br, $tag_text_pt_br)) continue;
         if (containsUnrealisticFutureYear($english . ' ' . $pt_br, $allowedFutureYears)) continue;
@@ -4503,6 +4544,12 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
                 $subject_raw['numero'] ?? $subject_raw['number'] ?? null,
                 $subject_raw['sigla_simbolo'] ?? $subject_raw['symbol'] ?? $subject_raw['abbreviation'] ?? null
             );
+            if ($selected_tag_role !== 'subject' && generatedTagTextMatchesSelected([
+                'en' => (string)$subjectMetadata['name'],
+                'pt_br' => (string)$subjectMetadata['name_pt_br'],
+            ], $tag_text_en, $tag_text_pt_br)) {
+                continue;
+            }
             $subject = findOrCreateWordTagForOwner($pdo, 5, (string)$subjectMetadata['name'], (string)$subjectMetadata['name_pt_br'], $subjectMetadata['numero'], $subjectMetadata['sigla_simbolo']);
         } catch (Throwable $e) {
             continue;
@@ -4513,6 +4560,9 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         foreach ($objects_raw as $object_raw) {
             if (!is_array($object_raw)) continue;
             if (generatedTagLooksVerbLike($object_raw)) {
+                if (generatedTagTextMatchesSelected($object_raw, $tag_text_en, $tag_text_pt_br)) {
+                    $selected_tag_role = 'chunk';
+                }
                 array_unshift($chunks_raw, $object_raw);
                 continue;
             }
@@ -4524,6 +4574,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
             );
             $object_en = (string)$objectMetadata['name'];
             $object_pt_br = (string)$objectMetadata['name_pt_br'];
+            if (normalizeWordTagLookupValue($object_en) === normalizeWordTagLookupValue((string)$subjectMetadata['name'])) continue;
             $object_key = normalizeWordTagLookupValue($object_en) . '|' . normalizeLexicalChunkLookupValue($object_pt_br) . '|' . normalizeNullableTagMetadataText($objectMetadata['numero']) . '|' . normalizeNullableTagMetadataText($objectMetadata['sigla_simbolo']);
             if ($object_key === '|' || isset($seen_objects[$object_key])) continue;
             $seen_objects[$object_key] = true;
@@ -4533,6 +4584,8 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
                 continue;
             }
         }
+
+        if (empty($objects)) continue;
 
         foreach (buildNumberTagCandidatesFromText($english) as $numberCandidate) {
             $numberMetadata = normalizeGeneratedTagMetadata(
@@ -4586,6 +4639,8 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         $examples[] = [
             'english' => $english,
             'pt_br' => $pt_br,
+            'selected_tag_id' => $tag_id,
+            'selected_tag_role' => $selected_tag_role,
             'subject' => $subject,
             'objects' => $objects,
             'chunks' => $chunks
@@ -4611,8 +4666,15 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
             }
             $new_card_id = (int)$pdo->lastInsertId();
             $chunk_tag_ids = array_values(array_filter(array_map(static fn($chunk) => (int)($chunk['tag_id'] ?? 0), $example['chunks'])));
-            $subject_tag_ids = array_values(array_filter([(int)($example['subject']['tag_id'] ?? 0), $tag_id]));
+            $subject_tag_ids = array_values(array_filter([(int)($example['subject']['tag_id'] ?? 0)]));
             $object_tag_ids = array_values(array_filter(array_map(static fn($object) => (int)($object['tag_id'] ?? 0), $example['objects'] ?? [])));
+            if (($example['selected_tag_role'] ?? '') === 'subject') {
+                $subject_tag_ids[] = $tag_id;
+            } elseif (($example['selected_tag_role'] ?? '') === 'object') {
+                $object_tag_ids[] = $tag_id;
+            } elseif (($example['selected_tag_role'] ?? '') === 'chunk') {
+                $chunk_tag_ids[] = $tag_id;
+            }
             syncCardTagLinks($pdo, 'flashcard_tag_links', $new_card_id, [], $user_id);
             syncCardTagLinks($pdo, 'subjects_links', $new_card_id, array_values(array_unique($subject_tag_ids)), $user_id);
             syncCardTagLinks($pdo, 'objects_links', $new_card_id, array_values(array_unique($object_tag_ids)), $user_id);
@@ -4629,6 +4691,8 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         'english' => $first_example['english'],
         'pt_br' => $first_example['pt_br'],
         'chunks' => $first_example['chunks'],
+        'selected_tag_id' => $tag_id,
+        'selected_tag_role' => $first_example['selected_tag_role'] ?? '',
         'examples' => $examples,
         'created_cards_count' => $created_cards_count,
         'existing_sentences_count' => count($existing_sentences)
