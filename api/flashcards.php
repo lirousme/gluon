@@ -770,6 +770,49 @@ function tagCombinationAlreadyExists(PDO $pdo, int $userId, string $name, ?strin
 
 
 
+function sentenceLooksInterrogative(string $value): bool
+{
+    $value = trim($value);
+    if ($value === '') return false;
+    if (preg_match('/[?？]["\'”’\)\]}>]*$/u', $value)) return true;
+
+    $value = preg_replace('/(["\'”’\)\]}>]+)$/u', '', $value);
+    $value = preg_replace('/[\s\.。!！?？]+$/u', '', (string)$value);
+    $value = trim((string)$value);
+    if ($value === '') return false;
+
+    $lower = function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+
+    if (preg_match('/^(who|what|when|where|why|how|which|whose|whom)\b/u', $lower)) return true;
+    if (preg_match('/^(quem|o que|quando|onde|aonde|por que|por quê|porque|como|qual|quais|quanto|quantos|quanta|quantas)\b/u', $lower)) return true;
+
+    if (preg_match('/^(am|are|is|was|were|do|does|did|have|has|had|can|could|would|shall|should|must)\b/u', $lower)) return true;
+    if (preg_match('/^(é|são|foi|foram|era|eram|está|estão|estava|estavam|pode|podem|poderia|poderiam|deve|devem)\b/u', $lower)) return true;
+
+    return false;
+}
+
+function ensureSentenceEndsWithTerminalPunctuation(string $value): string
+{
+    $value = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $value = str_replace(["\r", "\n", "\t"], ' ', $value);
+    $value = preg_replace('/\s+/u', ' ', trim((string)$value));
+    if ($value === '') return '';
+
+    // Example-card sentences must finish with sentence punctuation, while lexical-chunk
+    // tag cleaning remains stricter and removes punctuation separately.
+    $closing = '';
+    if (preg_match('/(["\'”’\)\]}>]+)$/u', $value, $matches)) {
+        $closing = $matches[1];
+        $value = substr($value, 0, -strlen($closing));
+        $value = rtrim($value);
+    }
+
+    $punctuation = sentenceLooksInterrogative($value) ? '?' : '.';
+    $value = preg_replace('/[\s\.。!！?？]+$/u', '', (string)$value);
+    return trim((string)$value) . $punctuation . $closing;
+}
+
 function ensureSentenceEndsWithPeriod(string $value): string
 {
     $value = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
@@ -4046,7 +4089,7 @@ Regras:
 - Para acontecimentos atuais, use a data de referência informada acima: prefira fatos ainda válidos nessa data ou fatos recentes amplamente conhecidos; evite notícias de última hora, previsões e alegações instáveis.
 - Quando a tag dificultar uma frase factual, ainda gere uma frase natural, mas mantenha cenário, sujeito, objetos e contexto plausíveis, sem transformar pessoas públicas ou fatos históricos em ficção.
 - Cada frase deve conter a tag solicitada "%s" em inglês e a tradução deve usar "%s" para esse trecho, exatamente no sentido indicado.
-- Todas as frases em inglês e em pt-BR devem terminar com ponto final. Não termine frases com interrogação, exclamação ou sem pontuação.
+- Todas as frases em inglês e em pt-BR devem terminar com pontuação final: use interrogação quando a frase for interrogativa e ponto final nos demais casos. Não termine frases com exclamação ou sem pontuação.
 - Para cada frase, preencha subject com o sujeito gramatical principal real da frase, sem artigos iniciais. Exemplo: em "The dog barked at the cat on the avenue", subject é "dog", não "the dog".
 - Nunca coloque a tag solicitada em subject só porque ela foi a tag inicial escolhida. Se a tag solicitada for verbo, lexical chunk, expressão, preposição, lugar, tempo ou modo, ela deve ser realocada para chunks e selected_tag_role deve ser "chunk". Se ela for um substantivo da frase mas não for o sujeito real, coloque-a em objects e selected_tag_role deve ser "object". Use selected_tag_role="subject" somente quando a tag solicitada for de fato o sujeito gramatical real da frase.
 - Para cada frase, preencha objects com 1 a 4 substantivos relevantes que aparecem na frase e não são o sujeito: objetos diretos, substantivos essenciais de complementos ou substantivos de expressões preposicionais importantes. Objects nunca deve ficar vazio. Sem verbos, sem sujeito e sem artigos iniciais. Exemplo: em "The dog chased the cat on the avenue", objects inclui "cat" e pode incluir "avenue", não "chased" nem "dog". Em "The dog barked at the cat on the avenue", objects inclui "cat" e/ou "avenue" porque são substantivos da frase que não são o sujeito.
@@ -4128,8 +4171,8 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
     $allowedFutureYears = extractQuantifiedNumberLiteralsFromText($tag_text_en . ' ' . $tag_text_pt_br);
     foreach ($examples_raw as $example_raw) {
         if (!is_array($example_raw)) continue;
-        $english = ensureSentenceEndsWithPeriod((string)($example_raw['english'] ?? ''));
-        $pt_br = ensureSentenceEndsWithPeriod((string)($example_raw['pt_br'] ?? ''));
+        $english = ensureSentenceEndsWithTerminalPunctuation((string)($example_raw['english'] ?? ''));
+        $pt_br = ensureSentenceEndsWithTerminalPunctuation((string)($example_raw['pt_br'] ?? ''));
         $chunks_raw = isset($example_raw['chunks']) && is_array($example_raw['chunks']) ? $example_raw['chunks'] : [];
         $subject_raw = isset($example_raw['subject']) && is_array($example_raw['subject']) ? $example_raw['subject'] : [];
         $objects_raw = isset($example_raw['objects']) && is_array($example_raw['objects']) ? $example_raw['objects'] : [];
