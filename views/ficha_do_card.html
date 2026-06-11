@@ -46,10 +46,10 @@
         <button type="button" id="backLink" class="inline-flex h-9 items-center justify-center rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800" title="Voltar" aria-label="Voltar">
           <i class="fa-solid fa-left-long" aria-hidden="true"></i>
         </button>
-        <button type="button" onclick="app.goToSourceDirectory()" class="inline-flex h-9 items-center justify-center rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800" title="Abrir minhas Anotações" aria-label="Abrir minhas Anotações">
+        <button type="button" id="btnGoToSourceDirectory" onclick="app.goToSourceDirectory()" class="inline-flex h-9 items-center justify-center rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800" title="Abrir minhas Anotações" aria-label="Abrir minhas Anotações">
           <i class="fa-solid fa-thumbtack" aria-hidden="true"></i>
         </button>
-        <button type="button" onclick="app.openCreateTagModal()" class="inline-flex h-9 items-center justify-center rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800" title="Criar nova tag" aria-label="Criar nova tag">
+        <button type="button" id="btnOpenCreateTagModal" onclick="app.openCreateTagModal()" class="inline-flex h-9 items-center justify-center rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800" title="Criar nova tag" aria-label="Criar nova tag">
           <i class="fa-solid fa-plus" aria-hidden="true"></i>
         </button>
         <button type="button" id="btnGenerateFrontTagsGemini" onclick="app.generateFrontSentenceTagsWithGemini()" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-fuchsia-400/20 p-2 text-sm font-medium text-fuchsia-400 transition-colors hover:bg-fuchsia-400/10 hover:text-fuchsia-300" title="Gerar tags da frase da frente com Gemini" aria-label="Gerar tags da frase da frente com Gemini">
@@ -161,7 +161,7 @@
       <form id="tagForm" class="p-5 space-y-4">
         <div class="flex items-center justify-between">
           <h3 class="text-lg font-semibold text-white">Criar nova tag</h3>
-          <button type="button" onclick="app.closeCreateTagModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+          <button type="button" id="btnCloseCreateTagModalIcon" onclick="app.closeCreateTagModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="space-y-2">
           <label class="text-sm text-slate-300">Nome da tag</label>
@@ -172,7 +172,7 @@
           <p class="text-xs text-slate-400">Novas tags serão criadas automaticamente na categoria Palavra.</p>
         </div>
         <div class="flex justify-end gap-2">
-          <button type="button" onclick="app.closeCreateTagModal()" class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white">Cancelar</button>
+          <button type="button" id="btnCancelCreateTag" onclick="app.closeCreateTagModal()" class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white">Cancelar</button>
           <button type="button" id="btnTranslateCreateTagGemini" onclick="app.translateCreateTagWithGemini()" class="px-4 py-2 rounded-lg border border-amber-300/30 text-amber-300 hover:bg-amber-300/10 hover:text-amber-200">
             <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Gemini
           </button>
@@ -185,7 +185,7 @@
     <div id="editTagModalContent" class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md transform scale-95 transition-transform duration-300">
       <form id="editTagForm" class="p-5 space-y-4">
         <input type="hidden" id="editTagIdInput">
-        <div class="flex items-center justify-between"><h3 class="text-lg font-semibold text-white">Editar tag</h3><button type="button" onclick="app.closeEditTagModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button></div>
+        <div class="flex items-center justify-between"><h3 class="text-lg font-semibold text-white">Editar tag</h3><button type="button" id="btnCloseEditTagModalIcon" onclick="app.closeEditTagModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button></div>
         <input id="editTagNameInput" type="text" maxlength="80" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
         <input id="editTagNamePtBrInput" type="text" maxlength="80" placeholder="Nome em pt-BR" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
         <input id="editTagSiglaSimboloInput" type="text" maxlength="191" placeholder="Sigla ou símbolo (ex.: °C, π, TCU)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
@@ -194,13 +194,13 @@
           <label class="inline-flex items-center gap-2"><input id="editTagIsBookInput" type="checkbox" class="h-4 w-4"><span>Livro</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsVerbTenseInput" type="checkbox" class="h-4 w-4"><span>Tempo Verbal</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsSentenceTypeInput" type="checkbox" class="h-4 w-4"><span>Tipo Frasal</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsLexicalChunkInput" type="checkbox" class="h-4 w-4"><span>Lexical Chunk</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsRelationTypeInput" type="checkbox" class="h-4 w-4"><span>Tipo de Relação</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsWordInput" type="checkbox" class="h-4 w-4"><span>Palavra</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsMonthInput" type="checkbox" class="h-4 w-4"><span>Mês</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsDayInput" type="checkbox" class="h-4 w-4"><span>Dia</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsYearInput" type="checkbox" class="h-4 w-4"><span>Ano</span></label>
         </div>
         <div class="flex flex-wrap justify-between gap-2">
-          <button type="button" onclick="app.viewTagFamily()" class="px-4 py-2 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-800">Ver família</button>
+          <button type="button" id="btnViewTagFamily" onclick="app.viewTagFamily()" class="px-4 py-2 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-800">Ver família</button>
           <div class="flex gap-2">
             <button type="button" id="btnTranslateEditTagGemini" onclick="app.translateEditTagWithGemini()" class="px-4 py-2 rounded-lg border border-amber-300/30 text-amber-300 hover:bg-amber-300/10 hover:text-amber-200" title="Traduzir tag com Gemini">
               <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Gemini
             </button>
             <button type="button" id="btnDeleteTag" onclick="app.deleteTag()" class="px-4 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white">Excluir tag</button>
-            <button type="button" onclick="app.closeEditTagModal()" class="px-4 py-2 rounded-lg bg-slate-700">Cancelar</button>
+            <button type="button" id="btnCancelEditTag" onclick="app.closeEditTagModal()" class="px-4 py-2 rounded-lg bg-slate-700">Cancelar</button>
             <button id="btnUpdateTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600">Salvar</button>
           </div>
         </div>
@@ -213,12 +213,12 @@
       <div class="p-5 space-y-4">
         <div class="flex items-center justify-between gap-3">
           <h3 class="text-lg font-semibold text-white">Dono dos nomes próprios</h3>
-          <button type="button" onclick="app.closeProperNounOwnerModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+          <button type="button" id="btnCloseProperNounOwnerModalIcon" onclick="app.closeProperNounOwnerModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <p class="text-sm text-slate-300">O Gemini encontrou nomes próprios. Escolha o dono de cada tag individualmente: sua conta ou o usuário público da plataforma (usuário 5).</p>
         <div id="properNounOwnerList" class="space-y-2 rounded-lg border border-slate-700 bg-slate-900/70 p-3 text-sm text-slate-100"></div>
         <div class="flex justify-end gap-2">
-          <button type="button" onclick="app.closeProperNounOwnerModal()" class="px-4 py-2 rounded-lg bg-slate-700 text-slate-100 hover:bg-slate-600">Cancelar</button>
+          <button type="button" id="btnCancelProperNounOwner" onclick="app.closeProperNounOwnerModal()" class="px-4 py-2 rounded-lg bg-slate-700 text-slate-100 hover:bg-slate-600">Cancelar</button>
           <button type="button" id="btnCreateProperNounsAsUser" onclick="app.confirmFrontSentenceTagsOwner()" class="px-4 py-2 rounded-lg border border-emerald-400/40 text-emerald-200 hover:bg-emerald-400/10">
             <i class="fa-solid fa-check" aria-hidden="true"></i> Criar tags
           </button>
@@ -234,7 +234,7 @@
           <i class="fa-solid fa-thumbtack text-gluon-primary"></i>
           <span>Anotações</span>
         </h3>
-        <button type="button" onclick="app.closeNotesModal()" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-200 hover:text-white hover:border-gluon-primary transition-colors text-sm">
+        <button type="button" id="btnCloseNotesModal" onclick="app.closeNotesModal()" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-200 hover:text-white hover:border-gluon-primary transition-colors text-sm">
           <i class="fa-solid fa-xmark"></i>
           <span>Fechar</span>
         </button>
@@ -297,6 +297,46 @@ const app = {
     const ids = ['editTagIsBookInput','editTagIsVerbTenseInput','editTagIsSentenceTypeInput','editTagIsLexicalChunkInput','editTagIsRelationTypeInput','editTagIsWordInput','editTagIsMonthInput','editTagIsDayInput','editTagIsYearInput'];
     const inputs = ids.map(id => document.getElementById(id)).filter(Boolean);
     inputs.forEach(input => input.addEventListener('change', () => { if (!input.checked) return; inputs.forEach(other => { if (other !== input) other.checked = false; }); }));
+  },
+  setupButtonIdContextCopy() {
+    document.addEventListener('contextmenu', (event) => {
+      const button = event.target.closest('button');
+      if (!button) return;
+      event.preventDefault();
+      this.copyButtonIdToClipboard(button);
+    });
+  },
+  async copyButtonIdToClipboard(button) {
+    const buttonId = String(button?.id || '').trim();
+    if (!buttonId) return this.setStatus('Este botão não possui id para copiar.', 'error');
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(buttonId);
+      } else {
+        this.copyTextWithFallback(buttonId);
+      }
+      this.setStatus(`ID do botão copiado: ${buttonId}`, 'success');
+    } catch (err) {
+      try {
+        this.copyTextWithFallback(buttonId);
+        this.setStatus(`ID do botão copiado: ${buttonId}`, 'success');
+      } catch (_) {
+        this.setStatus('Não foi possível copiar o id do botão.', 'error');
+      }
+    }
+  },
+  copyTextWithFallback(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    if (!copied) throw new Error('Falha ao copiar.');
   },
   normalizeInfoType(value) {
     const type = Number(value);
@@ -745,8 +785,8 @@ const app = {
       });
       el.innerHTML = selectedTags.map(tag => {
         const id = Number(tag.id);
-        const editButton = this.canEditTag(tag) ? `<button type="button" data-edit-tag-id="${id}" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button>` : '';
-        return `<div class="tag-pill inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${this.getTagOwnershipClass(tag)}"><button type="button" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button>${editButton}</div>`;
+        const editButton = this.canEditTag(tag) ? `<button type="button" id="btnEditSelectedTag-${panel}-${id}" data-edit-tag-id="${id}" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button>` : '';
+        return `<div class="tag-pill inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${this.getTagOwnershipClass(tag)}"><button type="button" id="btnTagSelection-${panel}-${id}" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button>${editButton}</div>`;
       }).join('');
       el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
       el.querySelectorAll('[data-edit-tag-id]').forEach(btn => btn.onclick = () => this.openEditTagModal(Number(btn.dataset.editTagId)));
@@ -768,8 +808,8 @@ const app = {
     if (!filtered.length) { el.innerHTML = '<span class="text-xs text-slate-400">Nenhuma tag para exibir.</span>'; return; }
     el.innerHTML = filtered.map(tag => {
       const id = Number(tag.id); const active = currentSelected.includes(id);
-      const editButton = this.canEditTag(tag) ? `<button type="button" data-edit-tag-id="${id}" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button>` : '';
-      return `<div class="tag-pill inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${this.getTagOwnershipClass(tag)} ${active ? 'ring-1 ring-emerald-300/60' : ''}"><button type="button" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button>${editButton}</div>`;
+      const editButton = this.canEditTag(tag) ? `<button type="button" id="btnEditSearchTag-${panel}-${id}" data-edit-tag-id="${id}" title="Editar tag"><i class="fa-solid fa-pen-to-square"></i></button>` : '';
+      return `<div class="tag-pill inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${this.getTagOwnershipClass(tag)} ${active ? 'ring-1 ring-emerald-300/60' : ''}"><button type="button" id="btnTagSearch-${panel}-${id}" data-tag-id="${id}">${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))}</button>${editButton}</div>`;
     }).join('');
     el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
     el.querySelectorAll('[data-edit-tag-id]').forEach(btn => btn.onclick = () => this.openEditTagModal(Number(btn.dataset.editTagId)));
@@ -1216,6 +1256,7 @@ cardForm.onsubmit = (e) => app.save(e);
 tagForm.onsubmit = (e) => app.createTag(e);
 editTagForm.onsubmit = (e) => app.updateTag(e);
 app.setupEditTagCategorySingleSelect();
+app.setupButtonIdContextCopy();
 tagModal.onclick = (e) => { if (e.target === tagModal) app.closeCreateTagModal(); };
 editTagModal.onclick = (e) => { if (e.target === editTagModal) app.closeEditTagModal(); };
 notesModal.onclick = (e) => { if (e.target === notesModal) app.closeNotesModal(); };
