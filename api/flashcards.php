@@ -1338,8 +1338,24 @@ function getSubjectObjectLexicalChunkCardCountSubquery(string $alias = 'subjects
         ) linked
         INNER JOIN flashcards f ON f.id = linked.flashcard_id
         INNER JOIN directories d ON d.id = f.directory_id
-        WHERE d.user_id = ?
+        WHERE d.user_id IN (?, 5)
         GROUP BY linked.tag_id
+    ";
+}
+
+function getTagCardCountSubqueryForLinkTable(string $linkTable, string $alias): string {
+    $allowedTables = ['subjects_links', 'objects_links', 'lexical_chunks_links'];
+    if (!in_array($linkTable, $allowedTables, true)) {
+        throw new InvalidArgumentException('Tabela de contagem de tags inválida.');
+    }
+
+    return "
+        SELECT l.tag_id, COUNT(DISTINCT l.flashcard_id) AS {$alias}
+        FROM {$linkTable} l
+        INNER JOIN flashcards f ON f.id = l.flashcard_id
+        INNER JOIN directories d ON d.id = f.directory_id
+        WHERE d.user_id IN (?, 5)
+        GROUP BY l.tag_id
     ";
 }
 
@@ -5158,20 +5174,36 @@ elseif ($action === 'list_tags') {
             t.is_month,
             t.is_day,
             t.is_year,
-            COALESCE(subject_counts.subjects_count, 0) AS subjects_count
+            COALESCE(subject_counts.subjects_count, 0) AS subjects_count,
+            COALESCE(subject_card_counts.subject_cards_count, 0) AS subject_cards_count,
+            COALESCE(object_card_counts.object_cards_count, 0) AS object_cards_count,
+            COALESCE(lexical_chunk_card_counts.lexical_chunk_cards_count, 0) AS lexical_chunk_cards_count
         FROM flashcard_tags t
         LEFT JOIN (
 " . getSubjectObjectLexicalChunkCardCountSubquery() . "
         ) subject_counts ON subject_counts.tag_id = t.id
+        LEFT JOIN (
+" . getTagCardCountSubqueryForLinkTable('subjects_links', 'subject_cards_count') . "
+        ) subject_card_counts ON subject_card_counts.tag_id = t.id
+        LEFT JOIN (
+" . getTagCardCountSubqueryForLinkTable('objects_links', 'object_cards_count') . "
+        ) object_card_counts ON object_card_counts.tag_id = t.id
+        LEFT JOIN (
+" . getTagCardCountSubqueryForLinkTable('lexical_chunks_links', 'lexical_chunk_cards_count') . "
+        ) lexical_chunk_card_counts ON lexical_chunk_card_counts.tag_id = t.id
         WHERE t.user_id IN (?, 5)
         ORDER BY t.id ASC
     ");
-    $stmt->execute([$user_id, $user_id]);
+    $stmt->execute([$user_id, $user_id, $user_id, $user_id, $user_id]);
     $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $parsed = [];
     foreach ($tags as $tag) {
         $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
         $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
+        $tag['subjects_count'] = (int)($tag['subjects_count'] ?? 0);
+        $tag['subject_cards_count'] = (int)($tag['subject_cards_count'] ?? 0);
+        $tag['object_cards_count'] = (int)($tag['object_cards_count'] ?? 0);
+        $tag['lexical_chunk_cards_count'] = (int)($tag['lexical_chunk_cards_count'] ?? 0);
         unset($tag['name_encrypted'], $tag['name_pt_br_encrypted']);
         $parsed[] = $tag;
     }
