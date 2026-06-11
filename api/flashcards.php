@@ -2997,6 +2997,24 @@ function extractGeminiText($decoded) {
 /**
  * Normaliza frases para detectar duplicatas ignorando caixa, pontuação e espaços extras.
  */
+
+function normalizeTextForExactPhraseMatch(string $text): string
+{
+    $normalized = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $normalized = function_exists('mb_strtolower') ? mb_strtolower($normalized, 'UTF-8') : strtolower($normalized);
+    $normalized = preg_replace('/[^\p{L}\p{N}]+/u', ' ', (string)$normalized);
+    return trim(preg_replace('/\s+/u', ' ', (string)$normalized));
+}
+
+function textContainsExactNormalizedPhrase(string $text, string $phrase): bool
+{
+    $normalizedText = normalizeTextForExactPhraseMatch($text);
+    $normalizedPhrase = normalizeTextForExactPhraseMatch($phrase);
+    if ($normalizedPhrase === '') return true;
+    if ($normalizedText === '') return false;
+    return preg_match('/(?:^|\s)' . preg_quote($normalizedPhrase, '/') . '(?:\s|$)/u', $normalizedText) === 1;
+}
+
 function normalizeSentenceForDuplicateCheck(string $text): string {
     $normalized = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
     $normalized = function_exists('mb_strtolower') ? mb_strtolower($normalized, 'UTF-8') : strtolower($normalized);
@@ -4197,10 +4215,20 @@ elseif ($action === 'generate_tag_sentence_gemini') {
         die(json_encode(['status' => 'error', 'message' => 'Texto da tag inválido para gerar frase.']));
     }
 
-    $stmtTag = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5) LIMIT 1");
+    $stmtTag = $pdo->prepare("SELECT id, name_encrypted, name_pt_br_encrypted FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5) LIMIT 1");
     $stmtTag->execute([$tag_id, $user_id]);
-    if (!$stmtTag->fetchColumn()) {
+    $selectedTagRow = $stmtTag->fetch(PDO::FETCH_ASSOC);
+    if (!$selectedTagRow) {
         die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada ou sem permissão.']));
+    }
+
+    $stored_tag_text_en = !empty($selectedTagRow['name_encrypted']) ? trim((string)Security::decryptData((string)$selectedTagRow['name_encrypted'])) : '';
+    $stored_tag_text_pt_br = !empty($selectedTagRow['name_pt_br_encrypted']) ? trim((string)Security::decryptData((string)$selectedTagRow['name_pt_br_encrypted'])) : '';
+    if ($stored_tag_text_en !== '') $tag_text_en = $stored_tag_text_en;
+    if ($stored_tag_text_pt_br !== '') $tag_text_pt_br = $stored_tag_text_pt_br;
+
+    if ($tag_text_en === '' || $tag_text_pt_br === '') {
+        die(json_encode(['status' => 'error', 'message' => 'A tag selecionada precisa ter texto em inglês e em pt-BR.']));
     }
 
     if (GEMINI_API_KEY === '') {
@@ -4300,10 +4328,20 @@ elseif ($action === 'generate_sentence_lexical_chunks_gemini') {
         die(json_encode(['status' => 'error', 'message' => 'Texto da tag inválido para gerar frase e lexical chunks.']));
     }
 
-    $stmtTag = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5) LIMIT 1");
+    $stmtTag = $pdo->prepare("SELECT id, name_encrypted, name_pt_br_encrypted FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5) LIMIT 1");
     $stmtTag->execute([$tag_id, $user_id]);
-    if (!$stmtTag->fetchColumn()) {
+    $selectedTagRow = $stmtTag->fetch(PDO::FETCH_ASSOC);
+    if (!$selectedTagRow) {
         die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada ou sem permissão.']));
+    }
+
+    $stored_tag_text_en = !empty($selectedTagRow['name_encrypted']) ? trim((string)Security::decryptData((string)$selectedTagRow['name_encrypted'])) : '';
+    $stored_tag_text_pt_br = !empty($selectedTagRow['name_pt_br_encrypted']) ? trim((string)Security::decryptData((string)$selectedTagRow['name_pt_br_encrypted'])) : '';
+    if ($stored_tag_text_en !== '') $tag_text_en = $stored_tag_text_en;
+    if ($stored_tag_text_pt_br !== '') $tag_text_pt_br = $stored_tag_text_pt_br;
+
+    if ($tag_text_en === '' || $tag_text_pt_br === '') {
+        die(json_encode(['status' => 'error', 'message' => 'A tag selecionada precisa ter texto em inglês e em pt-BR.']));
     }
 
     if ($create_cards) {
@@ -4329,7 +4367,9 @@ elseif ($action === 'generate_sentence_lexical_chunks_gemini') {
     }
 
     $prompt = sprintf(<<<'PROMPT'
-Gere %d frases naturais em inglês para estudante de inglês. Cada frase deve conter o lexical chunk "%s" traduzido como "%s". Gere também a tradução exata de cada frase em pt-BR.%s
+Gere %d frases naturais em inglês para estudante de inglês. Cada frase deve conter exatamente a tag em inglês "%s" e essa ocorrência deve ser traduzida exatamente como "%s" na frase em pt-BR. Gere também a tradução exata de cada frase em pt-BR.%s
+
+A tradução "%s" define o sentido obrigatório da tag "%s". Ignore outros sentidos possíveis da mesma palavra em inglês: se a mesma palavra puder ter várias traduções, use somente o sentido indicado por "%s".
 
 Para cada frase, identifique o sujeito, os objetos/verbos e poucos lexical chunks sucintos.
 
@@ -4366,7 +4406,7 @@ Regras:
 - Se qualquer frase gerada tiver ano, número, valor, medida ou quantidade, crie obrigatoriamente uma tag isolada para cada valor numérico literal encontrado, mesmo que o número também apareça dentro de um chunk maior como "in 2014".
 - Quando existir sigla ou símbolo conhecido (ex.: "°C", "π", "TCU"), coloque-o em sigla_simbolo. Caso não exista, use null ou omita.
 - Não use markdown, comentários ou texto fora do JSON.
-PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $example_count, $tag_text_en, $tag_text_pt_br, $tag_text_en);
+PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $tag_text_pt_br, $tag_text_en, $tag_text_pt_br, $example_count, $tag_text_en, $tag_text_pt_br, $tag_text_en);
 
     $payload = [
         'contents' => [
@@ -4427,6 +4467,8 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         $subject_raw = isset($example_raw['subject']) && is_array($example_raw['subject']) ? $example_raw['subject'] : [];
         $objects_raw = isset($example_raw['objects']) && is_array($example_raw['objects']) ? $example_raw['objects'] : [];
         if ($english === '' || $pt_br === '' || empty($chunks_raw) || empty($subject_raw)) continue;
+        if (!textContainsExactNormalizedPhrase($english, $tag_text_en)) continue;
+        if (!textContainsExactNormalizedPhrase($pt_br, $tag_text_pt_br)) continue;
         if (containsUnrealisticFutureYear($english . ' ' . $pt_br, $allowedFutureYears)) continue;
 
         $normalized_english = normalizeSentenceForDuplicateCheck($english);
@@ -4532,11 +4574,11 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
     }
 
     if (empty($examples)) {
-        die(json_encode(['status' => 'error', 'message' => 'Nenhuma frase com lexical chunks válidos foi retornada pelo Gemini.']));
+        die(json_encode(['status' => 'error', 'message' => 'Nenhuma frase com lexical chunks válidos e com a tradução exata da tag selecionada foi retornada pelo Gemini.']));
     }
 
     if (count($examples) < $example_count) {
-        die(json_encode(['status' => 'error', 'message' => 'O Gemini retornou apenas ' . count($examples) . ' frase(s) válida(s), mas eram necessárias ' . $example_count . '. Tente gerar novamente.']));
+        die(json_encode(['status' => 'error', 'message' => 'O Gemini retornou apenas ' . count($examples) . ' frase(s) válida(s), mas eram necessárias ' . $example_count . '. Tente gerar novamente; algumas frases podem ter sido descartadas por não usar a tradução exata da tag selecionada.']));
     }
 
     if ($create_cards) {
