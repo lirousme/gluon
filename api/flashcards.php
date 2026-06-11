@@ -4024,8 +4024,12 @@ elseif ($action === 'generate_sentence_lexical_chunks_gemini') {
         }
     }
 
+    $current_date_for_prompt = gmdate('F j, Y');
+
     $prompt = sprintf(<<<'PROMPT'
 Gere %d frases naturais em inglês para estudante de inglês. Cada frase deve conter exatamente a tag em inglês "%s" e essa ocorrência deve ser traduzida exatamente como "%s" na frase em pt-BR. Gere também a tradução exata de cada frase em pt-BR.%s
+
+Data atual de referência: %s.
 
 A tradução "%s" define o sentido obrigatório da tag "%s". Ignore outros sentidos possíveis da mesma palavra em inglês: se a mesma palavra puder ter várias traduções, use somente o sentido indicado por "%s".
 
@@ -4037,6 +4041,10 @@ Retorne exclusivamente JSON válido neste formato:
 Regras:
 - Retorne exatamente %d item(ns) em examples.
 - Cada frase deve ser diferente das outras e diferente das frases existentes listadas.
+- Dê preferência forte a frases factuais e concretas, baseadas em informações reais, verificáveis e popularmente conhecidas sobre acontecimentos atuais, pessoas públicas, figuras históricas, geografia, ciência, cultura, esportes, instituições ou fatos cotidianos verdadeiros.
+- Não invente eventos, estatísticas, cargos, datas, relações familiares, obras, descobertas, recordes, falas ou conquistas. Se não tiver certeza de um detalhe factual, troque por um fato estável, amplamente conhecido e mais fácil de verificar.
+- Para acontecimentos atuais, use a data de referência informada acima: prefira fatos ainda válidos nessa data ou fatos recentes amplamente conhecidos; evite notícias de última hora, previsões e alegações instáveis.
+- Quando a tag dificultar uma frase factual, ainda gere uma frase natural, mas mantenha cenário, sujeito, objetos e contexto plausíveis, sem transformar pessoas públicas ou fatos históricos em ficção.
 - Cada frase deve conter a tag solicitada "%s" em inglês e a tradução deve usar "%s" para esse trecho, exatamente no sentido indicado.
 - Todas as frases em inglês e em pt-BR devem terminar com ponto final. Não termine frases com interrogação, exclamação ou sem pontuação.
 - Para cada frase, preencha subject com o sujeito gramatical principal real da frase, sem artigos iniciais. Exemplo: em "The dog barked at the cat on the avenue", subject é "dog", não "the dog".
@@ -4065,7 +4073,7 @@ Regras:
 - Se qualquer frase gerada tiver ano, número, valor, medida ou quantidade, crie obrigatoriamente uma tag isolada para cada valor numérico literal encontrado, mesmo que o número também apareça dentro de um chunk maior como "in 2014".
 - Quando existir sigla ou símbolo conhecido (ex.: "°C", "π", "TCU"), coloque-o em sigla_simbolo. Caso não exista, use null ou omita.
 - Não use markdown, comentários ou texto fora do JSON.
-PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $tag_text_pt_br, $tag_text_en, $tag_text_pt_br, $example_count, $tag_text_en, $tag_text_pt_br, $tag_text_en);
+PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $current_date_for_prompt, $tag_text_pt_br, $tag_text_en, $tag_text_pt_br, $example_count, $tag_text_en, $tag_text_pt_br, $tag_text_en);
 
     $payload = [
         'contents' => [
@@ -4077,7 +4085,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
             ]
         ],
         'generationConfig' => [
-            'temperature' => 0.45,
+            'temperature' => 0.35,
             'responseMimeType' => 'application/json'
         ]
     ];
