@@ -393,6 +393,22 @@ function buildNumberTagCandidatesFromText(string ...$texts): array
     return array_values($candidates);
 }
 
+
+function generatedTagLooksVerbLike(array $tag): bool
+{
+    $fields = ['type', 'role', 'part_of_speech', 'pos', 'category', 'kind'];
+    foreach ($fields as $field) {
+        if (!array_key_exists($field, $tag)) continue;
+        $value = $tag[$field];
+        if (is_array($value)) $value = implode(' ', array_map('strval', $value));
+        $value = function_exists('mb_strtolower') ? mb_strtolower((string)$value, 'UTF-8') : strtolower((string)$value);
+        if (preg_match('/\b(verb|verbo|verb_phrase|phrasal_verb|action|ação|acao)\b/u', $value)) {
+            return true;
+        }
+    }
+    return !empty($tag['is_verb']) || !empty($tag['verb']);
+}
+
 function normalizeGeneratedTagMetadata(string $rawName, string $rawNamePtBr, $rawNumero = null, $rawSiglaSimbolo = null): array
 {
     $numero = normalizeNullableTagMetadataText($rawNumero);
@@ -4371,7 +4387,7 @@ Gere %d frases naturais em inglês para estudante de inglês. Cada frase deve co
 
 A tradução "%s" define o sentido obrigatório da tag "%s". Ignore outros sentidos possíveis da mesma palavra em inglês: se a mesma palavra puder ter várias traduções, use somente o sentido indicado por "%s".
 
-Para cada frase, identifique o sujeito, os objetos/verbos e poucos lexical chunks sucintos.
+Para cada frase, identifique o sujeito, somente os objetos diretos e poucos lexical chunks sucintos.
 
 Retorne exclusivamente JSON válido neste formato:
 {"examples":[{"english":"frase em inglês","pt_br":"tradução exata em pt-BR","subject":{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional"},"objects":[{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional"}],"chunks":[{"en":"lexical chunk curto e útil ou texto por extenso em inglês","pt_br":"tradução ou texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional"}]}]}
@@ -4382,9 +4398,9 @@ Regras:
 - Cada frase deve conter o lexical chunk "%s" em inglês e a tradução deve usar "%s" para esse trecho.
 - Todas as frases em inglês e em pt-BR devem terminar com ponto final. Não termine frases com interrogação, exclamação ou sem pontuação.
 - Para cada frase, preencha subject com o sujeito gramatical principal da frase, sem artigos iniciais. Exemplo: em "The dog barked at the cat on the avenue", subject é "dog", não "the dog".
-- Para cada frase, preencha objects com todos os substantivos que não são sujeito e também os verbos principais da frase. Substantivos em objects também devem vir sem artigos iniciais. Exemplo: em "The dog barked at the cat on the avenue", objects inclui "barked", "cat" e "avenue", não "the cat" nem "the avenue".
-- Em chunks, gere somente chunks sucintos: verbos ou expressões verbais, expressões de lugar, tempo, modo, causa, finalidade, intensidade, comparação, condição, afirmação, negação, dúvida ou frequência.
-- Em chunks, prefira trechos curtos como "barked", "at", "on the avenue", "every morning", "because of ...". Não crie muitas variações com mudanças mínimas e não inclua o sujeito ou substantivos soltos como lexical chunks.
+- Para cada frase, preencha objects somente com os objetos diretos do verbo principal, sem verbos, sem sujeito e sem substantivos que aparecem apenas em expressões preposicionais/adverbiais. Substantivos em objects também devem vir sem artigos iniciais. Exemplo: em "The dog chased the cat on the avenue", objects inclui somente "cat", não "chased", não "dog" nem "avenue". Em "The dog barked at the cat on the avenue", objects deve ser [] porque não há objeto direto.
+- Em chunks, gere somente chunks sucintos: verbos principais, verbos frasais ou expressões verbais, expressões de lugar, tempo, modo, causa, finalidade, intensidade, comparação, condição, afirmação, negação, dúvida ou frequência.
+- Em chunks, prefira trechos curtos como "chased", "barked", "at", "on the avenue", "every morning", "because of ...". Todo verbo principal que antes iria para objects deve ir para chunks. Não crie muitas variações com mudanças mínimas e não inclua o sujeito ou substantivos soltos como lexical chunks.
 - Cada frase deve ter de 2 a 4 chunks no máximo. Gere menos chunks, desde que sejam os mais úteis e naturais da frase.
 - Use reticências somente quando elas realmente deixarem o chunk mais reutilizável, como "because of ..." ou "whether ... or ...". Não force reticências em todos os chunks.
 - Inclua o lexical chunk "%s" também em chunks quando ele for verbo, expressão verbal, preposição/expressão de lugar/tempo/modo etc. Não inclua se ele for apenas sujeito ou substantivo solto.
@@ -4396,7 +4412,7 @@ Regras:
 - Faça cada frase em um tempo verbal, explore versões negativas, afirmativas fala em um diálogo comum, afirmativa estilo notícia de jornal, interrogativas, condicionais.
 - Repare na regra acima, frases com tempos verbais diferentes entre elas.
 - Não coloque vírgula, ponto final ou outra pontuação de frase dentro dos textos das tags.
-- Não use artigos iniciais nas tags de subject e nas tags de substantivos em objects: use "dog", "cat", "avenue", não "the dog", "the cat", "the avenue".
+- Não use artigos iniciais nas tags de subject e nas tags de objetos diretos em objects: use "dog", "cat", não "the dog", "the cat".
 - A única exceção para pontos em tags é quando o próprio lexical chunk for um padrão com reticências, como "Whether ... or ..." ("Seja ... ou ..."). Use reticências apenas nos chunks, nunca em subject ou objects.
 - Use traduções curtas para as tags e mantenha a ordem natural dos chunks.
 - Não gere frases com anos futuros aleatórios ou distantes (ex.: 2034, 2040). Só use ano futuro se o próprio lexical chunk solicitado for exatamente esse ano; caso contrário, prefira anos realistas até o ano atual.
@@ -4496,6 +4512,10 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         $seen_objects = [];
         foreach ($objects_raw as $object_raw) {
             if (!is_array($object_raw)) continue;
+            if (generatedTagLooksVerbLike($object_raw)) {
+                array_unshift($chunks_raw, $object_raw);
+                continue;
+            }
             $objectMetadata = normalizeGeneratedTagMetadata(
                 (string)($object_raw['en'] ?? $object_raw['english'] ?? $object_raw['name'] ?? ''),
                 (string)($object_raw['pt_br'] ?? $object_raw['ptBr'] ?? $object_raw['translation'] ?? $object_raw['name_pt_br'] ?? ''),
