@@ -1177,6 +1177,8 @@
             },
 
             setupEventListeners() {
+                this.setupButtonIdContextCopy();
+
                 document.addEventListener('click', (event) => {
                     const previewModal = document.getElementById('itemPreviewModal');
                     if (previewModal && this.state.previewModalOpen && event.target === previewModal) {
@@ -1248,6 +1250,73 @@
                         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); app.saveDirectory(e); }
                     });
                 }
+            },
+
+            setupButtonIdContextCopy() {
+                if (this.buttonIdContextCopyReady) return;
+                this.buttonIdContextCopyReady = true;
+
+                document.addEventListener('contextmenu', async (event) => {
+                    const button = event.target.closest('button');
+                    if (!button || !document.body.contains(button)) return;
+
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    const buttonId = this.ensureButtonIdForCopy(button);
+
+                    try {
+                        await this.copyTextToClipboard(buttonId);
+                        this.showToast(`ID do botão copiado: ${buttonId}`, 'success');
+                    } catch (error) {
+                        this.showToast('Não foi possível copiar o ID do botão.', 'error');
+                    }
+                }, true);
+            },
+
+            ensureButtonIdForCopy(button) {
+                if (button.id) return button.id;
+
+                const explicitCopyId = button.dataset.copyId || button.dataset.buttonId;
+                if (explicitCopyId) return explicitCopyId;
+
+                const label = button.getAttribute('aria-label')
+                    || button.getAttribute('title')
+                    || button.textContent
+                    || button.getAttribute('onclick')
+                    || 'botao';
+                const slug = this.slugifyButtonId(label) || 'botao';
+                const source = `${button.getAttribute('onclick') || ''}|${button.className || ''}|${label}`;
+                const hash = this.hashString(source);
+                let autoId = `btn-auto-${slug}-${hash}`;
+                let suffix = 2;
+
+                while (document.getElementById(autoId) && document.getElementById(autoId) !== button) {
+                    autoId = `btn-auto-${slug}-${hash}-${suffix}`;
+                    suffix += 1;
+                }
+
+                button.id = autoId;
+                return autoId;
+            },
+
+            slugifyButtonId(text) {
+                return String(text)
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, '')
+                    .slice(0, 36);
+            },
+
+            hashString(text) {
+                let hash = 0;
+                for (let i = 0; i < text.length; i += 1) {
+                    hash = ((hash << 5) - hash) + text.charCodeAt(i);
+                    hash |= 0;
+                }
+                return Math.abs(hash).toString(36);
             },
 
             handleTypeChange(typeValue) {
