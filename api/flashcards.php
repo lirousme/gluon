@@ -1687,37 +1687,30 @@ function buildGraphCardsSequence(array $cards, array $subjectTagsByCard, array $
     $objectTags = sortGraphCardTagsByUserScore($objectTagsByCard[$baseCardId] ?? [], $tagScoreByTag);
     $subjectTags = sortGraphCardTagsByUserScore($subjectTagsByCard[$baseCardId] ?? [], $tagScoreByTag);
 
-    // A sessão em modo grafo precisa repetir o card base nas posições ímpares e
-    // intercalar blocos de tags nas posições pares: 3 lexical chunks, depois 3
-    // objects usados como subject, depois 3 subjects usados como object. Se o
-    // card base tiver mais tags, o mesmo ciclo é repetido para a próxima tag de
-    // cada grupo, sem esgotar todos os lexical chunks antes dos demais grupos.
-    $tagBlocks = [
-        [
-            'tags' => $lexicalChunkTags,
-            'candidate_index' => $cardIdsByLexicalChunkTag,
-        ],
-        [
-            'tags' => $objectTags,
-            'candidate_index' => $cardIdsBySubjectTag,
-        ],
-        [
-            'tags' => $subjectTags,
-            'candidate_index' => $cardIdsByObjectTag,
-        ],
-    ];
+    // A sessão em modo grafo repete o mesmo card base em todas as posições
+    // ímpares. As posições pares são geradas em blocos fixos de 3 cards:
+    // 1) primeiro bloco par: lexical chunk do card base -> cards com o mesmo lexical chunk;
+    // 2) segundo bloco par: object do card base -> cards que tenham esse object como subject;
+    // 3) terceiro bloco par: subject do card base -> cards que tenham esse subject como object.
+    // Depois o ciclo recomeça com a próxima tag menos pontuada de cada categoria.
+    // Isso impede esgotar todos os lexical chunks antes de começar objects/subjects.
+    $appendGraphCategoryBlock = static function (array $tags, int $round, array $candidateIndex) use ($appendPairsForTag): void {
+        if (!isset($tags[$round])) return;
+
+        $appendPairsForTag(
+            (int)($tags[$round]['id'] ?? 0),
+            $candidateIndex,
+            3
+        );
+    };
 
     $maxTagRounds = max(count($lexicalChunkTags), count($objectTags), count($subjectTags));
     for ($round = 0; $round < $maxTagRounds; $round++) {
-        foreach ($tagBlocks as $block) {
-            if (!isset($block['tags'][$round])) continue;
-
-            $appendPairsForTag(
-                (int)($block['tags'][$round]['id'] ?? 0),
-                $block['candidate_index'],
-                3
-            );
-        }
+        // Ordem obrigatória dos blocos pares: 2/4/6 lexical chunk, 8/10/12 object
+        // como subject, 14/16/18 subject como object; depois repete a mesma ordem.
+        $appendGraphCategoryBlock($lexicalChunkTags, $round, $cardIdsByLexicalChunkTag);
+        $appendGraphCategoryBlock($objectTags, $round, $cardIdsBySubjectTag);
+        $appendGraphCategoryBlock($subjectTags, $round, $cardIdsByObjectTag);
     }
 
     if (empty($chosen)) {
