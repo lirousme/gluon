@@ -4117,7 +4117,7 @@ Retorne exclusivamente JSON válido neste formato:
 Regras:
 - Retorne exatamente %d item(ns) em examples.
 - Cada frase deve ser diferente das outras e diferente das frases existentes listadas.
-- Dê preferência forte a frases factuais e concretas, baseadas em informações reais, verificáveis e popularmente conhecidas sobre acontecimentos atuais, pessoas públicas, figuras históricas, geografia, ciência, cultura, esportes, instituições ou fatos cotidianos verdadeiros.
+- Dê preferência forte a frases de curiosidades, atuais, históricas, geografia, ciência, cultura, esportes, instituições ou fatos cotidianos verdadeiros.
 - Não invente eventos, estatísticas, cargos, datas, relações familiares, obras, descobertas, recordes, falas ou conquistas. Se não tiver certeza de um detalhe factual, troque por um fato estável, amplamente conhecido e mais fácil de verificar.
 - Para acontecimentos atuais, use a data de referência informada acima: prefira fatos ainda válidos nessa data ou fatos recentes amplamente conhecidos; evite notícias de última hora, previsões e alegações instáveis.
 - Quando a tag dificultar uma frase factual, ainda gere uma frase natural, mas mantenha cenário, sujeito, objetos e contexto plausíveis, sem transformar pessoas públicas ou fatos históricos em ficção.
