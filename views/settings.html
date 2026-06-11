@@ -34,7 +34,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             
             <!-- Botão de Busca Global (Substituindo o Logo antigo) -->
-            <button onclick="window.location.href='/buscar'" class="flex items-center gap-3 cursor-pointer group outline-none hover:bg-slate-800/50 p-1.5 -ml-1.5 rounded-xl transition-colors" title="Buscar Usuários na Rede">
+            <button onclick="window.location.href='/buscar'" id="btnSearchUsers" class="flex items-center gap-3 cursor-pointer group outline-none hover:bg-slate-800/50 p-1.5 -ml-1.5 rounded-xl transition-colors" title="Buscar Usuários na Rede">
                 <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-slate-800 border border-slate-600 flex items-center justify-center shadow-lg group-hover:border-gluon-primary/50 transition-colors">
                     <i class="fa-solid fa-magnifying-glass text-lg text-gluon-primary"></i>
                 </div>
@@ -42,7 +42,7 @@
             </button>
             
             <div class="flex items-center gap-2">
-                <button onclick="window.location.href='/dashboard'" class="text-sm bg-slate-800 border border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 font-medium shadow-sm">
+                <button onclick="window.location.href='/dashboard'" id="btnBackWorkspaceTop" class="text-sm bg-slate-800 border border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 font-medium shadow-sm">
                     <i class="fa-solid fa-arrow-left"></i> <span class="hidden sm:inline">Voltar ao Workspace</span>
                 </button>
                 <button onclick="app.toggleRightPanel()" id="btnRightPanel" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm py-2 px-3 rounded-lg transition-all" title="Abrir menu lateral direito" aria-label="Abrir menu lateral direito">
@@ -57,22 +57,22 @@
         <div class="p-4 space-y-4">
             <div class="flex items-center justify-between">
                 <h2 class="text-sm font-semibold text-slate-200">Ações rápidas</h2>
-                <button onclick="app.closeRightPanel()" class="text-slate-400 hover:text-white" title="Fechar menu" aria-label="Fechar menu lateral direito">
+                <button onclick="app.closeRightPanel()" id="btnCloseRightPanel" class="text-slate-400 hover:text-white" title="Fechar menu" aria-label="Fechar menu lateral direito">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
 
-            <button onclick="window.location.href='/dashboard'" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm py-2.5 px-3 rounded-lg transition-all text-left flex items-center gap-2">
+            <button onclick="window.location.href='/dashboard'" id="btnBackWorkspacePanel" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm py-2.5 px-3 rounded-lg transition-all text-left flex items-center gap-2">
                 <i class="fa-solid fa-arrow-left w-4 text-slate-400"></i>
                 Voltar ao Workspace
             </button>
 
-            <button onclick="app.logout()" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm py-2.5 px-3 rounded-lg transition-all text-left flex items-center gap-2">
+            <button onclick="app.logout()" id="btnLogoutPanel" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm py-2.5 px-3 rounded-lg transition-all text-left flex items-center gap-2">
                 <i class="fa-solid fa-power-off w-4 text-slate-400"></i>
                 Sair da Conta
             </button>
 
-            <button onclick="app.openDeleteModal()" class="w-full bg-red-600/90 hover:bg-red-500 text-white text-sm py-2.5 px-3 rounded-lg transition-all text-left flex items-center gap-2">
+            <button onclick="app.openDeleteModal()" id="btnOpenDeletePanel" class="w-full bg-red-600/90 hover:bg-red-500 text-white text-sm py-2.5 px-3 rounded-lg transition-all text-left flex items-center gap-2">
                 <i class="fa-solid fa-trash w-4"></i>
                 Excluir Conta
             </button>
@@ -157,7 +157,7 @@
                     <h3 class="font-medium text-red-400 mb-1">Excluir Conta Permanentemente</h3>
                     <p class="text-sm text-slate-400 leading-relaxed">Atenção: Todos os seus diretórios, configurações e dados criptografados serão excluídos do servidor sem chance de recuperação.</p>
                 </div>
-                <button onclick="app.openDeleteModal()" class="w-full sm:w-auto bg-red-600 hover:bg-red-500 text-white font-medium py-2 px-5 rounded-lg shadow-lg hover:shadow-red-500/30 transition-all flex items-center justify-center gap-2 whitespace-nowrap">
+                <button onclick="app.openDeleteModal()" id="btnOpenDeleteMain" class="w-full sm:w-auto bg-red-600 hover:bg-red-500 text-white font-medium py-2 px-5 rounded-lg shadow-lg hover:shadow-red-500/30 transition-all flex items-center justify-center gap-2 whitespace-nowrap">
                     <i class="fa-solid fa-trash"></i> Excluir Conta
                 </button>
             </div>
@@ -183,7 +183,7 @@
                 </div>
                 
                 <div class="flex gap-3">
-                    <button type="button" onclick="app.closeDeleteModal()" class="flex-1 py-2.5 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
+                    <button type="button" onclick="app.closeDeleteModal()" id="btnCancelDelete" class="flex-1 py-2.5 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
                     <button type="submit" id="btnConfirmDelete" class="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-lg shadow-lg font-medium transition-all flex items-center justify-center gap-2">
                         <i class="fa-solid fa-trash"></i> Excluir Tudo
                     </button>
@@ -203,11 +203,44 @@
 
             setupListeners() {
                 document.getElementById('profileForm').addEventListener('submit', (e) => this.saveProfile(e));
+                this.setupButtonIdCopyListeners();
                 document.addEventListener('keydown', (e) => {
                     if (e.key === 'Escape') {
                         this.closeRightPanel();
                     }
                 });
+            },
+
+            setupButtonIdCopyListeners() {
+                document.querySelectorAll('button[id]').forEach((button) => {
+                    button.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        this.copyButtonId(button.id);
+                    });
+                });
+            },
+
+            async copyButtonId(buttonId) {
+                try {
+                    if (navigator.clipboard && window.isSecureContext) {
+                        await navigator.clipboard.writeText(buttonId);
+                    } else {
+                        const textarea = document.createElement('textarea');
+                        textarea.value = buttonId;
+                        textarea.setAttribute('readonly', '');
+                        textarea.style.position = 'fixed';
+                        textarea.style.top = '-9999px';
+                        textarea.style.opacity = '0';
+                        document.body.appendChild(textarea);
+                        textarea.select();
+                        document.execCommand('copy');
+                        textarea.remove();
+                    }
+
+                    this.showToast(`ID copiado: ${buttonId}`);
+                } catch (err) {
+                    this.showToast('Não foi possível copiar o ID do botão.', 'error');
+                }
             },
 
             toggleRightPanel() {
