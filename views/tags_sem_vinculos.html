@@ -27,7 +27,7 @@
       <button type="button" onclick="history.back()" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">Voltar</button>
       <div class="text-center">
         <h1 class="text-lg md:text-xl font-semibold">Tags por quantidade de cards</h1>
-        <p id="pageInfo" class="text-xs text-slate-400 mt-1">Ordenadas por menos cards vinculados em Subjects</p>
+        <p id="pageInfo" class="text-xs text-slate-400 mt-1">Ordenadas por menos cards em Subjects, Objects e Lexical Chunks</p>
       </div>
       <span id="countBadge" class="rounded-lg border border-violet-500 bg-violet-600/80 px-3 py-2 text-sm">0</span>
     </div>
@@ -203,7 +203,7 @@
       label.textContent = `Página ${state.page} de ${state.totalPages}`;
       const searchSuffix = state.search ? ` filtrada${state.total === 1 ? '' : 's'} por \"${state.search}\"` : '';
       pageInfo.textContent = state.total
-        ? `Mostrando ${Math.min(state.perPage, Math.max(0, state.total - ((state.page - 1) * state.perPage)))} de ${state.total} tag${state.total === 1 ? '' : 's'}${searchSuffix} — menos cards em Subjects primeiro`
+        ? `Mostrando ${Math.min(state.perPage, Math.max(0, state.total - ((state.page - 1) * state.perPage)))} de ${state.total} tag${state.total === 1 ? '' : 's'}${searchSuffix} — menos cards em Subjects, Objects e Lexical Chunks primeiro`
         : (state.search ? `Nenhuma tag encontrada para \"${state.search}\"` : 'Nenhuma tag encontrada para o usuário atual');
     }
     async function loadPinnedTags(){
