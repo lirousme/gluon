@@ -1081,8 +1081,14 @@
                 }
                 return namePtBr ? `${name} (${namePtBr})` : name;
             },
-            getSubjectsCount(tag = {}) {
-                const value = Number(tag?.subjects_count ?? 0);
+            getSubjectsCount(tag = {}, categoryLabel = '') {
+                const normalizedCategory = String(categoryLabel || '').trim().toLowerCase();
+                const categoryCountKey = normalizedCategory === 'lexical chunks'
+                    ? 'lexical_chunk_cards_count'
+                    : (normalizedCategory === 'objects'
+                        ? 'subject_cards_count'
+                        : (normalizedCategory === 'subjects' ? 'object_cards_count' : 'subjects_count'));
+                const value = Number(tag?.[categoryCountKey] ?? tag?.subjects_count ?? 0);
                 return Number.isFinite(value) && value >= 0 ? value : 0;
             },
             buildNumeroPtBrCounts(tags = []) {
@@ -1095,8 +1101,8 @@
                 });
                 return counts;
             },
-            renderTagButtonContent(tag = {}, numeroPtBrCounts = null) {
-                return `${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))} <span class="text-[10px] text-slate-400">(${this.getSubjectsCount(tag)})</span>`;
+            renderTagButtonContent(tag = {}, numeroPtBrCounts = null, categoryLabel = '') {
+                return `${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))} <span class="text-[10px] text-slate-400">(${this.getSubjectsCount(tag, categoryLabel)})</span>`;
             },
             renderTagSelector(selectedIds = null) {
                 const el = document.getElementById('cardTagSelector');
@@ -1609,16 +1615,16 @@
                     const numeroPtBrCounts = this.buildNumeroPtBrCounts(allTags);
 
                     const decisionTagId = Number(card.graph_decision_tag_id || 0);
-                    const buildTagButton = (tag) => {
+                    const buildTagButton = (tag, categoryLabel = '') => {
                         const tagId = Number(tag.id);
                         const isDecisionTag = decisionTagId > 0 && tagId === decisionTagId;
                         const title = isDecisionTag ? 'Tag responsável por encontrar este card' : 'Ver família da tag';
-                        return `<button type="button" onclick="flashcardApp.viewTagFamily(${tagId})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${this.getCardTagDisplayClass(tag, decisionTagId)}" title="${title}">${this.renderTagButtonContent(tag, numeroPtBrCounts)}</button>`;
+                        return `<button type="button" onclick="flashcardApp.viewTagFamily(${tagId})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${this.getCardTagDisplayClass(tag, decisionTagId)}" title="${title}">${this.renderTagButtonContent(tag, numeroPtBrCounts, categoryLabel)}</button>`;
                     };
 
                     tagsList.innerHTML = tagsByPanel.map(group => {
                         if (!group.tags.length) return '';
-                        return `<section class="rounded-lg border border-slate-700/70 bg-slate-950/30 px-2.5 py-2"><p class="text-[10px] uppercase tracking-wide text-slate-400 mb-1">${group.label}</p><div class="flex flex-wrap gap-1.5">${group.tags.map(buildTagButton).join('')}</div></section>`;
+                        return `<section class="rounded-lg border border-slate-700/70 bg-slate-950/30 px-2.5 py-2"><p class="text-[10px] uppercase tracking-wide text-slate-400 mb-1">${group.label}</p><div class="flex flex-wrap gap-1.5">${group.tags.map(tag => buildTagButton(tag, group.label)).join('')}</div></section>`;
                     }).filter(Boolean).join('');
                     this.updateMobileTagsToggleButton(true);
                 } else {
