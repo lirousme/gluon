@@ -1687,18 +1687,36 @@ function buildGraphCardsSequence(array $cards, array $subjectTagsByCard, array $
     $objectTags = sortGraphCardTagsByUserScore($objectTagsByCard[$baseCardId] ?? [], $tagScoreByTag);
     $subjectTags = sortGraphCardTagsByUserScore($subjectTagsByCard[$baseCardId] ?? [], $tagScoreByTag);
 
+    // A sessão em modo grafo precisa repetir o card base nas posições ímpares e
+    // intercalar blocos de tags nas posições pares: 3 lexical chunks, depois 3
+    // objects usados como subject, depois 3 subjects usados como object. Se o
+    // card base tiver mais tags, o mesmo ciclo é repetido para a próxima tag de
+    // cada grupo, sem esgotar todos os lexical chunks antes dos demais grupos.
+    $tagBlocks = [
+        [
+            'tags' => $lexicalChunkTags,
+            'candidate_index' => $cardIdsByLexicalChunkTag,
+        ],
+        [
+            'tags' => $objectTags,
+            'candidate_index' => $cardIdsBySubjectTag,
+        ],
+        [
+            'tags' => $subjectTags,
+            'candidate_index' => $cardIdsByObjectTag,
+        ],
+    ];
+
     $maxTagRounds = max(count($lexicalChunkTags), count($objectTags), count($subjectTags));
     for ($round = 0; $round < $maxTagRounds; $round++) {
-        if (isset($lexicalChunkTags[$round])) {
-            $appendPairsForTag((int)($lexicalChunkTags[$round]['id'] ?? 0), $cardIdsByLexicalChunkTag, 3);
-        }
+        foreach ($tagBlocks as $block) {
+            if (!isset($block['tags'][$round])) continue;
 
-        if (isset($objectTags[$round])) {
-            $appendPairsForTag((int)($objectTags[$round]['id'] ?? 0), $cardIdsBySubjectTag, 3);
-        }
-
-        if (isset($subjectTags[$round])) {
-            $appendPairsForTag((int)($subjectTags[$round]['id'] ?? 0), $cardIdsByObjectTag, 3);
+            $appendPairsForTag(
+                (int)($block['tags'][$round]['id'] ?? 0),
+                $block['candidate_index'],
+                3
+            );
         }
     }
 
