@@ -1683,16 +1683,23 @@ function buildGraphCardsSequence(array $cards, array $subjectTagsByCard, array $
         }
     };
 
-    foreach (sortGraphCardTagsByUserScore($lexicalChunksTagsByCard[$baseCardId] ?? [], $tagScoreByTag) as $tag) {
-        $appendPairsForTag((int)($tag['id'] ?? 0), $cardIdsByLexicalChunkTag, 3);
-    }
+    $lexicalChunkTags = sortGraphCardTagsByUserScore($lexicalChunksTagsByCard[$baseCardId] ?? [], $tagScoreByTag);
+    $objectTags = sortGraphCardTagsByUserScore($objectTagsByCard[$baseCardId] ?? [], $tagScoreByTag);
+    $subjectTags = sortGraphCardTagsByUserScore($subjectTagsByCard[$baseCardId] ?? [], $tagScoreByTag);
 
-    foreach (sortGraphCardTagsByUserScore($objectTagsByCard[$baseCardId] ?? [], $tagScoreByTag) as $tag) {
-        $appendPairsForTag((int)($tag['id'] ?? 0), $cardIdsBySubjectTag, 3);
-    }
+    $maxTagRounds = max(count($lexicalChunkTags), count($objectTags), count($subjectTags));
+    for ($round = 0; $round < $maxTagRounds; $round++) {
+        if (isset($lexicalChunkTags[$round])) {
+            $appendPairsForTag((int)($lexicalChunkTags[$round]['id'] ?? 0), $cardIdsByLexicalChunkTag, 3);
+        }
 
-    foreach (sortGraphCardTagsByUserScore($subjectTagsByCard[$baseCardId] ?? [], $tagScoreByTag) as $tag) {
-        $appendPairsForTag((int)($tag['id'] ?? 0), $cardIdsByObjectTag, 3);
+        if (isset($objectTags[$round])) {
+            $appendPairsForTag((int)($objectTags[$round]['id'] ?? 0), $cardIdsBySubjectTag, 3);
+        }
+
+        if (isset($subjectTags[$round])) {
+            $appendPairsForTag((int)($subjectTags[$round]['id'] ?? 0), $cardIdsByObjectTag, 3);
+        }
     }
 
     if (empty($chosen)) {
