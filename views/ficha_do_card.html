@@ -43,7 +43,7 @@
         <i class="fa-solid fa-circle-question text-emerald-300" aria-hidden="true"></i>
         <span>Responder Gemini</span>
       </button>
-      <button type="button" id="btnGenerateLexicalChunksGemini" onclick="app.generateSentenceWithLexicalChunksGemini('semantic_block', this)" class="flex w-full items-center gap-2 rounded-xl border border-cyan-300/40 bg-cyan-500/10 px-3 py-2.5 text-left text-sm font-semibold text-cyan-100 transition-colors hover:border-cyan-300/70 hover:bg-cyan-500/20" title="Gerar 10 frases factuais de exemplo e lexical chunks com Gemini usando a primeira tag como bloco semântico" aria-label="Gerar 10 frases factuais de exemplo e lexical chunks com Gemini usando a primeira tag como bloco semântico">
+      <button type="button" id="btnGenerateLexicalChunksGemini" onclick="app.generateSentenceWithLexicalChunksGemini('semantic_block', this)" class="flex w-full items-center gap-2 rounded-xl border border-cyan-300/40 bg-cyan-500/10 px-3 py-2.5 text-left text-sm font-semibold text-cyan-100 transition-colors hover:border-cyan-300/70 hover:bg-cyan-500/20" title="Gerar 3 frases factuais de exemplo e lexical chunks com Gemini usando a primeira tag como bloco semântico" aria-label="Gerar 3 frases factuais de exemplo e lexical chunks com Gemini usando a primeira tag como bloco semântico">
         <i class="fa-solid fa-tags text-cyan-200" aria-hidden="true"></i>
         <span>Lexical chunks</span>
       </button>
@@ -1081,7 +1081,7 @@ const app = {
         tag_id: Number(tag.id),
         tag_text_en: tagTextEn,
         tag_text_pt_br: tagTextPtBr,
-        count: 10,
+        count: 3,
         create_cards: true,
         deck_id: Number(this.deckId || 0),
         info_type: 3,
