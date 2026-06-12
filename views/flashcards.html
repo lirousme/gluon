@@ -2441,13 +2441,32 @@
                 }, 200);
             },
 
+            getCardScoreKey(card) {
+                return card && card.id ? String(card.id) : '';
+            },
+
+            isGraphFixedBaseRepeat(card) {
+                if (this.deckMode !== 'grafo' || !card || this.currentIndex <= 0) return false;
+                // Em modo grafo, o primeiro card é o card base fixo e pode reaparecer
+                // nas demais posições ímpares (índices 2, 4, 6...). Essas repetições
+                // são contexto de revisão e não devem gerar novo ponto para o card base.
+                if (this.currentIndex % 2 !== 0) return false;
+
+                const baseCard = this.cards[0];
+                return this.getCardScoreKey(baseCard) !== ''
+                    && this.getCardScoreKey(baseCard) === this.getCardScoreKey(card);
+            },
+
             registerScore(card) {
                 if (!card || !card.id) return Promise.resolve();
-                if (this.scoredCardIds.has(card.id)) return Promise.resolve();
+                if (this.isGraphFixedBaseRepeat(card)) return Promise.resolve();
+
+                const scoreKey = this.getCardScoreKey(card);
+                if (this.scoredCardIds.has(scoreKey)) return Promise.resolve();
 
                 const nextScore = Math.min(card.score + 1, 20);
                 card.score = nextScore;
-                this.scoredCardIds.add(card.id);
+                this.scoredCardIds.add(scoreKey);
                 
                 const maxPossible = this.totalCardsInDeck * 20;
                 let currentTotal = this.cards.reduce((sum, c) => sum + c.score, 0);
@@ -2467,7 +2486,7 @@
                 }
 
                 return this.api('update_score', { card_id: card.id, decision_tag_id: Number(card.graph_decision_tag_id || 0) }).catch(e => {
-                    this.scoredCardIds.delete(card.id);
+                    this.scoredCardIds.delete(scoreKey);
                     console.error(e);
                 });
             },
