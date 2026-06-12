@@ -1965,7 +1965,7 @@ function buildGraphTagCardIndex(array $tagsByCard): array
     return $index;
 }
 
-function sortGraphCardTagsByUserScore(array $tags, array $tagScoreByTag): array
+function sortGraphCardTagsByUserScore(array $tags, array $tagScoreByTag, ?int $preferredTagId = null): array
 {
     $uniqueTags = [];
     foreach ($tags as $tag) {
@@ -1985,7 +1985,18 @@ function sortGraphCardTagsByUserScore(array $tags, array $tagScoreByTag): array
             return $tagAHasScore <=> $tagBHasScore;
         }
 
-        return ((int)($tagScoreByTag[$tagA] ?? 0) <=> (int)($tagScoreByTag[$tagB] ?? 0)) ?: ($tagA <=> $tagB);
+        $scoreCompare = ((int)($tagScoreByTag[$tagA] ?? 0) <=> (int)($tagScoreByTag[$tagB] ?? 0));
+        if ($scoreCompare !== 0) return $scoreCompare;
+
+        if ($preferredTagId !== null && $preferredTagId > 0) {
+            $tagAIsPreferred = $tagA === $preferredTagId;
+            $tagBIsPreferred = $tagB === $preferredTagId;
+            if ($tagAIsPreferred !== $tagBIsPreferred) {
+                return $tagAIsPreferred ? -1 : 1;
+            }
+        }
+
+        return $tagA <=> $tagB;
     });
 
     return $tags;
@@ -2010,12 +2021,6 @@ function pickGraphBaseCardId(array $cards, array $subjectTagsByCard, array $obje
         return $candidateIds[0] ?? null;
     };
 
-    if ($initialTagId !== null && $initialTagId > 0) {
-        $candidateIds = $cardIdsBySubjectTag[$initialTagId] ?? [];
-        $initialCardId = $pickWeakestCard($candidateIds);
-        if ($initialCardId !== null && isset($cardsById[$initialCardId])) return $initialCardId;
-    }
-
     if (!empty($cardIdsBySubjectTag)) {
         $subjectTags = [];
         $userOwnedSubjectTags = [];
@@ -2028,7 +2033,14 @@ function pickGraphBaseCardId(array $cards, array $subjectTagsByCard, array $obje
             }
         }
 
-        $sortedTags = sortGraphCardTagsByUserScore(!empty($userOwnedSubjectTags) ? array_values($userOwnedSubjectTags) : array_values($subjectTags), $tagScoreByTag);
+        // A tag inicial configurada no deck é apenas um desempate: tags do usuário
+        // sem registro em flashcard_tag_scores, ou com menos pontos, devem continuar
+        // tendo prioridade para escolher o card base do modo grafo.
+        $sortedTags = sortGraphCardTagsByUserScore(
+            !empty($userOwnedSubjectTags) ? array_values($userOwnedSubjectTags) : array_values($subjectTags),
+            $tagScoreByTag,
+            $initialTagId
+        );
         foreach ($sortedTags as $tag) {
             $tagId = (int)($tag['id'] ?? 0);
             $cardId = $pickWeakestCard($cardIdsBySubjectTag[$tagId] ?? []);
