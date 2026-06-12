@@ -1223,7 +1223,7 @@
 
             async api(action, payload = {}) {
                 payload.action = action;
-                const shouldLogReviewResult = action === 'update_score' || action === 'increment_book_score';
+                const shouldLogReviewResult = action === 'update_score' || action === 'increment_tag_score' || action === 'increment_book_score';
                 try {
                     const res = await fetch(`/api/flashcards`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     
@@ -1849,6 +1849,7 @@
                 this.clearAutoFlowTimer();
 
                 const card = this.cards[this.currentIndex];
+                const reviewCard = card ? { ...card, graph_decision_tag_id: Number(card.graph_decision_tag_id || 0) } : null;
                 const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
                 const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
                 const hasTwoSides = hasFront && hasBack;
@@ -1860,7 +1861,7 @@
                 
                 this.stopAudio(); 
                 
-                if (['aleatorio', 'grafo'].includes(this.deckMode)) await this.registerScore(card);
+                if (['aleatorio', 'grafo'].includes(this.deckMode)) await this.registerScore(reviewCard);
 
                 if (this.deckMode === 'livro' && this.cards.length === 1) {
                     this.incrementBookReadProgress();
@@ -2442,19 +2443,26 @@
             },
 
             getCardScoreKey(card) {
-                return card && card.id ? String(card.id) : '';
+                if (!card || !card.id) return '';
+                if (this.deckMode === 'grafo') {
+                    const decisionTagId = Number(card.graph_decision_tag_id || 0);
+                    return `${card.id}:${Number.isInteger(decisionTagId) && decisionTagId > 0 ? decisionTagId : 'none'}`;
+                }
+                return String(card.id);
             },
 
             isGraphFixedBaseRepeat(card) {
                 if (this.deckMode !== 'grafo' || !card || this.currentIndex <= 0) return false;
                 // Em modo grafo, o primeiro card é o card base fixo e pode reaparecer
-                // nas demais posições ímpares (índices 2, 4, 6...). Essas repetições
-                // são contexto de revisão e não devem gerar novo ponto para o card base.
+                // nas demais posições pares da sequência (índices zero-based 2, 4, 6...).
+                // Essas repetições são contexto de revisão e não devem gerar novo ponto
+                // para o card base, apenas para a tag de decisão daquele item.
                 if (this.currentIndex % 2 !== 0) return false;
 
                 const baseCard = this.cards[0];
                 return this.getCardScoreKey(baseCard) !== ''
-                    && this.getCardScoreKey(baseCard) === this.getCardScoreKey(card);
+                    && this.getCardScoreKey(card) !== ''
+                    && String(baseCard.id) === String(card.id);
             },
 
             registerGraphDecisionTagScore(card) {
@@ -2496,7 +2504,13 @@
                     if (backDots) backDots.innerHTML = dotsHtml;
                 }
 
-                return this.api('update_score', { card_id: card.id, decision_tag_id: Number(card.graph_decision_tag_id || 0) }).catch(e => {
+                const decisionTagId = Number(card.graph_decision_tag_id || 0);
+                const payload = { card_id: card.id };
+                if (this.deckMode === 'grafo' && Number.isInteger(decisionTagId) && decisionTagId > 0) {
+                    payload.decision_tag_id = decisionTagId;
+                }
+
+                return this.api('update_score', payload).catch(e => {
                     this.scoredCardIds.delete(scoreKey);
                     console.error(e);
                 });
