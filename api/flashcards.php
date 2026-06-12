@@ -4009,7 +4009,7 @@ Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag so
     } else {
         $selected_tag_role_instruction = sprintf("
 
-Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag solicitada como o bloco semântico central que conduz o sentido da frase inteira, não como uma palavra incidental. A frase deve depender semanticamente desse bloco: se a tag for removida, o sentido principal deve mudar. Inclua a tag solicitada em chunks exatamente como en=\"%s\" e pt_br=\"%s\", selected_tag_role deve ser \"chunk\", e não use a tag como o sujeito gramatical principal nem como object. Esta regra é uma exceção explícita às regras gerais que evitam substantivos soltos em chunks, porque aqui a tag selecionada representa o bloco semântico obrigatório.", $tag_text_en, $tag_text_pt_br);
+Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag solicitada como o bloco semântico central que conduz o sentido da frase inteira, não como uma palavra incidental. A frase deve depender semanticamente desse bloco: se a tag for removida, o sentido principal deve mudar. Inclua a tag solicitada em chunks exatamente como en=\"%s\" e pt_br=\"%s\", selected_tag_role deve ser \"chunk\". Neste modo, não descarte a frase só porque a tag também funciona gramaticalmente como sujeito, objeto, verbo ou complemento; o ponto obrigatório é ela estar em chunks como âncora semântica. Esta regra é uma exceção explícita às regras gerais que evitam substantivos soltos em chunks, porque aqui a tag selecionada representa o bloco semântico obrigatório.", $tag_text_en, $tag_text_pt_br);
     }
 
     $prompt = sprintf(<<<'PROMPT'
@@ -4121,10 +4121,14 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         $subject_raw = isset($example_raw['subject']) && is_array($example_raw['subject']) ? $example_raw['subject'] : [];
         $objects_raw = isset($example_raw['objects']) && is_array($example_raw['objects']) ? $example_raw['objects'] : [];
         $selected_tag_role = determineSelectedGeneratedTagRole($example_raw, $subject_raw, $objects_raw, $chunks_raw, $tag_text_en, $tag_text_pt_br);
-        if ($english === '' || $pt_br === '' || $selected_tag_role === '' || empty($chunks_raw) || empty($subject_raw) || empty($objects_raw)) continue;
+        if ($english === '' || $pt_br === '' || empty($subject_raw) || empty($objects_raw)) continue;
+        if ($selected_tag_usage_role !== 'semantic_block' && ($selected_tag_role === '' || empty($chunks_raw))) continue;
         if ($selected_tag_usage_role === 'subject' && $selected_tag_role !== 'subject') continue;
         if ($selected_tag_usage_role === 'object' && $selected_tag_role !== 'object') continue;
-        if ($selected_tag_usage_role === 'semantic_block' && $selected_tag_role !== 'chunk') continue;
+        // No modo semantic_block, Gemini às vezes declara a tag como object/subject
+        // mesmo quando ela é o bloco de sentido pedido. Não rejeite cedo:
+        // abaixo a tag selecionada é promovida/adicionada aos chunks e o papel
+        // final é normalizado para "chunk" quando a frase passar nas demais validações.
         if (!textContainsExactNormalizedPhrase($english, $tag_text_en)) continue;
         if (!textContainsExactNormalizedPhrase($pt_br, $tag_text_pt_br)) continue;
         if (containsUnrealisticFutureYear($english . ' ' . $pt_br, $allowedFutureYears)) continue;
@@ -4149,7 +4153,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
                 'en' => (string)$subjectMetadata['name'],
                 'pt_br' => (string)$subjectMetadata['name_pt_br'],
             ], $tag_text_en, $tag_text_pt_br);
-            if ($selected_tag_role !== 'subject' && $subjectMatchesSelectedTag) {
+            if ($selected_tag_usage_role !== 'semantic_block' && $selected_tag_role !== 'subject' && $subjectMatchesSelectedTag) {
                 continue;
             }
             if ($selected_tag_usage_role === 'subject' && !$subjectMatchesSelectedTag) {
@@ -4181,10 +4185,20 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
             $object_en = (string)$objectMetadata['name'];
             $object_pt_br = (string)$objectMetadata['name_pt_br'];
             if (normalizeWordTagLookupValue($object_en) === normalizeWordTagLookupValue((string)$subjectMetadata['name'])) continue;
-            if (generatedTagTextMatchesSelected([
+            $objectMatchesSelectedTag = generatedTagTextMatchesSelected([
                 'en' => $object_en,
                 'pt_br' => $object_pt_br,
-            ], $tag_text_en, $tag_text_pt_br)) {
+            ], $tag_text_en, $tag_text_pt_br);
+            if ($objectMatchesSelectedTag && $selected_tag_usage_role === 'semantic_block') {
+                array_unshift($chunks_raw, [
+                    'en' => $tag_text_en,
+                    'pt_br' => $tag_text_pt_br,
+                    'kind' => 'expression'
+                ]);
+                $selected_tag_role = 'chunk';
+                continue;
+            }
+            if ($objectMatchesSelectedTag) {
                 $selectedObjectFound = true;
             }
             $object_key = normalizeWordTagLookupValue($object_en) . '|' . normalizeLexicalChunkLookupValue($object_pt_br) . '|' . normalizeNullableTagMetadataText($objectMetadata['numero']) . '|' . normalizeNullableTagMetadataText($objectMetadata['sigla_simbolo']);
@@ -4199,7 +4213,8 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
 
         if (empty($objects)) continue;
         if ($selected_tag_usage_role === 'object' && !$selectedObjectFound) continue;
-        if ($selected_tag_usage_role === 'semantic_block' && $selectedObjectFound) continue;
+        // No modo semantic_block, a tag selecionada pode ter sido reportada por Gemini
+        // como objeto por causa da gramática da frase; ela já foi promovida aos chunks.
 
         foreach (buildNumberTagCandidatesFromText($english) as $numberCandidate) {
             $numberMetadata = normalizeGeneratedTagMetadata(
@@ -4266,6 +4281,9 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
 
         if (empty($chunks)) continue;
         if ($selected_tag_usage_role === 'semantic_block' && !$selectedChunkFound) continue;
+        if ($selected_tag_usage_role === 'semantic_block') {
+            $selected_tag_role = 'chunk';
+        }
         $seen_sentences[$normalized_english] = true;
         $examples[] = [
             'english' => $english,
