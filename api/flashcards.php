@@ -1978,6 +1978,13 @@ function sortGraphCardTagsByUserScore(array $tags, array $tagScoreByTag): array
     usort($tags, static function (array $a, array $b) use (&$tagScoreByTag): int {
         $tagA = (int)($a['id'] ?? 0);
         $tagB = (int)($b['id'] ?? 0);
+        $tagAHasScore = array_key_exists($tagA, $tagScoreByTag);
+        $tagBHasScore = array_key_exists($tagB, $tagScoreByTag);
+
+        if ($tagAHasScore !== $tagBHasScore) {
+            return $tagAHasScore <=> $tagBHasScore;
+        }
+
         return ((int)($tagScoreByTag[$tagA] ?? 0) <=> (int)($tagScoreByTag[$tagB] ?? 0)) ?: ($tagA <=> $tagB);
     });
 
@@ -2005,16 +2012,6 @@ function pickGraphBaseCardId(array $cards, array $subjectTagsByCard, array $obje
 
     if ($initialTagId !== null && $initialTagId > 0) {
         $candidateIds = $cardIdsBySubjectTag[$initialTagId] ?? [];
-        if (empty($candidateIds)) {
-            foreach ([$objectTagsByCard, $lexicalChunksTagsByCard] as $tagsByCard) {
-                foreach ($tagsByCard as $cardId => $tags) {
-                    foreach ($tags as $tag) {
-                        if ((int)($tag['id'] ?? 0) === $initialTagId) $candidateIds[] = (int)$cardId;
-                    }
-                }
-            }
-        }
-
         $initialCardId = $pickWeakestCard($candidateIds);
         if ($initialCardId !== null && isset($cardsById[$initialCardId])) return $initialCardId;
     }
