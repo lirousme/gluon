@@ -2023,28 +2023,59 @@ function pickGraphBaseCardId(array $cards, array $subjectTagsByCard, array $obje
 
     if (!empty($cardIdsBySubjectTag)) {
         $subjectTags = [];
-        $userOwnedSubjectTags = [];
         foreach ($subjectTagsByCard as $tags) {
             foreach ($tags as $tag) {
                 $tagId = (int)($tag['id'] ?? 0);
                 if ($tagId <= 0 || isset($subjectTags[$tagId])) continue;
+
+                // Só tags que realmente possuem ao menos um card disponível como
+                // subject podem disputar o card base. Assim uma tag sem pontuação
+                // nunca vence se não houver card inicial possível para ela.
+                $subjectCardId = $pickWeakestCard($cardIdsBySubjectTag[$tagId] ?? []);
+                if ($subjectCardId === null || !isset($cardsById[$subjectCardId])) continue;
+
                 $subjectTags[$tagId] = $tag;
-                if (!empty($tag['is_user_owned'])) $userOwnedSubjectTags[$tagId] = $tag;
+                $subjectTags[$tagId]['graph_subject_card_id'] = $subjectCardId;
+                $subjectTags[$tagId]['graph_subject_card_score'] = (int)($scoreByCard[$subjectCardId] ?? 0);
             }
         }
 
-        // A tag inicial configurada no deck é apenas um desempate: tags do usuário
-        // sem registro em flashcard_tag_scores, ou com menos pontos, devem continuar
-        // tendo prioridade para escolher o card base do modo grafo.
-        $sortedTags = sortGraphCardTagsByUserScore(
-            !empty($userOwnedSubjectTags) ? array_values($userOwnedSubjectTags) : array_values($subjectTags),
-            $tagScoreByTag,
-            $initialTagId
-        );
+        $sortedTags = array_values($subjectTags);
+        usort($sortedTags, static function (array $a, array $b) use (&$tagScoreByTag, $initialTagId): int {
+            $tagA = (int)($a['id'] ?? 0);
+            $tagB = (int)($b['id'] ?? 0);
+            $tagAHasScore = array_key_exists($tagA, $tagScoreByTag);
+            $tagBHasScore = array_key_exists($tagB, $tagScoreByTag);
+
+            // Ausência de registro em flashcard_tag_scores representa uma tag ainda
+            // não pontuada pelo usuário e deve vir antes de qualquer score existente.
+            if ($tagAHasScore !== $tagBHasScore) {
+                return $tagAHasScore <=> $tagBHasScore;
+            }
+
+            $scoreCompare = ((int)($tagScoreByTag[$tagA] ?? 0) <=> (int)($tagScoreByTag[$tagB] ?? 0));
+            if ($scoreCompare !== 0) return $scoreCompare;
+
+            $userOwnedCompare = ((empty($b['is_user_owned']) ? 0 : 1) <=> (empty($a['is_user_owned']) ? 0 : 1));
+            if ($userOwnedCompare !== 0) return $userOwnedCompare;
+
+            if ($initialTagId !== null && $initialTagId > 0) {
+                $tagAIsPreferred = $tagA === $initialTagId;
+                $tagBIsPreferred = $tagB === $initialTagId;
+                if ($tagAIsPreferred !== $tagBIsPreferred) {
+                    return $tagAIsPreferred ? -1 : 1;
+                }
+            }
+
+            $cardScoreCompare = ((int)($a['graph_subject_card_score'] ?? 0) <=> (int)($b['graph_subject_card_score'] ?? 0));
+            if ($cardScoreCompare !== 0) return $cardScoreCompare;
+
+            return $tagA <=> $tagB;
+        });
+
         foreach ($sortedTags as $tag) {
-            $tagId = (int)($tag['id'] ?? 0);
-            $cardId = $pickWeakestCard($cardIdsBySubjectTag[$tagId] ?? []);
-            if ($cardId !== null && isset($cardsById[$cardId])) return $cardId;
+            $cardId = (int)($tag['graph_subject_card_id'] ?? 0);
+            if ($cardId > 0 && isset($cardsById[$cardId])) return $cardId;
         }
     }
 
