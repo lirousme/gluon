@@ -1578,8 +1578,8 @@ function cardHasLinkedTag(PDO $pdo, int $cardId, int $tagId, int $userId): bool 
     return false;
 }
 
-function incrementFlashcardTagScore(PDO $pdo, int $userId, int $cardId, int $tagId): void {
-    if (!cardHasLinkedTag($pdo, $cardId, $tagId, $userId)) return;
+function incrementFlashcardTagScore(PDO $pdo, int $userId, int $cardId, int $tagId): bool {
+    if (!cardHasLinkedTag($pdo, $cardId, $tagId, $userId)) return false;
 
     ensureFlashcardTagScoresTable($pdo);
     $stmt = $pdo->prepare("
@@ -1589,7 +1589,7 @@ function incrementFlashcardTagScore(PDO $pdo, int $userId, int $cardId, int $tag
             score = score + 1,
             last_reviewed_at = CURRENT_TIMESTAMP
     ");
-    $stmt->execute([$userId, $tagId]);
+    return $stmt->execute([$userId, $tagId]);
 }
 
 function findSubjectCardIdsOrphanedByTagDeletion(PDO $pdo, int $tagId, int $userId, int $sampleLimit = 10): array {
@@ -4929,6 +4929,21 @@ elseif ($action === 'update_score') {
         }
         echo json_encode(['status' => 'success']);
     } else echo json_encode(['status' => 'error']);
+}
+
+
+elseif ($action === 'increment_tag_score') {
+    $card_id = (int)($input['card_id'] ?? 0);
+    $decision_tag_id = (int)($input['decision_tag_id'] ?? 0);
+    if ($card_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do card inválido.']));
+    if ($decision_tag_id <= 0) die(json_encode(['status' => 'error', 'message' => 'Tag inválida.']));
+
+    if (!verifyCardOwnership($pdo, $card_id, $user_id, true)) {
+        die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
+    }
+
+    $updated = incrementFlashcardTagScore($pdo, $user_id, $card_id, $decision_tag_id);
+    echo json_encode(['status' => $updated ? 'success' : 'error']);
 }
 
 elseif ($action === 'update_progress') {

@@ -2457,9 +2457,20 @@
                     && this.getCardScoreKey(baseCard) === this.getCardScoreKey(card);
             },
 
+            registerGraphDecisionTagScore(card) {
+                if (this.deckMode !== 'grafo' || !card || !card.id) return Promise.resolve();
+
+                const decisionTagId = Number(card.graph_decision_tag_id || 0);
+                if (!Number.isInteger(decisionTagId) || decisionTagId <= 0) return Promise.resolve();
+
+                return this.api('increment_tag_score', { card_id: card.id, decision_tag_id: decisionTagId }).catch(e => {
+                    console.error(e);
+                });
+            },
+
             registerScore(card) {
                 if (!card || !card.id) return Promise.resolve();
-                if (this.isGraphFixedBaseRepeat(card)) return Promise.resolve();
+                if (this.isGraphFixedBaseRepeat(card)) return this.registerGraphDecisionTagScore(card);
 
                 const scoreKey = this.getCardScoreKey(card);
                 if (this.scoredCardIds.has(scoreKey)) return Promise.resolve();
