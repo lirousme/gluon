@@ -538,10 +538,21 @@ const app = {
     let data = null;
     try { data = raw ? JSON.parse(raw) : null; }
     catch (_) {
-      throw new Error('Resposta inválida da API de flashcards.');
+      const error = new Error('Resposta inválida da API de flashcards.');
+      error.apiRawResponse = raw;
+      throw error;
     }
-    if (!data) throw new Error('A API de flashcards retornou uma resposta vazia.');
-    if (data.status !== 'success') throw new Error(data.message || 'Falha na requisição.');
+    if (!data) {
+      const error = new Error('A API de flashcards retornou uma resposta vazia.');
+      error.apiRawResponse = raw;
+      throw error;
+    }
+    if (data.status !== 'success') {
+      const error = new Error(data.message || 'Falha na requisição.');
+      error.apiResponse = data;
+      error.geminiDebug = data.gemini_debug || null;
+      throw error;
+    }
     return data;
   },
   handleCardImageUpload(e, side) {
@@ -1076,6 +1087,13 @@ const app = {
         info_type: 3,
         selected_tag_usage_role: tagUsageRole
       });
+      if (res?.gemini_debug) {
+        console.groupCollapsed('Resposta do Gemini - lexical chunks');
+        console.info('Texto extraído do Gemini:', res.gemini_debug.extracted_text || '');
+        console.info('JSON interpretado do Gemini:', res.gemini_debug.parsed_json || null);
+        console.info('Resposta bruta da API Gemini:', res.gemini_debug.raw_response || null);
+        console.groupEnd();
+      }
       if (!res || !res.english || !res.pt_br || !Array.isArray(res.chunks)) throw new Error('A API não retornou frase e lexical chunks válidos.');
 
       singleFront.value = res.english;
@@ -1113,6 +1131,18 @@ const app = {
       this.setActiveTab('front');
       this.setStatus(`Frases, traduções e lexical chunks gerados com Gemini: ${existingCount} tag(s) existente(s) selecionada(s), ${createdCount} tag(s) criada(s).${cardText}${duplicateText}`, 'success');
     } catch (err) {
+      if (err?.geminiDebug) {
+        console.groupCollapsed('Resposta do Gemini - lexical chunks (erro)');
+        console.info('Texto extraído do Gemini:', err.geminiDebug.extracted_text || '');
+        console.info('JSON interpretado do Gemini:', err.geminiDebug.parsed_json || null);
+        console.info('Resposta bruta da API Gemini:', err.geminiDebug.raw_response || null);
+        console.groupEnd();
+      } else if (err?.apiResponse || err?.apiRawResponse) {
+        console.groupCollapsed('Resposta da API - lexical chunks (erro)');
+        console.info('Resposta JSON da API:', err.apiResponse || null);
+        console.info('Resposta bruta da API:', err.apiRawResponse || null);
+        console.groupEnd();
+      }
       this.setStatus('Falha ao gerar lexical chunks com Gemini: ' + (err.message || 'erro desconhecido'), 'error');
     } finally {
       button.innerHTML = originalHtml;
