@@ -4083,7 +4083,17 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         $decoded_error = $response ? json_decode($response, true) : null;
         $api_error = is_array($decoded_error) ? trim((string)($decoded_error['error']['message'] ?? '')) : '';
         $details = $api_error !== '' ? $api_error : trim((string)$curlError);
-        die(json_encode(['status' => 'error', 'message' => 'Erro ao gerar lexical chunks com o Gemini.' . ($details !== '' ? (' Detalhes: ' . $details) : '')]));
+        die(json_encode([
+            'status' => 'error',
+            'message' => 'Erro ao gerar lexical chunks com o Gemini.' . ($details !== '' ? (' Detalhes: ' . $details) : ''),
+            'gemini_debug' => [
+                'http_code' => $httpcode,
+                'curl_error' => $curlError,
+                'raw_response' => $response,
+                'parsed_json' => $decoded_error,
+                'extracted_text' => ''
+            ]
+        ]));
     }
 
     $decoded = json_decode($response, true);
@@ -4105,9 +4115,22 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         $examples_raw = [$chunk_data];
     }
 
+    $gemini_debug = [
+        'http_code' => $httpcode,
+        'finish_reason' => trim((string)($decoded['candidates'][0]['finishReason'] ?? '')),
+        'raw_response' => $response,
+        'extracted_text' => $chunk_json,
+        'parsed_json' => $chunk_data,
+        'examples_returned_count' => count($examples_raw)
+    ];
+
     if (empty($examples_raw)) {
         $finish_reason = trim((string)($decoded['candidates'][0]['finishReason'] ?? ''));
-        die(json_encode(['status' => 'error', 'message' => 'A API do Gemini não retornou frases e lexical chunks válidos.' . ($finish_reason !== '' ? (' Motivo: ' . $finish_reason) : '')]));
+        die(json_encode([
+            'status' => 'error',
+            'message' => 'A API do Gemini não retornou frases e lexical chunks válidos.' . ($finish_reason !== '' ? (' Motivo: ' . $finish_reason) : ''),
+            'gemini_debug' => $gemini_debug
+        ]));
     }
 
     $examples = [];
@@ -4297,12 +4320,22 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         if (count($examples) >= $example_count) break;
     }
 
+    $gemini_debug['examples_accepted_count'] = count($examples);
+
     if (empty($examples)) {
-        die(json_encode(['status' => 'error', 'message' => 'Nenhuma frase com lexical chunks válidos e com a tradução exata da tag selecionada foi retornada pelo Gemini.']));
+        die(json_encode([
+            'status' => 'error',
+            'message' => 'Nenhuma frase com lexical chunks válidos e com a tradução exata da tag selecionada foi retornada pelo Gemini.',
+            'gemini_debug' => $gemini_debug
+        ]));
     }
 
     if (count($examples) < $example_count) {
-        die(json_encode(['status' => 'error', 'message' => 'O Gemini retornou apenas ' . count($examples) . ' frase(s) válida(s), mas eram necessárias ' . $example_count . '. Tente gerar novamente; algumas frases podem ter sido descartadas por não usar a tradução exata da tag selecionada.']));
+        die(json_encode([
+            'status' => 'error',
+            'message' => 'O Gemini retornou apenas ' . count($examples) . ' frase(s) válida(s), mas eram necessárias ' . $example_count . '. Tente gerar novamente; algumas frases podem ter sido descartadas por não usar a tradução exata da tag selecionada.',
+            'gemini_debug' => $gemini_debug
+        ]));
     }
 
     if ($create_cards) {
@@ -4344,7 +4377,8 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         'selected_tag_role' => $first_example['selected_tag_role'] ?? '',
         'examples' => $examples,
         'created_cards_count' => $created_cards_count,
-        'existing_sentences_count' => count($existing_sentences)
+        'existing_sentences_count' => count($existing_sentences),
+        'gemini_debug' => $gemini_debug
     ]);
 }
 
