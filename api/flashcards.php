@@ -4862,6 +4862,24 @@ elseif ($action === 'sync_back_phrase_dictionary') {
 
 
 
+
+elseif ($action === 'increment_tag_score') {
+    $card_id = (int)($input['card_id'] ?? 0);
+    $decision_tag_id = (int)($input['decision_tag_id'] ?? 0);
+
+    if ($card_id <= 0 || $decision_tag_id <= 0) {
+        die(json_encode(['status' => 'error', 'message' => 'Card ou tag de decisão inválidos.']));
+    }
+
+    if (!verifyCardOwnership($pdo, $card_id, $user_id, true)) {
+        die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
+    }
+
+    incrementFlashcardTagScore($pdo, $user_id, $card_id, $decision_tag_id);
+    echo json_encode(['status' => 'success']);
+}
+
+
 elseif ($action === 'update_score') {
     $card_id = (int)($input['card_id'] ?? 0);
     $decision_tag_id = (int)($input['decision_tag_id'] ?? 0);
