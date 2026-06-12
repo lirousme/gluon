@@ -4161,6 +4161,7 @@ Regras:
 - Para acontecimentos atuais, use a data de referência informada acima: prefira fatos ainda válidos nessa data ou fatos recentes amplamente conhecidos; evite notícias de última hora, previsões e alegações instáveis.
 - Quando a tag dificultar uma frase factual, ainda gere uma frase natural, mas mantenha cenário, sujeito, objetos e contexto plausíveis, sem transformar pessoas públicas ou fatos históricos em ficção.
 - Cada frase deve conter a tag solicitada "%s" em inglês e a tradução deve usar o sentido de "%s" para esse trecho. Se a frase em pt-BR exigir flexão natural, a frase completa pode usar a forma flexionada, mas o campo estruturado correspondente (subject, objects ou chunks) deve manter pt_br exatamente como "%s".
+- Na tradução completa em pt-BR, deixe explícitas as preposições e conjunções exigidas pelo português, mesmo quando a estrutura natural do inglês deixar esses conectores implícitos ou ocultos. Não faça tradução telegráfica: inclua conectores como "de", "a", "para", "por", "com", "em", "que", "se", "quando", "porque", "embora" sempre que o português natural precisar deles.
 - Todas as frases em inglês e em pt-BR devem terminar com pontuação final: use interrogação quando a frase for interrogativa e ponto final nos demais casos. Não termine frases com exclamação ou sem pontuação.
 - Para cada frase, preencha subject com o sujeito gramatical principal real da frase, sem artigos iniciais. Exemplo: em "The dog barked at the cat on the avenue", subject é "dog", não "the dog".
 - A regra obrigatória de papel da tag selecionada informada antes da data prevalece sobre as regras gerais de classificação abaixo.
@@ -4168,6 +4169,7 @@ Regras:
 - Para cada frase, preencha objects com 1 a 4 substantivos relevantes que aparecem na frase e não são o sujeito: objetos diretos, substantivos essenciais de complementos ou substantivos de expressões preposicionais importantes. Objects nunca deve ficar vazio. Sem verbos, sem sujeito e sem artigos iniciais. Exemplo: em "The dog chased the cat on the avenue", objects inclui "cat" e pode incluir "avenue", não "chased" nem "dog". Em "The dog barked at the cat on the avenue", objects inclui "cat" e/ou "avenue" porque são substantivos da frase que não são o sujeito.
 - Em chunks, gere somente verbos isolados úteis, locuções verbais, locuções conjuntivas, locuções prepositivas, acúmulos/combinações de preposições, preposições isoladas ou conjunções isoladas.
 - Em chunks, prefira trechos curtos como "chased", "barked", "at", "in", "because of ...", "whether ... or ...". Todo verbo principal que antes iria para objects deve ir para chunks. Não inclua sujeitos, pronomes nem substantivos como lexical chunks.
+- No pt_br de cada chunk, deixe explícitas as preposições e conjunções exigidas pelo português, mesmo que estejam implícitas/ocultas na construção em inglês. A tag em inglês pode continuar curta e natural, mas a tag pt_br não deve esconder conectores necessários: por exemplo, traduza estruturas com destino/finalidade usando "para ..." quando for o caso, estruturas com complemento usando "de ..."/"a ..." quando o português pedir, e conjunções com "que", "se", "quando", "porque", "embora" etc. quando forem parte do sentido.
 - Cada frase deve ter de 2 a 4 chunks no máximo. Gere menos chunks, desde que sejam os mais úteis e naturais da frase.
 - Quando uma locução candidata tiver substantivo ou pronome, substitua essa parte por reticências para manter apenas a estrutura funcional: por exemplo, "how you'll handle" deve virar "how ... will handle", "on the avenue" deve virar "on ..." e "because of the rain" deve virar "because of ...".
 - Inclua a tag "%s" em chunks somente quando ela obedecer estritamente às categorias permitidas de chunks. Nunca inclua a tag em chunks se ela for substantivo ou pronome.
@@ -4181,7 +4183,7 @@ Regras:
 - Não coloque vírgula, ponto final ou outra pontuação de frase dentro dos textos das tags.
 - Não use artigos iniciais nas tags de subject e nas tags de objetos diretos em objects: use "dog", "cat", não "the dog", "the cat".
 - A única exceção para pontos em tags é quando o próprio lexical chunk for um padrão com reticências, como "Whether ... or ..." ("Seja ... ou ..."). Use reticências apenas nos chunks, nunca em subject ou objects.
-- Use traduções curtas para as tags e mantenha a ordem natural dos chunks.
+- Use traduções curtas para as tags e mantenha a ordem natural dos chunks, mas não omita no pt_br preposições/conjunções necessárias para tornar explícita a relação gramatical do chunk.
 - Não gere frases com anos futuros aleatórios ou distantes (ex.: 2034, 2040). Só use ano futuro se o próprio lexical chunk solicitado for exatamente esse ano; caso contrário, prefira anos realistas até o ano atual.
 - Para datas completas em chunks, não inclua o ano nem o número literal do dia dentro do chunk: em vez de "on June 8th 2026", use "on June ...th". O ano e o dia devem aparecer como tags numéricas isoladas.
 - Quando a tag for um número, valor, medida ou quantidade (ex.: "2010", "R$42,40", "U$10,15", "1,60m", "49kg", "1.000.000.000"), coloque o valor literal em numero e coloque os textos por extenso em en e pt_br.
@@ -4541,13 +4543,15 @@ Retorne somente JSON válido neste formato:
 
 Regras:
 - english_sentence deve ser sempre uma frase completa, natural e idiomática em inglês. Se a frase original já estiver em inglês, retorne a própria frase revisada apenas o necessário. Se estiver em outro idioma, traduza para inglês e use essa tradução como base para todas as tags.
+- Nas traduções pt-BR das tags, especialmente chunks, deixe explícitas as preposições e conjunções exigidas pelo português, mesmo quando a estrutura inglesa ocultar esses conectores. Não esconda conectores como "de", "a", "para", "por", "com", "em", "que", "se", "quando", "porque" e equivalentes quando eles fizerem parte do sentido natural em português.
 - Se a frase original estiver em outro idioma, extraia os chunks a partir da tradução natural em inglês, não a partir da ordem literal do idioma original.
 - subjects deve conter o sujeito gramatical principal da frase, sem artigos iniciais.
-- objects deve conter substantivos relevantes que não são sujeito e verbos principais úteis. Substantivos devem vir sem artigos iniciais.
+- objects deve conter somente substantivos relevantes que não são sujeito. Substantivos devem vir sem artigos iniciais. Verbos principais úteis devem ir para chunks como verbos isolados, nunca para objects.
 - Use kind="proper_noun" para nomes próprios de pessoas, empresas, marcas, lugares, sistemas, produtos, obras e instituições.
 - Use kind="common_noun" para substantivos comuns.
 - Use kind="verb" para verbos.
 - chunks deve conter de 2 a 6 lexical chunks curtos e reutilizáveis: verbos isolados úteis, locuções verbais, locuções conjuntivas, locuções prepositivas, acúmulos/combinações de preposições, preposições isoladas ou conjunções isoladas.
+- No pt_br de cada chunk, deixe explícitas as preposições e conjunções exigidas pelo português, mesmo que estejam implícitas/ocultas na construção em inglês. A tag em inglês pode continuar curta e natural, mas a tag pt_br não deve esconder conectores necessários: por exemplo, use "para ...", "de ...", "a ...", "que", "se", "quando", "porque" ou equivalentes quando fizerem parte do sentido.
 - Nunca inclua sujeito, substantivo ou pronome como lexical chunk. Se uma locução tiver substantivo ou pronome, substitua essa parte por reticências: "how you'll handle" vira "how ... will handle", "on the avenue" vira "on ...".
 - Nas tags, remova pontuação de frase e expanda contrações: use "do not", "is", "are", "will", etc.
 - Para datas completas em chunks, não inclua o ano nem o número literal do dia dentro do chunk: em vez de "on June 8th 2026", use "on June ...th". O ano e o dia devem aparecer como tags numéricas isoladas.
