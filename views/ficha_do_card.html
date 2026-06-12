@@ -34,10 +34,20 @@
 <body class="min-h-[100dvh] bg-gluon-dark text-slate-100 selection:bg-blue-600/60">
   <aside class="fixed left-4 top-6 z-30 hidden w-48 rounded-2xl border border-slate-700 bg-gluon-secondary/95 p-4 shadow-2xl shadow-slate-950/40 backdrop-blur lg:block" aria-label="Menu lateral esquerdo">
     <h2 class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Menu</h2>
-    <a href="/dicionario" class="flex items-center gap-2 rounded-xl border border-blue-400/30 bg-blue-500/10 px-3 py-2.5 text-sm font-semibold text-blue-100 transition-colors hover:border-blue-300/60 hover:bg-blue-500/20" title="Abrir Dicionário">
-      <i class="fa-solid fa-book-open text-blue-300" aria-hidden="true"></i>
-      <span>Dicionário</span>
-    </a>
+    <nav class="space-y-2" aria-label="Ações da ficha">
+      <a href="/dicionario" class="flex items-center gap-2 rounded-xl border border-blue-400/30 bg-blue-500/10 px-3 py-2.5 text-sm font-semibold text-blue-100 transition-colors hover:border-blue-300/60 hover:bg-blue-500/20" title="Abrir Dicionário">
+        <i class="fa-solid fa-book-open text-blue-300" aria-hidden="true"></i>
+        <span>Dicionário</span>
+      </a>
+      <button type="button" id="btnAnswerGemini" onclick="app.answerFrontQuestionWithGemini()" class="flex w-full items-center gap-2 rounded-xl border border-emerald-300/30 bg-emerald-500/10 px-3 py-2.5 text-left text-sm font-semibold text-emerald-200 transition-colors hover:border-emerald-300/60 hover:bg-emerald-500/20" title="Responder frente com Gemini" aria-label="Responder frente com Gemini">
+        <i class="fa-solid fa-circle-question text-emerald-300" aria-hidden="true"></i>
+        <span>Responder Gemini</span>
+      </button>
+      <button type="button" id="btnGenerateLexicalChunksGemini" onclick="app.generateSentenceWithLexicalChunksGemini()" class="flex w-full items-center gap-2 rounded-xl border border-cyan-300/40 bg-cyan-500/10 px-3 py-2.5 text-left text-sm font-semibold text-cyan-100 transition-colors hover:border-cyan-300/70 hover:bg-cyan-500/20" title="Gerar 10 frases factuais de exemplo e lexical chunks com Gemini" aria-label="Gerar 10 frases factuais de exemplo e lexical chunks com Gemini">
+        <i class="fa-solid fa-tags text-cyan-200" aria-hidden="true"></i>
+        <span>Lexical chunks</span>
+      </button>
+    </nav>
   </aside>
 
   <main class="max-w-3xl mx-auto px-3 py-4 sm:px-4 sm:py-6 lg:ml-60 lg:mr-auto xl:mx-auto">
@@ -57,15 +67,6 @@
         </button>
         <button type="button" id="btnTranslateGemini" onclick="app.translateCardWithGemini()" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-300/30 p-2 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-300/10 hover:text-amber-200" title="Traduzir com Gemini" aria-label="Traduzir com Gemini">
           <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
-        </button>
-        <button type="button" id="btnAnswerGemini" onclick="app.answerFrontQuestionWithGemini()" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-emerald-300/30 p-2 text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-300/10 hover:text-emerald-200" title="Responder frente com Gemini" aria-label="Responder frente com Gemini">
-          <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
-        </button>
-        <button type="button" id="btnGenerateTagSentenceGemini" onclick="app.generateSentenceFromFirstSelectedTagWithGemini()" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-400/40 p-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200" title="Gerar frase da primeira tag com Gemini" aria-label="Gerar frase da primeira tag com Gemini">
-          <i class="fa-solid fa-quote-right" aria-hidden="true"></i>
-        </button>
-        <button type="button" id="btnGenerateLexicalChunksGemini" onclick="app.generateSentenceWithLexicalChunksGemini()" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-300/40 p-2 text-sm font-medium text-cyan-200 transition-colors hover:bg-cyan-400/10 hover:text-cyan-100" title="Gerar 10 frases factuais de exemplo e lexical chunks com Gemini" aria-label="Gerar 10 frases factuais de exemplo e lexical chunks com Gemini">
-          <i class="fa-solid fa-tags" aria-hidden="true"></i>
         </button>
       </div>
       <h1 id="pageTitle" class="text-base sm:text-lg font-semibold">Criar ficha de card</h1>
@@ -1105,36 +1106,6 @@ const app = {
     } finally {
       btnGenerateLexicalChunksGemini.innerHTML = originalHtml;
       btnGenerateLexicalChunksGemini.disabled = false;
-    }
-  },
-  async generateSentenceFromFirstSelectedTagWithGemini() {
-    const tag = this.getFirstSelectedSubjectTag();
-    const tagTextEn = String(tag?.name || '').trim();
-    const tagTextPtBr = String(tag?.name_pt_br || '').trim();
-
-    if (!tag) return this.setStatus('Selecione ao menos 1 tag para gerar a frase com Gemini.', 'error');
-    if (!tagTextEn || !tagTextPtBr) return this.setStatus('A primeira tag selecionada precisa ter texto em inglês e em pt-BR.', 'error');
-
-    const originalHtml = btnGenerateTagSentenceGemini.innerHTML;
-    btnGenerateTagSentenceGemini.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>';
-    btnGenerateTagSentenceGemini.disabled = true;
-
-    try {
-      const res = await this.api('generate_tag_sentence_gemini', { tag_id: Number(tag.id), tag_text_en: tagTextEn, tag_text_pt_br: tagTextPtBr });
-      if (!res || !res.english || !res.pt_br) throw new Error('A API não retornou uma frase válida.');
-
-      singleFront.value = res.english;
-      singleBack.value = res.pt_br;
-      this.renderGeneratedLexicalChunks([]);
-      const duplicateContext = Number(res.existing_sentences_count || 0);
-      const duplicateText = duplicateContext > 0 ? ` ${duplicateContext} frase(s) pública(s) existente(s) foram enviadas ao Gemini para evitar repetição.` : '';
-      this.setActiveTab('front');
-      this.setStatus(`Frase gerada com Gemini a partir da primeira tag selecionada!${duplicateText}`, 'success');
-    } catch (err) {
-      this.setStatus('Falha ao gerar frase com Gemini: ' + (err.message || 'erro desconhecido'), 'error');
-    } finally {
-      btnGenerateTagSentenceGemini.innerHTML = originalHtml;
-      btnGenerateTagSentenceGemini.disabled = false;
     }
   },
   async translateCardWithProvider({ action, button, loadingLabel, successLabel, frontSourceLanguage, backSourceLanguage, autoDetectOpposite = false, replaceSource = false }) {
