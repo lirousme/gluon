@@ -4145,7 +4145,7 @@ elseif ($action === 'generate_sentence_lexical_chunks_gemini') {
     if ($selected_tag_usage_role === 'subject') {
         $selected_tag_role_instruction = "
 
-Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag solicitada como o sujeito gramatical principal real. O campo subject deve ser exatamente essa tag, selected_tag_role deve ser \"subject\", e a tag não deve ser tratada como object nem como chunk.";
+Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag solicitada como o sujeito gramatical principal real. No texto completo em inglês, você pode colocar um artigo definido ou indefinido imediatamente antes do sujeito quando isso soar natural (ex.: \"the\", \"a\", \"an\"), mas esse artigo não deve fazer parte do campo subject. O campo subject deve ser exatamente essa tag sem artigo inicial, selected_tag_role deve ser \"subject\", e a tag não deve ser tratada como object nem como chunk. Quando a tag estiver como sujeito, dê preferência máxima a fatos históricos, curiosidades verdadeiras e/ou fatos super óbvios de senso ultra-comum diretamente sobre esse sujeito.";
     } elseif ($selected_tag_usage_role === 'object') {
         $selected_tag_role_instruction = "
 
