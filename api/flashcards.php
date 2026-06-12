@@ -1578,8 +1578,8 @@ function cardHasLinkedTag(PDO $pdo, int $cardId, int $tagId, int $userId): bool 
     return false;
 }
 
-function incrementFlashcardTagScore(PDO $pdo, int $userId, int $cardId, int $tagId): bool {
-    if (!cardHasLinkedTag($pdo, $cardId, $tagId, $userId)) return false;
+function incrementFlashcardTagScore(PDO $pdo, int $userId, int $cardId, int $tagId): void {
+    if (!cardHasLinkedTag($pdo, $cardId, $tagId, $userId)) return;
 
     ensureFlashcardTagScoresTable($pdo);
     $stmt = $pdo->prepare("
@@ -1589,7 +1589,7 @@ function incrementFlashcardTagScore(PDO $pdo, int $userId, int $cardId, int $tag
             score = score + 1,
             last_reviewed_at = CURRENT_TIMESTAMP
     ");
-    return $stmt->execute([$userId, $tagId]);
+    $stmt->execute([$userId, $tagId]);
 }
 
 function findSubjectCardIdsOrphanedByTagDeletion(PDO $pdo, int $tagId, int $userId, int $sampleLimit = 10): array {
@@ -1965,7 +1965,7 @@ function buildGraphTagCardIndex(array $tagsByCard): array
     return $index;
 }
 
-function sortGraphCardTagsByUserScore(array $tags, array $tagScoreByTag, ?int $preferredTagId = null): array
+function sortGraphCardTagsByUserScore(array $tags, array $tagScoreByTag): array
 {
     $uniqueTags = [];
     foreach ($tags as $tag) {
@@ -1985,18 +1985,7 @@ function sortGraphCardTagsByUserScore(array $tags, array $tagScoreByTag, ?int $p
             return $tagAHasScore <=> $tagBHasScore;
         }
 
-        $scoreCompare = ((int)($tagScoreByTag[$tagA] ?? 0) <=> (int)($tagScoreByTag[$tagB] ?? 0));
-        if ($scoreCompare !== 0) return $scoreCompare;
-
-        if ($preferredTagId !== null && $preferredTagId > 0) {
-            $tagAIsPreferred = $tagA === $preferredTagId;
-            $tagBIsPreferred = $tagB === $preferredTagId;
-            if ($tagAIsPreferred !== $tagBIsPreferred) {
-                return $tagAIsPreferred ? -1 : 1;
-            }
-        }
-
-        return $tagA <=> $tagB;
+        return ((int)($tagScoreByTag[$tagA] ?? 0) <=> (int)($tagScoreByTag[$tagB] ?? 0)) ?: ($tagA <=> $tagB);
     });
 
     return $tags;
@@ -2021,61 +2010,29 @@ function pickGraphBaseCardId(array $cards, array $subjectTagsByCard, array $obje
         return $candidateIds[0] ?? null;
     };
 
+    if ($initialTagId !== null && $initialTagId > 0) {
+        $candidateIds = $cardIdsBySubjectTag[$initialTagId] ?? [];
+        $initialCardId = $pickWeakestCard($candidateIds);
+        if ($initialCardId !== null && isset($cardsById[$initialCardId])) return $initialCardId;
+    }
+
     if (!empty($cardIdsBySubjectTag)) {
         $subjectTags = [];
+        $userOwnedSubjectTags = [];
         foreach ($subjectTagsByCard as $tags) {
             foreach ($tags as $tag) {
                 $tagId = (int)($tag['id'] ?? 0);
                 if ($tagId <= 0 || isset($subjectTags[$tagId])) continue;
-
-                // Só tags que realmente possuem ao menos um card disponível como
-                // subject podem disputar o card base. Assim uma tag sem pontuação
-                // nunca vence se não houver card inicial possível para ela.
-                $subjectCardId = $pickWeakestCard($cardIdsBySubjectTag[$tagId] ?? []);
-                if ($subjectCardId === null || !isset($cardsById[$subjectCardId])) continue;
-
                 $subjectTags[$tagId] = $tag;
-                $subjectTags[$tagId]['graph_subject_card_id'] = $subjectCardId;
-                $subjectTags[$tagId]['graph_subject_card_score'] = (int)($scoreByCard[$subjectCardId] ?? 0);
+                if (!empty($tag['is_user_owned'])) $userOwnedSubjectTags[$tagId] = $tag;
             }
         }
 
-        $sortedTags = array_values($subjectTags);
-        usort($sortedTags, static function (array $a, array $b) use (&$tagScoreByTag, $initialTagId): int {
-            $tagA = (int)($a['id'] ?? 0);
-            $tagB = (int)($b['id'] ?? 0);
-            $tagAHasScore = array_key_exists($tagA, $tagScoreByTag);
-            $tagBHasScore = array_key_exists($tagB, $tagScoreByTag);
-
-            // Ausência de registro em flashcard_tag_scores representa uma tag ainda
-            // não pontuada pelo usuário e deve vir antes de qualquer score existente.
-            if ($tagAHasScore !== $tagBHasScore) {
-                return $tagAHasScore <=> $tagBHasScore;
-            }
-
-            $scoreCompare = ((int)($tagScoreByTag[$tagA] ?? 0) <=> (int)($tagScoreByTag[$tagB] ?? 0));
-            if ($scoreCompare !== 0) return $scoreCompare;
-
-            $userOwnedCompare = ((empty($b['is_user_owned']) ? 0 : 1) <=> (empty($a['is_user_owned']) ? 0 : 1));
-            if ($userOwnedCompare !== 0) return $userOwnedCompare;
-
-            if ($initialTagId !== null && $initialTagId > 0) {
-                $tagAIsPreferred = $tagA === $initialTagId;
-                $tagBIsPreferred = $tagB === $initialTagId;
-                if ($tagAIsPreferred !== $tagBIsPreferred) {
-                    return $tagAIsPreferred ? -1 : 1;
-                }
-            }
-
-            $cardScoreCompare = ((int)($a['graph_subject_card_score'] ?? 0) <=> (int)($b['graph_subject_card_score'] ?? 0));
-            if ($cardScoreCompare !== 0) return $cardScoreCompare;
-
-            return $tagA <=> $tagB;
-        });
-
+        $sortedTags = sortGraphCardTagsByUserScore(!empty($userOwnedSubjectTags) ? array_values($userOwnedSubjectTags) : array_values($subjectTags), $tagScoreByTag);
         foreach ($sortedTags as $tag) {
-            $cardId = (int)($tag['graph_subject_card_id'] ?? 0);
-            if ($cardId > 0 && isset($cardsById[$cardId])) return $cardId;
+            $tagId = (int)($tag['id'] ?? 0);
+            $cardId = $pickWeakestCard($cardIdsBySubjectTag[$tagId] ?? []);
+            if ($cardId !== null && isset($cardsById[$cardId])) return $cardId;
         }
     }
 
@@ -4929,21 +4886,6 @@ elseif ($action === 'update_score') {
         }
         echo json_encode(['status' => 'success']);
     } else echo json_encode(['status' => 'error']);
-}
-
-
-elseif ($action === 'increment_tag_score') {
-    $card_id = (int)($input['card_id'] ?? 0);
-    $decision_tag_id = (int)($input['decision_tag_id'] ?? 0);
-    if ($card_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do card inválido.']));
-    if ($decision_tag_id <= 0) die(json_encode(['status' => 'error', 'message' => 'Tag inválida.']));
-
-    if (!verifyCardOwnership($pdo, $card_id, $user_id, true)) {
-        die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
-    }
-
-    $updated = incrementFlashcardTagScore($pdo, $user_id, $card_id, $decision_tag_id);
-    echo json_encode(['status' => $updated ? 'success' : 'error']);
 }
 
 elseif ($action === 'update_progress') {
