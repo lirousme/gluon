@@ -420,6 +420,28 @@ function generatedTagTextMatchesSelected(array $tag, string $selectedEn, string 
         && normalizeLexicalChunkLookupValue($tagPtBr) === normalizeLexicalChunkLookupValue($selectedPtBr);
 }
 
+
+function generatedTagListContainsSelectedTranslation(array $subjectRaw, array $objectsRaw, array $chunksRaw, string $selectedEn, string $selectedPtBr): bool
+{
+    if (!empty($subjectRaw) && generatedTagTextMatchesSelected($subjectRaw, $selectedEn, $selectedPtBr)) {
+        return true;
+    }
+
+    foreach ($objectsRaw as $objectRaw) {
+        if (is_array($objectRaw) && generatedTagTextMatchesSelected($objectRaw, $selectedEn, $selectedPtBr)) {
+            return true;
+        }
+    }
+
+    foreach ($chunksRaw as $chunkRaw) {
+        if (is_array($chunkRaw) && generatedTagTextMatchesSelected($chunkRaw, $selectedEn, $selectedPtBr)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function normalizeSelectedGeneratedTagRole($role): string
 {
     $role = function_exists('mb_strtolower') ? mb_strtolower(trim((string)$role), 'UTF-8') : strtolower(trim((string)$role));
@@ -4009,7 +4031,7 @@ Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag so
     } else {
         $selected_tag_role_instruction = sprintf("
 
-Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag solicitada como o bloco semântico central que conduz o sentido da frase inteira, não como uma palavra incidental. A frase deve depender semanticamente desse bloco: se a tag for removida, o sentido principal deve mudar. Inclua a tag solicitada em chunks exatamente como en=\"%s\" e pt_br=\"%s\", selected_tag_role deve ser \"chunk\". Neste modo, não descarte a frase só porque a tag também funciona gramaticalmente como sujeito, objeto, verbo ou complemento; o ponto obrigatório é ela estar em chunks como âncora semântica. Esta regra é uma exceção explícita às regras gerais que evitam substantivos soltos em chunks, porque aqui a tag selecionada representa o bloco semântico obrigatório.", $tag_text_en, $tag_text_pt_br);
+Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag solicitada como o bloco semântico central que conduz o sentido da frase inteira, não como uma palavra incidental. A frase deve depender semanticamente desse bloco: se a tag for removida, o sentido principal deve mudar. Inclua a tag solicitada em chunks exatamente como en=\"%s\" e pt_br=\"%s\", selected_tag_role deve ser \"chunk\". Neste modo, não descarte a frase só porque a tag também funciona gramaticalmente como sujeito, objeto, verbo ou complemento; o ponto obrigatório é ela estar em chunks como âncora semântica. Se a tradução em pt-BR precisar ser flexionada/conjugada naturalmente na frase (ex.: \"lidar\" vira \"lidam\"), mantenha pt_br=\"%s\" exatamente no chunk e use a forma natural na tradução completa da frase. Esta regra é uma exceção explícita às regras gerais que evitam substantivos soltos em chunks, porque aqui a tag selecionada representa o bloco semântico obrigatório.", $tag_text_en, $tag_text_pt_br, $tag_text_pt_br);
     }
 
     $prompt = sprintf(<<<'PROMPT'
@@ -4031,7 +4053,7 @@ Regras:
 - Não invente eventos, estatísticas, cargos, datas, relações familiares, obras, descobertas, recordes, falas ou conquistas. Se não tiver certeza de um detalhe factual, troque por um fato estável, amplamente conhecido e mais fácil de verificar.
 - Para acontecimentos atuais, use a data de referência informada acima: prefira fatos ainda válidos nessa data ou fatos recentes amplamente conhecidos; evite notícias de última hora, previsões e alegações instáveis.
 - Quando a tag dificultar uma frase factual, ainda gere uma frase natural, mas mantenha cenário, sujeito, objetos e contexto plausíveis, sem transformar pessoas públicas ou fatos históricos em ficção.
-- Cada frase deve conter a tag solicitada "%s" em inglês e a tradução deve usar "%s" para esse trecho, exatamente no sentido indicado.
+- Cada frase deve conter a tag solicitada "%s" em inglês e a tradução deve usar o sentido de "%s" para esse trecho. Se a frase em pt-BR exigir flexão natural, a frase completa pode usar a forma flexionada, mas o campo estruturado correspondente (subject, objects ou chunks) deve manter pt_br exatamente como "%s".
 - Todas as frases em inglês e em pt-BR devem terminar com pontuação final: use interrogação quando a frase for interrogativa e ponto final nos demais casos. Não termine frases com exclamação ou sem pontuação.
 - Para cada frase, preencha subject com o sujeito gramatical principal real da frase, sem artigos iniciais. Exemplo: em "The dog barked at the cat on the avenue", subject é "dog", não "the dog".
 - A regra obrigatória de papel da tag selecionada informada antes da data prevalece sobre as regras gerais de classificação abaixo.
@@ -4060,7 +4082,7 @@ Regras:
 - Se qualquer frase gerada tiver ano, número, valor, medida ou quantidade, crie obrigatoriamente uma tag isolada para cada valor numérico literal encontrado, mesmo que o número também apareça dentro de um chunk maior como "in 2014".
 - Quando existir sigla ou símbolo conhecido (ex.: "°C", "π", "TCU"), coloque-o em sigla_simbolo. Caso não exista, use null ou omita.
 - Não use markdown, comentários ou texto fora do JSON.
-PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $selected_tag_role_instruction, $current_date_for_prompt, $tag_text_pt_br, $tag_text_en, $tag_text_pt_br, $example_count, $tag_text_en, $tag_text_pt_br, $tag_text_en);
+PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $selected_tag_role_instruction, $current_date_for_prompt, $tag_text_pt_br, $tag_text_en, $tag_text_pt_br, $example_count, $tag_text_en, $tag_text_pt_br, $tag_text_pt_br, $tag_text_en);
 
     $payload = [
         'contents' => [
@@ -4152,8 +4174,9 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         // mesmo quando ela é o bloco de sentido pedido. Não rejeite cedo:
         // abaixo a tag selecionada é promovida/adicionada aos chunks e o papel
         // final é normalizado para "chunk" quando a frase passar nas demais validações.
+        $selectedTagAppearsInStructuredTags = generatedTagListContainsSelectedTranslation($subject_raw, $objects_raw, $chunks_raw, $tag_text_en, $tag_text_pt_br);
         if (!textContainsExactNormalizedPhrase($english, $tag_text_en)) continue;
-        if (!textContainsExactNormalizedPhrase($pt_br, $tag_text_pt_br)) continue;
+        if (!textContainsExactNormalizedPhrase($pt_br, $tag_text_pt_br) && !$selectedTagAppearsInStructuredTags) continue;
         if (containsUnrealisticFutureYear($english . ' ' . $pt_br, $allowedFutureYears)) continue;
 
         $normalized_english = normalizeSentenceForDuplicateCheck($english);
