@@ -4007,9 +4007,9 @@ Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag so
 
 Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag solicitada como objeto ou substantivo relevante que não seja o sujeito. Inclua essa tag em objects, selected_tag_role deve ser \"object\", e o sujeito gramatical principal deve ser outra coisa.";
     } else {
-        $selected_tag_role_instruction = "
+        $selected_tag_role_instruction = sprintf("
 
-Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag solicitada como um bloco semântico/lexical chunk que conduz o sentido semântico da frase. Inclua essa tag em chunks, selected_tag_role deve ser \"chunk\", e não use a tag como o sujeito gramatical principal nem como object.";
+Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag solicitada como o bloco semântico central que conduz o sentido da frase inteira, não como uma palavra incidental. A frase deve depender semanticamente desse bloco: se a tag for removida, o sentido principal deve mudar. Inclua a tag solicitada em chunks exatamente como en=\"%s\" e pt_br=\"%s\", selected_tag_role deve ser \"chunk\", e não use a tag como o sujeito gramatical principal nem como object. Esta regra é uma exceção explícita às regras gerais que evitam substantivos soltos em chunks, porque aqui a tag selecionada representa o bloco semântico obrigatório.", $tag_text_en, $tag_text_pt_br);
     }
 
     $prompt = sprintf(<<<'PROMPT'
@@ -4034,13 +4034,14 @@ Regras:
 - Cada frase deve conter a tag solicitada "%s" em inglês e a tradução deve usar "%s" para esse trecho, exatamente no sentido indicado.
 - Todas as frases em inglês e em pt-BR devem terminar com pontuação final: use interrogação quando a frase for interrogativa e ponto final nos demais casos. Não termine frases com exclamação ou sem pontuação.
 - Para cada frase, preencha subject com o sujeito gramatical principal real da frase, sem artigos iniciais. Exemplo: em "The dog barked at the cat on the avenue", subject é "dog", não "the dog".
-- Nunca coloque a tag solicitada em subject só porque ela foi a tag inicial escolhida. Se a tag solicitada for verbo, lexical chunk, expressão, preposição, lugar, tempo ou modo, ela deve ser realocada para chunks e selected_tag_role deve ser "chunk". Se ela for um substantivo da frase mas não for o sujeito real, coloque-a em objects e selected_tag_role deve ser "object". Use selected_tag_role="subject" somente quando a tag solicitada for de fato o sujeito gramatical real da frase.
+- A regra obrigatória de papel da tag selecionada informada antes da data prevalece sobre as regras gerais de classificação abaixo.
+- Nunca coloque a tag solicitada em subject só porque ela foi a tag inicial escolhida. Se a regra obrigatória pedir selected_tag_role="chunk", mantenha a tag em chunks como bloco semântico central, mesmo que ela pareça um substantivo solto. Caso contrário: se a tag solicitada for verbo, lexical chunk, expressão, preposição, lugar, tempo ou modo, ela deve ser realocada para chunks e selected_tag_role deve ser "chunk"; se ela for um substantivo da frase mas não for o sujeito real, coloque-a em objects e selected_tag_role deve ser "object". Use selected_tag_role="subject" somente quando a tag solicitada for de fato o sujeito gramatical real da frase.
 - Para cada frase, preencha objects com 1 a 4 substantivos relevantes que aparecem na frase e não são o sujeito: objetos diretos, substantivos essenciais de complementos ou substantivos de expressões preposicionais importantes. Objects nunca deve ficar vazio. Sem verbos, sem sujeito e sem artigos iniciais. Exemplo: em "The dog chased the cat on the avenue", objects inclui "cat" e pode incluir "avenue", não "chased" nem "dog". Em "The dog barked at the cat on the avenue", objects inclui "cat" e/ou "avenue" porque são substantivos da frase que não são o sujeito.
 - Em chunks, gere somente chunks sucintos: verbos principais, verbos frasais ou expressões verbais, expressões de lugar, tempo, modo, causa, finalidade, intensidade, comparação, condição, afirmação, negação, dúvida ou frequência.
 - Em chunks, prefira trechos curtos como "chased", "barked", "at", "on the avenue", "every morning", "because of ...". Todo verbo principal que antes iria para objects deve ir para chunks. Não crie muitas variações com mudanças mínimas e não inclua o sujeito ou substantivos soltos como lexical chunks.
 - Cada frase deve ter de 2 a 4 chunks no máximo. Gere menos chunks, desde que sejam os mais úteis e naturais da frase.
 - Use reticências somente quando elas realmente deixarem o chunk mais reutilizável, como "because of ..." ou "whether ... or ...". Não force reticências em todos os chunks.
-- Inclua o lexical chunk "%s" também em chunks quando ele for verbo, expressão verbal, preposição/expressão de lugar/tempo/modo etc. Não inclua se ele for apenas sujeito ou substantivo solto.
+- Inclua o lexical chunk "%s" também em chunks quando ele for verbo, expressão verbal, preposição/expressão de lugar/tempo/modo etc. Se a regra obrigatória pedir selected_tag_role="chunk", inclua-o em chunks de qualquer forma como bloco semântico central. Não inclua se ele for apenas sujeito ou substantivo solto nos outros modos.
 - Não repita o mesmo chunk com o mesmo par de texto em inglês e tradução pt-BR dentro dos chunks da mesma frase nem gere variações quase iguais.
 - No texto das frases em inglês, prefira frases ordinárias, cotidianas e naturais; não adicione auxiliares, modais, negativas ou estruturas com have/had/not/has/is/am/are/would/will/shall apenas para criar contrações.
 - Quando uma contração for realmente natural e necessária para a frase escolhida, use a forma contraída: have > 've, had > 'd, not > n't, has > 's, is > 's, am > 'm, are > 're, would > 'd, will > 'll, shall > 'll.
@@ -4198,6 +4199,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
 
         if (empty($objects)) continue;
         if ($selected_tag_usage_role === 'object' && !$selectedObjectFound) continue;
+        if ($selected_tag_usage_role === 'semantic_block' && $selectedObjectFound) continue;
 
         foreach (buildNumberTagCandidatesFromText($english) as $numberCandidate) {
             $numberMetadata = normalizeGeneratedTagMetadata(
@@ -4250,6 +4252,15 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
                 if (count($chunks) >= 4) break;
             } catch (Throwable $e) {
                 die(json_encode(['status' => 'error', 'message' => 'Erro ao criar tag de lexical chunk: ' . $chunk_en]));
+            }
+        }
+
+        if ($selected_tag_usage_role === 'semantic_block' && !$selectedChunkFound) {
+            try {
+                array_unshift($chunks, findOrCreateLexicalChunkTagForOwner($pdo, 5, $tag_text_en, $tag_text_pt_br, null, null));
+                $selectedChunkFound = true;
+            } catch (Throwable $e) {
+                continue;
             }
         }
 
