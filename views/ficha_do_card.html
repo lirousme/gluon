@@ -43,9 +43,17 @@
         <i class="fa-solid fa-circle-question text-emerald-300" aria-hidden="true"></i>
         <span>Responder Gemini</span>
       </button>
-      <button type="button" id="btnGenerateLexicalChunksGemini" onclick="app.generateSentenceWithLexicalChunksGemini()" class="flex w-full items-center gap-2 rounded-xl border border-cyan-300/40 bg-cyan-500/10 px-3 py-2.5 text-left text-sm font-semibold text-cyan-100 transition-colors hover:border-cyan-300/70 hover:bg-cyan-500/20" title="Gerar 10 frases factuais de exemplo e lexical chunks com Gemini" aria-label="Gerar 10 frases factuais de exemplo e lexical chunks com Gemini">
+      <button type="button" id="btnGenerateLexicalChunksGemini" onclick="app.generateSentenceWithLexicalChunksGemini('semantic_block', this)" class="flex w-full items-center gap-2 rounded-xl border border-cyan-300/40 bg-cyan-500/10 px-3 py-2.5 text-left text-sm font-semibold text-cyan-100 transition-colors hover:border-cyan-300/70 hover:bg-cyan-500/20" title="Gerar 10 frases factuais de exemplo e lexical chunks com Gemini usando a primeira tag como bloco semântico" aria-label="Gerar 10 frases factuais de exemplo e lexical chunks com Gemini usando a primeira tag como bloco semântico">
         <i class="fa-solid fa-tags text-cyan-200" aria-hidden="true"></i>
         <span>Lexical chunks</span>
+      </button>
+      <button type="button" id="btnGenerateLexicalChunksGeminiObject" onclick="app.generateSentenceWithLexicalChunksGemini('object', this)" class="flex w-full items-center gap-2 rounded-xl border border-cyan-300/40 bg-cyan-500/10 px-3 py-2.5 text-left text-sm font-semibold text-cyan-100 transition-colors hover:border-cyan-300/70 hover:bg-cyan-500/20" title="Gerar frases com a primeira tag como objeto" aria-label="Gerar frases com a primeira tag como objeto">
+        <i class="fa-solid fa-tags text-cyan-200" aria-hidden="true"></i>
+        <span>Usar como object</span>
+      </button>
+      <button type="button" id="btnGenerateLexicalChunksGeminiSubject" onclick="app.generateSentenceWithLexicalChunksGemini('subject', this)" class="flex w-full items-center gap-2 rounded-xl border border-cyan-300/40 bg-cyan-500/10 px-3 py-2.5 text-left text-sm font-semibold text-cyan-100 transition-colors hover:border-cyan-300/70 hover:bg-cyan-500/20" title="Gerar frases com a primeira tag como sujeito" aria-label="Gerar frases com a primeira tag como sujeito">
+        <i class="fa-solid fa-tags text-cyan-200" aria-hidden="true"></i>
+        <span>Usar como subject</span>
       </button>
     </nav>
   </aside>
@@ -1043,7 +1051,9 @@ const app = {
         <div class="flex flex-wrap gap-1.5">${validChunks.map(renderChunkPill).join('')}</div>` : ''}`;
     resultEl.classList.remove('hidden');
   },
-  async generateSentenceWithLexicalChunksGemini() {
+  async generateSentenceWithLexicalChunksGemini(selectedTagUsageRole = 'semantic_block', button = btnGenerateLexicalChunksGemini) {
+    const allowedUsageRoles = new Set(['semantic_block', 'subject', 'object']);
+    const tagUsageRole = allowedUsageRoles.has(selectedTagUsageRole) ? selectedTagUsageRole : 'semantic_block';
     const tag = this.getFirstSelectedSubjectTag();
     const tagTextEn = String(tag?.name || '').trim();
     const tagTextPtBr = String(tag?.name_pt_br || '').trim();
@@ -1051,9 +1061,9 @@ const app = {
     if (!tag) return this.setStatus('Selecione ao menos 1 tag para gerar a frase e os lexical chunks com Gemini.', 'error');
     if (!tagTextEn || !tagTextPtBr) return this.setStatus('A primeira tag selecionada precisa ter texto em inglês e em pt-BR.', 'error');
 
-    const originalHtml = btnGenerateLexicalChunksGemini.innerHTML;
-    btnGenerateLexicalChunksGemini.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>';
-    btnGenerateLexicalChunksGemini.disabled = true;
+    const originalHtml = button.innerHTML;
+    button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>';
+    button.disabled = true;
 
     try {
       const res = await this.api('generate_sentence_lexical_chunks_gemini', {
@@ -1063,7 +1073,8 @@ const app = {
         count: 10,
         create_cards: true,
         deck_id: Number(this.deckId || 0),
-        info_type: 3
+        info_type: 3,
+        selected_tag_usage_role: tagUsageRole
       });
       if (!res || !res.english || !res.pt_br || !Array.isArray(res.chunks)) throw new Error('A API não retornou frase e lexical chunks válidos.');
 
@@ -1104,8 +1115,8 @@ const app = {
     } catch (err) {
       this.setStatus('Falha ao gerar lexical chunks com Gemini: ' + (err.message || 'erro desconhecido'), 'error');
     } finally {
-      btnGenerateLexicalChunksGemini.innerHTML = originalHtml;
-      btnGenerateLexicalChunksGemini.disabled = false;
+      button.innerHTML = originalHtml;
+      button.disabled = false;
     }
   },
   async translateCardWithProvider({ action, button, loadingLabel, successLabel, frontSourceLanguage, backSourceLanguage, autoDetectOpposite = false, replaceSource = false }) {

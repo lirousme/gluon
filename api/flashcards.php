@@ -3945,6 +3945,10 @@ elseif ($action === 'generate_sentence_lexical_chunks_gemini') {
     $create_cards = !empty($input['create_cards']);
     $deck_id = (int)($input['deck_id'] ?? 0);
     $info_type = sanitizeInfoType($input['info_type'] ?? 2);
+    $selected_tag_usage_role = trim((string)($input['selected_tag_usage_role'] ?? 'semantic_block'));
+    if (!in_array($selected_tag_usage_role, ['semantic_block', 'subject', 'object'], true)) {
+        $selected_tag_usage_role = 'semantic_block';
+    }
 
     if ($tag_id <= 0) {
         die(json_encode(['status' => 'error', 'message' => 'ID da tag inválido para gerar frase e lexical chunks.']));
@@ -3993,9 +3997,23 @@ elseif ($action === 'generate_sentence_lexical_chunks_gemini') {
     }
 
     $current_date_for_prompt = gmdate('F j, Y');
+    $selected_tag_role_instruction = '';
+    if ($selected_tag_usage_role === 'subject') {
+        $selected_tag_role_instruction = "
+
+Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag solicitada como o sujeito gramatical principal real. O campo subject deve ser exatamente essa tag, selected_tag_role deve ser \"subject\", e a tag não deve ser tratada como object nem como chunk.";
+    } elseif ($selected_tag_usage_role === 'object') {
+        $selected_tag_role_instruction = "
+
+Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag solicitada como objeto ou substantivo relevante que não seja o sujeito. Inclua essa tag em objects, selected_tag_role deve ser \"object\", e o sujeito gramatical principal deve ser outra coisa.";
+    } else {
+        $selected_tag_role_instruction = "
+
+Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag solicitada como um bloco semântico/lexical chunk que conduz o sentido semântico da frase. Inclua essa tag em chunks, selected_tag_role deve ser \"chunk\", e não use a tag como o sujeito gramatical principal nem como object.";
+    }
 
     $prompt = sprintf(<<<'PROMPT'
-Gere %d frases naturais em inglês para estudante de inglês. Cada frase deve conter exatamente a tag em inglês "%s" e essa ocorrência deve ser traduzida exatamente como "%s" na frase em pt-BR. Gere também a tradução exata de cada frase em pt-BR.%s
+Gere %d frases naturais em inglês para estudante de inglês. Cada frase deve conter exatamente a tag em inglês "%s" e essa ocorrência deve ser traduzida exatamente como "%s" na frase em pt-BR. Gere também a tradução exata de cada frase em pt-BR.%s%s
 
 Data atual de referência: %s.
 
@@ -4041,7 +4059,7 @@ Regras:
 - Se qualquer frase gerada tiver ano, número, valor, medida ou quantidade, crie obrigatoriamente uma tag isolada para cada valor numérico literal encontrado, mesmo que o número também apareça dentro de um chunk maior como "in 2014".
 - Quando existir sigla ou símbolo conhecido (ex.: "°C", "π", "TCU"), coloque-o em sigla_simbolo. Caso não exista, use null ou omita.
 - Não use markdown, comentários ou texto fora do JSON.
-PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $current_date_for_prompt, $tag_text_pt_br, $tag_text_en, $tag_text_pt_br, $example_count, $tag_text_en, $tag_text_pt_br, $tag_text_en);
+PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block, $selected_tag_role_instruction, $current_date_for_prompt, $tag_text_pt_br, $tag_text_en, $tag_text_pt_br, $example_count, $tag_text_en, $tag_text_pt_br, $tag_text_en);
 
     $payload = [
         'contents' => [
@@ -4103,6 +4121,9 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         $objects_raw = isset($example_raw['objects']) && is_array($example_raw['objects']) ? $example_raw['objects'] : [];
         $selected_tag_role = determineSelectedGeneratedTagRole($example_raw, $subject_raw, $objects_raw, $chunks_raw, $tag_text_en, $tag_text_pt_br);
         if ($english === '' || $pt_br === '' || $selected_tag_role === '' || empty($chunks_raw) || empty($subject_raw) || empty($objects_raw)) continue;
+        if ($selected_tag_usage_role === 'subject' && $selected_tag_role !== 'subject') continue;
+        if ($selected_tag_usage_role === 'object' && $selected_tag_role !== 'object') continue;
+        if ($selected_tag_usage_role === 'semantic_block' && $selected_tag_role !== 'chunk') continue;
         if (!textContainsExactNormalizedPhrase($english, $tag_text_en)) continue;
         if (!textContainsExactNormalizedPhrase($pt_br, $tag_text_pt_br)) continue;
         if (containsUnrealisticFutureYear($english . ' ' . $pt_br, $allowedFutureYears)) continue;
@@ -4123,10 +4144,14 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
                 $subject_raw['numero'] ?? $subject_raw['number'] ?? null,
                 $subject_raw['sigla_simbolo'] ?? $subject_raw['symbol'] ?? $subject_raw['abbreviation'] ?? null
             );
-            if ($selected_tag_role !== 'subject' && generatedTagTextMatchesSelected([
+            $subjectMatchesSelectedTag = generatedTagTextMatchesSelected([
                 'en' => (string)$subjectMetadata['name'],
                 'pt_br' => (string)$subjectMetadata['name_pt_br'],
-            ], $tag_text_en, $tag_text_pt_br)) {
+            ], $tag_text_en, $tag_text_pt_br);
+            if ($selected_tag_role !== 'subject' && $subjectMatchesSelectedTag) {
+                continue;
+            }
+            if ($selected_tag_usage_role === 'subject' && !$subjectMatchesSelectedTag) {
                 continue;
             }
             $subject = findOrCreateWordTagForOwner($pdo, 5, (string)$subjectMetadata['name'], (string)$subjectMetadata['name_pt_br'], $subjectMetadata['numero'], $subjectMetadata['sigla_simbolo']);
@@ -4136,6 +4161,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
 
         $objects = [];
         $seen_objects = [];
+        $selectedObjectFound = false;
         foreach ($objects_raw as $object_raw) {
             if (!is_array($object_raw)) continue;
             if (generatedTagLooksVerbLike($object_raw)) {
@@ -4154,6 +4180,12 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
             $object_en = (string)$objectMetadata['name'];
             $object_pt_br = (string)$objectMetadata['name_pt_br'];
             if (normalizeWordTagLookupValue($object_en) === normalizeWordTagLookupValue((string)$subjectMetadata['name'])) continue;
+            if (generatedTagTextMatchesSelected([
+                'en' => $object_en,
+                'pt_br' => $object_pt_br,
+            ], $tag_text_en, $tag_text_pt_br)) {
+                $selectedObjectFound = true;
+            }
             $object_key = normalizeWordTagLookupValue($object_en) . '|' . normalizeLexicalChunkLookupValue($object_pt_br) . '|' . normalizeNullableTagMetadataText($objectMetadata['numero']) . '|' . normalizeNullableTagMetadataText($objectMetadata['sigla_simbolo']);
             if ($object_key === '|' || isset($seen_objects[$object_key])) continue;
             $seen_objects[$object_key] = true;
@@ -4165,6 +4197,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         }
 
         if (empty($objects)) continue;
+        if ($selected_tag_usage_role === 'object' && !$selectedObjectFound) continue;
 
         foreach (buildNumberTagCandidatesFromText($english) as $numberCandidate) {
             $numberMetadata = normalizeGeneratedTagMetadata(
@@ -4187,6 +4220,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
 
         $chunks = [];
         $seen_chunks = [];
+        $selectedChunkFound = false;
         foreach ($chunks_raw as $chunk) {
             if (!is_array($chunk)) continue;
             [$rawChunkEn, $rawChunkPtBr] = normalizeDateLexicalChunkTexts(
@@ -4202,6 +4236,12 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
             $chunk_en = cleanLexicalChunkTagText((string)$chunkMetadata['name']);
             $chunk_pt_br = cleanLexicalChunkTagText((string)$chunkMetadata['name_pt_br']);
             if ($chunk_en === '' || $chunk_pt_br === '') continue;
+            if (generatedTagTextMatchesSelected([
+                'en' => $chunk_en,
+                'pt_br' => $chunk_pt_br,
+            ], $tag_text_en, $tag_text_pt_br)) {
+                $selectedChunkFound = true;
+            }
             $dedupe_key = normalizeLexicalChunkLookupValue($chunk_en) . '|' . normalizeLexicalChunkLookupValue($chunk_pt_br) . '|' . normalizeNullableTagMetadataText($chunkMetadata['numero']) . '|' . normalizeNullableTagMetadataText($chunkMetadata['sigla_simbolo']);
             if (isset($seen_chunks[$dedupe_key])) continue;
             $seen_chunks[$dedupe_key] = true;
@@ -4214,6 +4254,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         }
 
         if (empty($chunks)) continue;
+        if ($selected_tag_usage_role === 'semantic_block' && !$selectedChunkFound) continue;
         $seen_sentences[$normalized_english] = true;
         $examples[] = [
             'english' => $english,
