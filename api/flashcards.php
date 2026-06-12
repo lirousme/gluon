@@ -1286,6 +1286,112 @@ function getProperNounOwnerChoiceKey(array $candidate): string
     ]));
 }
 
+
+function getEnglishLexicalChunkFunctionWords(): array
+{
+    return [
+        'prepositions' => array_fill_keys(['aboard','about','above','across','after','against','along','alongside','amid','among','around','as','at','before','behind','below','beneath','beside','besides','between','beyond','by','despite','down','during','except','for','from','in','inside','into','like','near','of','off','on','onto','opposite','out','outside','over','past','per','since','through','throughout','to','toward','towards','under','underneath','unlike','until','up','upon','versus','via','with','within','without'], true),
+        'conjunctions' => array_fill_keys(['and','although','as','because','before','but','how','if','nor','once','or','provided','since','so','than','that','though','unless','until','when','whenever','where','whereas','wherever','whether','while','why','yet'], true),
+        'particles' => array_fill_keys(['away','back','down','in','off','on','out','over','through','up'], true),
+        'auxiliaries' => array_fill_keys(['am','are','be','been','being','can','could','did','do','does','had','has','have','is','may','might','must','shall','should','was','were','will','would'], true),
+        'adverbs' => array_fill_keys(['again','almost','also','always','already','away','back','ever','even','far','here','how','just','never','not','now','often','only','rather','really','still','then','there','too','usually','very','well','when','where','why'], true),
+        'pronouns' => array_fill_keys(['i','me','my','mine','myself','you','your','yours','yourself','yourselves','he','him','his','himself','she','her','hers','herself','it','its','itself','we','us','our','ours','ourselves','they','them','their','theirs','themselves','this','that','these','those','who','whom','whose','which','what','whatever','whoever','whomever','someone','somebody','something','anyone','anybody','anything','everyone','everybody','everything','noone','nobody','nothing'], true),
+        'determiners' => array_fill_keys(['a','an','the','another','any','each','either','every','many','much','neither','no','some','such'], true),
+    ];
+}
+
+function normalizeEnglishLexicalChunkKind($kind): string
+{
+    $kind = strtolower(trim((string)$kind));
+    $kind = str_replace(['-', ' '], '_', $kind);
+    return $kind;
+}
+
+function lexicalChunkKindIsAllowedForStrictTags($kind): bool
+{
+    $kind = normalizeEnglishLexicalChunkKind($kind);
+    return in_array($kind, [
+        'verb', 'verb_phrase', 'phrasal_verb', 'verbal_phrase',
+        'preposition', 'prepositional_phrase', 'preposition_combination', 'prepositions',
+        'conjunction', 'conjunctive_phrase', 'conjunction_phrase', 'subordinating_conjunction',
+        'coordinating_conjunction', 'particle', 'auxiliary', 'modal'
+    ], true);
+}
+
+function sanitizeStrictEnglishLexicalChunkText(string $value): string
+{
+    $words = getEnglishLexicalChunkFunctionWords();
+    $value = cleanLexicalChunkTagText(expandEnglishContractionsForLexicalChunkTag($value));
+    if ($value === '') return '';
+
+    $parts = preg_split('/\s+/u', $value, -1, PREG_SPLIT_NO_EMPTY);
+    if (!$parts) return '';
+
+    $result = [];
+    $replaceContentAfterDeterminer = false;
+    foreach ($parts as $part) {
+        $token = trim($part);
+        if ($token === '') continue;
+        if ($token === '...' || $token === '…') {
+            $result[] = '...';
+            $replaceContentAfterDeterminer = false;
+            continue;
+        }
+        $lookup = strtolower(trim($token, " \t\n\r\0\x0B\"'()[]{}<>/\\|-–—"));
+        if ($lookup === '') continue;
+        if (isset($words['determiners'][$lookup])) {
+            $replaceContentAfterDeterminer = true;
+            continue;
+        }
+        if (isset($words['pronouns'][$lookup]) || $replaceContentAfterDeterminer) {
+            $result[] = '...';
+            $replaceContentAfterDeterminer = false;
+            continue;
+        }
+        $result[] = $token;
+    }
+
+    $value = preg_replace('/(?:\.\.\.\s*){2,}/u', '... ', implode(' ', $result));
+    return preg_replace('/\s+/u', ' ', trim((string)$value));
+}
+
+function isStrictAllowedEnglishLexicalChunk(string $en, string $kind = ''): bool
+{
+    $words = getEnglishLexicalChunkFunctionWords();
+    $en = sanitizeStrictEnglishLexicalChunkText($en);
+    if ($en === '') return false;
+    $tokens = preg_split('/\s+/u', strtolower($en), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    $meaningful = array_values(array_filter($tokens, static fn($token) => $token !== '...'));
+    if (empty($meaningful)) return false;
+
+    foreach ($meaningful as $token) {
+        $lookup = trim($token, " \t\n\r\0\x0B\"'()[]{}<>/\\|-–—");
+        if ($lookup === '' || isset($words['pronouns'][$lookup]) || isset($words['determiners'][$lookup])) return false;
+    }
+
+    if (count($meaningful) === 1) {
+        $token = $meaningful[0];
+        if (isset($words['prepositions'][$token]) || isset($words['conjunctions'][$token]) || isset($words['auxiliaries'][$token]) || lexicalChunkKindIsAllowedForStrictTags($kind)) return true;
+    }
+
+    $hasVerbSignal = lexicalChunkKindIsAllowedForStrictTags($kind);
+    $hasFunctionSignal = false;
+    foreach ($meaningful as $token) {
+        if (isset($words['prepositions'][$token]) || isset($words['conjunctions'][$token]) || isset($words['particles'][$token]) || isset($words['auxiliaries'][$token]) || isset($words['adverbs'][$token])) {
+            $hasFunctionSignal = true;
+            if (isset($words['auxiliaries'][$token])) $hasVerbSignal = true;
+            continue;
+        }
+        if (preg_match('/(?:ed|ing)$/iu', $token)) {
+            $hasVerbSignal = true;
+            continue;
+        }
+        if (!$hasVerbSignal) return false;
+    }
+
+    return $hasFunctionSignal || $hasVerbSignal;
+}
+
 function normalizeFrontSentenceChunkCandidate(array $raw): ?array
 {
     [$rawEn, $rawPtBr] = normalizeDateLexicalChunkTexts(
@@ -1298,10 +1404,11 @@ function normalizeFrontSentenceChunkCandidate(array $raw): ?array
         $raw['numero'] ?? $raw['number'] ?? null,
         $raw['sigla_simbolo'] ?? $raw['symbol'] ?? $raw['abbreviation'] ?? null
     );
-    $en = cleanLexicalChunkTagText((string)$metadata['name']);
+    $kind = normalizeEnglishLexicalChunkKind($raw['kind'] ?? $raw['type'] ?? '');
+    $en = sanitizeStrictEnglishLexicalChunkText((string)$metadata['name']);
     $ptBr = cleanLexicalChunkTagText((string)$metadata['name_pt_br']);
-    if ($en === '' || $ptBr === '') return null;
-    return ['en' => $en, 'pt_br' => $ptBr, 'numero' => $metadata['numero'], 'sigla_simbolo' => $metadata['sigla_simbolo']];
+    if ($en === '' || $ptBr === '' || !isStrictAllowedEnglishLexicalChunk($en, $kind)) return null;
+    return ['en' => $en, 'pt_br' => $ptBr, 'numero' => $metadata['numero'], 'sigla_simbolo' => $metadata['sigla_simbolo'], 'kind' => $kind];
 }
 
 function dedupeFrontSentenceCandidates(array $candidates, string $type): array
@@ -4031,7 +4138,7 @@ Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag so
     } else {
         $selected_tag_role_instruction = sprintf("
 
-Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag solicitada como o bloco semântico central que conduz o sentido da frase inteira, não como uma palavra incidental. A frase deve depender semanticamente desse bloco: se a tag for removida, o sentido principal deve mudar. Inclua a tag solicitada em chunks exatamente como en=\"%s\" e pt_br=\"%s\", selected_tag_role deve ser \"chunk\". Neste modo, não descarte a frase só porque a tag também funciona gramaticalmente como sujeito, objeto, verbo ou complemento; o ponto obrigatório é ela estar em chunks como âncora semântica. Se a tradução em pt-BR precisar ser flexionada/conjugada naturalmente na frase (ex.: \"lidar\" vira \"lidam\"), mantenha pt_br=\"%s\" exatamente no chunk e use a forma natural na tradução completa da frase. Esta regra é uma exceção explícita às regras gerais que evitam substantivos soltos em chunks, porque aqui a tag selecionada representa o bloco semântico obrigatório.", $tag_text_en, $tag_text_pt_br, $tag_text_pt_br);
+Regra obrigatória de papel da tag selecionada: em todas as frases, use a tag solicitada como o bloco semântico central que conduz o sentido da frase inteira, não como uma palavra incidental. A frase deve depender semanticamente desse bloco: se a tag for removida, o sentido principal deve mudar. Classifique a tag solicitada conforme sua função real: use selected_tag_role=\"chunk\" somente se ela for verbo isolado, locução verbal, locução conjuntiva, locução prepositiva, acúmulo/combinação de preposições, preposição isolada ou conjunção isolada; se ela for substantivo ou pronome, nunca a coloque em chunks e classifique-a como subject ou object. Se a tradução em pt-BR precisar ser flexionada/conjugada naturalmente na frase (ex.: \"lidar\" vira \"lidam\"), mantenha pt_br=\"%s\" exatamente no campo estruturado correspondente e use a forma natural na tradução completa da frase.", $tag_text_pt_br);
     }
 
     $prompt = sprintf(<<<'PROMPT'
@@ -4057,13 +4164,13 @@ Regras:
 - Todas as frases em inglês e em pt-BR devem terminar com pontuação final: use interrogação quando a frase for interrogativa e ponto final nos demais casos. Não termine frases com exclamação ou sem pontuação.
 - Para cada frase, preencha subject com o sujeito gramatical principal real da frase, sem artigos iniciais. Exemplo: em "The dog barked at the cat on the avenue", subject é "dog", não "the dog".
 - A regra obrigatória de papel da tag selecionada informada antes da data prevalece sobre as regras gerais de classificação abaixo.
-- Nunca coloque a tag solicitada em subject só porque ela foi a tag inicial escolhida. Se a regra obrigatória pedir selected_tag_role="chunk", mantenha a tag em chunks como bloco semântico central, mesmo que ela pareça um substantivo solto. Caso contrário: se a tag solicitada for verbo, lexical chunk, expressão, preposição, lugar, tempo ou modo, ela deve ser realocada para chunks e selected_tag_role deve ser "chunk"; se ela for um substantivo da frase mas não for o sujeito real, coloque-a em objects e selected_tag_role deve ser "object". Use selected_tag_role="subject" somente quando a tag solicitada for de fato o sujeito gramatical real da frase.
+- Nunca coloque a tag solicitada em subject só porque ela foi a tag inicial escolhida. Se a tag solicitada for verbo isolado, locução verbal, locução conjuntiva, locução prepositiva, acúmulo/combinação de preposições, preposição isolada ou conjunção isolada, ela deve ir para chunks e selected_tag_role deve ser "chunk"; se ela for substantivo ou pronome, nunca a coloque em chunks: use subject somente quando for o sujeito gramatical real, caso contrário use object.
 - Para cada frase, preencha objects com 1 a 4 substantivos relevantes que aparecem na frase e não são o sujeito: objetos diretos, substantivos essenciais de complementos ou substantivos de expressões preposicionais importantes. Objects nunca deve ficar vazio. Sem verbos, sem sujeito e sem artigos iniciais. Exemplo: em "The dog chased the cat on the avenue", objects inclui "cat" e pode incluir "avenue", não "chased" nem "dog". Em "The dog barked at the cat on the avenue", objects inclui "cat" e/ou "avenue" porque são substantivos da frase que não são o sujeito.
-- Em chunks, gere somente chunks sucintos: verbos principais, verbos frasais ou expressões verbais, expressões de lugar, tempo, modo, causa, finalidade, intensidade, comparação, condição, afirmação, negação, dúvida ou frequência.
-- Em chunks, prefira trechos curtos como "chased", "barked", "at", "on the avenue", "every morning", "because of ...". Todo verbo principal que antes iria para objects deve ir para chunks. Não crie muitas variações com mudanças mínimas e não inclua o sujeito ou substantivos soltos como lexical chunks.
+- Em chunks, gere somente verbos isolados úteis, locuções verbais, locuções conjuntivas, locuções prepositivas, acúmulos/combinações de preposições, preposições isoladas ou conjunções isoladas.
+- Em chunks, prefira trechos curtos como "chased", "barked", "at", "in", "because of ...", "whether ... or ...". Todo verbo principal que antes iria para objects deve ir para chunks. Não inclua sujeitos, pronomes nem substantivos como lexical chunks.
 - Cada frase deve ter de 2 a 4 chunks no máximo. Gere menos chunks, desde que sejam os mais úteis e naturais da frase.
-- Use reticências somente quando elas realmente deixarem o chunk mais reutilizável, como "because of ..." ou "whether ... or ...". Não force reticências em todos os chunks.
-- Inclua o lexical chunk "%s" também em chunks quando ele for verbo, expressão verbal, preposição/expressão de lugar/tempo/modo etc. Se a regra obrigatória pedir selected_tag_role="chunk", inclua-o em chunks de qualquer forma como bloco semântico central. Não inclua se ele for apenas sujeito ou substantivo solto nos outros modos.
+- Quando uma locução candidata tiver substantivo ou pronome, substitua essa parte por reticências para manter apenas a estrutura funcional: por exemplo, "how you'll handle" deve virar "how ... will handle", "on the avenue" deve virar "on ..." e "because of the rain" deve virar "because of ...".
+- Inclua a tag "%s" em chunks somente quando ela obedecer estritamente às categorias permitidas de chunks. Nunca inclua a tag em chunks se ela for substantivo ou pronome.
 - Não repita o mesmo chunk com o mesmo par de texto em inglês e tradução pt-BR dentro dos chunks da mesma frase nem gere variações quase iguais.
 - No texto das frases em inglês, prefira frases ordinárias, cotidianas e naturais; não adicione auxiliares, modais, negativas ou estruturas com have/had/not/has/is/am/are/would/will/shall apenas para criar contrações.
 - Quando uma contração for realmente natural e necessária para a frase escolhida, use a forma contraída: have > 've, had > 'd, not > n't, has > 's, is > 's, am > 'm, are > 're, would > 'd, will > 'll, shall > 'll.
@@ -4170,10 +4277,9 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
         if ($selected_tag_usage_role !== 'semantic_block' && ($selected_tag_role === '' || empty($chunks_raw))) continue;
         if ($selected_tag_usage_role === 'subject' && $selected_tag_role !== 'subject') continue;
         if ($selected_tag_usage_role === 'object' && $selected_tag_role !== 'object') continue;
-        // No modo semantic_block, Gemini às vezes declara a tag como object/subject
-        // mesmo quando ela é o bloco de sentido pedido. Não rejeite cedo:
-        // abaixo a tag selecionada é promovida/adicionada aos chunks e o papel
-        // final é normalizado para "chunk" quando a frase passar nas demais validações.
+        // No modo semantic_block, Gemini pode declarar a tag como object/subject/chunk.
+        // Não rejeite cedo, mas preserve a regra estrita: substantivos e pronomes
+        // nunca são transformados em lexical chunks.
         $selectedTagAppearsInStructuredTags = generatedTagListContainsSelectedTranslation($subject_raw, $objects_raw, $chunks_raw, $tag_text_en, $tag_text_pt_br);
         if (!textContainsExactNormalizedPhrase($english, $tag_text_en)) continue;
         if (!textContainsExactNormalizedPhrase($pt_br, $tag_text_pt_br) && !$selectedTagAppearsInStructuredTags) continue;
@@ -4236,13 +4342,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
                 'pt_br' => $object_pt_br,
             ], $tag_text_en, $tag_text_pt_br);
             if ($objectMatchesSelectedTag && $selected_tag_usage_role === 'semantic_block') {
-                array_unshift($chunks_raw, [
-                    'en' => $tag_text_en,
-                    'pt_br' => $tag_text_pt_br,
-                    'kind' => 'expression'
-                ]);
-                $selected_tag_role = 'chunk';
-                continue;
+                $selected_tag_role = 'object';
             }
             if ($objectMatchesSelectedTag) {
                 $selectedObjectFound = true;
@@ -4259,8 +4359,8 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
 
         if (empty($objects)) continue;
         if ($selected_tag_usage_role === 'object' && !$selectedObjectFound) continue;
-        // No modo semantic_block, a tag selecionada pode ter sido reportada por Gemini
-        // como objeto por causa da gramática da frase; ela já foi promovida aos chunks.
+        // No modo semantic_block, a tag selecionada pode ser subject/object/chunk,
+        // mas chunks continuam restritos: nunca promovemos substantivos/pronomes para chunks.
 
         foreach (buildNumberTagCandidatesFromText($english) as $numberCandidate) {
             $numberMetadata = normalizeGeneratedTagMetadata(
@@ -4296,9 +4396,10 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
                 $chunk['numero'] ?? $chunk['number'] ?? null,
                 $chunk['sigla_simbolo'] ?? $chunk['symbol'] ?? $chunk['abbreviation'] ?? null
             );
-            $chunk_en = cleanLexicalChunkTagText((string)$chunkMetadata['name']);
+            $chunk_kind = normalizeEnglishLexicalChunkKind($chunk['kind'] ?? $chunk['type'] ?? '');
+            $chunk_en = sanitizeStrictEnglishLexicalChunkText((string)$chunkMetadata['name']);
             $chunk_pt_br = cleanLexicalChunkTagText((string)$chunkMetadata['name_pt_br']);
-            if ($chunk_en === '' || $chunk_pt_br === '') continue;
+            if ($chunk_en === '' || $chunk_pt_br === '' || !isStrictAllowedEnglishLexicalChunk($chunk_en, $chunk_kind)) continue;
             if (generatedTagTextMatchesSelected([
                 'en' => $chunk_en,
                 'pt_br' => $chunk_pt_br,
@@ -4316,20 +4417,8 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
             }
         }
 
-        if ($selected_tag_usage_role === 'semantic_block' && !$selectedChunkFound) {
-            try {
-                array_unshift($chunks, findOrCreateLexicalChunkTagForOwner($pdo, 5, $tag_text_en, $tag_text_pt_br, null, null));
-                $selectedChunkFound = true;
-            } catch (Throwable $e) {
-                continue;
-            }
-        }
-
         if (empty($chunks)) continue;
-        if ($selected_tag_usage_role === 'semantic_block' && !$selectedChunkFound) continue;
-        if ($selected_tag_usage_role === 'semantic_block') {
-            $selected_tag_role = 'chunk';
-        }
+        if ($selected_tag_role === 'chunk' && !$selectedChunkFound) continue;
         $seen_sentences[$normalized_english] = true;
         $examples[] = [
             'english' => $english,
@@ -4448,7 +4537,7 @@ Frase:
 %s
 
 Retorne somente JSON válido neste formato:
-{"english_sentence":"frase completa e natural em inglês","subjects":[{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional","kind":"common_noun|proper_noun|verb|other"}],"objects":[{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional","kind":"common_noun|proper_noun|verb|other"}],"chunks":[{"en":"lexical chunk curto ou texto por extenso em inglês","pt_br":"tradução curta ou texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional"}]}
+{"english_sentence":"frase completa e natural em inglês","subjects":[{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional","kind":"common_noun|proper_noun|verb|other"}],"objects":[{"en":"texto por extenso em inglês","pt_br":"texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional","kind":"common_noun|proper_noun|verb|other"}],"chunks":[{"en":"lexical chunk curto ou texto por extenso em inglês","pt_br":"tradução curta ou texto por extenso em pt-BR","numero":"valor numérico opcional","sigla_simbolo":"sigla ou símbolo opcional","kind":"verb|verb_phrase|phrasal_verb|preposition|prepositional_phrase|conjunction|conjunctive_phrase"}]}
 
 Regras:
 - english_sentence deve ser sempre uma frase completa, natural e idiomática em inglês. Se a frase original já estiver em inglês, retorne a própria frase revisada apenas o necessário. Se estiver em outro idioma, traduza para inglês e use essa tradução como base para todas as tags.
@@ -4458,8 +4547,8 @@ Regras:
 - Use kind="proper_noun" para nomes próprios de pessoas, empresas, marcas, lugares, sistemas, produtos, obras e instituições.
 - Use kind="common_noun" para substantivos comuns.
 - Use kind="verb" para verbos.
-- chunks deve conter de 2 a 6 lexical chunks curtos e reutilizáveis: verbos ou expressões verbais, preposições, expressões de lugar, tempo, modo, causa, finalidade, frequência, comparação, condição, afirmação, negação ou dúvida.
-- Não inclua o sujeito ou substantivos soltos como lexical chunks.
+- chunks deve conter de 2 a 6 lexical chunks curtos e reutilizáveis: verbos isolados úteis, locuções verbais, locuções conjuntivas, locuções prepositivas, acúmulos/combinações de preposições, preposições isoladas ou conjunções isoladas.
+- Nunca inclua sujeito, substantivo ou pronome como lexical chunk. Se uma locução tiver substantivo ou pronome, substitua essa parte por reticências: "how you'll handle" vira "how ... will handle", "on the avenue" vira "on ...".
 - Nas tags, remova pontuação de frase e expanda contrações: use "do not", "is", "are", "will", etc.
 - Para datas completas em chunks, não inclua o ano nem o número literal do dia dentro do chunk: em vez de "on June 8th 2026", use "on June ...th". O ano e o dia devem aparecer como tags numéricas isoladas.
 - Quando a tag for um número, valor, medida ou quantidade (ex.: "2010", "R$42,40", "U$10,15", "1,60m", "49kg", "1.000.000.000"), coloque o valor literal em numero e coloque os textos por extenso em en e pt_br.
