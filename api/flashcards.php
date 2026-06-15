@@ -1907,6 +1907,19 @@ function buildGraphCardsSequence(array $cards, array $subjectTagsByCard, array $
     $objectTags = sortGraphCardTagsByUserScore($objectTagsByCard[$baseCardId] ?? [], $tagScoreByTag);
     $subjectTags = sortGraphCardTagsByUserScore($subjectTagsByCard[$baseCardId] ?? [], $tagScoreByTag);
 
+    $baseInitialDecisionTagId = null;
+    if ($initialTagId !== null && $initialTagId > 0) {
+        foreach ($subjectTags as $tag) {
+            if ((int)($tag['id'] ?? 0) === $initialTagId) {
+                $baseInitialDecisionTagId = $initialTagId;
+                break;
+            }
+        }
+    }
+    if ($baseInitialDecisionTagId === null && !empty($subjectTags)) {
+        $baseInitialDecisionTagId = (int)($subjectTags[0]['id'] ?? 0) ?: null;
+    }
+
     // A sessão em modo grafo repete o mesmo card base em todas as posições
     // ímpares. As posições pares são geradas em blocos fixos de 3 cards:
     // 1) primeiro bloco par: lexical chunk do card base -> cards com o mesmo lexical chunk;
@@ -1936,8 +1949,16 @@ function buildGraphCardsSequence(array $cards, array $subjectTagsByCard, array $
     if (empty($chosen)) {
         return [[
             'card_id' => $baseCardId,
-            'decision_tag' => null,
+            'decision_tag' => $baseInitialDecisionTagId,
         ]];
+    }
+
+    // Quando o usuário não definiu tag inicial, o primeiro card do grafo deve
+    // fixar uma tag de Subject do próprio card base. Object e lexical chunks
+    // continuam podendo conduzir os pares seguintes, mas não a tag fixada no
+    // card inicial da sessão.
+    if ($baseInitialDecisionTagId !== null) {
+        $chosen[0]['decision_tag'] = $baseInitialDecisionTagId;
     }
 
     return $chosen;
