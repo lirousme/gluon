@@ -1549,18 +1549,12 @@
                 return theme;
             },
 
-            renderInfoTypeBadge(elementId, theme, options = {}) {
+            renderInfoTypeBadge(elementId, theme) {
                 const el = document.getElementById(elementId);
                 if (!el) return;
-                const defaultClasses = 'card-type-badge absolute top-4 left-4 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase';
-                const translationFrontClasses = 'card-type-badge absolute top-4 left-4 rounded-full px-2.5 py-1 text-[13px] font-bold';
-                el.className = options.isTranslationFront ? translationFrontClasses : defaultClasses;
-                const label = options.label || theme.label;
-                el.innerHTML = options.hideIcon
-                    ? `<span>${this.escapeHTML(label)}</span>`
-                    : `<i class="${theme.icon}" aria-hidden="true"></i><span>${this.escapeHTML(label)}</span>`;
-                el.title = options.title || `Tipo do card: ${label}`;
-                el.setAttribute('aria-label', options.ariaLabel || el.title);
+                el.innerHTML = `<i class="${theme.icon}" aria-hidden="true"></i><span>${this.escapeHTML(theme.label)}</span>`;
+                el.title = `Tipo do card: ${theme.label}`;
+                el.setAttribute('aria-label', `Tipo do card: ${theme.label}`);
             },
 
             renderCurrentCard() {
@@ -1568,36 +1562,22 @@
                 
                 const card = this.cards[this.currentIndex];
                 const infoTypeTheme = this.applyInfoTypeTheme(card.info_type);
-                const isTranslationCard = Number(card.info_type) === 1;
-                this.renderInfoTypeBadge('frontLabel', infoTypeTheme, isTranslationCard ? {
-                    label: card.front || infoTypeTheme.label,
-                    hideIcon: true,
-                    isTranslationFront: true,
-                    title: card.front ? `Texto da frente: ${card.front}` : `Tipo do card: ${infoTypeTheme.label}`,
-                    ariaLabel: card.front ? `Texto da frente: ${card.front}` : `Tipo do card: ${infoTypeTheme.label}`
-                } : {});
+                this.renderInfoTypeBadge('frontLabel', infoTypeTheme);
                 this.renderInfoTypeBadge('backLabel', infoTypeTheme);
                 const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
                 const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
                 const isBackOnlyCard = !hasFront && hasBack;
 
                 const frontImageHtml = card.image_front ? `<img src="${card.image_front}" onclick="event.stopPropagation(); flashcardApp.openImageModal('${card.image_front}')" class="max-h-full max-w-full object-contain cursor-zoom-in ${card.front ? 'mt-4' : ''} rounded-lg shadow-md border border-slate-600/50 hover:opacity-90 transition-opacity" title="Clique para ampliar">` : '';
-                const backImageHtml = card.image_back ? `<img src="${card.image_back}" onclick="event.stopPropagation(); flashcardApp.openImageModal('${card.image_back}')" class="max-h-full max-w-full object-contain cursor-zoom-in ${card.back ? 'mt-4' : ''} rounded-lg shadow-md border border-blue-500/50 hover:opacity-90 transition-opacity" title="Clique para ampliar">` : '';
-                document.getElementById('cardFrontText').innerHTML = isTranslationCard
-                    ? `
-                        <div class="flex flex-col items-center justify-center w-full h-full pt-10">
-                            ${card.back ? `<div class="text-center w-full">${this.escapeHTML(card.back)}</div>` : ''}
-                            ${backImageHtml}
-                        </div>
-                    `
-                    : `
-                        <div class="flex flex-col items-center justify-center w-full h-full">
-                            ${card.front ? `<div class="text-center w-full">${this.escapeHTML(card.front)}</div>` : ''}
-                            ${frontImageHtml}
-                        </div>
-                    `;
+                document.getElementById('cardFrontText').innerHTML = `
+                    <div class="flex flex-col items-center justify-center w-full h-full">
+                        ${card.front ? `<div class="text-center w-full">${this.escapeHTML(card.front)}</div>` : ''}
+                        ${frontImageHtml}
+                    </div>
+                `;
                 this.renderMathInElement(document.getElementById('cardFrontText'));
 
+                const backImageHtml = card.image_back ? `<img src="${card.image_back}" onclick="event.stopPropagation(); flashcardApp.openImageModal('${card.image_back}')" class="max-h-full max-w-full object-contain cursor-zoom-in ${card.back ? 'mt-4' : ''} rounded-lg shadow-md border border-blue-500/50 hover:opacity-90 transition-opacity" title="Clique para ampliar">` : '';
                 document.getElementById('cardBackText').innerHTML = `
                     <div class="flex flex-col items-center justify-center w-full h-full">
                         ${card.back ? `<div class="text-center w-full">${this.escapeHTML(card.back)}</div>` : ''}
@@ -1672,7 +1652,7 @@
                 }
 
                 const audioBack = document.getElementById('audioControlsBack');
-                if (isTranslationCard || !hasBack || isBackOnlyCard) {
+                if (!hasBack || isBackOnlyCard) {
                     document.getElementById('flipIconFront').style.display = 'none';
                     cardEl.style.cursor = 'default';
                     if (!hasBack) {
@@ -1722,7 +1702,7 @@
                     document.getElementById('backScoreDots').innerHTML = '';
                 }
 
-                if (isBackOnlyCard && !isTranslationCard) {
+                if (isBackOnlyCard) {
                     this.isFlipped = true;
                     cardEl.classList.add('is-flipped');
                 } else if (this.isFlipped) {
@@ -1818,7 +1798,6 @@
                 if (!card) return null;
                 const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
                 const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
-                if (Number(card.info_type) === 1) return card.back && String(card.back).trim() !== '' ? 'back' : 'front';
                 if (this.isFlipped || (!hasFront && hasBack)) return 'back';
                 return 'front';
             },
@@ -1846,7 +1825,7 @@
                 const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
                 const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
 
-                if (Number(card.info_type) === 1 || !hasFront || !hasBack) return;
+                if (!hasFront || !hasBack) return;
 
                 this.isFlipped = !this.isFlipped;
                 const cardEl = document.getElementById('flashcard');
@@ -1873,7 +1852,7 @@
                 const reviewCard = card ? { ...card, graph_decision_tag_id: Number(card.graph_decision_tag_id || 0) } : null;
                 const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
                 const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
-                const hasTwoSides = Number(card.info_type) !== 1 && hasFront && hasBack;
+                const hasTwoSides = hasFront && hasBack;
 
                 if (hasTwoSides && !this.isFlipped) {
                     this.flipCard();
