@@ -40,6 +40,7 @@ if (!isset($_SESSION['user_id'])) {
 
 $pdo = Database::getConnection();
 ensureFlashcardTagsNumericMetadataSchema($pdo);
+ensureFlashcardTagsCreatorSchema($pdo);
 ensureTagFamilyOrderSchema($pdo);
 ensureFlashcardsPublicToggleSchema($pdo);
 $user_id = $_SESSION['user_id'];
@@ -321,6 +322,21 @@ function ensureFlashcardTagsNumericMetadataSchema(PDO $pdo): void
     }
 }
 
+function ensureFlashcardTagsCreatorSchema(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $creatorColumn = $pdo->query("SHOW COLUMNS FROM flashcard_tags LIKE 'created_by_user_id'")->fetch(PDO::FETCH_ASSOC);
+        if (!$creatorColumn) {
+            $pdo->exec('ALTER TABLE flashcard_tags ADD COLUMN created_by_user_id INT NULL AFTER user_id');
+        }
+        $pdo->exec('UPDATE flashcard_tags SET created_by_user_id = user_id WHERE created_by_user_id IS NULL');
+    } catch (Throwable $e) {
+        error_log('[flashcards][flashcard_tags_creator_schema] ' . $e->getMessage());
+    }
+}
 
 function ensureTagFamilyOrderSchema(PDO $pdo): void
 {
@@ -767,9 +783,9 @@ function tagCombinationAlreadyExists(PDO $pdo, int $userId, string $name, ?strin
     $sql = "
         SELECT id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo
         FROM flashcard_tags
-        WHERE user_id = ?
+        WHERE (user_id = ? OR created_by_user_id = ?)
     ";
-    $params = [$userId];
+    $params = [$userId, $userId];
     if ($excludeTagId !== null) {
         $sql .= " AND id <> ?";
         $params[] = $excludeTagId;
@@ -5349,6 +5365,7 @@ elseif ($action === 'list_tags') {
         SELECT
             t.id,
             t.user_id,
+            t.created_by_user_id,
             t.name_encrypted,
             t.name_pt_br_encrypted,
             t.numero,
@@ -5586,11 +5603,11 @@ elseif ($action === 'create_tag') {
 
     $name_enc = Security::encryptData($name);
     $name_pt_br_enc = $name_pt_br !== null ? Security::encryptData($name_pt_br) : null;
-    $stmt = $pdo->prepare("INSERT INTO flashcard_tags (user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $pdo->prepare("INSERT INTO flashcard_tags (user_id, created_by_user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $tagId = 0;
     try {
         $pdo->beginTransaction();
-        $stmt->execute([$user_id, $name_enc, $name_pt_br_enc, $numero, $siglaSimbolo, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year]);
+        $stmt->execute([$user_id, $user_id, $name_enc, $name_pt_br_enc, $numero, $siglaSimbolo, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year]);
         $tagId = (int)$pdo->lastInsertId();
         executeTagCreationCustomRules($pdo, $user_id, $tagId);
         $pdo->commit();
@@ -5616,8 +5633,8 @@ elseif ($action === 'update_tag') {
     $numero = normalizeNullableTagMetadataText($input['numero'] ?? null);
     $siglaSimbolo = normalizeNullableTagMetadataText($input['sigla_simbolo'] ?? null);
     if (!array_key_exists('sigla_simbolo', $input) && $tag_id > 0) {
-        $currentMetaStmt = $pdo->prepare('SELECT sigla_simbolo FROM flashcard_tags WHERE id = ? AND user_id = ? LIMIT 1');
-        $currentMetaStmt->execute([$tag_id, $user_id]);
+        $currentMetaStmt = $pdo->prepare('SELECT sigla_simbolo FROM flashcard_tags WHERE id = ? AND (user_id = ? OR created_by_user_id = ?) LIMIT 1');
+        $currentMetaStmt->execute([$tag_id, $user_id, $user_id]);
         $siglaSimbolo = normalizeNullableTagMetadataText($currentMetaStmt->fetchColumn() ?: null);
     }
     $name = preg_replace('/\s+/u', ' ', $name);
@@ -5653,22 +5670,65 @@ elseif ($action === 'update_tag') {
         'is_day' => $is_day,
         'is_year' => $is_year
     ]);
-    $stmt = $pdo->prepare("UPDATE flashcard_tags SET name_encrypted = ?, name_pt_br_encrypted = ?, numero = ?, sigla_simbolo = ?, color = ?, is_book = ?, is_verb_tense = ?, is_sentence_type = ?, is_lexical_chunk = ?, is_relation_type = ?, is_word = ?, is_month = ?, is_day = ?, is_year = ? WHERE id = ? AND user_id = ?");
+    $stmt = $pdo->prepare("UPDATE flashcard_tags SET name_encrypted = ?, name_pt_br_encrypted = ?, numero = ?, sigla_simbolo = ?, color = ?, is_book = ?, is_verb_tense = ?, is_sentence_type = ?, is_lexical_chunk = ?, is_relation_type = ?, is_word = ?, is_month = ?, is_day = ?, is_year = ? WHERE id = ? AND (user_id = ? OR created_by_user_id = ?)");
     try {
-        $stmt->execute([$name_enc, $name_pt_br_enc, $numero, $siglaSimbolo, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year, $tag_id, $user_id]);
+        $stmt->execute([$name_enc, $name_pt_br_enc, $numero, $siglaSimbolo, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year, $tag_id, $user_id, $user_id]);
     } catch (PDOException $e) {
         die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com esse nome.']));
     }
 
     if ($stmt->rowCount() === 0) {
-        $checkStmt = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id = ? LIMIT 1");
-        $checkStmt->execute([$tag_id, $user_id]);
+        $checkStmt = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND (user_id = ? OR created_by_user_id = ?) LIMIT 1");
+        $checkStmt->execute([$tag_id, $user_id, $user_id]);
         if (!$checkStmt->fetchColumn()) {
             die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada.']));
         }
     }
 
     echo json_encode(['status' => 'success', 'message' => 'Tag atualizada com sucesso.']);
+}
+
+elseif ($action === 'toggle_tag_public_visibility') {
+    $tag_id = (int)($input['id'] ?? 0);
+    if ($tag_id <= 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID da tag inválido.']));
+    }
+
+    try {
+        $pdo->beginTransaction();
+        $checkStmt = $pdo->prepare("SELECT id, user_id, created_by_user_id FROM flashcard_tags WHERE id = ? LIMIT 1 FOR UPDATE");
+        $checkStmt->execute([$tag_id]);
+        $tag = $checkStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$tag) {
+            $pdo->rollBack();
+            die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada.']));
+        }
+
+        $creatorId = (int)($tag['created_by_user_id'] ?: $tag['user_id']);
+        if ($creatorId !== (int)$user_id) {
+            $pdo->rollBack();
+            die(json_encode(['status' => 'error', 'message' => 'Você não tem permissão para alterar a visibilidade desta tag.']));
+        }
+
+        $currentOwnerId = (int)$tag['user_id'];
+        $nextOwnerId = $currentOwnerId === 5 ? $creatorId : 5;
+        $message = $nextOwnerId === 5 ? 'Tag tornada pública.' : 'Tag tornada privada.';
+        $update = $pdo->prepare("UPDATE flashcard_tags SET user_id = ?, created_by_user_id = ? WHERE id = ? LIMIT 1");
+        $update->execute([$nextOwnerId, $creatorId, $tag_id]);
+        $pdo->commit();
+
+        echo json_encode([
+            'status' => 'success',
+            'message' => $message,
+            'user_id' => $nextOwnerId,
+            'created_by_user_id' => $creatorId,
+            'is_public' => $nextOwnerId === 5,
+        ]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('[flashcards][toggle_tag_public_visibility] ' . $e->getMessage());
+        die(json_encode(['status' => 'error', 'message' => 'Erro interno ao alterar visibilidade da tag.']));
+    }
 }
 
 elseif ($action === 'delete_tag') {
