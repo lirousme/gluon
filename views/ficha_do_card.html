@@ -149,9 +149,9 @@
       </section>
 
       <div class="flex items-center justify-between gap-3 pt-2 border-t border-slate-700">
-        <button type="button" id="btnInfoType" class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm border border-purple-500/50 bg-purple-950/40 text-purple-200" title="Tipo da Informação" aria-label="Tipo da Informação">
-            <i class="fa-regular fa-circle-question" aria-hidden="true"></i>
-            Pergunta
+        <button type="button" id="btnInfoType" class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm border border-blue-500/50 bg-blue-950/40 text-blue-200" title="Tipo da Informação" aria-label="Tipo da Informação">
+            <i class="fa-regular fa-circle-check" aria-hidden="true"></i>
+            Afirmação
         </button>
         <div class="flex items-center gap-2">
           <button type="button" id="btnDeleteCard" class="hidden inline-flex items-center gap-2 bg-red-700 hover:bg-red-600 px-4 py-2 rounded-lg font-medium text-white">
@@ -284,7 +284,7 @@ const app = {
   from: params.get('from') || '',
   editCardId: params.get('edit_card_id'),
   initialSubjectTagId: Number(params.get('tag_id') || 0),
-  infoType: 2,
+  infoType: 0,
   infoTypeOptions: {
     0: { label: 'Afirmação', icon: 'fa-regular fa-circle-check', classes: 'border-blue-500/50 bg-blue-950/40 text-blue-200' },
     1: { label: 'Tradução', icon: 'fa-solid fa-language', classes: 'border-orange-500/50 bg-orange-950/40 text-orange-200' },
@@ -360,7 +360,7 @@ const app = {
     btnInfoType.setAttribute('aria-label', `Tipo da Informação: ${config.label}`);
   },
   cycleInfoType() {
-    const sequence = [2, 0, 1, 3];
+    const sequence = [0, 1, 2, 3];
     const currentIndex = sequence.indexOf(this.infoType);
     const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % sequence.length;
     this.setInfoType(sequence[nextIndex]);
