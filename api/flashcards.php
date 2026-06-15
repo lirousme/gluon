@@ -1912,16 +1912,14 @@ function buildGraphCardsSequence(array $cards, array $subjectTagsByCard, array $
     $previousSubjectTagId = $firstDecisionTagId;
 
     // Depois do primeiro card, o grafo vira uma corrente sem blocos nem limite por tag:
-    // - card 2, 4, 6... precisa ter como Object a tag Subject selecionada no card anterior;
-    // - card 3, 5, 7... precisa ter como Subject a tag Subject selecionada no card anterior.
+    // cada próximo card precisa ter como Object a tag Subject selecionada no card anterior.
     // Em cada card encontrado, a próxima tag de decisão continua sendo sempre uma tag de Subject
-    // do próprio card, mantendo a navegação alternada adiante enquanto houver candidatos inéditos.
+    // do próprio card, mantendo a corrente adiante enquanto houver candidatos inéditos.
     for ($position = 2; $position <= count($cards); $position++) {
-        $candidateIndex = ($position % 2 === 0) ? $cardIdsByObjectTag : $cardIdsBySubjectTag;
-        $nextCardId = $pickNextGraphCardId($previousSubjectTagId, $candidateIndex, $usedCards);
+        $nextCardId = $pickNextGraphCardId($previousSubjectTagId, $cardIdsByObjectTag, $usedCards);
         if ($nextCardId === null) break;
 
-        $nextDecisionTagId = $pickSubjectDecisionTag($nextCardId, $previousSubjectTagId);
+        $nextDecisionTagId = $pickSubjectDecisionTag($nextCardId);
         $chosen[] = [
             'card_id' => $nextCardId,
             'decision_tag' => $nextDecisionTagId,
