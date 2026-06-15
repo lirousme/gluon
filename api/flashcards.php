@@ -41,6 +41,7 @@ if (!isset($_SESSION['user_id'])) {
 $pdo = Database::getConnection();
 ensureFlashcardTagsNumericMetadataSchema($pdo);
 ensureTagFamilyOrderSchema($pdo);
+ensureFlashcardsPublicToggleSchema($pdo);
 $user_id = $_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? ($_GET['action'] ?? '');
@@ -333,6 +334,26 @@ function ensureTagFamilyOrderSchema(PDO $pdo): void
         }
     } catch (Throwable $e) {
         error_log('[flashcards][tag_family_order_schema] ' . $e->getMessage());
+    }
+}
+
+function ensureFlashcardsPublicToggleSchema(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $creatorColumn = $pdo->query("SHOW COLUMNS FROM flashcards LIKE 'created_by_user_id'")->fetch(PDO::FETCH_ASSOC);
+        if (!$creatorColumn) {
+            $pdo->exec('ALTER TABLE flashcards ADD COLUMN created_by_user_id INT NULL AFTER directory_id');
+        }
+
+        $privateDirectoryColumn = $pdo->query("SHOW COLUMNS FROM flashcards LIKE 'private_directory_id'")->fetch(PDO::FETCH_ASSOC);
+        if (!$privateDirectoryColumn) {
+            $pdo->exec('ALTER TABLE flashcards ADD COLUMN private_directory_id INT NULL AFTER created_by_user_id');
+        }
+    } catch (Throwable $e) {
+        error_log('[flashcards][public_toggle_schema] ' . $e->getMessage());
     }
 }
 
@@ -2167,12 +2188,12 @@ function findNextPendingAudioJobForDeck($pdo, $deck_id, $front_language, $back_l
  */
 function verifyCardOwnership($pdo, $card_id, $user_id, bool $allowPublicUserFive = false) {
     if ($allowPublicUserFive) {
-        $stmt = $pdo->prepare("SELECT f.id, f.directory_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND d.user_id IN (?, 5)");
-        $stmt->execute([$card_id, $user_id]);
+        $stmt = $pdo->prepare("SELECT f.id, f.directory_id, f.created_by_user_id, f.private_directory_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND (d.user_id IN (?, 5) OR f.created_by_user_id = ?)");
+        $stmt->execute([$card_id, $user_id, $user_id]);
         return $stmt->fetch();
     }
-    $stmt = $pdo->prepare("SELECT f.id, f.directory_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND d.user_id = ?");
-    $stmt->execute([$card_id, $user_id]);
+    $stmt = $pdo->prepare("SELECT f.id, f.directory_id, f.created_by_user_id, f.private_directory_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND (d.user_id = ? OR f.created_by_user_id = ?)");
+    $stmt->execute([$card_id, $user_id, $user_id]);
     return $stmt->fetch();
 }
 
@@ -4456,11 +4477,11 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
     }
 
     if ($create_cards) {
-        $stmtInsertCard = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, has_audio_front, has_audio_back) VALUES (?, ?, ?, NULL, NULL, ?, 0, 0)");
+        $stmtInsertCard = $pdo->prepare("INSERT INTO flashcards (directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, 0, 0)");
         foreach ($examples as &$example) {
             $front_enc = Security::encryptData($example['english']);
             $back_enc = Security::encryptData($example['pt_br']);
-            if (!$stmtInsertCard->execute([$deck_id, $front_enc, $back_enc, $info_type])) {
+            if (!$stmtInsertCard->execute([$deck_id, $user_id, $deck_id, $front_enc, $back_enc, $info_type])) {
                 die(json_encode(['status' => 'error', 'message' => 'Erro ao criar card de frase de exemplo.']));
             }
             $new_card_id = (int)$pdo->lastInsertId();
@@ -5037,9 +5058,9 @@ elseif ($action === 'add_single') {
     $img_front_enc = !empty($image_front) ? Security::encryptData($image_front) : null;
     $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
 
-    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, ?, 0, 0)");
+    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)");
     
-    if ($stmt->execute([$deck_id, $front_enc, $back_enc, $img_front_enc, $img_back_enc, $info_type])) {
+    if ($stmt->execute([$deck_id, $user_id, $deck_id, $front_enc, $back_enc, $img_front_enc, $img_back_enc, $info_type])) {
         $new_card_id = (int)$pdo->lastInsertId();
         syncCardTagLinks($pdo, 'flashcard_tag_links', $new_card_id, $tag_ids, $user_id);
         syncCardTagLinks($pdo, 'subjects_links', $new_card_id, $subject_tag_ids, $user_id);
@@ -5071,7 +5092,7 @@ elseif ($action === 'get_card_for_edit') {
     }
 
     $stmt = $pdo->prepare("
-        SELECT id, directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, has_audio_front, has_audio_back
+        SELECT id, directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, has_audio_front, has_audio_back
         FROM flashcards
         WHERE id = ?
         LIMIT 1
@@ -5091,6 +5112,9 @@ elseif ($action === 'get_card_for_edit') {
         'data' => [
             'id' => (int)$card['id'],
             'directory_id' => (int)$card['directory_id'],
+            'created_by_user_id' => (int)($card['created_by_user_id'] ?? 0),
+            'private_directory_id' => (int)($card['private_directory_id'] ?? 0),
+            'is_public' => (int)$card['directory_id'] === 6452 ? 1 : 0,
             'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
             'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
             'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
@@ -5103,6 +5127,38 @@ elseif ($action === 'get_card_for_edit') {
             'lexical_chunks_tags' => $lexicalChunksTagsByCard[$card_id] ?? []
         ]
     ]);
+}
+
+// ==== Alternar visibilidade pública do card ====
+elseif ($action === 'toggle_card_public') {
+    $publicDirectoryId = 6452;
+    $card_id = (int)($input['card_id'] ?? 0);
+    if ($card_id === 0) {
+        die(json_encode(['status' => 'error', 'message' => 'ID do card inválido.']));
+    }
+
+    $card = verifyCardOwnership($pdo, $card_id, $user_id);
+    if (!$card) {
+        die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
+    }
+
+    $currentDirectoryId = (int)$card['directory_id'];
+    $storedPrivateDirectoryId = (int)($card['private_directory_id'] ?? 0);
+    if ($currentDirectoryId === $publicDirectoryId) {
+        if ($storedPrivateDirectoryId <= 0 || !verifyDeckOwnership($pdo, $storedPrivateDirectoryId, $user_id)) {
+            die(json_encode(['status' => 'error', 'message' => 'Não foi possível encontrar o diretório privado original deste card.']));
+        }
+        $stmt = $pdo->prepare('UPDATE flashcards SET directory_id = ?, created_by_user_id = COALESCE(created_by_user_id, ?), private_directory_id = ? WHERE id = ?');
+        $stmt->execute([$storedPrivateDirectoryId, $user_id, $storedPrivateDirectoryId, $card_id]);
+        echo json_encode(['status' => 'success', 'message' => 'Card tornou-se privado novamente.', 'data' => ['is_public' => 0, 'directory_id' => $storedPrivateDirectoryId, 'private_directory_id' => $storedPrivateDirectoryId]]);
+    } else {
+        if (!verifyDeckOwnership($pdo, $currentDirectoryId, $user_id)) {
+            die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
+        }
+        $stmt = $pdo->prepare('UPDATE flashcards SET directory_id = ?, created_by_user_id = COALESCE(created_by_user_id, ?), private_directory_id = ? WHERE id = ?');
+        $stmt->execute([$publicDirectoryId, $user_id, $currentDirectoryId, $card_id]);
+        echo json_encode(['status' => 'success', 'message' => 'Card publicado no diretório público.', 'data' => ['is_public' => 1, 'directory_id' => $publicDirectoryId, 'private_directory_id' => $currentDirectoryId]]);
+    }
 }
 
 // ==== Editar Card Existente ====
@@ -6375,13 +6431,13 @@ elseif ($action === 'create_generated_cards') {
 
     try {
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted, has_audio_front, has_audio_back) VALUES (?, ?, ?, 0, 0)");
+        $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, 0, 0)");
         $count = 0;
         foreach ($cards as $card) {
             $front = trim((string)($card['front'] ?? ''));
             $back = trim((string)($card['back'] ?? ''));
             if ($front === '') continue;
-            $stmt->execute([$deck_id, Security::encryptData($front), $back !== '' ? Security::encryptData($back) : null]);
+            $stmt->execute([$deck_id, $user_id, $deck_id, Security::encryptData($front), $back !== '' ? Security::encryptData($back) : null]);
             $count++;
         }
 
@@ -6644,7 +6700,7 @@ elseif ($action === 'add_bulk') {
 
     try {
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, front_encrypted, back_encrypted, has_audio_front, has_audio_back) VALUES (?, ?, ?, 0, 0)");
+        $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, 0, 0)");
         
         $count = 0;
         foreach ($cards as $card) {
@@ -6654,7 +6710,7 @@ elseif ($action === 'add_bulk') {
             if (!empty($front)) {
                 $front_enc = Security::encryptData($front);
                 $back_enc = !empty($back) ? Security::encryptData($back) : null;
-                $stmt->execute([$deck_id, $front_enc, $back_enc]);
+                $stmt->execute([$deck_id, $user_id, $deck_id, $front_enc, $back_enc]);
                 $count++;
             }
         }
