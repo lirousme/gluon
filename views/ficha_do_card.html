@@ -55,6 +55,10 @@
         <i class="fa-solid fa-tags text-cyan-200" aria-hidden="true"></i>
         <span>Usar como subject</span>
       </button>
+      <button type="button" id="btnToggleCardPublic" onclick="app.toggleCardPublic()" class="hidden flex w-full items-center gap-2 rounded-xl border border-amber-300/30 bg-amber-500/10 px-3 py-2.5 text-left text-sm font-semibold text-amber-200 transition-colors hover:border-amber-300/60 hover:bg-amber-500/20" title="Tornar este card público" aria-label="Tornar este card público">
+        <i class="fa-solid fa-globe text-amber-300" aria-hidden="true"></i>
+        <span>Tornar público</span>
+      </button>
     </nav>
   </aside>
 
@@ -297,6 +301,10 @@ const app = {
   availableTags: [],
   sessionUserId: null,
   pendingFrontSentenceTagCandidates: null,
+  publicDirectoryId: 6452,
+  currentCardDirectoryId: null,
+  currentCardPrivateDirectoryId: null,
+  currentCardIsPublic: false,
   tagPanels: {
     subject: { selectedInputId: 'selectedSubjectTagIds', selectorId: 'subjectTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' },
     object: { selectedInputId: 'selectedObjectTagIds', selectorId: 'objectTagSelector', activeClass: 'bg-sky-500/20 text-sky-200 border-sky-400', searchQuery: '' },
@@ -1190,6 +1198,35 @@ const app = {
       button.disabled = false;
     }
   },
+  updatePublicToggleButton() {
+    if (!this.editCardId || typeof btnToggleCardPublic === 'undefined') return;
+    btnToggleCardPublic.classList.remove('hidden');
+    const label = this.currentCardIsPublic ? 'Tornar privado' : 'Tornar público';
+    const title = this.currentCardIsPublic ? 'Retornar este card ao diretório privado original' : 'Mover este card para o diretório público';
+    btnToggleCardPublic.querySelector('span').textContent = label;
+    btnToggleCardPublic.title = title;
+    btnToggleCardPublic.setAttribute('aria-label', title);
+  },
+  async toggleCardPublic() {
+    if (!this.editCardId) return;
+    const original = btnToggleCardPublic.innerHTML;
+    btnToggleCardPublic.disabled = true;
+    btnToggleCardPublic.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i><span>Atualizando...</span>';
+    try {
+      const res = await this.api('toggle_card_public', { card_id: this.editCardId });
+      const data = res?.data || {};
+      this.currentCardDirectoryId = Number(data.directory_id || this.currentCardDirectoryId || 0) || null;
+      this.currentCardPrivateDirectoryId = Number(data.private_directory_id || this.currentCardPrivateDirectoryId || 0) || null;
+      this.currentCardIsPublic = Number(data.is_public) === 1;
+      this.setStatus(res?.message || 'Visibilidade do card atualizada.', 'success');
+    } catch (err) {
+      this.setStatus(err.message || 'Erro ao alterar a visibilidade do card.', 'error');
+    } finally {
+      btnToggleCardPublic.disabled = false;
+      btnToggleCardPublic.innerHTML = original;
+      this.updatePublicToggleButton();
+    }
+  },
   async preloadEditCard() {
     if (!this.editCardId) return;
     pageTitle.textContent = 'Editar ficha de card';
@@ -1198,6 +1235,10 @@ const app = {
     const res = await this.api('get_card_for_edit', { deck_id: this.deckId, card_id: this.editCardId });
     const card = res?.data || null;
     if (!card) throw new Error('Card não encontrado para edição.');
+    this.currentCardDirectoryId = Number(card.directory_id || 0) || null;
+    this.currentCardPrivateDirectoryId = Number(card.private_directory_id || 0) || null;
+    this.currentCardIsPublic = Number(card.is_public) === 1 || this.currentCardDirectoryId === this.publicDirectoryId;
+    this.updatePublicToggleButton();
     singleFront.value = card.front || '';
     singleBack.value = String(card.back || '');
     if (card.image_front) this.setBase64ImagePreview('front', card.image_front);
