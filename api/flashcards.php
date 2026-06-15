@@ -1857,8 +1857,6 @@ function buildGraphCardsSequence(array $cards, array $subjectTagsByCard, array $
 
     $cardIdsBySubjectTag = buildGraphTagCardIndex($subjectTagsByCard);
     $cardIdsByObjectTag = buildGraphTagCardIndex($objectTagsByCard);
-    $cardIdsByLexicalChunkTag = buildGraphTagCardIndex($lexicalChunksTagsByCard);
-
     $baseCardId = pickGraphBaseCardId(
         $cards,
         $subjectTagsByCard,
@@ -1871,94 +1869,68 @@ function buildGraphCardsSequence(array $cards, array $subjectTagsByCard, array $
     );
     if ($baseCardId === null) return [];
 
-    $chosen = [];
-    $usedEvenCards = [$baseCardId => true];
+    $pickSubjectDecisionTag = static function (int $cardId, ?int $preferredTagId = null) use (&$subjectTagsByCard, &$tagScoreByTag): ?int {
+        $subjectTags = sortGraphCardTagsByUserScore($subjectTagsByCard[$cardId] ?? [], $tagScoreByTag);
+        if (empty($subjectTags)) return null;
 
-    $appendPairsForTag = static function (int $tagId, array $candidateIndex, int $limit = 3) use (&$chosen, &$usedEvenCards, $baseCardId, &$scoreByCard): void {
-        if ($tagId <= 0 || $limit <= 0) return;
+        if ($preferredTagId !== null && $preferredTagId > 0) {
+            foreach ($subjectTags as $tag) {
+                if ((int)($tag['id'] ?? 0) === $preferredTagId) return $preferredTagId;
+            }
+        }
+
+        $tagId = (int)($subjectTags[0]['id'] ?? 0);
+        return $tagId > 0 ? $tagId : null;
+    };
+
+    $pickNextGraphCardId = static function (int $tagId, array $candidateIndex, array $usedCards) use (&$scoreByCard): ?int {
+        if ($tagId <= 0) return null;
 
         $candidateIds = array_values(array_unique(array_map('intval', $candidateIndex[$tagId] ?? [])));
         usort($candidateIds, static function (int $a, int $b) use (&$scoreByCard): int {
             return ((int)($scoreByCard[$a] ?? 0) <=> (int)($scoreByCard[$b] ?? 0)) ?: ($a <=> $b);
         });
 
-        $added = 0;
         foreach ($candidateIds as $candidateId) {
-            if ($candidateId <= 0 || isset($usedEvenCards[$candidateId])) continue;
-
-            $chosen[] = [
-                'card_id' => $baseCardId,
-                'decision_tag' => $tagId,
-            ];
-            $chosen[] = [
-                'card_id' => $candidateId,
-                'decision_tag' => $tagId,
-            ];
-
-            $usedEvenCards[$candidateId] = true;
-            $scoreByCard[$candidateId] = (int)($scoreByCard[$candidateId] ?? 0) + 1;
-            $added += 1;
-
-            if ($added >= $limit) break;
+            if ($candidateId > 0 && !isset($usedCards[$candidateId])) return $candidateId;
         }
+
+        return null;
     };
 
-    $lexicalChunkTags = sortGraphCardTagsByUserScore($lexicalChunksTagsByCard[$baseCardId] ?? [], $tagScoreByTag);
-    $objectTags = sortGraphCardTagsByUserScore($objectTagsByCard[$baseCardId] ?? [], $tagScoreByTag);
-    $subjectTags = sortGraphCardTagsByUserScore($subjectTagsByCard[$baseCardId] ?? [], $tagScoreByTag);
+    $firstDecisionTagId = $pickSubjectDecisionTag($baseCardId, $initialTagId);
+    if ($firstDecisionTagId === null) return [[
+        'card_id' => $baseCardId,
+        'decision_tag' => null,
+    ]];
 
-    $baseInitialDecisionTagId = null;
-    if ($initialTagId !== null && $initialTagId > 0) {
-        foreach ($subjectTags as $tag) {
-            if ((int)($tag['id'] ?? 0) === $initialTagId) {
-                $baseInitialDecisionTagId = $initialTagId;
-                break;
-            }
-        }
-    }
-    if ($baseInitialDecisionTagId === null && !empty($subjectTags)) {
-        $baseInitialDecisionTagId = (int)($subjectTags[0]['id'] ?? 0) ?: null;
-    }
+    $chosen = [[
+        'card_id' => $baseCardId,
+        'decision_tag' => $firstDecisionTagId,
+    ]];
+    $usedCards = [$baseCardId => true];
+    $previousSubjectTagId = $firstDecisionTagId;
 
-    // A sessão em modo grafo repete o mesmo card base em todas as posições
-    // ímpares. As posições pares são geradas em blocos fixos de 3 cards:
-    // 1) primeiro bloco par: lexical chunk do card base -> cards com o mesmo lexical chunk;
-    // 2) segundo bloco par: object do card base -> cards que tenham esse object como subject;
-    // 3) terceiro bloco par: subject do card base -> cards que tenham esse subject como object.
-    // Depois o ciclo recomeça com a próxima tag menos pontuada de cada categoria.
-    // Isso impede esgotar todos os lexical chunks antes de começar objects/subjects.
-    $appendGraphCategoryBlock = static function (array $tags, int $round, array $candidateIndex) use ($appendPairsForTag): void {
-        if (!isset($tags[$round])) return;
+    // Depois do primeiro card, o grafo vira uma corrente sem blocos nem limite por tag:
+    // - card 2, 4, 6... precisa ter como Object a tag Subject selecionada no card anterior;
+    // - card 3, 5, 7... precisa ter como Subject a tag Subject selecionada no card anterior.
+    // Em cada card encontrado, a próxima tag de decisão continua sendo sempre uma tag de Subject
+    // do próprio card, mantendo a navegação alternada adiante enquanto houver candidatos inéditos.
+    for ($position = 2; $position <= count($cards); $position++) {
+        $candidateIndex = ($position % 2 === 0) ? $cardIdsByObjectTag : $cardIdsBySubjectTag;
+        $nextCardId = $pickNextGraphCardId($previousSubjectTagId, $candidateIndex, $usedCards);
+        if ($nextCardId === null) break;
 
-        $appendPairsForTag(
-            (int)($tags[$round]['id'] ?? 0),
-            $candidateIndex,
-            3
-        );
-    };
+        $nextDecisionTagId = $pickSubjectDecisionTag($nextCardId, $previousSubjectTagId);
+        $chosen[] = [
+            'card_id' => $nextCardId,
+            'decision_tag' => $nextDecisionTagId,
+        ];
 
-    $maxTagRounds = max(count($lexicalChunkTags), count($objectTags), count($subjectTags));
-    for ($round = 0; $round < $maxTagRounds; $round++) {
-        // Ordem obrigatória dos blocos pares: 2/4/6 lexical chunk, 8/10/12 object
-        // como subject, 14/16/18 subject como object; depois repete a mesma ordem.
-        $appendGraphCategoryBlock($lexicalChunkTags, $round, $cardIdsByLexicalChunkTag);
-        $appendGraphCategoryBlock($objectTags, $round, $cardIdsBySubjectTag);
-        $appendGraphCategoryBlock($subjectTags, $round, $cardIdsByObjectTag);
-    }
-
-    if (empty($chosen)) {
-        return [[
-            'card_id' => $baseCardId,
-            'decision_tag' => $baseInitialDecisionTagId,
-        ]];
-    }
-
-    // Quando o usuário não definiu tag inicial, o primeiro card do grafo deve
-    // fixar uma tag de Subject do próprio card base. Object e lexical chunks
-    // continuam podendo conduzir os pares seguintes, mas não a tag fixada no
-    // card inicial da sessão.
-    if ($baseInitialDecisionTagId !== null) {
-        $chosen[0]['decision_tag'] = $baseInitialDecisionTagId;
+        $usedCards[$nextCardId] = true;
+        $scoreByCard[$nextCardId] = (int)($scoreByCard[$nextCardId] ?? 0) + 1;
+        if ($nextDecisionTagId === null) break;
+        $previousSubjectTagId = $nextDecisionTagId;
     }
 
     return $chosen;
