@@ -150,17 +150,12 @@
 
             savedFiltersList.innerHTML = filters.map((tag, index) => {
                 const label = getTagLabel(tag);
-                const count = Number(tag.subjects_count || 0);
-                const countLabel = count === 1 ? '1 card' : `${count} cards`;
                 const isActive = Number(tag.id) === state.selectedTagId;
                 return `
                     <article class="rounded-xl border ${isActive ? 'border-violet-400/80 bg-violet-950/40' : 'border-sky-500/20 bg-sky-950/20'} p-3 transition hover:border-sky-400/60 hover:bg-sky-950/40">
                         <button type="button" data-saved-filter-index="${index}" class="w-full text-left text-sm font-semibold ${isActive ? 'text-violet-100' : 'text-slate-100'} transition hover:text-sky-100">
                             ${escapeHtml(label)}
                         </button>
-                        <a href="${escapeHtml(buildTagRoute('/views/card_da_tag.html', tag))}" class="mt-2 inline-flex rounded-full border border-sky-500/30 bg-sky-900/40 px-2.5 py-1 text-xs text-sky-100 transition hover:border-sky-300 hover:bg-sky-500/30">
-                            ${escapeHtml(countLabel)}
-                        </a>
                     </article>
                 `;
             }).join('');
