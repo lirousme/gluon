@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <script src="/assets/zoom-lock.js" defer></script>
+    <title>Gluon - Cards do Grafo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        gluon: {
+                            dark: '#0f172a',
+                            primary: '#3b82f6',
+                            secondary: '#1e293b',
+                            accent: '#6366f1'
+                        }
+                    }
+                }
+            }
+        };
+    </script>
+</head>
+<body class="min-h-screen bg-gluon-dark text-slate-100">
+    <div class="flex min-h-screen flex-col">
+        <header class="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur">
+            <div class="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-violet-300">Gluon</p>
+                    <h1 class="text-2xl font-bold text-white">Cards do modo grafo</h1>
+                    <p id="pageSubtitle" class="mt-1 text-sm text-slate-400">Listando seus cards em decks configurados como grafo.</p>
+                </div>
+                <a href="/dashboard" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-violet-400 hover:text-white">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    Dashboard
+                </a>
+            </div>
+        </header>
+
+        <main class="mx-auto w-full max-w-6xl flex-1 px-4 py-6">
+            <div id="statusBox" class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 text-center text-slate-300">
+                <i class="fa-solid fa-spinner fa-spin mr-2 text-violet-300"></i>Carregando cards...
+            </div>
+            <section id="cardsGrid" class="hidden grid-cols-1 gap-4 md:grid-cols-2"></section>
+        </main>
+
+        <footer class="sticky bottom-0 border-t border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur">
+            <div class="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div id="paginationInfo" class="text-sm text-slate-400">Página 1 de 1</div>
+                <div class="flex items-center gap-2">
+                    <button id="prevPageBtn" type="button" class="rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-40 hover:not-disabled:border-violet-400">
+                        <i class="fa-solid fa-chevron-left mr-2"></i>Anterior
+                    </button>
+                    <button id="nextPageBtn" type="button" class="rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-40 hover:not-disabled:border-violet-400">
+                        Próxima<i class="fa-solid fa-chevron-right ml-2"></i>
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        const state = { page: Number(new URLSearchParams(window.location.search).get('page')) || 1, totalPages: 1, totalCards: 0 };
+        const cardsGrid = document.getElementById('cardsGrid');
+        const statusBox = document.getElementById('statusBox');
+        const pageSubtitle = document.getElementById('pageSubtitle');
+        const paginationInfo = document.getElementById('paginationInfo');
+        const prevPageBtn = document.getElementById('prevPageBtn');
+        const nextPageBtn = document.getElementById('nextPageBtn');
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+        }
+
+        function renderImage(src, label) {
+            if (!src) return '';
+            return `<img src="${escapeHtml(src)}" alt="${escapeHtml(label)}" class="mt-3 max-h-52 w-full rounded-xl border border-slate-700 object-contain bg-slate-950/60">`;
+        }
+
+        function renderCards(cards) {
+            cardsGrid.innerHTML = cards.map((card) => `
+                <article class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80 shadow-xl shadow-black/20">
+                    <div class="flex items-center justify-between border-b border-slate-800 px-4 py-3 text-xs text-slate-400">
+                        <span class="font-semibold text-violet-200">#${card.id}</span>
+                        <span class="truncate pl-3">${escapeHtml(card.directory_name || 'Deck grafo')}</span>
+                    </div>
+                    <div class="grid gap-px bg-slate-800 md:grid-cols-2">
+                        <div class="bg-slate-900 p-4">
+                            <div class="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Frente</div>
+                            <div class="whitespace-pre-wrap break-words text-sm leading-6 text-slate-100">${escapeHtml(card.front || '—')}</div>
+                            ${renderImage(card.image_front, 'Imagem da frente')}
+                        </div>
+                        <div class="bg-slate-900 p-4">
+                            <div class="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Verso</div>
+                            <div class="whitespace-pre-wrap break-words text-sm leading-6 text-slate-100">${escapeHtml(card.back || '—')}</div>
+                            ${renderImage(card.image_back, 'Imagem do verso')}
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 px-4 py-3 text-xs text-slate-400">
+                        <span class="rounded-full bg-slate-800 px-2.5 py-1">Score: ${card.score}</span>
+                        <span class="rounded-full bg-slate-800 px-2.5 py-1">Áudio frente: ${card.has_audio_front ? 'sim' : 'não'}</span>
+                        <span class="rounded-full bg-slate-800 px-2.5 py-1">Áudio verso: ${card.has_audio_back ? 'sim' : 'não'}</span>
+                    </div>
+                </article>
+            `).join('');
+        }
+
+        function updateFooter() {
+            paginationInfo.textContent = `Página ${state.page} de ${state.totalPages} • ${state.totalCards} card(s) • 20 por página`;
+            pageSubtitle.textContent = `${state.totalCards} card(s) encontrados em seus decks do modo grafo.`;
+            prevPageBtn.disabled = state.page <= 1;
+            nextPageBtn.disabled = state.page >= state.totalPages;
+        }
+
+        async function loadPage(page) {
+            statusBox.classList.remove('hidden');
+            cardsGrid.classList.add('hidden');
+            statusBox.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2 text-violet-300"></i>Carregando cards...';
+            try {
+                const response = await fetch(`/api/flashcards?action=list_graph_cards_for_user&page=${page}`, { headers: { 'Accept': 'application/json' } });
+                const result = await response.json();
+                if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível carregar os cards.');
+
+                state.page = result.pagination.page;
+                state.totalPages = result.pagination.total_pages;
+                state.totalCards = result.pagination.total_cards;
+                window.history.replaceState(null, '', `/card_filters?page=${state.page}`);
+                updateFooter();
+
+                if (!result.data.length) {
+                    statusBox.textContent = 'Nenhum card encontrado em decks do modo grafo.';
+                    return;
+                }
+                renderCards(result.data);
+                statusBox.classList.add('hidden');
+                cardsGrid.classList.remove('hidden');
+                cardsGrid.classList.add('grid');
+            } catch (error) {
+                statusBox.textContent = error.message || 'Erro ao carregar cards.';
+            }
+        }
+
+        prevPageBtn.addEventListener('click', () => { if (state.page > 1) loadPage(state.page - 1); });
+        nextPageBtn.addEventListener('click', () => { if (state.page < state.totalPages) loadPage(state.page + 1); });
+        loadPage(state.page);
+    </script>
+</body>
+</html>

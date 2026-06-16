@@ -5257,6 +5257,83 @@ elseif ($action === 'delete_card') {
 }
 
 
+
+elseif ($action === 'list_graph_cards_for_user') {
+    $rawPage = is_array($input) ? ($input['page'] ?? ($_GET['page'] ?? 1)) : ($_GET['page'] ?? 1);
+    $page = filter_var($rawPage, FILTER_VALIDATE_INT, ['options' => ['default' => 1, 'min_range' => 1]]);
+    $perPage = 20;
+    $offset = ($page - 1) * $perPage;
+
+    $stmtTotal = $pdo->prepare("
+        SELECT COUNT(f.id)
+        FROM flashcards f
+        INNER JOIN directories d ON d.id = f.directory_id
+        WHERE d.user_id = ?
+          AND d.deck_mode = 'grafo'
+          AND d.type IN (4, 10)
+    ");
+    $stmtTotal->execute([$user_id]);
+    $totalCards = (int)$stmtTotal->fetchColumn();
+    $totalPages = max(1, (int)ceil($totalCards / $perPage));
+    if ($page > $totalPages) {
+        $page = $totalPages;
+        $offset = ($page - 1) * $perPage;
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT
+            f.id,
+            f.directory_id,
+            f.front_encrypted,
+            f.back_encrypted,
+            f.image_front_encrypted,
+            f.image_back_encrypted,
+            f.info_type,
+            f.has_audio_front,
+            f.has_audio_back,
+            d.name_encrypted AS directory_name_encrypted,
+            COALESCE(fs.score, 0) AS score
+        FROM flashcards f
+        INNER JOIN directories d ON d.id = f.directory_id
+        LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
+        WHERE d.user_id = ?
+          AND d.deck_mode = 'grafo'
+          AND d.type IN (4, 10)
+        ORDER BY f.id DESC
+        LIMIT {$perPage} OFFSET {$offset}
+    ");
+    $stmt->execute([$user_id, $user_id]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $cards = [];
+    foreach ($rows as $card) {
+        $cards[] = [
+            'id' => (int)$card['id'],
+            'directory_id' => (int)$card['directory_id'],
+            'directory_name' => !empty($card['directory_name_encrypted']) ? Security::decryptData($card['directory_name_encrypted']) : '',
+            'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
+            'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
+            'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
+            'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
+            'info_type' => sanitizeInfoType($card['info_type'] ?? 2),
+            'has_audio_front' => (int)$card['has_audio_front'],
+            'has_audio_back' => (int)$card['has_audio_back'],
+            'score' => (int)$card['score'],
+        ];
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'data' => $cards,
+        'pagination' => [
+            'page' => $page,
+            'per_page' => $perPage,
+            'total_cards' => $totalCards,
+            'total_pages' => $totalPages,
+        ],
+    ]);
+}
+
 elseif ($action === 'list_subject_cards_by_tag') {
     $tag_id = (int)($input['tag_id'] ?? 0);
     if ($tag_id <= 0) {
