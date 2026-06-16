@@ -41,7 +41,18 @@
         </header>
 
         <div class="grid w-full flex-1 grid-cols-1 gap-4 py-6 lg:grid-cols-[16rem_minmax(0,1fr)_16rem]">
-            <aside aria-label="Menu lateral esquerdo" class="mx-4 min-h-24 rounded-2xl border border-slate-800 bg-slate-900/50 p-4 lg:sticky lg:top-28 lg:ml-0 lg:mr-4 lg:h-[calc(100vh-12rem)]"></aside>
+            <aside aria-label="Menu lateral esquerdo" class="mx-4 min-h-24 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/50 p-4 lg:sticky lg:top-28 lg:ml-0 lg:mr-4 lg:h-[calc(100vh-12rem)]">
+                <div class="mb-4 flex items-center justify-between gap-2">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-sky-300">Filtros</p>
+                        <h2 class="mt-1 text-base font-bold text-white">Tags fixadas</h2>
+                    </div>
+                    <span id="savedFiltersCount" class="rounded-full border border-sky-500/40 bg-sky-500/20 px-2 py-0.5 text-xs font-semibold text-sky-100">0</span>
+                </div>
+                <div id="savedFiltersList" class="space-y-2 text-sm text-slate-300">
+                    <p class="text-xs text-slate-500">Carregando tags fixadas...</p>
+                </div>
+            </aside>
 
             <main class="min-w-0 px-4 lg:px-0">
                 <div id="statusBox" class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 text-center text-slate-300">
@@ -79,6 +90,83 @@
 
         function escapeHtml(value) {
             return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+        }
+
+        function getTagLabel(tag = {}) {
+            const numero = tag?.numero;
+            const hasNumero = numero !== null && numero !== undefined && String(numero).trim() !== '';
+            if (hasNumero) return String(numero).trim();
+
+            const name = String(tag?.name || '').trim();
+            const namePtBr = String(tag?.name_pt_br || '').trim();
+            if (name && namePtBr && name.toLowerCase() !== namePtBr.toLowerCase()) return `${name} (${namePtBr})`;
+            return name || namePtBr || 'Tag sem nome';
+        }
+
+        function normalizeSavedFilter(filter = {}) {
+            return { ...filter, id: Number(filter.id_tag || filter.id || 0) };
+        }
+
+        function buildTagRoute(path, tag = {}) {
+            const params = new URLSearchParams();
+            const tagId = Number(tag?.id || 0);
+            if (tagId) params.set('tag_id', String(tagId));
+            const tagName = getTagLabel(tag);
+            if (tagName) params.set('tag_name', tagName);
+            const query = params.toString();
+            return `${path}${query ? `?${query}` : ''}`;
+        }
+
+        function renderSavedFilters(filters) {
+            const savedFiltersList = document.getElementById('savedFiltersList');
+            const savedFiltersCount = document.getElementById('savedFiltersCount');
+            savedFiltersCount.textContent = String(filters.length);
+
+            if (!filters.length) {
+                savedFiltersList.innerHTML = '<p class="text-xs text-slate-500">Nenhuma tag fixada para o usuário atual.</p>';
+                return;
+            }
+
+            savedFiltersList.innerHTML = filters.map((tag, index) => {
+                const label = getTagLabel(tag);
+                const count = Number(tag.subjects_count || 0);
+                const countLabel = count === 1 ? '1 card' : `${count} cards`;
+                return `
+                    <article class="rounded-xl border border-sky-500/20 bg-sky-950/20 p-3 transition hover:border-sky-400/60 hover:bg-sky-950/40">
+                        <button type="button" data-saved-filter-index="${index}" class="w-full text-left text-sm font-semibold text-slate-100 transition hover:text-sky-100">
+                            ${escapeHtml(label)}
+                        </button>
+                        <a href="${escapeHtml(buildTagRoute('/views/card_da_tag.html', tag))}" class="mt-2 inline-flex rounded-full border border-sky-500/30 bg-sky-900/40 px-2.5 py-1 text-xs text-sky-100 transition hover:border-sky-300 hover:bg-sky-500/30">
+                            ${escapeHtml(countLabel)}
+                        </a>
+                    </article>
+                `;
+            }).join('');
+
+            savedFiltersList.querySelectorAll('[data-saved-filter-index]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const tag = filters[Number(button.dataset.savedFilterIndex)] || {};
+                    window.location.href = buildTagRoute('/views/tag_family.html', tag);
+                });
+            });
+        }
+
+        async function loadSavedFilters() {
+            const savedFiltersList = document.getElementById('savedFiltersList');
+            const savedFiltersCount = document.getElementById('savedFiltersCount');
+            try {
+                const response = await fetch('/api/flashcards', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ action: 'list_saved_filters' })
+                });
+                const result = await response.json();
+                if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível carregar as tags fixadas.');
+                renderSavedFilters((result.data || []).map(normalizeSavedFilter).filter((tag) => Number(tag.id) > 0));
+            } catch (error) {
+                savedFiltersCount.textContent = '0';
+                savedFiltersList.innerHTML = `<p class="text-xs text-red-300">${escapeHtml(error.message || 'Erro ao carregar tags fixadas.')}</p>`;
+            }
         }
 
         function renderImage(src, label) {
@@ -151,6 +239,7 @@
 
         prevPageBtn.addEventListener('click', () => { if (state.page > 1) loadPage(state.page - 1); });
         nextPageBtn.addEventListener('click', () => { if (state.page < state.totalPages) loadPage(state.page + 1); });
+        loadSavedFilters();
         loadPage(state.page);
     </script>
 </body>
