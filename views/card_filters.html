@@ -52,6 +52,9 @@
                 <div id="savedFiltersList" class="space-y-2 text-sm text-slate-300">
                     <p class="text-xs text-slate-500">Carregando tags fixadas...</p>
                 </div>
+                <button id="clearTagFilterBtn" type="button" class="mt-4 hidden w-full rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-violet-400 hover:text-white">
+                    Limpar filtro de tag
+                </button>
             </aside>
 
             <main class="min-w-0 px-4 lg:px-0">
@@ -80,13 +83,21 @@
     </div>
 
     <script>
-        const state = { page: Number(new URLSearchParams(window.location.search).get('page')) || 1, totalPages: 1, totalCards: 0 };
+        const urlParams = new URLSearchParams(window.location.search);
+        const state = {
+            page: Number(urlParams.get('page')) || 1,
+            totalPages: 1,
+            totalCards: 0,
+            selectedTagId: Number(urlParams.get('tag_id')) || 0,
+            selectedTagLabel: urlParams.get('tag_name') || ''
+        };
         const cardsGrid = document.getElementById('cardsGrid');
         const statusBox = document.getElementById('statusBox');
         const pageSubtitle = document.getElementById('pageSubtitle');
         const paginationInfo = document.getElementById('paginationInfo');
         const prevPageBtn = document.getElementById('prevPageBtn');
         const nextPageBtn = document.getElementById('nextPageBtn');
+        const clearTagFilterBtn = document.getElementById('clearTagFilterBtn');
 
         function escapeHtml(value) {
             return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
@@ -117,6 +128,16 @@
             return `${path}${query ? `?${query}` : ''}`;
         }
 
+        function buildCardsRoute(page = state.page) {
+            const params = new URLSearchParams();
+            params.set('page', String(page));
+            if (state.selectedTagId > 0) {
+                params.set('tag_id', String(state.selectedTagId));
+                if (state.selectedTagLabel) params.set('tag_name', state.selectedTagLabel);
+            }
+            return `/card_filters?${params.toString()}`;
+        }
+
         function renderSavedFilters(filters) {
             const savedFiltersList = document.getElementById('savedFiltersList');
             const savedFiltersCount = document.getElementById('savedFiltersCount');
@@ -131,9 +152,10 @@
                 const label = getTagLabel(tag);
                 const count = Number(tag.subjects_count || 0);
                 const countLabel = count === 1 ? '1 card' : `${count} cards`;
+                const isActive = Number(tag.id) === state.selectedTagId;
                 return `
-                    <article class="rounded-xl border border-sky-500/20 bg-sky-950/20 p-3 transition hover:border-sky-400/60 hover:bg-sky-950/40">
-                        <button type="button" data-saved-filter-index="${index}" class="w-full text-left text-sm font-semibold text-slate-100 transition hover:text-sky-100">
+                    <article class="rounded-xl border ${isActive ? 'border-violet-400/80 bg-violet-950/40' : 'border-sky-500/20 bg-sky-950/20'} p-3 transition hover:border-sky-400/60 hover:bg-sky-950/40">
+                        <button type="button" data-saved-filter-index="${index}" class="w-full text-left text-sm font-semibold ${isActive ? 'text-violet-100' : 'text-slate-100'} transition hover:text-sky-100">
                             ${escapeHtml(label)}
                         </button>
                         <a href="${escapeHtml(buildTagRoute('/views/card_da_tag.html', tag))}" class="mt-2 inline-flex rounded-full border border-sky-500/30 bg-sky-900/40 px-2.5 py-1 text-xs text-sky-100 transition hover:border-sky-300 hover:bg-sky-500/30">
@@ -146,7 +168,10 @@
             savedFiltersList.querySelectorAll('[data-saved-filter-index]').forEach((button) => {
                 button.addEventListener('click', () => {
                     const tag = filters[Number(button.dataset.savedFilterIndex)] || {};
-                    window.location.href = buildTagRoute('/views/tag_family.html', tag);
+                    state.selectedTagId = Number(tag.id) || 0;
+                    state.selectedTagLabel = getTagLabel(tag);
+                    loadPage(1);
+                    renderSavedFilters(filters);
                 });
             });
         }
@@ -204,9 +229,12 @@
 
         function updateFooter() {
             paginationInfo.textContent = `Página ${state.page} de ${state.totalPages} • ${state.totalCards} card(s) • 20 por página`;
-            pageSubtitle.textContent = `${state.totalCards} card(s) encontrados em seus decks do modo grafo.`;
+            pageSubtitle.textContent = state.selectedTagId > 0
+                ? `${state.totalCards} card(s) encontrados com a tag "${state.selectedTagLabel || state.selectedTagId}" em seus decks do modo grafo.`
+                : `${state.totalCards} card(s) encontrados em seus decks do modo grafo.`;
             prevPageBtn.disabled = state.page <= 1;
             nextPageBtn.disabled = state.page >= state.totalPages;
+            clearTagFilterBtn.classList.toggle('hidden', state.selectedTagId <= 0);
         }
 
         async function loadPage(page) {
@@ -214,14 +242,16 @@
             cardsGrid.classList.add('hidden');
             statusBox.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2 text-violet-300"></i>Carregando cards...';
             try {
-                const response = await fetch(`/api/flashcards?action=list_graph_cards_for_user&page=${page}`, { headers: { 'Accept': 'application/json' } });
+                const params = new URLSearchParams({ action: 'list_graph_cards_for_user', page: String(page) });
+                if (state.selectedTagId > 0) params.set('tag_id', String(state.selectedTagId));
+                const response = await fetch(`/api/flashcards?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
                 const result = await response.json();
                 if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível carregar os cards.');
 
                 state.page = result.pagination.page;
                 state.totalPages = result.pagination.total_pages;
                 state.totalCards = result.pagination.total_cards;
-                window.history.replaceState(null, '', `/card_filters?page=${state.page}`);
+                window.history.replaceState(null, '', buildCardsRoute(state.page));
                 updateFooter();
 
                 if (!result.data.length) {
@@ -239,6 +269,12 @@
 
         prevPageBtn.addEventListener('click', () => { if (state.page > 1) loadPage(state.page - 1); });
         nextPageBtn.addEventListener('click', () => { if (state.page < state.totalPages) loadPage(state.page + 1); });
+        clearTagFilterBtn.addEventListener('click', () => {
+            state.selectedTagId = 0;
+            state.selectedTagLabel = '';
+            loadPage(1);
+            loadSavedFilters();
+        });
         loadSavedFilters();
         loadPage(state.page);
     </script>

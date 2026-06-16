@@ -5260,9 +5260,30 @@ elseif ($action === 'delete_card') {
 
 elseif ($action === 'list_graph_cards_for_user') {
     $rawPage = is_array($input) ? ($input['page'] ?? ($_GET['page'] ?? 1)) : ($_GET['page'] ?? 1);
+    $rawTagId = is_array($input) ? ($input['tag_id'] ?? ($_GET['tag_id'] ?? 0)) : ($_GET['tag_id'] ?? 0);
     $page = filter_var($rawPage, FILTER_VALIDATE_INT, ['options' => ['default' => 1, 'min_range' => 1]]);
+    $tagId = filter_var($rawTagId, FILTER_VALIDATE_INT, ['options' => ['default' => 0, 'min_range' => 0]]);
     $perPage = 20;
     $offset = ($page - 1) * $perPage;
+    $tagFilterSql = '';
+    $tagFilterParams = [];
+
+    if ($tagId > 0) {
+        $stmtTag = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5) LIMIT 1");
+        $stmtTag->execute([$tagId, $user_id]);
+        if (!$stmtTag->fetchColumn()) {
+            die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada ou sem permissão.']));
+        }
+
+        $tagExistsClauses = [];
+        foreach (getCardTagLinkColumnsByTable() as $linkTable => $columns) {
+            foreach ($columns as $column) {
+                $tagExistsClauses[] = "EXISTS (SELECT 1 FROM {$linkTable} l WHERE l.flashcard_id = f.id AND l.{$column} = ?)";
+                $tagFilterParams[] = $tagId;
+            }
+        }
+        $tagFilterSql = ' AND (' . implode(' OR ', $tagExistsClauses) . ')';
+    }
 
     $stmtTotal = $pdo->prepare("
         SELECT COUNT(f.id)
@@ -5271,8 +5292,9 @@ elseif ($action === 'list_graph_cards_for_user') {
         WHERE d.user_id = ?
           AND d.deck_mode = 'grafo'
           AND d.type IN (4, 10)
+          {$tagFilterSql}
     ");
-    $stmtTotal->execute([$user_id]);
+    $stmtTotal->execute(array_merge([$user_id], $tagFilterParams));
     $totalCards = (int)$stmtTotal->fetchColumn();
     $totalPages = max(1, (int)ceil($totalCards / $perPage));
     if ($page > $totalPages) {
@@ -5299,10 +5321,11 @@ elseif ($action === 'list_graph_cards_for_user') {
         WHERE d.user_id = ?
           AND d.deck_mode = 'grafo'
           AND d.type IN (4, 10)
+          {$tagFilterSql}
         ORDER BY f.id DESC
         LIMIT {$perPage} OFFSET {$offset}
     ");
-    $stmt->execute([$user_id, $user_id]);
+    $stmt->execute(array_merge([$user_id, $user_id], $tagFilterParams));
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $cards = [];
