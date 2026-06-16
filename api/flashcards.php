@@ -3257,8 +3257,9 @@ if ($action === 'fetch') {
         $placeholders = implode(',', array_fill(0, count($deck_ids), '?'));
 
         $stmtCards = $pdo->prepare("
-            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.has_audio_front, f.has_audio_back, d.user_id AS card_owner_user_id, COALESCE(fs.score, 0) as score
             FROM flashcards f
+            JOIN directories d ON d.id = f.directory_id
             LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
             WHERE f.directory_id IN ($placeholders)
               AND f.has_audio_front = 1
@@ -3319,6 +3320,8 @@ if ($action === 'fetch') {
                 'has_audio_front' => (int)$card['has_audio_front'],
                 'has_audio_back' => (int)$card['has_audio_back'],
                 'score' => (int)$card['score'],
+                'card_owner_user_id' => isset($card['card_owner_user_id']) ? (int)$card['card_owner_user_id'] : $user_id,
+                'is_public_card' => (isset($card['card_owner_user_id']) && (int)$card['card_owner_user_id'] !== (int)$user_id) ? 1 : 0,
                 'subject_tags' => $subjectTagsByCard[(int)$card['id']] ?? [],
                 'object_tags' => $objectTagsByCard[(int)$card['id']] ?? [],
                 'tipo_frasal_tags' => $tipoFrasalTagsByCard[(int)$card['id']] ?? [],
@@ -3376,7 +3379,7 @@ if ($action === 'fetch') {
             // No modo grafo, busca cards de qualquer deck do usuário
             // e também dos decks pertencentes ao usuário de id 5.
             $stmt = $pdo->prepare("
-                SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score
+                SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.has_audio_front, f.has_audio_back, d.user_id AS card_owner_user_id, COALESCE(fs.score, 0) as score
                 FROM flashcards f
                 JOIN directories d ON d.id = f.directory_id
                 LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
@@ -3387,8 +3390,9 @@ if ($action === 'fetch') {
         } else {
             // No modo aleatório, mantém filtro por deck e cards vencidos.
             $stmt = $pdo->prepare("
-                SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.has_audio_front, f.has_audio_back, COALESCE(fs.score, 0) as score
+                SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.has_audio_front, f.has_audio_back, d.user_id AS card_owner_user_id, COALESCE(fs.score, 0) as score
                 FROM flashcards f
+                JOIN directories d ON d.id = f.directory_id
                 LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
                 WHERE f.directory_id = ?
                   AND (fs.next_review_at IS NULL OR fs.next_review_at <= NOW())
@@ -3411,8 +3415,9 @@ if ($action === 'fetch') {
         $random_next_review_at = $stmtNextRandomReview->fetchColumn() ?: null;
     } else {
         $stmt = $pdo->prepare("
-            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.has_audio_front, f.has_audio_back, 0 as score
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.has_audio_front, f.has_audio_back, d.user_id AS card_owner_user_id, 0 as score
             FROM flashcards f
+            JOIN directories d ON d.id = f.directory_id
             WHERE f.directory_id = ? 
             ORDER BY f.sort_order ASC, f.id ASC
         ");
@@ -3526,6 +3531,8 @@ if ($action === 'fetch') {
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
             'score' => (int)$card['score'],
+            'card_owner_user_id' => isset($card['card_owner_user_id']) ? (int)$card['card_owner_user_id'] : $user_id,
+            'is_public_card' => (isset($card['card_owner_user_id']) && (int)$card['card_owner_user_id'] !== (int)$user_id) ? 1 : 0,
             'subject_tags' => $subjectTagsByCard[(int)$card['id']] ?? [],
             'object_tags' => $objectTagsByCard[(int)$card['id']] ?? [],
             'tipo_frasal_tags' => $tipoFrasalTagsByCard[(int)$card['id']] ?? [],
