@@ -191,6 +191,24 @@
             `;
         }
 
+        function selectTagFilter(tagId, tag = {}) {
+            if (!tagId || state.selectedTagIds.includes(tagId)) return false;
+            state.selectedTagIds.push(tagId);
+            state.selectedTagLabels.push(getTagLabel(tag));
+            return true;
+        }
+
+        function toggleTagFilter(tagId, tag = {}) {
+            if (!tagId) return false;
+            const existingIndex = state.selectedTagIds.indexOf(tagId);
+            if (existingIndex >= 0) {
+                state.selectedTagIds.splice(existingIndex, 1);
+                state.selectedTagLabels.splice(existingIndex, 1);
+                return true;
+            }
+            return selectTagFilter(tagId, tag);
+        }
+
         function renderSavedFilters(filters, allTags = filters, familyRelations = []) {
             const savedFiltersList = document.getElementById('savedFiltersList');
             const savedFiltersCount = document.getElementById('savedFiltersCount');
@@ -211,8 +229,11 @@
                     event.stopPropagation();
                     const tagId = Number(button.dataset.tagAccordionId) || 0;
                     if (!tagId) return;
+                    const tag = tagById.get(tagId) || {};
+                    selectTagFilter(tagId, tag);
                     if (state.expandedTagIds.has(tagId)) state.expandedTagIds.delete(tagId);
                     else state.expandedTagIds.add(tagId);
+                    loadPage(1);
                     renderSavedFilters(filters, allTags, familyRelations);
                 });
             });
@@ -222,14 +243,7 @@
                     const tagId = Number(button.dataset.tagFilterId) || 0;
                     const tag = tagById.get(tagId) || {};
                     if (!tagId) return;
-                    const existingIndex = state.selectedTagIds.indexOf(tagId);
-                    if (existingIndex >= 0) {
-                        state.selectedTagIds.splice(existingIndex, 1);
-                        state.selectedTagLabels.splice(existingIndex, 1);
-                    } else {
-                        state.selectedTagIds.push(tagId);
-                        state.selectedTagLabels.push(getTagLabel(tag));
-                    }
+                    toggleTagFilter(tagId, tag);
                     loadPage(1);
                     renderSavedFilters(filters, allTags, familyRelations);
                 });
