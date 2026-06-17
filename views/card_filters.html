@@ -64,7 +64,13 @@
                 <section id="cardsGrid" class="hidden grid-cols-1 gap-4 md:grid-cols-2"></section>
             </main>
 
-            <aside aria-label="Menu lateral direito" class="mx-4 min-h-24 rounded-2xl border border-slate-800 bg-slate-900/50 p-4 lg:sticky lg:top-28 lg:ml-4 lg:mr-0 lg:h-[calc(100vh-12rem)]"></aside>
+            <aside aria-label="Menu lateral direito" class="mx-4 min-h-24 rounded-2xl border border-slate-800 bg-slate-900/50 p-4 lg:sticky lg:top-28 lg:ml-4 lg:mr-0 lg:h-[calc(100vh-12rem)]">
+                <div class="mb-4">
+                    <p class="text-xs font-semibold uppercase tracking-[0.25em] text-sky-300">Menu</p>
+                    <h2 class="mt-1 text-base font-bold text-white">Ações rápidas</h2>
+                </div>
+                <div id="rightOptionsMenu" class="space-y-2 text-sm text-slate-300"></div>
+            </aside>
         </div>
 
         <footer class="sticky bottom-0 border-t border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur">
@@ -90,7 +96,8 @@
             totalCards: 0,
             selectedTagIds: parseSelectedTagIds(urlParams),
             selectedTagLabels: parseSelectedTagLabels(urlParams),
-            expandedTagIds: new Set()
+            expandedTagIds: new Set(),
+            rightOptionsExpanded: false
         };
         const cardsGrid = document.getElementById('cardsGrid');
         const statusBox = document.getElementById('statusBox');
@@ -99,6 +106,7 @@
         const prevPageBtn = document.getElementById('prevPageBtn');
         const nextPageBtn = document.getElementById('nextPageBtn');
         const clearTagFilterBtn = document.getElementById('clearTagFilterBtn');
+        const rightOptionsMenu = document.getElementById('rightOptionsMenu');
 
         function escapeHtml(value) {
             return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
@@ -189,6 +197,34 @@
                     ${childMarkup}
                 </article>
             `;
+        }
+
+
+        function renderRightOptionsMenu() {
+            const options = ['Livre 1', 'Livre 2', 'Livre 3'];
+            const isExpanded = state.rightOptionsExpanded;
+            rightOptionsMenu.innerHTML = `
+                <article class="rounded-xl border border-sky-500/20 bg-sky-950/20 p-3 transition hover:border-sky-400/60 hover:bg-sky-950/40">
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="rightOptionsAccordionBtn" aria-expanded="${isExpanded ? 'true' : 'false'}" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-xs text-sky-200 hover:border-sky-400 hover:text-white" title="Mostrar opções">
+                            <i class="fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}"></i>
+                        </button>
+                        <button type="button" id="rightOptionsTitleBtn" class="min-w-0 flex-1 text-left text-sm font-semibold text-slate-100 transition hover:text-sky-100">
+                            <span class="break-words">Opções</span>
+                        </button>
+                    </div>
+                    ${isExpanded ? `<div class="mt-2 space-y-2 border-l border-sky-500/20 pl-3">${options.map((option) => `
+                        <button type="button" class="w-full rounded-xl border border-sky-500/20 bg-sky-950/20 p-3 text-left text-sm font-semibold text-slate-100 transition hover:border-sky-400/60 hover:bg-sky-950/40 hover:text-sky-100">${escapeHtml(option)}</button>
+                    `).join('')}</div>` : ''}
+                </article>
+            `;
+
+            rightOptionsMenu.querySelectorAll('#rightOptionsAccordionBtn, #rightOptionsTitleBtn').forEach((button) => {
+                button.addEventListener('click', () => {
+                    state.rightOptionsExpanded = !state.rightOptionsExpanded;
+                    renderRightOptionsMenu();
+                });
+            });
         }
 
         function selectTagFilter(tagId, tag = {}) {
@@ -420,6 +456,7 @@
             loadPage(1);
             loadSavedFilters();
         });
+        renderRightOptionsMenu();
         loadSavedFilters();
         loadPage(state.page);
     </script>
