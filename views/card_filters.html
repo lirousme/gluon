@@ -89,7 +89,8 @@
             totalPages: 1,
             totalCards: 0,
             selectedTagIds: parseSelectedTagIds(urlParams),
-            selectedTagLabels: parseSelectedTagLabels(urlParams)
+            selectedTagLabels: parseSelectedTagLabels(urlParams),
+            expandedTagIds: new Set()
         };
         const cardsGrid = document.getElementById('cardsGrid');
         const statusBox = document.getElementById('statusBox');
@@ -153,7 +154,44 @@
             return `/card_filters?${params.toString()}`;
         }
 
-        function renderSavedFilters(filters) {
+        function buildChildrenByMother(relations = []) {
+            return relations.reduce((acc, relation) => {
+                const motherId = Number(relation.id_tag_mother || 0);
+                const childId = Number(relation.id_tag_child || 0);
+                if (!motherId || !childId) return acc;
+                if (!acc.has(motherId)) acc.set(motherId, []);
+                if (!acc.get(motherId).includes(childId)) acc.get(motherId).push(childId);
+                return acc;
+            }, new Map());
+        }
+
+        function renderTagTreeItem(tag, tagById, childrenByMother, depth = 0, visited = new Set()) {
+            const tagId = Number(tag.id) || 0;
+            const label = getTagLabel(tag);
+            const isActive = state.selectedTagIds.includes(tagId);
+            const childIds = (childrenByMother.get(tagId) || []).filter((childId) => !visited.has(childId) && tagById.has(childId));
+            const hasChildren = childIds.length > 0;
+            const isExpanded = state.expandedTagIds.has(tagId);
+            const childMarkup = hasChildren && isExpanded
+                ? `<div class="mt-2 space-y-2 border-l border-sky-500/20 pl-3">${childIds.map((childId) => renderTagTreeItem(tagById.get(childId), tagById, childrenByMother, depth + 1, new Set([...visited, tagId]))).join('')}</div>`
+                : '';
+
+            return `
+                <article class="rounded-xl border ${isActive ? 'border-violet-400/80 bg-violet-950/40' : 'border-sky-500/20 bg-sky-950/20'} p-3 transition hover:border-sky-400/60 hover:bg-sky-950/40" data-tag-tree-depth="${depth}">
+                    <div class="flex items-center gap-2">
+                        <button type="button" data-tag-accordion-id="${tagId}" aria-expanded="${isExpanded ? 'true' : 'false'}" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-xs ${hasChildren ? 'text-sky-200 hover:border-sky-400 hover:text-white' : 'cursor-default text-slate-600 opacity-50'}" ${hasChildren ? '' : 'disabled'} title="${hasChildren ? 'Mostrar tags filhas' : 'Sem tags filhas'}">
+                            <i class="fa-solid ${hasChildren && isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}"></i>
+                        </button>
+                        <button type="button" data-tag-filter-id="${tagId}" class="min-w-0 flex-1 text-left text-sm font-semibold ${isActive ? 'text-violet-100' : 'text-slate-100'} transition hover:text-sky-100">
+                            <span class="break-words">${escapeHtml(label)}</span>
+                        </button>
+                    </div>
+                    ${childMarkup}
+                </article>
+            `;
+        }
+
+        function renderSavedFilters(filters, allTags = filters, familyRelations = []) {
             const savedFiltersList = document.getElementById('savedFiltersList');
             const savedFiltersCount = document.getElementById('savedFiltersCount');
             savedFiltersCount.textContent = String(filters.length);
@@ -163,22 +201,26 @@
                 return;
             }
 
-            savedFiltersList.innerHTML = filters.map((tag, index) => {
-                const label = getTagLabel(tag);
-                const isActive = state.selectedTagIds.includes(Number(tag.id));
-                return `
-                    <article class="rounded-xl border ${isActive ? 'border-violet-400/80 bg-violet-950/40' : 'border-sky-500/20 bg-sky-950/20'} p-3 transition hover:border-sky-400/60 hover:bg-sky-950/40">
-                        <button type="button" data-saved-filter-index="${index}" class="w-full text-left text-sm font-semibold ${isActive ? 'text-violet-100' : 'text-slate-100'} transition hover:text-sky-100">
-                            ${escapeHtml(label)}
-                        </button>
-                    </article>
-                `;
-            }).join('');
+            const tagById = new Map(allTags.map((tag) => [Number(tag.id), normalizeSavedFilter(tag)]).filter(([id]) => id > 0));
+            filters.forEach((tag) => tagById.set(Number(tag.id), tag));
+            const childrenByMother = buildChildrenByMother(familyRelations);
+            savedFiltersList.innerHTML = filters.map((tag) => renderTagTreeItem(tag, tagById, childrenByMother, 0, new Set())).join('');
 
-            savedFiltersList.querySelectorAll('[data-saved-filter-index]').forEach((button) => {
+            savedFiltersList.querySelectorAll('[data-tag-accordion-id]').forEach((button) => {
+                button.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    const tagId = Number(button.dataset.tagAccordionId) || 0;
+                    if (!tagId) return;
+                    if (state.expandedTagIds.has(tagId)) state.expandedTagIds.delete(tagId);
+                    else state.expandedTagIds.add(tagId);
+                    renderSavedFilters(filters, allTags, familyRelations);
+                });
+            });
+
+            savedFiltersList.querySelectorAll('[data-tag-filter-id]').forEach((button) => {
                 button.addEventListener('click', () => {
-                    const tag = filters[Number(button.dataset.savedFilterIndex)] || {};
-                    const tagId = Number(tag.id) || 0;
+                    const tagId = Number(button.dataset.tagFilterId) || 0;
+                    const tag = tagById.get(tagId) || {};
                     if (!tagId) return;
                     const existingIndex = state.selectedTagIds.indexOf(tagId);
                     if (existingIndex >= 0) {
@@ -189,7 +231,7 @@
                         state.selectedTagLabels.push(getTagLabel(tag));
                     }
                     loadPage(1);
-                    renderSavedFilters(filters);
+                    renderSavedFilters(filters, allTags, familyRelations);
                 });
             });
         }
@@ -198,14 +240,24 @@
             const savedFiltersList = document.getElementById('savedFiltersList');
             const savedFiltersCount = document.getElementById('savedFiltersCount');
             try {
-                const response = await fetch('/api/flashcards', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                    body: JSON.stringify({ action: 'list_saved_filters' })
-                });
-                const result = await response.json();
-                if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível carregar as tags fixadas.');
-                renderSavedFilters((result.data || []).map(normalizeSavedFilter).filter((tag) => Number(tag.id) > 0));
+                const [savedResponse, tagsResponse, familyResponse] = await Promise.all([
+                    fetch('/api/flashcards', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                        body: JSON.stringify({ action: 'list_saved_filters' })
+                    }),
+                    fetch('/api/flashcards?action=list_tags', { headers: { 'Accept': 'application/json' } }),
+                    fetch('/api/flashcards?action=list_tag_family_relations', { headers: { 'Accept': 'application/json' } })
+                ]);
+                const [savedResult, tagsResult, familyResult] = await Promise.all([savedResponse.json(), tagsResponse.json(), familyResponse.json()]);
+                if (!savedResponse.ok || savedResult.status !== 'success') throw new Error(savedResult.message || 'Não foi possível carregar as tags fixadas.');
+                if (!tagsResponse.ok || tagsResult.status !== 'success') throw new Error(tagsResult.message || 'Não foi possível carregar as tags.');
+                if (!familyResponse.ok || familyResult.status !== 'success') throw new Error(familyResult.message || 'Não foi possível carregar as famílias de tags.');
+                renderSavedFilters(
+                    (savedResult.data || []).map(normalizeSavedFilter).filter((tag) => Number(tag.id) > 0),
+                    (tagsResult.data || []).map(normalizeSavedFilter).filter((tag) => Number(tag.id) > 0),
+                    familyResult.data || []
+                );
             } catch (error) {
                 savedFiltersCount.textContent = '0';
                 savedFiltersList.innerHTML = `<p class="text-xs text-red-300">${escapeHtml(error.message || 'Erro ao carregar tags fixadas.')}</p>`;
