@@ -87,7 +87,11 @@ function sanitizeInfoType($value): int {
 }
 
 function sanitizeTagIds($rawTagIds): array {
-    if (!is_array($rawTagIds)) return [];
+    if (is_string($rawTagIds)) {
+        $rawTagIds = preg_split('/[\s,]+/', $rawTagIds, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    } elseif (!is_array($rawTagIds)) {
+        $rawTagIds = [$rawTagIds];
+    }
     return array_values(array_unique(array_filter(array_map('intval', $rawTagIds), static fn($id) => $id > 0)));
 }
 
@@ -5260,29 +5264,36 @@ elseif ($action === 'delete_card') {
 
 elseif ($action === 'list_graph_cards_for_user') {
     $rawPage = is_array($input) ? ($input['page'] ?? ($_GET['page'] ?? 1)) : ($_GET['page'] ?? 1);
+    $rawTagIds = is_array($input) ? ($input['tag_ids'] ?? ($_GET['tag_ids'] ?? null)) : ($_GET['tag_ids'] ?? null);
     $rawTagId = is_array($input) ? ($input['tag_id'] ?? ($_GET['tag_id'] ?? 0)) : ($_GET['tag_id'] ?? 0);
     $page = filter_var($rawPage, FILTER_VALIDATE_INT, ['options' => ['default' => 1, 'min_range' => 1]]);
-    $tagId = filter_var($rawTagId, FILTER_VALIDATE_INT, ['options' => ['default' => 0, 'min_range' => 0]]);
+    $tagIds = sanitizeTagIds($rawTagIds ?? $rawTagId);
     $perPage = 20;
     $offset = ($page - 1) * $perPage;
     $tagFilterSql = '';
     $tagFilterParams = [];
 
-    if ($tagId > 0) {
-        $stmtTag = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5) LIMIT 1");
-        $stmtTag->execute([$tagId, $user_id]);
-        if (!$stmtTag->fetchColumn()) {
-            die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada ou sem permissão.']));
+    if (!empty($tagIds)) {
+        $placeholders = implode(',', array_fill(0, count($tagIds), '?'));
+        $stmtTag = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id IN ($placeholders) AND user_id IN (?, 5)");
+        $stmtTag->execute(array_merge($tagIds, [$user_id]));
+        $allowedTagIds = array_map('intval', $stmtTag->fetchAll(PDO::FETCH_COLUMN));
+        if (count($allowedTagIds) !== count($tagIds)) {
+            die(json_encode(['status' => 'error', 'message' => 'Uma ou mais tags não foram encontradas ou estão sem permissão.']));
         }
 
-        $tagExistsClauses = [];
-        foreach (getCardTagLinkColumnsByTable() as $linkTable => $columns) {
-            foreach ($columns as $column) {
-                $tagExistsClauses[] = "EXISTS (SELECT 1 FROM {$linkTable} l WHERE l.flashcard_id = f.id AND l.{$column} = ?)";
-                $tagFilterParams[] = $tagId;
+        $tagFilterSqlParts = [];
+        foreach ($tagIds as $tagId) {
+            $tagExistsClauses = [];
+            foreach (getCardTagLinkColumnsByTable() as $linkTable => $columns) {
+                foreach ($columns as $column) {
+                    $tagExistsClauses[] = "EXISTS (SELECT 1 FROM {$linkTable} l WHERE l.flashcard_id = f.id AND l.{$column} = ?)";
+                    $tagFilterParams[] = $tagId;
+                }
             }
+            $tagFilterSqlParts[] = '(' . implode(' OR ', $tagExistsClauses) . ')';
         }
-        $tagFilterSql = ' AND (' . implode(' OR ', $tagExistsClauses) . ')';
+        $tagFilterSql = ' AND ' . implode(' AND ', $tagFilterSqlParts);
     }
 
     $stmtTotal = $pdo->prepare("

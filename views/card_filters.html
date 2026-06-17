@@ -53,7 +53,7 @@
                     <p class="text-xs text-slate-500">Carregando tags fixadas...</p>
                 </div>
                 <button id="clearTagFilterBtn" type="button" class="mt-4 hidden w-full rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-violet-400 hover:text-white">
-                    Limpar filtro de tag
+                    Limpar filtros de tags
                 </button>
             </aside>
 
@@ -88,8 +88,8 @@
             page: Number(urlParams.get('page')) || 1,
             totalPages: 1,
             totalCards: 0,
-            selectedTagId: Number(urlParams.get('tag_id')) || 0,
-            selectedTagLabel: urlParams.get('tag_name') || ''
+            selectedTagIds: parseSelectedTagIds(urlParams),
+            selectedTagLabels: parseSelectedTagLabels(urlParams)
         };
         const cardsGrid = document.getElementById('cardsGrid');
         const statusBox = document.getElementById('statusBox');
@@ -114,8 +114,23 @@
             return name || namePtBr || 'Tag sem nome';
         }
 
+        function parseSelectedTagIds(params) {
+            const rawTagIds = params.get('tag_ids') || params.get('tag_id') || '';
+            return rawTagIds.split(',').map((id) => Number(id)).filter((id, index, ids) => id > 0 && ids.indexOf(id) === index);
+        }
+
+        function parseSelectedTagLabels(params) {
+            const rawTagNames = params.get('tag_names') || params.get('tag_name') || '';
+            return rawTagNames.split('|').map((label) => label.trim()).filter(Boolean);
+        }
+
         function normalizeSavedFilter(filter = {}) {
             return { ...filter, id: Number(filter.id_tag || filter.id || 0) };
+        }
+
+        function getSelectedTagSummary() {
+            if (!state.selectedTagIds.length) return '';
+            return state.selectedTagIds.map((id, index) => state.selectedTagLabels[index] || id).join(', ');
         }
 
         function buildTagRoute(path, tag = {}) {
@@ -131,9 +146,9 @@
         function buildCardsRoute(page = state.page) {
             const params = new URLSearchParams();
             params.set('page', String(page));
-            if (state.selectedTagId > 0) {
-                params.set('tag_id', String(state.selectedTagId));
-                if (state.selectedTagLabel) params.set('tag_name', state.selectedTagLabel);
+            if (state.selectedTagIds.length) {
+                params.set('tag_ids', state.selectedTagIds.join(','));
+                if (state.selectedTagLabels.length) params.set('tag_names', state.selectedTagLabels.join('|'));
             }
             return `/card_filters?${params.toString()}`;
         }
@@ -150,7 +165,7 @@
 
             savedFiltersList.innerHTML = filters.map((tag, index) => {
                 const label = getTagLabel(tag);
-                const isActive = Number(tag.id) === state.selectedTagId;
+                const isActive = state.selectedTagIds.includes(Number(tag.id));
                 return `
                     <article class="rounded-xl border ${isActive ? 'border-violet-400/80 bg-violet-950/40' : 'border-sky-500/20 bg-sky-950/20'} p-3 transition hover:border-sky-400/60 hover:bg-sky-950/40">
                         <button type="button" data-saved-filter-index="${index}" class="w-full text-left text-sm font-semibold ${isActive ? 'text-violet-100' : 'text-slate-100'} transition hover:text-sky-100">
@@ -163,8 +178,16 @@
             savedFiltersList.querySelectorAll('[data-saved-filter-index]').forEach((button) => {
                 button.addEventListener('click', () => {
                     const tag = filters[Number(button.dataset.savedFilterIndex)] || {};
-                    state.selectedTagId = Number(tag.id) || 0;
-                    state.selectedTagLabel = getTagLabel(tag);
+                    const tagId = Number(tag.id) || 0;
+                    if (!tagId) return;
+                    const existingIndex = state.selectedTagIds.indexOf(tagId);
+                    if (existingIndex >= 0) {
+                        state.selectedTagIds.splice(existingIndex, 1);
+                        state.selectedTagLabels.splice(existingIndex, 1);
+                    } else {
+                        state.selectedTagIds.push(tagId);
+                        state.selectedTagLabels.push(getTagLabel(tag));
+                    }
                     loadPage(1);
                     renderSavedFilters(filters);
                 });
@@ -224,12 +247,12 @@
 
         function updateFooter() {
             paginationInfo.textContent = `Página ${state.page} de ${state.totalPages} • ${state.totalCards} card(s) • 20 por página`;
-            pageSubtitle.textContent = state.selectedTagId > 0
-                ? `${state.totalCards} card(s) encontrados com a tag "${state.selectedTagLabel || state.selectedTagId}" em seus decks do modo grafo.`
+            pageSubtitle.textContent = state.selectedTagIds.length
+                ? `${state.totalCards} card(s) encontrados com ${state.selectedTagIds.length === 1 ? 'a tag' : 'as tags'} "${getSelectedTagSummary()}" em seus decks do modo grafo.`
                 : `${state.totalCards} card(s) encontrados em seus decks do modo grafo.`;
             prevPageBtn.disabled = state.page <= 1;
             nextPageBtn.disabled = state.page >= state.totalPages;
-            clearTagFilterBtn.classList.toggle('hidden', state.selectedTagId <= 0);
+            clearTagFilterBtn.classList.toggle('hidden', state.selectedTagIds.length === 0);
         }
 
         async function loadPage(page) {
@@ -238,7 +261,7 @@
             statusBox.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2 text-violet-300"></i>Carregando cards...';
             try {
                 const params = new URLSearchParams({ action: 'list_graph_cards_for_user', page: String(page) });
-                if (state.selectedTagId > 0) params.set('tag_id', String(state.selectedTagId));
+                if (state.selectedTagIds.length) params.set('tag_ids', state.selectedTagIds.join(','));
                 const response = await fetch(`/api/flashcards?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
                 const result = await response.json();
                 if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível carregar os cards.');
@@ -265,8 +288,8 @@
         prevPageBtn.addEventListener('click', () => { if (state.page > 1) loadPage(state.page - 1); });
         nextPageBtn.addEventListener('click', () => { if (state.page < state.totalPages) loadPage(state.page + 1); });
         clearTagFilterBtn.addEventListener('click', () => {
-            state.selectedTagId = 0;
-            state.selectedTagLabel = '';
+            state.selectedTagIds = [];
+            state.selectedTagLabels = [];
             loadPage(1);
             loadSavedFilters();
         });
