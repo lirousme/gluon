@@ -505,6 +505,19 @@
             return relationType?.name || relationType?.nome || relationType?.label || `Sessão ${typeId}`;
         }
 
+        function getRelationTypeHierarchy(typeId) {
+            const relationType = state.relationTypes.find((item) => Number(item.id) === Number(typeId));
+            return Number(relationType?.hierarquia ?? relationType?.hierarchy ?? 0) || 0;
+        }
+
+        function relationTypeUsesHierarchy(typeId) {
+            return getRelationTypeHierarchy(typeId) === 1;
+        }
+
+        function relationTypeUsesSequence(typeId) {
+            return getRelationTypeHierarchy(typeId) === 2;
+        }
+
         function getTagRelationType(tag = {}) {
             return Number(tag.tipo_de_relacao ?? tag.relation_type_id ?? tag.id_relation_type ?? tag.relationTypeId ?? 0) || 0;
         }
@@ -526,19 +539,27 @@
                 tagFamilySections.innerHTML = `<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 text-center text-slate-300">Nenhuma sessão de família encontrada para ${escapeHtml(selectedLabel)}.</div>`;
                 return;
             }
+            const renderSectionTags = (tags) => tags.length ? tags.map(renderFamilyTagChip).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>';
             tagFamilySections.innerHTML = `
                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                     <p class="text-xs font-semibold uppercase tracking-[0.25em] text-sky-300">Famílias</p>
                     <h2 class="mt-1 text-lg font-bold text-white">${escapeHtml(selectedLabel)}</h2>
+                    <p class="mt-2 text-xs text-slate-400">Modo Tags permite apenas uma tag selecionada por vez para exibir as sessões desta família.</p>
                 </div>
                 ${types.map((type) => {
                     const children = (state.tagFamily.children || []).filter((tag) => getTagRelationType(tag) === type);
                     const mothers = (state.tagFamily.mothers || []).filter((tag) => getTagRelationType(tag) === type);
+                    if (relationTypeUsesSequence(type) || !relationTypeUsesHierarchy(type)) {
+                        return `<article class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                            <h3 class="mb-3 text-sm font-semibold text-violet-200">${escapeHtml(getRelationTypeLabel(type))}</h3>
+                            <div class="flex flex-wrap gap-2">${renderSectionTags(children)}</div>
+                        </article>`;
+                    }
                     return `<article class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                         <h3 class="mb-3 text-sm font-semibold text-violet-200">${escapeHtml(getRelationTypeLabel(type))}</h3>
                         <div class="grid gap-4 md:grid-cols-2">
-                            <div><p class="mb-2 text-sm text-red-300">Esta tag é mãe de:</p><div class="flex flex-wrap gap-2">${children.length ? children.map(renderFamilyTagChip).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></div>
-                            <div><p class="mb-2 text-sm text-red-300">Esta tag é filha de:</p><div class="flex flex-wrap gap-2">${mothers.length ? mothers.map(renderFamilyTagChip).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></div>
+                            <div><p class="mb-2 text-sm text-red-300">Esta tag é mãe de:</p><div class="flex flex-wrap gap-2">${renderSectionTags(children)}</div></div>
+                            <div><p class="mb-2 text-sm text-red-300">Esta tag é filha de:</p><div class="flex flex-wrap gap-2">${renderSectionTags(mothers)}</div></div>
                         </div>
                     </article>`;
                 }).join('')}
@@ -575,7 +596,7 @@
                 if (!familyResponse.ok || familyResult.status !== 'success') throw new Error(familyResult.message || 'Não foi possível carregar a família da tag.');
                 if (!relationTypesResponse.ok || relationTypesResult.status !== 'success') throw new Error(relationTypesResult.message || 'Não foi possível carregar as sessões.');
                 state.tagFamily = familyResult.data || { mothers: [], children: [] };
-                state.relationTypes = relationTypesResult.data || [];
+                state.relationTypes = (relationTypesResult.data || []).map((item) => ({ ...item, id: Number(item.id), hierarquia: Number(item.hierarquia || 0) }));
                 renderTagFamilySections();
             } catch (error) {
                 tagFamilySections.innerHTML = `<div class="rounded-2xl border border-red-500/30 bg-red-950/20 p-6 text-center text-red-200">${escapeHtml(error.message || 'Erro ao carregar famílias da tag.')}</div>`;

@@ -6175,7 +6175,7 @@ elseif ($action === 'delete_relation_type') {
 }
 
 elseif ($action === 'get_tag_family') {
-    $tag_id = (int)($input['tag_id'] ?? 0);
+    $tag_id = (int)($input['tag_id'] ?? ($_GET['tag_id'] ?? 0));
     if ($tag_id <= 0) die(json_encode(['status'=>'error','message'=>'Tag inválida.']));
     $check = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5) LIMIT 1");
     $check->execute([$tag_id, $user_id]);
