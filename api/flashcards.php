@@ -95,6 +95,37 @@ function sanitizeTagIds($rawTagIds): array {
     return array_values(array_unique(array_filter(array_map('intval', $rawTagIds), static fn($id) => $id > 0)));
 }
 
+function sanitizeGraphTagLinkTypes($rawTypes): array {
+    $allowedTypes = ['subject', 'object', 'lexical_chunk'];
+    if (is_string($rawTypes)) {
+        $rawTypes = preg_split('/[\s,]+/', $rawTypes, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    } elseif (!is_array($rawTypes)) {
+        $rawTypes = $rawTypes === null ? [] : [$rawTypes];
+    }
+    $types = array_values(array_unique(array_filter(array_map(static fn($type) => trim((string)$type), $rawTypes), static fn($type) => in_array($type, $allowedTypes, true))));
+    return $types;
+}
+
+function getGraphTagLinkColumnsByType(): array {
+    return [
+        'subject' => ['subjects_links' => ['tag_id']],
+        'object' => ['objects_links' => ['tag_id']],
+        'lexical_chunk' => ['lexical_chunks_links' => ['tag_id']],
+    ];
+}
+
+function getGraphTagLinkColumnsForTypes(array $types): array {
+    $columnsByType = getGraphTagLinkColumnsByType();
+    $columnsByTable = [];
+    foreach ($types as $type) {
+        foreach (($columnsByType[$type] ?? []) as $table => $columns) {
+            if (!isset($columnsByTable[$table])) $columnsByTable[$table] = [];
+            $columnsByTable[$table] = array_values(array_unique(array_merge($columnsByTable[$table], $columns)));
+        }
+    }
+    return $columnsByTable;
+}
+
 /**
  * Garante que nomes criptografados de tipos de relação não sejam truncados.
  *
@@ -5269,8 +5300,11 @@ elseif ($action === 'list_graph_cards_for_user') {
     $rawPage = is_array($input) ? ($input['page'] ?? ($_GET['page'] ?? 1)) : ($_GET['page'] ?? 1);
     $rawTagIds = is_array($input) ? ($input['tag_ids'] ?? ($_GET['tag_ids'] ?? null)) : ($_GET['tag_ids'] ?? null);
     $rawTagId = is_array($input) ? ($input['tag_id'] ?? ($_GET['tag_id'] ?? 0)) : ($_GET['tag_id'] ?? 0);
+    $rawTagLinkTypes = is_array($input) ? ($input['tag_link_types'] ?? ($_GET['tag_link_types'] ?? ['subject', 'object', 'lexical_chunk'])) : ($_GET['tag_link_types'] ?? ['subject', 'object', 'lexical_chunk']);
     $page = filter_var($rawPage, FILTER_VALIDATE_INT, ['options' => ['default' => 1, 'min_range' => 1]]);
     $tagIds = sanitizeTagIds($rawTagIds ?? $rawTagId);
+    $tagLinkTypes = sanitizeGraphTagLinkTypes($rawTagLinkTypes);
+    $tagLinkColumnsByTable = getGraphTagLinkColumnsForTypes($tagLinkTypes);
     $perPage = 20;
     $offset = ($page - 1) * $perPage;
     $tagFilterSql = '';
@@ -5288,13 +5322,13 @@ elseif ($action === 'list_graph_cards_for_user') {
         $tagFilterSqlParts = [];
         foreach ($tagIds as $tagId) {
             $tagExistsClauses = [];
-            foreach (getCardTagLinkColumnsByTable() as $linkTable => $columns) {
+            foreach ($tagLinkColumnsByTable as $linkTable => $columns) {
                 foreach ($columns as $column) {
                     $tagExistsClauses[] = "EXISTS (SELECT 1 FROM {$linkTable} l WHERE l.flashcard_id = f.id AND l.{$column} = ?)";
                     $tagFilterParams[] = $tagId;
                 }
             }
-            $tagFilterSqlParts[] = '(' . implode(' OR ', $tagExistsClauses) . ')';
+            $tagFilterSqlParts[] = !empty($tagExistsClauses) ? '(' . implode(' OR ', $tagExistsClauses) . ')' : '0 = 1';
         }
         $tagFilterSql = ' AND ' . implode(' AND ', $tagFilterSqlParts);
     }
