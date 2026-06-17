@@ -376,6 +376,24 @@
             return `<button type="button" data-card-tab="${tab}" data-card-id="${cardId}" class="rounded-lg px-3 py-1.5 font-semibold transition ${isActive ? 'bg-violet-500/20 text-violet-100' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}">${label}</button>`;
         }
 
+        function getCardEditUrl(card = {}) {
+            const deckId = Number(card?.directory_id || 0);
+            const cardId = Number(card?.id || 0);
+            if (!deckId || !cardId) return '';
+
+            const params = new URLSearchParams();
+            params.set('id', String(deckId));
+            params.set('edit_card_id', String(cardId));
+            params.set('from', window.location.pathname + window.location.search);
+            return `/ficha_do_card?${params.toString()}`;
+        }
+
+        function renderCardEditButton(card = {}) {
+            const editUrl = getCardEditUrl(card);
+            if (!editUrl) return '';
+            return `<a href="${escapeHtml(editUrl)}" class="rounded-lg px-3 py-1.5 font-semibold text-slate-400 transition hover:bg-slate-800 hover:text-white">Editar</a>`;
+        }
+
         function renderCards(cards) {
             cardsGrid.innerHTML = cards.map((card) => {
                 const activeTab = card.active_tab || 'texts';
@@ -386,10 +404,11 @@
                                 <span class="font-semibold text-violet-200">#${card.id}</span>
                                 <span class="truncate pl-3">${escapeHtml(card.directory_name || 'Deck grafo')}</span>
                             </div>
-                            <div class="ml-3 flex shrink-0 items-center gap-1 rounded-xl border border-slate-800 bg-slate-950/40 p-1">
+                            <div id="card-tabs-nav-${card.id}" class="ml-3 flex shrink-0 items-center gap-1 rounded-xl border border-slate-800 bg-slate-950/40 p-1">
                                 ${renderCardTabButton(card.id, 'texts', 'Textos', activeTab)}
                                 ${renderCardTabButton(card.id, 'status', 'Status do card', activeTab)}
                                 ${renderCardTabButton(card.id, 'tags', 'Tags', activeTab)}
+                                ${renderCardEditButton(card)}
                             </div>
                         </div>
                         <div data-card-panel="${card.id}">${renderCardPanel(card, activeTab)}</div>
