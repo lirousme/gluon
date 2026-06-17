@@ -96,6 +96,7 @@
             totalCards: 0,
             selectedTagIds: parseSelectedTagIds(urlParams),
             selectedTagLabels: parseSelectedTagLabels(urlParams),
+            selectedTagLinkTypes: parseSelectedTagLinkTypes(urlParams),
             expandedTagIds: new Set(),
             rightOptionsExpanded: false
         };
@@ -133,6 +134,14 @@
             return rawTagNames.split('|').map((label) => label.trim()).filter(Boolean);
         }
 
+        function parseSelectedTagLinkTypes(params) {
+            const allowedTypes = ['subject', 'object', 'lexical_chunk'];
+            if (!params.has('tag_link_types')) return [...allowedTypes];
+            const rawTypes = params.get('tag_link_types') || '';
+            const parsedTypes = rawTypes.split(',').map((type) => type.trim()).filter((type, index, types) => allowedTypes.includes(type) && types.indexOf(type) === index);
+            return parsedTypes;
+        }
+
         function normalizeSavedFilter(filter = {}) {
             return { ...filter, id: Number(filter.id_tag || filter.id || 0) };
         }
@@ -159,6 +168,7 @@
                 params.set('tag_ids', state.selectedTagIds.join(','));
                 if (state.selectedTagLabels.length) params.set('tag_names', state.selectedTagLabels.join('|'));
             }
+            if (state.selectedTagLinkTypes.length !== 3) params.set('tag_link_types', state.selectedTagLinkTypes.join(','));
             return `/card_filters?${params.toString()}`;
         }
 
@@ -201,7 +211,11 @@
 
 
         function renderRightOptionsMenu() {
-            const options = ['Livre 1', 'Livre 2', 'Livre 3'];
+            const options = [
+                { type: 'subject', label: 'Sujeito' },
+                { type: 'object', label: 'Objeto' },
+                { type: 'lexical_chunk', label: 'Lexical Chunk' }
+            ];
             const isExpanded = state.rightOptionsExpanded;
             rightOptionsMenu.innerHTML = `
                 <article class="rounded-xl border border-sky-500/20 bg-sky-950/20 p-3 transition hover:border-sky-400/60 hover:bg-sky-950/40">
@@ -213,11 +227,28 @@
                             <span class="break-words">Opções</span>
                         </button>
                     </div>
-                    ${isExpanded ? `<div class="mt-2 space-y-2 border-l border-sky-500/20 pl-3">${options.map((option) => `
-                        <button type="button" class="w-full rounded-xl border border-sky-500/20 bg-sky-950/20 p-3 text-left text-sm font-semibold text-slate-100 transition hover:border-sky-400/60 hover:bg-sky-950/40 hover:text-sky-100">${escapeHtml(option)}</button>
-                    `).join('')}</div>` : ''}
+                    ${isExpanded ? `<div class="mt-2 space-y-2 border-l border-sky-500/20 pl-3">${options.map((option) => {
+                        const isActive = state.selectedTagLinkTypes.includes(option.type);
+                        return `
+                        <button type="button" data-tag-link-type="${option.type}" aria-pressed="${isActive ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${isActive ? 'border-violet-400/80 bg-violet-950/40 text-violet-100' : 'border-sky-500/20 bg-sky-950/20 text-slate-100 hover:border-sky-400/60 hover:bg-sky-950/40 hover:text-sky-100'}">${escapeHtml(option.label)}</button>
+                    `;
+                    }).join('')}</div>` : ''}
                 </article>
             `;
+
+            rightOptionsMenu.querySelectorAll('[data-tag-link-type]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const type = button.dataset.tagLinkType || '';
+                    if (!type) return;
+                    if (state.selectedTagLinkTypes.includes(type)) {
+                        state.selectedTagLinkTypes = state.selectedTagLinkTypes.filter((selectedType) => selectedType !== type);
+                    } else {
+                        state.selectedTagLinkTypes.push(type);
+                    }
+                    renderRightOptionsMenu();
+                    loadPage(1);
+                });
+            });
 
             rightOptionsMenu.querySelectorAll('#rightOptionsAccordionBtn, #rightOptionsTitleBtn').forEach((button) => {
                 button.addEventListener('click', () => {
@@ -444,6 +475,7 @@
             try {
                 const params = new URLSearchParams({ action: 'list_graph_cards_for_user', page: String(page) });
                 if (state.selectedTagIds.length) params.set('tag_ids', state.selectedTagIds.join(','));
+                if (state.selectedTagIds.length) params.set('tag_link_types', state.selectedTagLinkTypes.join(','));
                 const response = await fetch(`/api/flashcards?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
                 const result = await response.json();
                 if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível carregar os cards.');
