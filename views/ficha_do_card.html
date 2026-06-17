@@ -283,11 +283,15 @@
   }, { passive: false });
 })();
 const params = new URLSearchParams(window.location.search);
+function parseInitialSubjectTagIds(params) {
+  const rawTagIds = params.get('tag_ids') || params.get('tag_id') || '';
+  return rawTagIds.split(',').map(id => Number(id)).filter((id, index, ids) => id > 0 && ids.indexOf(id) === index);
+}
 const app = {
   deckId: params.get('id'),
   from: params.get('from') || '',
   editCardId: params.get('edit_card_id'),
-  initialSubjectTagId: Number(params.get('tag_id') || 0),
+  initialSubjectTagIds: parseInitialSubjectTagIds(params),
   infoType: 0,
   infoTypeOptions: {
     0: { label: 'Afirmação', icon: 'fa-regular fa-circle-check', classes: 'border-blue-500/50 bg-blue-950/40 text-blue-200' },
@@ -607,15 +611,14 @@ const app = {
     this.renderAllTagSelectors();
   },
   applyInitialSubjectTag() {
-    if (this.editCardId || !this.initialSubjectTagId) return;
-    const tagExists = this.getVisibleTags().some(tag => Number(tag.id) === this.initialSubjectTagId);
-    if (!tagExists) return;
+    if (this.editCardId || !this.initialSubjectTagIds.length) return;
+    const visibleTagIds = new Set(this.getVisibleTags().map(tag => Number(tag.id)).filter(Boolean));
     const selectedIds = this.getSelectedTagIds('subject');
-    if (!selectedIds.includes(this.initialSubjectTagId)) {
-      selectedIds.push(this.initialSubjectTagId);
-      this.setSelectedTagIds('subject', selectedIds);
-      this.renderTagSelector('subject');
-    }
+    this.initialSubjectTagIds.forEach((tagId) => {
+      if (visibleTagIds.has(tagId) && !selectedIds.includes(tagId)) selectedIds.push(tagId);
+    });
+    this.setSelectedTagIds('subject', selectedIds);
+    this.renderTagSelector('subject');
   },
   async loadSessionUserId() {
     try {
