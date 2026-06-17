@@ -1732,7 +1732,7 @@ function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagCol
 
     $tagPlaceholders = implode(',', array_fill(0, count($cardIds), '?'));
     $stmtTags = $pdo->prepare("
-        SELECT l.flashcard_id, t.id AS tag_id, t.user_id AS tag_user_id, t.name_encrypted, t.color
+        SELECT l.flashcard_id, t.id AS tag_id, t.user_id AS tag_user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo, t.color
         FROM {$linkTable} l
         JOIN flashcard_tags t ON t.id = l.{$tagColumn}
         WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id IN (?, 5)
@@ -1749,6 +1749,9 @@ function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagCol
             'user_id' => (int)$tagRow['tag_user_id'],
             'is_user_owned' => ((int)$tagRow['tag_user_id'] === $user_id),
             'name' => !empty($tagRow['name_encrypted']) ? Security::decryptData($tagRow['name_encrypted']) : '',
+            'name_pt_br' => !empty($tagRow['name_pt_br_encrypted']) ? Security::decryptData($tagRow['name_pt_br_encrypted']) : null,
+            'numero' => normalizeNullableTagMetadataText($tagRow['numero'] ?? null),
+            'sigla_simbolo' => normalizeNullableTagMetadataText($tagRow['sigla_simbolo'] ?? null),
             'color' => $tagRow['color']
         ];
     }
@@ -5338,11 +5341,27 @@ elseif ($action === 'list_graph_cards_for_user') {
     ");
     $stmt->execute(array_merge([$user_id, $user_id], $tagFilterParams));
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $cardIds = array_values(array_map(static fn($card) => (int)$card['id'], $rows));
+    $tagsByCard = [];
+    foreach (getCardTagLinkColumnsByTable() as $linkTable => $columns) {
+        foreach ($columns as $column) {
+            $linkedTags = fetchLinkedTagsByCardColumn($pdo, $linkTable, $column, $cardIds, $user_id);
+            foreach ($linkedTags as $flashcardId => $tags) {
+                if (!isset($tagsByCard[$flashcardId])) $tagsByCard[$flashcardId] = [];
+                foreach ($tags as $tag) {
+                    $tagId = (int)($tag['id'] ?? 0);
+                    if ($tagId <= 0 || isset($tagsByCard[$flashcardId][$tagId])) continue;
+                    $tagsByCard[$flashcardId][$tagId] = $tag;
+                }
+            }
+        }
+    }
 
     $cards = [];
     foreach ($rows as $card) {
+        $cardId = (int)$card['id'];
         $cards[] = [
-            'id' => (int)$card['id'],
+            'id' => $cardId,
             'directory_id' => (int)$card['directory_id'],
             'directory_name' => !empty($card['directory_name_encrypted']) ? Security::decryptData($card['directory_name_encrypted']) : '',
             'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
@@ -5353,6 +5372,7 @@ elseif ($action === 'list_graph_cards_for_user') {
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
             'score' => (int)$card['score'],
+            'tags' => array_values($tagsByCard[$cardId] ?? []),
         ];
     }
 
