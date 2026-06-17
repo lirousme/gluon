@@ -61,6 +61,7 @@
                     <i class="fa-solid fa-spinner fa-spin mr-2 text-violet-300"></i>Carregando cards...
                 </div>
                 <section id="cardsGrid" class="hidden grid-cols-1 gap-4 md:grid-cols-2"></section>
+                <section id="tagFamilySections" class="hidden space-y-4"></section>
             </main>
 
             <aside aria-label="Menu lateral direito" class="mx-4 min-h-24 rounded-2xl border border-slate-800 bg-slate-900/50 p-4 lg:sticky lg:top-28 lg:ml-4 lg:mr-0 lg:h-[calc(100vh-12rem)]">
@@ -96,10 +97,16 @@
             selectedTagIds: parseSelectedTagIds(urlParams),
             selectedTagLabels: parseSelectedTagLabels(urlParams),
             selectedTagLinkTypes: parseSelectedTagLinkTypes(urlParams),
+            viewMode: parseViewMode(urlParams),
             expandedTagIds: new Set(),
-            rightOptionsExpanded: false
+            rightModeExpanded: false,
+            rightOptionsExpanded: false,
+            tagFamily: { mothers: [], children: [] },
+            relationTypes: [],
+            tagFamilyLoading: false
         };
         const cardsGrid = document.getElementById('cardsGrid');
+        const tagFamilySections = document.getElementById('tagFamilySections');
         const statusBox = document.getElementById('statusBox');
         const createFilteredCardBtn = document.getElementById('createFilteredCardBtn');
         const paginationInfo = document.getElementById('paginationInfo');
@@ -133,6 +140,10 @@
             return rawTagNames.split('|').map((label) => label.trim()).filter(Boolean);
         }
 
+        function parseViewMode(params) {
+            return params.get('mode') === 'tags' ? 'tags' : 'cards';
+        }
+
         function parseSelectedTagLinkTypes(params) {
             const allowedTypes = ['subject', 'object', 'lexical_chunk'];
             if (!params.has('tag_link_types')) return [...allowedTypes];
@@ -163,6 +174,7 @@
         function buildCardsRoute(page = state.page) {
             const params = new URLSearchParams();
             params.set('page', String(page));
+            if (state.viewMode !== 'cards') params.set('mode', state.viewMode);
             if (state.selectedTagIds.length) {
                 params.set('tag_ids', state.selectedTagIds.join(','));
                 if (state.selectedTagLabels.length) params.set('tag_names', state.selectedTagLabels.join('|'));
@@ -210,55 +222,86 @@
 
 
         function renderRightOptionsMenu() {
+            const modes = [
+                { mode: 'tags', label: 'Tags' },
+                { mode: 'cards', label: 'Cards' }
+            ];
             const options = [
                 { type: 'subject', label: 'Sujeito' },
                 { type: 'object', label: 'Objeto' },
                 { type: 'lexical_chunk', label: 'Lexical Chunk' }
             ];
-            const isExpanded = state.rightOptionsExpanded;
             rightOptionsMenu.innerHTML = `
+                <article class="rounded-xl border border-violet-500/20 bg-violet-950/20 p-3 transition hover:border-violet-400/60 hover:bg-violet-950/40">
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="rightModeAccordionBtn" aria-expanded="${state.rightModeExpanded ? 'true' : 'false'}" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-xs text-violet-200 hover:border-violet-400 hover:text-white" title="Mostrar modos">
+                            <i class="fa-solid ${state.rightModeExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}"></i>
+                        </button>
+                        <button type="button" id="rightModeTitleBtn" class="min-w-0 flex-1 text-left text-sm font-semibold text-slate-100 transition hover:text-violet-100">
+                            <span class="break-words">Modo</span>
+                        </button>
+                    </div>
+                    ${state.rightModeExpanded ? `<div class="mt-2 space-y-2 border-l border-violet-500/20 pl-3">${modes.map((option) => {
+                        const isActive = state.viewMode === option.mode;
+                        return `<button type="button" data-view-mode="${option.mode}" aria-pressed="${isActive ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${isActive ? 'border-violet-400/80 bg-violet-950/40 text-violet-100' : 'border-violet-500/20 bg-violet-950/20 text-slate-100 hover:border-violet-400/60 hover:bg-violet-950/40 hover:text-violet-100'}">${escapeHtml(option.label)}</button>`;
+                    }).join('')}</div>` : ''}
+                </article>
                 <article class="rounded-xl border border-sky-500/20 bg-sky-950/20 p-3 transition hover:border-sky-400/60 hover:bg-sky-950/40">
                     <div class="flex items-center gap-2">
-                        <button type="button" id="rightOptionsAccordionBtn" aria-expanded="${isExpanded ? 'true' : 'false'}" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-xs text-sky-200 hover:border-sky-400 hover:text-white" title="Mostrar opções">
-                            <i class="fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}"></i>
+                        <button type="button" id="rightOptionsAccordionBtn" aria-expanded="${state.rightOptionsExpanded ? 'true' : 'false'}" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-xs text-sky-200 hover:border-sky-400 hover:text-white" title="Mostrar opções">
+                            <i class="fa-solid ${state.rightOptionsExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}"></i>
                         </button>
                         <button type="button" id="rightOptionsTitleBtn" class="min-w-0 flex-1 text-left text-sm font-semibold text-slate-100 transition hover:text-sky-100">
                             <span class="break-words">Opções</span>
                         </button>
                     </div>
-                    ${isExpanded ? `<div class="mt-2 space-y-2 border-l border-sky-500/20 pl-3">${options.map((option) => {
+                    ${state.rightOptionsExpanded ? `<div class="mt-2 space-y-2 border-l border-sky-500/20 pl-3">${options.map((option) => {
                         const isActive = state.selectedTagLinkTypes.includes(option.type);
-                        return `
-                        <button type="button" data-tag-link-type="${option.type}" aria-pressed="${isActive ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${isActive ? 'border-violet-400/80 bg-violet-950/40 text-violet-100' : 'border-sky-500/20 bg-sky-950/20 text-slate-100 hover:border-sky-400/60 hover:bg-sky-950/40 hover:text-sky-100'}">${escapeHtml(option.label)}</button>
-                    `;
+                        return `<button type="button" data-tag-link-type="${option.type}" aria-pressed="${isActive ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${isActive ? 'border-violet-400/80 bg-violet-950/40 text-violet-100' : 'border-sky-500/20 bg-sky-950/20 text-slate-100 hover:border-sky-400/60 hover:bg-sky-950/40 hover:text-sky-100'}">${escapeHtml(option.label)}</button>`;
                     }).join('')}</div>` : ''}
                 </article>
             `;
 
+            rightOptionsMenu.querySelectorAll('[data-view-mode]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    state.viewMode = button.dataset.viewMode === 'tags' ? 'tags' : 'cards';
+                    enforceSingleTagSelectionForTagMode();
+                    renderRightOptionsMenu();
+                    loadPage(1);
+                    loadSavedFilters();
+                });
+            });
             rightOptionsMenu.querySelectorAll('[data-tag-link-type]').forEach((button) => {
                 button.addEventListener('click', () => {
                     const type = button.dataset.tagLinkType || '';
                     if (!type) return;
-                    if (state.selectedTagLinkTypes.includes(type)) {
-                        state.selectedTagLinkTypes = state.selectedTagLinkTypes.filter((selectedType) => selectedType !== type);
-                    } else {
-                        state.selectedTagLinkTypes.push(type);
-                    }
+                    if (state.selectedTagLinkTypes.includes(type)) state.selectedTagLinkTypes = state.selectedTagLinkTypes.filter((selectedType) => selectedType !== type);
+                    else state.selectedTagLinkTypes.push(type);
                     renderRightOptionsMenu();
-                    loadPage(1);
+                    if (state.viewMode === 'cards') loadPage(1);
                 });
             });
-
+            rightOptionsMenu.querySelectorAll('#rightModeAccordionBtn, #rightModeTitleBtn').forEach((button) => {
+                button.addEventListener('click', () => { state.rightModeExpanded = !state.rightModeExpanded; renderRightOptionsMenu(); });
+            });
             rightOptionsMenu.querySelectorAll('#rightOptionsAccordionBtn, #rightOptionsTitleBtn').forEach((button) => {
-                button.addEventListener('click', () => {
-                    state.rightOptionsExpanded = !state.rightOptionsExpanded;
-                    renderRightOptionsMenu();
-                });
+                button.addEventListener('click', () => { state.rightOptionsExpanded = !state.rightOptionsExpanded; renderRightOptionsMenu(); });
             });
+        }
+
+        function enforceSingleTagSelectionForTagMode() {
+            if (state.viewMode !== 'tags' || state.selectedTagIds.length <= 1) return;
+            state.selectedTagIds = [state.selectedTagIds[state.selectedTagIds.length - 1]];
+            state.selectedTagLabels = [state.selectedTagLabels[state.selectedTagLabels.length - 1]].filter(Boolean);
         }
 
         function selectTagFilter(tagId, tag = {}) {
             if (!tagId || state.selectedTagIds.includes(tagId)) return false;
+            if (state.viewMode === 'tags') {
+                state.selectedTagIds = [tagId];
+                state.selectedTagLabels = [getTagLabel(tag)];
+                return true;
+            }
             state.selectedTagIds.push(tagId);
             state.selectedTagLabels.push(getTagLabel(tag));
             return true;
@@ -457,6 +500,88 @@
             });
         }
 
+        function getRelationTypeLabel(typeId) {
+            const relationType = state.relationTypes.find((item) => Number(item.id) === Number(typeId));
+            return relationType?.name || relationType?.nome || relationType?.label || `Sessão ${typeId}`;
+        }
+
+        function getTagRelationType(tag = {}) {
+            return Number(tag.tipo_de_relacao ?? tag.relation_type_id ?? tag.id_relation_type ?? tag.relationTypeId ?? 0) || 0;
+        }
+
+        function renderFamilyTagChip(tag = {}) {
+            return `<button type="button" data-main-family-tag-id="${Number(tag.id) || 0}" class="rounded-full border border-sky-500/30 bg-sky-950/40 px-3 py-1.5 text-xs font-semibold text-sky-100 transition hover:border-sky-300 hover:bg-sky-900/50">${escapeHtml(getTagLabel(tag))}</button>`;
+        }
+
+        function renderTagFamilySections() {
+            const selectedLabel = getSelectedTagSummary();
+            if (!state.selectedTagIds.length) {
+                tagFamilySections.innerHTML = '<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 text-center text-slate-300">Selecione uma tag fixada no menu esquerdo para ver suas famílias.</div>';
+                return;
+            }
+            const familyTypes = [...new Set([...(state.tagFamily.children || []), ...(state.tagFamily.mothers || [])].map((tag) => getTagRelationType(tag)))].filter((type) => type > 0);
+            const configuredTypes = state.relationTypes.map((item) => Number(item.id)).filter((id) => id > 0);
+            const types = [...new Set([...configuredTypes, ...familyTypes])].sort((a, b) => a - b);
+            if (!types.length) {
+                tagFamilySections.innerHTML = `<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 text-center text-slate-300">Nenhuma sessão de família encontrada para ${escapeHtml(selectedLabel)}.</div>`;
+                return;
+            }
+            tagFamilySections.innerHTML = `
+                <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                    <p class="text-xs font-semibold uppercase tracking-[0.25em] text-sky-300">Famílias</p>
+                    <h2 class="mt-1 text-lg font-bold text-white">${escapeHtml(selectedLabel)}</h2>
+                </div>
+                ${types.map((type) => {
+                    const children = (state.tagFamily.children || []).filter((tag) => getTagRelationType(tag) === type);
+                    const mothers = (state.tagFamily.mothers || []).filter((tag) => getTagRelationType(tag) === type);
+                    return `<article class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                        <h3 class="mb-3 text-sm font-semibold text-violet-200">${escapeHtml(getRelationTypeLabel(type))}</h3>
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div><p class="mb-2 text-sm text-red-300">Esta tag é mãe de:</p><div class="flex flex-wrap gap-2">${children.length ? children.map(renderFamilyTagChip).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></div>
+                            <div><p class="mb-2 text-sm text-red-300">Esta tag é filha de:</p><div class="flex flex-wrap gap-2">${mothers.length ? mothers.map(renderFamilyTagChip).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></div>
+                        </div>
+                    </article>`;
+                }).join('')}
+            `;
+            tagFamilySections.querySelectorAll('[data-main-family-tag-id]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const tagId = Number(button.dataset.mainFamilyTagId) || 0;
+                    if (!tagId) return;
+                    const tag = [...(state.tagFamily.children || []), ...(state.tagFamily.mothers || [])].find((item) => Number(item.id) === tagId) || {};
+                    state.selectedTagIds = [tagId];
+                    state.selectedTagLabels = [getTagLabel(tag)];
+                    loadPage(1);
+                    loadSavedFilters();
+                });
+            });
+        }
+
+        async function loadTagFamilyMode() {
+            enforceSingleTagSelectionForTagMode();
+            statusBox.classList.add('hidden');
+            cardsGrid.classList.add('hidden');
+            cardsGrid.classList.remove('grid');
+            tagFamilySections.classList.remove('hidden');
+            window.history.replaceState(null, '', buildCardsRoute(state.page));
+            updateFooter();
+            if (!state.selectedTagIds.length) { renderTagFamilySections(); return; }
+            tagFamilySections.innerHTML = '<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 text-center text-slate-300"><i class="fa-solid fa-spinner fa-spin mr-2 text-violet-300"></i>Carregando famílias da tag...</div>';
+            try {
+                const [familyResponse, relationTypesResponse] = await Promise.all([
+                    fetch(`/api/flashcards?action=get_tag_family&tag_id=${encodeURIComponent(state.selectedTagIds[0])}`, { headers: { 'Accept': 'application/json' } }),
+                    fetch('/api/flashcards?action=list_relation_types', { headers: { 'Accept': 'application/json' } })
+                ]);
+                const [familyResult, relationTypesResult] = await Promise.all([familyResponse.json(), relationTypesResponse.json()]);
+                if (!familyResponse.ok || familyResult.status !== 'success') throw new Error(familyResult.message || 'Não foi possível carregar a família da tag.');
+                if (!relationTypesResponse.ok || relationTypesResult.status !== 'success') throw new Error(relationTypesResult.message || 'Não foi possível carregar as sessões.');
+                state.tagFamily = familyResult.data || { mothers: [], children: [] };
+                state.relationTypes = relationTypesResult.data || [];
+                renderTagFamilySections();
+            } catch (error) {
+                tagFamilySections.innerHTML = `<div class="rounded-2xl border border-red-500/30 bg-red-950/20 p-6 text-center text-red-200">${escapeHtml(error.message || 'Erro ao carregar famílias da tag.')}</div>`;
+            }
+        }
+
         function updateFooter() {
             paginationInfo.textContent = `Página ${state.page} de ${state.totalPages} • ${state.totalCards} card(s) • 20 por página`;
             prevPageBtn.disabled = state.page <= 1;
@@ -465,6 +590,12 @@
         }
 
         async function loadPage(page) {
+            if (state.viewMode === 'tags') {
+                state.page = 1;
+                await loadTagFamilyMode();
+                return;
+            }
+            tagFamilySections.classList.add('hidden');
             statusBox.classList.remove('hidden');
             cardsGrid.classList.add('hidden');
             statusBox.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2 text-violet-300"></i>Carregando cards...';
@@ -536,6 +667,7 @@
             loadPage(1);
             loadSavedFilters();
         });
+        enforceSingleTagSelectionForTagMode();
         renderRightOptionsMenu();
         loadSavedFilters();
         loadPage(state.page);
