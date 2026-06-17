@@ -269,32 +269,93 @@
             return `<img src="${escapeHtml(src)}" alt="${escapeHtml(label)}" class="mt-3 max-h-52 w-full rounded-xl border border-slate-700 object-contain bg-slate-950/60">`;
         }
 
+        function renderCardTextsPanel(card) {
+            return `
+                <div class="grid gap-px bg-slate-800 md:grid-cols-2">
+                    <div class="bg-slate-900 p-4">
+                        <div class="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Frente</div>
+                        <div class="whitespace-pre-wrap break-words text-sm leading-6 text-slate-100">${escapeHtml(card.front || '—')}</div>
+                        ${renderImage(card.image_front, 'Imagem da frente')}
+                    </div>
+                    <div class="bg-slate-900 p-4">
+                        <div class="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Verso</div>
+                        <div class="whitespace-pre-wrap break-words text-sm leading-6 text-slate-100">${escapeHtml(card.back || '—')}</div>
+                        ${renderImage(card.image_back, 'Imagem do verso')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderCardStatusPanel(card) {
+            return `
+                <div class="grid gap-3 bg-slate-900 p-4 text-sm text-slate-200 sm:grid-cols-3">
+                    <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                        <div class="text-xs font-bold uppercase tracking-wider text-slate-500">Score</div>
+                        <div class="mt-2 text-2xl font-bold text-violet-200">${escapeHtml(card.score ?? 0)}</div>
+                    </div>
+                    <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                        <div class="text-xs font-bold uppercase tracking-wider text-slate-500">Áudio frente</div>
+                        <div class="mt-2 font-semibold ${card.has_audio_front ? 'text-emerald-300' : 'text-slate-400'}">${card.has_audio_front ? 'Sim' : 'Não'}</div>
+                    </div>
+                    <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                        <div class="text-xs font-bold uppercase tracking-wider text-slate-500">Áudio verso</div>
+                        <div class="mt-2 font-semibold ${card.has_audio_back ? 'text-emerald-300' : 'text-slate-400'}">${card.has_audio_back ? 'Sim' : 'Não'}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderCardTagsPanel(card) {
+            const tags = Array.isArray(card.tags) ? card.tags : [];
+            if (!tags.length) return '<div class="bg-slate-900 p-4 text-sm text-slate-500">Nenhuma tag vinculada a este card.</div>';
+            return `
+                <div class="flex flex-wrap gap-2 bg-slate-900 p-4 text-xs text-slate-200">
+                    ${tags.map((tag) => `<span class="rounded-full border border-sky-500/30 bg-sky-950/40 px-3 py-1.5">${escapeHtml(getTagLabel(tag))}</span>`).join('')}
+                </div>
+            `;
+        }
+
+        function renderCardPanel(card, activeTab = 'texts') {
+            if (activeTab === 'status') return renderCardStatusPanel(card);
+            if (activeTab === 'tags') return renderCardTagsPanel(card);
+            return renderCardTextsPanel(card);
+        }
+
+        function renderCardTabButton(cardId, tab, label, activeTab) {
+            const isActive = tab === activeTab;
+            return `<button type="button" data-card-tab="${tab}" data-card-id="${cardId}" class="rounded-lg px-3 py-1.5 font-semibold transition ${isActive ? 'bg-violet-500/20 text-violet-100' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}">${label}</button>`;
+        }
+
         function renderCards(cards) {
-            cardsGrid.innerHTML = cards.map((card) => `
-                <article class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80 shadow-xl shadow-black/20">
-                    <div class="flex items-center justify-between border-b border-slate-800 px-4 py-3 text-xs text-slate-400">
-                        <span class="font-semibold text-violet-200">#${card.id}</span>
-                        <span class="truncate pl-3">${escapeHtml(card.directory_name || 'Deck grafo')}</span>
-                    </div>
-                    <div class="grid gap-px bg-slate-800 md:grid-cols-2">
-                        <div class="bg-slate-900 p-4">
-                            <div class="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Frente</div>
-                            <div class="whitespace-pre-wrap break-words text-sm leading-6 text-slate-100">${escapeHtml(card.front || '—')}</div>
-                            ${renderImage(card.image_front, 'Imagem da frente')}
+            cardsGrid.innerHTML = cards.map((card) => {
+                const activeTab = card.active_tab || 'texts';
+                return `
+                    <article class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80 shadow-xl shadow-black/20" data-card-id="${card.id}">
+                        <div class="flex items-center justify-between border-b border-slate-800 px-4 py-3 text-xs text-slate-400">
+                            <div class="min-w-0">
+                                <span class="font-semibold text-violet-200">#${card.id}</span>
+                                <span class="truncate pl-3">${escapeHtml(card.directory_name || 'Deck grafo')}</span>
+                            </div>
+                            <div class="ml-3 flex shrink-0 items-center gap-1 rounded-xl border border-slate-800 bg-slate-950/40 p-1">
+                                ${renderCardTabButton(card.id, 'texts', 'Textos', activeTab)}
+                                ${renderCardTabButton(card.id, 'status', 'Status do card', activeTab)}
+                                ${renderCardTabButton(card.id, 'tags', 'Tags', activeTab)}
+                            </div>
                         </div>
-                        <div class="bg-slate-900 p-4">
-                            <div class="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Verso</div>
-                            <div class="whitespace-pre-wrap break-words text-sm leading-6 text-slate-100">${escapeHtml(card.back || '—')}</div>
-                            ${renderImage(card.image_back, 'Imagem do verso')}
-                        </div>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-2 px-4 py-3 text-xs text-slate-400">
-                        <span class="rounded-full bg-slate-800 px-2.5 py-1">Score: ${card.score}</span>
-                        <span class="rounded-full bg-slate-800 px-2.5 py-1">Áudio frente: ${card.has_audio_front ? 'sim' : 'não'}</span>
-                        <span class="rounded-full bg-slate-800 px-2.5 py-1">Áudio verso: ${card.has_audio_back ? 'sim' : 'não'}</span>
-                    </div>
-                </article>
-            `).join('');
+                        <div data-card-panel="${card.id}">${renderCardPanel(card, activeTab)}</div>
+                    </article>
+                `;
+            }).join('');
+
+            cardsGrid.querySelectorAll('[data-card-tab]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const cardId = Number(button.dataset.cardId) || 0;
+                    const card = cards.find((item) => Number(item.id) === cardId);
+                    if (!card) return;
+                    card.active_tab = button.dataset.cardTab || 'texts';
+                    renderCards(cards);
+                });
+            });
         }
 
         function updateFooter() {
