@@ -23,6 +23,12 @@
             }
         };
     </script>
+
+    <style>
+        .sequence-reorder-list { align-items: center; min-height: 2.25rem; }
+        .sequence-reorder-list.sequence-drag-active { border-radius: 0.75rem; background: rgba(14, 165, 233, 0.08); box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.26); padding: 0.25rem; margin: -0.25rem; }
+        .sequence-tag-chip.sequence-dragging { display: none; }
+    </style>
 </head>
 <body class="min-h-screen bg-gluon-dark text-slate-100">
     <div class="flex min-h-screen flex-col">
@@ -153,6 +159,20 @@
             </form>
         </div>
     </div>
+    <div id="editRelationTypeModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 opacity-0 transition-opacity duration-200 p-4" role="dialog" aria-modal="true">
+        <div id="editRelationTypeModalContent" class="w-[92%] max-w-md rounded-xl border border-slate-700 bg-slate-900 p-4 scale-95 transition-transform duration-200">
+            <form id="editRelationTypeForm" class="space-y-4">
+                <div class="flex items-center justify-between gap-3"><h3 class="text-lg font-semibold">Editar sessão</h3><button id="btnCloseEditRelationTypeModal" type="button" class="text-slate-400 hover:text-white text-xl">&times;</button></div>
+                <input id="editRelationTypeNameInput" type="text" maxlength="120" placeholder="Nome da sessão" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
+                <div class="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
+                    <button type="button" id="btnDeleteRelationType" class="rounded-lg border border-red-500/60 px-4 py-2 text-red-300 hover:bg-red-500/10">Excluir sessão</button>
+                    <div class="flex justify-end gap-2"><button type="button" id="btnCancelEditRelationType" class="rounded-lg border border-slate-600 px-4 py-2">Cancelar</button><button type="submit" id="btnSubmitEditRelationType" class="rounded-lg bg-violet-600 px-4 py-2 hover:bg-violet-500">Salvar</button></div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
 
     <script>
         const urlParams = new URLSearchParams(window.location.search);
@@ -171,7 +191,11 @@
             relationTypes: [],
             tagFamilyLoading: false,
             tags: [],
-            sessionUserId: null
+            sessionUserId: null,
+            removalRelationType: null,
+            reorderRelationType: null,
+            draggedSequenceTagId: null,
+            editingRelationTypeId: null
         };
         const cardsGrid = document.getElementById('cardsGrid');
         const tagFamilySections = document.getElementById('tagFamilySections');
@@ -256,7 +280,7 @@
         async function api(action, payload = {}) {
             const response = await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify({ ...payload, action }) });
             const result = await response.json();
-            if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Erro na requisição.');
+            if (!response.ok || result.status !== 'success') { const error = new Error(result.message || 'Erro na requisição.'); error.response = result; throw error; }
             return result;
         }
 
@@ -645,8 +669,16 @@
             return Number(tag.tipo_de_relacao ?? tag.relation_type_id ?? tag.id_relation_type ?? tag.relationTypeId ?? 0) || 0;
         }
 
-        function renderFamilyTagChip(tag = {}) {
-            return `<button type="button" data-main-family-tag-id="${Number(tag.id) || 0}" class="rounded-full border border-sky-500/30 bg-sky-950/40 px-3 py-1.5 text-xs font-semibold text-sky-100 transition hover:border-sky-300 hover:bg-sky-900/50">${escapeHtml(getTagLabel(tag))}</button>`;
+        function getRelationTypeById(type) { return state.relationTypes.find((item) => Number(item.id) === Number(type)) || null; }
+        function canEditRelationType(relationType = {}) { const typeUserId = Number(relationType?.user_id); const sessionId = Number(state.sessionUserId); return Number.isInteger(typeUserId) && typeUserId > 0 && Number.isInteger(sessionId) && sessionId > 0 && typeUserId === sessionId; }
+        function getRelationTypeHierarchy(type) { return Number(getRelationTypeById(type)?.hierarquia || 0); }
+        function relationTypeUsesHierarchy(type) { return getRelationTypeHierarchy(type) === 1; }
+        function relationTypeUsesSequence(type) { return getRelationTypeHierarchy(type) === 2; }
+
+        function renderFamilyTagChip(tag = {}, type = 0, relationRole = 'child') {
+            const isReorderMode = relationTypeUsesSequence(type) && state.reorderRelationType === type;
+            const isRemovalMode = state.removalRelationType === type;
+            return `<button type="button" data-main-family-tag-id="${Number(tag.id) || 0}" data-relation-role="${escapeHtml(relationRole)}" draggable="${isReorderMode ? 'true' : 'false'}" class="sequence-tag-chip rounded-full border px-3 py-1.5 text-xs font-semibold transition ${isRemovalMode ? 'border-red-400/70 bg-red-950/40 text-red-100 hover:bg-red-900/50' : 'border-sky-500/30 bg-sky-950/40 text-sky-100 hover:border-sky-300 hover:bg-sky-900/50'} ${isReorderMode ? 'cursor-move ring-1 ring-sky-300/70' : ''}">${isReorderMode ? '<i class="fa-solid fa-grip-vertical mr-1 text-sky-200"></i>' : ''}${escapeHtml(getTagLabel(tag))}</button>`;
         }
 
         function showModal(modalId, contentId, focusId) {
@@ -709,6 +741,17 @@
             await loadPage(1);
         }
 
+        function buildTagFamilySectionHeader(type, children = []) {
+            const relationType = getRelationTypeById(type);
+            const isRemovalMode = state.removalRelationType === type;
+            const isReorderMode = state.reorderRelationType === type;
+            const canReorder = relationTypeUsesSequence(type) && children.length > 1;
+            const actionsButton = canEditRelationType(relationType) ? `<button type="button" data-open-relation-type-actions="${type}" class="h-8 w-8 shrink-0 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white" title="Editar ou excluir esta sessão"><i class="fa-solid fa-ellipsis-vertical"></i></button>` : '';
+            const reorderButton = canReorder ? `<button type="button" data-toggle-reorder-type="${type}" class="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors md:inline-flex ${isReorderMode ? 'border-sky-300 bg-sky-500/20 text-sky-100' : 'border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white'}" title="Reordenar tags desta sequência"><i class="fa-solid fa-arrow-up-wide-short"></i></button>` : '';
+            const removalButton = `<button type="button" data-toggle-removal-type="${type}" class="h-8 w-8 shrink-0 rounded-lg border transition-colors ${isRemovalMode ? 'border-red-300 bg-red-500/20 text-red-100' : 'border-red-500/50 text-red-300 hover:bg-red-500/10 hover:text-red-200'}" title="${isRemovalMode ? 'Desativar remoção de tags' : 'Ativar remoção de tags'}"><i class="fa-solid fa-trash-can"></i></button>`;
+            return `<div class="mb-3 flex items-center justify-between gap-3"><h3 class="min-w-0 text-sm font-semibold text-violet-200">${escapeHtml(getRelationTypeLabel(type))}</h3><div class="flex shrink-0 items-center gap-2">${actionsButton}${reorderButton}${removalButton}</div></div>`;
+        }
+
         function renderTagFamilySections() {
             const selectedLabel = getSelectedTagSummary();
             if (!state.selectedTagIds.length) {
@@ -730,26 +773,126 @@
                 ${types.map((type) => {
                     const children = (state.tagFamily.children || []).filter((tag) => getTagRelationType(tag) === type);
                     const mothers = (state.tagFamily.mothers || []).filter((tag) => getTagRelationType(tag) === type);
-                    return `<article class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                        <h3 class="mb-3 text-sm font-semibold text-violet-200">${escapeHtml(getRelationTypeLabel(type))}</h3>
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <div><p class="mb-2 text-sm text-red-300">Esta tag é mãe de:</p><div class="flex flex-wrap gap-2">${children.length ? children.map(renderFamilyTagChip).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></div>
-                            <div><p class="mb-2 text-sm text-red-300">Esta tag é filha de:</p><div class="flex flex-wrap gap-2">${mothers.length ? mothers.map(renderFamilyTagChip).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></div>
-                        </div>
-                    </article>`;
+                    const isSequence = relationTypeUsesSequence(type);
+                    const childListClass = isSequence ? `sequence-reorder-list ${state.reorderRelationType === type ? 'sequence-drag-active' : ''}` : '';
+                    if (!relationTypeUsesHierarchy(type)) {
+                        return `<article data-relation-type="${type}" class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">${buildTagFamilySectionHeader(type, children)}<div data-sequence-list="${type}" class="flex flex-wrap gap-2 ${childListClass}">${children.length ? children.map((tag) => renderFamilyTagChip(tag, type, 'child')).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></article>`;
+                    }
+                    return `<article data-relation-type="${type}" class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">${buildTagFamilySectionHeader(type, children)}<div class="grid gap-4 md:grid-cols-2"><div><p class="mb-2 text-sm text-red-300">Esta tag é mãe de:</p><div class="flex flex-wrap gap-2">${children.length ? children.map((tag) => renderFamilyTagChip(tag, type, 'child')).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></div><div><p class="mb-2 text-sm text-red-300">Esta tag é filha de:</p><div class="flex flex-wrap gap-2">${mothers.length ? mothers.map((tag) => renderFamilyTagChip(tag, type, 'mother')).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></div></div></article>`;
                 }).join('')}
             `;
+            bindTagFamilySectionEvents();
+        }
+
+        function bindTagFamilySectionEvents() {
+            tagFamilySections.querySelectorAll('[data-toggle-removal-type]').forEach((button) => button.addEventListener('click', () => {
+                const type = Number(button.dataset.toggleRemovalType) || 0;
+                state.removalRelationType = state.removalRelationType === type ? null : type;
+                if (state.removalRelationType === type) state.reorderRelationType = null;
+                renderTagFamilySections();
+            }));
+            tagFamilySections.querySelectorAll('[data-toggle-reorder-type]').forEach((button) => button.addEventListener('click', () => {
+                const type = Number(button.dataset.toggleReorderType) || 0;
+                state.reorderRelationType = state.reorderRelationType === type ? null : type;
+                if (state.reorderRelationType === type) state.removalRelationType = null;
+                renderTagFamilySections();
+            }));
+            tagFamilySections.querySelectorAll('[data-open-relation-type-actions]').forEach((button) => button.addEventListener('click', () => openRelationTypeActionsModal(Number(button.dataset.openRelationTypeActions) || 0)));
+            tagFamilySections.querySelectorAll('[data-sequence-list]').forEach((list) => {
+                list.addEventListener('dragover', (event) => { if (state.reorderRelationType === Number(list.dataset.sequenceList || 0)) event.preventDefault(); });
+            });
             tagFamilySections.querySelectorAll('[data-main-family-tag-id]').forEach((button) => {
-                button.addEventListener('click', () => {
+                button.addEventListener('dragstart', (event) => {
+                    const type = Number(button.closest('[data-relation-type]')?.dataset.relationType || 0);
+                    if (state.reorderRelationType !== type) { event.preventDefault(); return; }
+                    state.draggedSequenceTagId = Number(button.dataset.mainFamilyTagId) || 0;
+                    button.classList.add('sequence-dragging');
+                });
+                button.addEventListener('dragend', () => { button.classList.remove('sequence-dragging'); state.draggedSequenceTagId = null; });
+                button.addEventListener('dragover', (event) => {
+                    const type = Number(button.closest('[data-relation-type]')?.dataset.relationType || 0);
+                    if (state.reorderRelationType === type) event.preventDefault();
+                });
+                button.addEventListener('drop', async (event) => {
+                    event.preventDefault();
+                    const type = Number(button.closest('[data-relation-type]')?.dataset.relationType || 0);
+                    if (state.reorderRelationType !== type) return;
+                    const targetId = Number(button.dataset.mainFamilyTagId) || 0;
+                    await reorderSequenceTag(type, Number(state.draggedSequenceTagId), targetId);
+                });
+                button.addEventListener('click', async () => {
                     const tagId = Number(button.dataset.mainFamilyTagId) || 0;
+                    const type = Number(button.closest('[data-relation-type]')?.dataset.relationType || 0);
                     if (!tagId) return;
-                    const tag = [...(state.tagFamily.children || []), ...(state.tagFamily.mothers || [])].find((item) => Number(item.id) === tagId) || {};
+                    const tag = [...(state.tagFamily.children || []), ...(state.tagFamily.mothers || [])].find((item) => Number(item.id) === tagId && getTagRelationType(item) === type) || {};
+                    if (state.reorderRelationType === type) return;
+                    if (state.removalRelationType === type) { await removeFamilyTag(tag, button.dataset.relationRole || 'child'); return; }
                     state.selectedTagIds = [tagId];
                     state.selectedTagLabels = [getTagLabel(tag)];
-                    loadPage(1);
-                    loadSavedFilters();
+                    await loadPage(1);
+                    await loadSavedFilters();
                 });
             });
+        }
+
+        async function removeFamilyTag(tag, relationRole) {
+            if (!tag) return;
+            const relationTypeId = getTagRelationType(tag);
+            if (relationTypeUsesHierarchy(relationTypeId)) {
+                await api('remove_tag_family_relation', { tag_id: state.selectedTagIds[0], other_tag_id: Number(tag.id), relation_type: relationRole, tipo_de_relacao: relationTypeId });
+            } else {
+                const payload = { tag_id: state.selectedTagIds[0], other_tag_id: Number(tag.id), tipo_de_relacao: relationTypeId };
+                const results = await Promise.allSettled([api('remove_tag_family_relation', { ...payload, relation_type: 'child' }), api('remove_tag_family_relation', { ...payload, relation_type: 'mother' })]);
+                if (results.every((result) => result.status === 'rejected')) throw results[0].reason || new Error('Não foi possível remover o vínculo.');
+            }
+            await loadPage(1);
+        }
+
+        async function reorderSequenceTag(relationType, draggedId, targetId) {
+            if (!draggedId || !targetId || draggedId === targetId) return;
+            const ordered = (state.tagFamily.children || []).filter((tag) => getTagRelationType(tag) === relationType).map((tag) => Number(tag.id));
+            const from = ordered.indexOf(draggedId), to = ordered.indexOf(targetId);
+            if (from < 0 || to < 0) return;
+            ordered.splice(from, 1);
+            ordered.splice(to, 0, draggedId);
+            await api('reorder_tag_family_sequence', { tag_id: state.selectedTagIds[0], tipo_de_relacao: relationType, ordered_tag_ids: ordered });
+            state.tagFamily.children.sort((a, b) => {
+                const ia = ordered.indexOf(Number(a.id)), ib = ordered.indexOf(Number(b.id));
+                if (getTagRelationType(a) !== relationType || getTagRelationType(b) !== relationType) return 0;
+                return (ia < 0 ? 9999 : ia) - (ib < 0 ? 9999 : ib);
+            });
+            renderTagFamilySections();
+        }
+
+        function openRelationTypeActionsModal(type) {
+            const relationType = getRelationTypeById(type);
+            if (!canEditRelationType(relationType)) return;
+            state.editingRelationTypeId = Number(relationType.id);
+            document.getElementById('editRelationTypeNameInput').value = String(relationType.nome || relationType.name || '');
+            showModal('editRelationTypeModal', 'editRelationTypeModalContent', 'editRelationTypeNameInput');
+        }
+        function closeRelationTypeActionsModal() { closeModal('editRelationTypeModal', 'editRelationTypeModalContent'); state.editingRelationTypeId = null; }
+        async function submitEditRelationType(event) {
+            event.preventDefault();
+            const id = Number(state.editingRelationTypeId || 0);
+            const relationType = getRelationTypeById(id);
+            if (!canEditRelationType(relationType)) return;
+            const name = document.getElementById('editRelationTypeNameInput').value.trim();
+            if (!name) { alert('Preencha o nome da sessão.'); return; }
+            await api('update_relation_type', { id, nome: name });
+            closeRelationTypeActionsModal();
+            await loadPage(1);
+        }
+        async function deleteEditingRelationType() {
+            const id = Number(state.editingRelationTypeId || 0);
+            const relationType = getRelationTypeById(id);
+            if (!canEditRelationType(relationType)) return;
+            if (!confirm('Excluir esta sessão também removerá os vínculos dela. Deseja continuar?')) return;
+            await api('delete_relation_type', { id });
+            if (state.removalRelationType === id) state.removalRelationType = null;
+            if (state.reorderRelationType === id) state.reorderRelationType = null;
+            closeRelationTypeActionsModal();
+            await loadPage(1);
         }
 
         async function loadTagFamilyMode() {
@@ -763,15 +906,11 @@
             if (!state.selectedTagIds.length) { renderTagFamilySections(); return; }
             tagFamilySections.innerHTML = '<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 text-center text-slate-300"><i class="fa-solid fa-spinner fa-spin mr-2 text-violet-300"></i>Carregando famílias da tag...</div>';
             try {
-                const [familyResponse, relationTypesResponse, tagsResponse] = await Promise.all([
-                    fetch(`/api/flashcards?action=get_tag_family&tag_id=${encodeURIComponent(state.selectedTagIds[0])}`, { headers: { 'Accept': 'application/json' } }),
-                    fetch('/api/flashcards?action=list_relation_types', { headers: { 'Accept': 'application/json' } }),
-                    fetch('/api/flashcards?action=list_tags', { headers: { 'Accept': 'application/json' } })
+                const [familyResult, relationTypesResult, tagsResult] = await Promise.all([
+                    api('get_tag_family', { tag_id: state.selectedTagIds[0] }),
+                    api('list_relation_types'),
+                    api('list_tags')
                 ]);
-                const [familyResult, relationTypesResult, tagsResult] = await Promise.all([familyResponse.json(), relationTypesResponse.json(), tagsResponse.json()]);
-                if (!familyResponse.ok || familyResult.status !== 'success') throw new Error(familyResult.message || 'Não foi possível carregar a família da tag.');
-                if (!relationTypesResponse.ok || relationTypesResult.status !== 'success') throw new Error(relationTypesResult.message || 'Não foi possível carregar as sessões.');
-                if (!tagsResponse.ok || tagsResult.status !== 'success') throw new Error(tagsResult.message || 'Não foi possível carregar as tags.');
                 state.tags = tagsResult.data || [];
                 state.tagFamily = familyResult.data || { mothers: [], children: [] };
                 state.relationTypes = relationTypesResult.data || [];
@@ -880,6 +1019,10 @@
         document.getElementById('btnCancelCreateRelationType').addEventListener('click', () => closeModal('createRelationTypeModal', 'createRelationTypeModalContent'));
         document.getElementById('btnCloseCreateRelationTypeModal').addEventListener('click', () => closeModal('createRelationTypeModal', 'createRelationTypeModalContent'));
         document.getElementById('createRelationTypeForm').addEventListener('submit', submitCreateRelationType);
+        document.getElementById('btnCancelEditRelationType').addEventListener('click', closeRelationTypeActionsModal);
+        document.getElementById('btnCloseEditRelationTypeModal').addEventListener('click', closeRelationTypeActionsModal);
+        document.getElementById('btnDeleteRelationType').addEventListener('click', deleteEditingRelationType);
+        document.getElementById('editRelationTypeForm').addEventListener('submit', submitEditRelationType);
         clearTagFilterBtn.addEventListener('click', () => {
             state.selectedTagIds = [];
             state.selectedTagLabels = [];
