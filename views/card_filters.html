@@ -244,13 +244,17 @@
             return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
         }
 
-        function getTagLabel(tag = {}) {
+        function getTagLabel(tag = {}, numeroPtBrCounts = null) {
             const numero = tag?.numero;
             const hasNumero = numero !== null && numero !== undefined && String(numero).trim() !== '';
-            if (hasNumero) return String(numero).trim();
-
             const name = String(tag?.name || '').trim();
             const namePtBr = String(tag?.name_pt_br || '').trim();
+            if (hasNumero) {
+                const numeroKey = String(numero).trim();
+                const qtdTraducoes = numeroPtBrCounts?.get(numeroKey) || 0;
+                if (qtdTraducoes > 1 && namePtBr) return `${numeroKey} (${namePtBr})`;
+                return numeroKey;
+            }
             if (name && namePtBr && name.toLowerCase() !== namePtBr.toLowerCase()) return `${name} (${namePtBr})`;
             return name || namePtBr || 'Tag sem nome';
         }
@@ -297,6 +301,37 @@
         function canEditTag(tag = {}) {
             const sessionId = Number(state.sessionUserId);
             return Number.isInteger(sessionId) && sessionId > 0 && [Number(tag.user_id), Number(tag.created_by_user_id)].includes(sessionId);
+        }
+
+        function isUserOwnedTag(tag = {}) {
+            const tagUserId = Number(tag?.user_id);
+            const sessionId = Number(state.sessionUserId);
+            return Number.isInteger(tagUserId) && tagUserId > 0 && Number.isInteger(sessionId) && sessionId > 0 && tagUserId === sessionId;
+        }
+
+        function getTagOwnershipClass(tag = {}, { removalMode = false } = {}) {
+            const base = isUserOwnedTag(tag) ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/80 hover:bg-emerald-500/25' : 'bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700';
+            return removalMode ? `${base} ring-1 ring-amber-300/70` : base;
+        }
+
+        function getSubjectsCount(tag = {}) {
+            const value = Number(tag?.subjects_count ?? 0);
+            return Number.isFinite(value) && value >= 0 ? value : 0;
+        }
+
+        function buildNumeroPtBrCounts(tags = []) {
+            const counts = new Map();
+            tags.forEach((tag) => {
+                const numero = tag?.numero;
+                const numeroKey = numero !== null && numero !== undefined ? String(numero).trim() : '';
+                const namePtBr = String(tag?.name_pt_br || '').trim();
+                if (numeroKey && namePtBr) counts.set(numeroKey, (counts.get(numeroKey) || 0) + 1);
+            });
+            return counts;
+        }
+
+        function renderTagButtonContent(tag = {}, numeroPtBrCounts = null) {
+            return `${escapeHtml(getTagLabel(tag, numeroPtBrCounts))} <span class="text-[10px] text-slate-400">(${getSubjectsCount(tag)})</span>`;
         }
 
         function getCurrentTag() {
@@ -675,10 +710,10 @@
         function relationTypeUsesHierarchy(type) { return getRelationTypeHierarchy(type) === 1; }
         function relationTypeUsesSequence(type) { return getRelationTypeHierarchy(type) === 2; }
 
-        function renderFamilyTagChip(tag = {}, type = 0, relationRole = 'child') {
+        function renderFamilyTagChip(tag = {}, type = 0, relationRole = 'child', numeroPtBrCounts = null) {
             const isReorderMode = relationTypeUsesSequence(type) && state.reorderRelationType === type;
             const isRemovalMode = state.removalRelationType === type;
-            return `<button type="button" data-main-family-tag-id="${Number(tag.id) || 0}" data-relation-role="${escapeHtml(relationRole)}" draggable="${isReorderMode ? 'true' : 'false'}" class="sequence-tag-chip rounded-full border px-3 py-1.5 text-xs font-semibold transition ${isRemovalMode ? 'border-red-400/70 bg-red-950/40 text-red-100 hover:bg-red-900/50' : 'border-sky-500/30 bg-sky-950/40 text-sky-100 hover:border-sky-300 hover:bg-sky-900/50'} ${isReorderMode ? 'cursor-move ring-1 ring-sky-300/70' : ''}">${isReorderMode ? '<i class="fa-solid fa-grip-vertical mr-1 text-sky-200"></i>' : ''}${escapeHtml(getTagLabel(tag))}</button>`;
+            return `<button type="button" data-main-family-tag-id="${Number(tag.id) || 0}" data-relation-role="${escapeHtml(relationRole)}" draggable="${isReorderMode ? 'true' : 'false'}" class="sequence-tag-chip px-2 py-1 rounded-full text-xs border transition-colors ${getTagOwnershipClass(tag, { removalMode: isRemovalMode })} ${isRemovalMode ? 'cursor-pointer' : ''} ${isReorderMode ? 'cursor-move ring-1 ring-sky-300/70' : ''}" title="${isReorderMode ? 'Arraste para reordenar a sequência' : (isRemovalMode ? 'Remover tag desta família' : 'Abrir família da tag')}">${isReorderMode ? '<i class="fa-solid fa-grip-vertical mr-1 text-sky-200"></i>' : ''}${renderTagButtonContent(tag, numeroPtBrCounts)}</button>`;
         }
 
         function showModal(modalId, contentId, focusId) {
@@ -745,11 +780,12 @@
             const relationType = getRelationTypeById(type);
             const isRemovalMode = state.removalRelationType === type;
             const isReorderMode = state.reorderRelationType === type;
-            const canReorder = relationTypeUsesSequence(type) && children.length > 1;
-            const actionsButton = canEditRelationType(relationType) ? `<button type="button" data-open-relation-type-actions="${type}" class="h-8 w-8 shrink-0 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white" title="Editar ou excluir esta sessão"><i class="fa-solid fa-ellipsis-vertical"></i></button>` : '';
-            const reorderButton = canReorder ? `<button type="button" data-toggle-reorder-type="${type}" class="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors md:inline-flex ${isReorderMode ? 'border-sky-300 bg-sky-500/20 text-sky-100' : 'border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white'}" title="Reordenar tags desta sequência"><i class="fa-solid fa-arrow-up-wide-short"></i></button>` : '';
-            const removalButton = `<button type="button" data-toggle-removal-type="${type}" class="h-8 w-8 shrink-0 rounded-lg border transition-colors ${isRemovalMode ? 'border-red-300 bg-red-500/20 text-red-100' : 'border-red-500/50 text-red-300 hover:bg-red-500/10 hover:text-red-200'}" title="${isRemovalMode ? 'Desativar remoção de tags' : 'Ativar remoção de tags'}"><i class="fa-solid fa-trash-can"></i></button>`;
-            return `<div class="mb-3 flex items-center justify-between gap-3"><h3 class="min-w-0 text-sm font-semibold text-violet-200">${escapeHtml(getRelationTypeLabel(type))}</h3><div class="flex shrink-0 items-center gap-2">${actionsButton}${reorderButton}${removalButton}</div></div>`;
+            const canReorder = relationTypeUsesSequence(type);
+            const actionsButton = canEditRelationType(relationType) ? `<button type="button" data-open-relation-type-actions="${type}" class="h-8 w-8 shrink-0 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors" title="Editar ou excluir esta sessão" aria-label="Editar ou excluir esta sessão"><i class="fa-solid fa-ellipsis-vertical"></i></button>` : '';
+            const reorderButton = canReorder ? `<button type="button" data-toggle-reorder-type="${type}" class="hidden md:inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${isReorderMode ? 'border-sky-300 bg-sky-500/20 text-sky-100' : 'border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white'} transition-colors" title="Reordenar tags desta sequência" aria-label="Reordenar tags desta sequência"><i class="fa-solid fa-arrow-up-wide-short"></i></button>` : '';
+            const removalButton = `<button type="button" data-toggle-removal-type="${type}" class="h-8 w-8 shrink-0 rounded-lg border ${isRemovalMode ? 'border-amber-300 bg-amber-500/20 text-amber-100' : 'border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white'} transition-colors" title="Remover tags desta sessão" aria-label="Remover tags desta sessão"><i class="fa-solid fa-folder-minus"></i></button>`;
+            const actionGroup = actionsButton || reorderButton || removalButton ? `<div class="flex shrink-0 items-center gap-2">${actionsButton}${reorderButton}${removalButton}</div>` : '';
+            return `<div class="mb-3 flex items-start justify-between gap-3"><div><h3 class="text-sm font-semibold text-violet-200">${escapeHtml(getRelationTypeLabel(type))}</h3>${isRemovalMode ? '<p class="mt-1 text-xs text-amber-300">Clique em uma tag desta sessão para removê-la daqui.</p>' : ''}${isReorderMode ? '<p class="mt-1 hidden text-xs text-sky-300 md:block">Arraste as tags para ajustar a ordem desta sequência.</p>' : ''}</div>${actionGroup}</div>`;
         }
 
         function renderTagFamilySections() {
@@ -776,9 +812,9 @@
                     const isSequence = relationTypeUsesSequence(type);
                     const childListClass = isSequence ? `sequence-reorder-list ${state.reorderRelationType === type ? 'sequence-drag-active' : ''}` : '';
                     if (!relationTypeUsesHierarchy(type)) {
-                        return `<article data-relation-type="${type}" class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">${buildTagFamilySectionHeader(type, children)}<div data-sequence-list="${type}" class="flex flex-wrap gap-2 ${childListClass}">${children.length ? children.map((tag) => renderFamilyTagChip(tag, type, 'child')).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></article>`;
+                        return `<article data-relation-type="${type}" class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">${buildTagFamilySectionHeader(type, children)}<div data-sequence-list="${type}" class="flex flex-wrap gap-2 ${childListClass}">${children.length ? children.map((tag) => renderFamilyTagChip(tag, type, 'child', buildNumeroPtBrCounts(children))).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></article>`;
                     }
-                    return `<article data-relation-type="${type}" class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">${buildTagFamilySectionHeader(type, children)}<div class="grid gap-4 md:grid-cols-2"><div><p class="mb-2 text-sm text-red-300">Esta tag é mãe de:</p><div class="flex flex-wrap gap-2">${children.length ? children.map((tag) => renderFamilyTagChip(tag, type, 'child')).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></div><div><p class="mb-2 text-sm text-red-300">Esta tag é filha de:</p><div class="flex flex-wrap gap-2">${mothers.length ? mothers.map((tag) => renderFamilyTagChip(tag, type, 'mother')).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></div></div></article>`;
+                    return `<article data-relation-type="${type}" class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">${buildTagFamilySectionHeader(type, children)}<div class="grid gap-4 md:grid-cols-2"><div><p class="mb-2 text-sm text-red-300">Esta tag é mãe de:</p><div class="flex flex-wrap gap-2">${children.length ? children.map((tag) => renderFamilyTagChip(tag, type, 'child', buildNumeroPtBrCounts(children))).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></div><div><p class="mb-2 text-sm text-red-300">Esta tag é filha de:</p><div class="flex flex-wrap gap-2">${mothers.length ? mothers.map((tag) => renderFamilyTagChip(tag, type, 'mother', buildNumeroPtBrCounts(mothers))).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></div></div></article>`;
                 }).join('')}
             `;
             bindTagFamilySectionEvents();
