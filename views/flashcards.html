@@ -2032,8 +2032,9 @@
                 const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
                 const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
                 const hasTwoSides = hasFront && hasBack;
+                const shouldRevealBackBeforeAdvancing = hasTwoSides && !this.isTranslationCard(card);
 
-                if (hasTwoSides && !this.isFlipped) {
+                if (shouldRevealBackBeforeAdvancing && !this.isFlipped) {
                     this.flipCard();
                     return;
                 }
