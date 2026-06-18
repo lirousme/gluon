@@ -133,7 +133,7 @@
                         <button id="relationModeSwitch" type="button" class="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-200">Adicionando filhas</button>
                     </div>
                 </div>
-                <div id="footerTagSelector" class="flex min-h-[48px] flex-wrap gap-2 rounded-lg border border-slate-700 bg-slate-900/70 p-3"></div>
+                <div id="footerTagSelector" class="hidden min-h-[48px] flex-wrap gap-2 rounded-lg border border-slate-700 bg-slate-900/70 p-3"></div>
                 <input id="footerTagSearch" type="text" placeholder="Pesquisar tag por nome..." class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-base text-slate-100">
             </div>
         </footer>
@@ -1014,20 +1014,26 @@
             if (!footerTagSelector || state.viewMode !== 'tags') return;
             ensureSelectedRelationType();
             selectedRelationTypeLabel.textContent = state.selectedRelationType ? `(${getRelationTypeLabel(state.selectedRelationType)})` : '';
+            const hideFooterTagSelector = () => {
+                footerTagSelector.innerHTML = '';
+                footerTagSelector.classList.add('hidden');
+                footerTagSelector.classList.remove('flex');
+            };
             const currentTagId = Number(state.selectedTagIds[0] || 0);
-            if (!currentTagId) { footerTagSelector.innerHTML = '<span class="text-xs text-slate-400">Selecione uma tag no menu esquerdo para adicionar vínculos.</span>'; return; }
-            if (!state.selectedRelationType) { footerTagSelector.innerHTML = '<span class="text-xs text-slate-400">Crie ou selecione uma sessão antes de adicionar tags.</span>'; return; }
+            if (!currentTagId || !state.selectedRelationType) { hideFooterTagSelector(); return; }
             const query = (footerTagSearch.value || '').toLowerCase().trim();
-            if (query.length < 2) { footerTagSelector.innerHTML = '<span class="text-xs text-slate-400">Digite pelo menos 2 caracteres para buscar tags.</span>'; return; }
+            if (query.length < 2) { hideFooterTagSelector(); return; }
             const matches = state.tags
                 .filter((tag) => Number(tag.id) !== currentTagId)
                 .filter((tag) => String(tag.name || '').toLowerCase().includes(query) || String(tag.name_pt_br || '').toLowerCase().includes(query) || String(tag.numero ?? '').toLowerCase().includes(query));
-            if (!matches.length) { footerTagSelector.innerHTML = '<span class="text-xs text-slate-400">Nenhuma tag encontrada.</span>'; return; }
+            if (!matches.length) { hideFooterTagSelector(); return; }
             const maxResults = 200;
             const filtered = matches.slice(0, maxResults);
             const numeroPtBrCounts = buildNumeroPtBrCounts(filtered);
             const summary = matches.length > maxResults ? `<div class="mb-2 w-full text-[11px] text-amber-300">Mostrando ${maxResults} de ${matches.length} tags. Refine a busca para ver menos resultados.</div>` : '';
             footerTagSelector.innerHTML = summary + filtered.map((tag) => `<button type="button" data-footer-add-tag-id="${Number(tag.id)}" class="rounded-full border px-2.5 py-1 text-xs transition-colors ${getTagOwnershipClass(tag)}">${renderTagButtonContent(tag, numeroPtBrCounts)}</button>`).join('');
+            footerTagSelector.classList.remove('hidden');
+            footerTagSelector.classList.add('flex');
             footerTagSelector.querySelectorAll('[data-footer-add-tag-id]').forEach((button) => button.addEventListener('click', () => addRelationToSelectedTag(Number(button.dataset.footerAddTagId || 0))));
         }
 
