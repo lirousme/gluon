@@ -103,7 +103,7 @@
         </div>
 
         <footer class="sticky bottom-0 border-t border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur">
-            <div class="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div id="cardsPaginationFooter" class="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div id="paginationInfo" class="text-sm text-slate-400">Página 1 de 1</div>
                 <div class="grid grid-cols-2 gap-2 lg:hidden">
                     <button id="openLeftMenuBtn" type="button" class="rounded-xl border border-sky-500/50 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/20">
@@ -121,6 +121,20 @@
                         Próxima<i class="fa-solid fa-chevron-right ml-2"></i>
                     </button>
                 </div>
+            </div>
+            <div id="tagRelationFooter" class="hidden w-full space-y-3">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="grid grid-cols-2 gap-2 lg:hidden">
+                        <button id="openLeftMenuBtnTags" type="button" class="rounded-xl border border-sky-500/50 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/20"><i class="fa-solid fa-filter mr-2"></i>Filtros</button>
+                        <button id="openRightMenuBtnTags" type="button" class="rounded-xl border border-violet-500/50 bg-violet-500/10 px-4 py-2 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/20"><i class="fa-solid fa-bars mr-2"></i>Menu</button>
+                    </div>
+                    <div class="flex items-center justify-between gap-3 sm:ml-auto">
+                        <label class="text-sm text-slate-300">Modo de vínculo <span id="selectedRelationTypeLabel" class="text-violet-300"></span></label>
+                        <button id="relationModeSwitch" type="button" class="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-200">Adicionando filhas</button>
+                    </div>
+                </div>
+                <div id="footerTagSelector" class="flex min-h-[48px] flex-wrap gap-2 rounded-lg border border-slate-700 bg-slate-900/70 p-3"></div>
+                <input id="footerTagSearch" type="text" placeholder="Pesquisar tag por nome..." class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-base text-slate-100">
             </div>
         </footer>
     </div>
@@ -195,7 +209,9 @@
             removalRelationType: null,
             reorderRelationType: null,
             draggedSequenceTagId: null,
-            editingRelationTypeId: null
+            editingRelationTypeId: null,
+            selectedRelationType: null,
+            relationMode: 'child'
         };
         const cardsGrid = document.getElementById('cardsGrid');
         const tagFamilySections = document.getElementById('tagFamilySections');
@@ -204,6 +220,12 @@
         const editCurrentTagBtn = document.getElementById('editCurrentTagBtn');
         const createTagBtn = document.getElementById('createTagBtn');
         const createRelationTypeBtn = document.getElementById('createRelationTypeBtn');
+        const cardsPaginationFooter = document.getElementById('cardsPaginationFooter');
+        const tagRelationFooter = document.getElementById('tagRelationFooter');
+        const footerTagSelector = document.getElementById('footerTagSelector');
+        const footerTagSearch = document.getElementById('footerTagSearch');
+        const selectedRelationTypeLabel = document.getElementById('selectedRelationTypeLabel');
+        const relationModeSwitch = document.getElementById('relationModeSwitch');
         const paginationInfo = document.getElementById('paginationInfo');
         const prevPageBtn = document.getElementById('prevPageBtn');
         const nextPageBtn = document.getElementById('nextPageBtn');
@@ -214,6 +236,8 @@
         const mobileDrawerBackdrop = document.getElementById('mobileDrawerBackdrop');
         const openLeftMenuBtn = document.getElementById('openLeftMenuBtn');
         const openRightMenuBtn = document.getElementById('openRightMenuBtn');
+        const openLeftMenuBtnTags = document.getElementById('openLeftMenuBtnTags');
+        const openRightMenuBtnTags = document.getElementById('openRightMenuBtnTags');
 
 
         function setMobileDrawerBackdrop(open) {
@@ -790,6 +814,7 @@
 
         function renderTagFamilySections() {
             const selectedLabel = getSelectedTagSummary();
+            ensureSelectedRelationType();
             if (!state.selectedTagIds.length) {
                 tagFamilySections.innerHTML = '<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 text-center text-slate-300">Selecione uma tag fixada no menu esquerdo para ver suas famílias.</div>';
                 return;
@@ -809,18 +834,26 @@
                 ${types.map((type) => {
                     const children = (state.tagFamily.children || []).filter((tag) => getTagRelationType(tag) === type);
                     const mothers = (state.tagFamily.mothers || []).filter((tag) => getTagRelationType(tag) === type);
+                    const isSelected = Number(state.selectedRelationType) === Number(type);
+                    const articleClass = `rounded-2xl border bg-slate-900/70 p-4 transition ${isSelected ? 'border-violet-400/80 ring-1 ring-violet-400/40' : 'border-slate-800 hover:border-violet-500/40'}`;
                     const isSequence = relationTypeUsesSequence(type);
                     const childListClass = isSequence ? `sequence-reorder-list ${state.reorderRelationType === type ? 'sequence-drag-active' : ''}` : '';
                     if (!relationTypeUsesHierarchy(type)) {
-                        return `<article data-relation-type="${type}" class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">${buildTagFamilySectionHeader(type, children)}<div data-sequence-list="${type}" class="flex flex-wrap gap-2 ${childListClass}">${children.length ? children.map((tag) => renderFamilyTagChip(tag, type, 'child', buildNumeroPtBrCounts(children))).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></article>`;
+                        return `<article data-relation-type="${type}" class="${articleClass}">${buildTagFamilySectionHeader(type, children)}<div data-sequence-list="${type}" class="flex flex-wrap gap-2 ${childListClass}">${children.length ? children.map((tag) => renderFamilyTagChip(tag, type, 'child', buildNumeroPtBrCounts(children))).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></article>`;
                     }
-                    return `<article data-relation-type="${type}" class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">${buildTagFamilySectionHeader(type, children)}<div class="grid gap-4 md:grid-cols-2"><div><p class="mb-2 text-sm text-red-300">Esta tag é mãe de:</p><div class="flex flex-wrap gap-2">${children.length ? children.map((tag) => renderFamilyTagChip(tag, type, 'child', buildNumeroPtBrCounts(children))).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></div><div><p class="mb-2 text-sm text-red-300">Esta tag é filha de:</p><div class="flex flex-wrap gap-2">${mothers.length ? mothers.map((tag) => renderFamilyTagChip(tag, type, 'mother', buildNumeroPtBrCounts(mothers))).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></div></div></article>`;
+                    return `<article data-relation-type="${type}" class="${articleClass}">${buildTagFamilySectionHeader(type, children)}<div class="grid gap-4 md:grid-cols-2"><div><p class="mb-2 text-sm text-red-300">Esta tag é mãe de:</p><div class="flex flex-wrap gap-2">${children.length ? children.map((tag) => renderFamilyTagChip(tag, type, 'child', buildNumeroPtBrCounts(children))).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></div><div><p class="mb-2 text-sm text-red-300">Esta tag é filha de:</p><div class="flex flex-wrap gap-2">${mothers.length ? mothers.map((tag) => renderFamilyTagChip(tag, type, 'mother', buildNumeroPtBrCounts(mothers))).join('') : '<span class="text-xs text-slate-400">Nenhuma</span>'}</div></div></div></article>`;
                 }).join('')}
             `;
             bindTagFamilySectionEvents();
         }
 
         function bindTagFamilySectionEvents() {
+            tagFamilySections.querySelectorAll('[data-relation-type]').forEach((card) => card.addEventListener('click', (event) => {
+                if (event.target.closest('button')) return;
+                state.selectedRelationType = Number(card.dataset.relationType || 0);
+                renderTagFamilySections();
+                renderFooterTags();
+            }));
             tagFamilySections.querySelectorAll('[data-toggle-removal-type]').forEach((button) => button.addEventListener('click', () => {
                 const type = Number(button.dataset.toggleRemovalType) || 0;
                 state.removalRelationType = state.removalRelationType === type ? null : type;
@@ -950,7 +983,9 @@
                 state.tags = tagsResult.data || [];
                 state.tagFamily = familyResult.data || { mothers: [], children: [] };
                 state.relationTypes = relationTypesResult.data || [];
+                ensureSelectedRelationType();
                 renderTagFamilySections();
+                renderFooterTags();
             } catch (error) {
                 tagFamilySections.innerHTML = `<div class="rounded-2xl border border-red-500/30 bg-red-950/20 p-6 text-center text-red-200">${escapeHtml(error.message || 'Erro ao carregar famílias da tag.')}</div>`;
             }
@@ -958,10 +993,49 @@
 
         function updateFooter() {
             updateHeaderActions();
+            const isTagMode = state.viewMode === 'tags';
+            cardsPaginationFooter.classList.toggle('hidden', isTagMode);
+            cardsPaginationFooter.classList.toggle('flex', !isTagMode);
+            tagRelationFooter.classList.toggle('hidden', !isTagMode);
             paginationInfo.textContent = `Página ${state.page} de ${state.totalPages} • ${state.totalCards} card(s) • 20 por página`;
             prevPageBtn.disabled = state.page <= 1;
             nextPageBtn.disabled = state.page >= state.totalPages;
             clearTagFilterBtn.classList.toggle('hidden', state.selectedTagIds.length === 0);
+            if (isTagMode) renderFooterTags();
+        }
+
+        function ensureSelectedRelationType() {
+            const validTypes = new Set(state.relationTypes.map((item) => Number(item.id)).filter((id) => id > 0));
+            if (!validTypes.size) { state.selectedRelationType = null; return; }
+            if (!validTypes.has(Number(state.selectedRelationType))) state.selectedRelationType = [...validTypes][0];
+        }
+
+        function renderFooterTags() {
+            if (!footerTagSelector || state.viewMode !== 'tags') return;
+            ensureSelectedRelationType();
+            selectedRelationTypeLabel.textContent = state.selectedRelationType ? `(${getRelationTypeLabel(state.selectedRelationType)})` : '';
+            const currentTagId = Number(state.selectedTagIds[0] || 0);
+            if (!currentTagId) { footerTagSelector.innerHTML = '<span class="text-xs text-slate-400">Selecione uma tag no menu esquerdo para adicionar vínculos.</span>'; return; }
+            if (!state.selectedRelationType) { footerTagSelector.innerHTML = '<span class="text-xs text-slate-400">Crie ou selecione uma sessão antes de adicionar tags.</span>'; return; }
+            const query = (footerTagSearch.value || '').toLowerCase().trim();
+            if (query.length < 2) { footerTagSelector.innerHTML = '<span class="text-xs text-slate-400">Digite pelo menos 2 caracteres para buscar tags.</span>'; return; }
+            const matches = state.tags
+                .filter((tag) => Number(tag.id) !== currentTagId)
+                .filter((tag) => String(tag.name || '').toLowerCase().includes(query) || String(tag.name_pt_br || '').toLowerCase().includes(query) || String(tag.numero ?? '').toLowerCase().includes(query));
+            if (!matches.length) { footerTagSelector.innerHTML = '<span class="text-xs text-slate-400">Nenhuma tag encontrada.</span>'; return; }
+            const maxResults = 200;
+            const filtered = matches.slice(0, maxResults);
+            const numeroPtBrCounts = buildNumeroPtBrCounts(filtered);
+            const summary = matches.length > maxResults ? `<div class="mb-2 w-full text-[11px] text-amber-300">Mostrando ${maxResults} de ${matches.length} tags. Refine a busca para ver menos resultados.</div>` : '';
+            footerTagSelector.innerHTML = summary + filtered.map((tag) => `<button type="button" data-footer-add-tag-id="${Number(tag.id)}" class="rounded-full border px-2.5 py-1 text-xs transition-colors ${getTagOwnershipClass(tag)}">${renderTagButtonContent(tag, numeroPtBrCounts)}</button>`).join('');
+            footerTagSelector.querySelectorAll('[data-footer-add-tag-id]').forEach((button) => button.addEventListener('click', () => addRelationToSelectedTag(Number(button.dataset.footerAddTagId || 0))));
+        }
+
+        async function addRelationToSelectedTag(otherTagId) {
+            if (!otherTagId || !state.selectedTagIds[0] || !state.selectedRelationType) return;
+            await api('add_tag_family_relation', { tag_id: state.selectedTagIds[0], other_tag_id: otherTagId, mode: state.relationMode, tipo_de_relacao: state.selectedRelationType });
+            footerTagSearch.value = '';
+            await loadPage(1);
         }
 
         async function loadPage(page) {
@@ -1035,6 +1109,8 @@
 
         openLeftMenuBtn?.addEventListener('click', () => openMobileMenu('left'));
         openRightMenuBtn?.addEventListener('click', () => openMobileMenu('right'));
+        openLeftMenuBtnTags?.addEventListener('click', () => openMobileMenu('left'));
+        openRightMenuBtnTags?.addEventListener('click', () => openMobileMenu('right'));
         mobileDrawerBackdrop?.addEventListener('click', closeMobileMenus);
         document.querySelectorAll('[data-close-mobile-menu]').forEach((button) => button.addEventListener('click', closeMobileMenus));
         window.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeMobileMenus(); });
@@ -1046,6 +1122,8 @@
         createTagBtn.addEventListener('click', openCreateTagModal);
         createRelationTypeBtn.addEventListener('click', openCreateRelationTypeModal);
         editCurrentTagBtn.addEventListener('click', openEditCurrentTagModal);
+        footerTagSearch?.addEventListener('input', renderFooterTags);
+        relationModeSwitch?.addEventListener('click', () => { state.relationMode = state.relationMode === 'child' ? 'mother' : 'child'; relationModeSwitch.textContent = state.relationMode === 'child' ? 'Adicionando filhas' : 'Adicionando mães'; });
         document.getElementById('btnCancelCreateTag').addEventListener('click', () => closeModal('createTagModal', 'createTagModalContent'));
         document.getElementById('btnCloseCreateTagModal').addEventListener('click', () => closeModal('createTagModal', 'createTagModalContent'));
         document.getElementById('createTagForm').addEventListener('submit', submitCreateTag);
