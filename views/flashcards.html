@@ -470,7 +470,7 @@
                 <div class="card-face card-front relative">
                     <div class="absolute top-4 left-4 z-30 flex flex-wrap items-center gap-1.5">
                         <span id="frontLabel" class="card-type-badge rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase">Frente</span>
-                        <span id="frontCreatedAtLabel" class="card-type-badge hidden rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase"></span>
+                        <button id="frontCreatedAtLabel" type="button" onclick="event.stopPropagation(); flashcardApp.toggleCreatedAtBadge('frontCreatedAtLabel')" class="card-type-badge hidden rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase"></button>
                     </div>
                     
                     <div class="absolute top-4 right-4 z-30 flex items-center gap-3">
@@ -488,7 +488,7 @@
                 <div class="card-face card-back relative">
                     <div class="absolute top-4 left-4 z-30 flex flex-wrap items-center gap-1.5">
                         <span id="backLabel" class="card-type-badge rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase">Verso</span>
-                        <span id="backCreatedAtLabel" class="card-type-badge hidden rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase"></span>
+                        <button id="backCreatedAtLabel" type="button" onclick="event.stopPropagation(); flashcardApp.toggleCreatedAtBadge('backCreatedAtLabel')" class="card-type-badge hidden rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase"></button>
                     </div>
                     
                     <div class="absolute top-4 right-4 z-30 flex items-center gap-3">
@@ -1606,14 +1606,81 @@
                 el.setAttribute('aria-label', `Tipo do card: ${theme.label}`);
             },
 
-            formatCardCreatedAt(createdAt) {
-                if (!createdAt) return '';
+            parseCardCreatedAt(createdAt) {
+                if (!createdAt) return null;
                 const normalized = String(createdAt).trim().replace(' ', 'T');
                 const date = new Date(normalized);
-                if (Number.isNaN(date.getTime())) return '';
+                return Number.isNaN(date.getTime()) ? null : date;
+            },
+
+            formatCardCreatedAt(createdAt) {
+                const date = this.parseCardCreatedAt(createdAt);
+                if (!date) return '';
                 const months = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
                 const pad = (value) => String(value).padStart(2, '0');
                 return `${pad(date.getDate())} ${months[date.getMonth()]} ${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+            },
+
+            formatCardCreatedAgo(createdAt) {
+                const date = this.parseCardCreatedAt(createdAt);
+                if (!date) return '';
+
+                const now = new Date();
+                const elapsedMs = Math.max(0, now.getTime() - date.getTime());
+                const elapsedMinutes = Math.floor(elapsedMs / 60000);
+                const elapsedHours = Math.floor(elapsedMinutes / 60);
+                const elapsedDays = Math.floor(elapsedHours / 24);
+                const elapsedMonths = Math.floor(elapsedDays / 30);
+                const elapsedYears = Math.floor(elapsedDays / 365);
+                const plural = (value, singular, pluralLabel) => `${value} ${value === 1 ? singular : pluralLabel}`;
+
+                if (elapsedMinutes < 60) {
+                    const minutes = Math.max(1, elapsedMinutes);
+                    return `HÁ ${plural(minutes, 'MINUTO', 'MINUTOS')}`;
+                }
+                if (elapsedHours < 24) return `HÁ ${plural(elapsedHours, 'HORA', 'HORAS')}`;
+                if (elapsedDays <= 2) {
+                    const hours = elapsedHours % 24;
+                    const minutes = elapsedMinutes % 60;
+                    return `HÁ ${elapsedDays}d ${hours}h ${minutes}m`;
+                }
+                if (elapsedDays < 30) return `HÁ ${plural(elapsedDays, 'DIA', 'DIAS')}`;
+                if (elapsedDays < 365) {
+                    const months = elapsedMonths;
+                    const days = elapsedDays % 30;
+                    if (days > 0) return `HÁ ${months}m ${days}d`;
+                    return `HÁ ${plural(months, 'MÊS', 'MESES')}`;
+                }
+
+                const years = elapsedYears;
+                const remainingDaysAfterYears = elapsedDays % 365;
+                const months = Math.floor(remainingDaysAfterYears / 30);
+                const days = remainingDaysAfterYears % 30;
+                const parts = [`${years}a`];
+                if (months > 0) parts.push(`${months}m`);
+                if (days > 0) parts.push(`${days}d`);
+                if (parts.length > 1) return `HÁ ${parts.join(' ')}`;
+                return `HÁ ${plural(years, 'ANO', 'ANOS')}`;
+            },
+
+            setCreatedAtBadgeContent(el, mode = 'date') {
+                const createdAt = el?.dataset?.createdAt || '';
+                const formattedCreatedAt = this.formatCardCreatedAt(createdAt);
+                const formattedAgo = this.formatCardCreatedAgo(createdAt);
+                const isAgoMode = mode === 'ago' && formattedAgo;
+                const label = isAgoMode ? formattedAgo : formattedCreatedAt;
+                if (!label) return;
+                el.dataset.displayMode = isAgoMode ? 'ago' : 'date';
+                el.innerHTML = `<i class="fa-regular fa-clock" aria-hidden="true"></i><span>${this.escapeHTML(label)}</span>`;
+                el.title = isAgoMode ? `Criado ${formattedAgo.toLowerCase()}` : `Criado em ${formattedCreatedAt}`;
+                el.setAttribute('aria-label', isAgoMode ? `Card criado ${formattedAgo.toLowerCase()}` : `Card criado em ${formattedCreatedAt}`);
+            },
+
+            toggleCreatedAtBadge(elementId) {
+                const el = document.getElementById(elementId);
+                if (!el || el.classList.contains('hidden')) return;
+                const nextMode = el.dataset.displayMode === 'ago' ? 'date' : 'ago';
+                this.setCreatedAtBadgeContent(el, nextMode);
             },
 
             renderCreatedAtBadge(elementId, card) {
@@ -1626,11 +1693,12 @@
                     el.innerHTML = '';
                     el.removeAttribute('title');
                     el.removeAttribute('aria-label');
+                    delete el.dataset.createdAt;
+                    delete el.dataset.displayMode;
                     return;
                 }
-                el.innerHTML = `<i class="fa-regular fa-clock" aria-hidden="true"></i><span>${this.escapeHTML(formattedCreatedAt)}</span>`;
-                el.title = `Criado em ${formattedCreatedAt}`;
-                el.setAttribute('aria-label', `Card criado em ${formattedCreatedAt}`);
+                el.dataset.createdAt = String(card.created_at);
+                this.setCreatedAtBadgeContent(el, 'date');
             },
 
             isTranslationCard(card) {
