@@ -1608,8 +1608,13 @@
 
             parseCardCreatedAt(createdAt) {
                 if (!createdAt) return null;
-                const normalized = String(createdAt).trim().replace(' ', 'T');
-                const date = new Date(normalized);
+                const rawCreatedAt = String(createdAt).trim();
+                if (!rawCreatedAt) return null;
+
+                const normalized = rawCreatedAt.replace(' ', 'T');
+                const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+                const utcCreatedAt = hasTimezone ? normalized : `${normalized}Z`;
+                const date = new Date(utcCreatedAt);
                 return Number.isNaN(date.getTime()) ? null : date;
             },
 
