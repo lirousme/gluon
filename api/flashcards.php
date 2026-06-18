@@ -3295,7 +3295,7 @@ if ($action === 'fetch') {
         $placeholders = implode(',', array_fill(0, count($deck_ids), '?'));
 
         $stmtCards = $pdo->prepare("
-            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.has_audio_front, f.has_audio_back, d.user_id AS card_owner_user_id, COALESCE(fs.score, 0) as score
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, COALESCE(fs.score, 0) as score
             FROM flashcards f
             JOIN directories d ON d.id = f.directory_id
             LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
@@ -3355,6 +3355,7 @@ if ($action === 'fetch') {
                 'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
                 'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
                 'info_type' => sanitizeInfoType($card['info_type'] ?? 2),
+                'created_at' => $card['created_at'] ?? null,
                 'has_audio_front' => (int)$card['has_audio_front'],
                 'has_audio_back' => (int)$card['has_audio_back'],
                 'score' => (int)$card['score'],
@@ -3417,7 +3418,7 @@ if ($action === 'fetch') {
             // No modo grafo, busca cards de qualquer deck do usuário
             // e também dos decks pertencentes ao usuário de id 5.
             $stmt = $pdo->prepare("
-                SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.has_audio_front, f.has_audio_back, d.user_id AS card_owner_user_id, COALESCE(fs.score, 0) as score
+                SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, COALESCE(fs.score, 0) as score
                 FROM flashcards f
                 JOIN directories d ON d.id = f.directory_id
                 LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
@@ -3428,7 +3429,7 @@ if ($action === 'fetch') {
         } else {
             // No modo aleatório, mantém filtro por deck e cards vencidos.
             $stmt = $pdo->prepare("
-                SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.has_audio_front, f.has_audio_back, d.user_id AS card_owner_user_id, COALESCE(fs.score, 0) as score
+                SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, COALESCE(fs.score, 0) as score
                 FROM flashcards f
                 JOIN directories d ON d.id = f.directory_id
                 LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
@@ -3453,7 +3454,7 @@ if ($action === 'fetch') {
         $random_next_review_at = $stmtNextRandomReview->fetchColumn() ?: null;
     } else {
         $stmt = $pdo->prepare("
-            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.has_audio_front, f.has_audio_back, d.user_id AS card_owner_user_id, 0 as score
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, 0 as score
             FROM flashcards f
             JOIN directories d ON d.id = f.directory_id
             WHERE f.directory_id = ? 
@@ -3566,6 +3567,7 @@ if ($action === 'fetch') {
             'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
             'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
             'info_type' => sanitizeInfoType($card['info_type'] ?? 2),
+            'created_at' => $card['created_at'] ?? null,
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
             'score' => (int)$card['score'],
