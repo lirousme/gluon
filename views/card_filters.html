@@ -1099,7 +1099,7 @@
                 const params = new URLSearchParams({ action: 'list_graph_cards_for_user', page: String(page) });
                 if (state.withoutTagsOnly) params.set('without_tags', '1');
                 if (state.selectedTagIds.length) params.set('tag_ids', state.selectedTagIds.join(','));
-                if (state.selectedTagIds.length) params.set('tag_link_types', state.selectedTagLinkTypes.join(','));
+                params.set('tag_link_types', state.selectedTagLinkTypes.join(','));
                 const response = await fetch(`/api/flashcards?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
                 const result = await response.json();
                 if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível carregar os cards.');

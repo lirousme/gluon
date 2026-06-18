@@ -5315,12 +5315,12 @@ elseif ($action === 'list_graph_cards_for_user') {
 
     if ($withoutTagsOnly) {
         $withoutTagClauses = [];
-        foreach (getCardTagLinkColumnsByTable() as $linkTable => $columns) {
+        foreach ($tagLinkColumnsByTable as $linkTable => $columns) {
             foreach ($columns as $column) {
                 $withoutTagClauses[] = "NOT EXISTS (SELECT 1 FROM {$linkTable} l WHERE l.flashcard_id = f.id AND l.{$column} IS NOT NULL)";
             }
         }
-        if (!empty($withoutTagClauses)) $tagFilterSql = ' AND ' . implode(' AND ', $withoutTagClauses);
+        $tagFilterSql = !empty($withoutTagClauses) ? ' AND ' . implode(' AND ', $withoutTagClauses) : ' AND 0 = 1';
         $tagIds = [];
     } elseif (!empty($tagIds)) {
         $placeholders = implode(',', array_fill(0, count($tagIds), '?'));
