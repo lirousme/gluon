@@ -72,6 +72,7 @@
                         </button>
                     </div>
                 </div>
+                <div id="leftOthersMenu" class="mb-4 space-y-2 text-sm text-slate-300"></div>
                 <div id="savedFiltersList" class="space-y-2 text-sm text-slate-300">
                     <p class="text-xs text-slate-500">Carregando tags fixadas...</p>
                 </div>
@@ -192,7 +193,9 @@
             selectedTagLabels: parseSelectedTagLabels(urlParams),
             selectedTagLinkTypes: parseSelectedTagLinkTypes(urlParams),
             viewMode: parseViewMode(urlParams),
+            withoutTagsOnly: parseWithoutTagsOnly(urlParams),
             expandedTagIds: new Set(),
+            leftOthersExpanded: false,
             rightModeExpanded: false,
             rightOptionsExpanded: false,
             tagFamily: { mothers: [], children: [] },
@@ -206,6 +209,11 @@
             editingRelationTypeId: null,
             selectedRelationType: null
         };
+        if (state.withoutTagsOnly && state.viewMode === 'cards') {
+            state.selectedTagIds = [];
+            state.selectedTagLabels = [];
+        }
+
         const cardsGrid = document.getElementById('cardsGrid');
         const tagFamilySections = document.getElementById('tagFamilySections');
         const statusBox = document.getElementById('statusBox');
@@ -221,6 +229,7 @@
         const prevPageBtn = document.getElementById('prevPageBtn');
         const nextPageBtn = document.getElementById('nextPageBtn');
         const clearTagFilterBtn = document.getElementById('clearTagFilterBtn');
+        const leftOthersMenu = document.getElementById('leftOthersMenu');
         const rightOptionsMenu = document.getElementById('rightOptionsMenu');
         const leftFiltersMenu = document.getElementById('leftFiltersMenu');
         const rightActionsMenu = document.getElementById('rightActionsMenu');
@@ -286,6 +295,10 @@
 
         function parseViewMode(params) {
             return params.get('mode') === 'tags' ? 'tags' : 'cards';
+        }
+
+        function parseWithoutTagsOnly(params) {
+            return params.get('without_tags') === '1';
         }
 
         function parseSelectedTagLinkTypes(params) {
@@ -385,6 +398,7 @@
             const params = new URLSearchParams();
             params.set('page', String(page));
             if (state.viewMode !== 'cards') params.set('mode', state.viewMode);
+            if (state.withoutTagsOnly && state.viewMode === 'cards') params.set('without_tags', '1');
             if (state.selectedTagIds.length) {
                 params.set('tag_ids', state.selectedTagIds.join(','));
                 if (state.selectedTagLabels.length) params.set('tag_names', state.selectedTagLabels.join('|'));
@@ -475,6 +489,7 @@
             rightOptionsMenu.querySelectorAll('[data-view-mode]').forEach((button) => {
                 button.addEventListener('click', () => {
                     state.viewMode = button.dataset.viewMode === 'tags' ? 'tags' : 'cards';
+                    if (state.viewMode === 'tags') state.withoutTagsOnly = false;
                     enforceSingleTagSelectionForTagMode();
                     renderRightOptionsMenu();
                     loadPage(1);
@@ -507,6 +522,7 @@
 
         function selectTagFilter(tagId, tag = {}) {
             if (!tagId || state.selectedTagIds.includes(tagId)) return false;
+            state.withoutTagsOnly = false;
             if (state.viewMode === 'tags') {
                 state.selectedTagIds = [tagId];
                 state.selectedTagLabels = [getTagLabel(tag)];
@@ -526,6 +542,40 @@
                 return true;
             }
             return selectTagFilter(tagId, tag);
+        }
+
+        function renderLeftOthersMenu() {
+            if (!leftOthersMenu) return;
+            if (state.viewMode !== 'cards') {
+                leftOthersMenu.innerHTML = '';
+                return;
+            }
+            leftOthersMenu.innerHTML = `
+                <article class="rounded-xl border border-sky-500/20 bg-sky-950/20 p-3 transition hover:border-sky-400/60 hover:bg-sky-950/40">
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="leftOthersAccordionBtn" aria-expanded="${state.leftOthersExpanded ? 'true' : 'false'}" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-xs text-sky-200 hover:border-sky-400 hover:text-white" title="Mostrar outros filtros">
+                            <i class="fa-solid ${state.leftOthersExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}"></i>
+                        </button>
+                        <button type="button" id="leftOthersTitleBtn" class="min-w-0 flex-1 text-left text-sm font-semibold text-slate-100 transition hover:text-sky-100">
+                            <span class="break-words">Outros</span>
+                        </button>
+                    </div>
+                    ${state.leftOthersExpanded ? `<div class="mt-2 space-y-2 border-l border-sky-500/20 pl-3"><button type="button" id="withoutTagsOnlyBtn" aria-pressed="${state.withoutTagsOnly ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${state.withoutTagsOnly ? 'border-violet-400/80 bg-violet-950/40 text-violet-100' : 'border-sky-500/20 bg-sky-950/20 text-slate-100 hover:border-sky-400/60 hover:bg-sky-950/40 hover:text-sky-100'}">Sem tags</button></div>` : ''}
+                </article>
+            `;
+            leftOthersMenu.querySelectorAll('#leftOthersAccordionBtn, #leftOthersTitleBtn').forEach((button) => {
+                button.addEventListener('click', () => { state.leftOthersExpanded = !state.leftOthersExpanded; renderLeftOthersMenu(); });
+            });
+            leftOthersMenu.querySelector('#withoutTagsOnlyBtn')?.addEventListener('click', () => {
+                state.withoutTagsOnly = !state.withoutTagsOnly;
+                if (state.withoutTagsOnly) {
+                    state.selectedTagIds = [];
+                    state.selectedTagLabels = [];
+                }
+                renderLeftOthersMenu();
+                loadPage(1);
+                loadSavedFilters();
+            });
         }
 
         function renderSavedFilters(filters, allTags = filters, familyRelations = []) {
@@ -991,7 +1041,8 @@
             paginationInfo.textContent = `Página ${state.page} de ${state.totalPages} • ${state.totalCards} card(s) • 20 por página`;
             prevPageBtn.disabled = state.page <= 1;
             nextPageBtn.disabled = state.page >= state.totalPages;
-            clearTagFilterBtn.classList.toggle('hidden', state.selectedTagIds.length === 0);
+            clearTagFilterBtn.classList.toggle('hidden', state.selectedTagIds.length === 0 && !state.withoutTagsOnly);
+            renderLeftOthersMenu();
             if (isTagMode) renderFooterTags();
         }
 
@@ -1046,6 +1097,7 @@
             statusBox.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2 text-violet-300"></i>Carregando cards...';
             try {
                 const params = new URLSearchParams({ action: 'list_graph_cards_for_user', page: String(page) });
+                if (state.withoutTagsOnly) params.set('without_tags', '1');
                 if (state.selectedTagIds.length) params.set('tag_ids', state.selectedTagIds.join(','));
                 if (state.selectedTagIds.length) params.set('tag_link_types', state.selectedTagLinkTypes.join(','));
                 const response = await fetch(`/api/flashcards?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
@@ -1135,12 +1187,14 @@
         clearTagFilterBtn.addEventListener('click', () => {
             state.selectedTagIds = [];
             state.selectedTagLabels = [];
+            state.withoutTagsOnly = false;
             loadPage(1);
             loadSavedFilters();
         });
         loadSessionUserId().then(() => updateHeaderActions());
         enforceSingleTagSelectionForTagMode();
         renderRightOptionsMenu();
+        renderLeftOthersMenu();
         loadSavedFilters();
         loadPage(state.page);
     </script>
