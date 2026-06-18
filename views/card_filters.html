@@ -50,14 +50,21 @@
             </div>
         </header>
 
+        <div id="mobileDrawerBackdrop" class="fixed inset-0 z-30 hidden bg-black/60 opacity-0 transition-opacity duration-200 lg:hidden"></div>
+
         <div class="grid w-full flex-1 grid-cols-1 gap-4 py-6 lg:grid-cols-[16rem_minmax(0,1fr)_16rem]">
-            <aside aria-label="Menu lateral esquerdo" class="mx-4 min-h-24 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/50 p-4 lg:sticky lg:top-28 lg:ml-0 lg:mr-4 lg:h-[calc(100vh-12rem)]">
+            <aside id="leftFiltersMenu" aria-label="Menu lateral esquerdo" class="fixed inset-y-0 left-0 z-40 w-[85vw] max-w-xs -translate-x-full overflow-y-auto border-r border-slate-800 bg-slate-950 p-4 shadow-2xl shadow-black/50 transition-transform duration-200 lg:sticky lg:top-28 lg:z-auto lg:mx-0 lg:ml-0 lg:mr-4 lg:h-[calc(100vh-12rem)] lg:w-auto lg:max-w-none lg:translate-x-0 lg:overflow-y-auto lg:rounded-2xl lg:border lg:bg-slate-900/50 lg:shadow-none">
                 <div class="mb-4 flex items-center justify-between gap-2">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-[0.25em] text-sky-300">Filtros</p>
                         <h2 class="mt-1 text-base font-bold text-white">Tags fixadas</h2>
                     </div>
-                    <span id="savedFiltersCount" class="rounded-full border border-sky-500/40 bg-sky-500/20 px-2 py-0.5 text-xs font-semibold text-sky-100">0</span>
+                    <div class="flex items-center gap-2">
+                        <span id="savedFiltersCount" class="rounded-full border border-sky-500/40 bg-sky-500/20 px-2 py-0.5 text-xs font-semibold text-sky-100">0</span>
+                        <button type="button" data-close-mobile-menu class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-sky-400 hover:text-white lg:hidden" title="Fechar filtros" aria-label="Fechar filtros">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
                 </div>
                 <div id="savedFiltersList" class="space-y-2 text-sm text-slate-300">
                     <p class="text-xs text-slate-500">Carregando tags fixadas...</p>
@@ -75,10 +82,15 @@
                 <section id="tagFamilySections" class="hidden space-y-4"></section>
             </main>
 
-            <aside aria-label="Menu lateral direito" class="mx-4 min-h-24 rounded-2xl border border-slate-800 bg-slate-900/50 p-4 lg:sticky lg:top-28 lg:ml-4 lg:mr-0 lg:h-[calc(100vh-12rem)]">
-                <div class="mb-4">
-                    <p class="text-xs font-semibold uppercase tracking-[0.25em] text-sky-300">Menu</p>
-                    <h2 class="mt-1 text-base font-bold text-white">Ações rápidas</h2>
+            <aside id="rightActionsMenu" aria-label="Menu lateral direito" class="fixed inset-y-0 right-0 z-40 w-[85vw] max-w-xs translate-x-full overflow-y-auto border-l border-slate-800 bg-slate-950 p-4 shadow-2xl shadow-black/50 transition-transform duration-200 lg:sticky lg:top-28 lg:z-auto lg:mx-0 lg:ml-4 lg:mr-0 lg:h-[calc(100vh-12rem)] lg:w-auto lg:max-w-none lg:translate-x-0 lg:rounded-2xl lg:border lg:bg-slate-900/50 lg:shadow-none">
+                <div class="mb-4 flex items-center justify-between gap-2">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-sky-300">Menu</p>
+                        <h2 class="mt-1 text-base font-bold text-white">Ações rápidas</h2>
+                    </div>
+                    <button type="button" data-close-mobile-menu class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-sky-400 hover:text-white lg:hidden" title="Fechar ações" aria-label="Fechar ações">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
                 </div>
                 <div id="rightOptionsMenu" class="space-y-2 text-sm text-slate-300"></div>
             </aside>
@@ -87,6 +99,14 @@
         <footer class="sticky bottom-0 border-t border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur">
             <div class="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div id="paginationInfo" class="text-sm text-slate-400">Página 1 de 1</div>
+                <div class="grid grid-cols-2 gap-2 lg:hidden">
+                    <button id="openLeftMenuBtn" type="button" class="rounded-xl border border-sky-500/50 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/20">
+                        <i class="fa-solid fa-filter mr-2"></i>Filtros
+                    </button>
+                    <button id="openRightMenuBtn" type="button" class="rounded-xl border border-violet-500/50 bg-violet-500/10 px-4 py-2 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/20">
+                        <i class="fa-solid fa-bars mr-2"></i>Menu
+                    </button>
+                </div>
                 <div class="flex items-center gap-2">
                     <button id="prevPageBtn" type="button" class="rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-40 hover:not-disabled:border-violet-400">
                         <i class="fa-solid fa-chevron-left mr-2"></i>Anterior
@@ -165,6 +185,36 @@
         const nextPageBtn = document.getElementById('nextPageBtn');
         const clearTagFilterBtn = document.getElementById('clearTagFilterBtn');
         const rightOptionsMenu = document.getElementById('rightOptionsMenu');
+        const leftFiltersMenu = document.getElementById('leftFiltersMenu');
+        const rightActionsMenu = document.getElementById('rightActionsMenu');
+        const mobileDrawerBackdrop = document.getElementById('mobileDrawerBackdrop');
+        const openLeftMenuBtn = document.getElementById('openLeftMenuBtn');
+        const openRightMenuBtn = document.getElementById('openRightMenuBtn');
+
+
+        function setMobileDrawerBackdrop(open) {
+            if (!mobileDrawerBackdrop) return;
+            mobileDrawerBackdrop.classList.toggle('hidden', !open);
+            requestAnimationFrame(() => {
+                mobileDrawerBackdrop.classList.toggle('opacity-0', !open);
+                mobileDrawerBackdrop.classList.toggle('opacity-100', open);
+            });
+        }
+
+        function closeMobileMenus() {
+            leftFiltersMenu?.classList.add('-translate-x-full');
+            rightActionsMenu?.classList.add('translate-x-full');
+            setMobileDrawerBackdrop(false);
+            document.body.classList.remove('overflow-hidden');
+        }
+
+        function openMobileMenu(side) {
+            const isLeft = side === 'left';
+            setMobileDrawerBackdrop(true);
+            document.body.classList.add('overflow-hidden');
+            leftFiltersMenu?.classList.toggle('-translate-x-full', !isLeft);
+            rightActionsMenu?.classList.toggle('translate-x-full', isLeft);
+        }
 
         function escapeHtml(value) {
             return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
@@ -807,6 +857,13 @@
                 createFilteredCardBtn.innerHTML = originalContent;
             }
         }
+
+        openLeftMenuBtn?.addEventListener('click', () => openMobileMenu('left'));
+        openRightMenuBtn?.addEventListener('click', () => openMobileMenu('right'));
+        mobileDrawerBackdrop?.addEventListener('click', closeMobileMenus);
+        document.querySelectorAll('[data-close-mobile-menu]').forEach((button) => button.addEventListener('click', closeMobileMenus));
+        window.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeMobileMenus(); });
+        window.addEventListener('resize', () => { if (window.matchMedia('(min-width: 1024px)').matches) closeMobileMenus(); });
 
         prevPageBtn.addEventListener('click', () => { if (state.page > 1) loadPage(state.page - 1); });
         nextPageBtn.addEventListener('click', () => { if (state.page < state.totalPages) loadPage(state.page + 1); });
