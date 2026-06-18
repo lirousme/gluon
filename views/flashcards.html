@@ -468,7 +468,10 @@
                 
                 <!-- Frente -->
                 <div class="card-face card-front relative">
-                    <span id="frontLabel" class="card-type-badge absolute top-4 left-4 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase">Frente</span>
+                    <div class="absolute top-4 left-4 z-30 flex flex-wrap items-center gap-1.5">
+                        <span id="frontLabel" class="card-type-badge rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase">Frente</span>
+                        <span id="frontCreatedAtLabel" class="card-type-badge hidden rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase"></span>
+                    </div>
                     
                     <div class="absolute top-4 right-4 z-30 flex items-center gap-3">
                         <i id="flipIconFront" class="fa-solid fa-rotate text-slate-600 opacity-50 hidden sm:block"></i>
@@ -483,7 +486,10 @@
 
                 <!-- Verso -->
                 <div class="card-face card-back relative">
-                    <span id="backLabel" class="card-type-badge absolute top-4 left-4 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase">Verso</span>
+                    <div class="absolute top-4 left-4 z-30 flex flex-wrap items-center gap-1.5">
+                        <span id="backLabel" class="card-type-badge rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase">Verso</span>
+                        <span id="backCreatedAtLabel" class="card-type-badge hidden rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase"></span>
+                    </div>
                     
                     <div class="absolute top-4 right-4 z-30 flex items-center gap-3">
                         <i id="flipIconBack" class="fa-solid fa-rotate text-blue-300 opacity-50 hidden sm:block"></i>
@@ -1600,6 +1606,33 @@
                 el.setAttribute('aria-label', `Tipo do card: ${theme.label}`);
             },
 
+            formatCardCreatedAt(createdAt) {
+                if (!createdAt) return '';
+                const normalized = String(createdAt).trim().replace(' ', 'T');
+                const date = new Date(normalized);
+                if (Number.isNaN(date.getTime())) return '';
+                const months = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+                const pad = (value) => String(value).padStart(2, '0');
+                return `${pad(date.getDate())} ${months[date.getMonth()]} ${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+            },
+
+            renderCreatedAtBadge(elementId, card) {
+                const el = document.getElementById(elementId);
+                if (!el) return;
+                const isOwner = Number(card?.card_owner_user_id) === Number(this.sessionUserId);
+                const formattedCreatedAt = isOwner ? this.formatCardCreatedAt(card?.created_at) : '';
+                el.classList.toggle('hidden', !formattedCreatedAt);
+                if (!formattedCreatedAt) {
+                    el.innerHTML = '';
+                    el.removeAttribute('title');
+                    el.removeAttribute('aria-label');
+                    return;
+                }
+                el.innerHTML = `<i class="fa-regular fa-clock" aria-hidden="true"></i><span>${this.escapeHTML(formattedCreatedAt)}</span>`;
+                el.title = `Criado em ${formattedCreatedAt}`;
+                el.setAttribute('aria-label', `Card criado em ${formattedCreatedAt}`);
+            },
+
             isTranslationCard(card) {
                 return Number(card?.info_type) === 1;
             },
@@ -1611,6 +1644,8 @@
                 const infoTypeTheme = this.applyInfoTypeTheme(card.info_type);
                 this.renderInfoTypeBadge('frontLabel', infoTypeTheme);
                 this.renderInfoTypeBadge('backLabel', infoTypeTheme);
+                this.renderCreatedAtBadge('frontCreatedAtLabel', card);
+                this.renderCreatedAtBadge('backCreatedAtLabel', card);
                 const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
                 const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
                 const isTranslation = this.isTranslationCard(card);
