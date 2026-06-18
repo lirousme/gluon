@@ -123,15 +123,9 @@
                 </div>
             </div>
             <div id="tagRelationFooter" class="hidden w-full space-y-3">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="grid grid-cols-2 gap-2 lg:hidden">
-                        <button id="openLeftMenuBtnTags" type="button" class="rounded-xl border border-sky-500/50 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/20"><i class="fa-solid fa-filter mr-2"></i>Filtros</button>
-                        <button id="openRightMenuBtnTags" type="button" class="rounded-xl border border-violet-500/50 bg-violet-500/10 px-4 py-2 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/20"><i class="fa-solid fa-bars mr-2"></i>Menu</button>
-                    </div>
-                    <div class="flex items-center justify-between gap-3 sm:ml-auto">
-                        <label class="text-sm text-slate-300">Modo de vínculo <span id="selectedRelationTypeLabel" class="text-violet-300"></span></label>
-                        <button id="relationModeSwitch" type="button" class="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-200">Adicionando filhas</button>
-                    </div>
+                <div class="grid grid-cols-2 gap-2 lg:hidden">
+                    <button id="openLeftMenuBtnTags" type="button" class="rounded-xl border border-sky-500/50 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/20"><i class="fa-solid fa-filter mr-2"></i>Filtros</button>
+                    <button id="openRightMenuBtnTags" type="button" class="rounded-xl border border-violet-500/50 bg-violet-500/10 px-4 py-2 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/20"><i class="fa-solid fa-bars mr-2"></i>Menu</button>
                 </div>
                 <div id="footerTagSelector" class="hidden min-h-[48px] flex-wrap gap-2 rounded-lg border border-slate-700 bg-slate-900/70 p-3"></div>
                 <input id="footerTagSearch" type="text" placeholder="Pesquisar tag por nome..." class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-base text-slate-100">
@@ -210,8 +204,7 @@
             reorderRelationType: null,
             draggedSequenceTagId: null,
             editingRelationTypeId: null,
-            selectedRelationType: null,
-            relationMode: 'child'
+            selectedRelationType: null
         };
         const cardsGrid = document.getElementById('cardsGrid');
         const tagFamilySections = document.getElementById('tagFamilySections');
@@ -224,8 +217,6 @@
         const tagRelationFooter = document.getElementById('tagRelationFooter');
         const footerTagSelector = document.getElementById('footerTagSelector');
         const footerTagSearch = document.getElementById('footerTagSearch');
-        const selectedRelationTypeLabel = document.getElementById('selectedRelationTypeLabel');
-        const relationModeSwitch = document.getElementById('relationModeSwitch');
         const paginationInfo = document.getElementById('paginationInfo');
         const prevPageBtn = document.getElementById('prevPageBtn');
         const nextPageBtn = document.getElementById('nextPageBtn');
@@ -1013,7 +1004,6 @@
         function renderFooterTags() {
             if (!footerTagSelector || state.viewMode !== 'tags') return;
             ensureSelectedRelationType();
-            selectedRelationTypeLabel.textContent = state.selectedRelationType ? `(${getRelationTypeLabel(state.selectedRelationType)})` : '';
             const hideFooterTagSelector = () => {
                 footerTagSelector.innerHTML = '';
                 footerTagSelector.classList.add('hidden');
@@ -1039,7 +1029,7 @@
 
         async function addRelationToSelectedTag(otherTagId) {
             if (!otherTagId || !state.selectedTagIds[0] || !state.selectedRelationType) return;
-            await api('add_tag_family_relation', { tag_id: state.selectedTagIds[0], other_tag_id: otherTagId, mode: state.relationMode, tipo_de_relacao: state.selectedRelationType });
+            await api('add_tag_family_relation', { tag_id: state.selectedTagIds[0], other_tag_id: otherTagId, mode: 'child', tipo_de_relacao: state.selectedRelationType });
             footerTagSearch.value = '';
             await loadPage(1);
         }
@@ -1129,7 +1119,6 @@
         createRelationTypeBtn.addEventListener('click', openCreateRelationTypeModal);
         editCurrentTagBtn.addEventListener('click', openEditCurrentTagModal);
         footerTagSearch?.addEventListener('input', renderFooterTags);
-        relationModeSwitch?.addEventListener('click', () => { state.relationMode = state.relationMode === 'child' ? 'mother' : 'child'; relationModeSwitch.textContent = state.relationMode === 'child' ? 'Adicionando filhas' : 'Adicionando mães'; });
         document.getElementById('btnCancelCreateTag').addEventListener('click', () => closeModal('createTagModal', 'createTagModalContent'));
         document.getElementById('btnCloseCreateTagModal').addEventListener('click', () => closeModal('createTagModal', 'createTagModalContent'));
         document.getElementById('createTagForm').addEventListener('submit', submitCreateTag);
