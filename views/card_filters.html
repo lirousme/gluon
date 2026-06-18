@@ -32,10 +32,21 @@
                     <i class="fa-solid fa-arrow-left"></i>
                     Dashboard
                 </a>
-                <button id="createFilteredCardBtn" type="button" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-violet-400 hover:text-white">
-                    <i class="fa-solid fa-plus"></i>
-                    Novo card
-                </button>
+                <div class="flex items-center gap-2">
+                    <button id="editCurrentTagBtn" type="button" class="hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/50 text-amber-300 transition hover:bg-amber-500/20 hover:text-amber-200" title="Editar tag selecionada" aria-label="Editar tag selecionada">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    <button id="createTagBtn" type="button" class="hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-violet-500/50 text-violet-300 transition hover:bg-violet-500/20 hover:text-violet-200" title="Criar nova tag" aria-label="Criar nova tag">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                    <button id="createRelationTypeBtn" type="button" class="hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-500/50 text-emerald-300 transition hover:bg-emerald-500/20 hover:text-emerald-200" title="Criar novo tipo de relação" aria-label="Criar novo tipo de relação">
+                        <i class="fa-solid fa-folder-plus"></i>
+                    </button>
+                    <button id="createFilteredCardBtn" type="button" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-violet-400 hover:text-white">
+                        <i class="fa-solid fa-plus"></i>
+                        Novo card
+                    </button>
+                </div>
             </div>
         </header>
 
@@ -88,6 +99,41 @@
         </footer>
     </div>
 
+    <div id="createTagModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 opacity-0 transition-opacity duration-200 p-4">
+        <div id="createTagModalContent" class="w-[92%] max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-4 scale-95 transition-transform duration-200">
+            <form id="createTagForm" class="space-y-3">
+                <div class="flex items-center justify-between"><h3 class="text-lg font-semibold">Criar nova tag</h3><button id="btnCloseCreateTagModal" type="button" class="text-slate-400 hover:text-white text-xl">&times;</button></div>
+                <input id="createTagNameInput" type="text" maxlength="80" placeholder="Nome" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
+                <input id="createTagNamePtBrInput" type="text" maxlength="80" placeholder="Nome pt-br" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
+                <input id="createTagNumeroInput" type="number" placeholder="Número" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
+                <p class="text-xs text-slate-400">Novas tags serão criadas automaticamente na categoria Palavra.</p>
+                <div class="flex justify-end gap-2 pt-2"><button id="btnCancelCreateTag" type="button" class="rounded-lg border border-slate-600 px-4 py-2">Cancelar</button><button id="btnSubmitCreateTag" type="submit" class="rounded-lg bg-violet-600 px-4 py-2 hover:bg-violet-500">Criar tag</button></div>
+            </form>
+        </div>
+    </div>
+    <div id="editTagModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 opacity-0 transition-opacity duration-200 p-4">
+        <div id="editTagModalContent" class="w-[92%] max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-4 scale-95 transition-transform duration-200">
+            <form id="editTagForm" class="space-y-3">
+                <div class="flex items-center justify-between"><h3 class="text-lg font-semibold">Editar tag</h3><button id="btnCloseEditTagModal" type="button" class="text-slate-400 hover:text-white text-xl">&times;</button></div>
+                <input id="editTagIdInput" type="hidden">
+                <input id="editTagNameInput" type="text" maxlength="80" placeholder="Nome" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
+                <input id="editTagNamePtBrInput" type="text" maxlength="80" placeholder="Nome pt-br" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
+                <input id="editTagNumeroInput" type="number" placeholder="Número" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
+                <div class="flex justify-end gap-2 pt-2"><button id="btnCancelEditTag" type="button" class="rounded-lg border border-slate-600 px-4 py-2">Cancelar</button><button type="submit" class="rounded-lg bg-amber-600 px-4 py-2 hover:bg-amber-500">Salvar</button></div>
+            </form>
+        </div>
+    </div>
+    <div id="createRelationTypeModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 opacity-0 transition-opacity duration-200 p-4">
+        <div id="createRelationTypeModalContent" class="w-[92%] max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-4 scale-95 transition-transform duration-200">
+            <form id="createRelationTypeForm" class="space-y-3">
+                <div class="flex items-center justify-between"><h3 class="text-lg font-semibold">Criar tipo de relação</h3><button id="btnCloseCreateRelationTypeModal" type="button" class="text-slate-400 hover:text-white text-xl">&times;</button></div>
+                <input id="createRelationTypeNameInput" type="text" required maxlength="120" placeholder="Nome do tipo de relação" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
+                <select id="createRelationTypeHierarchyInput" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2"><option value="0">0 - Conjunto simples</option><option value="1">1 - Árvore parental</option><option value="2">2 - Sequência</option><option value="3">3 - Componente conexo</option></select>
+                <div class="flex justify-end gap-2 pt-2"><button id="btnCancelCreateRelationType" type="button" class="rounded-lg border border-slate-600 px-4 py-2">Cancelar</button><button id="btnSubmitCreateRelationType" type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 hover:bg-emerald-500">Criar relação</button></div>
+            </form>
+        </div>
+    </div>
+
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const state = {
@@ -103,12 +149,17 @@
             rightOptionsExpanded: false,
             tagFamily: { mothers: [], children: [] },
             relationTypes: [],
-            tagFamilyLoading: false
+            tagFamilyLoading: false,
+            tags: [],
+            sessionUserId: null
         };
         const cardsGrid = document.getElementById('cardsGrid');
         const tagFamilySections = document.getElementById('tagFamilySections');
         const statusBox = document.getElementById('statusBox');
         const createFilteredCardBtn = document.getElementById('createFilteredCardBtn');
+        const editCurrentTagBtn = document.getElementById('editCurrentTagBtn');
+        const createTagBtn = document.getElementById('createTagBtn');
+        const createRelationTypeBtn = document.getElementById('createRelationTypeBtn');
         const paginationInfo = document.getElementById('paginationInfo');
         const prevPageBtn = document.getElementById('prevPageBtn');
         const nextPageBtn = document.getElementById('nextPageBtn');
@@ -150,6 +201,41 @@
             const rawTypes = params.get('tag_link_types') || '';
             const parsedTypes = rawTypes.split(',').map((type) => type.trim()).filter((type, index, types) => allowedTypes.includes(type) && types.indexOf(type) === index);
             return parsedTypes;
+        }
+
+        async function api(action, payload = {}) {
+            const response = await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify({ ...payload, action }) });
+            const result = await response.json();
+            if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Erro na requisição.');
+            return result;
+        }
+
+        async function loadSessionUserId() {
+            try {
+                const response = await fetch('/api/user', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_session' }) });
+                if (!response.ok) return;
+                const result = await response.json();
+                const parsed = Number(result?.id ?? result?.data?.id);
+                if (Number.isInteger(parsed) && parsed > 0) state.sessionUserId = parsed;
+            } catch (_) {}
+        }
+
+        function canEditTag(tag = {}) {
+            const sessionId = Number(state.sessionUserId);
+            return Number.isInteger(sessionId) && sessionId > 0 && [Number(tag.user_id), Number(tag.created_by_user_id)].includes(sessionId);
+        }
+
+        function getCurrentTag() {
+            const selectedId = Number(state.selectedTagIds[0] || 0);
+            return state.tags.find((tag) => Number(tag.id) === selectedId) || { id: selectedId, name: state.selectedTagLabels[0] || '' };
+        }
+
+        function updateHeaderActions() {
+            const isTagMode = state.viewMode === 'tags';
+            createFilteredCardBtn.classList.toggle('hidden', isTagMode);
+            createTagBtn.classList.toggle('hidden', !isTagMode);
+            createRelationTypeBtn.classList.toggle('hidden', !isTagMode);
+            editCurrentTagBtn.classList.toggle('hidden', !isTagMode || state.selectedTagIds.length !== 1 || !canEditTag(getCurrentTag()));
         }
 
         function normalizeSavedFilter(filter = {}) {
@@ -513,6 +599,66 @@
             return `<button type="button" data-main-family-tag-id="${Number(tag.id) || 0}" class="rounded-full border border-sky-500/30 bg-sky-950/40 px-3 py-1.5 text-xs font-semibold text-sky-100 transition hover:border-sky-300 hover:bg-sky-900/50">${escapeHtml(getTagLabel(tag))}</button>`;
         }
 
+        function showModal(modalId, contentId, focusId) {
+            const modal = document.getElementById(modalId);
+            const content = document.getElementById(contentId);
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); document.getElementById(focusId)?.focus(); }, 20);
+        }
+
+        function closeModal(modalId, contentId) {
+            const modal = document.getElementById(modalId);
+            const content = document.getElementById(contentId);
+            modal.classList.add('opacity-0');
+            content.classList.add('scale-95');
+            setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 180);
+        }
+
+        function openCreateTagModal() { ['createTagNameInput', 'createTagNamePtBrInput', 'createTagNumeroInput'].forEach((id) => { document.getElementById(id).value = ''; }); showModal('createTagModal', 'createTagModalContent', 'createTagNameInput'); }
+        function openCreateRelationTypeModal() { document.getElementById('createRelationTypeNameInput').value = ''; document.getElementById('createRelationTypeHierarchyInput').value = '0'; showModal('createRelationTypeModal', 'createRelationTypeModalContent', 'createRelationTypeNameInput'); }
+        function openEditCurrentTagModal() { const tag = getCurrentTag(); if (!canEditTag(tag)) return; document.getElementById('editTagIdInput').value = String(tag.id || ''); document.getElementById('editTagNameInput').value = String(tag.name || ''); document.getElementById('editTagNamePtBrInput').value = String(tag.name_pt_br || ''); document.getElementById('editTagNumeroInput').value = tag.numero ?? ''; showModal('editTagModal', 'editTagModalContent', 'editTagNameInput'); }
+
+        async function submitCreateTag(event) {
+            event.preventDefault();
+            const nameInput = document.getElementById('createTagNameInput');
+            const namePtBrInput = document.getElementById('createTagNamePtBrInput');
+            let namePtBr = namePtBrInput.value.trim();
+            const nameFromEnglish = nameInput.value.trim();
+            const name = nameFromEnglish || namePtBr;
+            if (!name) { alert('Preencha o nome em inglês ou em pt-BR para criar a tag.'); return; }
+            if (!nameFromEnglish) { nameInput.value = name; namePtBrInput.value = ''; namePtBr = ''; }
+            await api('create_tag', { name, name_pt_br: namePtBr, numero: document.getElementById('createTagNumeroInput').value.trim(), is_book: 0, is_verb_tense: 0, is_sentence_type: 0, is_lexical_chunk: 0, is_relation_type: 0, is_word: 1, is_month: 0, is_day: 0, is_year: 0 });
+            closeModal('createTagModal', 'createTagModalContent');
+            await loadSavedFilters();
+        }
+
+        async function submitCreateRelationType(event) {
+            event.preventDefault();
+            await api('create_relation_type', { nome: document.getElementById('createRelationTypeNameInput').value.trim(), hierarquia: Number(document.getElementById('createRelationTypeHierarchyInput').value || 0) });
+            closeModal('createRelationTypeModal', 'createRelationTypeModalContent');
+            if (state.viewMode === 'tags') await loadPage(1);
+        }
+
+        async function submitEditCurrentTag(event) {
+            event.preventDefault();
+            const id = Number(document.getElementById('editTagIdInput').value || 0);
+            const original = state.tags.find((tag) => Number(tag.id) === id) || {};
+            if (!canEditTag(original)) return;
+            const nameInput = document.getElementById('editTagNameInput');
+            const namePtBrInput = document.getElementById('editTagNamePtBrInput');
+            let namePtBr = namePtBrInput.value.trim();
+            const nameFromEnglish = nameInput.value.trim();
+            const name = nameFromEnglish || namePtBr;
+            if (!name) { alert('Preencha o nome em inglês ou em pt-BR para editar a tag.'); return; }
+            if (!nameFromEnglish) { nameInput.value = name; namePtBrInput.value = ''; namePtBr = ''; }
+            await api('update_tag', { id, name, name_pt_br: namePtBr, numero: document.getElementById('editTagNumeroInput').value.trim(), is_book: Number(original.is_book || 0), is_verb_tense: Number(original.is_verb_tense || 0), is_sentence_type: Number(original.is_sentence_type || 0), is_lexical_chunk: Number(original.is_lexical_chunk || 0), is_relation_type: Number(original.is_relation_type || 0), is_word: Number(original.is_word || 0), is_month: Number(original.is_month || 0), is_day: Number(original.is_day || 0), is_year: Number(original.is_year || 0) });
+            state.selectedTagLabels = [name];
+            closeModal('editTagModal', 'editTagModalContent');
+            await loadSavedFilters();
+            await loadPage(1);
+        }
+
         function renderTagFamilySections() {
             const selectedLabel = getSelectedTagSummary();
             if (!state.selectedTagIds.length) {
@@ -567,13 +713,16 @@
             if (!state.selectedTagIds.length) { renderTagFamilySections(); return; }
             tagFamilySections.innerHTML = '<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 text-center text-slate-300"><i class="fa-solid fa-spinner fa-spin mr-2 text-violet-300"></i>Carregando famílias da tag...</div>';
             try {
-                const [familyResponse, relationTypesResponse] = await Promise.all([
+                const [familyResponse, relationTypesResponse, tagsResponse] = await Promise.all([
                     fetch(`/api/flashcards?action=get_tag_family&tag_id=${encodeURIComponent(state.selectedTagIds[0])}`, { headers: { 'Accept': 'application/json' } }),
-                    fetch('/api/flashcards?action=list_relation_types', { headers: { 'Accept': 'application/json' } })
+                    fetch('/api/flashcards?action=list_relation_types', { headers: { 'Accept': 'application/json' } }),
+                    fetch('/api/flashcards?action=list_tags', { headers: { 'Accept': 'application/json' } })
                 ]);
-                const [familyResult, relationTypesResult] = await Promise.all([familyResponse.json(), relationTypesResponse.json()]);
+                const [familyResult, relationTypesResult, tagsResult] = await Promise.all([familyResponse.json(), relationTypesResponse.json(), tagsResponse.json()]);
                 if (!familyResponse.ok || familyResult.status !== 'success') throw new Error(familyResult.message || 'Não foi possível carregar a família da tag.');
                 if (!relationTypesResponse.ok || relationTypesResult.status !== 'success') throw new Error(relationTypesResult.message || 'Não foi possível carregar as sessões.');
+                if (!tagsResponse.ok || tagsResult.status !== 'success') throw new Error(tagsResult.message || 'Não foi possível carregar as tags.');
+                state.tags = tagsResult.data || [];
                 state.tagFamily = familyResult.data || { mothers: [], children: [] };
                 state.relationTypes = relationTypesResult.data || [];
                 renderTagFamilySections();
@@ -583,6 +732,7 @@
         }
 
         function updateFooter() {
+            updateHeaderActions();
             paginationInfo.textContent = `Página ${state.page} de ${state.totalPages} • ${state.totalCards} card(s) • 20 por página`;
             prevPageBtn.disabled = state.page <= 1;
             nextPageBtn.disabled = state.page >= state.totalPages;
@@ -661,12 +811,25 @@
         prevPageBtn.addEventListener('click', () => { if (state.page > 1) loadPage(state.page - 1); });
         nextPageBtn.addEventListener('click', () => { if (state.page < state.totalPages) loadPage(state.page + 1); });
         createFilteredCardBtn.addEventListener('click', openFilteredCreateCard);
+        createTagBtn.addEventListener('click', openCreateTagModal);
+        createRelationTypeBtn.addEventListener('click', openCreateRelationTypeModal);
+        editCurrentTagBtn.addEventListener('click', openEditCurrentTagModal);
+        document.getElementById('btnCancelCreateTag').addEventListener('click', () => closeModal('createTagModal', 'createTagModalContent'));
+        document.getElementById('btnCloseCreateTagModal').addEventListener('click', () => closeModal('createTagModal', 'createTagModalContent'));
+        document.getElementById('createTagForm').addEventListener('submit', submitCreateTag);
+        document.getElementById('btnCancelEditTag').addEventListener('click', () => closeModal('editTagModal', 'editTagModalContent'));
+        document.getElementById('btnCloseEditTagModal').addEventListener('click', () => closeModal('editTagModal', 'editTagModalContent'));
+        document.getElementById('editTagForm').addEventListener('submit', submitEditCurrentTag);
+        document.getElementById('btnCancelCreateRelationType').addEventListener('click', () => closeModal('createRelationTypeModal', 'createRelationTypeModalContent'));
+        document.getElementById('btnCloseCreateRelationTypeModal').addEventListener('click', () => closeModal('createRelationTypeModal', 'createRelationTypeModalContent'));
+        document.getElementById('createRelationTypeForm').addEventListener('submit', submitCreateRelationType);
         clearTagFilterBtn.addEventListener('click', () => {
             state.selectedTagIds = [];
             state.selectedTagLabels = [];
             loadPage(1);
             loadSavedFilters();
         });
+        loadSessionUserId().then(() => updateHeaderActions());
         enforceSingleTagSelectionForTagMode();
         renderRightOptionsMenu();
         loadSavedFilters();
