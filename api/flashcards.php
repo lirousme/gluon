@@ -5301,6 +5301,9 @@ elseif ($action === 'list_graph_cards_for_user') {
     $rawTagIds = is_array($input) ? ($input['tag_ids'] ?? ($_GET['tag_ids'] ?? null)) : ($_GET['tag_ids'] ?? null);
     $rawTagId = is_array($input) ? ($input['tag_id'] ?? ($_GET['tag_id'] ?? 0)) : ($_GET['tag_id'] ?? 0);
     $rawTagLinkTypes = is_array($input) ? ($input['tag_link_types'] ?? ($_GET['tag_link_types'] ?? ['subject', 'object', 'lexical_chunk'])) : ($_GET['tag_link_types'] ?? ['subject', 'object', 'lexical_chunk']);
+    $rawWithoutTags = is_array($input) ? ($input['without_tags'] ?? ($_GET['without_tags'] ?? 0)) : ($_GET['without_tags'] ?? 0);
+    $withoutTagsOnly = filter_var($rawWithoutTags, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+    $withoutTagsOnly = $withoutTagsOnly === null ? ((string)$rawWithoutTags === '1') : $withoutTagsOnly;
     $page = filter_var($rawPage, FILTER_VALIDATE_INT, ['options' => ['default' => 1, 'min_range' => 1]]);
     $tagIds = sanitizeTagIds($rawTagIds ?? $rawTagId);
     $tagLinkTypes = sanitizeGraphTagLinkTypes($rawTagLinkTypes);
@@ -5310,7 +5313,16 @@ elseif ($action === 'list_graph_cards_for_user') {
     $tagFilterSql = '';
     $tagFilterParams = [];
 
-    if (!empty($tagIds)) {
+    if ($withoutTagsOnly) {
+        $withoutTagClauses = [];
+        foreach (getCardTagLinkColumnsByTable() as $linkTable => $columns) {
+            foreach ($columns as $column) {
+                $withoutTagClauses[] = "NOT EXISTS (SELECT 1 FROM {$linkTable} l WHERE l.flashcard_id = f.id AND l.{$column} IS NOT NULL)";
+            }
+        }
+        if (!empty($withoutTagClauses)) $tagFilterSql = ' AND ' . implode(' AND ', $withoutTagClauses);
+        $tagIds = [];
+    } elseif (!empty($tagIds)) {
         $placeholders = implode(',', array_fill(0, count($tagIds), '?'));
         $stmtTag = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id IN ($placeholders) AND user_id IN (?, 5)");
         $stmtTag->execute(array_merge($tagIds, [$user_id]));
