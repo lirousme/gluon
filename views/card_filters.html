@@ -217,7 +217,9 @@
             draggedSequenceTagId: null,
             editingRelationTypeId: null,
             selectedRelationType: null,
-            leftTagSearchQuery: ''
+            leftTagSearchQuery: '',
+            savedFilterTagIds: new Set(),
+            pinningSelectedTags: false
         };
         if (state.withoutTagsOnly && state.viewMode === 'cards') {
             state.selectedTagIds = [];
@@ -496,6 +498,7 @@
                     const tag = state.tags.find((item) => Number(item.id) === tagId) || {};
                     if (!tagId) return;
                     toggleTagFilter(tagId, tag);
+                    renderRightOptionsMenu();
                     loadPage(1);
                     loadSavedFilters();
                     renderLeftTagSearchResults();
@@ -503,7 +506,33 @@
             });
         }
 
+        function getSelectedUnpinnedTagIds() {
+            return state.selectedTagIds.filter((tagId) => Number(tagId) > 0 && !state.savedFilterTagIds.has(Number(tagId)));
+        }
+
+        async function pinSelectedTags() {
+            const tagIds = getSelectedUnpinnedTagIds();
+            if (!tagIds.length || state.pinningSelectedTags) return;
+            state.pinningSelectedTags = true;
+            renderRightOptionsMenu();
+            try {
+                await Promise.all(tagIds.map((tagId) => api('toggle_saved_filter', { tag_id: tagId })));
+                await loadSavedFilters();
+            } catch (error) {
+                alert(error.message || 'Não foi possível fixar as tags selecionadas.');
+            } finally {
+                state.pinningSelectedTags = false;
+                renderRightOptionsMenu();
+            }
+        }
+
         function renderRightOptionsMenu() {
+            const unpinnedSelectedTagIds = getSelectedUnpinnedTagIds();
+            const pinSelectedButton = unpinnedSelectedTagIds.length ? `
+                <button type="button" id="pinSelectedTagsBtn" class="w-full rounded-xl border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-left text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60" ${state.pinningSelectedTags ? 'disabled' : ''}>
+                    <i class="fa-solid ${state.pinningSelectedTags ? 'fa-spinner fa-spin' : 'fa-thumbtack'} mr-2"></i>${unpinnedSelectedTagIds.length === 1 ? 'Fixar tag' : 'Fixar tags'}
+                </button>
+            ` : '';
             const modes = [
                 { mode: 'tags', label: 'Tags' },
                 { mode: 'cards', label: 'Cards' }
@@ -514,6 +543,7 @@
                 { type: 'lexical_chunk', label: 'Lexical Chunk' }
             ];
             rightOptionsMenu.innerHTML = `
+                ${pinSelectedButton}
                 <article class="rounded-xl border border-violet-500/20 bg-violet-950/20 p-3 transition hover:border-violet-400/60 hover:bg-violet-950/40">
                     <div class="flex items-center gap-2">
                         <button type="button" id="rightModeAccordionBtn" aria-expanded="${state.rightModeExpanded ? 'true' : 'false'}" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-xs text-violet-200 hover:border-violet-400 hover:text-white" title="Mostrar modos">
@@ -544,6 +574,7 @@
                 </article>
             `;
 
+            rightOptionsMenu.querySelector('#pinSelectedTagsBtn')?.addEventListener('click', pinSelectedTags);
             rightOptionsMenu.querySelectorAll('[data-view-mode]').forEach((button) => {
                 button.addEventListener('click', () => {
                     state.viewMode = button.dataset.viewMode === 'tags' ? 'tags' : 'cards';
@@ -630,6 +661,7 @@
                     state.selectedTagIds = [];
                     state.selectedTagLabels = [];
                 }
+                renderRightOptionsMenu();
                 renderLeftOthersMenu();
                 loadPage(1);
                 loadSavedFilters();
@@ -658,6 +690,7 @@
                     if (!tagId) return;
                     const tag = tagById.get(tagId) || {};
                     selectTagFilter(tagId, tag);
+                    renderRightOptionsMenu();
                     if (state.expandedTagIds.has(tagId)) state.expandedTagIds.delete(tagId);
                     else state.expandedTagIds.add(tagId);
                     loadPage(1);
@@ -671,6 +704,7 @@
                     const tag = tagById.get(tagId) || {};
                     if (!tagId) return;
                     toggleTagFilter(tagId, tag);
+                    renderRightOptionsMenu();
                     loadPage(1);
                     renderSavedFilters(filters, allTags, familyRelations);
                 });
@@ -695,14 +729,19 @@
                 if (!tagsResponse.ok || tagsResult.status !== 'success') throw new Error(tagsResult.message || 'Não foi possível carregar as tags.');
                 if (!familyResponse.ok || familyResult.status !== 'success') throw new Error(familyResult.message || 'Não foi possível carregar as famílias de tags.');
                 const allTags = (tagsResult.data || []).map(normalizeSavedFilter).filter((tag) => Number(tag.id) > 0);
+                const savedFilters = (savedResult.data || []).map(normalizeSavedFilter).filter((tag) => Number(tag.id) > 0);
+                state.savedFilterTagIds = new Set(savedFilters.map((tag) => Number(tag.id)));
                 state.tags = allTags;
+                renderRightOptionsMenu();
                 renderLeftTagSearchResults();
                 renderSavedFilters(
-                    (savedResult.data || []).map(normalizeSavedFilter).filter((tag) => Number(tag.id) > 0),
+                    savedFilters,
                     allTags,
                     familyResult.data || []
                 );
             } catch (error) {
+                state.savedFilterTagIds = new Set();
+                renderRightOptionsMenu();
                 savedFiltersCount.textContent = '0';
                 savedFiltersList.innerHTML = `<p class="text-xs text-red-300">${escapeHtml(error.message || 'Erro ao carregar tags fixadas.')}</p>`;
             }
@@ -1000,6 +1039,7 @@
                     if (state.removalRelationType === type) { await removeFamilyTag(tag, button.dataset.relationRole || 'child'); return; }
                     state.selectedTagIds = [tagId];
                     state.selectedTagLabels = [getTagLabel(tag)];
+                    renderRightOptionsMenu();
                     await loadPage(1);
                     await loadSavedFilters();
                 });
@@ -1253,6 +1293,7 @@
             state.selectedTagIds = [];
             state.selectedTagLabels = [];
             state.withoutTagsOnly = false;
+            renderRightOptionsMenu();
             loadPage(1);
             loadSavedFilters();
         });
