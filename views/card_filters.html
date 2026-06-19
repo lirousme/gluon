@@ -39,6 +39,9 @@
                     Dashboard
                 </a>
                 <div class="flex items-center gap-2">
+                    <span id="selectedTagsVisibilityIndicator" class="hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 text-slate-400" title="Tags privadas" aria-label="Tags privadas">
+                        <i class="fa-solid fa-lock"></i>
+                    </span>
                     <button id="editCurrentTagBtn" type="button" class="hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/50 text-amber-300 transition hover:bg-amber-500/20 hover:text-amber-200" title="Editar tag selecionada" aria-label="Editar tag selecionada">
                         <i class="fa-solid fa-pen-to-square"></i>
                     </button>
@@ -232,6 +235,7 @@
         const tagFamilySections = document.getElementById('tagFamilySections');
         const statusBox = document.getElementById('statusBox');
         const createFilteredCardBtn = document.getElementById('createFilteredCardBtn');
+        const selectedTagsVisibilityIndicator = document.getElementById('selectedTagsVisibilityIndicator');
         const editCurrentTagBtn = document.getElementById('editCurrentTagBtn');
         const createTagBtn = document.getElementById('createTagBtn');
         const createRelationTypeBtn = document.getElementById('createRelationTypeBtn');
@@ -385,6 +389,7 @@
 
         function updateHeaderActions() {
             const isTagMode = state.viewMode === 'tags';
+            updateSelectedTagsVisibilityIndicator();
             createFilteredCardBtn.classList.toggle('hidden', isTagMode);
             createTagBtn.classList.toggle('hidden', !isTagMode);
             createRelationTypeBtn.classList.toggle('hidden', !isTagMode);
@@ -524,16 +529,61 @@
             return { selectedTags, ownedTags, hasNonOwned, nextPublic: !allOwnedPublic };
         }
 
+        function getSelectedTagsVisibilityStatus() {
+            const selectedTags = getSelectedTags();
+            if (!selectedTags.length) return 'none';
+            const publicCount = selectedTags.filter((tag) => Number(tag.user_id) === 5).length;
+            if (publicCount === selectedTags.length) return 'public';
+            if (publicCount > 0) return 'mixed';
+            return 'private';
+        }
+
+        function updateSelectedTagsVisibilityIndicator() {
+            if (!selectedTagsVisibilityIndicator) return;
+            const status = getSelectedTagsVisibilityStatus();
+            const config = {
+                none: {
+                    hidden: true,
+                    icon: 'fa-lock',
+                    className: 'border-slate-700 text-slate-400',
+                    label: 'Nenhuma tag selecionada'
+                },
+                public: {
+                    hidden: false,
+                    icon: 'fa-globe',
+                    className: 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300',
+                    label: state.selectedTagIds.length > 1 ? 'Todas as tags selecionadas são públicas' : 'Tag pública'
+                },
+                mixed: {
+                    hidden: false,
+                    icon: 'fa-globe',
+                    className: 'border-orange-500/50 bg-orange-500/10 text-orange-300',
+                    label: 'Algumas tags selecionadas são públicas'
+                },
+                private: {
+                    hidden: false,
+                    icon: 'fa-lock',
+                    className: 'border-slate-700 bg-slate-800/60 text-slate-400',
+                    label: state.selectedTagIds.length > 1 ? 'Todas as tags selecionadas são privadas' : 'Tag privada'
+                }
+            }[status];
+            selectedTagsVisibilityIndicator.className = `inline-flex h-10 w-10 items-center justify-center rounded-xl border ${config.className}`;
+            selectedTagsVisibilityIndicator.classList.toggle('hidden', config.hidden);
+            selectedTagsVisibilityIndicator.title = config.label;
+            selectedTagsVisibilityIndicator.setAttribute('aria-label', config.label);
+            selectedTagsVisibilityIndicator.innerHTML = `<i class="fa-solid ${config.icon}"></i>`;
+        }
+
         async function updateSelectedTagsVisibility() {
             const { ownedTags, hasNonOwned, nextPublic } = getSelectedTagsVisibilityConfig();
             if (!ownedTags.length || hasNonOwned || state.updatingSelectedTagsVisibility) return;
-            const label = ownedTags.length === 1 ? getTagLabel(ownedTags[0]) : `${ownedTags.length} tags`;
-            const actionText = nextPublic ? 'tornar pública' : 'tornar privada';
-            if (!confirm(`Deseja ${actionText} ${label}?`)) return;
             state.updatingSelectedTagsVisibility = true;
             renderRightOptionsMenu();
             try {
                 await api('set_tags_public_visibility', { ids: ownedTags.map((tag) => Number(tag.id)), is_public: nextPublic ? 1 : 0 });
+                const nextUserId = nextPublic ? 5 : Number(state.sessionUserId);
+                state.tags = state.tags.map((tag) => ownedTags.some((ownedTag) => Number(ownedTag.id) === Number(tag.id)) ? { ...tag, user_id: nextUserId, created_by_user_id: Number(tag.created_by_user_id || state.sessionUserId) } : tag);
+                updateHeaderActions();
                 await loadSavedFilters();
                 if (state.viewMode === 'cards') await loadPage(1);
             } catch (error) {
@@ -794,6 +844,7 @@
                 const savedFilters = (savedResult.data || []).map(normalizeSavedFilter).filter((tag) => Number(tag.id) > 0);
                 state.savedFilterTagIds = new Set(savedFilters.map((tag) => Number(tag.id)));
                 state.tags = allTags;
+                updateHeaderActions();
                 renderRightOptionsMenu();
                 renderLeftTagSearchResults();
                 renderSavedFilters(
@@ -1185,6 +1236,7 @@
                     api('list_tags')
                 ]);
                 state.tags = tagsResult.data || [];
+                updateHeaderActions();
                 state.tagFamily = familyResult.data || { mothers: [], children: [] };
                 state.relationTypes = relationTypesResult.data || [];
                 ensureSelectedRelationType();
