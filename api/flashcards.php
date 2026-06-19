@@ -5965,6 +5965,59 @@ elseif ($action === 'set_tags_public_visibility') {
     }
 }
 
+
+elseif ($action === 'toggle_selected_owned_tags_visibility') {
+    $tagIds = array_values(array_unique(array_filter(array_map('intval', (array)($input['ids'] ?? [])), fn($id) => $id > 0)));
+    if (!$tagIds) {
+        die(json_encode(['status' => 'error', 'message' => 'Nenhuma tag válida foi selecionada.']));
+    }
+
+    try {
+        $pdo->beginTransaction();
+        $placeholders = implode(',', array_fill(0, count($tagIds), '?'));
+        $checkStmt = $pdo->prepare("SELECT id, user_id, created_by_user_id FROM flashcard_tags WHERE id IN ($placeholders) FOR UPDATE");
+        $checkStmt->execute($tagIds);
+        $tags = $checkStmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!$tags) {
+            $pdo->rollBack();
+            die(json_encode(['status' => 'error', 'message' => 'Nenhuma tag selecionada foi encontrada.']));
+        }
+
+        $update = $pdo->prepare('UPDATE flashcard_tags SET user_id = ?, created_by_user_id = ? WHERE id = ? LIMIT 1');
+        $updatedTags = [];
+        foreach ($tags as $tag) {
+            $creatorId = (int)($tag['created_by_user_id'] ?: $tag['user_id']);
+            if ($creatorId !== (int)$user_id) continue;
+
+            $currentOwnerId = (int)$tag['user_id'];
+            $nextOwnerId = $currentOwnerId === 5 ? $creatorId : 5;
+            $update->execute([$nextOwnerId, $creatorId, (int)$tag['id']]);
+            $updatedTags[] = [
+                'id' => (int)$tag['id'],
+                'user_id' => $nextOwnerId,
+                'created_by_user_id' => $creatorId,
+                'is_public' => $nextOwnerId === 5,
+            ];
+        }
+
+        if (!$updatedTags) {
+            $pdo->rollBack();
+            die(json_encode(['status' => 'error', 'message' => 'Você não é dono de nenhuma das tags selecionadas.']));
+        }
+
+        $pdo->commit();
+        echo json_encode([
+            'status' => 'success',
+            'message' => count($updatedTags) === 1 ? 'Visibilidade da tag alterada.' : 'Visibilidade das tags alterada.',
+            'updated_tags' => $updatedTags,
+        ]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('[flashcards][toggle_selected_owned_tags_visibility] ' . $e->getMessage());
+        die(json_encode(['status' => 'error', 'message' => 'Erro interno ao alterar visibilidade das tags.']));
+    }
+}
+
 elseif ($action === 'delete_tag') {
     $tag_id = (int)($input['id'] ?? 0);
 
