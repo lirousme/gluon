@@ -72,6 +72,15 @@
                         </button>
                     </div>
                 </div>
+                <section class="mb-4 rounded-xl border border-sky-500/20 bg-sky-950/20 p-3" aria-labelledby="leftTagSearchLabel">
+                    <label id="leftTagSearchLabel" for="leftTagSearchInput" class="text-xs font-semibold uppercase tracking-[0.2em] text-sky-300">Pesquisar tags</label>
+                    <div class="mt-2 flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 focus-within:border-sky-400 focus-within:ring-2 focus-within:ring-sky-500/20">
+                        <i class="fa-solid fa-magnifying-glass text-slate-500" aria-hidden="true"></i>
+                        <input id="leftTagSearchInput" type="search" autocomplete="off" placeholder="Digite para buscar qualquer tag..." class="w-full bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none">
+                    </div>
+                    <p class="mt-2 text-[11px] text-slate-500">Mostra tags além das fixadas conforme você digita.</p>
+                    <div id="leftTagSearchResults" class="mt-3 hidden max-h-72 space-y-2 overflow-y-auto pr-1 text-sm text-slate-300"></div>
+                </section>
                 <div id="leftOthersMenu" class="mb-4 space-y-2 text-sm text-slate-300"></div>
                 <div id="savedFiltersList" class="space-y-2 text-sm text-slate-300">
                     <p class="text-xs text-slate-500">Carregando tags fixadas...</p>
@@ -207,7 +216,8 @@
             reorderRelationType: null,
             draggedSequenceTagId: null,
             editingRelationTypeId: null,
-            selectedRelationType: null
+            selectedRelationType: null,
+            leftTagSearchQuery: ''
         };
         if (state.withoutTagsOnly && state.viewMode === 'cards') {
             state.selectedTagIds = [];
@@ -230,6 +240,8 @@
         const nextPageBtn = document.getElementById('nextPageBtn');
         const clearTagFilterBtn = document.getElementById('clearTagFilterBtn');
         const leftOthersMenu = document.getElementById('leftOthersMenu');
+        const leftTagSearchInput = document.getElementById('leftTagSearchInput');
+        const leftTagSearchResults = document.getElementById('leftTagSearchResults');
         const rightOptionsMenu = document.getElementById('rightOptionsMenu');
         const leftFiltersMenu = document.getElementById('leftFiltersMenu');
         const rightActionsMenu = document.getElementById('rightActionsMenu');
@@ -445,6 +457,52 @@
         }
 
 
+
+        function tagMatchesLeftSearch(tag = {}, query = '') {
+            const normalizedQuery = query.toLowerCase().trim();
+            if (!normalizedQuery) return false;
+            return [tag.name, tag.name_pt_br, tag.numero]
+                .map((value) => String(value ?? '').toLowerCase())
+                .some((value) => value.includes(normalizedQuery));
+        }
+
+        function renderLeftTagSearchResults() {
+            if (!leftTagSearchResults) return;
+            const query = state.leftTagSearchQuery.trim();
+            const hideResults = () => {
+                leftTagSearchResults.innerHTML = '';
+                leftTagSearchResults.classList.add('hidden');
+            };
+            if (query.length < 2) { hideResults(); return; }
+            const matches = state.tags.filter((tag) => tagMatchesLeftSearch(tag, query));
+            if (!matches.length) {
+                leftTagSearchResults.innerHTML = `<p class="rounded-lg border border-slate-700 bg-slate-950/60 p-3 text-xs text-slate-400">Nenhuma tag encontrada para "${escapeHtml(query)}".</p>`;
+                leftTagSearchResults.classList.remove('hidden');
+                return;
+            }
+            const maxResults = 80;
+            const filtered = matches.slice(0, maxResults);
+            const numeroPtBrCounts = buildNumeroPtBrCounts(filtered);
+            const summary = matches.length > maxResults ? `<p class="text-[11px] text-amber-300">Mostrando ${maxResults} de ${matches.length} tags. Refine a busca.</p>` : '';
+            leftTagSearchResults.innerHTML = summary + filtered.map((tag) => {
+                const tagId = Number(tag.id) || 0;
+                const isActive = state.selectedTagIds.includes(tagId);
+                return `<button type="button" data-left-search-tag-id="${tagId}" aria-pressed="${isActive ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${isActive ? 'border-violet-400/80 bg-violet-950/40 text-violet-100' : 'border-sky-500/20 bg-sky-950/20 text-slate-100 hover:border-sky-400/60 hover:bg-sky-950/40 hover:text-sky-100'}">${renderTagButtonContent(tag, numeroPtBrCounts)}</button>`;
+            }).join('');
+            leftTagSearchResults.classList.remove('hidden');
+            leftTagSearchResults.querySelectorAll('[data-left-search-tag-id]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const tagId = Number(button.dataset.leftSearchTagId) || 0;
+                    const tag = state.tags.find((item) => Number(item.id) === tagId) || {};
+                    if (!tagId) return;
+                    toggleTagFilter(tagId, tag);
+                    loadPage(1);
+                    loadSavedFilters();
+                    renderLeftTagSearchResults();
+                });
+            });
+        }
+
         function renderRightOptionsMenu() {
             const modes = [
                 { mode: 'tags', label: 'Tags' },
@@ -636,9 +694,12 @@
                 if (!savedResponse.ok || savedResult.status !== 'success') throw new Error(savedResult.message || 'Não foi possível carregar as tags fixadas.');
                 if (!tagsResponse.ok || tagsResult.status !== 'success') throw new Error(tagsResult.message || 'Não foi possível carregar as tags.');
                 if (!familyResponse.ok || familyResult.status !== 'success') throw new Error(familyResult.message || 'Não foi possível carregar as famílias de tags.');
+                const allTags = (tagsResult.data || []).map(normalizeSavedFilter).filter((tag) => Number(tag.id) > 0);
+                state.tags = allTags;
+                renderLeftTagSearchResults();
                 renderSavedFilters(
                     (savedResult.data || []).map(normalizeSavedFilter).filter((tag) => Number(tag.id) > 0),
-                    (tagsResult.data || []).map(normalizeSavedFilter).filter((tag) => Number(tag.id) > 0),
+                    allTags,
                     familyResult.data || []
                 );
             } catch (error) {
@@ -1171,6 +1232,10 @@
         createRelationTypeBtn.addEventListener('click', openCreateRelationTypeModal);
         editCurrentTagBtn.addEventListener('click', openEditCurrentTagModal);
         footerTagSearch?.addEventListener('input', renderFooterTags);
+        leftTagSearchInput?.addEventListener('input', () => {
+            state.leftTagSearchQuery = leftTagSearchInput.value || '';
+            renderLeftTagSearchResults();
+        });
         document.getElementById('btnCancelCreateTag').addEventListener('click', () => closeModal('createTagModal', 'createTagModalContent'));
         document.getElementById('btnCloseCreateTagModal').addEventListener('click', () => closeModal('createTagModal', 'createTagModalContent'));
         document.getElementById('createTagForm').addEventListener('submit', submitCreateTag);
