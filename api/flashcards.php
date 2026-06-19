@@ -2291,7 +2291,7 @@ function getGoogleTtsVoiceByLanguage($language) {
     switch ($language) {
         case 'pt-BR': return 'pt-BR-Chirp3-HD-Algieba'; //Algenib* //Charon //Enceladus** //Fenrir** //Iapetus //Vindemiatrix*FEMME //Pulcherrima*FEMME
         case 'en-US': return 'en-US-Chirp3-HD-Algieba';
-        case 'en-GB': return 'en-GB-Chirp3-HD-Fenrir';
+        case 'en-GB': return 'en-GB-Chirp3-HD-Algieba';
         default: return 'en-US-Chirp3-HD-Algieba';
     }
 }
@@ -2303,7 +2303,7 @@ function getGoogleTtsAlternateVoiceByLanguage($language) {
     switch ($language) {
         case 'pt-BR': return 'pt-BR-Chirp3-HD-Algieba';
         case 'en-US': return 'en-US-Chirp3-HD-Enceladus';
-        case 'en-GB': return 'en-GB-Chirp3-HD-Fenrir';
+        case 'en-GB': return 'en-GB-Chirp3-HD-Algieba';
         default: return 'en-US-Chirp3-HD-Enceladus';
     }
 }
@@ -2326,7 +2326,7 @@ function getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $fro
         }
 
         if ($side === 'back') {
-            return 'en-GB-Chirp3-HD-Fenrir';
+            return 'en-GB-Chirp3-HD-Algieba';
         }
     }
 
