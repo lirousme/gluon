@@ -5683,6 +5683,8 @@ elseif ($action === 'list_saved_filters') {
             f.id,
             f.id_tag,
             f.ativo,
+            t.user_id,
+            t.created_by_user_id,
             t.name_encrypted,
             t.name_pt_br_encrypted,
             t.numero,
@@ -5914,6 +5916,52 @@ elseif ($action === 'toggle_tag_public_visibility') {
         if ($pdo->inTransaction()) $pdo->rollBack();
         error_log('[flashcards][toggle_tag_public_visibility] ' . $e->getMessage());
         die(json_encode(['status' => 'error', 'message' => 'Erro interno ao alterar visibilidade da tag.']));
+    }
+}
+
+
+elseif ($action === 'set_tags_public_visibility') {
+    $tagIds = array_values(array_unique(array_filter(array_map('intval', (array)($input['ids'] ?? [])), fn($id) => $id > 0)));
+    $makePublic = !empty($input['is_public']);
+    if (!$tagIds) {
+        die(json_encode(['status' => 'error', 'message' => 'Nenhuma tag válida foi selecionada.']));
+    }
+
+    try {
+        $pdo->beginTransaction();
+        $placeholders = implode(',', array_fill(0, count($tagIds), '?'));
+        $checkStmt = $pdo->prepare("SELECT id, user_id, created_by_user_id FROM flashcard_tags WHERE id IN ($placeholders) FOR UPDATE");
+        $checkStmt->execute($tagIds);
+        $tags = $checkStmt->fetchAll(PDO::FETCH_ASSOC);
+        if (count($tags) !== count($tagIds)) {
+            $pdo->rollBack();
+            die(json_encode(['status' => 'error', 'message' => 'Uma ou mais tags selecionadas não foram encontradas.']));
+        }
+
+        $update = $pdo->prepare('UPDATE flashcard_tags SET user_id = ?, created_by_user_id = ? WHERE id = ? LIMIT 1');
+        foreach ($tags as $tag) {
+            $creatorId = (int)($tag['created_by_user_id'] ?: $tag['user_id']);
+            if ($creatorId !== (int)$user_id) {
+                $pdo->rollBack();
+                die(json_encode(['status' => 'error', 'message' => 'Apenas o dono da tag pode alterar estas configurações.']));
+            }
+            $nextOwnerId = $makePublic ? 5 : $creatorId;
+            $update->execute([$nextOwnerId, $creatorId, (int)$tag['id']]);
+        }
+        $pdo->commit();
+
+        echo json_encode([
+            'status' => 'success',
+            'message' => count($tagIds) === 1
+                ? ($makePublic ? 'Tag tornada pública.' : 'Tag tornada privada.')
+                : ($makePublic ? 'Tags tornadas públicas.' : 'Tags tornadas privadas.'),
+            'updated_ids' => $tagIds,
+            'is_public' => $makePublic,
+        ]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('[flashcards][set_tags_public_visibility] ' . $e->getMessage());
+        die(json_encode(['status' => 'error', 'message' => 'Erro interno ao alterar visibilidade das tags.']));
     }
 }
 

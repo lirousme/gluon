@@ -207,6 +207,7 @@
             leftOthersExpanded: false,
             rightModeExpanded: false,
             rightOptionsExpanded: false,
+            rightConfigExpanded: false,
             tagFamily: { mothers: [], children: [] },
             relationTypes: [],
             tagFamilyLoading: false,
@@ -219,7 +220,8 @@
             selectedRelationType: null,
             leftTagSearchQuery: '',
             savedFilterTagIds: new Set(),
-            pinningSelectedTags: false
+            pinningSelectedTags: false,
+            updatingSelectedTagsVisibility: false
         };
         if (state.withoutTagsOnly && state.viewMode === 'cards') {
             state.selectedTagIds = [];
@@ -510,6 +512,38 @@
             return state.selectedTagIds.filter((tagId) => Number(tagId) > 0 && !state.savedFilterTagIds.has(Number(tagId)));
         }
 
+        function getSelectedTags() {
+            return state.selectedTagIds.map((tagId, index) => state.tags.find((tag) => Number(tag.id) === Number(tagId)) || { id: tagId, name: state.selectedTagLabels[index] || '' }).filter((tag) => Number(tag.id) > 0);
+        }
+
+        function getSelectedTagsVisibilityConfig() {
+            const selectedTags = getSelectedTags();
+            const ownedTags = selectedTags.filter((tag) => canEditTag(tag));
+            const hasNonOwned = selectedTags.length > 0 && ownedTags.length !== selectedTags.length;
+            const allOwnedPublic = ownedTags.length > 0 && ownedTags.every((tag) => Number(tag.user_id) === 5);
+            return { selectedTags, ownedTags, hasNonOwned, nextPublic: !allOwnedPublic };
+        }
+
+        async function updateSelectedTagsVisibility() {
+            const { ownedTags, hasNonOwned, nextPublic } = getSelectedTagsVisibilityConfig();
+            if (!ownedTags.length || hasNonOwned || state.updatingSelectedTagsVisibility) return;
+            const label = ownedTags.length === 1 ? getTagLabel(ownedTags[0]) : `${ownedTags.length} tags`;
+            const actionText = nextPublic ? 'tornar pública' : 'tornar privada';
+            if (!confirm(`Deseja ${actionText} ${label}?`)) return;
+            state.updatingSelectedTagsVisibility = true;
+            renderRightOptionsMenu();
+            try {
+                await api('set_tags_public_visibility', { ids: ownedTags.map((tag) => Number(tag.id)), is_public: nextPublic ? 1 : 0 });
+                await loadSavedFilters();
+                if (state.viewMode === 'cards') await loadPage(1);
+            } catch (error) {
+                alert(error.message || 'Não foi possível alterar a visibilidade das tags selecionadas.');
+            } finally {
+                state.updatingSelectedTagsVisibility = false;
+                renderRightOptionsMenu();
+            }
+        }
+
         async function pinSelectedTags() {
             const tagIds = getSelectedUnpinnedTagIds();
             if (!tagIds.length || state.pinningSelectedTags) return;
@@ -542,8 +576,32 @@
                 { type: 'object', label: 'Objeto' },
                 { type: 'lexical_chunk', label: 'Lexical Chunk' }
             ];
+            const { selectedTags, ownedTags, hasNonOwned, nextPublic } = getSelectedTagsVisibilityConfig();
+            const visibilityActionLabel = selectedTags.length > 1
+                ? (nextPublic ? 'Tornar públicas' : 'Tornar privadas')
+                : (nextPublic ? 'Tornar pública' : 'Tornar privada');
+            const configHelp = !selectedTags.length
+                ? 'Selecione uma tag para alterar configurações.'
+                : (hasNonOwned ? 'Apenas o dono da tag pode alterar estas configurações.' : 'Altera a visibilidade das tags selecionadas.');
+            const configButtonDisabled = !ownedTags.length || hasNonOwned || state.updatingSelectedTagsVisibility;
             rightOptionsMenu.innerHTML = `
                 ${pinSelectedButton}
+                <article class="rounded-xl border border-amber-500/20 bg-amber-950/20 p-3 transition hover:border-amber-400/60 hover:bg-amber-950/40">
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="rightConfigAccordionBtn" aria-expanded="${state.rightConfigExpanded ? 'true' : 'false'}" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-xs text-amber-200 hover:border-amber-400 hover:text-white" title="Mostrar configurações">
+                            <i class="fa-solid ${state.rightConfigExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}"></i>
+                        </button>
+                        <button type="button" id="rightConfigTitleBtn" class="min-w-0 flex-1 text-left text-sm font-semibold text-slate-100 transition hover:text-amber-100">
+                            <span class="break-words">Config</span>
+                        </button>
+                    </div>
+                    ${state.rightConfigExpanded ? `<div class="mt-2 space-y-2 border-l border-amber-500/20 pl-3">
+                        <button type="button" id="toggleSelectedTagsPublicBtn" class="w-full rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-left text-sm font-semibold text-amber-100 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50" ${configButtonDisabled ? 'disabled' : ''}>
+                            <i class="fa-solid ${state.updatingSelectedTagsVisibility ? 'fa-spinner fa-spin' : (nextPublic ? 'fa-globe' : 'fa-lock')} mr-2"></i>${visibilityActionLabel}
+                        </button>
+                        <p class="text-[11px] text-slate-400">${escapeHtml(configHelp)}</p>
+                    </div>` : ''}
+                </article>
                 <article class="rounded-xl border border-violet-500/20 bg-violet-950/20 p-3 transition hover:border-violet-400/60 hover:bg-violet-950/40">
                     <div class="flex items-center gap-2">
                         <button type="button" id="rightModeAccordionBtn" aria-expanded="${state.rightModeExpanded ? 'true' : 'false'}" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-xs text-violet-200 hover:border-violet-400 hover:text-white" title="Mostrar modos">
@@ -575,6 +633,7 @@
             `;
 
             rightOptionsMenu.querySelector('#pinSelectedTagsBtn')?.addEventListener('click', pinSelectedTags);
+            rightOptionsMenu.querySelector('#toggleSelectedTagsPublicBtn')?.addEventListener('click', updateSelectedTagsVisibility);
             rightOptionsMenu.querySelectorAll('[data-view-mode]').forEach((button) => {
                 button.addEventListener('click', () => {
                     state.viewMode = button.dataset.viewMode === 'tags' ? 'tags' : 'cards';
@@ -594,6 +653,9 @@
                     renderRightOptionsMenu();
                     if (state.viewMode === 'cards') loadPage(1);
                 });
+            });
+            rightOptionsMenu.querySelectorAll('#rightConfigAccordionBtn, #rightConfigTitleBtn').forEach((button) => {
+                button.addEventListener('click', () => { state.rightConfigExpanded = !state.rightConfigExpanded; renderRightOptionsMenu(); });
             });
             rightOptionsMenu.querySelectorAll('#rightModeAccordionBtn, #rightModeTitleBtn').forEach((button) => {
                 button.addEventListener('click', () => { state.rightModeExpanded = !state.rightModeExpanded; renderRightOptionsMenu(); });
