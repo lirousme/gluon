@@ -526,7 +526,9 @@
             const ownedTags = selectedTags.filter((tag) => canEditTag(tag));
             const hasNonOwned = selectedTags.length > 0 && ownedTags.length !== selectedTags.length;
             const allOwnedPublic = ownedTags.length > 0 && ownedTags.every((tag) => Number(tag.user_id) === 5);
-            return { selectedTags, ownedTags, hasNonOwned, nextPublic: !allOwnedPublic };
+            const fixedSelectedTagIds = state.selectedTagIds.filter((tagId) => state.savedFilterTagIds.has(Number(tagId)));
+            const fixedOwnedTags = ownedTags.filter((tag) => state.savedFilterTagIds.has(Number(tag.id)));
+            return { selectedTags, ownedTags, hasNonOwned, nextPublic: !allOwnedPublic, fixedSelectedTagIds, fixedOwnedTags };
         }
 
         function getSelectedTagsVisibilityStatus() {
@@ -575,14 +577,17 @@
         }
 
         async function updateSelectedTagsVisibility() {
-            const { ownedTags, hasNonOwned, nextPublic } = getSelectedTagsVisibilityConfig();
-            if (!ownedTags.length || hasNonOwned || state.updatingSelectedTagsVisibility) return;
+            const { ownedTags } = getSelectedTagsVisibilityConfig();
+            if (!ownedTags.length || state.updatingSelectedTagsVisibility) return;
             state.updatingSelectedTagsVisibility = true;
             renderRightOptionsMenu();
             try {
-                await api('set_tags_public_visibility', { ids: ownedTags.map((tag) => Number(tag.id)), is_public: nextPublic ? 1 : 0 });
-                const nextUserId = nextPublic ? 5 : Number(state.sessionUserId);
-                state.tags = state.tags.map((tag) => ownedTags.some((ownedTag) => Number(ownedTag.id) === Number(tag.id)) ? { ...tag, user_id: nextUserId, created_by_user_id: Number(tag.created_by_user_id || state.sessionUserId) } : tag);
+                const result = await api('toggle_selected_owned_tags_visibility', { ids: ownedTags.map((tag) => Number(tag.id)) });
+                const updatedById = new Map((result.updated_tags || []).map((tag) => [Number(tag.id), tag]));
+                state.tags = state.tags.map((tag) => {
+                    const updated = updatedById.get(Number(tag.id));
+                    return updated ? { ...tag, user_id: Number(updated.user_id), created_by_user_id: Number(updated.created_by_user_id || tag.created_by_user_id || state.sessionUserId) } : tag;
+                });
                 updateHeaderActions();
                 await loadSavedFilters();
                 if (state.viewMode === 'cards') await loadPage(1);
@@ -612,11 +617,6 @@
 
         function renderRightOptionsMenu() {
             const unpinnedSelectedTagIds = getSelectedUnpinnedTagIds();
-            const pinSelectedButton = unpinnedSelectedTagIds.length ? `
-                <button type="button" id="pinSelectedTagsBtn" class="w-full rounded-xl border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-left text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60" ${state.pinningSelectedTags ? 'disabled' : ''}>
-                    <i class="fa-solid ${state.pinningSelectedTags ? 'fa-spinner fa-spin' : 'fa-thumbtack'} mr-2"></i>${unpinnedSelectedTagIds.length === 1 ? 'Fixar tag' : 'Fixar tags'}
-                </button>
-            ` : '';
             const modes = [
                 { mode: 'tags', label: 'Tags' },
                 { mode: 'cards', label: 'Cards' }
@@ -626,16 +626,25 @@
                 { type: 'object', label: 'Objeto' },
                 { type: 'lexical_chunk', label: 'Lexical Chunk' }
             ];
-            const { selectedTags, ownedTags, hasNonOwned, nextPublic } = getSelectedTagsVisibilityConfig();
-            const visibilityActionLabel = selectedTags.length > 1
-                ? (nextPublic ? 'Tornar públicas' : 'Tornar privadas')
-                : (nextPublic ? 'Tornar pública' : 'Tornar privada');
+            const { selectedTags, ownedTags, fixedSelectedTagIds, fixedOwnedTags } = getSelectedTagsVisibilityConfig();
+            const hasUnpinnedSelection = unpinnedSelectedTagIds.length > 0;
+            const canToggleFixedVisibility = !hasUnpinnedSelection && fixedSelectedTagIds.length > 0 && fixedOwnedTags.length > 0;
+            const primarySelectedTagsButton = hasUnpinnedSelection ? `
+                <button type="button" id="pinSelectedTagsBtn" class="w-full rounded-xl border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-left text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60" ${state.pinningSelectedTags ? 'disabled' : ''}>
+                    <i class="fa-solid ${state.pinningSelectedTags ? 'fa-spinner fa-spin' : 'fa-thumbtack'} mr-2"></i>${unpinnedSelectedTagIds.length === 1 ? 'Fixar tag' : 'Fixar tags'}
+                </button>
+            ` : (canToggleFixedVisibility ? `
+                <button type="button" id="toggleSelectedTagsPublicBtnPrimary" class="w-full rounded-xl border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-left text-sm font-semibold text-amber-100 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60" ${state.updatingSelectedTagsVisibility ? 'disabled' : ''}>
+                    <i class="fa-solid ${state.updatingSelectedTagsVisibility ? 'fa-spinner fa-spin' : 'fa-arrows-rotate'} mr-2"></i>${fixedOwnedTags.length === 1 ? 'Alterar visibilidade da tag' : 'Alterar visibilidade das tags'}
+                </button>
+            ` : '');
+            const visibilityActionLabel = selectedTags.length > 1 ? 'Alterar visibilidade das tags' : 'Alterar visibilidade da tag';
             const configHelp = !selectedTags.length
                 ? 'Selecione uma tag para alterar configurações.'
-                : (hasNonOwned ? 'Apenas o dono da tag pode alterar estas configurações.' : 'Altera a visibilidade das tags selecionadas.');
-            const configButtonDisabled = !ownedTags.length || hasNonOwned || state.updatingSelectedTagsVisibility;
+                : (!ownedTags.length ? 'Apenas o dono da tag pode alterar estas configurações.' : 'Altera somente as tags selecionadas das quais você é dono.');
+            const configButtonDisabled = !ownedTags.length || state.updatingSelectedTagsVisibility;
             rightOptionsMenu.innerHTML = `
-                ${pinSelectedButton}
+                ${primarySelectedTagsButton}
                 <article class="rounded-xl border border-amber-500/20 bg-amber-950/20 p-3 transition hover:border-amber-400/60 hover:bg-amber-950/40">
                     <div class="flex items-center gap-2">
                         <button type="button" id="rightConfigAccordionBtn" aria-expanded="${state.rightConfigExpanded ? 'true' : 'false'}" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-xs text-amber-200 hover:border-amber-400 hover:text-white" title="Mostrar configurações">
@@ -647,7 +656,7 @@
                     </div>
                     ${state.rightConfigExpanded ? `<div class="mt-2 space-y-2 border-l border-amber-500/20 pl-3">
                         <button type="button" id="toggleSelectedTagsPublicBtn" class="w-full rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-left text-sm font-semibold text-amber-100 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50" ${configButtonDisabled ? 'disabled' : ''}>
-                            <i class="fa-solid ${state.updatingSelectedTagsVisibility ? 'fa-spinner fa-spin' : (nextPublic ? 'fa-globe' : 'fa-lock')} mr-2"></i>${visibilityActionLabel}
+                            <i class="fa-solid ${state.updatingSelectedTagsVisibility ? 'fa-spinner fa-spin' : 'fa-arrows-rotate'} mr-2"></i>${visibilityActionLabel}
                         </button>
                         <p class="text-[11px] text-slate-400">${escapeHtml(configHelp)}</p>
                     </div>` : ''}
@@ -684,6 +693,7 @@
 
             rightOptionsMenu.querySelector('#pinSelectedTagsBtn')?.addEventListener('click', pinSelectedTags);
             rightOptionsMenu.querySelector('#toggleSelectedTagsPublicBtn')?.addEventListener('click', updateSelectedTagsVisibility);
+            rightOptionsMenu.querySelector('#toggleSelectedTagsPublicBtnPrimary')?.addEventListener('click', updateSelectedTagsVisibility);
             rightOptionsMenu.querySelectorAll('[data-view-mode]').forEach((button) => {
                 button.addEventListener('click', () => {
                     state.viewMode = button.dataset.viewMode === 'tags' ? 'tags' : 'cards';
