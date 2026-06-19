@@ -25,9 +25,57 @@
     </script>
 
     <style>
+        :root {
+            --card-filters-left-menu-width: 16rem;
+            --card-filters-right-menu-width: 16rem;
+            --card-filters-menu-min-width: 16rem;
+            --card-filters-menu-max-width: min(32rem, 34vw);
+        }
         .sequence-reorder-list { align-items: center; min-height: 2.25rem; }
         .sequence-reorder-list.sequence-drag-active { border-radius: 0.75rem; background: rgba(14, 165, 233, 0.08); box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.26); padding: 0.25rem; margin: -0.25rem; }
         .sequence-tag-chip.sequence-dragging { display: none; }
+        .desktop-menu-resize-handle { display: none; }
+        @media (min-width: 1024px) {
+            #cardFiltersLayout {
+                grid-template-columns: var(--card-filters-left-menu-width) minmax(0, 1fr) var(--card-filters-right-menu-width);
+            }
+            .desktop-resizable-menu {
+                min-width: var(--card-filters-menu-min-width);
+                max-width: var(--card-filters-menu-max-width);
+            }
+            .desktop-menu-resize-handle {
+                display: flex;
+                position: absolute;
+                top: 0.75rem;
+                bottom: 0.75rem;
+                z-index: 10;
+                width: 0.75rem;
+                cursor: ew-resize;
+                touch-action: none;
+                align-items: center;
+                justify-content: center;
+                color: rgb(148 163 184 / 0.8);
+            }
+            .desktop-menu-resize-handle:hover,
+            .desktop-menu-resize-handle:focus-visible,
+            .desktop-menu-resize-handle.is-resizing {
+                color: rgb(186 230 253);
+            }
+            .desktop-menu-resize-handle::before {
+                content: '';
+                width: 0.25rem;
+                height: 3rem;
+                border-radius: 9999px;
+                background: currentColor;
+                opacity: 0.55;
+            }
+            .desktop-menu-resize-handle[data-resize-menu="left"] { right: -0.375rem; }
+            .desktop-menu-resize-handle[data-resize-menu="right"] { left: -0.375rem; }
+            body.card-filters-resizing {
+                cursor: ew-resize;
+                user-select: none;
+            }
+        }
     </style>
 </head>
 <body class="min-h-screen bg-gluon-dark text-slate-100">
@@ -61,8 +109,9 @@
 
         <div id="mobileDrawerBackdrop" class="fixed inset-0 z-30 hidden bg-black/60 opacity-0 transition-opacity duration-200 lg:hidden"></div>
 
-        <div class="grid w-full flex-1 grid-cols-1 gap-4 py-6 lg:grid-cols-[16rem_minmax(0,1fr)_16rem]">
-            <aside id="leftFiltersMenu" aria-label="Menu lateral esquerdo" class="fixed inset-y-0 left-0 z-40 w-[85vw] max-w-xs -translate-x-full overflow-y-auto border-r border-slate-800 bg-slate-950 p-4 shadow-2xl shadow-black/50 transition-transform duration-200 lg:sticky lg:top-28 lg:z-auto lg:mx-0 lg:ml-0 lg:mr-4 lg:h-[calc(100vh-12rem)] lg:w-auto lg:max-w-none lg:translate-x-0 lg:overflow-y-auto lg:rounded-2xl lg:border lg:bg-slate-900/50 lg:shadow-none">
+        <div id="cardFiltersLayout" class="grid w-full flex-1 grid-cols-1 gap-4 py-6">
+            <aside id="leftFiltersMenu" aria-label="Menu lateral esquerdo" class="desktop-resizable-menu fixed inset-y-0 left-0 z-40 w-[85vw] max-w-xs -translate-x-full overflow-y-auto border-r border-slate-800 bg-slate-950 p-4 shadow-2xl shadow-black/50 transition-transform duration-200 lg:sticky lg:top-28 lg:z-auto lg:mx-0 lg:ml-0 lg:mr-4 lg:h-[calc(100vh-12rem)] lg:w-auto lg:max-w-none lg:translate-x-0 lg:overflow-y-auto lg:rounded-2xl lg:border lg:bg-slate-900/50 lg:shadow-none">
+                <button type="button" class="desktop-menu-resize-handle" data-resize-menu="left" aria-label="Redimensionar menu de filtros" title="Arraste para aumentar o menu de filtros"></button>
                 <div class="mb-4 flex items-center justify-between gap-2">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-[0.25em] text-sky-300">Filtros</p>
@@ -101,7 +150,8 @@
                 <section id="tagFamilySections" class="hidden space-y-4"></section>
             </main>
 
-            <aside id="rightActionsMenu" aria-label="Menu lateral direito" class="fixed inset-y-0 right-0 z-40 w-[85vw] max-w-xs translate-x-full overflow-y-auto border-l border-slate-800 bg-slate-950 p-4 shadow-2xl shadow-black/50 transition-transform duration-200 lg:sticky lg:top-28 lg:z-auto lg:mx-0 lg:ml-4 lg:mr-0 lg:h-[calc(100vh-12rem)] lg:w-auto lg:max-w-none lg:translate-x-0 lg:rounded-2xl lg:border lg:bg-slate-900/50 lg:shadow-none">
+            <aside id="rightActionsMenu" aria-label="Menu lateral direito" class="desktop-resizable-menu fixed inset-y-0 right-0 z-40 w-[85vw] max-w-xs translate-x-full overflow-y-auto border-l border-slate-800 bg-slate-950 p-4 shadow-2xl shadow-black/50 transition-transform duration-200 lg:sticky lg:top-28 lg:z-auto lg:mx-0 lg:ml-4 lg:mr-0 lg:h-[calc(100vh-12rem)] lg:w-auto lg:max-w-none lg:translate-x-0 lg:rounded-2xl lg:border lg:bg-slate-900/50 lg:shadow-none">
+                <button type="button" class="desktop-menu-resize-handle" data-resize-menu="right" aria-label="Redimensionar menu de ações" title="Arraste para aumentar o menu de ações"></button>
                 <div class="mb-4 flex items-center justify-between gap-2">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-[0.25em] text-sky-300">Menu</p>
@@ -257,7 +307,54 @@
         const openRightMenuBtn = document.getElementById('openRightMenuBtn');
         const openLeftMenuBtnTags = document.getElementById('openLeftMenuBtnTags');
         const openRightMenuBtnTags = document.getElementById('openRightMenuBtnTags');
+        const cardFiltersLayout = document.getElementById('cardFiltersLayout');
+        const desktopMenuMinWidthPx = 16 * 16;
 
+        function clampDesktopMenuWidth(width) {
+            const viewportLimit = Math.floor(window.innerWidth * 0.34);
+            const maxWidth = Math.max(desktopMenuMinWidthPx, Math.min(32 * 16, viewportLimit));
+            return Math.min(Math.max(width, desktopMenuMinWidthPx), maxWidth);
+        }
+
+        function setDesktopMenuWidth(side, width) {
+            if (!cardFiltersLayout || !['left', 'right'].includes(side)) return;
+            const clampedWidth = clampDesktopMenuWidth(width);
+            cardFiltersLayout.style.setProperty(`--card-filters-${side}-menu-width`, `${clampedWidth}px`);
+        }
+
+        function setupDesktopMenuResizing() {
+            if (!cardFiltersLayout) return;
+            const desktopQuery = window.matchMedia('(min-width: 1024px)');
+            document.querySelectorAll('[data-resize-menu]').forEach((handle) => {
+                handle.addEventListener('pointerdown', (event) => {
+                    if (!desktopQuery.matches || event.button !== 0) return;
+                    const side = handle.dataset.resizeMenu;
+                    const menu = side === 'left' ? leftFiltersMenu : rightActionsMenu;
+                    if (!menu) return;
+                    event.preventDefault();
+                    handle.setPointerCapture?.(event.pointerId);
+                    handle.classList.add('is-resizing');
+                    document.body.classList.add('card-filters-resizing');
+                    const startX = event.clientX;
+                    const startWidth = menu.getBoundingClientRect().width;
+                    const onPointerMove = (moveEvent) => {
+                        const delta = moveEvent.clientX - startX;
+                        const nextWidth = side === 'left' ? startWidth + delta : startWidth - delta;
+                        setDesktopMenuWidth(side, nextWidth);
+                    };
+                    const stopResizing = () => {
+                        handle.classList.remove('is-resizing');
+                        document.body.classList.remove('card-filters-resizing');
+                        window.removeEventListener('pointermove', onPointerMove);
+                        window.removeEventListener('pointerup', stopResizing);
+                        window.removeEventListener('pointercancel', stopResizing);
+                    };
+                    window.addEventListener('pointermove', onPointerMove);
+                    window.addEventListener('pointerup', stopResizing);
+                    window.addEventListener('pointercancel', stopResizing);
+                });
+            });
+        }
 
         function setMobileDrawerBackdrop(open) {
             if (!mobileDrawerBackdrop) return;
@@ -1404,6 +1501,7 @@
         enforceSingleTagSelectionForTagMode();
         renderRightOptionsMenu();
         renderLeftOthersMenu();
+        setupDesktopMenuResizing();
         loadSavedFilters();
         loadPage(state.page);
     </script>
