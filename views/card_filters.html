@@ -39,9 +39,9 @@
                     Dashboard
                 </a>
                 <div class="flex items-center gap-2">
-                    <span id="selectedTagsVisibilityIndicator" class="hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 text-slate-400" title="Tags privadas" aria-label="Tags privadas">
+                    <button id="selectedTagsVisibilityIndicator" type="button" class="hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 text-slate-400 transition hover:bg-slate-800/80 disabled:cursor-not-allowed disabled:opacity-60" title="Tags privadas" aria-label="Tags privadas">
                         <i class="fa-solid fa-lock"></i>
-                    </span>
+                    </button>
                     <button id="editCurrentTagBtn" type="button" class="hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/50 text-amber-300 transition hover:bg-amber-500/20 hover:text-amber-200" title="Editar tag selecionada" aria-label="Editar tag selecionada">
                         <i class="fa-solid fa-pen-to-square"></i>
                     </button>
@@ -210,7 +210,6 @@
             leftOthersExpanded: false,
             rightModeExpanded: false,
             rightOptionsExpanded: false,
-            rightConfigExpanded: false,
             tagFamily: { mothers: [], children: [] },
             relationTypes: [],
             tagFamilyLoading: false,
@@ -543,6 +542,10 @@
         function updateSelectedTagsVisibilityIndicator() {
             if (!selectedTagsVisibilityIndicator) return;
             const status = getSelectedTagsVisibilityStatus();
+            const unpinnedSelectedTagIds = getSelectedUnpinnedTagIds();
+            const { ownedTags } = getSelectedTagsVisibilityConfig();
+            const isBusy = state.pinningSelectedTags || state.updatingSelectedTagsVisibility;
+            const canRunAction = state.selectedTagIds.length > 0 && (unpinnedSelectedTagIds.length > 0 || ownedTags.length > 0);
             const config = {
                 none: {
                     hidden: true,
@@ -553,33 +556,38 @@
                 public: {
                     hidden: false,
                     icon: 'fa-globe',
-                    className: 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300',
+                    className: 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20',
                     label: state.selectedTagIds.length > 1 ? 'Todas as tags selecionadas são públicas' : 'Tag pública'
                 },
                 mixed: {
                     hidden: false,
                     icon: 'fa-globe',
-                    className: 'border-orange-500/50 bg-orange-500/10 text-orange-300',
+                    className: 'border-orange-500/50 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20',
                     label: 'Algumas tags selecionadas são públicas'
                 },
                 private: {
                     hidden: false,
                     icon: 'fa-lock',
-                    className: 'border-slate-700 bg-slate-800/60 text-slate-400',
+                    className: 'border-slate-700 bg-slate-800/60 text-slate-400 hover:bg-slate-700/70',
                     label: state.selectedTagIds.length > 1 ? 'Todas as tags selecionadas são privadas' : 'Tag privada'
                 }
             }[status];
-            selectedTagsVisibilityIndicator.className = `inline-flex h-10 w-10 items-center justify-center rounded-xl border ${config.className}`;
+            const actionLabel = unpinnedSelectedTagIds.length > 0
+                ? (unpinnedSelectedTagIds.length === 1 ? 'Fixar tag selecionada' : 'Fixar tags selecionadas')
+                : (ownedTags.length > 0 ? (ownedTags.length === 1 ? 'Alterar visibilidade da tag selecionada' : 'Alterar visibilidade das tags selecionadas') : 'Apenas o dono da tag pode alterar a visibilidade');
+            selectedTagsVisibilityIndicator.className = `inline-flex h-10 w-10 items-center justify-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-60 ${config.className}`;
             selectedTagsVisibilityIndicator.classList.toggle('hidden', config.hidden);
-            selectedTagsVisibilityIndicator.title = config.label;
-            selectedTagsVisibilityIndicator.setAttribute('aria-label', config.label);
-            selectedTagsVisibilityIndicator.innerHTML = `<i class="fa-solid ${config.icon}"></i>`;
+            selectedTagsVisibilityIndicator.disabled = !canRunAction || isBusy;
+            selectedTagsVisibilityIndicator.title = canRunAction ? actionLabel : config.label;
+            selectedTagsVisibilityIndicator.setAttribute('aria-label', canRunAction ? actionLabel : config.label);
+            selectedTagsVisibilityIndicator.innerHTML = `<i class="fa-solid ${isBusy ? 'fa-spinner fa-spin' : config.icon}"></i>`;
         }
 
         async function updateSelectedTagsVisibility() {
             const { ownedTags } = getSelectedTagsVisibilityConfig();
             if (!ownedTags.length || state.updatingSelectedTagsVisibility) return;
             state.updatingSelectedTagsVisibility = true;
+            updateHeaderActions();
             renderRightOptionsMenu();
             try {
                 const result = await api('toggle_selected_owned_tags_visibility', { ids: ownedTags.map((tag) => Number(tag.id)) });
@@ -595,6 +603,7 @@
                 alert(error.message || 'Não foi possível alterar a visibilidade das tags selecionadas.');
             } finally {
                 state.updatingSelectedTagsVisibility = false;
+                updateHeaderActions();
                 renderRightOptionsMenu();
             }
         }
@@ -603,6 +612,7 @@
             const tagIds = getSelectedUnpinnedTagIds();
             if (!tagIds.length || state.pinningSelectedTags) return;
             state.pinningSelectedTags = true;
+            updateHeaderActions();
             renderRightOptionsMenu();
             try {
                 await Promise.all(tagIds.map((tagId) => api('toggle_saved_filter', { tag_id: tagId })));
@@ -611,12 +621,20 @@
                 alert(error.message || 'Não foi possível fixar as tags selecionadas.');
             } finally {
                 state.pinningSelectedTags = false;
+                updateHeaderActions();
                 renderRightOptionsMenu();
             }
         }
 
+        function handleSelectedTagsHeaderAction() {
+            if (getSelectedUnpinnedTagIds().length > 0) {
+                pinSelectedTags();
+                return;
+            }
+            updateSelectedTagsVisibility();
+        }
+
         function renderRightOptionsMenu() {
-            const unpinnedSelectedTagIds = getSelectedUnpinnedTagIds();
             const modes = [
                 { mode: 'tags', label: 'Tags' },
                 { mode: 'cards', label: 'Cards' }
@@ -626,41 +644,7 @@
                 { type: 'object', label: 'Objeto' },
                 { type: 'lexical_chunk', label: 'Lexical Chunk' }
             ];
-            const { selectedTags, ownedTags, fixedSelectedTagIds, fixedOwnedTags } = getSelectedTagsVisibilityConfig();
-            const hasUnpinnedSelection = unpinnedSelectedTagIds.length > 0;
-            const canToggleFixedVisibility = !hasUnpinnedSelection && fixedSelectedTagIds.length > 0 && fixedOwnedTags.length > 0;
-            const primarySelectedTagsButton = hasUnpinnedSelection ? `
-                <button type="button" id="pinSelectedTagsBtn" class="w-full rounded-xl border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-left text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60" ${state.pinningSelectedTags ? 'disabled' : ''}>
-                    <i class="fa-solid ${state.pinningSelectedTags ? 'fa-spinner fa-spin' : 'fa-thumbtack'} mr-2"></i>${unpinnedSelectedTagIds.length === 1 ? 'Fixar tag' : 'Fixar tags'}
-                </button>
-            ` : (canToggleFixedVisibility ? `
-                <button type="button" id="toggleSelectedTagsPublicBtnPrimary" class="w-full rounded-xl border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-left text-sm font-semibold text-amber-100 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60" ${state.updatingSelectedTagsVisibility ? 'disabled' : ''}>
-                    <i class="fa-solid ${state.updatingSelectedTagsVisibility ? 'fa-spinner fa-spin' : 'fa-arrows-rotate'} mr-2"></i>${fixedOwnedTags.length === 1 ? 'Alterar visibilidade da tag' : 'Alterar visibilidade das tags'}
-                </button>
-            ` : '');
-            const visibilityActionLabel = selectedTags.length > 1 ? 'Alterar visibilidade das tags' : 'Alterar visibilidade da tag';
-            const configHelp = !selectedTags.length
-                ? 'Selecione uma tag para alterar configurações.'
-                : (!ownedTags.length ? 'Apenas o dono da tag pode alterar estas configurações.' : 'Altera somente as tags selecionadas das quais você é dono.');
-            const configButtonDisabled = !ownedTags.length || state.updatingSelectedTagsVisibility;
             rightOptionsMenu.innerHTML = `
-                ${primarySelectedTagsButton}
-                <article class="rounded-xl border border-amber-500/20 bg-amber-950/20 p-3 transition hover:border-amber-400/60 hover:bg-amber-950/40">
-                    <div class="flex items-center gap-2">
-                        <button type="button" id="rightConfigAccordionBtn" aria-expanded="${state.rightConfigExpanded ? 'true' : 'false'}" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-xs text-amber-200 hover:border-amber-400 hover:text-white" title="Mostrar configurações">
-                            <i class="fa-solid ${state.rightConfigExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}"></i>
-                        </button>
-                        <button type="button" id="rightConfigTitleBtn" class="min-w-0 flex-1 text-left text-sm font-semibold text-slate-100 transition hover:text-amber-100">
-                            <span class="break-words">Config</span>
-                        </button>
-                    </div>
-                    ${state.rightConfigExpanded ? `<div class="mt-2 space-y-2 border-l border-amber-500/20 pl-3">
-                        <button type="button" id="toggleSelectedTagsPublicBtn" class="w-full rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-left text-sm font-semibold text-amber-100 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50" ${configButtonDisabled ? 'disabled' : ''}>
-                            <i class="fa-solid ${state.updatingSelectedTagsVisibility ? 'fa-spinner fa-spin' : 'fa-arrows-rotate'} mr-2"></i>${visibilityActionLabel}
-                        </button>
-                        <p class="text-[11px] text-slate-400">${escapeHtml(configHelp)}</p>
-                    </div>` : ''}
-                </article>
                 <article class="rounded-xl border border-violet-500/20 bg-violet-950/20 p-3 transition hover:border-violet-400/60 hover:bg-violet-950/40">
                     <div class="flex items-center gap-2">
                         <button type="button" id="rightModeAccordionBtn" aria-expanded="${state.rightModeExpanded ? 'true' : 'false'}" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-xs text-violet-200 hover:border-violet-400 hover:text-white" title="Mostrar modos">
@@ -691,9 +675,6 @@
                 </article>
             `;
 
-            rightOptionsMenu.querySelector('#pinSelectedTagsBtn')?.addEventListener('click', pinSelectedTags);
-            rightOptionsMenu.querySelector('#toggleSelectedTagsPublicBtn')?.addEventListener('click', updateSelectedTagsVisibility);
-            rightOptionsMenu.querySelector('#toggleSelectedTagsPublicBtnPrimary')?.addEventListener('click', updateSelectedTagsVisibility);
             rightOptionsMenu.querySelectorAll('[data-view-mode]').forEach((button) => {
                 button.addEventListener('click', () => {
                     state.viewMode = button.dataset.viewMode === 'tags' ? 'tags' : 'cards';
@@ -713,9 +694,6 @@
                     renderRightOptionsMenu();
                     if (state.viewMode === 'cards') loadPage(1);
                 });
-            });
-            rightOptionsMenu.querySelectorAll('#rightConfigAccordionBtn, #rightConfigTitleBtn').forEach((button) => {
-                button.addEventListener('click', () => { state.rightConfigExpanded = !state.rightConfigExpanded; renderRightOptionsMenu(); });
             });
             rightOptionsMenu.querySelectorAll('#rightModeAccordionBtn, #rightModeTitleBtn').forEach((button) => {
                 button.addEventListener('click', () => { state.rightModeExpanded = !state.rightModeExpanded; renderRightOptionsMenu(); });
@@ -1395,6 +1373,7 @@
         createTagBtn.addEventListener('click', openCreateTagModal);
         createRelationTypeBtn.addEventListener('click', openCreateRelationTypeModal);
         editCurrentTagBtn.addEventListener('click', openEditCurrentTagModal);
+        selectedTagsVisibilityIndicator?.addEventListener('click', handleSelectedTagsHeaderAction);
         footerTagSearch?.addEventListener('input', renderFooterTags);
         leftTagSearchInput?.addEventListener('input', () => {
             state.leftTagSearchQuery = leftTagSearchInput.value || '';
