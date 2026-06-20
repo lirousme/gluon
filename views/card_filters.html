@@ -609,8 +609,33 @@
             });
         }
 
+        function getSelectedPinnedTagIds() {
+            return state.selectedTagIds.filter((tagId) => Number(tagId) > 0 && state.savedFilterTagIds.has(Number(tagId)));
+        }
+
         function getSelectedUnpinnedTagIds() {
             return state.selectedTagIds.filter((tagId) => Number(tagId) > 0 && !state.savedFilterTagIds.has(Number(tagId)));
+        }
+
+        function getSelectedPinToggleConfig() {
+            const selectedCount = state.selectedTagIds.length;
+            const pinnedIds = getSelectedPinnedTagIds();
+            const unpinnedIds = getSelectedUnpinnedTagIds();
+            const hasPinned = pinnedIds.length > 0;
+            const hasUnpinned = unpinnedIds.length > 0;
+            let label = selectedCount === 1 ? 'Fixar tag' : 'Fixar tags';
+            let description = selectedCount === 1 ? 'Cria o filtro desta tag.' : 'Cria filtros para estas tags.';
+            let icon = 'fa-thumbtack';
+            if (hasPinned && !hasUnpinned) {
+                label = selectedCount === 1 ? 'Desfixar tag' : 'Desfixar tags';
+                description = selectedCount === 1 ? 'Remove o filtro desta tag.' : 'Remove os filtros destas tags.';
+                icon = 'fa-thumbtack';
+            } else if (hasPinned && hasUnpinned) {
+                label = selectedCount === 1 ? 'Inverter fixação da tag' : 'Inverter fixação das tags';
+                description = 'Fixa as tags não fixadas e desfixa as já fixadas.';
+                icon = 'fa-retweet';
+            }
+            return { selectedCount, pinnedIds, unpinnedIds, hasPinned, hasUnpinned, label, description, icon };
         }
 
         function getSelectedTags() {
@@ -706,16 +731,19 @@
         }
 
         async function pinSelectedTags() {
-            const tagIds = getSelectedUnpinnedTagIds();
-            if (!tagIds.length || state.pinningSelectedTags) return;
+            const { pinnedIds, unpinnedIds, selectedCount } = getSelectedPinToggleConfig();
+            if (!selectedCount || state.pinningSelectedTags) return;
             state.pinningSelectedTags = true;
             updateHeaderActions();
             renderRightOptionsMenu();
             try {
-                await Promise.all(tagIds.map((tagId) => api('toggle_saved_filter', { tag_id: tagId })));
+                await Promise.all([
+                    ...unpinnedIds.map((tagId) => api('toggle_saved_filter', { tag_id: tagId })),
+                    ...pinnedIds.map((tagId) => api('remove_saved_filter', { tag_id: tagId }))
+                ]);
                 await loadSavedFilters();
             } catch (error) {
-                alert(error.message || 'Não foi possível fixar as tags selecionadas.');
+                alert(error.message || 'Não foi possível atualizar a fixação das tags selecionadas.');
             } finally {
                 state.pinningSelectedTags = false;
                 updateHeaderActions();
@@ -741,7 +769,15 @@
                 { type: 'object', label: 'Objeto' },
                 { type: 'lexical_chunk', label: 'Lexical Chunk' }
             ];
+            const pinToggleConfig = getSelectedPinToggleConfig();
+            const pinToggleButton = pinToggleConfig.selectedCount > 0 ? `
+                <button type="button" id="toggleSelectedPinnedTagsBtn" class="w-full rounded-xl border border-amber-400/60 bg-amber-500/10 p-3 text-left text-sm font-semibold text-amber-100 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60" ${state.pinningSelectedTags ? 'disabled' : ''}>
+                    <span class="flex items-center gap-2"><i class="fa-solid ${state.pinningSelectedTags ? 'fa-spinner fa-spin' : pinToggleConfig.icon}"></i>${escapeHtml(pinToggleConfig.label)}</span>
+                    <span class="mt-1 block text-xs font-normal text-amber-200/80">${escapeHtml(pinToggleConfig.description)}</span>
+                </button>
+            ` : '';
             rightOptionsMenu.innerHTML = `
+                ${pinToggleButton}
                 <article class="rounded-xl border border-violet-500/20 bg-violet-950/20 p-3 transition hover:border-violet-400/60 hover:bg-violet-950/40">
                     <div class="flex items-center gap-2">
                         <button type="button" id="rightModeAccordionBtn" aria-expanded="${state.rightModeExpanded ? 'true' : 'false'}" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-xs text-violet-200 hover:border-violet-400 hover:text-white" title="Mostrar modos">
@@ -772,6 +808,7 @@
                 </article>
             `;
 
+            rightOptionsMenu.querySelector('#toggleSelectedPinnedTagsBtn')?.addEventListener('click', pinSelectedTags);
             rightOptionsMenu.querySelectorAll('[data-view-mode]').forEach((button) => {
                 button.addEventListener('click', () => {
                     state.viewMode = button.dataset.viewMode === 'tags' ? 'tags' : 'cards';
