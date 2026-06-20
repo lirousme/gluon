@@ -5696,7 +5696,7 @@ elseif ($action === 'list_saved_filters') {
         LEFT JOIN (
 " . getSubjectObjectLexicalChunkCardCountSubquery() . "
         ) subject_counts ON subject_counts.tag_id = t.id
-        WHERE f.id_user = ? AND t.user_id IN (?, 5)
+        WHERE f.id_user = ? AND f.ativo = 1 AND t.user_id IN (?, 5)
         ORDER BY f.id DESC
     ");
     $stmt->execute([$user_id, $user_id, $user_id]);
