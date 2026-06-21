@@ -83,7 +83,7 @@ function normalizeReturnTarget(?string $rawTarget): string {
  */
 function sanitizeInfoType($value): int {
     $type = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['default' => 2]]);
-    return in_array($type, [0, 1, 2, 3], true) ? $type : 2;
+    return in_array($type, [0, 1, 2, 3, 4], true) ? $type : 2;
 }
 
 function sanitizeTagIds($rawTagIds): array {
@@ -101,7 +101,7 @@ function sanitizeGraphInfoTypes($rawTypes): array {
     } elseif (!is_array($rawTypes)) {
         $rawTypes = $rawTypes === null ? [] : [$rawTypes];
     }
-    return array_values(array_unique(array_filter(array_map('intval', $rawTypes), static fn($type) => in_array($type, [0, 1, 2, 3], true))));
+    return array_values(array_unique(array_filter(array_map('intval', $rawTypes), static fn($type) => in_array($type, [0, 1, 2, 3, 4], true))));
 }
 
 function sanitizeGraphTagLinkTypes($rawTypes): array {
@@ -5313,7 +5313,7 @@ elseif ($action === 'list_graph_cards_for_user') {
     $rawTagId = is_array($input) ? ($input['tag_id'] ?? ($_GET['tag_id'] ?? 0)) : ($_GET['tag_id'] ?? 0);
     $rawTagLinkTypes = is_array($input) ? ($input['tag_link_types'] ?? ($_GET['tag_link_types'] ?? ['subject', 'object', 'lexical_chunk'])) : ($_GET['tag_link_types'] ?? ['subject', 'object', 'lexical_chunk']);
     $rawWithoutTags = is_array($input) ? ($input['without_tags'] ?? ($_GET['without_tags'] ?? 0)) : ($_GET['without_tags'] ?? 0);
-    $rawInfoTypes = is_array($input) ? ($input['info_types'] ?? ($_GET['info_types'] ?? [0, 1, 2, 3])) : ($_GET['info_types'] ?? [0, 1, 2, 3]);
+    $rawInfoTypes = is_array($input) ? ($input['info_types'] ?? ($_GET['info_types'] ?? [0, 1, 2, 3, 4])) : ($_GET['info_types'] ?? [0, 1, 2, 3, 4]);
     $withoutTagsOnly = filter_var($rawWithoutTags, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
     $withoutTagsOnly = $withoutTagsOnly === null ? ((string)$rawWithoutTags === '1') : $withoutTagsOnly;
     $page = filter_var($rawPage, FILTER_VALIDATE_INT, ['options' => ['default' => 1, 'min_range' => 1]]);
