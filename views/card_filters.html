@@ -428,7 +428,7 @@
         }
 
         function parseSelectedInfoTypes(params) {
-            const allowedTypes = ['0', '1', '2', '3'];
+            const allowedTypes = ['0', '1', '2', '3', '4'];
             if (!params.has('info_types')) return [...allowedTypes];
             const rawTypes = params.get('info_types') || '';
             return rawTypes.split(',').map((type) => type.trim()).filter((type, index, types) => allowedTypes.includes(type) && types.indexOf(type) === index);
@@ -530,7 +530,7 @@
                 if (state.selectedTagLabels.length) params.set('tag_names', state.selectedTagLabels.join('|'));
             }
             if (state.selectedTagLinkTypes.length !== 3) params.set('tag_link_types', state.selectedTagLinkTypes.join(','));
-            if (state.selectedInfoTypes.length !== 4) params.set('info_types', state.selectedInfoTypes.join(','));
+            if (state.selectedInfoTypes.length !== 5) params.set('info_types', state.selectedInfoTypes.join(','));
             return `/card_filters?${params.toString()}`;
         }
 
@@ -783,7 +783,8 @@
                 { type: '0', label: 'Afirmação' },
                 { type: '2', label: 'Pergunta' },
                 { type: '1', label: 'Tradução' },
-                { type: '3', label: 'Frase de Exemplo' }
+                { type: '3', label: 'Frase de Exemplo' },
+                { type: '4', label: 'Tcoins' }
             ];
             const pinToggleConfig = getSelectedPinToggleConfig();
             const pinToggleButton = pinToggleConfig.selectedCount > 0 ? `
