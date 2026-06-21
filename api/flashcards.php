@@ -95,6 +95,15 @@ function sanitizeTagIds($rawTagIds): array {
     return array_values(array_unique(array_filter(array_map('intval', $rawTagIds), static fn($id) => $id > 0)));
 }
 
+function sanitizeGraphInfoTypes($rawTypes): array {
+    if (is_string($rawTypes)) {
+        $rawTypes = preg_split('/[\s,]+/', $rawTypes, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    } elseif (!is_array($rawTypes)) {
+        $rawTypes = $rawTypes === null ? [] : [$rawTypes];
+    }
+    return array_values(array_unique(array_filter(array_map('intval', $rawTypes), static fn($type) => in_array($type, [0, 1, 2, 3], true))));
+}
+
 function sanitizeGraphTagLinkTypes($rawTypes): array {
     $allowedTypes = ['subject', 'object', 'lexical_chunk'];
     if (is_string($rawTypes)) {
@@ -5304,16 +5313,27 @@ elseif ($action === 'list_graph_cards_for_user') {
     $rawTagId = is_array($input) ? ($input['tag_id'] ?? ($_GET['tag_id'] ?? 0)) : ($_GET['tag_id'] ?? 0);
     $rawTagLinkTypes = is_array($input) ? ($input['tag_link_types'] ?? ($_GET['tag_link_types'] ?? ['subject', 'object', 'lexical_chunk'])) : ($_GET['tag_link_types'] ?? ['subject', 'object', 'lexical_chunk']);
     $rawWithoutTags = is_array($input) ? ($input['without_tags'] ?? ($_GET['without_tags'] ?? 0)) : ($_GET['without_tags'] ?? 0);
+    $rawInfoTypes = is_array($input) ? ($input['info_types'] ?? ($_GET['info_types'] ?? [0, 1, 2, 3])) : ($_GET['info_types'] ?? [0, 1, 2, 3]);
     $withoutTagsOnly = filter_var($rawWithoutTags, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
     $withoutTagsOnly = $withoutTagsOnly === null ? ((string)$rawWithoutTags === '1') : $withoutTagsOnly;
     $page = filter_var($rawPage, FILTER_VALIDATE_INT, ['options' => ['default' => 1, 'min_range' => 1]]);
     $tagIds = sanitizeTagIds($rawTagIds ?? $rawTagId);
     $tagLinkTypes = sanitizeGraphTagLinkTypes($rawTagLinkTypes);
+    $infoTypes = sanitizeGraphInfoTypes($rawInfoTypes);
     $tagLinkColumnsByTable = getGraphTagLinkColumnsForTypes($tagLinkTypes);
     $perPage = 20;
     $offset = ($page - 1) * $perPage;
     $tagFilterSql = '';
     $tagFilterParams = [];
+    $infoTypeFilterSql = '';
+    $infoTypeFilterParams = [];
+    if (!empty($infoTypes) && count($infoTypes) < 4) {
+        $infoTypePlaceholders = implode(',', array_fill(0, count($infoTypes), '?'));
+        $infoTypeFilterSql = " AND f.info_type IN ({$infoTypePlaceholders})";
+        $infoTypeFilterParams = $infoTypes;
+    } elseif (empty($infoTypes)) {
+        $infoTypeFilterSql = ' AND 0 = 1';
+    }
 
     if ($withoutTagsOnly) {
         $withoutTagClauses = [];
@@ -5355,8 +5375,9 @@ elseif ($action === 'list_graph_cards_for_user') {
           AND d.deck_mode = 'grafo'
           AND d.type IN (4, 10)
           {$tagFilterSql}
+          {$infoTypeFilterSql}
     ");
-    $stmtTotal->execute(array_merge([$user_id], $tagFilterParams));
+    $stmtTotal->execute(array_merge([$user_id], $tagFilterParams, $infoTypeFilterParams));
     $totalCards = (int)$stmtTotal->fetchColumn();
     $totalPages = max(1, (int)ceil($totalCards / $perPage));
     if ($page > $totalPages) {
@@ -5384,10 +5405,11 @@ elseif ($action === 'list_graph_cards_for_user') {
           AND d.deck_mode = 'grafo'
           AND d.type IN (4, 10)
           {$tagFilterSql}
+          {$infoTypeFilterSql}
         ORDER BY f.id DESC
         LIMIT {$perPage} OFFSET {$offset}
     ");
-    $stmt->execute(array_merge([$user_id, $user_id], $tagFilterParams));
+    $stmt->execute(array_merge([$user_id, $user_id], $tagFilterParams, $infoTypeFilterParams));
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $cardIds = array_values(array_map(static fn($card) => (int)$card['id'], $rows));
     $tagsByCard = [];
