@@ -287,7 +287,9 @@
             pinningSelectedTags: false,
             updatingSelectedTagsVisibility: false
         };
-        if (state.withoutTagsOnly && state.viewMode === 'cards') {
+        if (state.viewMode === 'tcoins') state.selectedInfoTypes = ['4'];
+        if (state.viewMode === 'equacionar') state.selectedInfoTypes = ['5'];
+        if (state.withoutTagsOnly && isCardListMode()) {
             state.selectedTagIds = [];
             state.selectedTagLabels = [];
         }
@@ -422,7 +424,12 @@
         }
 
         function parseViewMode(params) {
-            return params.get('mode') === 'tags' ? 'tags' : 'cards';
+            const mode = params.get('mode') || 'cards';
+            return ['tags', 'cards', 'tcoins', 'equacionar'].includes(mode) ? mode : 'cards';
+        }
+
+        function isCardListMode() {
+            return state.viewMode !== 'tags';
         }
 
         function parseWithoutTagsOnly(params) {
@@ -438,7 +445,7 @@
         }
 
         function parseSelectedInfoTypes(params) {
-            const allowedTypes = ['0', '1', '2', '3', '4'];
+            const allowedTypes = ['0', '1', '2', '3', '4', '5'];
             if (!params.has('info_types')) return [...allowedTypes];
             const rawTypes = params.get('info_types') || '';
             return rawTypes.split(',').map((type) => type.trim()).filter((type, index, types) => allowedTypes.includes(type) && types.indexOf(type) === index);
@@ -534,13 +541,13 @@
             const params = new URLSearchParams();
             params.set('page', String(page));
             if (state.viewMode !== 'cards') params.set('mode', state.viewMode);
-            if (state.withoutTagsOnly && state.viewMode === 'cards') params.set('without_tags', '1');
+            if (state.withoutTagsOnly && isCardListMode()) params.set('without_tags', '1');
             if (state.selectedTagIds.length) {
                 params.set('tag_ids', state.selectedTagIds.join(','));
                 if (state.selectedTagLabels.length) params.set('tag_names', state.selectedTagLabels.join('|'));
             }
             if (state.selectedTagLinkTypes.length !== 3) params.set('tag_link_types', state.selectedTagLinkTypes.join(','));
-            if (state.selectedInfoTypes.length !== 5) params.set('info_types', state.selectedInfoTypes.join(','));
+            if (state.selectedInfoTypes.length !== 6) params.set('info_types', state.selectedInfoTypes.join(','));
             return `/card_filters?${params.toString()}`;
         }
 
@@ -740,7 +747,7 @@
                 });
                 updateHeaderActions();
                 await loadSavedFilters();
-                if (state.viewMode === 'cards') await loadPage(1);
+                if (isCardListMode()) await loadPage(1);
             } catch (error) {
                 alert(error.message || 'Não foi possível alterar a visibilidade das tags selecionadas.');
             } finally {
@@ -782,7 +789,9 @@
         function renderRightOptionsMenu() {
             const modes = [
                 { mode: 'tags', label: 'Tags' },
-                { mode: 'cards', label: 'Cards' }
+                { mode: 'cards', label: 'Cards' },
+                { mode: 'tcoins', label: 'Tcoins' },
+                { mode: 'equacionar', label: 'Equacionar' }
             ];
             const options = [
                 { type: 'subject', label: 'Sujeito' },
@@ -794,7 +803,8 @@
                 { type: '2', label: 'Pergunta' },
                 { type: '1', label: 'Tradução' },
                 { type: '3', label: 'Frase de Exemplo' },
-                { type: '4', label: 'Tcoins' }
+                { type: '4', label: 'Tcoins' },
+                { type: '5', label: 'Equacionar' }
             ];
             const pinToggleConfig = getSelectedPinToggleConfig();
             const pinToggleButton = pinToggleConfig.selectedCount > 0 ? `
@@ -852,8 +862,10 @@
             rightOptionsMenu.querySelector('#toggleSelectedPinnedTagsBtn')?.addEventListener('click', pinSelectedTags);
             rightOptionsMenu.querySelectorAll('[data-view-mode]').forEach((button) => {
                 button.addEventListener('click', () => {
-                    state.viewMode = button.dataset.viewMode === 'tags' ? 'tags' : 'cards';
+                    state.viewMode = ['tags', 'cards', 'tcoins', 'equacionar'].includes(button.dataset.viewMode) ? button.dataset.viewMode : 'cards';
                     if (state.viewMode === 'tags') state.withoutTagsOnly = false;
+                    if (state.viewMode === 'tcoins') state.selectedInfoTypes = ['4'];
+                    if (state.viewMode === 'equacionar') state.selectedInfoTypes = ['5'];
                     enforceSingleTagSelectionForTagMode();
                     renderRightOptionsMenu();
                     loadPage(1);
@@ -867,7 +879,7 @@
                     if (state.selectedTagLinkTypes.includes(type)) state.selectedTagLinkTypes = state.selectedTagLinkTypes.filter((selectedType) => selectedType !== type);
                     else state.selectedTagLinkTypes.push(type);
                     renderRightOptionsMenu();
-                    if (state.viewMode === 'cards') loadPage(1);
+                    if (isCardListMode()) loadPage(1);
                 });
             });
             rightOptionsMenu.querySelectorAll('[data-info-type]').forEach((button) => {
@@ -877,7 +889,7 @@
                     if (state.selectedInfoTypes.includes(type)) state.selectedInfoTypes = state.selectedInfoTypes.filter((selectedType) => selectedType !== type);
                     else state.selectedInfoTypes.push(type);
                     renderRightOptionsMenu();
-                    if (state.viewMode === 'cards') loadPage(1);
+                    if (isCardListMode()) loadPage(1);
                 });
             });
             rightOptionsMenu.querySelectorAll('#rightModeAccordionBtn, #rightModeTitleBtn').forEach((button) => {
@@ -923,7 +935,7 @@
 
         function renderLeftOthersMenu() {
             if (!leftOthersMenu) return;
-            if (state.viewMode !== 'cards') {
+            if (!isCardListMode()) {
                 leftOthersMenu.innerHTML = '';
                 return;
             }
