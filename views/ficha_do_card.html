@@ -1274,6 +1274,39 @@ const app = {
       btnDeleteCard.innerHTML = original;
     }
   },
+
+  async getDescendantObjectTagIdsFromFamily(seedTagIds = []) {
+    const seeds = Array.from(new Set((Array.isArray(seedTagIds) ? seedTagIds : []).map(Number).filter(Boolean)));
+    if (!seeds.length) return [];
+
+    const res = await this.api('list_tag_family_relations');
+    const relations = Array.isArray(res?.data) ? res.data : [];
+    const childrenByMother = new Map();
+    relations.forEach((relation) => {
+      if (Number(relation?.tipo_de_relacao) !== 19) return;
+      const motherId = Number(relation?.id_tag_mother || 0);
+      const childId = Number(relation?.id_tag_child || 0);
+      if (!motherId || !childId) return;
+      if (!childrenByMother.has(motherId)) childrenByMother.set(motherId, []);
+      childrenByMother.get(motherId).push(childId);
+    });
+
+    const found = new Set();
+    const visitedMothers = new Set();
+    const queue = [...seeds];
+    while (queue.length) {
+      const motherId = queue.shift();
+      if (visitedMothers.has(motherId)) continue;
+      visitedMothers.add(motherId);
+      (childrenByMother.get(motherId) || []).forEach((childId) => {
+        if (!found.has(childId)) {
+          found.add(childId);
+          queue.push(childId);
+        }
+      });
+    }
+    return Array.from(found);
+  },
   async save(e) {
     e.preventDefault();
     const front = singleFront.value.trim();
@@ -1281,13 +1314,17 @@ const app = {
     const image_front = frontImageBase64.value;
     const image_back = backImageBase64.value;
     const subject_tag_ids = this.getSelectedTagIds('subject');
-    const object_tag_ids = this.getSelectedTagIds('object');
+    let object_tag_ids = this.getSelectedTagIds('object');
     const lexical_chunk_tag_ids = this.getSelectedTagIds('lexicalChunk');
     if (!front && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
     if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag na categoria Subject para salvar o card.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
+      if (!this.editCardId) {
+        const descendantObjectTagIds = await this.getDescendantObjectTagIdsFromFamily([...subject_tag_ids, ...object_tag_ids]);
+        object_tag_ids = Array.from(new Set([...object_tag_ids, ...descendantObjectTagIds]));
+      }
       const return_to = this.getReturnTarget();
       const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, info_type: this.infoType, return_to };
       if (this.editCardId) payload.card_id = this.editCardId;

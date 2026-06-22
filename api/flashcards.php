@@ -5687,13 +5687,14 @@ elseif ($action === 'list_user_tags_by_subject_card_count' || $action === 'list_
 }
 
 elseif ($action === 'list_tag_family_relations') {
-    $stmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother FROM tag_family WHERE id_user IN (?, 5)");
+    $stmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother, tipo_de_relacao FROM tag_family WHERE id_user IN (?, 5)");
     $stmt->execute([$user_id]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $parsed = array_map(static function ($row) {
         return [
             'id_tag_child' => (int)$row['id_tag_child'],
-            'id_tag_mother' => (int)$row['id_tag_mother']
+            'id_tag_mother' => (int)$row['id_tag_mother'],
+            'tipo_de_relacao' => (int)$row['tipo_de_relacao']
         ];
     }, $rows);
     echo json_encode(['status' => 'success', 'data' => $parsed]);
