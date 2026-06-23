@@ -235,7 +235,7 @@
             <form id="createRelationTypeForm" class="space-y-3">
                 <div class="flex items-center justify-between"><h3 class="text-lg font-semibold">Criar tipo de relação</h3><button id="btnCloseCreateRelationTypeModal" type="button" class="text-slate-400 hover:text-white text-xl">&times;</button></div>
                 <input id="createRelationTypeNameInput" type="text" required maxlength="120" placeholder="Nome do tipo de relação" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
-                <select id="createRelationTypeHierarchyInput" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2"><option value="0">0 - Conjunto simples</option><option value="1">1 - Árvore parental</option><option value="2">2 - Sequência</option><option value="3">3 - Componente conexo</option></select>
+                <select id="createRelationTypeHierarchyInput" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2"><option value="0">0 - Conjunto simples</option><option value="1">1 - Árvore parental</option><option value="2">2 - Sequência</option><option value="3">3 - Componente conexo</option><option value="4">4 - Replicação familiar</option></select>
                 <div class="flex justify-end gap-2 pt-2"><button id="btnCancelCreateRelationType" type="button" class="rounded-lg border border-slate-600 px-4 py-2">Cancelar</button><button id="btnSubmitCreateRelationType" type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 hover:bg-emerald-500">Criar relação</button></div>
             </form>
         </div>
@@ -1173,7 +1173,7 @@
         function getRelationTypeById(type) { return state.relationTypes.find((item) => Number(item.id) === Number(type)) || null; }
         function canEditRelationType(relationType = {}) { const typeUserId = Number(relationType?.user_id); const sessionId = Number(state.sessionUserId); return Number.isInteger(typeUserId) && typeUserId > 0 && Number.isInteger(sessionId) && sessionId > 0 && typeUserId === sessionId; }
         function getRelationTypeHierarchy(type) { return Number(getRelationTypeById(type)?.hierarquia || 0); }
-        function relationTypeUsesHierarchy(type) { return getRelationTypeHierarchy(type) === 1; }
+        function relationTypeUsesHierarchy(type) { return [1, 4].includes(getRelationTypeHierarchy(type)); }
         function relationTypeUsesSequence(type) { return getRelationTypeHierarchy(type) === 2; }
 
         function renderFamilyTagChip(tag = {}, type = 0, relationRole = 'child', numeroPtBrCounts = null) {

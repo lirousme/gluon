@@ -286,6 +286,62 @@ function nextTagFamilyOrder(PDO $pdo, int $userId, int $motherTagId, int $relati
     return (int)($orderStmt->fetchColumn() ?: 1);
 }
 
+function fetchTagFamilyConnectedComponent(PDO $pdo, int $userId, int $relationTypeId, array $seedTagIds): array
+{
+    if ($userId <= 0 || $relationTypeId <= 0) return [];
+
+    $seedTagIds = array_values(array_unique(array_filter(array_map('intval', $seedTagIds), static fn($id) => $id > 0)));
+    if (!$seedTagIds) return [];
+
+    $graphStmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother FROM tag_family WHERE id_user IN (?, 5) AND tipo_de_relacao = ?");
+    $graphStmt->execute([$userId, $relationTypeId]);
+
+    $adjacency = [];
+    foreach ($graphStmt->fetchAll(PDO::FETCH_ASSOC) as $edge) {
+        $childTagId = (int)($edge['id_tag_child'] ?? 0);
+        $motherTagId = (int)($edge['id_tag_mother'] ?? 0);
+        if ($childTagId <= 0 || $motherTagId <= 0 || $childTagId === $motherTagId) continue;
+        $adjacency[$childTagId][$motherTagId] = true;
+        $adjacency[$motherTagId][$childTagId] = true;
+    }
+
+    $visited = [];
+    $queue = $seedTagIds;
+    foreach ($seedTagIds as $tagId) $visited[$tagId] = true;
+
+    while (!empty($queue)) {
+        $currentTagId = array_shift($queue);
+        foreach (array_keys($adjacency[$currentTagId] ?? []) as $neighborTagId) {
+            $neighborTagId = (int)$neighborTagId;
+            if ($neighborTagId <= 0 || isset($visited[$neighborTagId])) continue;
+            $visited[$neighborTagId] = true;
+            $queue[] = $neighborTagId;
+        }
+    }
+
+    return array_values(array_map('intval', array_keys($visited)));
+}
+
+function replicateTagFamilyRelations(PDO $pdo, int $userId, int $relationTypeId, array $tagIds): void
+{
+    if ($userId <= 0 || $relationTypeId <= 0) return;
+
+    $tagIds = array_values(array_unique(array_filter(array_map('intval', $tagIds), static fn($id) => $id > 0)));
+    if (count($tagIds) < 2) return;
+
+    $insertStmt = $pdo->prepare("
+        INSERT IGNORE INTO tag_family (id_user, id_tag_child, id_tag_mother, tipo_de_relacao, ordem)
+        VALUES (?, ?, ?, ?, 0)
+    ");
+
+    foreach ($tagIds as $childTagId) {
+        foreach ($tagIds as $motherTagId) {
+            if ($childTagId === $motherTagId) continue;
+            $insertStmt->execute([$userId, $childTagId, $motherTagId, $relationTypeId]);
+        }
+    }
+}
+
 function applyAutoTagFamilyCustomRule(PDO $pdo, int $userId, int $candidateTagId, int $customRuleId): void
 {
     if ($userId <= 0 || $candidateTagId <= 0 || $customRuleId <= 0) return;
@@ -6229,7 +6285,7 @@ elseif ($action === 'create_relation_type') {
     $hierarquia = (int)($input['hierarquia'] ?? -1);
 
     if ($nome === '') die(json_encode(['status'=>'error','message'=>'Nome é obrigatório.']));
-    if (!in_array($hierarquia, [0,1,2,3], true)) die(json_encode(['status'=>'error','message'=>'Hierarquia inválida.']));
+    if (!in_array($hierarquia, [0,1,2,3,4], true)) die(json_encode(['status'=>'error','message'=>'Hierarquia inválida.']));
 
     $nomeEnc = Security::encryptData($nome);
     $stmt = $pdo->prepare("INSERT INTO tipo_de_relacao (id_user, nome, hierarquia) VALUES (?, ?, ?)");
@@ -6422,10 +6478,12 @@ elseif ($action === 'add_tag_family_relation') {
     $child = $mode === 'mother' ? $tag_id : $other_tag_id;
     $mother = $mode === 'mother' ? $other_tag_id : $tag_id;
 
-    $reverseStmt = $pdo->prepare("SELECT 1 FROM tag_family WHERE id_user IN (?, 5) AND id_tag_child = ? AND id_tag_mother = ? AND tipo_de_relacao = ? LIMIT 1");
-    $reverseStmt->execute([$user_id, $mother, $child, $relation_type]);
-    if ($reverseStmt->fetchColumn()) {
-        die(json_encode(['status'=>'error','message'=>'Já existe essa relação invertida para esse tipo de relacionamento.']));
+    if ($relation_hierarchy !== 4) {
+        $reverseStmt = $pdo->prepare("SELECT 1 FROM tag_family WHERE id_user IN (?, 5) AND id_tag_child = ? AND id_tag_mother = ? AND tipo_de_relacao = ? LIMIT 1");
+        $reverseStmt->execute([$user_id, $mother, $child, $relation_type]);
+        if ($reverseStmt->fetchColumn()) {
+            die(json_encode(['status'=>'error','message'=>'Já existe essa relação invertida para esse tipo de relacionamento.']));
+        }
     }
 
     if ($relation_hierarchy === 3) {
@@ -6468,8 +6526,23 @@ elseif ($action === 'add_tag_family_relation') {
         $nextOrder = (int)($orderStmt->fetchColumn() ?: 1);
     }
 
-    $stmt = $pdo->prepare("INSERT IGNORE INTO tag_family (id_user, id_tag_child, id_tag_mother, tipo_de_relacao, ordem) VALUES (?, ?, ?, ?, ?)");
-    $stmt->execute([$user_id, $child, $mother, $relation_type, $nextOrder]);
+    if ($relation_hierarchy === 4) {
+        $pdo->beginTransaction();
+        try {
+            $stmt = $pdo->prepare("INSERT IGNORE INTO tag_family (id_user, id_tag_child, id_tag_mother, tipo_de_relacao, ordem) VALUES (?, ?, ?, ?, 0)");
+            $stmt->execute([$user_id, $child, $mother, $relation_type]);
+            $familyTagIds = fetchTagFamilyConnectedComponent($pdo, $user_id, $relation_type, [$child, $mother]);
+            replicateTagFamilyRelations($pdo, $user_id, $relation_type, $familyTagIds);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            error_log('[flashcards][replicate_tag_family_relations] ' . $e->getMessage());
+            die(json_encode(['status'=>'error','message'=>'Erro interno ao replicar família.']));
+        }
+    } else {
+        $stmt = $pdo->prepare("INSERT IGNORE INTO tag_family (id_user, id_tag_child, id_tag_mother, tipo_de_relacao, ordem) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$user_id, $child, $mother, $relation_type, $nextOrder]);
+    }
     executeTagFamilyRelationCustomRules($pdo, $user_id, [$child, $mother]);
     echo json_encode(['status'=>'success','message'=>'Relação salva com sucesso.']);
 }
