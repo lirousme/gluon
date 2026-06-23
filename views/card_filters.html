@@ -1173,7 +1173,7 @@
         function getRelationTypeById(type) { return state.relationTypes.find((item) => Number(item.id) === Number(type)) || null; }
         function canEditRelationType(relationType = {}) { const typeUserId = Number(relationType?.user_id); const sessionId = Number(state.sessionUserId); return Number.isInteger(typeUserId) && typeUserId > 0 && Number.isInteger(sessionId) && sessionId > 0 && typeUserId === sessionId; }
         function getRelationTypeHierarchy(type) { return Number(getRelationTypeById(type)?.hierarquia || 0); }
-        function relationTypeUsesHierarchy(type) { return [1, 4].includes(getRelationTypeHierarchy(type)); }
+        function relationTypeUsesHierarchy(type) { return getRelationTypeHierarchy(type) === 1; }
         function relationTypeUsesSequence(type) { return getRelationTypeHierarchy(type) === 2; }
 
         function renderFamilyTagChip(tag = {}, type = 0, relationRole = 'child', numeroPtBrCounts = null) {
