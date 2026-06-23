@@ -1275,22 +1275,26 @@ const app = {
     }
   },
 
-  async getDescendantObjectTagIdsFromFamily(seedTagIds = []) {
-    const seeds = Array.from(new Set((Array.isArray(seedTagIds) ? seedTagIds : []).map(Number).filter(Boolean)));
-    if (!seeds.length) return [];
-
+  async getTagFamilyRelationsByMother(relationType) {
     const res = await this.api('list_tag_family_relations');
     const relations = Array.isArray(res?.data) ? res.data : [];
     const childrenByMother = new Map();
     relations.forEach((relation) => {
-      if (Number(relation?.tipo_de_relacao) !== 19) return;
+      if (Number(relation?.tipo_de_relacao) !== Number(relationType)) return;
       const motherId = Number(relation?.id_tag_mother || 0);
       const childId = Number(relation?.id_tag_child || 0);
       if (!motherId || !childId) return;
       if (!childrenByMother.has(motherId)) childrenByMother.set(motherId, []);
       childrenByMother.get(motherId).push(childId);
     });
+    return childrenByMother;
+  },
 
+  async getDescendantObjectTagIdsFromFamily(seedTagIds = []) {
+    const seeds = Array.from(new Set((Array.isArray(seedTagIds) ? seedTagIds : []).map(Number).filter(Boolean)));
+    if (!seeds.length) return [];
+
+    const childrenByMother = await this.getTagFamilyRelationsByMother(19);
     const found = new Set();
     const visitedMothers = new Set();
     const queue = [...seeds];
@@ -1307,6 +1311,18 @@ const app = {
     }
     return Array.from(found);
   },
+
+  async getLexicalChunkChildTagIdsFromFamily(seedTagIds = []) {
+    const seeds = Array.from(new Set((Array.isArray(seedTagIds) ? seedTagIds : []).map(Number).filter(Boolean)));
+    if (!seeds.length) return [];
+
+    const childrenByMother = await this.getTagFamilyRelationsByMother(21);
+    const found = new Set();
+    seeds.forEach((motherId) => {
+      (childrenByMother.get(motherId) || []).forEach((childId) => found.add(childId));
+    });
+    return Array.from(found);
+  },
   async save(e) {
     e.preventDefault();
     const front = singleFront.value.trim();
@@ -1315,15 +1331,19 @@ const app = {
     const image_back = backImageBase64.value;
     const subject_tag_ids = this.getSelectedTagIds('subject');
     let object_tag_ids = this.getSelectedTagIds('object');
-    const lexical_chunk_tag_ids = this.getSelectedTagIds('lexicalChunk');
+    let lexical_chunk_tag_ids = this.getSelectedTagIds('lexicalChunk');
     if (!front && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
     if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag na categoria Subject para salvar o card.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
       if (!this.editCardId) {
-        const descendantObjectTagIds = await this.getDescendantObjectTagIdsFromFamily([...subject_tag_ids, ...object_tag_ids]);
+        const [descendantObjectTagIds, lexicalChunkChildTagIds] = await Promise.all([
+          this.getDescendantObjectTagIdsFromFamily([...subject_tag_ids, ...object_tag_ids]),
+          this.getLexicalChunkChildTagIdsFromFamily(lexical_chunk_tag_ids)
+        ]);
         object_tag_ids = Array.from(new Set([...object_tag_ids, ...descendantObjectTagIds]));
+        lexical_chunk_tag_ids = Array.from(new Set([...lexical_chunk_tag_ids, ...lexicalChunkChildTagIds]));
       }
       const return_to = this.getReturnTarget();
       const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, info_type: this.infoType, return_to };
