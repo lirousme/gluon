@@ -95,6 +95,51 @@ function sanitizeTagIds($rawTagIds): array {
     return array_values(array_unique(array_filter(array_map('intval', $rawTagIds), static fn($id) => $id > 0)));
 }
 
+function sanitizeDynamicTextType($value): string {
+    $type = trim((string)$value);
+    return in_array($type, ['none', 'subject', 'object', 'verb'], true) ? $type : 'none';
+}
+
+function getDynamicSubjectChildTags(PDO $pdo, int $user_id, array $subjectTagIds): array {
+    $subjectTagIds = array_values(array_unique(array_filter(array_map('intval', $subjectTagIds), static fn($id) => $id > 0)));
+    if (empty($subjectTagIds)) return [];
+
+    $placeholders = implode(',', array_fill(0, count($subjectTagIds), '?'));
+    $stmt = $pdo->prepare("
+        SELECT DISTINCT t.id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo
+        FROM relacoes_taguineas r
+        INNER JOIN flashcard_tags t ON t.id = r.id_tag_child
+        WHERE r.tipo_de_relacao = 24
+          AND r.id_tag_mother IN ($placeholders)
+          AND r.id_user IN (?, 5)
+          AND t.user_id IN (?, 5)
+        ORDER BY t.id ASC
+    ");
+    $stmt->execute(array_merge($subjectTagIds, [$user_id, $user_id]));
+
+    $children = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $label = '';
+        if (!empty($row['name_encrypted'])) $label = trim((string)Security::decryptData((string)$row['name_encrypted']));
+        if ($label === '' && !empty($row['name_pt_br_encrypted'])) $label = trim((string)Security::decryptData((string)$row['name_pt_br_encrypted']));
+        if ($label === '' && normalizeNullableTagMetadataText($row['numero'] ?? null) !== null) $label = (string)normalizeNullableTagMetadataText($row['numero'] ?? null);
+        if ($label === '' && normalizeNullableTagMetadataText($row['sigla_simbolo'] ?? null) !== null) $label = (string)normalizeNullableTagMetadataText($row['sigla_simbolo'] ?? null);
+        if ($label === '') continue;
+        $children[] = ['id' => (int)$row['id'], 'label' => $label];
+    }
+    return $children;
+}
+
+function renderDynamicSubjectFront(string $frontTemplate, string $subjectLabel): string {
+    $tokens = ['$sujeitoDinamico', '{{sujeitoDinamico}}', '{sujeitoDinamico}'];
+    foreach ($tokens as $token) {
+        if (str_contains($frontTemplate, $token)) {
+            return str_replace($token, $subjectLabel, $frontTemplate);
+        }
+    }
+    return $frontTemplate;
+}
+
 function sanitizeGraphInfoTypes($rawTypes): array {
     if (is_string($rawTypes)) {
         $rawTypes = preg_split('/[\s,]+/', $rawTypes, -1, PREG_SPLIT_NO_EMPTY) ?: [];
@@ -5294,6 +5339,7 @@ elseif ($action === 'add_single') {
     $object_tag_ids = sanitizeTagIds($input['object_tag_ids'] ?? []);
     $lexical_chunk_tag_ids = sanitizeTagIds($input['lexical_chunk_tag_ids'] ?? []);
     $info_type = sanitizeInfoType($input['info_type'] ?? 2);
+    $dynamic_text_type = sanitizeDynamicTextType($input['dynamic_text_type'] ?? 'none');
 
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
@@ -5309,30 +5355,48 @@ elseif ($action === 'add_single') {
         die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
     }
 
-    $front_enc = !empty($front) ? Security::encryptData($front) : null;
-    $back_enc = !empty($back) ? Security::encryptData($back) : null;
-    $img_front_enc = !empty($image_front) ? Security::encryptData($image_front) : null;
-    $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
+    $dynamicSubjectChildren = $dynamic_text_type === 'subject' ? getDynamicSubjectChildTags($pdo, $user_id, $subject_tag_ids) : [];
+    if ($dynamic_text_type === 'subject' && empty($dynamicSubjectChildren)) {
+        die(json_encode(['status' => 'error', 'message' => 'Nenhuma tag filha com tipo_de_relacao 24 foi encontrada para o sujeito selecionado.']));
+    }
+    if ($dynamic_text_type === 'subject' && !str_contains($front, '$sujeitoDinamico') && !str_contains($front, '{{sujeitoDinamico}}') && !str_contains($front, '{sujeitoDinamico}')) {
+        die(json_encode(['status' => 'error', 'message' => 'Use $sujeitoDinamico, {{sujeitoDinamico}} ou {sujeitoDinamico} no texto da frente para criar sujeito dinâmico.']));
+    }
 
     $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)");
-    
-    if ($stmt->execute([$deck_id, $user_id, $deck_id, $front_enc, $back_enc, $img_front_enc, $img_back_enc, $info_type])) {
+    $created_card_ids = [];
+    $cardsToCreate = $dynamic_text_type === 'subject' ? $dynamicSubjectChildren : [['id' => null, 'label' => null]];
+
+    foreach ($cardsToCreate as $dynamicSubject) {
+        $cardFront = $dynamic_text_type === 'subject' ? renderDynamicSubjectFront($front, (string)$dynamicSubject['label']) : $front;
+        $cardSubjectTagIds = $dynamic_text_type === 'subject' ? [(int)$dynamicSubject['id']] : $subject_tag_ids;
+        $front_enc = !empty($cardFront) ? Security::encryptData($cardFront) : null;
+        $back_enc = !empty($back) ? Security::encryptData($back) : null;
+        $img_front_enc = !empty($image_front) ? Security::encryptData($image_front) : null;
+        $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
+
+        if (!$stmt->execute([$deck_id, $user_id, $deck_id, $front_enc, $back_enc, $img_front_enc, $img_back_enc, $info_type])) {
+            echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
+            return;
+        }
+
         $new_card_id = (int)$pdo->lastInsertId();
+        $created_card_ids[] = $new_card_id;
         syncCardTagLinks($pdo, 'flashcard_tag_links', $new_card_id, $tag_ids, $user_id);
-        syncCardTagLinks($pdo, 'subjects_links', $new_card_id, $subject_tag_ids, $user_id);
+        syncCardTagLinks($pdo, 'subjects_links', $new_card_id, $cardSubjectTagIds, $user_id);
         syncCardTagLinks($pdo, 'objects_links', $new_card_id, $object_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'lexical_chunks_links', $new_card_id, $lexical_chunk_tag_ids, $user_id);
-        // O áudio não é mais gerado automaticamente ao criar um card.
-        // O usuário decide quando gerar áudio usando as ações manuais de TTS.
-        echo json_encode([
-            'status' => 'success',
-            'message' => 'Card adicionado.',
-            'card_id' => $new_card_id,
-            'redirect_url' => normalizeReturnTarget($input['return_to'] ?? '')
-        ]);
-    } else {
-        echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
     }
+
+    $createdCount = count($created_card_ids);
+    echo json_encode([
+        'status' => 'success',
+        'message' => $dynamic_text_type === 'subject' ? "{$createdCount} cards dinâmicos adicionados." : 'Card adicionado.',
+        'card_id' => $created_card_ids[0] ?? null,
+        'card_ids' => $created_card_ids,
+        'created_count' => $createdCount,
+        'redirect_url' => normalizeReturnTarget($input['return_to'] ?? '')
+    ]);
 }
 
 // ==== Buscar Card para Edição ====

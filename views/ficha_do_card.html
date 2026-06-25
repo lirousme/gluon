@@ -105,8 +105,18 @@
         </button>
       </div>
 
-      <section id="singleFrontTabContent">
+      <section id="singleFrontTabContent" class="space-y-3">
         <textarea id="singleFront" rows="4" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white resize-none" placeholder="Frente do flashcard"></textarea>
+        <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-3">
+          <label for="dynamicTextType" class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-300">Texto dinâmico</label>
+          <select id="dynamicTextType" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white">
+            <option value="none">Não dinâmico</option>
+            <option value="subject">Sujeito dinâmico</option>
+            <option value="object">Objeto dinâmico</option>
+            <option value="verb">Verbo dinâmico</option>
+          </select>
+          <p class="mt-2 text-xs text-slate-400">Use <code>$sujeitoDinamico</code>, <code>{{sujeitoDinamico}}</code> ou <code>{sujeitoDinamico}</code> na frente. Ao salvar com Sujeito dinâmico, será criado um card para cada tag filha da relação 24.</p>
+        </div>
         <div id="lexicalChunksGeminiResult" class="mt-2 hidden rounded-lg border border-cyan-400/30 bg-cyan-950/20 p-2 text-xs text-cyan-100"></div>
       </section>
 
@@ -1346,7 +1356,7 @@ const app = {
         lexical_chunk_tag_ids = Array.from(new Set([...lexical_chunk_tag_ids, ...lexicalChunkChildTagIds]));
       }
       const return_to = this.getReturnTarget();
-      const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, info_type: this.infoType, return_to };
+      const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, info_type: this.infoType, dynamic_text_type: dynamicTextType.value, return_to };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
