@@ -162,6 +162,7 @@ image_front_encrypted LONGTEXT DEFAULT NULL,
 image_back_encrypted LONGTEXT DEFAULT NULL,
 audio_front_encrypted LONGTEXT DEFAULT NULL, -- Áudio (MP3/Base64) da frente criptografado
 audio_back_encrypted LONGTEXT DEFAULT NULL,  -- Áudio (MP3/Base64) do verso criptografado
+dynamic_text_type INT NOT NULL DEFAULT 0, -- 0 = Não dinâmico, 1 = Sujeito dinâmico, 2 = Objeto dinâmico, 3 = Verbo dinâmico
 has_audio_front TINYINT(1) DEFAULT 0,  -- NOVO: Flag para o áudio da frente
 has_audio_back TINYINT(1) DEFAULT 0,   -- NOVO: Flag para o áudio do verso
 sort_order INT DEFAULT 0,           -- Para ordenar os cards no futuro, se necessário

@@ -43,6 +43,7 @@ ensureFlashcardTagsNumericMetadataSchema($pdo);
 ensureFlashcardTagsCreatorSchema($pdo);
 ensureTagFamilyOrderSchema($pdo);
 ensureFlashcardsPublicToggleSchema($pdo);
+ensureFlashcardsDynamicTextTypeSchema($pdo);
 $user_id = $_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? ($_GET['action'] ?? '');
@@ -98,6 +99,15 @@ function sanitizeTagIds($rawTagIds): array {
 function sanitizeDynamicTextType($value): string {
     $type = trim((string)$value);
     return in_array($type, ['none', 'subject', 'object', 'verb'], true) ? $type : 'none';
+}
+
+function dynamicTextTypeToInt(string $type): int {
+    return ['none' => 0, 'subject' => 1, 'object' => 2, 'verb' => 3][$type] ?? 0;
+}
+
+function dynamicTextTypeFromInt($value): string {
+    $type = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['default' => 0]]);
+    return [0 => 'none', 1 => 'subject', 2 => 'object', 3 => 'verb'][$type] ?? 'none';
 }
 
 function getDynamicSubjectMotherTags(PDO $pdo, int $user_id, array $subjectTagIds): array {
@@ -495,6 +505,21 @@ function ensureTagFamilyOrderSchema(PDO $pdo): void
         }
     } catch (Throwable $e) {
         error_log('[flashcards][tag_family_order_schema] ' . $e->getMessage());
+    }
+}
+
+function ensureFlashcardsDynamicTextTypeSchema(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $dynamicTextTypeColumn = $pdo->query("SHOW COLUMNS FROM flashcards LIKE 'dynamic_text_type'")->fetch(PDO::FETCH_ASSOC);
+        if (!$dynamicTextTypeColumn) {
+            $pdo->exec('ALTER TABLE flashcards ADD COLUMN dynamic_text_type INT NOT NULL DEFAULT 0 AFTER info_type');
+        }
+    } catch (Throwable $e) {
+        error_log('[flashcards][dynamic_text_type_schema] ' . $e->getMessage());
     }
 }
 
@@ -5363,19 +5388,31 @@ elseif ($action === 'add_single') {
         die(json_encode(['status' => 'error', 'message' => 'Use $sujeitoDinamico, {{sujeitoDinamico}} ou {sujeitoDinamico} no texto da frente para criar sujeito dinâmico.']));
     }
 
-    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)");
+    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, dynamic_text_type, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)");
     $created_card_ids = [];
-    $cardsToCreate = $dynamic_text_type === 'subject' ? $dynamicSubjectMothers : [['id' => null, 'label' => null]];
+    $templateDynamicTextType = dynamicTextTypeToInt($dynamic_text_type);
+    $cardsToCreate = [['id' => null, 'label' => null, 'dynamic_text_type' => $templateDynamicTextType]];
+    if ($dynamic_text_type === 'subject') {
+        foreach ($dynamicSubjectMothers as $dynamicSubjectMother) {
+            $cardsToCreate[] = [
+                'id' => (int)$dynamicSubjectMother['id'],
+                'label' => (string)$dynamicSubjectMother['label'],
+                'dynamic_text_type' => 0
+            ];
+        }
+    }
 
     foreach ($cardsToCreate as $dynamicSubject) {
-        $cardFront = $dynamic_text_type === 'subject' ? renderDynamicSubjectFront($front, (string)$dynamicSubject['label']) : $front;
-        $cardSubjectTagIds = $dynamic_text_type === 'subject' ? [(int)$dynamicSubject['id']] : $subject_tag_ids;
+        $isGeneratedDynamicSubjectCard = $dynamic_text_type === 'subject' && $dynamicSubject['id'] !== null;
+        $cardFront = $isGeneratedDynamicSubjectCard ? renderDynamicSubjectFront($front, (string)$dynamicSubject['label']) : $front;
+        $cardSubjectTagIds = $isGeneratedDynamicSubjectCard ? [(int)$dynamicSubject['id']] : $subject_tag_ids;
+        $cardDynamicTextType = (int)($dynamicSubject['dynamic_text_type'] ?? 0);
         $front_enc = !empty($cardFront) ? Security::encryptData($cardFront) : null;
         $back_enc = !empty($back) ? Security::encryptData($back) : null;
         $img_front_enc = !empty($image_front) ? Security::encryptData($image_front) : null;
         $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
 
-        if (!$stmt->execute([$deck_id, $user_id, $deck_id, $front_enc, $back_enc, $img_front_enc, $img_back_enc, $info_type])) {
+        if (!$stmt->execute([$deck_id, $user_id, $deck_id, $front_enc, $back_enc, $img_front_enc, $img_back_enc, $info_type, $cardDynamicTextType])) {
             echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
             return;
         }
@@ -5391,7 +5428,7 @@ elseif ($action === 'add_single') {
     $createdCount = count($created_card_ids);
     echo json_encode([
         'status' => 'success',
-        'message' => $dynamic_text_type === 'subject' ? "{$createdCount} cards dinâmicos adicionados." : 'Card adicionado.',
+        'message' => $dynamic_text_type === 'subject' ? "{$createdCount} cards adicionados (incluindo o modelo dinâmico)." : 'Card adicionado.',
         'card_id' => $created_card_ids[0] ?? null,
         'card_ids' => $created_card_ids,
         'created_count' => $createdCount,
@@ -5412,7 +5449,7 @@ elseif ($action === 'get_card_for_edit') {
     }
 
     $stmt = $pdo->prepare("
-        SELECT id, directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, has_audio_front, has_audio_back
+        SELECT id, directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, dynamic_text_type, has_audio_front, has_audio_back
         FROM flashcards
         WHERE id = ?
         LIMIT 1
@@ -5440,6 +5477,7 @@ elseif ($action === 'get_card_for_edit') {
             'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
             'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
             'info_type' => sanitizeInfoType($card['info_type'] ?? 2),
+            'dynamic_text_type' => dynamicTextTypeFromInt($card['dynamic_text_type'] ?? 0),
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
             'subject_tags' => $subjectTagsByCard[$card_id] ?? [],
@@ -5493,6 +5531,8 @@ elseif ($action === 'update_card') {
     $object_tag_ids = sanitizeTagIds($input['object_tag_ids'] ?? []);
     $lexical_chunk_tag_ids = sanitizeTagIds($input['lexical_chunk_tag_ids'] ?? []);
     $info_type = sanitizeInfoType($input['info_type'] ?? 2);
+    $dynamic_text_type = sanitizeDynamicTextType($input['dynamic_text_type'] ?? 'none');
+    $dynamic_text_type_id = dynamicTextTypeToInt($dynamic_text_type);
 
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
@@ -5514,9 +5554,9 @@ elseif ($action === 'update_card') {
     $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
 
     // Mantém os áudios existentes. Eles só devem ser alterados quando o usuário solicitar nova geração.
-    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, info_type = ? WHERE id = ?");
+    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, info_type = ?, dynamic_text_type = ? WHERE id = ?");
     
-    if ($stmt->execute([$front_enc, $back_enc, $img_front_enc, $img_back_enc, $info_type, $card_id])) {
+    if ($stmt->execute([$front_enc, $back_enc, $img_front_enc, $img_back_enc, $info_type, $dynamic_text_type_id, $card_id])) {
         syncCardTagLinks($pdo, 'flashcard_tag_links', $card_id, $tag_ids, $user_id);
         syncCardTagLinks($pdo, 'subjects_links', $card_id, $subject_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'objects_links', $card_id, $object_tag_ids, $user_id);
@@ -5642,6 +5682,7 @@ elseif ($action === 'list_graph_cards_for_user') {
             f.image_front_encrypted,
             f.image_back_encrypted,
             f.info_type,
+            f.dynamic_text_type,
             f.has_audio_front,
             f.has_audio_back,
             d.name_encrypted AS directory_name_encrypted,
@@ -5687,6 +5728,7 @@ elseif ($action === 'list_graph_cards_for_user') {
             'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
             'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
             'info_type' => sanitizeInfoType($card['info_type'] ?? 2),
+            'dynamic_text_type' => dynamicTextTypeFromInt($card['dynamic_text_type'] ?? 0),
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
             'score' => (int)$card['score'],
