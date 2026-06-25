@@ -520,9 +520,7 @@ function ensureFlashcardsDynamicTextTypeSchema(PDO $pdo): void
         }
         $dynamicParentColumn = $pdo->query("SHOW COLUMNS FROM flashcards LIKE 'dynamic_parent_flashcard_id'")->fetch(PDO::FETCH_ASSOC);
         if (!$dynamicParentColumn) {
-            $pdo->exec('ALTER TABLE flashcards ADD COLUMN dynamic_parent_flashcard_id INT UNSIGNED NULL DEFAULT NULL AFTER dynamic_text_type');
-        } elseif (stripos((string)($dynamicParentColumn['Type'] ?? ''), 'unsigned') === false) {
-            $pdo->exec('ALTER TABLE flashcards MODIFY COLUMN dynamic_parent_flashcard_id INT UNSIGNED NULL DEFAULT NULL');
+            $pdo->exec('ALTER TABLE flashcards ADD COLUMN dynamic_parent_flashcard_id INT NULL DEFAULT NULL AFTER dynamic_text_type');
         }
     } catch (Throwable $e) {
         error_log('[flashcards][dynamic_text_type_schema] ' . $e->getMessage());
