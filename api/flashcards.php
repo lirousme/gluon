@@ -518,9 +518,42 @@ function ensureFlashcardsDynamicTextTypeSchema(PDO $pdo): void
         if (!$dynamicTextTypeColumn) {
             $pdo->exec('ALTER TABLE flashcards ADD COLUMN dynamic_text_type INT NOT NULL DEFAULT 0 AFTER info_type');
         }
+        $idColumn = $pdo->query("SHOW COLUMNS FROM flashcards LIKE 'id'")->fetch(PDO::FETCH_ASSOC);
+        $flashcardIdType = strtolower((string)($idColumn['Type'] ?? 'int unsigned'));
+        if (!preg_match('/^[a-z0-9() ]+$/', $flashcardIdType)) {
+            $flashcardIdType = 'int unsigned';
+        }
+
         $dynamicParentColumn = $pdo->query("SHOW COLUMNS FROM flashcards LIKE 'dynamic_parent_flashcard_id'")->fetch(PDO::FETCH_ASSOC);
         if (!$dynamicParentColumn) {
-            $pdo->exec('ALTER TABLE flashcards ADD COLUMN dynamic_parent_flashcard_id INT NULL DEFAULT NULL AFTER dynamic_text_type');
+            $pdo->exec("ALTER TABLE flashcards ADD COLUMN dynamic_parent_flashcard_id {$flashcardIdType} NULL DEFAULT NULL AFTER dynamic_text_type");
+        } elseif (strtolower((string)($dynamicParentColumn['Type'] ?? '')) !== $flashcardIdType) {
+            $pdo->exec("ALTER TABLE flashcards MODIFY COLUMN dynamic_parent_flashcard_id {$flashcardIdType} NULL DEFAULT NULL");
+        }
+
+        $dynamicParentIndex = $pdo->query("SHOW INDEX FROM flashcards WHERE Key_name = 'idx_flashcards_dynamic_parent_flashcard_id'")->fetch(PDO::FETCH_ASSOC);
+        if (!$dynamicParentIndex) {
+            $pdo->exec('CREATE INDEX idx_flashcards_dynamic_parent_flashcard_id ON flashcards (dynamic_parent_flashcard_id)');
+        }
+
+        $fkStmt = $pdo->prepare("
+            SELECT kcu.CONSTRAINT_NAME
+            FROM information_schema.KEY_COLUMN_USAGE kcu
+            WHERE kcu.TABLE_SCHEMA = DATABASE()
+              AND kcu.TABLE_NAME = 'flashcards'
+              AND (
+                  kcu.CONSTRAINT_NAME = 'fk_flashcards_dynamic_card_mother'
+                  OR (
+                      kcu.COLUMN_NAME = 'dynamic_parent_flashcard_id'
+                      AND kcu.REFERENCED_TABLE_NAME = 'flashcards'
+                      AND kcu.REFERENCED_COLUMN_NAME = 'id'
+                  )
+              )
+            LIMIT 1
+        ");
+        $fkStmt->execute();
+        if (!$fkStmt->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->exec('ALTER TABLE flashcards ADD CONSTRAINT fk_flashcards_dynamic_card_mother FOREIGN KEY (dynamic_parent_flashcard_id) REFERENCES flashcards(id) ON DELETE CASCADE');
         }
     } catch (Throwable $e) {
         error_log('[flashcards][dynamic_text_type_schema] ' . $e->getMessage());
