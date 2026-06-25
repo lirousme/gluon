@@ -149,7 +149,7 @@ function ensureRelationTypeEncryptedNameCapacity(PDO $pdo): void
     $checked = true;
 
     try {
-        $stmt = $pdo->query("SHOW COLUMNS FROM tipo_de_relacao LIKE 'nome'");
+        $stmt = $pdo->query("SHOW COLUMNS FROM tipos_de_relacoes LIKE 'nome'");
         $column = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
         $type = strtolower((string)($column['Type'] ?? ''));
 
@@ -161,7 +161,7 @@ function ensureRelationTypeEncryptedNameCapacity(PDO $pdo): void
         }
 
         if ($needsAlter) {
-            $pdo->exec('ALTER TABLE tipo_de_relacao MODIFY nome TEXT NOT NULL');
+            $pdo->exec('ALTER TABLE tipos_de_relacoes MODIFY nome TEXT NOT NULL');
         }
     } catch (Throwable $e) {
         error_log('[flashcards][relation_types_schema] ' . $e->getMessage());
@@ -244,7 +244,7 @@ function candidateMatchesAutoTagFamilyParameters(PDO $pdo, int $userId, int $can
 
     $existsStmt = $pdo->prepare("
         SELECT 1
-        FROM tag_family
+        FROM relacoes_taguineas
         WHERE id_user IN (?, 5)
           AND id_tag_child = ?
           AND id_tag_mother = ?
@@ -277,11 +277,11 @@ function nextTagFamilyOrder(PDO $pdo, int $userId, int $motherTagId, int $relati
 {
     if ($userId <= 0 || $motherTagId <= 0 || $relationTypeId <= 0) return 0;
 
-    $typeStmt = $pdo->prepare("SELECT hierarquia FROM tipo_de_relacao WHERE id = ? AND id_user IN (?, 5) LIMIT 1");
+    $typeStmt = $pdo->prepare("SELECT hierarquia FROM tipos_de_relacoes WHERE id = ? AND id_user IN (?, 5) LIMIT 1");
     $typeStmt->execute([$relationTypeId, $userId]);
     if ((int)($typeStmt->fetchColumn() ?: 0) !== 2) return 0;
 
-    $orderStmt = $pdo->prepare("SELECT COALESCE(MAX(ordem), 0) + 1 FROM tag_family WHERE id_user = ? AND id_tag_mother = ? AND tipo_de_relacao = ?");
+    $orderStmt = $pdo->prepare("SELECT COALESCE(MAX(ordem), 0) + 1 FROM relacoes_taguineas WHERE id_user = ? AND id_tag_mother = ? AND tipo_de_relacao = ?");
     $orderStmt->execute([$userId, $motherTagId, $relationTypeId]);
     return (int)($orderStmt->fetchColumn() ?: 1);
 }
@@ -293,7 +293,7 @@ function fetchTagFamilyConnectedComponent(PDO $pdo, int $userId, int $relationTy
     $seedTagIds = array_values(array_unique(array_filter(array_map('intval', $seedTagIds), static fn($id) => $id > 0)));
     if (!$seedTagIds) return [];
 
-    $graphStmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother FROM tag_family WHERE id_user IN (?, 5) AND tipo_de_relacao = ?");
+    $graphStmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother FROM relacoes_taguineas WHERE id_user IN (?, 5) AND tipo_de_relacao = ?");
     $graphStmt->execute([$userId, $relationTypeId]);
 
     $adjacency = [];
@@ -330,7 +330,7 @@ function replicateTagFamilyRelations(PDO $pdo, int $userId, int $relationTypeId,
     if (count($tagIds) < 2) return;
 
     $insertStmt = $pdo->prepare("
-        INSERT IGNORE INTO tag_family (id_user, id_tag_child, id_tag_mother, tipo_de_relacao, ordem)
+        INSERT IGNORE INTO relacoes_taguineas (id_user, id_tag_child, id_tag_mother, tipo_de_relacao, ordem)
         VALUES (?, ?, ?, ?, 0)
     ");
 
@@ -370,12 +370,12 @@ function applyAutoTagFamilyCustomRule(PDO $pdo, int $userId, int $candidateTagId
     if (!$destinationRuleTags || !candidateMatchesAutoTagFamilyParameters($pdo, $userId, $candidateTagId, $parameterRuleTags)) return;
 
     $insertStmt = $pdo->prepare("
-        INSERT IGNORE INTO tag_family (id_user, id_tag_child, id_tag_mother, tipo_de_relacao, ordem)
+        INSERT IGNORE INTO relacoes_taguineas (id_user, id_tag_child, id_tag_mother, tipo_de_relacao, ordem)
         VALUES (?, ?, ?, ?, ?)
     ");
     $reverseStmt = $pdo->prepare("
         SELECT 1
-        FROM tag_family
+        FROM relacoes_taguineas
         WHERE id_user IN (?, 5)
           AND id_tag_child = ?
           AND id_tag_mother = ?
@@ -444,9 +444,9 @@ function ensureTagFamilyOrderSchema(PDO $pdo): void
     if ($checked) return;
     $checked = true;
     try {
-        $orderColumn = $pdo->query("SHOW COLUMNS FROM tag_family LIKE 'ordem'")->fetch(PDO::FETCH_ASSOC);
+        $orderColumn = $pdo->query("SHOW COLUMNS FROM relacoes_taguineas LIKE 'ordem'")->fetch(PDO::FETCH_ASSOC);
         if (!$orderColumn) {
-            $pdo->exec('ALTER TABLE tag_family ADD COLUMN ordem INT NOT NULL DEFAULT 0 AFTER tipo_de_relacao');
+            $pdo->exec('ALTER TABLE relacoes_taguineas ADD COLUMN ordem INT NOT NULL DEFAULT 0 AFTER tipo_de_relacao');
         }
     } catch (Throwable $e) {
         error_log('[flashcards][tag_family_order_schema] ' . $e->getMessage());
@@ -1889,7 +1889,7 @@ function fetchTagFamilyDescendantIds(PDO $pdo, int $user_id, int $relationType, 
     $seeds = array_values(array_unique(array_filter(array_map('intval', $seedTagIds), fn($id) => $id > 0)));
     if (empty($seeds)) return [];
 
-    $stmt = $pdo->prepare("SELECT id_tag_mother, id_tag_child FROM tag_family WHERE id_user IN (?, 5) AND tipo_de_relacao = ?");
+    $stmt = $pdo->prepare("SELECT id_tag_mother, id_tag_child FROM relacoes_taguineas WHERE id_user IN (?, 5) AND tipo_de_relacao = ?");
     $stmt->execute([$user_id, $relationType]);
 
     $childrenByMother = [];
@@ -5871,7 +5871,7 @@ elseif ($action === 'list_user_tags_by_subject_card_count' || $action === 'list_
 }
 
 elseif ($action === 'list_tag_family_relations') {
-    $stmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother, tipo_de_relacao FROM tag_family WHERE id_user IN (?, 5)");
+    $stmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother, tipo_de_relacao FROM relacoes_taguineas WHERE id_user IN (?, 5)");
     $stmt->execute([$user_id]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $parsed = array_map(static function ($row) {
@@ -6276,7 +6276,7 @@ elseif ($action === 'delete_tag') {
 elseif ($action === 'list_relation_types') {
     ensureRelationTypeEncryptedNameCapacity($pdo);
 
-    $stmt = $pdo->prepare("SELECT id, id_user, nome, hierarquia FROM tipo_de_relacao WHERE id_user IN (?, 5) ORDER BY id_user = 5 ASC, id ASC");
+    $stmt = $pdo->prepare("SELECT id, id_user, nome, hierarquia FROM tipos_de_relacoes WHERE id_user IN (?, 5) ORDER BY id_user = 5 ASC, id ASC");
     $stmt->execute([$user_id]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -6327,7 +6327,7 @@ elseif ($action === 'create_custom_rule') {
         die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos uma tag.']));
     }
 
-    $relationTypeStmt = $pdo->prepare("SELECT id FROM tipo_de_relacao WHERE id = ? AND id_user IN (?, 5) LIMIT 1");
+    $relationTypeStmt = $pdo->prepare("SELECT id FROM tipos_de_relacoes WHERE id = ? AND id_user IN (?, 5) LIMIT 1");
     $relationTypeStmt->execute([$idTipoDeRelacao, $user_id]);
     if (!$relationTypeStmt->fetchColumn()) {
         http_response_code(403);
@@ -6416,15 +6416,15 @@ elseif ($action === 'create_relation_type') {
     if (!in_array($hierarquia, [0,1,2,3,4], true)) die(json_encode(['status'=>'error','message'=>'Hierarquia inválida.']));
 
     $nomeEnc = Security::encryptData($nome);
-    $stmt = $pdo->prepare("INSERT INTO tipo_de_relacao (id_user, nome, hierarquia) VALUES (?, ?, ?)");
+    $stmt = $pdo->prepare("INSERT INTO tipos_de_relacoes (id_user, nome, hierarquia) VALUES (?, ?, ?)");
     $stmt->execute([$user_id, $nomeEnc, $hierarquia]);
 
     $relationTypeId = (int)$pdo->lastInsertId();
-    $stmtCheck = $pdo->prepare("SELECT nome FROM tipo_de_relacao WHERE id = ? AND id_user = ? LIMIT 1");
+    $stmtCheck = $pdo->prepare("SELECT nome FROM tipos_de_relacoes WHERE id = ? AND id_user = ? LIMIT 1");
     $stmtCheck->execute([$relationTypeId, $user_id]);
     $storedNome = (string)($stmtCheck->fetchColumn() ?: '');
     if (Security::decryptData($storedNome) !== $nome) {
-        $stmtCleanup = $pdo->prepare("DELETE FROM tipo_de_relacao WHERE id = ? AND id_user = ? LIMIT 1");
+        $stmtCleanup = $pdo->prepare("DELETE FROM tipos_de_relacoes WHERE id = ? AND id_user = ? LIMIT 1");
         $stmtCleanup->execute([$relationTypeId, $user_id]);
         http_response_code(500);
         die(json_encode(['status'=>'error','message'=>'Não foi possível salvar o nome criptografado completo do tipo de relação. Verifique o tamanho da coluna tipo_de_relacao.nome.']));
@@ -6444,18 +6444,18 @@ elseif ($action === 'update_relation_type') {
     if ($nome === '') die(json_encode(['status'=>'error','message'=>'Nome é obrigatório.']));
 
     $nomeEnc = Security::encryptData($nome);
-    $stmt = $pdo->prepare("UPDATE tipo_de_relacao SET nome = ? WHERE id = ? AND id_user = ?");
+    $stmt = $pdo->prepare("UPDATE tipos_de_relacoes SET nome = ? WHERE id = ? AND id_user = ?");
     $stmt->execute([$nomeEnc, $relationTypeId, $user_id]);
 
     if ($stmt->rowCount() === 0) {
-        $checkStmt = $pdo->prepare("SELECT id FROM tipo_de_relacao WHERE id = ? AND id_user = ? LIMIT 1");
+        $checkStmt = $pdo->prepare("SELECT id FROM tipos_de_relacoes WHERE id = ? AND id_user = ? LIMIT 1");
         $checkStmt->execute([$relationTypeId, $user_id]);
         if (!$checkStmt->fetchColumn()) {
             die(json_encode(['status'=>'error','message'=>'Sessão não encontrada ou sem permissão.']));
         }
     }
 
-    $stmtCheck = $pdo->prepare("SELECT nome FROM tipo_de_relacao WHERE id = ? AND id_user = ? LIMIT 1");
+    $stmtCheck = $pdo->prepare("SELECT nome FROM tipos_de_relacoes WHERE id = ? AND id_user = ? LIMIT 1");
     $stmtCheck->execute([$relationTypeId, $user_id]);
     $storedNome = (string)($stmtCheck->fetchColumn() ?: '');
     if (Security::decryptData($storedNome) !== $nome) {
@@ -6473,17 +6473,17 @@ elseif ($action === 'delete_relation_type') {
     try {
         $pdo->beginTransaction();
 
-        $checkStmt = $pdo->prepare("SELECT id FROM tipo_de_relacao WHERE id = ? AND id_user = ? LIMIT 1 FOR UPDATE");
+        $checkStmt = $pdo->prepare("SELECT id FROM tipos_de_relacoes WHERE id = ? AND id_user = ? LIMIT 1 FOR UPDATE");
         $checkStmt->execute([$relationTypeId, $user_id]);
         if (!$checkStmt->fetchColumn()) {
             $pdo->rollBack();
             die(json_encode(['status'=>'error','message'=>'Sessão não encontrada ou sem permissão.']));
         }
 
-        $deleteRelations = $pdo->prepare("DELETE FROM tag_family WHERE id_user = ? AND tipo_de_relacao = ?");
+        $deleteRelations = $pdo->prepare("DELETE FROM relacoes_taguineas WHERE id_user = ? AND tipo_de_relacao = ?");
         $deleteRelations->execute([$user_id, $relationTypeId]);
 
-        $deleteType = $pdo->prepare("DELETE FROM tipo_de_relacao WHERE id = ? AND id_user = ? LIMIT 1");
+        $deleteType = $pdo->prepare("DELETE FROM tipos_de_relacoes WHERE id = ? AND id_user = ? LIMIT 1");
         $deleteType->execute([$relationTypeId, $user_id]);
 
         $pdo->commit();
@@ -6503,7 +6503,7 @@ elseif ($action === 'get_tag_family') {
     $check->execute([$tag_id, $user_id]);
     if (!$check->fetchColumn()) die(json_encode(['status'=>'error','message'=>'Sem permissão para esta tag.']));
 
-    $stmtRelationTypes = $pdo->prepare("SELECT id, hierarquia FROM tipo_de_relacao WHERE id_user IN (?, 5)");
+    $stmtRelationTypes = $pdo->prepare("SELECT id, hierarquia FROM tipos_de_relacoes WHERE id_user IN (?, 5)");
     $stmtRelationTypes->execute([$user_id]);
     $relationTypeHierarchy = [];
     foreach ($stmtRelationTypes->fetchAll(PDO::FETCH_ASSOC) as $typeRow) {
@@ -6512,18 +6512,18 @@ elseif ($action === 'get_tag_family') {
         $relationTypeHierarchy[$typeId] = (int)($typeRow['hierarquia'] ?? 0);
     }
 
-    $stmtChildren = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo, t.color, tf.tipo_de_relacao, tf.id_user AS family_user_id, tf.ordem FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_child LEFT JOIN tipo_de_relacao tr ON tr.id = tf.tipo_de_relacao WHERE tf.id_user IN (?, 5) AND tf.id_tag_mother = ? AND t.user_id IN (?,5) ORDER BY (tf.id_user = ?) DESC, CASE WHEN COALESCE(tr.hierarquia, 0) = 2 THEN tf.ordem ELSE 0 END ASC, t.id ASC");
+    $stmtChildren = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo, t.color, tf.tipo_de_relacao, tf.id_user AS family_user_id, tf.ordem FROM relacoes_taguineas tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_child LEFT JOIN tipos_de_relacoes tr ON tr.id = tf.tipo_de_relacao WHERE tf.id_user IN (?, 5) AND tf.id_tag_mother = ? AND t.user_id IN (?,5) ORDER BY (tf.id_user = ?) DESC, CASE WHEN COALESCE(tr.hierarquia, 0) = 2 THEN tf.ordem ELSE 0 END ASC, t.id ASC");
     $stmtChildren->execute([$user_id, $tag_id, $user_id, $user_id]);
     $children = $stmtChildren->fetchAll(PDO::FETCH_ASSOC);
 
-    $stmtMothers = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo, t.color, tf.tipo_de_relacao, tf.id_user AS family_user_id, tf.ordem FROM tag_family tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_mother WHERE tf.id_user IN (?, 5) AND tf.id_tag_child = ? AND t.user_id IN (?,5) ORDER BY (tf.id_user = ?) DESC, t.id ASC");
+    $stmtMothers = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo, t.color, tf.tipo_de_relacao, tf.id_user AS family_user_id, tf.ordem FROM relacoes_taguineas tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_mother WHERE tf.id_user IN (?, 5) AND tf.id_tag_child = ? AND t.user_id IN (?,5) ORDER BY (tf.id_user = ?) DESC, t.id ASC");
     $stmtMothers->execute([$user_id, $tag_id, $user_id, $user_id]);
     $mothers = $stmtMothers->fetchAll(PDO::FETCH_ASSOC);
 
     $hierarquiaTresTypes = array_keys(array_filter($relationTypeHierarchy, function($hierarquia){ return (int)$hierarquia === 3; }));
     if (!empty($hierarquiaTresTypes)) {
         $placeholders = implode(',', array_fill(0, count($hierarquiaTresTypes), '?'));
-        $graphStmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother, tipo_de_relacao, id_user AS family_user_id, ordem FROM tag_family WHERE id_user IN (?, 5) AND tipo_de_relacao IN ($placeholders)");
+        $graphStmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother, tipo_de_relacao, id_user AS family_user_id, ordem FROM relacoes_taguineas WHERE id_user IN (?, 5) AND tipo_de_relacao IN ($placeholders)");
         $graphStmt->execute(array_merge([$user_id], $hierarquiaTresTypes));
         $graphRows = $graphStmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -6592,7 +6592,7 @@ elseif ($action === 'add_tag_family_relation') {
     $other_tag_id = (int)($input['other_tag_id'] ?? 0);
     $mode = (string)($input['mode'] ?? 'child');
     $relation_type = (int)($input['tipo_de_relacao'] ?? 0);
-    $typeStmt = $pdo->prepare("SELECT id, hierarquia FROM tipo_de_relacao WHERE id = ? AND id_user IN (?, 5) LIMIT 1");
+    $typeStmt = $pdo->prepare("SELECT id, hierarquia FROM tipos_de_relacoes WHERE id = ? AND id_user IN (?, 5) LIMIT 1");
     $typeStmt->execute([$relation_type, $user_id]);
     $relationTypeRow = $typeStmt->fetch(PDO::FETCH_ASSOC);
     if (!$relationTypeRow) die(json_encode(['status'=>'error','message'=>'Tipo de relação inválido.']));
@@ -6607,7 +6607,7 @@ elseif ($action === 'add_tag_family_relation') {
     $mother = $mode === 'mother' ? $other_tag_id : $tag_id;
 
     if ($relation_hierarchy !== 4) {
-        $reverseStmt = $pdo->prepare("SELECT 1 FROM tag_family WHERE id_user IN (?, 5) AND id_tag_child = ? AND id_tag_mother = ? AND tipo_de_relacao = ? LIMIT 1");
+        $reverseStmt = $pdo->prepare("SELECT 1 FROM relacoes_taguineas WHERE id_user IN (?, 5) AND id_tag_child = ? AND id_tag_mother = ? AND tipo_de_relacao = ? LIMIT 1");
         $reverseStmt->execute([$user_id, $mother, $child, $relation_type]);
         if ($reverseStmt->fetchColumn()) {
             die(json_encode(['status'=>'error','message'=>'Já existe essa relação invertida para esse tipo de relacionamento.']));
@@ -6615,7 +6615,7 @@ elseif ($action === 'add_tag_family_relation') {
     }
 
     if ($relation_hierarchy === 3) {
-        $graphStmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother FROM tag_family WHERE id_user IN (?, 5) AND tipo_de_relacao = ?");
+        $graphStmt = $pdo->prepare("SELECT id_tag_child, id_tag_mother FROM relacoes_taguineas WHERE id_user IN (?, 5) AND tipo_de_relacao = ?");
         $graphStmt->execute([$user_id, $relation_type]);
         $adjacency = [];
         foreach ($graphStmt->fetchAll(PDO::FETCH_ASSOC) as $edge) {
@@ -6649,7 +6649,7 @@ elseif ($action === 'add_tag_family_relation') {
 
     $nextOrder = 0;
     if ($relation_hierarchy === 2) {
-        $orderStmt = $pdo->prepare("SELECT COALESCE(MAX(ordem), 0) + 1 FROM tag_family WHERE id_user = ? AND id_tag_mother = ? AND tipo_de_relacao = ?");
+        $orderStmt = $pdo->prepare("SELECT COALESCE(MAX(ordem), 0) + 1 FROM relacoes_taguineas WHERE id_user = ? AND id_tag_mother = ? AND tipo_de_relacao = ?");
         $orderStmt->execute([$user_id, $mother, $relation_type]);
         $nextOrder = (int)($orderStmt->fetchColumn() ?: 1);
     }
@@ -6657,7 +6657,7 @@ elseif ($action === 'add_tag_family_relation') {
     if ($relation_hierarchy === 4) {
         $pdo->beginTransaction();
         try {
-            $stmt = $pdo->prepare("INSERT IGNORE INTO tag_family (id_user, id_tag_child, id_tag_mother, tipo_de_relacao, ordem) VALUES (?, ?, ?, ?, 0)");
+            $stmt = $pdo->prepare("INSERT IGNORE INTO relacoes_taguineas (id_user, id_tag_child, id_tag_mother, tipo_de_relacao, ordem) VALUES (?, ?, ?, ?, 0)");
             $stmt->execute([$user_id, $child, $mother, $relation_type]);
             $familyTagIds = fetchTagFamilyConnectedComponent($pdo, $user_id, $relation_type, [$child, $mother]);
             replicateTagFamilyRelations($pdo, $user_id, $relation_type, $familyTagIds);
@@ -6668,7 +6668,7 @@ elseif ($action === 'add_tag_family_relation') {
             die(json_encode(['status'=>'error','message'=>'Erro interno ao replicar família.']));
         }
     } else {
-        $stmt = $pdo->prepare("INSERT IGNORE INTO tag_family (id_user, id_tag_child, id_tag_mother, tipo_de_relacao, ordem) VALUES (?, ?, ?, ?, ?)");
+        $stmt = $pdo->prepare("INSERT IGNORE INTO relacoes_taguineas (id_user, id_tag_child, id_tag_mother, tipo_de_relacao, ordem) VALUES (?, ?, ?, ?, ?)");
         $stmt->execute([$user_id, $child, $mother, $relation_type, $nextOrder]);
     }
     executeTagFamilyRelationCustomRules($pdo, $user_id, [$child, $mother]);
@@ -6691,12 +6691,12 @@ elseif ($action === 'reorder_tag_family_sequence') {
     $ordered_tag_ids = sanitizeTagIds($input['ordered_tag_ids'] ?? []);
     if ($tag_id <= 0 || $relation_type <= 0 || empty($ordered_tag_ids)) die(json_encode(['status'=>'error','message'=>'Ordem inválida.']));
 
-    $typeStmt = $pdo->prepare("SELECT id FROM tipo_de_relacao WHERE id = ? AND id_user IN (?, 5) AND hierarquia = 2 LIMIT 1");
+    $typeStmt = $pdo->prepare("SELECT id FROM tipos_de_relacoes WHERE id = ? AND id_user IN (?, 5) AND hierarquia = 2 LIMIT 1");
     $typeStmt->execute([$relation_type, $user_id]);
     if (!$typeStmt->fetchColumn()) die(json_encode(['status'=>'error','message'=>'Esta sessão não é do tipo Sequência.']));
 
     $placeholders = implode(',', array_fill(0, count($ordered_tag_ids), '?'));
-    $currentStmt = $pdo->prepare("SELECT id_tag_child FROM tag_family WHERE id_user = ? AND id_tag_mother = ? AND tipo_de_relacao = ? AND id_tag_child IN ($placeholders)");
+    $currentStmt = $pdo->prepare("SELECT id_tag_child FROM relacoes_taguineas WHERE id_user = ? AND id_tag_mother = ? AND tipo_de_relacao = ? AND id_tag_child IN ($placeholders)");
     $currentStmt->execute(array_merge([$user_id, $tag_id, $relation_type], $ordered_tag_ids));
     $currentIds = array_map('intval', $currentStmt->fetchAll(PDO::FETCH_COLUMN));
     sort($currentIds);
@@ -6706,7 +6706,7 @@ elseif ($action === 'reorder_tag_family_sequence') {
 
     try {
         $pdo->beginTransaction();
-        $updateStmt = $pdo->prepare("UPDATE tag_family SET ordem = ? WHERE id_user = ? AND id_tag_mother = ? AND tipo_de_relacao = ? AND id_tag_child = ? LIMIT 1");
+        $updateStmt = $pdo->prepare("UPDATE relacoes_taguineas SET ordem = ? WHERE id_user = ? AND id_tag_mother = ? AND tipo_de_relacao = ? AND id_tag_child = ? LIMIT 1");
         foreach ($ordered_tag_ids as $index => $childId) {
             $updateStmt->execute([$index + 1, $user_id, $tag_id, $relation_type, $childId]);
         }
@@ -6730,7 +6730,7 @@ elseif ($action === 'remove_tag_family_relation') {
     $child = $relation_type === 'mother' ? $tag_id : $other_tag_id;
     $mother = $relation_type === 'mother' ? $other_tag_id : $tag_id;
 
-    $stmt = $pdo->prepare("DELETE FROM tag_family WHERE id_user = ? AND id_tag_child = ? AND id_tag_mother = ? AND tipo_de_relacao = ? LIMIT 1");
+    $stmt = $pdo->prepare("DELETE FROM relacoes_taguineas WHERE id_user = ? AND id_tag_child = ? AND id_tag_mother = ? AND tipo_de_relacao = ? LIMIT 1");
     $stmt->execute([$user_id, $child, $mother, (int)($input['tipo_de_relacao'] ?? 0)]);
     echo json_encode(['status'=>'success','message'=>'Relação removida com sucesso.']);
 }
