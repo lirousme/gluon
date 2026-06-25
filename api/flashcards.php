@@ -100,7 +100,7 @@ function sanitizeDynamicTextType($value): string {
     return in_array($type, ['none', 'subject', 'object', 'verb'], true) ? $type : 'none';
 }
 
-function getDynamicSubjectChildTags(PDO $pdo, int $user_id, array $subjectTagIds): array {
+function getDynamicSubjectMotherTags(PDO $pdo, int $user_id, array $subjectTagIds): array {
     $subjectTagIds = array_values(array_unique(array_filter(array_map('intval', $subjectTagIds), static fn($id) => $id > 0)));
     if (empty($subjectTagIds)) return [];
 
@@ -108,16 +108,16 @@ function getDynamicSubjectChildTags(PDO $pdo, int $user_id, array $subjectTagIds
     $stmt = $pdo->prepare("
         SELECT DISTINCT t.id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo
         FROM relacoes_taguineas r
-        INNER JOIN flashcard_tags t ON t.id = r.id_tag_child
+        INNER JOIN flashcard_tags t ON t.id = r.id_tag_mother
         WHERE r.tipo_de_relacao = 24
-          AND r.id_tag_mother IN ($placeholders)
+          AND r.id_tag_child IN ($placeholders)
           AND r.id_user IN (?, 5)
           AND t.user_id IN (?, 5)
         ORDER BY t.id ASC
     ");
     $stmt->execute(array_merge($subjectTagIds, [$user_id, $user_id]));
 
-    $children = [];
+    $mothers = [];
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
         $label = '';
         if (!empty($row['name_encrypted'])) $label = trim((string)Security::decryptData((string)$row['name_encrypted']));
@@ -125,9 +125,9 @@ function getDynamicSubjectChildTags(PDO $pdo, int $user_id, array $subjectTagIds
         if ($label === '' && normalizeNullableTagMetadataText($row['numero'] ?? null) !== null) $label = (string)normalizeNullableTagMetadataText($row['numero'] ?? null);
         if ($label === '' && normalizeNullableTagMetadataText($row['sigla_simbolo'] ?? null) !== null) $label = (string)normalizeNullableTagMetadataText($row['sigla_simbolo'] ?? null);
         if ($label === '') continue;
-        $children[] = ['id' => (int)$row['id'], 'label' => $label];
+        $mothers[] = ['id' => (int)$row['id'], 'label' => $label];
     }
-    return $children;
+    return $mothers;
 }
 
 function renderDynamicSubjectFront(string $frontTemplate, string $subjectLabel): string {
@@ -5355,9 +5355,9 @@ elseif ($action === 'add_single') {
         die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
     }
 
-    $dynamicSubjectChildren = $dynamic_text_type === 'subject' ? getDynamicSubjectChildTags($pdo, $user_id, $subject_tag_ids) : [];
-    if ($dynamic_text_type === 'subject' && empty($dynamicSubjectChildren)) {
-        die(json_encode(['status' => 'error', 'message' => 'Nenhuma tag filha com tipo_de_relacao 24 foi encontrada para o sujeito selecionado.']));
+    $dynamicSubjectMothers = $dynamic_text_type === 'subject' ? getDynamicSubjectMotherTags($pdo, $user_id, $subject_tag_ids) : [];
+    if ($dynamic_text_type === 'subject' && empty($dynamicSubjectMothers)) {
+        die(json_encode(['status' => 'error', 'message' => 'Nenhuma tag mãe com tipo_de_relacao 24 foi encontrada para o sujeito selecionado como tag filha.']));
     }
     if ($dynamic_text_type === 'subject' && !str_contains($front, '$sujeitoDinamico') && !str_contains($front, '{{sujeitoDinamico}}') && !str_contains($front, '{sujeitoDinamico}')) {
         die(json_encode(['status' => 'error', 'message' => 'Use $sujeitoDinamico, {{sujeitoDinamico}} ou {sujeitoDinamico} no texto da frente para criar sujeito dinâmico.']));
@@ -5365,7 +5365,7 @@ elseif ($action === 'add_single') {
 
     $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)");
     $created_card_ids = [];
-    $cardsToCreate = $dynamic_text_type === 'subject' ? $dynamicSubjectChildren : [['id' => null, 'label' => null]];
+    $cardsToCreate = $dynamic_text_type === 'subject' ? $dynamicSubjectMothers : [['id' => null, 'label' => null]];
 
     foreach ($cardsToCreate as $dynamicSubject) {
         $cardFront = $dynamic_text_type === 'subject' ? renderDynamicSubjectFront($front, (string)$dynamicSubject['label']) : $front;
