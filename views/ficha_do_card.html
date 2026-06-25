@@ -1258,6 +1258,7 @@ const app = {
     if (card.image_front) this.setBase64ImagePreview('front', card.image_front);
     if (card.image_back) this.setBase64ImagePreview('back', card.image_back);
     this.setInfoType(card.info_type);
+    dynamicTextType.value = ['none', 'subject', 'object', 'verb'].includes(card.dynamic_text_type) ? card.dynamic_text_type : 'none';
     const subjectTags = Array.isArray(card.subject_tags) ? card.subject_tags.map(t => Number(t.id)).filter(Boolean) : [];
     const objectTags = Array.isArray(card.object_tags) ? card.object_tags.map(t => Number(t.id)).filter(Boolean) : [];
     const lexicalChunkTags = Array.isArray(card.lexical_chunks_tags) ? card.lexical_chunks_tags.map(t => Number(t.id)).filter(Boolean) : [];
