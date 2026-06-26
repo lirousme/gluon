@@ -162,10 +162,23 @@
         <input id="lexicalChunkTagSearchInput" type="text" placeholder="Buscar lexical chunks..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
       </section>
 
+      <div id="questionAnswerPanel" class="hidden rounded-lg border border-purple-400/30 bg-purple-950/20 p-3">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <p class="text-sm font-semibold text-purple-100">Resposta da pergunta</p>
+            <p class="text-xs text-slate-400">Use somente para cards do tipo Pergunta.</p>
+          </div>
+          <button type="button" id="btnQuestionAnswer" class="inline-flex min-w-24 items-center justify-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition-colors" title="Alternar resposta da pergunta" aria-label="Resposta da pergunta: Sim" aria-pressed="true">
+            <span id="questionAnswerKnob" class="h-3 w-3 rounded-full bg-current"></span>
+            <span id="questionAnswerLabel">Sim</span>
+          </button>
+        </div>
+      </div>
+
       <div class="flex items-center justify-between gap-3 pt-2 border-t border-slate-700">
-        <button type="button" id="btnInfoType" class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm border border-blue-500/50 bg-blue-950/40 text-blue-200" title="Tipo da Informação" aria-label="Tipo da Informação">
-            <i class="fa-regular fa-circle-check" aria-hidden="true"></i>
-            Afirmação
+        <button type="button" id="btnInfoType" class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm border border-purple-500/50 bg-purple-950/40 text-purple-200" title="Tipo da Informação" aria-label="Tipo da Informação">
+            <i class="fa-regular fa-circle-question" aria-hidden="true"></i>
+            Pergunta
         </button>
         <div class="flex items-center gap-2">
           <button type="button" id="btnDeleteCard" class="hidden inline-flex items-center gap-2 bg-red-700 hover:bg-red-600 px-4 py-2 rounded-lg font-medium text-white">
@@ -302,7 +315,7 @@ const app = {
   from: params.get('from') || '',
   editCardId: params.get('edit_card_id'),
   initialSubjectTagIds: parseInitialSubjectTagIds(params),
-  infoType: 0,
+  infoType: 2,
   infoTypeOptions: {
     0: { label: 'Afirmação', icon: 'fa-regular fa-circle-check', classes: 'border-blue-500/50 bg-blue-950/40 text-blue-200' },
     1: { label: 'Tradução', icon: 'fa-solid fa-language', classes: 'border-orange-500/50 bg-orange-950/40 text-orange-200' },
@@ -310,6 +323,7 @@ const app = {
     3: { label: 'Frase de Exemplo', icon: 'fa-solid fa-circle-info', classes: 'border-teal-500/50 bg-teal-950/40 text-teal-200' },
     4: { label: 'Tcoins', icon: 'fa-solid fa-coins', classes: 'border-yellow-500/50 bg-yellow-950/40 text-yellow-200' }
   },
+  questionAnswer: 1,
   activeTab: 'front',
   frontLanguage: 'pt-BR',
   backLanguage: 'en-GB',
@@ -381,6 +395,24 @@ const app = {
     btnInfoType.innerHTML = `<i class="${config.icon}" aria-hidden="true"></i>${config.label}`;
     btnInfoType.title = `Tipo da Informação: ${config.label}`;
     btnInfoType.setAttribute('aria-label', `Tipo da Informação: ${config.label}`);
+    this.updateQuestionAnswerVisibility();
+  },
+  setQuestionAnswer(value) {
+    this.questionAnswer = Number(value) === 0 ? 0 : 1;
+    if (!window.btnQuestionAnswer) return;
+    const isYes = this.questionAnswer === 1;
+    btnQuestionAnswer.className = `inline-flex min-w-24 items-center justify-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition-colors ${isYes ? 'border-emerald-400/70 bg-emerald-500/20 text-emerald-100' : 'border-rose-400/70 bg-rose-500/20 text-rose-100'}`;
+    btnQuestionAnswer.setAttribute('aria-pressed', isYes ? 'true' : 'false');
+    btnQuestionAnswer.setAttribute('aria-label', `Resposta da pergunta: ${isYes ? 'Sim' : 'Não'}`);
+    btnQuestionAnswer.title = `Resposta da pergunta: ${isYes ? 'Sim' : 'Não'}`;
+    questionAnswerLabel.textContent = isYes ? 'Sim' : 'Não';
+  },
+  toggleQuestionAnswer() {
+    this.setQuestionAnswer(this.questionAnswer === 1 ? 0 : 1);
+  },
+  updateQuestionAnswerVisibility() {
+    if (!window.questionAnswerPanel) return;
+    questionAnswerPanel.classList.toggle('hidden', this.infoType !== 2);
   },
   cycleInfoType() {
     const sequence = [0, 1, 2, 3, 4];
@@ -1258,6 +1290,7 @@ const app = {
     if (card.image_front) this.setBase64ImagePreview('front', card.image_front);
     if (card.image_back) this.setBase64ImagePreview('back', card.image_back);
     this.setInfoType(card.info_type);
+    this.setQuestionAnswer(card.question_answer === 0 ? 0 : 1);
     dynamicTextType.value = ['none', 'subject', 'object', 'verb'].includes(card.dynamic_text_type) ? card.dynamic_text_type : 'none';
     const subjectTags = Array.isArray(card.subject_tags) ? card.subject_tags.map(t => Number(t.id)).filter(Boolean) : [];
     const objectTags = Array.isArray(card.object_tags) ? card.object_tags.map(t => Number(t.id)).filter(Boolean) : [];
@@ -1357,7 +1390,8 @@ const app = {
         lexical_chunk_tag_ids = Array.from(new Set([...lexical_chunk_tag_ids, ...lexicalChunkChildTagIds]));
       }
       const return_to = this.getReturnTarget();
-      const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, info_type: this.infoType, dynamic_text_type: dynamicTextType.value, return_to };
+      const question_answer = this.infoType === 2 ? this.questionAnswer : null;
+      const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, info_type: this.infoType, question_answer, dynamic_text_type: dynamicTextType.value, return_to };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
@@ -1378,6 +1412,7 @@ btnRemoveFrontImage.onclick = () => app.removeCardImage('front');
 backImageFile.onchange = (e) => app.handleCardImageUpload(e, 'back');
 btnRemoveBackImage.onclick = () => app.removeCardImage('back');
 btnInfoType.onclick = () => app.cycleInfoType();
+btnQuestionAnswer.onclick = () => app.toggleQuestionAnswer();
 btnDeleteCard.onclick = () => app.deleteCard();
 subjectTagSearchInput.oninput = (e) => app.handleTagSearch('subject', e.target.value);
   objectTagSearchInput.oninput = (e) => app.handleTagSearch('object', e.target.value);
@@ -1397,6 +1432,7 @@ document.addEventListener('keydown', (e) => {
 (async () => {
   app.setActiveTab('front');
   app.setInfoType(app.infoType);
+  app.setQuestionAnswer(app.questionAnswer);
   await app.setPageTitleWithDirectoryName();
   await app.loadSessionUserId();
   await app.loadTags();
