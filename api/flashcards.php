@@ -5627,11 +5627,55 @@ elseif ($action === 'delete_card') {
         die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
     }
 
-    $stmt = $pdo->prepare("DELETE FROM flashcards WHERE id = ?");
-    
-    if ($stmt->execute([$card_id])) {
-        echo json_encode(['status' => 'success', 'message' => 'Card excluído com sucesso.']);
-    } else {
+    $cardStmt = $pdo->prepare("
+        SELECT f.id, f.dynamic_text_type, f.dynamic_parent_flashcard_id
+        FROM flashcards f
+        WHERE f.id = ?
+        LIMIT 1
+    ");
+    $cardStmt->execute([$card_id]);
+    $cardToDelete = $cardStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$cardToDelete) {
+        die(json_encode(['status' => 'error', 'message' => 'Card não encontrado.']));
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $deletedDerivedCount = 0;
+        $isDynamicTemplateCard = (int)($cardToDelete['dynamic_text_type'] ?? 0) === 1;
+        if ($isDynamicTemplateCard) {
+            $deleteDerivedStmt = $pdo->prepare("
+                DELETE child
+                FROM flashcards child
+                INNER JOIN directories child_directory ON child_directory.id = child.directory_id
+                WHERE child.dynamic_parent_flashcard_id = ?
+                  AND (child_directory.user_id = ? OR child.created_by_user_id = ?)
+            ");
+            $deleteDerivedStmt->execute([$card_id, $user_id, $user_id]);
+            $deletedDerivedCount = $deleteDerivedStmt->rowCount();
+        }
+
+        $stmt = $pdo->prepare("DELETE FROM flashcards WHERE id = ?");
+        $stmt->execute([$card_id]);
+        $deletedTemplateCount = $stmt->rowCount();
+
+        if ($deletedTemplateCount < 1) {
+            $pdo->rollBack();
+            echo json_encode(['status' => 'error', 'message' => 'Erro interno ao excluir card.']);
+            return;
+        }
+
+        $pdo->commit();
+        $message = $deletedDerivedCount > 0
+            ? "Card excluído com sucesso. {$deletedDerivedCount} card(s) derivado(s) também foram excluídos."
+            : 'Card excluído com sucesso.';
+        echo json_encode(['status' => 'success', 'message' => $message]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log('[flashcards][delete_card] ' . $e->getMessage());
         echo json_encode(['status' => 'error', 'message' => 'Erro interno ao excluir card.']);
     }
 }
