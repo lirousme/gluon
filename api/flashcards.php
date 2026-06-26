@@ -2307,26 +2307,22 @@ function buildGraphCardsSequence(array $cards, array $subjectTagsByCard, array $
         'decision_tag' => $firstDecisionTagId,
     ]];
     $usedCards = [$baseCardId => true];
-    $previousSubjectTagId = $firstDecisionTagId;
 
-    // Depois do primeiro card, o grafo vira uma corrente sem blocos nem limite por tag:
-    // cada próximo card precisa ter como Object a tag Subject selecionada no card anterior.
-    // Em cada card encontrado, a próxima tag de decisão continua sendo sempre uma tag de Subject
-    // do próprio card, mantendo a corrente adiante enquanto houver candidatos inéditos.
+    // Depois do primeiro card, o Subject selecionado nele fica fixo para toda a consulta.
+    // As posições pares buscam cards inéditos que tenham essa tag fixa como Object.
+    // As posições ímpares buscam cards inéditos que tenham essa tag fixa como Subject.
     for ($position = 2; $position <= count($cards); $position++) {
-        $nextCardId = $pickNextGraphCardId($previousSubjectTagId, $cardIdsByObjectTag, $usedCards);
+        $candidateIndex = ($position % 2 === 0) ? $cardIdsByObjectTag : $cardIdsBySubjectTag;
+        $nextCardId = $pickNextGraphCardId($firstDecisionTagId, $candidateIndex, $usedCards);
         if ($nextCardId === null) break;
 
-        $nextDecisionTagId = $pickSubjectDecisionTag($nextCardId);
         $chosen[] = [
             'card_id' => $nextCardId,
-            'decision_tag' => $nextDecisionTagId,
+            'decision_tag' => $firstDecisionTagId,
         ];
 
         $usedCards[$nextCardId] = true;
         $scoreByCard[$nextCardId] = (int)($scoreByCard[$nextCardId] ?? 0) + 1;
-        if ($nextDecisionTagId === null) break;
-        $previousSubjectTagId = $nextDecisionTagId;
     }
 
     return $chosen;
