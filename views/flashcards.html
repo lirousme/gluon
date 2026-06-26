@@ -539,6 +539,14 @@
                 <button onclick="event.stopPropagation(); flashcardApp.playCurrentCardAudio()" id="btnPlayCurrentAudio" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center text-base shadow-md transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Ouvir áudio do card" aria-label="Ouvir áudio do card" disabled>
                     <i class="fa-solid fa-play"></i>
                 </button>
+                <div id="questionAnswerControls" class="hidden items-center gap-2">
+                    <button type="button" onclick="flashcardApp.answerQuestion(1)" id="btnQuestionYes" class="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-emerald-400/60 bg-emerald-500/20 px-4 text-sm font-semibold text-emerald-100 transition-all hover:bg-emerald-500/30" title="Responder Sim" aria-label="Responder Sim">
+                        <i class="fa-solid fa-check"></i><span>Sim</span>
+                    </button>
+                    <button type="button" onclick="flashcardApp.answerQuestion(0)" id="btnQuestionNo" class="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-rose-400/60 bg-rose-500/20 px-4 text-sm font-semibold text-rose-100 transition-all hover:bg-rose-500/30" title="Responder Não" aria-label="Responder Não">
+                        <i class="fa-solid fa-xmark"></i><span>Não</span>
+                    </button>
+                </div>
                 <button onclick="flashcardApp.nextCard()" id="btnNext" class="w-11 h-11 rounded-full bg-gluon-primary hover:bg-blue-600 text-white flex items-center justify-center text-base shadow-md shadow-blue-500/25 transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Próximo card" aria-label="Próximo card">
                     <i class="fa-solid fa-arrow-right"></i>
                 </button>
@@ -1719,6 +1727,27 @@
                 return Number(card?.info_type) === 1;
             },
 
+            isQuestionCard(card) {
+                return Number(card?.info_type) === 2;
+            },
+
+            getQuestionAnswer(card) {
+                if (!this.isQuestionCard(card)) return null;
+                if (card?.question_answer === null || typeof card?.question_answer === 'undefined') return null;
+                return Number(card.question_answer) === 0 ? 0 : 1;
+            },
+
+            updateQuestionAnswerControls(card) {
+                const controls = document.getElementById('questionAnswerControls');
+                const btnNext = document.getElementById('btnNext');
+                if (!controls || !btnNext) return;
+                const showQuestionControls = this.isQuestionCard(card);
+                controls.classList.toggle('hidden', !showQuestionControls);
+                controls.classList.toggle('flex', showQuestionControls);
+                btnNext.classList.toggle('hidden', showQuestionControls);
+                btnNext.disabled = showQuestionControls || (this.deckMode !== 'livro' && !['aleatorio', 'grafo'].includes(this.deckMode) && this.currentIndex === this.cards.length - 1);
+            },
+
             renderCurrentCard() {
                 if (this.cards.length === 0) return;
                 
@@ -1901,7 +1930,7 @@
                 this.updateHeaderCardActions();
 
                 document.getElementById('btnPrev').disabled = this.currentIndex === 0;
-                document.getElementById('btnNext').disabled = this.deckMode !== 'livro' && !['aleatorio', 'grafo'].includes(this.deckMode) && this.currentIndex === this.cards.length - 1;
+                this.updateQuestionAnswerControls(card);
             },
 
             incrementBookReadProgress() {
@@ -2031,8 +2060,10 @@
                 this.handleAutoPlaybackAndFlow();
             },
 
-            async nextCard() {
+            async nextCard(options = {}) {
                 if (this.cards.length === 0) return;
+                const allowQuestionAdvance = Boolean(options.allowQuestionAdvance);
+                if (this.isQuestionCard(this.cards[this.currentIndex]) && !allowQuestionAdvance) return;
                 this.autoFlowToken++;
                 this.clearAutoFlowTimer();
 
@@ -2073,6 +2104,19 @@
                     // Se não houver mais cartas, o loadDeck mostra o estado "Você está em dia".
                     await this.loadDeck();
                 }
+            },
+
+            answerQuestion(answer) {
+                if (this.cards.length === 0) return;
+                const card = this.cards[this.currentIndex];
+                if (!this.isQuestionCard(card)) return;
+                const selectedAnswer = Number(answer) === 0 ? 0 : 1;
+                const correctAnswer = this.getQuestionAnswer(card);
+                const isCorrect = correctAnswer === null || selectedAnswer === correctAnswer;
+                if (correctAnswer !== null) {
+                    this.showToast(isCorrect ? 'Resposta correta!' : `Resposta incorreta. O correto era ${correctAnswer === 1 ? 'Sim' : 'Não'}.`, isCorrect ? 'success' : 'error');
+                }
+                this.nextCard({ allowQuestionAdvance: true });
             },
 
             prevCard() {
@@ -2767,6 +2811,7 @@
                         e.preventDefault();
                         this.flipCard();
                     } else if (!isTypingTarget && e.code === 'ArrowRight') {
+                        if (this.isQuestionCard(this.cards[this.currentIndex])) return;
                         this.nextCard();
                     } else if (!isTypingTarget && e.code === 'ArrowLeft') {
                         this.prevCard();
