@@ -44,6 +44,7 @@ ensureFlashcardTagsCreatorSchema($pdo);
 ensureTagFamilyOrderSchema($pdo);
 ensureFlashcardsPublicToggleSchema($pdo);
 ensureFlashcardsDynamicTextTypeSchema($pdo);
+ensureFlashcardsQuestionAnswerSchema($pdo);
 $user_id = $_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? ($_GET['action'] ?? '');
@@ -85,6 +86,13 @@ function normalizeReturnTarget(?string $rawTarget): string {
 function sanitizeInfoType($value): int {
     $type = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['default' => 2]]);
     return in_array($type, [0, 1, 2, 3, 4, 5], true) ? $type : 2;
+}
+
+function sanitizeQuestionAnswer($value, int $infoType): ?int {
+    if ($infoType !== 2) return null;
+    if ($value === null || $value === '') return null;
+    $answer = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['default' => null]]);
+    return in_array($answer, [0, 1], true) ? $answer : null;
 }
 
 function sanitizeTagIds($rawTagIds): array {
@@ -557,6 +565,21 @@ function ensureFlashcardsDynamicTextTypeSchema(PDO $pdo): void
         }
     } catch (Throwable $e) {
         error_log('[flashcards][dynamic_text_type_schema] ' . $e->getMessage());
+    }
+}
+
+function ensureFlashcardsQuestionAnswerSchema(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $questionAnswerColumn = $pdo->query("SHOW COLUMNS FROM flashcards LIKE 'question_answer'")->fetch(PDO::FETCH_ASSOC);
+        if (!$questionAnswerColumn) {
+            $pdo->exec('ALTER TABLE flashcards ADD COLUMN question_answer TINYINT NULL DEFAULT NULL AFTER info_type');
+        }
+    } catch (Throwable $e) {
+        error_log('[flashcards][question_answer_schema] ' . $e->getMessage());
     }
 }
 
@@ -5402,6 +5425,7 @@ elseif ($action === 'add_single') {
     $lexical_chunk_tag_ids = sanitizeTagIds($input['lexical_chunk_tag_ids'] ?? []);
     $info_type = sanitizeInfoType($input['info_type'] ?? 2);
     $dynamic_text_type = sanitizeDynamicTextType($input['dynamic_text_type'] ?? 'none');
+    $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
 
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
@@ -5425,7 +5449,7 @@ elseif ($action === 'add_single') {
         die(json_encode(['status' => 'error', 'message' => 'Use $sujeitoDinamico, {{sujeitoDinamico}} ou {sujeitoDinamico} no texto da frente para criar sujeito dinâmico.']));
     }
 
-    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, dynamic_text_type, dynamic_parent_flashcard_id, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)");
+    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, question_answer, dynamic_text_type, dynamic_parent_flashcard_id, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)");
     $created_card_ids = [];
     $template_card_id = null;
     $templateDynamicTextType = dynamicTextTypeToInt($dynamic_text_type);
@@ -5451,7 +5475,7 @@ elseif ($action === 'add_single') {
         $img_front_enc = !empty($image_front) ? Security::encryptData($image_front) : null;
         $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
 
-        if (!$stmt->execute([$deck_id, $user_id, $deck_id, $front_enc, $back_enc, $img_front_enc, $img_back_enc, $info_type, $cardDynamicTextType, $dynamicParentFlashcardId])) {
+        if (!$stmt->execute([$deck_id, $user_id, $deck_id, $front_enc, $back_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $cardDynamicTextType, $dynamicParentFlashcardId])) {
             echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
             return;
         }
@@ -5491,7 +5515,7 @@ elseif ($action === 'get_card_for_edit') {
     }
 
     $stmt = $pdo->prepare("
-        SELECT id, directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, dynamic_text_type, dynamic_parent_flashcard_id, has_audio_front, has_audio_back
+        SELECT id, directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, question_answer, dynamic_text_type, dynamic_parent_flashcard_id, has_audio_front, has_audio_back
         FROM flashcards
         WHERE id = ?
         LIMIT 1
@@ -5519,6 +5543,7 @@ elseif ($action === 'get_card_for_edit') {
             'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
             'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
             'info_type' => sanitizeInfoType($card['info_type'] ?? 2),
+            'question_answer' => $card['question_answer'] === null ? null : (int)$card['question_answer'],
             'dynamic_text_type' => dynamicTextTypeFromInt($card['dynamic_text_type'] ?? 0),
             'dynamic_parent_flashcard_id' => !empty($card['dynamic_parent_flashcard_id']) ? (int)$card['dynamic_parent_flashcard_id'] : null,
             'has_audio_front' => (int)$card['has_audio_front'],
@@ -5575,6 +5600,7 @@ elseif ($action === 'update_card') {
     $lexical_chunk_tag_ids = sanitizeTagIds($input['lexical_chunk_tag_ids'] ?? []);
     $info_type = sanitizeInfoType($input['info_type'] ?? 2);
     $dynamic_text_type = sanitizeDynamicTextType($input['dynamic_text_type'] ?? 'none');
+    $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
     $dynamic_text_type_id = dynamicTextTypeToInt($dynamic_text_type);
 
     $has_front = !empty($front) || !empty($image_front);
@@ -5597,9 +5623,9 @@ elseif ($action === 'update_card') {
     $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
 
     // Mantém os áudios existentes. Eles só devem ser alterados quando o usuário solicitar nova geração.
-    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, info_type = ?, dynamic_text_type = ? WHERE id = ?");
+    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, info_type = ?, question_answer = ?, dynamic_text_type = ? WHERE id = ?");
     
-    if ($stmt->execute([$front_enc, $back_enc, $img_front_enc, $img_back_enc, $info_type, $dynamic_text_type_id, $card_id])) {
+    if ($stmt->execute([$front_enc, $back_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $dynamic_text_type_id, $card_id])) {
         syncCardTagLinks($pdo, 'flashcard_tag_links', $card_id, $tag_ids, $user_id);
         syncCardTagLinks($pdo, 'subjects_links', $card_id, $subject_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'objects_links', $card_id, $object_tag_ids, $user_id);
