@@ -2081,7 +2081,7 @@
                 
                 this.stopAudio(); 
                 
-                if (['aleatorio', 'grafo'].includes(this.deckMode)) await this.registerScore(reviewCard);
+                if (['aleatorio', 'grafo'].includes(this.deckMode) && !options.skipScore) await this.registerScore(reviewCard);
 
                 if (this.deckMode === 'livro' && this.cards.length === 1) {
                     this.incrementBookReadProgress();
@@ -2106,7 +2106,7 @@
                 }
             },
 
-            answerQuestion(answer) {
+            async answerQuestion(answer) {
                 if (this.cards.length === 0) return;
                 const card = this.cards[this.currentIndex];
                 if (!this.isQuestionCard(card)) return;
@@ -2115,6 +2115,11 @@
                 const isCorrect = correctAnswer === null || selectedAnswer === correctAnswer;
                 if (correctAnswer !== null) {
                     this.showToast(isCorrect ? 'Resposta correta!' : `Resposta incorreta. O correto era ${correctAnswer === 1 ? 'Sim' : 'Não'}.`, isCorrect ? 'success' : 'error');
+                }
+                if (!isCorrect && ['aleatorio', 'grafo'].includes(this.deckMode)) {
+                    await this.registerScore(card, { reset: true });
+                    this.nextCard({ allowQuestionAdvance: true, skipScore: true });
+                    return;
                 }
                 this.nextCard({ allowQuestionAdvance: true });
             },
@@ -2709,14 +2714,16 @@
                 });
             },
 
-            registerScore(card) {
+            registerScore(card, options = {}) {
                 if (!card || !card.id) return Promise.resolve();
-                if (this.isGraphFixedBaseRepeat(card)) return this.registerGraphDecisionTagScore(card);
+                const shouldResetScore = Boolean(options.reset);
+                if (!shouldResetScore && this.isGraphFixedBaseRepeat(card)) return this.registerGraphDecisionTagScore(card);
 
                 const scoreKey = this.getCardScoreKey(card);
                 if (this.scoredCardIds.has(scoreKey)) return Promise.resolve();
 
-                const nextScore = Math.min(card.score + 1, 20);
+                const previousScore = Number(card.score || 0);
+                const nextScore = shouldResetScore ? 0 : Math.min(previousScore + 1, 20);
                 card.score = nextScore;
                 this.scoredCardIds.add(scoreKey);
                 
@@ -2739,11 +2746,13 @@
 
                 const decisionTagId = Number(card.graph_decision_tag_id || 0);
                 const payload = { card_id: card.id };
-                if (this.deckMode === 'grafo' && Number.isInteger(decisionTagId) && decisionTagId > 0) {
+                if (shouldResetScore) payload.reset_score = true;
+                if (!shouldResetScore && this.deckMode === 'grafo' && Number.isInteger(decisionTagId) && decisionTagId > 0) {
                     payload.decision_tag_id = decisionTagId;
                 }
 
                 return this.api('update_score', payload).catch(e => {
+                    card.score = previousScore;
                     this.scoredCardIds.delete(scoreKey);
                     console.error(e);
                 });
