@@ -5279,23 +5279,35 @@ elseif ($action === 'increment_tag_score') {
 elseif ($action === 'update_score') {
     $card_id = (int)($input['card_id'] ?? 0);
     $decision_tag_id = (int)($input['decision_tag_id'] ?? 0);
+    $reset_score = !empty($input['reset_score']);
     if ($card_id === 0) die(json_encode(['status' => 'error', 'message' => 'ID do card inválido.']));
 
     if (!verifyCardOwnership($pdo, $card_id, $user_id, true)) {
         die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
     }
 
-    $stmt = $pdo->prepare("
-        INSERT INTO flashcard_scores (user_id, flashcard_id, score, next_review_at) 
-        VALUES (?, ?, 1, DATE_ADD(NOW(), INTERVAL 24 HOUR)) 
-        ON DUPLICATE KEY UPDATE 
-            score = LEAST(score + 1, 20), 
-            last_reviewed_at = CURRENT_TIMESTAMP,
-            next_review_at = DATE_ADD(NOW(), INTERVAL (LEAST(score + 1, 20) * 24) HOUR)
-    ");
+    if ($reset_score) {
+        $stmt = $pdo->prepare("
+            INSERT INTO flashcard_scores (user_id, flashcard_id, score, next_review_at)
+            VALUES (?, ?, 0, NULL)
+            ON DUPLICATE KEY UPDATE
+                score = 0,
+                last_reviewed_at = CURRENT_TIMESTAMP,
+                next_review_at = NULL
+        ");
+    } else {
+        $stmt = $pdo->prepare("
+            INSERT INTO flashcard_scores (user_id, flashcard_id, score, next_review_at)
+            VALUES (?, ?, 1, DATE_ADD(NOW(), INTERVAL 24 HOUR))
+            ON DUPLICATE KEY UPDATE
+                score = LEAST(score + 1, 20),
+                last_reviewed_at = CURRENT_TIMESTAMP,
+                next_review_at = DATE_ADD(NOW(), INTERVAL (LEAST(score + 1, 20) * 24) HOUR)
+        ");
+    }
     
     if ($stmt->execute([$user_id, $card_id])) {
-        if ($decision_tag_id > 0) {
+        if (!$reset_score && $decision_tag_id > 0) {
             incrementFlashcardTagScore($pdo, $user_id, $card_id, $decision_tag_id);
         }
         echo json_encode(['status' => 'success']);
@@ -5325,8 +5337,8 @@ elseif ($action === 'increment_book_score') {
     }
 
     $stmt = $pdo->prepare("
-        INSERT INTO flashcard_book_progress (user_id, directory_id, current_index, completed_reads, next_review_at) 
-        VALUES (?, ?, 0, 1, DATE_ADD(NOW(), INTERVAL 24 HOUR)) 
+        INSERT INTO flashcard_book_progress (user_id, directory_id, current_index, completed_reads, next_review_at)
+        VALUES (?, ?, 0, 1, DATE_ADD(NOW(), INTERVAL 24 HOUR))
         ON DUPLICATE KEY UPDATE
             current_index = 0,
             completed_reads = LEAST(completed_reads + 1, 3),
@@ -5350,7 +5362,7 @@ elseif ($action === 'reset_book_score') {
 
     if ($isBookMode) {
         $stmt = $pdo->prepare("
-            INSERT INTO flashcard_book_progress (user_id, directory_id, current_index, completed_reads, next_review_at) 
+            INSERT INTO flashcard_book_progress (user_id, directory_id, current_index, completed_reads, next_review_at)
             VALUES (?, ?, 0, 0, NULL) 
             ON DUPLICATE KEY UPDATE current_index = 0, completed_reads = 0, next_review_at = NULL
         ");
