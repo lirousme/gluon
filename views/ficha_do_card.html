@@ -321,7 +321,9 @@ const app = {
     1: { label: 'Tradução', icon: 'fa-solid fa-language', classes: 'border-orange-500/50 bg-orange-950/40 text-orange-200' },
     2: { label: 'Pergunta', icon: 'fa-regular fa-circle-question', classes: 'border-purple-500/50 bg-purple-950/40 text-purple-200' },
     3: { label: 'Frase de Exemplo', icon: 'fa-solid fa-circle-info', classes: 'border-teal-500/50 bg-teal-950/40 text-teal-200' },
-    4: { label: 'Tcoins', icon: 'fa-solid fa-coins', classes: 'border-yellow-500/50 bg-yellow-950/40 text-yellow-200' }
+    4: { label: 'Tcoins', icon: 'fa-solid fa-coins', classes: 'border-yellow-500/50 bg-yellow-950/40 text-yellow-200' },
+    5: { label: 'Tag Expansion', icon: 'fa-solid fa-maximize', classes: 'border-rose-700/60 bg-rose-950/50 text-rose-100' },
+    6: { label: 'Pílula', icon: 'fa-solid fa-capsules', classes: 'border-green-600/60 bg-green-950/50 text-green-100' }
   },
   questionAnswer: 1,
   activeTab: 'front',
@@ -396,6 +398,7 @@ const app = {
     btnInfoType.title = `Tipo da Informação: ${config.label}`;
     btnInfoType.setAttribute('aria-label', `Tipo da Informação: ${config.label}`);
     this.updateQuestionAnswerVisibility();
+    this.updateTagExpansionMode();
   },
   setQuestionAnswer(value) {
     this.questionAnswer = Number(value) === 0 ? 0 : 1;
@@ -414,8 +417,33 @@ const app = {
     if (!window.questionAnswerPanel) return;
     questionAnswerPanel.classList.toggle('hidden', this.infoType !== 2);
   },
+  isTagExpansionType() {
+    return Number(this.infoType) === 5;
+  },
+  updateTagExpansionMode() {
+    const tagExpansion = this.isTagExpansionType();
+    if (window.singleFront) {
+      singleFront.disabled = tagExpansion;
+      singleFront.placeholder = tagExpansion ? 'Frente gerada automaticamente pela tag Subject selecionada' : 'Frente do flashcard';
+      if (tagExpansion) singleFront.value = this.getSingleSubjectTagFrontText();
+    }
+    if (window.frontImageFile) frontImageFile.disabled = tagExpansion;
+    if (window.backImageFile) backImageFile.disabled = tagExpansion;
+    if (tagExpansion && window.frontImageBase64 && frontImageBase64.value) this.removeCardImage('front');
+    if (tagExpansion && window.backImageBase64 && backImageBase64.value) this.removeCardImage('back');
+    ['ObjectTagsPanel', 'LexicalChunkTagsPanel'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle('hidden', tagExpansion);
+    });
+  },
+  getSingleSubjectTagFrontText() {
+    const subjectIds = this.getSelectedTagIds('subject');
+    if (subjectIds.length !== 1) return '';
+    const tag = this.availableTags.find(item => Number(item.id) === Number(subjectIds[0]));
+    return tag ? this.getTagLabel(tag) : '';
+  },
   cycleInfoType() {
-    const sequence = [0, 1, 2, 3, 4];
+    const sequence = [0, 1, 2, 3, 4, 5, 6];
     const currentIndex = sequence.indexOf(this.infoType);
     const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % sequence.length;
     this.setInfoType(sequence[nextIndex]);
@@ -805,7 +833,9 @@ const app = {
     catch (_) { return []; }
   },
   setSelectedTagIds(panel, ids) {
-    document.getElementById(this.getPanelConfig(panel).selectedInputId).value = JSON.stringify(ids.map(Number).filter(Boolean));
+    const normalizedIds = ids.map(Number).filter(Boolean);
+    document.getElementById(this.getPanelConfig(panel).selectedInputId).value = JSON.stringify(panel === 'subject' && this.isTagExpansionType() ? normalizedIds.slice(-1) : normalizedIds);
+    this.updateTagExpansionMode();
   },
   handleTagSearch(panel, query='') {
     this.getPanelConfig(panel).searchQuery = query.trim().toLowerCase();
@@ -1373,10 +1403,17 @@ const app = {
     const back = singleBack.value.trim();
     const image_front = frontImageBase64.value;
     const image_back = backImageBase64.value;
-    const subject_tag_ids = this.getSelectedTagIds('subject');
+    let subject_tag_ids = this.getSelectedTagIds('subject');
     let object_tag_ids = this.getSelectedTagIds('object');
     let lexical_chunk_tag_ids = this.getSelectedTagIds('lexicalChunk');
-    if (!front && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
+    const isTagExpansion = this.isTagExpansionType();
+    const generatedFront = isTagExpansion ? this.getSingleSubjectTagFrontText() : front;
+    if (isTagExpansion) {
+      if (subject_tag_ids.length !== 1) return this.setStatus('Cards Tag Expansion aceitam exatamente 1 tag Subject.', 'error');
+      if (!back) return this.setStatus('Preencha o texto do verso do Tag Expansion.', 'error');
+      object_tag_ids = [];
+      lexical_chunk_tag_ids = [];
+    } else if (!front && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
     if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag na categoria Subject para salvar o card.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
@@ -1391,7 +1428,7 @@ const app = {
       }
       const return_to = this.getReturnTarget();
       const question_answer = this.infoType === 2 ? this.questionAnswer : null;
-      const payload = { deck_id: this.deckId, front, back, image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, info_type: this.infoType, question_answer, dynamic_text_type: dynamicTextType.value, return_to };
+      const payload = { deck_id: this.deckId, front: generatedFront, back, image_front: isTagExpansion ? '' : image_front, image_back: isTagExpansion ? '' : image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, info_type: this.infoType, question_answer, dynamic_text_type: isTagExpansion ? 'none' : dynamicTextType.value, return_to };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
