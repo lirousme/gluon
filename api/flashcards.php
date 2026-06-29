@@ -5446,6 +5446,17 @@ elseif ($action === 'add_single') {
     if (empty($subject_tag_ids)) {
         die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos 1 tag na categoria Subject para salvar o card.']));
     }
+    if ($info_type === 5) {
+        if (count($subject_tag_ids) !== 1) {
+            die(json_encode(['status' => 'error', 'message' => 'Cards Tag Expansion aceitam exatamente 1 tag Subject.']));
+        }
+        if ($back === '') {
+            die(json_encode(['status' => 'error', 'message' => 'Preencha o texto do verso do Tag Expansion.']));
+        }
+        $image_front = null;
+        $image_back = null;
+        $dynamic_text_type = 'none';
+    }
     $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
     if (!$deck) {
         die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
@@ -5621,6 +5632,18 @@ elseif ($action === 'update_card') {
     }
     if (empty($subject_tag_ids)) {
         die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos 1 tag na categoria Subject para salvar o card.']));
+    }
+    if ($info_type === 5) {
+        if (count($subject_tag_ids) !== 1) {
+            die(json_encode(['status' => 'error', 'message' => 'Cards Tag Expansion aceitam exatamente 1 tag Subject.']));
+        }
+        if ($back === '') {
+            die(json_encode(['status' => 'error', 'message' => 'Preencha o texto do verso do Tag Expansion.']));
+        }
+        $image_front = null;
+        $image_back = null;
+        $dynamic_text_type = 'none';
+        $dynamic_text_type_id = 0;
     }
 
     if (!verifyCardOwnership($pdo, $card_id, $user_id)) {

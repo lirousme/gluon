@@ -1810,7 +1810,7 @@
                     const pillFrontText = this.isTagExpansionCard(card) ? this.getTagExpansionFrontText(card) : String(card.front || '').trim();
                     document.getElementById('cardFrontText').innerHTML = `
                         <div class="translation-card-content flex flex-col items-center justify-center w-full h-full">
-                            ${pillFrontText ? `<span id="translationCenteredPill" class="centered-card-pill translation-card-front-text card-type-badge rounded-full px-2.5 py-1 text-[13px] font-bold">${this.escapeHTML(pillFrontText)}</span>` : ''}
+                            ${pillFrontText ? `<span id="centeredCardPill" class="centered-card-pill translation-card-front-text card-type-badge rounded-full px-2.5 py-1 text-[13px] font-bold">${this.escapeHTML(pillFrontText)}</span>` : ''}
                             ${frontImageHtml}
                             ${card.back ? `<div class="translation-card-back-text">${this.escapeHTML(card.back)}</div>` : ''}
                             ${backImageHtml}
