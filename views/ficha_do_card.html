@@ -431,10 +431,14 @@ const app = {
     if (window.backImageFile) backImageFile.disabled = tagExpansion;
     if (tagExpansion && window.frontImageBase64 && frontImageBase64.value) this.removeCardImage('front');
     if (tagExpansion && window.backImageBase64 && backImageBase64.value) this.removeCardImage('back');
-    ['ObjectTagsPanel', 'LexicalChunkTagsPanel'].forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) el.classList.toggle('hidden', tagExpansion);
-    });
+    if (tagExpansion) {
+      const subjectIds = this.getSelectedTagIds('subject');
+      if (subjectIds.length > 1) {
+        this.setSelectedTagIds('subject', subjectIds.slice(-1));
+        this.renderTagSelector('subject');
+        return;
+      }
+    }
   },
   getSingleSubjectTagFrontText() {
     const subjectIds = this.getSelectedTagIds('subject');
@@ -1411,8 +1415,6 @@ const app = {
     if (isTagExpansion) {
       if (subject_tag_ids.length !== 1) return this.setStatus('Cards Tag Expansion aceitam exatamente 1 tag Subject.', 'error');
       if (!back) return this.setStatus('Preencha o texto do verso do Tag Expansion.', 'error');
-      object_tag_ids = [];
-      lexical_chunk_tag_ids = [];
     } else if (!front && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
     if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag na categoria Subject para salvar o card.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
