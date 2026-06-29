@@ -424,27 +424,21 @@ const app = {
     const tagExpansion = this.isTagExpansionType();
     if (window.singleFront) {
       singleFront.disabled = tagExpansion;
-      singleFront.placeholder = tagExpansion ? 'Frente gerada automaticamente pela tag Subject selecionada' : 'Frente do flashcard';
-      if (tagExpansion) singleFront.value = this.getSingleSubjectTagFrontText();
+      singleFront.placeholder = tagExpansion ? 'Frente gerada automaticamente pelas tags Subject selecionadas' : 'Frente do flashcard';
+      if (tagExpansion) singleFront.value = this.getSubjectTagFrontText();
     }
     if (window.frontImageFile) frontImageFile.disabled = tagExpansion;
     if (window.backImageFile) backImageFile.disabled = tagExpansion;
     if (tagExpansion && window.frontImageBase64 && frontImageBase64.value) this.removeCardImage('front');
     if (tagExpansion && window.backImageBase64 && backImageBase64.value) this.removeCardImage('back');
-    if (tagExpansion) {
-      const subjectIds = this.getSelectedTagIds('subject');
-      if (subjectIds.length > 1) {
-        this.setSelectedTagIds('subject', subjectIds.slice(-1));
-        this.renderTagSelector('subject');
-        return;
-      }
-    }
   },
-  getSingleSubjectTagFrontText() {
+  getSubjectTagFrontText() {
     const subjectIds = this.getSelectedTagIds('subject');
-    if (subjectIds.length !== 1) return '';
-    const tag = this.availableTags.find(item => Number(item.id) === Number(subjectIds[0]));
-    return tag ? this.getTagLabel(tag) : '';
+    if (!subjectIds.length) return '';
+    return subjectIds.map((id) => {
+      const tag = this.availableTags.find(item => Number(item.id) === Number(id));
+      return tag ? this.getTagLabel(tag) : '';
+    }).filter(Boolean).join(', ');
   },
   cycleInfoType() {
     const sequence = [0, 1, 2, 3, 4, 5, 6];
@@ -838,7 +832,7 @@ const app = {
   },
   setSelectedTagIds(panel, ids) {
     const normalizedIds = ids.map(Number).filter(Boolean);
-    document.getElementById(this.getPanelConfig(panel).selectedInputId).value = JSON.stringify(panel === 'subject' && this.isTagExpansionType() ? normalizedIds.slice(-1) : normalizedIds);
+    document.getElementById(this.getPanelConfig(panel).selectedInputId).value = JSON.stringify(normalizedIds);
     this.updateTagExpansionMode();
   },
   handleTagSearch(panel, query='') {
@@ -1411,9 +1405,9 @@ const app = {
     let object_tag_ids = this.getSelectedTagIds('object');
     let lexical_chunk_tag_ids = this.getSelectedTagIds('lexicalChunk');
     const isTagExpansion = this.isTagExpansionType();
-    const generatedFront = isTagExpansion ? this.getSingleSubjectTagFrontText() : front;
+    const generatedFront = isTagExpansion ? this.getSubjectTagFrontText() : front;
     if (isTagExpansion) {
-      if (subject_tag_ids.length !== 1) return this.setStatus('Cards Tag Expansion aceitam exatamente 1 tag Subject.', 'error');
+      if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag Subject para o Tag Expansion.', 'error');
       if (!back) return this.setStatus('Preencha o texto do verso do Tag Expansion.', 'error');
     } else if (!front && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
     if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag na categoria Subject para salvar o card.', 'error');
