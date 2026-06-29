@@ -2065,7 +2065,7 @@
                 if (!card) return null;
                 const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
                 const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
-                if (this.isTranslationCard(card)) return 'front';
+                if (this.isTranslationLikeCard(card)) return 'front';
                 if (this.isFlipped || (!hasFront && hasBack)) return 'back';
                 return 'front';
             },
@@ -2093,7 +2093,7 @@
                 const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
                 const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
 
-                if (this.isTranslationCard(card) || !hasFront || !hasBack) return;
+                if (this.isTranslationLikeCard(card) || !hasFront || !hasBack) return;
 
                 this.isFlipped = !this.isFlipped;
                 const cardEl = document.getElementById('flashcard');
@@ -2123,7 +2123,7 @@
                 const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
                 const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
                 const hasTwoSides = hasFront && hasBack;
-                const shouldRevealBackBeforeAdvancing = hasTwoSides && !this.isTranslationCard(card);
+                const shouldRevealBackBeforeAdvancing = hasTwoSides && !this.isTranslationLikeCard(card);
 
                 if (shouldRevealBackBeforeAdvancing && !this.isFlipped) {
                     this.flipCard();
@@ -2406,7 +2406,7 @@
                 const runAutoFlowStep = () => {
                     if (!this.autoFlowEnabled || token !== this.autoFlowToken) return;
                     if (side === 'front') {
-                        if (hasBack && !this.isTranslationCard(card)) this.flipCard();
+                        if (hasBack && !this.isTranslationLikeCard(card)) this.flipCard();
                         else this.nextCard();
                     } else {
                         this.nextCard();
