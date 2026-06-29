@@ -5447,9 +5447,6 @@ elseif ($action === 'add_single') {
         die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos 1 tag na categoria Subject para salvar o card.']));
     }
     if ($info_type === 5) {
-        if (count($subject_tag_ids) !== 1) {
-            die(json_encode(['status' => 'error', 'message' => 'Cards Tag Expansion aceitam exatamente 1 tag Subject.']));
-        }
         if ($back === '') {
             die(json_encode(['status' => 'error', 'message' => 'Preencha o texto do verso do Tag Expansion.']));
         }
@@ -5634,9 +5631,6 @@ elseif ($action === 'update_card') {
         die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos 1 tag na categoria Subject para salvar o card.']));
     }
     if ($info_type === 5) {
-        if (count($subject_tag_ids) !== 1) {
-            die(json_encode(['status' => 'error', 'message' => 'Cards Tag Expansion aceitam exatamente 1 tag Subject.']));
-        }
         if ($back === '') {
             die(json_encode(['status' => 'error', 'message' => 'Preencha o texto do verso do Tag Expansion.']));
         }
