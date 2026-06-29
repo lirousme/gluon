@@ -424,8 +424,8 @@ const app = {
     const tagExpansion = this.isTagExpansionType();
     if (window.singleFront) {
       singleFront.disabled = tagExpansion;
-      singleFront.placeholder = tagExpansion ? 'Frente gerada automaticamente pelas tags Subject selecionadas' : 'Frente do flashcard';
-      if (tagExpansion) singleFront.value = this.getSubjectTagFrontText();
+      singleFront.placeholder = tagExpansion ? 'A frente do Tag Expansion é montada pelas tags Subject na tela de estudo' : 'Frente do flashcard';
+      if (tagExpansion) singleFront.value = '';
     }
     if (window.frontImageFile) frontImageFile.disabled = tagExpansion;
     if (window.backImageFile) backImageFile.disabled = tagExpansion;
@@ -1405,7 +1405,7 @@ const app = {
     let object_tag_ids = this.getSelectedTagIds('object');
     let lexical_chunk_tag_ids = this.getSelectedTagIds('lexicalChunk');
     const isTagExpansion = this.isTagExpansionType();
-    const generatedFront = isTagExpansion ? this.getSubjectTagFrontText() : front;
+    const generatedFront = isTagExpansion ? '' : front;
     if (isTagExpansion) {
       if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag Subject para o Tag Expansion.', 'error');
       if (!back) return this.setStatus('Preencha o texto do verso do Tag Expansion.', 'error');

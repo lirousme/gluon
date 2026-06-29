@@ -5450,6 +5450,7 @@ elseif ($action === 'add_single') {
         if ($back === '') {
             die(json_encode(['status' => 'error', 'message' => 'Preencha o texto do verso do Tag Expansion.']));
         }
+        $front = '';
         $image_front = null;
         $image_back = null;
         $dynamic_text_type = 'none';
@@ -5634,6 +5635,7 @@ elseif ($action === 'update_card') {
         if ($back === '') {
             die(json_encode(['status' => 'error', 'message' => 'Preencha o texto do verso do Tag Expansion.']));
         }
+        $front = '';
         $image_front = null;
         $image_back = null;
         $dynamic_text_type = 'none';
