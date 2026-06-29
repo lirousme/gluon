@@ -1771,9 +1771,7 @@
                 const tagLabels = subjectTags
                     .map(tag => this.getTagLabel(tag))
                     .filter(Boolean);
-                if (tagLabels.length) return tagLabels;
-                const fallbackFront = String(card?.front || '').trim();
-                return fallbackFront ? [fallbackFront] : [];
+                return tagLabels;
             },
 
             isQuestionCard(card) {
