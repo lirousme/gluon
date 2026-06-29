@@ -97,10 +97,11 @@
         }
 
         .card-text {
+            --card-text-font-size: 1.5rem;
             flex-grow: 1;
             display: flex;
             align-items: center;
-            font-size: 1.5rem;
+            font-size: var(--card-text-font-size);
             line-height: 1.4;
             white-space: pre-wrap;
             word-break: break-word;
@@ -155,7 +156,8 @@
             white-space: normal;
             word-break: normal;
             overflow-wrap: normal;
-            font-size: inherit;
+            font-size: var(--card-text-font-size);
+            font-weight: 400;
         }
 
         .translation-card-back-text {
@@ -305,7 +307,7 @@
                 max-height: none;
                 min-height: 0;
             }
-            .card-text { font-size: 1.25rem; }
+            .card-text { --card-text-font-size: 1.25rem; }
             .score-dot { width: 8px; height: 8px; }
             #cardTagsPanel:not(.mobile-tags-open) { display: none !important; }
         }
