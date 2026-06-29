@@ -1138,7 +1138,8 @@
                     if (qtdTraducoes > 1 && namePtBr) return `${numeroKey} (${namePtBr})`;
                     return numeroKey;
                 }
-                return namePtBr ? `${name} (${namePtBr})` : name;
+                if (name && namePtBr && name !== namePtBr) return `${name} (${namePtBr})`;
+                return name || namePtBr;
             },
             getSubjectsCount(tag = {}, categoryLabel = '') {
                 const normalizedCategory = String(categoryLabel || '').trim().toLowerCase();
@@ -1758,7 +1759,7 @@
             getTagExpansionFrontTexts(card) {
                 const subjectTags = Array.isArray(card?.subject_tags) ? card.subject_tags : [];
                 const tagLabels = subjectTags
-                    .map(tag => String(tag?.name_pt_br || tag?.name || '').trim())
+                    .map(tag => this.getTagLabel(tag))
                     .filter(Boolean);
                 if (tagLabels.length) return tagLabels;
                 const fallbackFront = String(card?.front || '').trim();
