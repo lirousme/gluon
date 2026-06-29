@@ -97,11 +97,10 @@
         }
 
         .card-text {
-            --card-text-font-size: 1.5rem;
             flex-grow: 1;
             display: flex;
             align-items: center;
-            font-size: var(--card-text-font-size);
+            font-size: 1.5rem;
             line-height: 1.4;
             white-space: pre-wrap;
             word-break: break-word;
@@ -139,11 +138,8 @@
 
         .centered-card-pills {
             width: 100%;
-            font-size: inherit !important;
-            line-height: inherit;
         }
 
-        #centeredCardPills .centered-card-pill,
         .centered-card-pill,
         .translation-card-front-text {
             position: static !important;
@@ -159,17 +155,12 @@
             white-space: normal;
             word-break: normal;
             overflow-wrap: normal;
-            font-size: inherit !important;
-            line-height: inherit;
-            font-weight: 400;
         }
 
         .translation-card-back-text {
             width: 100%;
             text-align: center;
             color: var(--card-type-text-strong);
-            font-size: inherit;
-            line-height: inherit;
         }
 
         .score-dot {
@@ -313,7 +304,7 @@
                 max-height: none;
                 min-height: 0;
             }
-            .card-text { --card-text-font-size: 1.25rem; }
+            .card-text { font-size: 1.25rem; }
             .score-dot { width: 8px; height: 8px; }
             #cardTagsPanel:not(.mobile-tags-open) { display: none !important; }
         }
@@ -1829,7 +1820,7 @@
 
                 if (isTranslation) {
                     const pillFrontTexts = this.isTagExpansionCard(card) ? this.getTagExpansionFrontTexts(card) : [String(card.front || '').trim()].filter(Boolean);
-                    const centeredPillsHtml = pillFrontTexts.map((pillFrontText, index) => `<span id="centeredCardPill-${index + 1}" class="centered-card-pill translation-card-front-text card-type-badge rounded-full px-2.5 py-1">${this.escapeHTML(pillFrontText)}</span>`).join('');
+                    const centeredPillsHtml = pillFrontTexts.map((pillFrontText, index) => `<span id="centeredCardPill-${index + 1}" class="centered-card-pill translation-card-front-text card-type-badge rounded-full px-2.5 py-1 text-[13px] font-bold">${this.escapeHTML(pillFrontText)}</span>`).join('');
                     document.getElementById('cardFrontText').innerHTML = `
                         <div class="translation-card-content flex flex-col items-center justify-center w-full h-full">
                             ${centeredPillsHtml ? `<div id="centeredCardPills" class="centered-card-pills flex flex-wrap items-center justify-center gap-2">${centeredPillsHtml}</div>` : ''}
