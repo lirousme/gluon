@@ -427,10 +427,11 @@ const app = {
       singleFront.placeholder = tagExpansion ? 'A frente do Tag Expansion é montada pelas tags Subject na tela de estudo' : 'Frente do flashcard';
       if (tagExpansion) singleFront.value = '';
     }
+    if (['front', 'frontImage'].includes(this.activeTab)) this.setActiveTab('back');
+    if (window.tabFrontBtn) tabFrontBtn.classList.toggle('hidden', tagExpansion);
+    if (window.tabFrontImageBtn) tabFrontImageBtn.classList.toggle('hidden', tagExpansion);
     if (window.frontImageFile) frontImageFile.disabled = tagExpansion;
-    if (window.backImageFile) backImageFile.disabled = tagExpansion;
     if (tagExpansion && window.frontImageBase64 && frontImageBase64.value) this.removeCardImage('front');
-    if (tagExpansion && window.backImageBase64 && backImageBase64.value) this.removeCardImage('back');
   },
   getSubjectTagFrontText() {
     const subjectIds = this.getSelectedTagIds('subject');
@@ -1424,7 +1425,7 @@ const app = {
       }
       const return_to = this.getReturnTarget();
       const question_answer = this.infoType === 2 ? this.questionAnswer : null;
-      const payload = { deck_id: this.deckId, front: generatedFront, back, image_front: isTagExpansion ? '' : image_front, image_back: isTagExpansion ? '' : image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, info_type: this.infoType, question_answer, dynamic_text_type: isTagExpansion ? 'none' : dynamicTextType.value, return_to };
+      const payload = { deck_id: this.deckId, front: generatedFront, back, image_front: isTagExpansion ? '' : image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, info_type: this.infoType, question_answer, dynamic_text_type: isTagExpansion ? 'none' : dynamicTextType.value, return_to };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
