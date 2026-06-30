@@ -5456,12 +5456,11 @@ elseif ($action === 'add_single') {
         die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos 1 tag na categoria Subject para salvar o card.']));
     }
     if ($info_type === 5) {
-        if ($back === '') {
-            die(json_encode(['status' => 'error', 'message' => 'Preencha o texto do verso do Tag Expansion.']));
+        if ($back === '' && empty($image_back)) {
+            die(json_encode(['status' => 'error', 'message' => 'Preencha o verso do Tag Expansion com texto ou imagem.']));
         }
         $front = '';
         $image_front = null;
-        $image_back = null;
         $dynamic_text_type = 'none';
     }
     $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
@@ -5641,12 +5640,11 @@ elseif ($action === 'update_card') {
         die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos 1 tag na categoria Subject para salvar o card.']));
     }
     if ($info_type === 5) {
-        if ($back === '') {
-            die(json_encode(['status' => 'error', 'message' => 'Preencha o texto do verso do Tag Expansion.']));
+        if ($back === '' && empty($image_back)) {
+            die(json_encode(['status' => 'error', 'message' => 'Preencha o verso do Tag Expansion com texto ou imagem.']));
         }
         $front = '';
         $image_front = null;
-        $image_back = null;
         $dynamic_text_type = 'none';
         $dynamic_text_type_id = 0;
     }
