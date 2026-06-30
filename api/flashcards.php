@@ -2309,11 +2309,20 @@ function buildGraphCardsSequence(array $cards, array $subjectTagsByCard, array $
     $usedCards = [$baseCardId => true];
 
     // Depois do primeiro card, o Subject selecionado nele fica fixo para toda a consulta.
-    // As posições pares buscam cards inéditos que tenham essa tag fixa como Object.
+    // As posições pares priorizam cards inéditos que tenham essa tag fixa como Object.
+    // Quando não houver candidato por Object, elas caem no mesmo critério das posições
+    // ímpares: cards inéditos que tenham essa tag fixa como Subject.
     // As posições ímpares buscam cards inéditos que tenham essa tag fixa como Subject.
     for ($position = 2; $position <= count($cards); $position++) {
-        $candidateIndex = ($position % 2 === 0) ? $cardIdsByObjectTag : $cardIdsBySubjectTag;
-        $nextCardId = $pickNextGraphCardId($firstDecisionTagId, $candidateIndex, $usedCards);
+        $isEvenPosition = $position % 2 === 0;
+        $nextCardId = $isEvenPosition
+            ? $pickNextGraphCardId($firstDecisionTagId, $cardIdsByObjectTag, $usedCards)
+            : $pickNextGraphCardId($firstDecisionTagId, $cardIdsBySubjectTag, $usedCards);
+
+        if ($nextCardId === null && $isEvenPosition) {
+            $nextCardId = $pickNextGraphCardId($firstDecisionTagId, $cardIdsBySubjectTag, $usedCards);
+        }
+
         if ($nextCardId === null) break;
 
         $chosen[] = [
