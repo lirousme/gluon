@@ -5766,7 +5766,7 @@ elseif ($action === 'list_graph_cards_for_user') {
     $tagFilterParams = [];
     $infoTypeFilterSql = '';
     $infoTypeFilterParams = [];
-    if (!empty($infoTypes) && count($infoTypes) < 6) {
+    if (!empty($infoTypes) && count($infoTypes) < 7) {
         $infoTypePlaceholders = implode(',', array_fill(0, count($infoTypes), '?'));
         $infoTypeFilterSql = " AND f.info_type IN ({$infoTypePlaceholders})";
         $infoTypeFilterParams = $infoTypes;
@@ -5869,6 +5869,8 @@ elseif ($action === 'list_graph_cards_for_user') {
         }
     }
 
+    $subjectTagsByCard = fetchLinkedTagsByCard($pdo, 'subjects_links', $cardIds, $user_id);
+
     $cards = [];
     foreach ($rows as $card) {
         $cardId = (int)$card['id'];
@@ -5888,6 +5890,7 @@ elseif ($action === 'list_graph_cards_for_user') {
             'has_audio_back' => (int)$card['has_audio_back'],
             'score' => (int)$card['score'],
             'tags' => array_values($tagsByCard[$cardId] ?? []),
+            'subject_tags' => array_values($subjectTagsByCard[$cardId] ?? []),
         ];
     }
 

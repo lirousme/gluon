@@ -256,7 +256,7 @@
             mainFormMode: null
         };
         if (state.viewMode === 'tcoins') state.selectedInfoTypes = ['4'];
-        if (state.viewMode === 'equacionar') state.selectedInfoTypes = ['5'];
+        if (state.viewMode === 'tag_expansion') state.selectedInfoTypes = ['5'];
         if (state.withoutTagsOnly && isCardListMode()) {
             state.selectedTagIds = [];
             state.selectedTagLabels = [];
@@ -394,7 +394,7 @@
 
         function parseViewMode(params) {
             const mode = params.get('mode') || 'cards';
-            return ['tags', 'cards', 'tcoins', 'equacionar'].includes(mode) ? mode : 'cards';
+            return ['tags', 'cards', 'tcoins', 'tag_expansion'].includes(mode) ? mode : 'cards';
         }
 
         function isCardListMode() {
@@ -760,7 +760,7 @@
                 { mode: 'tags', label: 'Tags' },
                 { mode: 'cards', label: 'Cards' },
                 { mode: 'tcoins', label: 'Tcoins' },
-                { mode: 'equacionar', label: 'Equacionar' }
+                { mode: 'tag_expansion', label: 'Tag Expansion' }
             ];
             const options = [
                 { type: 'subject', label: 'Sujeito' },
@@ -832,10 +832,10 @@
             rightOptionsMenu.querySelector('#toggleSelectedPinnedTagsBtn')?.addEventListener('click', pinSelectedTags);
             rightOptionsMenu.querySelectorAll('[data-view-mode]').forEach((button) => {
                 button.addEventListener('click', () => {
-                    state.viewMode = ['tags', 'cards', 'tcoins', 'equacionar'].includes(button.dataset.viewMode) ? button.dataset.viewMode : 'cards';
+                    state.viewMode = ['tags', 'cards', 'tcoins', 'tag_expansion'].includes(button.dataset.viewMode) ? button.dataset.viewMode : 'cards';
                     if (state.viewMode === 'tags') state.withoutTagsOnly = false;
                     if (state.viewMode === 'tcoins') state.selectedInfoTypes = ['4'];
-                    if (state.viewMode === 'equacionar') state.selectedInfoTypes = ['5'];
+                    if (state.viewMode === 'tag_expansion') state.selectedInfoTypes = ['5'];
                     enforceSingleTagSelectionForTagMode();
                     renderRightOptionsMenu();
                     loadPage(1);
@@ -1023,12 +1023,27 @@
             return `<img src="${escapeHtml(src)}" alt="${escapeHtml(label)}" class="mt-3 max-h-52 w-full rounded-xl border border-slate-700 object-contain bg-slate-950/60">`;
         }
 
+        function renderTagExpansionFrontPills(card) {
+            const subjects = Array.isArray(card.subject_tags) ? card.subject_tags : [];
+            if (!subjects.length) return '<div class="text-sm leading-6 text-slate-500">Nenhuma tag Subject vinculada.</div>';
+            return `
+                <div class="flex min-h-24 flex-wrap items-center justify-center gap-3">
+                    ${subjects.map((tag) => `<span class="tag-expansion-front-pill inline-flex items-center justify-center rounded-full border border-rose-700/60 bg-rose-950/50 px-5 py-2 text-center text-sm font-bold text-rose-100 shadow-lg shadow-rose-950/20"><i class="fa-solid fa-maximize mr-2 text-rose-300"></i>${escapeHtml(getTagLabel(tag))}</span>`).join('')}
+                </div>
+            `;
+        }
+
+        function renderCardFrontContent(card) {
+            if (Number(card.info_type) === 5) return renderTagExpansionFrontPills(card);
+            return `<div class="whitespace-pre-wrap break-words text-sm leading-6 text-slate-100">${escapeHtml(card.front || '—')}</div>`;
+        }
+
         function renderCardTextsPanel(card) {
             return `
                 <div class="grid gap-px bg-slate-800 md:grid-cols-2">
                     <div class="bg-slate-900 p-4">
                         <div class="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Frente</div>
-                        <div class="whitespace-pre-wrap break-words text-sm leading-6 text-slate-100">${escapeHtml(card.front || '—')}</div>
+                        ${renderCardFrontContent(card)}
                         ${renderImage(card.image_front, 'Imagem da frente')}
                     </div>
                     <div class="bg-slate-900 p-4">
@@ -1532,6 +1547,8 @@
                 await loadTagFamilyMode();
                 return;
             }
+            if (state.viewMode === 'tcoins') state.selectedInfoTypes = ['4'];
+            if (state.viewMode === 'tag_expansion') state.selectedInfoTypes = ['5'];
             hideTagFormSection();
             tagFamilySections.classList.add('hidden');
             statusBox.classList.remove('hidden');
