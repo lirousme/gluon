@@ -6016,6 +6016,99 @@ elseif ($action === 'list_cards_for_tag_filtering') {
     echo json_encode(['status' => 'success', 'data' => $response]);
 }
 
+
+elseif ($action === 'list_graph_tags_for_user') {
+    $rawPage = is_array($input) ? ($input['page'] ?? ($_GET['page'] ?? 1)) : ($_GET['page'] ?? 1);
+    $rawTagLinkTypes = is_array($input) ? ($input['tag_link_types'] ?? ($_GET['tag_link_types'] ?? ['subject', 'object', 'lexical_chunk'])) : ($_GET['tag_link_types'] ?? ['subject', 'object', 'lexical_chunk']);
+    $rawInfoTypes = is_array($input) ? ($input['info_types'] ?? ($_GET['info_types'] ?? [0, 1, 2, 3, 4, 5, 6])) : ($_GET['info_types'] ?? [0, 1, 2, 3, 4, 5, 6]);
+    $rawSort = is_array($input) ? ($input['sort'] ?? ($_GET['sort'] ?? 'asc')) : ($_GET['sort'] ?? 'asc');
+    $page = filter_var($rawPage, FILTER_VALIDATE_INT, ['options' => ['default' => 1, 'min_range' => 1]]);
+    $tagLinkTypes = sanitizeGraphTagLinkTypes($rawTagLinkTypes);
+    $infoTypes = sanitizeGraphInfoTypes($rawInfoTypes);
+    $tagLinkColumnsByTable = getGraphTagLinkColumnsForTypes($tagLinkTypes);
+    $sortDirection = strtolower((string)$rawSort) === 'desc' ? 'DESC' : 'ASC';
+    $perPage = 20;
+    $offset = ($page - 1) * $perPage;
+
+    $infoTypeFilterSql = '';
+    $infoTypeFilterParams = [];
+    if (!empty($infoTypes) && count($infoTypes) < 7) {
+        $infoTypePlaceholders = implode(',', array_fill(0, count($infoTypes), '?'));
+        $infoTypeFilterSql = " AND f.info_type IN ({$infoTypePlaceholders})";
+        $infoTypeFilterParams = $infoTypes;
+    } elseif (empty($infoTypes)) {
+        $infoTypeFilterSql = ' AND 0 = 1';
+    }
+
+    $unionParts = [];
+    foreach ($tagLinkColumnsByTable as $linkTable => $columns) {
+        foreach ($columns as $column) {
+            $unionParts[] = "SELECT {$column} AS tag_id, flashcard_id FROM {$linkTable} WHERE {$column} IS NOT NULL";
+        }
+    }
+    $relationSubquery = !empty($unionParts) ? implode("\nUNION ALL\n", $unionParts) : "SELECT NULL AS tag_id, NULL AS flashcard_id WHERE 0 = 1";
+
+    $stmtTotal = $pdo->prepare("SELECT COUNT(*) FROM flashcard_tags t WHERE t.user_id IN (?, 5)");
+    $stmtTotal->execute([$user_id]);
+    $totalTags = (int)$stmtTotal->fetchColumn();
+    $totalPages = max(1, (int)ceil($totalTags / $perPage));
+    if ($page > $totalPages) {
+        $page = $totalPages;
+        $offset = ($page - 1) * $perPage;
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT
+            t.id,
+            t.user_id,
+            t.created_by_user_id,
+            t.name_encrypted,
+            t.name_pt_br_encrypted,
+            t.numero,
+            t.sigla_simbolo,
+            t.color,
+            t.is_book,
+            t.is_verb_tense,
+            t.is_sentence_type,
+            t.is_lexical_chunk,
+            t.is_relation_type,
+            t.is_word,
+            t.is_month,
+            t.is_day,
+            t.is_year,
+            COALESCE(card_counts.related_cards_count, 0) AS related_cards_count,
+            COALESCE(card_counts.related_cards_count, 0) AS subjects_count
+        FROM flashcard_tags t
+        LEFT JOIN (
+            SELECT linked.tag_id, COUNT(DISTINCT linked.flashcard_id) AS related_cards_count
+            FROM ({$relationSubquery}) linked
+            INNER JOIN flashcards f ON f.id = linked.flashcard_id
+            INNER JOIN directories d ON d.id = f.directory_id
+            WHERE d.user_id = ?
+              AND d.deck_mode = 'grafo'
+              AND d.type IN (4, 10)
+              {$infoTypeFilterSql}
+            GROUP BY linked.tag_id
+        ) card_counts ON card_counts.tag_id = t.id
+        WHERE t.user_id IN (?, 5)
+        ORDER BY related_cards_count {$sortDirection}, t.id ASC
+        LIMIT {$perPage} OFFSET {$offset}
+    ");
+    $stmt->execute(array_merge([$user_id], $infoTypeFilterParams, [$user_id]));
+    $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $parsed = [];
+    foreach ($tags as $tag) {
+        $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
+        $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
+        $tag['related_cards_count'] = (int)($tag['related_cards_count'] ?? 0);
+        $tag['subjects_count'] = (int)($tag['subjects_count'] ?? 0);
+        unset($tag['name_encrypted'], $tag['name_pt_br_encrypted']);
+        $parsed[] = $tag;
+    }
+    echo json_encode(['status' => 'success', 'data' => $parsed, 'pagination' => ['page' => $page, 'total_pages' => $totalPages, 'total_tags' => $totalTags, 'per_page' => $perPage]]);
+}
+
+
 elseif ($action === 'list_tags') {
     $stmt = $pdo->prepare("
         SELECT
