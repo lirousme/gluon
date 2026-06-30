@@ -393,8 +393,9 @@
         }
 
         function parseViewMode(params) {
-            const mode = params.get('mode') || 'cards';
-            return ['tags', 'cards', 'tcoins', 'tag_expansion'].includes(mode) ? mode : 'cards';
+            const mode = params.get('mode') || 'affirmations';
+            if (mode === 'cards') return 'affirmations';
+            return ['tags', 'affirmations', 'translations', 'questions', 'tcoins', 'tag_expansion'].includes(mode) ? mode : 'affirmations';
         }
 
         function isCardListMode() {
@@ -509,7 +510,7 @@
         function buildCardsRoute(page = state.page) {
             const params = new URLSearchParams();
             params.set('page', String(page));
-            if (state.viewMode !== 'cards') params.set('mode', state.viewMode);
+            if (state.viewMode !== 'affirmations') params.set('mode', state.viewMode);
             if (state.withoutTagsOnly && isCardListMode()) params.set('without_tags', '1');
             if (state.selectedTagIds.length) {
                 params.set('tag_ids', state.selectedTagIds.join(','));
@@ -758,7 +759,9 @@
         function renderRightOptionsMenu() {
             const modes = [
                 { mode: 'tags', label: 'Tags' },
-                { mode: 'cards', label: 'Cards' },
+                { mode: 'affirmations', label: 'Afirmations' },
+                { mode: 'translations', label: 'Tradução' },
+                { mode: 'questions', label: 'Pergunta' },
                 { mode: 'tcoins', label: 'Tcoins' },
                 { mode: 'tag_expansion', label: 'Tag Expansion' }
             ];
@@ -832,8 +835,11 @@
             rightOptionsMenu.querySelector('#toggleSelectedPinnedTagsBtn')?.addEventListener('click', pinSelectedTags);
             rightOptionsMenu.querySelectorAll('[data-view-mode]').forEach((button) => {
                 button.addEventListener('click', () => {
-                    state.viewMode = ['tags', 'cards', 'tcoins', 'tag_expansion'].includes(button.dataset.viewMode) ? button.dataset.viewMode : 'cards';
+                    state.viewMode = ['tags', 'affirmations', 'translations', 'questions', 'tcoins', 'tag_expansion'].includes(button.dataset.viewMode) ? button.dataset.viewMode : 'affirmations';
                     if (state.viewMode === 'tags') state.withoutTagsOnly = false;
+                    if (state.viewMode === 'affirmations') state.selectedInfoTypes = ['0'];
+                    if (state.viewMode === 'translations') state.selectedInfoTypes = ['1'];
+                    if (state.viewMode === 'questions') state.selectedInfoTypes = ['2'];
                     if (state.viewMode === 'tcoins') state.selectedInfoTypes = ['4'];
                     if (state.viewMode === 'tag_expansion') state.selectedInfoTypes = ['5'];
                     enforceSingleTagSelectionForTagMode();
@@ -1547,6 +1553,9 @@
                 await loadTagFamilyMode();
                 return;
             }
+            if (state.viewMode === 'affirmations') state.selectedInfoTypes = ['0'];
+            if (state.viewMode === 'translations') state.selectedInfoTypes = ['1'];
+            if (state.viewMode === 'questions') state.selectedInfoTypes = ['2'];
             if (state.viewMode === 'tcoins') state.selectedInfoTypes = ['4'];
             if (state.viewMode === 'tag_expansion') state.selectedInfoTypes = ['5'];
             hideTagFormSection();
