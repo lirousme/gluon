@@ -176,9 +176,9 @@
       </div>
 
       <div class="flex items-center justify-between gap-3 pt-2 border-t border-slate-700">
-        <button type="button" id="btnInfoType" class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm border border-purple-500/50 bg-purple-950/40 text-purple-200" title="Tipo da Informação" aria-label="Tipo da Informação">
-            <i class="fa-regular fa-circle-question" aria-hidden="true"></i>
-            Pergunta
+        <button type="button" id="btnInfoType" class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm border border-rose-700/60 bg-rose-950/50 text-rose-100" title="Tipo da Informação" aria-label="Tipo da Informação">
+            <i class="fa-solid fa-maximize" aria-hidden="true"></i>
+            Tag Expansion
         </button>
         <div class="flex items-center gap-2">
           <button type="button" id="btnDeleteCard" class="hidden inline-flex items-center gap-2 bg-red-700 hover:bg-red-600 px-4 py-2 rounded-lg font-medium text-white">
@@ -315,15 +315,15 @@ const app = {
   from: params.get('from') || '',
   editCardId: params.get('edit_card_id'),
   initialSubjectTagIds: parseInitialSubjectTagIds(params),
-  infoType: 2,
+  infoType: 5,
   infoTypeOptions: {
     0: { label: 'Afirmação', icon: 'fa-regular fa-circle-check', classes: 'border-blue-500/50 bg-blue-950/40 text-blue-200' },
     1: { label: 'Tradução', icon: 'fa-solid fa-language', classes: 'border-orange-500/50 bg-orange-950/40 text-orange-200' },
     2: { label: 'Pergunta', icon: 'fa-regular fa-circle-question', classes: 'border-purple-500/50 bg-purple-950/40 text-purple-200' },
-    3: { label: 'Frase de Exemplo', icon: 'fa-solid fa-circle-info', classes: 'border-teal-500/50 bg-teal-950/40 text-teal-200' },
-    4: { label: 'Tcoins', icon: 'fa-solid fa-coins', classes: 'border-yellow-500/50 bg-yellow-950/40 text-yellow-200' },
+    3: { label: 'Frase de exemplo', icon: 'fa-solid fa-circle-info', classes: 'border-teal-500/50 bg-teal-950/40 text-teal-200' },
+    4: { label: 'Tcoin', icon: 'fa-solid fa-coins', classes: 'border-yellow-500/50 bg-yellow-950/40 text-yellow-200' },
     5: { label: 'Tag Expansion', icon: 'fa-solid fa-maximize', classes: 'border-rose-700/60 bg-rose-950/50 text-rose-100' },
-    6: { label: 'Pílula', icon: 'fa-solid fa-capsules', classes: 'border-green-600/60 bg-green-950/50 text-green-100' }
+    6: { label: 'Pílulas', icon: 'fa-solid fa-capsules', classes: 'border-green-600/60 bg-green-950/50 text-green-100' }
   },
   questionAnswer: 1,
   activeTab: 'front',
@@ -388,7 +388,7 @@ const app = {
   },
   normalizeInfoType(value) {
     const type = Number(value);
-    return Object.prototype.hasOwnProperty.call(this.infoTypeOptions, type) ? type : 2;
+    return Object.prototype.hasOwnProperty.call(this.infoTypeOptions, type) ? type : 5;
   },
   setInfoType(value) {
     this.infoType = this.normalizeInfoType(value);
@@ -441,7 +441,7 @@ const app = {
     }).filter(Boolean).join(', ');
   },
   cycleInfoType() {
-    const sequence = [0, 1, 2, 3, 4, 5, 6];
+    const sequence = [5, 1, 2, 0, 4, 6, 3];
     const currentIndex = sequence.indexOf(this.infoType);
     const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % sequence.length;
     this.setInfoType(sequence[nextIndex]);
