@@ -397,11 +397,24 @@
         function parseViewMode(params) {
             const mode = params.get('mode') || 'cards';
             if (['affirmations', 'translations', 'questions', 'tcoins', 'tag_expansion'].includes(mode)) return 'cards';
+            if (mode === 'tag_sessions') return 'tag_sessions';
             return ['tags', 'cards'].includes(mode) ? mode : 'cards';
         }
 
+        function isTagsGridMode() {
+            return state.viewMode === 'tags';
+        }
+
+        function isTagSessionsMode() {
+            return state.viewMode === 'tag_sessions';
+        }
+
+        function isAnyTagMode() {
+            return isTagsGridMode() || isTagSessionsMode();
+        }
+
         function isCardListMode() {
-            return state.viewMode !== 'tags';
+            return state.viewMode === 'cards';
         }
 
         function parseWithoutTagsOnly(params) {
@@ -482,7 +495,7 @@
         }
 
         function updateHeaderActions() {
-            const isTagMode = state.viewMode === 'tags';
+            const isTagMode = isAnyTagMode();
             updateSelectedTagsVisibilityIndicator();
             createFilteredCardBtn.classList.toggle('hidden', isTagMode);
             createTagBtn.classList.toggle('hidden', !isTagMode);
@@ -513,7 +526,7 @@
             const params = new URLSearchParams();
             params.set('page', String(page));
             if (state.viewMode !== 'cards') params.set('mode', state.viewMode);
-            if (state.viewMode === 'tags' && state.tagSortDirection !== 'asc') params.set('tag_sort', state.tagSortDirection);
+            if (isTagsGridMode() && state.tagSortDirection !== 'asc') params.set('tag_sort', state.tagSortDirection);
             if (state.withoutTagsOnly && isCardListMode()) params.set('without_tags', '1');
             if (state.selectedTagIds.length) {
                 params.set('tag_ids', state.selectedTagIds.join(','));
@@ -761,8 +774,9 @@
 
         function renderRightOptionsMenu() {
             const modes = [
-                { mode: 'tags', label: 'Tags' },
-                { mode: 'cards', label: 'Cards' }
+                { mode: 'cards', label: 'Cards' },
+                { mode: 'tags', label: 'Tags Grid' },
+                { mode: 'tag_sessions', label: 'Tags Sessões' }
             ];
             const options = [
                 { type: 'subject', label: 'Sujeito' },
@@ -833,8 +847,8 @@
             rightOptionsMenu.querySelector('#toggleSelectedPinnedTagsBtn')?.addEventListener('click', pinSelectedTags);
             rightOptionsMenu.querySelectorAll('[data-view-mode]').forEach((button) => {
                 button.addEventListener('click', () => {
-                    state.viewMode = ['tags', 'cards'].includes(button.dataset.viewMode) ? button.dataset.viewMode : 'cards';
-                    if (state.viewMode === 'tags') state.withoutTagsOnly = false;
+                    state.viewMode = ['cards', 'tags', 'tag_sessions'].includes(button.dataset.viewMode) ? button.dataset.viewMode : 'cards';
+                    if (isAnyTagMode()) state.withoutTagsOnly = false;
                     renderRightOptionsMenu();
                     loadPage(1);
                     loadSavedFilters();
@@ -875,7 +889,7 @@
         }
 
         function enforceSingleTagSelectionForTagMode() {
-            if (state.viewMode !== 'tags' || state.selectedTagIds.length <= 1) return;
+            if (!isTagSessionsMode() || state.selectedTagIds.length <= 1) return;
             state.selectedTagIds = [state.selectedTagIds[state.selectedTagIds.length - 1]];
             state.selectedTagLabels = [state.selectedTagLabels[state.selectedTagLabels.length - 1]].filter(Boolean);
         }
@@ -883,7 +897,7 @@
         function selectTagFilter(tagId, tag = {}) {
             if (!tagId || state.selectedTagIds.includes(tagId)) return false;
             state.withoutTagsOnly = false;
-            if (state.viewMode === 'tags') {
+            if (isTagSessionsMode()) {
                 state.selectedTagIds = [tagId];
                 state.selectedTagLabels = [getTagLabel(tag)];
                 return true;
@@ -1273,7 +1287,7 @@
             event.preventDefault();
             await api('create_relation_type', { nome: document.getElementById('createRelationTypeNameInput').value.trim(), hierarquia: Number(document.getElementById('createRelationTypeHierarchyInput').value || 0) });
             closeModal('createRelationTypeModal', 'createRelationTypeModalContent');
-            if (state.viewMode === 'tags') await loadPage(1);
+            if (isAnyTagMode()) await loadPage(1);
         }
 
         async function submitEditCurrentTag(event) {
@@ -1491,16 +1505,17 @@
 
         function updateFooter() {
             updateHeaderActions();
-            const isTagMode = state.viewMode === 'tags';
-            cardsPaginationFooter.classList.remove('hidden');
-            cardsPaginationFooter.classList.add('flex');
-            tagRelationFooter.classList.add('hidden');
-            paginationInfo.textContent = `Página ${state.page} de ${state.totalPages} • ${state.totalCards} ${isTagMode ? 'tag(s)' : 'card(s)'} • 20 por página`;
+            const isGridMode = isTagsGridMode();
+            const isSessionsMode = isTagSessionsMode();
+            cardsPaginationFooter.classList.toggle('hidden', isSessionsMode);
+            cardsPaginationFooter.classList.toggle('flex', !isSessionsMode);
+            tagRelationFooter.classList.toggle('hidden', !isSessionsMode);
+            paginationInfo.textContent = `Página ${state.page} de ${state.totalPages} • ${state.totalCards} ${isGridMode ? 'tag(s)' : 'card(s)'} • 20 por página`;
             prevPageBtn.disabled = state.page <= 1;
             nextPageBtn.disabled = state.page >= state.totalPages;
             clearTagFilterBtn.classList.toggle('hidden', state.selectedTagIds.length === 0 && !state.withoutTagsOnly);
             renderLeftOthersMenu();
-            if (isTagMode) renderFooterTags();
+            if (isSessionsMode) renderFooterTags();
         }
 
         function ensureSelectedRelationType() {
@@ -1510,7 +1525,7 @@
         }
 
         function renderFooterTags() {
-            if (!footerTagSelector || state.viewMode !== 'tags') return;
+            if (!footerTagSelector || !isTagSessionsMode()) return;
             ensureSelectedRelationType();
             const hideFooterTagSelector = () => {
                 footerTagSelector.innerHTML = '';
@@ -1617,8 +1632,12 @@
         }
 
         async function loadPage(page) {
-            if (state.viewMode === 'tags') {
+            if (isTagsGridMode()) {
                 await loadTagsPage(page);
+                return;
+            }
+            if (isTagSessionsMode()) {
+                await loadTagFamilyMode();
                 return;
             }
             hideTagFormSection();
