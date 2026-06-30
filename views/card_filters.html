@@ -253,10 +253,12 @@
             savedFilterTagIds: new Set(),
             pinningSelectedTags: false,
             updatingSelectedTagsVisibility: false,
-            mainFormMode: null
+            mainFormMode: null,
+            tagSortDirection: ['asc', 'desc'].includes(urlParams.get('tag_sort')) ? urlParams.get('tag_sort') : 'asc'
         };
-        if (state.viewMode === 'tcoins') state.selectedInfoTypes = ['4'];
-        if (state.viewMode === 'tag_expansion') state.selectedInfoTypes = ['5'];
+        
+        state.selectedInfoTypes = state.selectedInfoTypes.filter((type) => ['0', '1', '2', '4', '5'].includes(type));
+        if (!state.selectedInfoTypes.length) state.selectedInfoTypes = ['0', '5', '4', '1', '2'];
         if (state.withoutTagsOnly && isCardListMode()) {
             state.selectedTagIds = [];
             state.selectedTagLabels = [];
@@ -393,9 +395,9 @@
         }
 
         function parseViewMode(params) {
-            const mode = params.get('mode') || 'affirmations';
-            if (mode === 'cards') return 'affirmations';
-            return ['tags', 'affirmations', 'translations', 'questions', 'tcoins', 'tag_expansion'].includes(mode) ? mode : 'affirmations';
+            const mode = params.get('mode') || 'cards';
+            if (['affirmations', 'translations', 'questions', 'tcoins', 'tag_expansion'].includes(mode)) return 'cards';
+            return ['tags', 'cards'].includes(mode) ? mode : 'cards';
         }
 
         function isCardListMode() {
@@ -510,7 +512,8 @@
         function buildCardsRoute(page = state.page) {
             const params = new URLSearchParams();
             params.set('page', String(page));
-            if (state.viewMode !== 'affirmations') params.set('mode', state.viewMode);
+            if (state.viewMode !== 'cards') params.set('mode', state.viewMode);
+            if (state.viewMode === 'tags' && state.tagSortDirection !== 'asc') params.set('tag_sort', state.tagSortDirection);
             if (state.withoutTagsOnly && isCardListMode()) params.set('without_tags', '1');
             if (state.selectedTagIds.length) {
                 params.set('tag_ids', state.selectedTagIds.join(','));
@@ -759,11 +762,7 @@
         function renderRightOptionsMenu() {
             const modes = [
                 { mode: 'tags', label: 'Tags' },
-                { mode: 'affirmations', label: 'Afirmations' },
-                { mode: 'translations', label: 'Tradução' },
-                { mode: 'questions', label: 'Pergunta' },
-                { mode: 'tcoins', label: 'Tcoins' },
-                { mode: 'tag_expansion', label: 'Tag Expansion' }
+                { mode: 'cards', label: 'Cards' }
             ];
             const options = [
                 { type: 'subject', label: 'Sujeito' },
@@ -771,13 +770,12 @@
                 { type: 'lexical_chunk', label: 'Lexical Chunk' }
             ];
             const intentOptions = [
-                { type: '0', label: 'Afirmação' },
-                { type: '2', label: 'Pergunta' },
-                { type: '1', label: 'Tradução' },
-                { type: '3', label: 'Frase de Exemplo' },
-                { type: '4', label: 'Tcoins' },
+                { type: 'all', label: 'Todos os tipos' },
+                { type: '0', label: 'Afirmations' },
                 { type: '5', label: 'Tag Expansion' },
-                { type: '6', label: 'Pílula' }
+                { type: '4', label: 'Tcoins' },
+                { type: '1', label: 'Tradução' },
+                { type: '2', label: 'Pergunta' }
             ];
             const pinToggleConfig = getSelectedPinToggleConfig();
             const pinToggleButton = pinToggleConfig.selectedCount > 0 ? `
@@ -826,7 +824,7 @@
                         </button>
                     </div>
                     ${state.rightIntentFiltersExpanded ? `<div class="mt-2 space-y-2 border-l border-cyan-500/20 pl-3">${intentOptions.map((option) => {
-                        const isActive = state.selectedInfoTypes.includes(option.type);
+                        const isActive = option.type === 'all' ? state.selectedInfoTypes.length === 5 : state.selectedInfoTypes.includes(option.type);
                         return `<button type="button" data-info-type="${option.type}" aria-pressed="${isActive ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${isActive ? 'border-violet-400/80 bg-violet-950/40 text-violet-100' : 'border-cyan-500/20 bg-cyan-950/20 text-slate-100 hover:border-cyan-400/60 hover:bg-cyan-950/40 hover:text-cyan-100'}">${escapeHtml(option.label)}</button>`;
                     }).join('')}</div>` : ''}
                 </article>
@@ -835,14 +833,8 @@
             rightOptionsMenu.querySelector('#toggleSelectedPinnedTagsBtn')?.addEventListener('click', pinSelectedTags);
             rightOptionsMenu.querySelectorAll('[data-view-mode]').forEach((button) => {
                 button.addEventListener('click', () => {
-                    state.viewMode = ['tags', 'affirmations', 'translations', 'questions', 'tcoins', 'tag_expansion'].includes(button.dataset.viewMode) ? button.dataset.viewMode : 'affirmations';
+                    state.viewMode = ['tags', 'cards'].includes(button.dataset.viewMode) ? button.dataset.viewMode : 'cards';
                     if (state.viewMode === 'tags') state.withoutTagsOnly = false;
-                    if (state.viewMode === 'affirmations') state.selectedInfoTypes = ['0'];
-                    if (state.viewMode === 'translations') state.selectedInfoTypes = ['1'];
-                    if (state.viewMode === 'questions') state.selectedInfoTypes = ['2'];
-                    if (state.viewMode === 'tcoins') state.selectedInfoTypes = ['4'];
-                    if (state.viewMode === 'tag_expansion') state.selectedInfoTypes = ['5'];
-                    enforceSingleTagSelectionForTagMode();
                     renderRightOptionsMenu();
                     loadPage(1);
                     loadSavedFilters();
@@ -855,17 +847,20 @@
                     if (state.selectedTagLinkTypes.includes(type)) state.selectedTagLinkTypes = state.selectedTagLinkTypes.filter((selectedType) => selectedType !== type);
                     else state.selectedTagLinkTypes.push(type);
                     renderRightOptionsMenu();
-                    if (isCardListMode()) loadPage(1);
+                    loadPage(1);
                 });
             });
             rightOptionsMenu.querySelectorAll('[data-info-type]').forEach((button) => {
                 button.addEventListener('click', () => {
                     const type = button.dataset.infoType || '';
                     if (!type) return;
-                    if (state.selectedInfoTypes.includes(type)) state.selectedInfoTypes = state.selectedInfoTypes.filter((selectedType) => selectedType !== type);
+                    const allIntentTypes = ['0', '5', '4', '1', '2'];
+                    if (type === 'all') state.selectedInfoTypes = [...allIntentTypes];
+                    else if (state.selectedInfoTypes.includes(type)) state.selectedInfoTypes = state.selectedInfoTypes.filter((selectedType) => selectedType !== type);
                     else state.selectedInfoTypes.push(type);
+                    state.selectedInfoTypes = state.selectedInfoTypes.filter((selectedType, index, types) => allIntentTypes.includes(selectedType) && types.indexOf(selectedType) === index);
                     renderRightOptionsMenu();
-                    if (isCardListMode()) loadPage(1);
+                    loadPage(1);
                 });
             });
             rightOptionsMenu.querySelectorAll('#rightModeAccordionBtn, #rightModeTitleBtn').forEach((button) => {
@@ -1497,10 +1492,10 @@
         function updateFooter() {
             updateHeaderActions();
             const isTagMode = state.viewMode === 'tags';
-            cardsPaginationFooter.classList.toggle('hidden', isTagMode);
-            cardsPaginationFooter.classList.toggle('flex', !isTagMode);
-            tagRelationFooter.classList.toggle('hidden', !isTagMode);
-            paginationInfo.textContent = `Página ${state.page} de ${state.totalPages} • ${state.totalCards} card(s) • 20 por página`;
+            cardsPaginationFooter.classList.remove('hidden');
+            cardsPaginationFooter.classList.add('flex');
+            tagRelationFooter.classList.add('hidden');
+            paginationInfo.textContent = `Página ${state.page} de ${state.totalPages} • ${state.totalCards} ${isTagMode ? 'tag(s)' : 'card(s)'} • 20 por página`;
             prevPageBtn.disabled = state.page <= 1;
             nextPageBtn.disabled = state.page >= state.totalPages;
             clearTagFilterBtn.classList.toggle('hidden', state.selectedTagIds.length === 0 && !state.withoutTagsOnly);
@@ -1547,17 +1542,85 @@
             await loadPage(1);
         }
 
+
+        function renderGraphTags(tags = []) {
+            const numeroPtBrCounts = buildNumeroPtBrCounts(tags);
+            const sortLabel = state.tagSortDirection === 'desc' ? 'Mais para Menos' : 'Menos para Mais';
+            tagFamilySections.innerHTML = `
+                <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-[0.25em] text-sky-300">Tags</p>
+                            <h2 class="mt-1 text-lg font-bold text-white">Ordenação por relações com cards filtrados</h2>
+                            <p class="mt-1 text-xs text-slate-400">Respeita os filtros intencionais e semânticos selecionados.</p>
+                        </div>
+                        <button id="toggleTagSortDirectionBtn" type="button" class="rounded-xl border border-sky-500/40 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/20">
+                            <i class="fa-solid fa-arrow-down-wide-short mr-2"></i>${sortLabel}
+                        </button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    ${tags.map((tag) => {
+                        const count = Number(tag.related_cards_count ?? tag.subjects_count ?? 0);
+                        return `<button type="button" data-graph-tag-id="${Number(tag.id)}" class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-left transition hover:border-violet-400/70 hover:bg-slate-900">
+                            <div class="flex items-start justify-between gap-3">
+                                <span class="min-w-0 font-semibold text-slate-100">${renderTagButtonContent(tag, numeroPtBrCounts)}</span>
+                                <span class="shrink-0 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-xs font-semibold text-cyan-100">${count}</span>
+                            </div>
+                            <p class="mt-2 text-xs text-slate-500">card(s) relacionados pelos filtros atuais</p>
+                        </button>`;
+                    }).join('')}
+                </div>
+            `;
+            tagFamilySections.querySelector('#toggleTagSortDirectionBtn')?.addEventListener('click', () => {
+                state.tagSortDirection = state.tagSortDirection === 'desc' ? 'asc' : 'desc';
+                loadPage(1);
+            });
+            tagFamilySections.querySelectorAll('[data-graph-tag-id]').forEach((button) => button.addEventListener('click', () => {
+                const tagId = Number(button.dataset.graphTagId || 0);
+                const tag = tags.find((item) => Number(item.id) === tagId) || {};
+                toggleTagFilter(tagId, tag);
+                renderRightOptionsMenu();
+                loadPage(1);
+                loadSavedFilters();
+            }));
+        }
+
+        async function loadTagsPage(page) {
+            hideTagFormSection();
+            cardsGrid.classList.add('hidden');
+            cardsGrid.classList.remove('grid');
+            tagFamilySections.classList.remove('hidden');
+            statusBox.classList.add('hidden');
+            tagFamilySections.innerHTML = '<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 text-center text-slate-300"><i class="fa-solid fa-spinner fa-spin mr-2 text-violet-300"></i>Carregando tags...</div>';
+            try {
+                const params = new URLSearchParams({ action: 'list_graph_tags_for_user', page: String(page), sort: state.tagSortDirection });
+                params.set('tag_link_types', state.selectedTagLinkTypes.join(','));
+                params.set('info_types', state.selectedInfoTypes.join(','));
+                const response = await fetch(`/api/flashcards?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
+                const result = await response.json();
+                if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível carregar as tags.');
+                state.page = result.pagination.page;
+                state.totalPages = result.pagination.total_pages;
+                state.totalCards = result.pagination.total_tags;
+                state.tags = result.data || [];
+                window.history.replaceState(null, '', buildCardsRoute(state.page));
+                updateFooter();
+                if (!state.tags.length) {
+                    tagFamilySections.innerHTML = '<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 text-center text-slate-300">Nenhuma tag encontrada.</div>';
+                    return;
+                }
+                renderGraphTags(state.tags);
+            } catch (error) {
+                tagFamilySections.innerHTML = `<div class="rounded-2xl border border-red-500/30 bg-red-950/20 p-6 text-center text-red-200">${escapeHtml(error.message || 'Erro ao carregar tags.')}</div>`;
+            }
+        }
+
         async function loadPage(page) {
             if (state.viewMode === 'tags') {
-                state.page = 1;
-                await loadTagFamilyMode();
+                await loadTagsPage(page);
                 return;
             }
-            if (state.viewMode === 'affirmations') state.selectedInfoTypes = ['0'];
-            if (state.viewMode === 'translations') state.selectedInfoTypes = ['1'];
-            if (state.viewMode === 'questions') state.selectedInfoTypes = ['2'];
-            if (state.viewMode === 'tcoins') state.selectedInfoTypes = ['4'];
-            if (state.viewMode === 'tag_expansion') state.selectedInfoTypes = ['5'];
             hideTagFormSection();
             tagFamilySections.classList.add('hidden');
             statusBox.classList.remove('hidden');
