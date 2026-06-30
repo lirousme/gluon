@@ -257,8 +257,7 @@
             tagSortDirection: ['asc', 'desc'].includes(urlParams.get('tag_sort')) ? urlParams.get('tag_sort') : 'asc'
         };
         
-        state.selectedInfoTypes = state.selectedInfoTypes.filter((type) => ['0', '1', '2', '4', '5'].includes(type));
-        if (!state.selectedInfoTypes.length) state.selectedInfoTypes = ['0', '5', '4', '1', '2'];
+        state.selectedInfoTypes = normalizeSelectedInfoTypes(state.selectedInfoTypes);
         if (state.withoutTagsOnly && isCardListMode()) {
             state.selectedTagIds = [];
             state.selectedTagLabels = [];
@@ -429,11 +428,21 @@
             return parsedTypes;
         }
 
+        function getAllowedIntentTypes() {
+            return ['0', '5', '4', '1', '2'];
+        }
+
+        function normalizeSelectedInfoTypes(types = []) {
+            const allowedTypes = getAllowedIntentTypes();
+            const parsedTypes = types.filter((type, index) => allowedTypes.includes(type) && types.indexOf(type) === index);
+            if (!parsedTypes.length || parsedTypes.length === allowedTypes.length) return [...allowedTypes];
+            return [parsedTypes[0]];
+        }
+
         function parseSelectedInfoTypes(params) {
-            const allowedTypes = ['0', '1', '2', '3', '4', '5', '6'];
-            if (!params.has('info_types')) return [...allowedTypes];
+            if (!params.has('info_types')) return getAllowedIntentTypes();
             const rawTypes = params.get('info_types') || '';
-            return rawTypes.split(',').map((type) => type.trim()).filter((type, index, types) => allowedTypes.includes(type) && types.indexOf(type) === index);
+            return normalizeSelectedInfoTypes(rawTypes.split(',').map((type) => type.trim()));
         }
 
         async function api(action, payload = {}) {
@@ -533,7 +542,7 @@
                 if (state.selectedTagLabels.length) params.set('tag_names', state.selectedTagLabels.join('|'));
             }
             if (state.selectedTagLinkTypes.length !== 3) params.set('tag_link_types', state.selectedTagLinkTypes.join(','));
-            if (state.selectedInfoTypes.length !== 7) params.set('info_types', state.selectedInfoTypes.join(','));
+            if (state.selectedInfoTypes.length !== 5) params.set('info_types', state.selectedInfoTypes.join(','));
             return `/card_filters?${params.toString()}`;
         }
 
@@ -868,11 +877,9 @@
                 button.addEventListener('click', () => {
                     const type = button.dataset.infoType || '';
                     if (!type) return;
-                    const allIntentTypes = ['0', '5', '4', '1', '2'];
-                    if (type === 'all') state.selectedInfoTypes = [...allIntentTypes];
-                    else if (state.selectedInfoTypes.includes(type)) state.selectedInfoTypes = state.selectedInfoTypes.filter((selectedType) => selectedType !== type);
-                    else state.selectedInfoTypes.push(type);
-                    state.selectedInfoTypes = state.selectedInfoTypes.filter((selectedType, index, types) => allIntentTypes.includes(selectedType) && types.indexOf(selectedType) === index);
+                    const allIntentTypes = getAllowedIntentTypes();
+                    if (type !== 'all' && !allIntentTypes.includes(type)) return;
+                    state.selectedInfoTypes = type === 'all' ? [...allIntentTypes] : [type];
                     renderRightOptionsMenu();
                     loadPage(1);
                 });
