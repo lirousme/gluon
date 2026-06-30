@@ -1820,7 +1820,7 @@
 
                 if (isTranslation) {
                     const pillFrontTexts = this.isTagExpansionCard(card) ? this.getTagExpansionFrontTexts(card) : [String(card.front || '').trim()].filter(Boolean);
-                    const centeredPillsHtml = pillFrontTexts.map((pillFrontText, index) => `<span id="centeredCardPill-${index + 1}" class="centered-card-pill translation-card-front-text card-type-badge rounded-full px-2.5 py-1 text-[13px] font-bold">${this.escapeHTML(pillFrontText)}</span>`).join('');
+                    const centeredPillsHtml = pillFrontTexts.map((pillFrontText, index) => `<span id="centeredCardPill-${index + 1}" class="centered-card-pill translation-card-front-text card-type-badge rounded-full px-2.5 py-1 text-[15px] font-bold">${this.escapeHTML(pillFrontText)}</span>`).join('');
                     document.getElementById('cardFrontText').innerHTML = `
                         <div class="translation-card-content flex flex-col items-center justify-center w-full h-full">
                             ${centeredPillsHtml ? `<div id="centeredCardPills" class="centered-card-pills flex flex-wrap items-center justify-center gap-2">${centeredPillsHtml}</div>` : ''}
