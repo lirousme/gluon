@@ -1825,9 +1825,9 @@
                     document.getElementById('cardFrontText').innerHTML = `
                         <div class="translation-card-content flex flex-col items-center justify-center w-full h-full">
                             ${centeredPillsHtml ? `<div id="centeredCardPills" class="centered-card-pills flex flex-wrap items-center justify-center gap-2">${centeredPillsHtml}</div>` : ''}
-                            ${frontImageHtml}
                             ${card.back ? `<div class="translation-card-back-text">${this.escapeHTML(card.back)}</div>` : ''}
                             ${backImageHtml}
+                            ${frontImageHtml}
                         </div>
                     `;
                     document.getElementById('cardBackText').innerHTML = '';
