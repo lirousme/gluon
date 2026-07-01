@@ -1615,51 +1615,90 @@
         }
 
 
+        function getStoryScenesFromForm() {
+            return Array.from(tagFamilySections.querySelectorAll('[data-story-scene]')).map((sceneEl, index) => ({
+                id: (sceneEl.querySelector('[data-scene-id]')?.value || `scene_${index + 1}`).trim().replace(/[^a-zA-Z0-9_-]/g, '_') || `scene_${index + 1}`,
+                title: (sceneEl.querySelector('[data-scene-title]')?.value || '').trim(),
+                text: (sceneEl.querySelector('[data-scene-text]')?.value || '').trim(),
+                options: Array.from(sceneEl.querySelectorAll('[data-story-option]')).map((optionEl) => ({
+                    label: (optionEl.querySelector('[data-option-label]')?.value || '').trim(),
+                    target: (optionEl.querySelector('[data-option-target]')?.value || '').trim()
+                })).filter((option) => option.label)
+            }));
+        }
+
         function renderInteractiveStory(data = {}) {
-            const superposition = data.superposition || { title: 'História em Superposição', premise: '', options: [] };
-            const options = Array.isArray(superposition.options) ? superposition.options : [];
+            const superposition = data.superposition || { title: 'História em Superposição', premise: '', scenes: [] };
+            const scenes = Array.isArray(superposition.scenes) && superposition.scenes.length ? superposition.scenes : [{ id: 'inicio', title: 'Início', text: '', options: [] }];
             const collapses = Array.isArray(data.collapses) ? data.collapses : [];
             const tagOptions = state.tags.map((tag) => `<option value="${Number(tag.id)}">${escapeHtml(getTagLabel(tag))}</option>`).join('');
+            const renderTargetOptions = (selected = '') => `<option value="">Fim da história</option>${scenes.map((scene) => `<option value="${escapeHtml(scene.id)}" ${scene.id === selected ? 'selected' : ''}>${escapeHtml(scene.title || scene.id)}</option>`).join('')}`;
+            const renderScene = (scene, index) => `
+                <article data-story-scene class="rounded-xl border border-slate-700 bg-slate-950/50 p-3 space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2"><span class="text-xs font-semibold uppercase tracking-widest text-violet-300">Cena ${index + 1}</span><button type="button" data-remove-scene class="rounded-lg border border-red-500/50 px-2 py-1 text-xs text-red-200 hover:bg-red-500/10">Remover</button></div>
+                    <div class="grid gap-2 md:grid-cols-2"><input data-scene-id value="${escapeHtml(scene.id || '')}" class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="id-da-cena"><input data-scene-title value="${escapeHtml(scene.title || '')}" class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Título da cena"></div>
+                    <textarea data-scene-text rows="5" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Texto/enunciado desta cena...">${escapeHtml(scene.text || '')}</textarea>
+                    <div data-story-options class="space-y-2">${(scene.options || []).map((option) => `<div data-story-option class="grid gap-2 md:grid-cols-[1fr_14rem_auto]"><input data-option-label value="${escapeHtml(option.label || '')}" class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Opção escolhível"><select data-option-target class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100">${renderTargetOptions(option.target || '')}</select><button type="button" data-remove-option class="rounded-lg border border-red-500/50 px-3 py-2 text-red-200 hover:bg-red-500/10"><i class="fa-solid fa-trash"></i></button></div>`).join('')}</div>
+                    <button type="button" data-add-option class="rounded-lg border border-violet-400/50 px-3 py-2 text-sm text-violet-100 hover:bg-violet-500/10"><i class="fa-solid fa-plus mr-2"></i>Adicionar opção</button>
+                </article>`;
             tagFamilySections.innerHTML = `
                 <div class="space-y-4">
                     <section class="rounded-2xl border border-violet-500/30 bg-violet-950/20 p-4">
                         <p class="text-xs font-semibold uppercase tracking-[0.25em] text-violet-300">História em Superposição</p>
-                        <h2 class="mt-1 text-lg font-bold text-white">Todos os desenrolares possíveis</h2>
-                        <p class="mt-1 text-xs text-slate-400">Salve a história geral no banco de dados e cadastre as opções/caminhos possíveis, um por linha.</p>
+                        <h2 class="mt-1 text-lg font-bold text-white">Editor de cenas no estilo Twine</h2>
+                        <p class="mt-1 text-xs text-slate-400">Cada cena tem um texto e opções que apontam para a próxima cena. A superposição salva todos os caminhos possíveis.</p>
                         <form id="interactiveStorySuperpositionForm" class="mt-4 space-y-3">
                             <input id="interactiveStoryTitle" type="text" maxlength="191" value="${escapeHtml(superposition.title || '')}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Título da história geral">
-                            <textarea id="interactiveStoryPremise" rows="6" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Premissa, regras e contexto da história em superposição...">${escapeHtml(superposition.premise || '')}</textarea>
-                            <textarea id="interactiveStoryOptions" rows="6" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Uma opção de desenrolar por linha...">${escapeHtml(options.join('\n'))}</textarea>
-                            <button type="submit" class="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500"><i class="fa-solid fa-floppy-disk mr-2"></i>Salvar Superposição</button>
+                            <textarea id="interactiveStoryPremise" rows="3" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Premissa/regras gerais...">${escapeHtml(superposition.premise || '')}</textarea>
+                            <div id="interactiveStoryScenes" class="space-y-3">${scenes.map(renderScene).join('')}</div>
+                            <div class="flex flex-wrap gap-2"><button type="button" id="addInteractiveStoryScene" class="rounded-xl border border-violet-400/60 px-4 py-2 text-sm font-semibold text-violet-100 hover:bg-violet-500/10"><i class="fa-solid fa-plus mr-2"></i>Adicionar cena</button><button type="submit" class="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500"><i class="fa-solid fa-floppy-disk mr-2"></i>Salvar Superposição</button></div>
                         </form>
                     </section>
                     <section class="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-4">
                         <p class="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-300">História Colapsada</p>
-                        <h2 class="mt-1 text-lg font-bold text-white">Colapsar um caminho para uma tag</h2>
-                        <p class="mt-1 text-xs text-slate-400">Cada História Colapsada exige uma tag, e cada tag possui no máximo uma História Colapsada.</p>
-                        <form id="interactiveStoryCollapseForm" class="mt-4 space-y-3">
-                            <select id="interactiveStoryTagId" required class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"><option value="">Selecione a tag vinculada</option>${tagOptions}</select>
-                            <input id="interactiveStoryCollapseTitle" type="text" maxlength="191" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Título da história colapsada">
-                            <textarea id="interactiveStoryPath" rows="4" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Opções escolhidas, uma por linha..."></textarea>
-                            <textarea id="interactiveStoryCollapsedText" rows="6" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Texto resultante desse colapso..."></textarea>
-                            <button type="submit" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"><i class="fa-solid fa-link mr-2"></i>Salvar Colapso vinculado à tag</button>
-                        </form>
+                        <h2 class="mt-1 text-lg font-bold text-white">Jogar/colapsar escolhas para uma tag</h2>
+                        <p class="mt-1 text-xs text-slate-400">Selecione uma tag e clique nas opções. A História Colapsada armazena a sequência de escolhas vinculada à tag.</p>
+                        <div class="mt-4 grid gap-2 md:grid-cols-[1fr_1fr_auto]"><select id="interactiveStoryTagId" required class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"><option value="">Selecione a tag vinculada</option>${tagOptions}</select><input id="interactiveStoryCollapseTitle" type="text" maxlength="191" class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Título da história colapsada"><button type="button" id="resetInteractiveStoryRun" class="rounded-lg border border-slate-500 px-3 py-2 text-sm text-slate-100 hover:bg-slate-700">Reiniciar</button></div>
+                        <div id="interactiveStoryPlayer" class="mt-4 rounded-xl border border-slate-700 bg-slate-950/60 p-4"></div>
                     </section>
                     <section class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                         <h2 class="text-lg font-bold text-white">Histórias Colapsadas salvas</h2>
-                        <div class="mt-3 space-y-3">${collapses.length ? collapses.map((item) => `<article class="rounded-xl border border-slate-700 bg-slate-950/50 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h3 class="font-semibold text-slate-100">${escapeHtml(item.title || 'Sem título')}</h3><span class="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-xs text-sky-100">${escapeHtml(getTagLabel(item.tag || {}))}</span></div><p class="mt-2 whitespace-pre-wrap text-sm text-slate-300">${escapeHtml(item.collapsed_text || '')}</p><p class="mt-2 text-xs text-slate-500">Caminho: ${escapeHtml((item.path || []).join(' → ') || 'não informado')}</p></article>`).join('') : '<p class="text-sm text-slate-400">Nenhuma História Colapsada salva ainda.</p>'}</div>
+                        <div class="mt-3 space-y-3">${collapses.length ? collapses.map((item) => `<article class="rounded-xl border border-slate-700 bg-slate-950/50 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h3 class="font-semibold text-slate-100">${escapeHtml(item.title || 'Sem título')}</h3><span class="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-xs text-sky-100">${escapeHtml(getTagLabel(item.tag || {}))}</span></div><p class="mt-2 whitespace-pre-wrap text-sm text-slate-300">${escapeHtml(item.collapsed_text || '')}</p><p class="mt-2 text-xs text-slate-500">Escolhas: ${escapeHtml((item.path || []).map((choice) => choice.label || choice).join(' → ') || 'nenhuma')}</p></article>`).join('') : '<p class="text-sm text-slate-400">Nenhuma História Colapsada salva ainda.</p>'}</div>
                     </section>
                 </div>`;
+            const playerState = { sceneId: scenes[0]?.id || 'inicio', path: [] };
+            const sceneById = () => new Map(scenes.map((scene) => [scene.id, scene]));
+            const renderPlayer = () => {
+                const scene = sceneById().get(playerState.sceneId);
+                const player = tagFamilySections.querySelector('#interactiveStoryPlayer');
+                if (!player) return;
+                if (!scene) { player.innerHTML = '<p class="text-sm text-red-200">Cena não encontrada.</p>'; return; }
+                player.innerHTML = `<h3 class="font-semibold text-white">${escapeHtml(scene.title || scene.id)}</h3><p class="mt-2 whitespace-pre-wrap text-sm text-slate-200">${escapeHtml(scene.text || '')}</p><div class="mt-4 flex flex-wrap gap-2">${(scene.options || []).length ? scene.options.map((option, idx) => `<button type="button" data-play-option="${idx}" class="rounded-xl border border-emerald-400/60 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-500/20">${escapeHtml(option.label || '')}</button>`).join('') : '<span class="rounded-full border border-slate-600 px-3 py-1 text-xs text-slate-300">Fim da história</span>'}</div><p class="mt-3 text-xs text-slate-500">Escolhas: ${escapeHtml(playerState.path.map((choice) => choice.label).join(' → ') || 'nenhuma')}</p>`;
+                player.querySelectorAll('[data-play-option]').forEach((button) => button.addEventListener('click', async () => {
+                    const option = (scene.options || [])[Number(button.dataset.playOption || 0)];
+                    if (!option) return;
+                    playerState.path.push({ scene_id: scene.id, label: option.label, target: option.target || '' });
+                    if (option.target && sceneById().has(option.target)) playerState.sceneId = option.target;
+                    renderPlayer();
+                    const tagId = Number(tagFamilySections.querySelector('#interactiveStoryTagId')?.value || 0);
+                    if (tagId > 0) await api('save_interactive_story_collapse', { tag_id: tagId, title: tagFamilySections.querySelector('#interactiveStoryCollapseTitle')?.value.trim() || '', path: playerState.path });
+                }));
+            };
+            tagFamilySections.querySelector('#addInteractiveStoryScene')?.addEventListener('click', () => { tagFamilySections.querySelector('#interactiveStoryScenes')?.insertAdjacentHTML('beforeend', renderScene({ id: `scene_${Date.now()}`, title: '', text: '', options: [] }, tagFamilySections.querySelectorAll('[data-story-scene]').length)); });
+            tagFamilySections.querySelector('#interactiveStoryScenes')?.addEventListener('click', (event) => {
+                const target = event.target.closest('button');
+                if (!target) return;
+                if (target.matches('[data-remove-scene]')) target.closest('[data-story-scene]')?.remove();
+                if (target.matches('[data-add-option]')) target.closest('[data-story-scene]')?.querySelector('[data-story-options]')?.insertAdjacentHTML('beforeend', `<div data-story-option class="grid gap-2 md:grid-cols-[1fr_14rem_auto]"><input data-option-label class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Opção escolhível"><select data-option-target class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100">${renderTargetOptions('')}</select><button type="button" data-remove-option class="rounded-lg border border-red-500/50 px-3 py-2 text-red-200 hover:bg-red-500/10"><i class="fa-solid fa-trash"></i></button></div>`);
+                if (target.matches('[data-remove-option]')) target.closest('[data-story-option]')?.remove();
+            });
+            tagFamilySections.querySelector('#resetInteractiveStoryRun')?.addEventListener('click', () => { playerState.sceneId = scenes[0]?.id || 'inicio'; playerState.path = []; renderPlayer(); });
             tagFamilySections.querySelector('#interactiveStorySuperpositionForm')?.addEventListener('submit', async (event) => {
                 event.preventDefault();
-                await api('save_interactive_story', { title: interactiveStoryTitle.value.trim(), premise: interactiveStoryPremise.value.trim(), options: interactiveStoryOptions.value.split('\n').map(v => v.trim()).filter(Boolean) });
+                await api('save_interactive_story', { title: interactiveStoryTitle.value.trim(), premise: interactiveStoryPremise.value.trim(), scenes: getStoryScenesFromForm() });
                 await loadInteractiveStoryMode();
             });
-            tagFamilySections.querySelector('#interactiveStoryCollapseForm')?.addEventListener('submit', async (event) => {
-                event.preventDefault();
-                await api('save_interactive_story_collapse', { tag_id: Number(interactiveStoryTagId.value), title: interactiveStoryCollapseTitle.value.trim(), path: interactiveStoryPath.value.split('\n').map(v => v.trim()).filter(Boolean), collapsed_text: interactiveStoryCollapsedText.value.trim() });
-                await loadInteractiveStoryMode();
-            });
+            renderPlayer();
         }
 
         async function loadInteractiveStoryMode() {
