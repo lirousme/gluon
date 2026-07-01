@@ -518,15 +518,34 @@ function ensureTagFamilyOrderSchema(PDO $pdo): void
 }
 
 
+function getTableIdSqlType(PDO $pdo, string $table, string $fallback = 'int unsigned'): string
+{
+    try {
+        $stmt = $pdo->prepare("SHOW COLUMNS FROM `$table` LIKE 'id'");
+        $stmt->execute();
+        $column = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $type = strtolower((string)($column['Type'] ?? $fallback));
+        if (preg_match('/^[a-z0-9() ]+$/', $type)) {
+            return $type;
+        }
+    } catch (Throwable $e) {
+        error_log('[flashcards][id_type_schema] ' . $table . ': ' . $e->getMessage());
+    }
+    return $fallback;
+}
+
 function ensureInteractiveStoriesSchema(PDO $pdo): void
 {
     static $checked = false;
     if ($checked) return;
     $checked = true;
     try {
+        $userIdType = getTableIdSqlType($pdo, 'users');
+        $tagIdType = getTableIdSqlType($pdo, 'flashcard_tags');
+
         $pdo->exec("CREATE TABLE IF NOT EXISTS interactive_story_superpositions (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id {$userIdType} NOT NULL,
             title VARCHAR(191) NOT NULL DEFAULT 'História em Superposição',
             premise MEDIUMTEXT NULL,
             options_json MEDIUMTEXT NULL,
@@ -535,11 +554,12 @@ function ensureInteractiveStoriesSchema(PDO $pdo): void
             UNIQUE KEY uniq_interactive_story_superpositions_user (user_id),
             CONSTRAINT fk_interactive_story_superpositions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $superpositionIdType = getTableIdSqlType($pdo, 'interactive_story_superpositions');
         $pdo->exec("CREATE TABLE IF NOT EXISTS interactive_story_collapses (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
-            superposition_id INT NOT NULL,
-            tag_id INT NOT NULL,
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id {$userIdType} NOT NULL,
+            superposition_id {$superpositionIdType} NOT NULL,
+            tag_id {$tagIdType} NOT NULL,
             title VARCHAR(191) NOT NULL DEFAULT '',
             path_json MEDIUMTEXT NULL,
             collapsed_text MEDIUMTEXT NULL,
