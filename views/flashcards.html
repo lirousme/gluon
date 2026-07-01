@@ -99,15 +99,54 @@
         .card-text {
             flex-grow: 1;
             display: flex;
-            align-items: center;
+            align-items: stretch;
             font-size: 1.5rem;
             line-height: 1.4;
             white-space: pre-wrap;
             word-break: break-word;
+            overflow-x: hidden;
             overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+            scrollbar-width: thin;
+            scrollbar-color: var(--card-type-accent) transparent;
             width: 100%;
             justify-content: center;
-            padding: 1rem 0;
+            padding: 1rem 0.25rem 1rem 0;
+            touch-action: pan-y;
+        }
+
+        .card-text::-webkit-scrollbar {
+            width: 6px;
+            height: 0;
+        }
+
+        .card-text::-webkit-scrollbar-track {
+            background: transparent;
+            border-radius: 9999px;
+        }
+
+        .card-text::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, var(--card-type-accent), var(--card-type-accent-strong));
+            border-radius: 9999px;
+            border: 1px solid rgba(15, 23, 42, 0.45);
+        }
+
+        .card-text::-webkit-scrollbar-thumb:hover {
+            background: var(--card-type-accent-strong);
+        }
+
+        .card-back .card-text::-webkit-scrollbar-thumb {
+            border-color: rgba(255, 255, 255, 0.45);
+        }
+
+        .card-text-content {
+            min-height: 100%;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
         
         .score-dots {
@@ -490,7 +529,7 @@
                         <i id="flipIconFront" class="fa-solid fa-rotate text-slate-600 opacity-50 hidden sm:block"></i>
                     </div>
                     
-                    <div class="card-text no-scrollbar" id="cardFrontText"></div>
+                    <div class="card-text" id="cardFrontText"></div>
                     <div class="score-dots" id="frontScoreDots"></div>
                     <span id="publicCardIndicatorFront" class="public-card-indicator hidden" title="Card público" aria-label="Card público de outro usuário">
                         <i class="fa-solid fa-globe" aria-hidden="true"></i>
@@ -508,7 +547,7 @@
                         <i id="flipIconBack" class="fa-solid fa-rotate text-blue-300 opacity-50 hidden sm:block"></i>
                     </div>
                     
-                    <div class="card-text no-scrollbar drop-shadow-md" id="cardBackText"></div>
+                    <div class="card-text drop-shadow-md" id="cardBackText"></div>
                     <div class="score-dots" id="backScoreDots"></div>
                     <span id="publicCardIndicatorBack" class="public-card-indicator hidden" title="Card público" aria-label="Card público de outro usuário">
                         <i class="fa-solid fa-globe" aria-hidden="true"></i>
@@ -1823,7 +1862,7 @@
                     const pillFrontTexts = this.isTagExpansionCard(card) ? this.getTagExpansionFrontTexts(card) : [String(card.front || '').trim()].filter(Boolean);
                     const centeredPillsHtml = pillFrontTexts.map((pillFrontText, index) => `<span id="centeredCardPill-${index + 1}" class="centered-card-pill translation-card-front-text card-type-badge rounded-full px-2.5 py-1 text-[14px] font-bold">${this.escapeHTML(pillFrontText)}</span>`).join('');
                     document.getElementById('cardFrontText').innerHTML = `
-                        <div class="translation-card-content flex flex-col items-center justify-center w-full h-full">
+                        <div class="card-text-content translation-card-content">
                             ${centeredPillsHtml ? `<div id="centeredCardPills" class="centered-card-pills flex flex-wrap items-center justify-center gap-2">${centeredPillsHtml}</div>` : ''}
                             ${card.back ? `<div class="translation-card-back-text">${this.escapeHTML(card.back)}</div>` : ''}
                             ${backImageHtml}
@@ -1833,14 +1872,14 @@
                     document.getElementById('cardBackText').innerHTML = '';
                 } else {
                     document.getElementById('cardFrontText').innerHTML = `
-                        <div class="flex flex-col items-center justify-center w-full h-full">
+                        <div class="card-text-content">
                             ${card.front ? `<div class="text-center w-full">${this.escapeHTML(card.front)}</div>` : ''}
                             ${frontImageHtml}
                         </div>
                     `;
 
                     document.getElementById('cardBackText').innerHTML = `
-                        <div class="flex flex-col items-center justify-center w-full h-full">
+                        <div class="card-text-content">
                             ${card.back ? `<div class="text-center w-full">${this.escapeHTML(card.back)}</div>` : ''}
                             ${backImageHtml}
                         </div>
