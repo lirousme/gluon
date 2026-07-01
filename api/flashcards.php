@@ -2387,55 +2387,24 @@ function sortGraphCardTagsByUserScore(array $tags, array $tagScoreByTag): array
 
 function pickGraphBaseCardId(array $cards, array $subjectTagsByCard, array $objectTagsByCard, array $lexicalChunksTagsByCard, array $cardIdsBySubjectTag, array $scoreByCard, ?int $initialTagId, array $tagScoreByTag): ?int
 {
-    $cardsById = [];
-    foreach ($cards as $card) {
-        $cardId = (int)($card['id'] ?? 0);
-        if ($cardId > 0) $cardsById[$cardId] = $card;
-    }
+    if (empty($cards)) return null;
 
-    $pickWeakestCard = static function (array $candidateIds) use (&$scoreByCard): ?int {
-        $candidateIds = array_values(array_unique(array_filter(array_map('intval', $candidateIds), static fn($id) => $id > 0)));
-        if (empty($candidateIds)) return null;
-
-        usort($candidateIds, static function (int $a, int $b) use (&$scoreByCard): int {
-            return ((int)($scoreByCard[$a] ?? 0) <=> (int)($scoreByCard[$b] ?? 0)) ?: ($a <=> $b);
-        });
-
-        return $candidateIds[0] ?? null;
-    };
-
-    if ($initialTagId !== null && $initialTagId > 0) {
-        $candidateIds = $cardIdsBySubjectTag[$initialTagId] ?? [];
-        $initialCardId = $pickWeakestCard($candidateIds);
-        if ($initialCardId !== null && isset($cardsById[$initialCardId])) return $initialCardId;
-    }
-
-    if (!empty($cardIdsBySubjectTag)) {
-        $subjectTags = [];
-        $userOwnedSubjectTags = [];
-        foreach ($subjectTagsByCard as $tags) {
-            foreach ($tags as $tag) {
-                $tagId = (int)($tag['id'] ?? 0);
-                if ($tagId <= 0 || isset($subjectTags[$tagId])) continue;
-                $subjectTags[$tagId] = $tag;
-                if (!empty($tag['is_user_owned'])) $userOwnedSubjectTags[$tagId] = $tag;
-            }
-        }
-
-        $sortedTags = sortGraphCardTagsByUserScore(!empty($userOwnedSubjectTags) ? array_values($userOwnedSubjectTags) : array_values($subjectTags), $tagScoreByTag);
-        foreach ($sortedTags as $tag) {
-            $tagId = (int)($tag['id'] ?? 0);
-            $cardId = $pickWeakestCard($cardIdsBySubjectTag[$tagId] ?? []);
-            if ($cardId !== null && isset($cardsById[$cardId])) return $cardId;
-        }
-    }
-
+    // No modo grafo, o primeiro card deve ser escolhido pelo próprio card:
+    // menor pontuação primeiro e, em caso de empate, o card mais antigo.
+    // A tag fixa será decidida depois a partir das Subject tags deste card.
     usort($cards, static function (array $a, array $b): int {
-        return ((int)($a['score'] ?? 0) <=> (int)($b['score'] ?? 0)) ?: ((int)($a['id'] ?? 0) <=> (int)($b['id'] ?? 0));
+        $scoreComparison = ((int)($a['score'] ?? 0) <=> (int)($b['score'] ?? 0));
+        if ($scoreComparison !== 0) return $scoreComparison;
+
+        $createdAtA = strtotime((string)($a['created_at'] ?? '')) ?: PHP_INT_MAX;
+        $createdAtB = strtotime((string)($b['created_at'] ?? '')) ?: PHP_INT_MAX;
+        if ($createdAtA !== $createdAtB) return $createdAtA <=> $createdAtB;
+
+        return ((int)($a['id'] ?? 0) <=> (int)($b['id'] ?? 0));
     });
 
-    $fallbackCardId = (int)($cards[0]['id'] ?? 0);
-    return $fallbackCardId > 0 ? $fallbackCardId : null;
+    $baseCardId = (int)($cards[0]['id'] ?? 0);
+    return $baseCardId > 0 ? $baseCardId : null;
 }
 
 
