@@ -397,7 +397,7 @@
             const mode = params.get('mode') || 'cards';
             if (['affirmations', 'translations', 'questions', 'tcoins', 'tag_expansion'].includes(mode)) return 'cards';
             if (mode === 'tag_sessions') return 'tag_sessions';
-            return ['tags', 'cards'].includes(mode) ? mode : 'cards';
+            return ['tags', 'cards', 'interactive_story'].includes(mode) ? mode : 'cards';
         }
 
         function isTagsGridMode() {
@@ -408,8 +408,12 @@
             return state.viewMode === 'tag_sessions';
         }
 
+        function isInteractiveStoryMode() {
+            return state.viewMode === 'interactive_story';
+        }
+
         function isAnyTagMode() {
-            return isTagsGridMode() || isTagSessionsMode();
+            return isTagsGridMode() || isTagSessionsMode() || isInteractiveStoryMode();
         }
 
         function isCardListMode() {
@@ -785,7 +789,8 @@
             const modes = [
                 { mode: 'cards', label: 'Cards' },
                 { mode: 'tags', label: 'Tags Grid' },
-                { mode: 'tag_sessions', label: 'Tags Sessões' }
+                { mode: 'tag_sessions', label: 'Tags Sessões' },
+                { mode: 'interactive_story', label: 'História Interativa' }
             ];
             const options = [
                 { type: 'subject', label: 'Sujeito' },
@@ -856,7 +861,7 @@
             rightOptionsMenu.querySelector('#toggleSelectedPinnedTagsBtn')?.addEventListener('click', pinSelectedTags);
             rightOptionsMenu.querySelectorAll('[data-view-mode]').forEach((button) => {
                 button.addEventListener('click', () => {
-                    state.viewMode = ['cards', 'tags', 'tag_sessions'].includes(button.dataset.viewMode) ? button.dataset.viewMode : 'cards';
+                    state.viewMode = ['cards', 'tags', 'tag_sessions', 'interactive_story'].includes(button.dataset.viewMode) ? button.dataset.viewMode : 'cards';
                     if (isAnyTagMode()) state.withoutTagsOnly = false;
                     renderRightOptionsMenu();
                     loadPage(1);
@@ -1514,8 +1519,9 @@
             updateHeaderActions();
             const isGridMode = isTagsGridMode();
             const isSessionsMode = isTagSessionsMode();
-            cardsPaginationFooter.classList.toggle('hidden', isSessionsMode);
-            cardsPaginationFooter.classList.toggle('flex', !isSessionsMode);
+            const isStoryMode = isInteractiveStoryMode();
+            cardsPaginationFooter.classList.toggle('hidden', isSessionsMode || isStoryMode);
+            cardsPaginationFooter.classList.toggle('flex', !isSessionsMode && !isStoryMode);
             tagRelationFooter.classList.toggle('hidden', !isSessionsMode);
             paginationInfo.textContent = `Página ${state.page} de ${state.totalPages} • ${state.totalCards} ${isGridMode ? 'tag(s)' : 'card(s)'} • 20 por página`;
             prevPageBtn.disabled = state.page <= 1;
@@ -1608,6 +1614,72 @@
             }));
         }
 
+
+        function renderInteractiveStory(data = {}) {
+            const superposition = data.superposition || { title: 'História em Superposição', premise: '', options: [] };
+            const options = Array.isArray(superposition.options) ? superposition.options : [];
+            const collapses = Array.isArray(data.collapses) ? data.collapses : [];
+            const tagOptions = state.tags.map((tag) => `<option value="${Number(tag.id)}">${escapeHtml(getTagLabel(tag))}</option>`).join('');
+            tagFamilySections.innerHTML = `
+                <div class="space-y-4">
+                    <section class="rounded-2xl border border-violet-500/30 bg-violet-950/20 p-4">
+                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-violet-300">História em Superposição</p>
+                        <h2 class="mt-1 text-lg font-bold text-white">Todos os desenrolares possíveis</h2>
+                        <p class="mt-1 text-xs text-slate-400">Salve a história geral no banco de dados e cadastre as opções/caminhos possíveis, um por linha.</p>
+                        <form id="interactiveStorySuperpositionForm" class="mt-4 space-y-3">
+                            <input id="interactiveStoryTitle" type="text" maxlength="191" value="${escapeHtml(superposition.title || '')}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Título da história geral">
+                            <textarea id="interactiveStoryPremise" rows="6" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Premissa, regras e contexto da história em superposição...">${escapeHtml(superposition.premise || '')}</textarea>
+                            <textarea id="interactiveStoryOptions" rows="6" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Uma opção de desenrolar por linha...">${escapeHtml(options.join('\n'))}</textarea>
+                            <button type="submit" class="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500"><i class="fa-solid fa-floppy-disk mr-2"></i>Salvar Superposição</button>
+                        </form>
+                    </section>
+                    <section class="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-4">
+                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-300">História Colapsada</p>
+                        <h2 class="mt-1 text-lg font-bold text-white">Colapsar um caminho para uma tag</h2>
+                        <p class="mt-1 text-xs text-slate-400">Cada História Colapsada exige uma tag, e cada tag possui no máximo uma História Colapsada.</p>
+                        <form id="interactiveStoryCollapseForm" class="mt-4 space-y-3">
+                            <select id="interactiveStoryTagId" required class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"><option value="">Selecione a tag vinculada</option>${tagOptions}</select>
+                            <input id="interactiveStoryCollapseTitle" type="text" maxlength="191" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Título da história colapsada">
+                            <textarea id="interactiveStoryPath" rows="4" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Opções escolhidas, uma por linha..."></textarea>
+                            <textarea id="interactiveStoryCollapsedText" rows="6" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Texto resultante desse colapso..."></textarea>
+                            <button type="submit" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"><i class="fa-solid fa-link mr-2"></i>Salvar Colapso vinculado à tag</button>
+                        </form>
+                    </section>
+                    <section class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                        <h2 class="text-lg font-bold text-white">Histórias Colapsadas salvas</h2>
+                        <div class="mt-3 space-y-3">${collapses.length ? collapses.map((item) => `<article class="rounded-xl border border-slate-700 bg-slate-950/50 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h3 class="font-semibold text-slate-100">${escapeHtml(item.title || 'Sem título')}</h3><span class="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-xs text-sky-100">${escapeHtml(getTagLabel(item.tag || {}))}</span></div><p class="mt-2 whitespace-pre-wrap text-sm text-slate-300">${escapeHtml(item.collapsed_text || '')}</p><p class="mt-2 text-xs text-slate-500">Caminho: ${escapeHtml((item.path || []).join(' → ') || 'não informado')}</p></article>`).join('') : '<p class="text-sm text-slate-400">Nenhuma História Colapsada salva ainda.</p>'}</div>
+                    </section>
+                </div>`;
+            tagFamilySections.querySelector('#interactiveStorySuperpositionForm')?.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                await api('save_interactive_story', { title: interactiveStoryTitle.value.trim(), premise: interactiveStoryPremise.value.trim(), options: interactiveStoryOptions.value.split('\n').map(v => v.trim()).filter(Boolean) });
+                await loadInteractiveStoryMode();
+            });
+            tagFamilySections.querySelector('#interactiveStoryCollapseForm')?.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                await api('save_interactive_story_collapse', { tag_id: Number(interactiveStoryTagId.value), title: interactiveStoryCollapseTitle.value.trim(), path: interactiveStoryPath.value.split('\n').map(v => v.trim()).filter(Boolean), collapsed_text: interactiveStoryCollapsedText.value.trim() });
+                await loadInteractiveStoryMode();
+            });
+        }
+
+        async function loadInteractiveStoryMode() {
+            hideTagFormSection();
+            cardsGrid.classList.add('hidden');
+            cardsGrid.classList.remove('grid');
+            statusBox.classList.add('hidden');
+            tagFamilySections.classList.remove('hidden');
+            window.history.replaceState(null, '', buildCardsRoute(state.page));
+            updateFooter();
+            tagFamilySections.innerHTML = '<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 text-center text-slate-300"><i class="fa-solid fa-spinner fa-spin mr-2 text-violet-300"></i>Carregando história interativa...</div>';
+            try {
+                const [storyResult, tagsResult] = await Promise.all([api('get_interactive_story'), api('list_tags')]);
+                state.tags = tagsResult.data || [];
+                renderInteractiveStory(storyResult.data || {});
+            } catch (error) {
+                tagFamilySections.innerHTML = `<div class="rounded-2xl border border-red-500/30 bg-red-950/20 p-6 text-center text-red-200">${escapeHtml(error.message || 'Erro ao carregar história interativa.')}</div>`;
+            }
+        }
+
         async function loadTagsPage(page) {
             hideTagFormSection();
             cardsGrid.classList.add('hidden');
@@ -1641,6 +1713,10 @@
         async function loadPage(page) {
             if (isTagsGridMode()) {
                 await loadTagsPage(page);
+                return;
+            }
+            if (isInteractiveStoryMode()) {
+                await loadInteractiveStoryMode();
                 return;
             }
             if (isTagSessionsMode()) {
