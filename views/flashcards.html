@@ -148,6 +148,10 @@
             align-items: center;
             justify-content: center;
         }
+
+        .card-text.is-overflowing .card-text-content {
+            justify-content: flex-start;
+        }
         
         .score-dots {
             display: flex;
@@ -1021,11 +1025,30 @@
                 this.setupSwipeListeners();
                 this.setupBulkListener();
                 this.setupButtonIdCopyOnRightClick();
-                window.addEventListener('resize', () => this.updateMobileSceneHeight());
+                window.addEventListener('resize', () => {
+                    this.updateMobileSceneHeight();
+                    this.updateCardTextOverflow();
+                });
                 this.applyStudyScopeUI();
                 await this.loadSessionUser();
                 await this.loadTags();
                 await this.loadDeck();
+            },
+
+            updateCardTextOverflow() {
+                document.querySelectorAll('.card-text').forEach((cardText) => {
+                    cardText.classList.remove('is-overflowing');
+                    cardText.scrollTop = 0;
+                    const hasVerticalOverflow = cardText.scrollHeight > cardText.clientHeight + 1;
+                    cardText.classList.toggle('is-overflowing', hasVerticalOverflow);
+                });
+            },
+
+            scheduleCardTextOverflowUpdate() {
+                requestAnimationFrame(() => {
+                    this.updateCardTextOverflow();
+                    requestAnimationFrame(() => this.updateCardTextOverflow());
+                });
             },
 
             applyCardSheetEmbedLayout() {
@@ -1887,6 +1910,10 @@
                 }
                 this.renderMathInElement(document.getElementById('cardFrontText'));
                 this.renderMathInElement(document.getElementById('cardBackText'));
+                document.querySelectorAll('.card-text img').forEach((image) => {
+                    image.addEventListener('load', () => this.updateCardTextOverflow(), { once: true });
+                });
+                this.scheduleCardTextOverflowUpdate();
                 
                 document.getElementById('cardCounter').innerText = `${this.currentIndex + 1} / ${this.cards.length}`;
                 const tagsPanel = document.getElementById('cardTagsPanel');
