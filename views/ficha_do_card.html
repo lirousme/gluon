@@ -107,6 +107,7 @@
 
       <section id="singleFrontTabContent" class="space-y-3">
         <textarea id="singleFront" rows="4" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white resize-none" placeholder="Frente do flashcard"></textarea>
+        <p id="singleFrontCharCount" class="text-right text-[0.6875rem] leading-4 text-slate-500" aria-live="polite">0 caracteres</p>
         <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-3">
           <label for="dynamicTextType" class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-300">Texto dinâmico</label>
           <select id="dynamicTextType" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white">
@@ -122,6 +123,7 @@
 
       <section id="singleBackTabContent" class="hidden">
         <textarea id="singleBack" rows="4" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white resize-none" placeholder="Verso do flashcard"></textarea>
+        <p id="singleBackCharCount" class="mt-1 text-right text-[0.6875rem] leading-4 text-slate-500" aria-live="polite">0 caracteres</p>
       </section>
 
       <section id="frontImageTabContent" class="hidden">
@@ -386,6 +388,29 @@ const app = {
     document.body.removeChild(textarea);
     if (!copied) throw new Error('Falha ao copiar.');
   },
+  getCharacterCountLabel(count) {
+    return `${count} ${count === 1 ? 'caractere' : 'caracteres'}`;
+  },
+  updateTextCharacterCount(field) {
+    const textarea = field === 'front' ? document.getElementById('singleFront') : document.getElementById('singleBack');
+    const counter = field === 'front' ? document.getElementById('singleFrontCharCount') : document.getElementById('singleBackCharCount');
+    if (!textarea || !counter) return;
+    counter.textContent = this.getCharacterCountLabel(textarea.value.length);
+  },
+  updateAllTextCharacterCounts() {
+    this.updateTextCharacterCount('front');
+    this.updateTextCharacterCount('back');
+  },
+  setupTextCharacterCounters() {
+    [
+      { el: document.getElementById('singleFront'), field: 'front' },
+      { el: document.getElementById('singleBack'), field: 'back' }
+    ].forEach(({ el, field }) => {
+      if (!el) return;
+      el.addEventListener('input', () => this.updateTextCharacterCount(field));
+    });
+    this.updateAllTextCharacterCounts();
+  },
   normalizeInfoType(value) {
     const type = Number(value);
     return Object.prototype.hasOwnProperty.call(this.infoTypeOptions, type) ? type : 5;
@@ -426,6 +451,7 @@ const app = {
       singleFront.disabled = tagExpansion;
       singleFront.placeholder = tagExpansion ? 'A frente do Tag Expansion é montada pelas tags Subject na tela de estudo' : 'Frente do flashcard';
       if (tagExpansion) singleFront.value = '';
+      this.updateTextCharacterCount('front');
     }
     if (['front', 'frontImage'].includes(this.activeTab)) this.setActiveTab('back');
     if (window.tabFrontBtn) tabFrontBtn.classList.toggle('hidden', tagExpansion);
@@ -1012,6 +1038,7 @@ const app = {
       if (!res || !res.candidates) throw new Error('A API não retornou tags válidas.');
       if (res.english_sentence && String(res.english_sentence).trim()) {
         singleFront.value = String(res.english_sentence).trim();
+        this.updateTextCharacterCount('front');
       }
       this.pendingFrontSentenceTagCandidates = res.candidates;
       if (res.needs_ownership_choice) {
@@ -1095,6 +1122,7 @@ const app = {
       if (!res || !res.answer) throw new Error('A API não retornou uma resposta válida.');
 
       singleBack.value = res.answer;
+      this.updateTextCharacterCount('back');
       this.setActiveTab('back');
       this.setStatus('Resposta do Gemini adicionada ao verso!', 'success');
     } catch (err) {
@@ -1181,6 +1209,7 @@ const app = {
 
       singleFront.value = res.english;
       singleBack.value = res.pt_br;
+      this.updateAllTextCharacterCounts();
       const allChunks = Array.isArray(res.examples)
         ? res.examples.flatMap(example => Array.isArray(example.chunks) ? example.chunks : [])
         : (res.chunks || []);
@@ -1264,6 +1293,7 @@ const app = {
       if (!res || !res.translation) throw new Error('A API não retornou uma tradução válida.');
 
       targetEl.value = res.translation;
+      this.updateTextCharacterCount(targetEl === singleFront ? 'front' : 'back');
       this.setActiveTab(targetTab);
       this.setStatus(successLabel, 'success');
     } catch (err) {
@@ -1316,6 +1346,7 @@ const app = {
     this.updatePublicToggleButton();
     singleFront.value = card.front || '';
     singleBack.value = String(card.back || '');
+    this.updateAllTextCharacterCounts();
     if (card.image_front) this.setBase64ImagePreview('front', card.image_front);
     if (card.image_back) this.setBase64ImagePreview('back', card.image_back);
     this.setInfoType(card.info_type);
@@ -1456,6 +1487,7 @@ tagForm.onsubmit = (e) => app.createTag(e);
 editTagForm.onsubmit = (e) => app.updateTag(e);
 app.setupEditTagCategorySingleSelect();
 app.setupButtonIdContextCopy();
+app.setupTextCharacterCounters();
 tagModal.onclick = (e) => { if (e.target === tagModal) app.closeCreateTagModal(); };
 editTagModal.onclick = (e) => { if (e.target === editTagModal) app.closeEditTagModal(); };
 notesModal.onclick = (e) => { if (e.target === notesModal) app.closeNotesModal(); };
