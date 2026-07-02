@@ -6012,15 +6012,28 @@ elseif ($action === 'list_graph_cards_for_user') {
     $stmt->execute(array_merge([$user_id, $user_id], $tagFilterParams, $infoTypeFilterParams));
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     if ($longTextOnly) {
-        $rows = array_values(array_filter($rows, static function ($card) {
+        $rowsWithLongTextLength = [];
+        foreach ($rows as $card) {
             $front = !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '';
             $back = !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '';
             $frontText = trim(strip_tags((string)$front));
             $backText = trim(strip_tags((string)$back));
             $frontLength = function_exists('mb_strlen') ? mb_strlen($frontText, 'UTF-8') : strlen($frontText);
             $backLength = function_exists('mb_strlen') ? mb_strlen($backText, 'UTF-8') : strlen($backText);
-            return $frontLength > 80 || $backLength > 80;
-        }));
+            $longTextLength = max($frontLength, $backLength);
+            if ($longTextLength <= 80) continue;
+            $card['_long_text_length'] = $longTextLength;
+            $rowsWithLongTextLength[] = $card;
+        }
+        usort($rowsWithLongTextLength, static function ($firstCard, $secondCard) {
+            $lengthComparison = ((int)($secondCard['_long_text_length'] ?? 0)) <=> ((int)($firstCard['_long_text_length'] ?? 0));
+            if ($lengthComparison !== 0) return $lengthComparison;
+            return ((int)($secondCard['id'] ?? 0)) <=> ((int)($firstCard['id'] ?? 0));
+        });
+        $rows = array_map(static function ($card) {
+            unset($card['_long_text_length']);
+            return $card;
+        }, $rowsWithLongTextLength);
         $totalCards = count($rows);
         $totalPages = max(1, (int)ceil($totalCards / $perPage));
         if ($page > $totalPages) {
