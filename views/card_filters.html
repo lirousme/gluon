@@ -851,12 +851,6 @@
                         return `<button type="button" data-tag-link-type="${option.type}" aria-pressed="${isActive ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${isActive ? 'border-violet-400/80 bg-violet-950/40 text-violet-100' : 'border-sky-500/20 bg-sky-950/20 text-slate-100 hover:border-sky-400/60 hover:bg-sky-950/40 hover:text-sky-100'}">${escapeHtml(option.label)}</button>`;
                     }).join('')}</div>` : ''}
                 </article>
-                <article class="rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-3 transition hover:border-emerald-400/60 hover:bg-emerald-950/40">
-                    <div class="space-y-2">${cardOptions.map((option) => {
-                        const isActive = !!state[option.flag];
-                        return `<button type="button" data-card-option="${option.flag}" aria-pressed="${isActive ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${isActive ? 'border-emerald-300/80 bg-emerald-500/20 text-emerald-100' : 'border-emerald-500/20 bg-emerald-950/20 text-slate-100 hover:border-emerald-400/60 hover:bg-emerald-950/40 hover:text-emerald-100'}"><span class="block">${escapeHtml(option.label)}</span><span class="mt-1 block text-xs font-normal text-emerald-100/70">${escapeHtml(option.description)}</span></button>`;
-                    }).join('')}</div>
-                </article>
                 <article class="rounded-xl border border-cyan-500/20 bg-cyan-950/20 p-3 transition hover:border-cyan-400/60 hover:bg-cyan-950/40">
                     <div class="flex items-center gap-2">
                         <button type="button" id="rightIntentFiltersAccordionBtn" aria-expanded="${state.rightIntentFiltersExpanded ? 'true' : 'false'}" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-xs text-cyan-200 hover:border-cyan-400 hover:text-white" title="Mostrar filtros intencionais">
@@ -869,6 +863,9 @@
                     ${state.rightIntentFiltersExpanded ? `<div class="mt-2 space-y-2 border-l border-cyan-500/20 pl-3">${intentOptions.map((option) => {
                         const isActive = option.type === 'all' ? state.selectedInfoTypes.length === 5 : state.selectedInfoTypes.includes(option.type);
                         return `<button type="button" data-info-type="${option.type}" aria-pressed="${isActive ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${isActive ? 'border-violet-400/80 bg-violet-950/40 text-violet-100' : 'border-cyan-500/20 bg-cyan-950/20 text-slate-100 hover:border-cyan-400/60 hover:bg-cyan-950/40 hover:text-cyan-100'}">${escapeHtml(option.label)}</button>`;
+                    }).join('')}${cardOptions.map((option) => {
+                        const isActive = !!state[option.flag];
+                        return `<button type="button" data-card-option="${option.flag}" aria-pressed="${isActive ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${isActive ? 'border-cyan-300/80 bg-cyan-500/20 text-cyan-100' : 'border-cyan-500/20 bg-cyan-950/20 text-slate-100 hover:border-cyan-400/60 hover:bg-cyan-950/40 hover:text-cyan-100'}"><span class="block">${escapeHtml(option.label)}</span><span class="mt-1 block text-xs font-normal text-cyan-100/70">${escapeHtml(option.description)}</span></button>`;
                     }).join('')}</div>` : ''}
                 </article>
             `;
