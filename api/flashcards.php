@@ -45,7 +45,6 @@ ensureTagFamilyOrderSchema($pdo);
 ensureFlashcardsPublicToggleSchema($pdo);
 ensureFlashcardsDynamicTextTypeSchema($pdo);
 ensureFlashcardsQuestionAnswerSchema($pdo);
-ensureInteractiveStoriesSchema($pdo);
 $user_id = $_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? ($_GET['action'] ?? '');
@@ -534,48 +533,6 @@ function getTableIdSqlType(PDO $pdo, string $table, string $fallback = 'int unsi
     return $fallback;
 }
 
-function ensureInteractiveStoriesSchema(PDO $pdo): void
-{
-    static $checked = false;
-    if ($checked) return;
-    $checked = true;
-    try {
-        $userIdType = getTableIdSqlType($pdo, 'users');
-        $tagIdType = getTableIdSqlType($pdo, 'flashcard_tags');
-
-        $pdo->exec("CREATE TABLE IF NOT EXISTS interactive_story_superpositions (
-            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            user_id {$userIdType} NOT NULL,
-            title VARCHAR(191) NOT NULL DEFAULT 'História em Superposição',
-            premise MEDIUMTEXT NULL,
-            options_json MEDIUMTEXT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY uniq_interactive_story_superpositions_user (user_id),
-            CONSTRAINT fk_interactive_story_superpositions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        $superpositionIdType = getTableIdSqlType($pdo, 'interactive_story_superpositions');
-        $pdo->exec("CREATE TABLE IF NOT EXISTS interactive_story_collapses (
-            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            user_id {$userIdType} NOT NULL,
-            superposition_id {$superpositionIdType} NOT NULL,
-            tag_id {$tagIdType} NOT NULL,
-            title VARCHAR(191) NOT NULL DEFAULT '',
-            path_json MEDIUMTEXT NULL,
-            collapsed_text MEDIUMTEXT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY uniq_interactive_story_collapses_tag (tag_id),
-            KEY idx_interactive_story_collapses_user (user_id),
-            KEY idx_interactive_story_collapses_superposition (superposition_id),
-            CONSTRAINT fk_interactive_story_collapses_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            CONSTRAINT fk_interactive_story_collapses_superposition FOREIGN KEY (superposition_id) REFERENCES interactive_story_superpositions(id) ON DELETE CASCADE,
-            CONSTRAINT fk_interactive_story_collapses_tag FOREIGN KEY (tag_id) REFERENCES flashcard_tags(id) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    } catch (Throwable $e) {
-        error_log('[flashcards][interactive_stories_schema] ' . $e->getMessage());
-    }
-}
 
 function ensureFlashcardsDynamicTextTypeSchema(PDO $pdo): void
 {
@@ -3613,57 +3570,6 @@ function fetchDeckHistoryText($pdo, $deck_id) {
 
 
 
-function normalizeInteractiveStoryScenes($rawScenes): array
-{
-    $scenes = is_array($rawScenes) ? $rawScenes : [];
-    if ($scenes && array_is_list($scenes) && !is_array($scenes[0] ?? null)) {
-        $legacyOptions = [];
-        foreach ($scenes as $option) {
-            $label = trim((string)$option);
-            if ($label !== '') $legacyOptions[] = ['label' => $label, 'target' => ''];
-        }
-        $scenes = [['id' => 'inicio', 'title' => 'Início', 'text' => '', 'options' => $legacyOptions]];
-    }
-    $normalized = [];
-    $seen = [];
-    foreach ($scenes as $index => $scene) {
-        if (!is_array($scene)) continue;
-        $id = trim((string)($scene['id'] ?? ''));
-        if ($id === '') $id = 'scene_' . ($index + 1);
-        $id = preg_replace('/[^a-zA-Z0-9_-]/', '_', $id) ?: ('scene_' . ($index + 1));
-        $baseId = $id;
-        $suffix = 2;
-        while (isset($seen[$id])) $id = $baseId . '_' . $suffix++;
-        $seen[$id] = true;
-        $options = [];
-        foreach ((is_array($scene['options'] ?? null) ? $scene['options'] : []) as $option) {
-            if (!is_array($option)) continue;
-            $label = trim((string)($option['label'] ?? ''));
-            if ($label === '') continue;
-            $options[] = ['label' => $label, 'target' => trim((string)($option['target'] ?? ''))];
-        }
-        $normalized[] = ['id' => $id, 'title' => trim((string)($scene['title'] ?? '')), 'text' => trim((string)($scene['text'] ?? '')), 'options' => $options];
-    }
-    if (!$normalized) $normalized[] = ['id' => 'inicio', 'title' => 'Início', 'text' => '', 'options' => []];
-    return $normalized;
-}
-
-function getInteractiveStoryPayload(PDO $pdo, int $user_id): array
-{
-    $stmt = $pdo->prepare("SELECT id, title, premise, options_json FROM interactive_story_superpositions WHERE user_id = ? LIMIT 1");
-    $stmt->execute([$user_id]);
-    $superposition = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$superposition) {
-        $insert = $pdo->prepare("INSERT INTO interactive_story_superpositions (user_id, title, premise, options_json) VALUES (?, 'História em Superposição', '', ?)");
-        $insert->execute([$user_id, json_encode([['id' => 'inicio', 'title' => 'Início', 'text' => '', 'options' => []]], JSON_UNESCAPED_UNICODE)]);
-        $superposition = ['id' => (int)$pdo->lastInsertId(), 'title' => 'História em Superposição', 'premise' => '', 'options_json' => '[]'];
-    }
-    $decoded = json_decode((string)($superposition['options_json'] ?? '[]'), true);
-    $scenes = normalizeInteractiveStoryScenes($decoded);
-    return [$superposition, $scenes];
-}
-
-
 if ($action === 'fetch') {
     $deck_id = (int)($input['deck_id'] ?? 0);
     $directory_id = (int)($input['directory_id'] ?? 0);
@@ -5823,79 +5729,6 @@ elseif ($action === 'delete_card') {
         error_log('[flashcards][delete_card] ' . $e->getMessage());
         echo json_encode(['status' => 'error', 'message' => 'Erro interno ao excluir card.']);
     }
-}
-
-
-elseif ($action === 'get_interactive_story') {
-    [$superposition, $scenes] = getInteractiveStoryPayload($pdo, $user_id);
-    $stmt = $pdo->prepare("SELECT c.id, c.tag_id, c.title, c.path_json, c.collapsed_text, t.name_encrypted, t.name_pt_br_encrypted, t.numero FROM interactive_story_collapses c INNER JOIN flashcard_tags t ON t.id = c.tag_id WHERE c.user_id = ? AND c.superposition_id = ? ORDER BY c.updated_at DESC, c.id DESC");
-    $stmt->execute([$user_id, (int)$superposition['id']]);
-    $collapses = [];
-    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-        $row['tag'] = [
-            'id' => (int)$row['tag_id'],
-            'name' => !empty($row['name_encrypted']) ? Security::decryptData($row['name_encrypted']) : '',
-            'name_pt_br' => !empty($row['name_pt_br_encrypted']) ? Security::decryptData($row['name_pt_br_encrypted']) : null,
-            'numero' => $row['numero'] ?? null,
-        ];
-        $row['path'] = json_decode((string)($row['path_json'] ?? '[]'), true) ?: [];
-        unset($row['name_encrypted'], $row['name_pt_br_encrypted'], $row['numero'], $row['path_json']);
-        $collapses[] = $row;
-    }
-    echo json_encode(['status' => 'success', 'data' => [
-        'superposition' => ['id' => (int)$superposition['id'], 'title' => $superposition['title'], 'premise' => $superposition['premise'], 'scenes' => $scenes],
-        'collapses' => $collapses,
-    ]]);
-}
-
-elseif ($action === 'save_interactive_story') {
-    $title = trim((string)($input['title'] ?? 'História em Superposição')) ?: 'História em Superposição';
-    $premise = trim((string)($input['premise'] ?? ''));
-    $scenes = normalizeInteractiveStoryScenes($input['scenes'] ?? []);
-    $sceneIds = array_fill_keys(array_map(static fn($scene) => $scene['id'], $scenes), true);
-    foreach ($scenes as &$scene) {
-        foreach ($scene['options'] as &$option) {
-            if ($option['target'] !== '' && !isset($sceneIds[$option['target']])) $option['target'] = '';
-        }
-        unset($option);
-    }
-    unset($scene);
-    $scenesJson = json_encode($scenes, JSON_UNESCAPED_UNICODE);
-    $pdo->prepare("INSERT INTO interactive_story_superpositions (user_id, title, premise, options_json) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE title = VALUES(title), premise = VALUES(premise), options_json = VALUES(options_json)")->execute([$user_id, $title, $premise, $scenesJson]);
-    echo json_encode(['status' => 'success', 'message' => 'História em Superposição salva como cenas interativas.']);
-}
-
-elseif ($action === 'save_interactive_story_collapse') {
-    $tagId = (int)($input['tag_id'] ?? 0);
-    if ($tagId <= 0) die(json_encode(['status' => 'error', 'message' => 'Selecione uma tag para a História Colapsada.']));
-    $stmtTag = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5) LIMIT 1");
-    $stmtTag->execute([$tagId, $user_id]);
-    if (!$stmtTag->fetchColumn()) die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada ou sem permissão.']));
-    [$superposition, $scenes] = getInteractiveStoryPayload($pdo, $user_id);
-    $sceneById = [];
-    foreach ($scenes as $scene) $sceneById[$scene['id']] = $scene;
-    $path = is_array($input['path'] ?? null) ? array_values($input['path']) : [];
-    $cleanPath = [];
-    $currentId = $scenes[0]['id'] ?? 'inicio';
-    $parts = [];
-    foreach ($path as $choice) {
-        if (!is_array($choice)) continue;
-        $scene = $sceneById[$currentId] ?? null;
-        if (!$scene) break;
-        $label = trim((string)($choice['label'] ?? $choice));
-        $matched = null;
-        foreach ($scene['options'] as $option) if ($option['label'] === $label) { $matched = $option; break; }
-        if (!$matched) break;
-        $parts[] = trim((string)($scene['text'] ?? ''));
-        $cleanPath[] = ['scene_id' => $currentId, 'label' => $label, 'target' => $matched['target'] ?? ''];
-        if (empty($matched['target']) || !isset($sceneById[$matched['target']])) { $currentId = ''; break; }
-        $currentId = $matched['target'];
-    }
-    if ($currentId !== '' && isset($sceneById[$currentId])) $parts[] = trim((string)($sceneById[$currentId]['text'] ?? ''));
-    $collapsedText = trim(implode("\n\n", array_values(array_filter($parts, static fn($part) => $part !== ''))));
-    $title = trim((string)($input['title'] ?? '')) ?: ('História de tag #' . $tagId);
-    $pdo->prepare("INSERT INTO interactive_story_collapses (user_id, superposition_id, tag_id, title, path_json, collapsed_text) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), superposition_id = VALUES(superposition_id), title = VALUES(title), path_json = VALUES(path_json), collapsed_text = VALUES(collapsed_text)")->execute([$user_id, (int)$superposition['id'], $tagId, $title, json_encode($cleanPath, JSON_UNESCAPED_UNICODE), $collapsedText]);
-    echo json_encode(['status' => 'success', 'message' => 'Escolhas da História Colapsada salvas na tag.', 'collapsed_text' => $collapsedText, 'path' => $cleanPath]);
 }
 
 

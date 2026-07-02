@@ -398,7 +398,7 @@
             const mode = params.get('mode') || 'cards';
             if (['affirmations', 'translations', 'questions', 'tcoins', 'tag_expansion'].includes(mode)) return 'cards';
             if (mode === 'tag_sessions') return 'tag_sessions';
-            return ['tags', 'cards', 'interactive_story'].includes(mode) ? mode : 'cards';
+            return ['tags', 'cards'].includes(mode) ? mode : 'cards';
         }
 
         function isTagsGridMode() {
@@ -409,12 +409,9 @@
             return state.viewMode === 'tag_sessions';
         }
 
-        function isInteractiveStoryMode() {
-            return state.viewMode === 'interactive_story';
-        }
 
         function isAnyTagMode() {
-            return isTagsGridMode() || isTagSessionsMode() || isInteractiveStoryMode();
+            return isTagsGridMode() || isTagSessionsMode();
         }
 
         function isCardListMode() {
@@ -795,8 +792,7 @@
             const modes = [
                 { mode: 'cards', label: 'Cards' },
                 { mode: 'tags', label: 'Tags Grid' },
-                { mode: 'tag_sessions', label: 'Tags Sessões' },
-                { mode: 'interactive_story', label: 'História Interativa' }
+                { mode: 'tag_sessions', label: 'Tags Sessões' }
             ];
             const options = [
                 { type: 'subject', label: 'Sujeito' },
@@ -882,7 +878,7 @@
             });
             rightOptionsMenu.querySelectorAll('[data-view-mode]').forEach((button) => {
                 button.addEventListener('click', () => {
-                    state.viewMode = ['cards', 'tags', 'tag_sessions', 'interactive_story'].includes(button.dataset.viewMode) ? button.dataset.viewMode : 'cards';
+                    state.viewMode = ['cards', 'tags', 'tag_sessions'].includes(button.dataset.viewMode) ? button.dataset.viewMode : 'cards';
                     if (isAnyTagMode()) state.withoutTagsOnly = false;
                     renderRightOptionsMenu();
                     loadPage(1);
@@ -922,7 +918,7 @@
         }
 
         function enforceSingleTagSelectionForTagMode() {
-            if (!(isTagSessionsMode() || isInteractiveStoryMode()) || state.selectedTagIds.length <= 1) return;
+            if (!isTagSessionsMode() || state.selectedTagIds.length <= 1) return;
             state.selectedTagIds = [state.selectedTagIds[state.selectedTagIds.length - 1]];
             state.selectedTagLabels = [state.selectedTagLabels[state.selectedTagLabels.length - 1]].filter(Boolean);
         }
@@ -930,7 +926,7 @@
         function selectTagFilter(tagId, tag = {}) {
             if (!tagId || state.selectedTagIds.includes(tagId)) return false;
             state.withoutTagsOnly = false;
-            if (isTagSessionsMode() || isInteractiveStoryMode()) {
+            if (isTagSessionsMode()) {
                 state.selectedTagIds = [tagId];
                 state.selectedTagLabels = [getTagLabel(tag)];
                 return true;
@@ -953,7 +949,7 @@
 
         function renderLeftOthersMenu() {
             if (!leftOthersMenu) return;
-            if (!isCardListMode() && !isInteractiveStoryMode()) {
+            if (!isCardListMode()) {
                 leftOthersMenu.innerHTML = '';
                 return;
             }
@@ -964,24 +960,16 @@
                             <i class="fa-solid ${state.leftOthersExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}"></i>
                         </button>
                         <button type="button" id="leftOthersTitleBtn" class="min-w-0 flex-1 text-left text-sm font-semibold text-slate-100 transition hover:text-sky-100">
-                            <span class="break-words">${isInteractiveStoryMode() ? 'Modo' : 'Outros'}</span>
+                            <span class="break-words">Outros</span>
                         </button>
                     </div>
-                    ${state.leftOthersExpanded ? `<div class="mt-2 space-y-2 border-l border-sky-500/20 pl-3">${isCardListMode() ? `<button type="button" id="withoutTagsOnlyBtn" aria-pressed="${state.withoutTagsOnly ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${state.withoutTagsOnly ? 'border-violet-400/80 bg-violet-950/40 text-violet-100' : 'border-sky-500/20 bg-sky-950/20 text-slate-100 hover:border-sky-400/60 hover:bg-sky-950/40 hover:text-sky-100'}">Sem tags</button>` : ''}${isInteractiveStoryMode() ? `<button type="button" id="mountInteractiveStoryBtn" aria-pressed="${state.selectedTagIds.length === 1 ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${state.selectedTagIds.length === 1 ? 'border-emerald-400/80 bg-emerald-950/40 text-emerald-100' : 'border-sky-500/20 bg-sky-950/20 text-slate-100 hover:border-sky-400/60 hover:bg-sky-950/40 hover:text-sky-100'}">Montar História</button>` : ''}</div>` : ''}
+                    ${state.leftOthersExpanded ? `<div class="mt-2 space-y-2 border-l border-sky-500/20 pl-3"><button type="button" id="withoutTagsOnlyBtn" aria-pressed="${state.withoutTagsOnly ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${state.withoutTagsOnly ? 'border-violet-400/80 bg-violet-950/40 text-violet-100' : 'border-sky-500/20 bg-sky-950/20 text-slate-100 hover:border-sky-400/60 hover:bg-sky-950/40 hover:text-sky-100'}">Sem tags</button></div>` : ''}
                 </article>
             `;
             leftOthersMenu.querySelectorAll('#leftOthersAccordionBtn, #leftOthersTitleBtn').forEach((button) => {
                 button.addEventListener('click', () => { state.leftOthersExpanded = !state.leftOthersExpanded; renderLeftOthersMenu(); });
             });
 
-            leftOthersMenu.querySelector('#mountInteractiveStoryBtn')?.addEventListener('click', () => {
-                if (!isInteractiveStoryMode()) return;
-                if (state.selectedTagIds.length !== 1) {
-                    alert('Selecione uma tag no menu lateral esquerdo para montar a História Colapsada dela.');
-                    return;
-                }
-                tagFamilySections.querySelector('#interactiveStoryCollapseSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            });
             leftOthersMenu.querySelector('#withoutTagsOnlyBtn')?.addEventListener('click', () => {
                 state.withoutTagsOnly = !state.withoutTagsOnly;
                 if (state.withoutTagsOnly) {
@@ -1549,9 +1537,8 @@
             updateHeaderActions();
             const isGridMode = isTagsGridMode();
             const isSessionsMode = isTagSessionsMode();
-            const isStoryMode = isInteractiveStoryMode();
-            cardsPaginationFooter.classList.toggle('hidden', isSessionsMode || isStoryMode);
-            cardsPaginationFooter.classList.toggle('flex', !isSessionsMode && !isStoryMode);
+            cardsPaginationFooter.classList.toggle('hidden', isSessionsMode);
+            cardsPaginationFooter.classList.toggle('flex', !isSessionsMode);
             tagRelationFooter.classList.toggle('hidden', !isSessionsMode);
             paginationInfo.textContent = `Página ${state.page} de ${state.totalPages} • ${state.totalCards} ${isGridMode ? 'tag(s)' : 'card(s)'} • 20 por página`;
             prevPageBtn.disabled = state.page <= 1;
@@ -1645,120 +1632,6 @@
         }
 
 
-        function getStoryScenesFromForm() {
-            return Array.from(tagFamilySections.querySelectorAll('[data-story-scene]')).map((sceneEl, index) => ({
-                id: (sceneEl.querySelector('[data-scene-id]')?.value || `scene_${index + 1}`).trim().replace(/[^a-zA-Z0-9_-]/g, '_') || `scene_${index + 1}`,
-                title: (sceneEl.querySelector('[data-scene-title]')?.value || '').trim(),
-                text: (sceneEl.querySelector('[data-scene-text]')?.value || '').trim(),
-                options: Array.from(sceneEl.querySelectorAll('[data-story-option]')).map((optionEl) => ({
-                    label: (optionEl.querySelector('[data-option-label]')?.value || '').trim(),
-                    target: (optionEl.querySelector('[data-option-target]')?.value || '').trim()
-                })).filter((option) => option.label)
-            }));
-        }
-
-        function renderInteractiveStory(data = {}) {
-            const superposition = data.superposition || { title: 'História em Superposição', premise: '', scenes: [] };
-            const scenes = Array.isArray(superposition.scenes) && superposition.scenes.length ? superposition.scenes : [{ id: 'inicio', title: 'Início', text: '', options: [] }];
-            const collapses = Array.isArray(data.collapses) ? data.collapses : [];
-            const selectedTagId = Number(state.selectedTagIds[0] || 0);
-            const selectedTag = selectedTagId ? (state.tags.find((tag) => Number(tag.id) === selectedTagId) || getCurrentTag()) : null;
-            const currentCollapse = selectedTagId ? (collapses.find((item) => Number(item.tag_id) === selectedTagId || Number(item.tag?.id) === selectedTagId) || null) : null;
-            const currentCollapsePath = Array.isArray(currentCollapse?.path) ? currentCollapse.path : [];
-            const selectedTagLabel = selectedTag ? getTagLabel(selectedTag) : '';
-            const renderTargetOptions = (selected = '') => `<option value="">Fim da história</option>${scenes.map((scene) => `<option value="${escapeHtml(scene.id)}" ${scene.id === selected ? 'selected' : ''}>${escapeHtml(scene.title || scene.id)}</option>`).join('')}`;
-            const renderScene = (scene, index) => `
-                <article data-story-scene class="rounded-xl border border-slate-700 bg-slate-950/50 p-3 space-y-3">
-                    <div class="flex flex-wrap items-center justify-between gap-2"><span class="text-xs font-semibold uppercase tracking-widest text-violet-300">Cena ${index + 1}</span><button type="button" data-remove-scene class="rounded-lg border border-red-500/50 px-2 py-1 text-xs text-red-200 hover:bg-red-500/10">Remover</button></div>
-                    <div class="grid gap-2 md:grid-cols-2"><input data-scene-id value="${escapeHtml(scene.id || '')}" class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="id-da-cena"><input data-scene-title value="${escapeHtml(scene.title || '')}" class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Título da cena"></div>
-                    <textarea data-scene-text rows="5" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Texto/enunciado desta cena...">${escapeHtml(scene.text || '')}</textarea>
-                    <div data-story-options class="space-y-2">${(scene.options || []).map((option) => `<div data-story-option class="grid gap-2 md:grid-cols-[1fr_14rem_auto]"><input data-option-label value="${escapeHtml(option.label || '')}" class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Opção escolhível"><select data-option-target class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100">${renderTargetOptions(option.target || '')}</select><button type="button" data-remove-option class="rounded-lg border border-red-500/50 px-3 py-2 text-red-200 hover:bg-red-500/10"><i class="fa-solid fa-trash"></i></button></div>`).join('')}</div>
-                    <button type="button" data-add-option class="rounded-lg border border-violet-400/50 px-3 py-2 text-sm text-violet-100 hover:bg-violet-500/10"><i class="fa-solid fa-plus mr-2"></i>Adicionar opção</button>
-                </article>`;
-            tagFamilySections.innerHTML = `
-                <div class="space-y-4">
-                    <section class="rounded-2xl border border-violet-500/30 bg-violet-950/20 p-4">
-                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-violet-300">História em Superposição</p>
-                        <h2 class="mt-1 text-lg font-bold text-white">Editor de cenas no estilo Twine</h2>
-                        <p class="mt-1 text-xs text-slate-400">Cada cena tem um texto e opções que apontam para a próxima cena. A superposição salva todos os caminhos possíveis.</p>
-                        <form id="interactiveStorySuperpositionForm" class="mt-4 space-y-3">
-                            <input id="interactiveStoryTitle" type="text" maxlength="191" value="${escapeHtml(superposition.title || '')}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Título da história geral">
-                            <textarea id="interactiveStoryPremise" rows="3" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Premissa/regras gerais...">${escapeHtml(superposition.premise || '')}</textarea>
-                            <div id="interactiveStoryScenes" class="space-y-3">${scenes.map(renderScene).join('')}</div>
-                            <div class="flex flex-wrap gap-2"><button type="button" id="addInteractiveStoryScene" class="rounded-xl border border-violet-400/60 px-4 py-2 text-sm font-semibold text-violet-100 hover:bg-violet-500/10"><i class="fa-solid fa-plus mr-2"></i>Adicionar cena</button><button type="submit" class="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500"><i class="fa-solid fa-floppy-disk mr-2"></i>Salvar Superposição</button></div>
-                        </form>
-                    </section>
-                    <section id="interactiveStoryCollapseSection" class="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-4">
-                        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-300">Montar História</p>
-                        <h2 class="mt-1 text-lg font-bold text-white">História Colapsada da tag selecionada</h2>
-                        <p class="mt-1 text-xs text-slate-400">Escolha uma tag no menu lateral esquerdo e use Montar História. Não há seletor aqui: a História Colapsada pertence sempre à tag selecionada.</p>
-                        ${selectedTagId ? `<div class="mt-4 grid gap-2 md:grid-cols-[1fr_auto]"><div class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100"><span class="text-xs uppercase tracking-widest text-emerald-300">Tag vinculada</span><div class="font-semibold">${escapeHtml(selectedTagLabel)}</div></div><button type="button" id="resetInteractiveStoryRun" class="rounded-lg border border-slate-500 px-3 py-2 text-sm text-slate-100 hover:bg-slate-700">Reiniciar</button></div><input id="interactiveStoryCollapseTitle" type="text" maxlength="191" value="${escapeHtml(currentCollapse?.title || `História de ${selectedTagLabel}`)}" class="mt-2 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Título da história colapsada"><div id="interactiveStoryPlayer" class="mt-4 rounded-xl border border-slate-700 bg-slate-950/60 p-4"></div>` : `<div class="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">Selecione uma tag no menu lateral esquerdo para montar a História Colapsada dela.</div>`}
-                    </section>
-                    <section class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                        <h2 class="text-lg font-bold text-white">Histórias Colapsadas salvas</h2>
-                        <div class="mt-3 space-y-3">${collapses.length ? collapses.map((item) => `<article class="rounded-xl border border-slate-700 bg-slate-950/50 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h3 class="font-semibold text-slate-100">${escapeHtml(item.title || 'Sem título')}</h3><span class="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-xs text-sky-100">${escapeHtml(getTagLabel(item.tag || {}))}</span></div><p class="mt-2 whitespace-pre-wrap text-sm text-slate-300">${escapeHtml(item.collapsed_text || '')}</p><p class="mt-2 text-xs text-slate-500">Escolhas: ${escapeHtml((item.path || []).map((choice) => choice.label || choice).join(' → ') || 'nenhuma')}</p></article>`).join('') : '<p class="text-sm text-slate-400">Nenhuma História Colapsada salva ainda.</p>'}</div>
-                    </section>
-                </div>`;
-            const lastSavedChoice = currentCollapsePath[currentCollapsePath.length - 1] || null;
-            const savedTarget = lastSavedChoice?.target && scenes.some((scene) => scene.id === lastSavedChoice.target) ? lastSavedChoice.target : '';
-            const playerState = { sceneId: savedTarget || scenes[0]?.id || 'inicio', path: [...currentCollapsePath] };
-            const sceneById = () => new Map(scenes.map((scene) => [scene.id, scene]));
-            const renderPlayer = () => {
-                const scene = sceneById().get(playerState.sceneId);
-                const player = tagFamilySections.querySelector('#interactiveStoryPlayer');
-                if (!player) return;
-                if (!scene) { player.innerHTML = '<p class="text-sm text-red-200">Cena não encontrada.</p>'; return; }
-                player.innerHTML = `<h3 class="font-semibold text-white">${escapeHtml(scene.title || scene.id)}</h3><p class="mt-2 whitespace-pre-wrap text-sm text-slate-200">${escapeHtml(scene.text || '')}</p><div class="mt-4 flex flex-wrap gap-2">${(scene.options || []).length ? scene.options.map((option, idx) => `<button type="button" data-play-option="${idx}" class="rounded-xl border border-emerald-400/60 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-500/20">${escapeHtml(option.label || '')}</button>`).join('') : '<span class="rounded-full border border-slate-600 px-3 py-1 text-xs text-slate-300">Fim da história</span>'}</div><p class="mt-3 text-xs text-slate-500">Escolhas: ${escapeHtml(playerState.path.map((choice) => choice.label).join(' → ') || 'nenhuma')}</p>`;
-                player.querySelectorAll('[data-play-option]').forEach((button) => button.addEventListener('click', async () => {
-                    const option = (scene.options || [])[Number(button.dataset.playOption || 0)];
-                    if (!option) return;
-                    playerState.path.push({ scene_id: scene.id, label: option.label, target: option.target || '' });
-                    if (option.target && sceneById().has(option.target)) playerState.sceneId = option.target;
-                    if (selectedTagId > 0) renderPlayer();
-                    if (selectedTagId > 0) await api('save_interactive_story_collapse', { tag_id: selectedTagId, title: tagFamilySections.querySelector('#interactiveStoryCollapseTitle')?.value.trim() || '', path: playerState.path });
-                }));
-            };
-            tagFamilySections.querySelector('#addInteractiveStoryScene')?.addEventListener('click', () => { tagFamilySections.querySelector('#interactiveStoryScenes')?.insertAdjacentHTML('beforeend', renderScene({ id: `scene_${Date.now()}`, title: '', text: '', options: [] }, tagFamilySections.querySelectorAll('[data-story-scene]').length)); });
-            tagFamilySections.querySelector('#interactiveStoryScenes')?.addEventListener('click', (event) => {
-                const target = event.target.closest('button');
-                if (!target) return;
-                if (target.matches('[data-remove-scene]')) target.closest('[data-story-scene]')?.remove();
-                if (target.matches('[data-add-option]')) target.closest('[data-story-scene]')?.querySelector('[data-story-options]')?.insertAdjacentHTML('beforeend', `<div data-story-option class="grid gap-2 md:grid-cols-[1fr_14rem_auto]"><input data-option-label class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100" placeholder="Opção escolhível"><select data-option-target class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100">${renderTargetOptions('')}</select><button type="button" data-remove-option class="rounded-lg border border-red-500/50 px-3 py-2 text-red-200 hover:bg-red-500/10"><i class="fa-solid fa-trash"></i></button></div>`);
-                if (target.matches('[data-remove-option]')) target.closest('[data-story-option]')?.remove();
-            });
-            tagFamilySections.querySelector('#resetInteractiveStoryRun')?.addEventListener('click', async () => {
-                playerState.sceneId = scenes[0]?.id || 'inicio';
-                playerState.path = [];
-                renderPlayer();
-                if (selectedTagId > 0) await api('save_interactive_story_collapse', { tag_id: selectedTagId, title: tagFamilySections.querySelector('#interactiveStoryCollapseTitle')?.value.trim() || '', path: [] });
-            });
-            tagFamilySections.querySelector('#interactiveStorySuperpositionForm')?.addEventListener('submit', async (event) => {
-                event.preventDefault();
-                await api('save_interactive_story', { title: interactiveStoryTitle.value.trim(), premise: interactiveStoryPremise.value.trim(), scenes: getStoryScenesFromForm() });
-                await loadInteractiveStoryMode();
-            });
-            renderPlayer();
-        }
-
-        async function loadInteractiveStoryMode() {
-            enforceSingleTagSelectionForTagMode();
-            hideTagFormSection();
-            cardsGrid.classList.add('hidden');
-            cardsGrid.classList.remove('grid');
-            statusBox.classList.add('hidden');
-            tagFamilySections.classList.remove('hidden');
-            window.history.replaceState(null, '', buildCardsRoute(state.page));
-            updateFooter();
-            tagFamilySections.innerHTML = '<div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 text-center text-slate-300"><i class="fa-solid fa-spinner fa-spin mr-2 text-violet-300"></i>Carregando história interativa...</div>';
-            try {
-                const [storyResult, tagsResult] = await Promise.all([api('get_interactive_story'), api('list_tags')]);
-                state.tags = tagsResult.data || [];
-                renderInteractiveStory(storyResult.data || {});
-            } catch (error) {
-                tagFamilySections.innerHTML = `<div class="rounded-2xl border border-red-500/30 bg-red-950/20 p-6 text-center text-red-200">${escapeHtml(error.message || 'Erro ao carregar história interativa.')}</div>`;
-            }
-        }
-
         async function loadTagsPage(page) {
             hideTagFormSection();
             cardsGrid.classList.add('hidden');
@@ -1792,10 +1665,6 @@
         async function loadPage(page) {
             if (isTagsGridMode()) {
                 await loadTagsPage(page);
-                return;
-            }
-            if (isInteractiveStoryMode()) {
-                await loadInteractiveStoryMode();
                 return;
             }
             if (isTagSessionsMode()) {
