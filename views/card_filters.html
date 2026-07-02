@@ -234,6 +234,7 @@
             selectedInfoTypes: parseSelectedInfoTypes(urlParams),
             viewMode: parseViewMode(urlParams),
             withoutTagsOnly: parseWithoutTagsOnly(urlParams),
+            longTextOnly: parseLongTextOnly(urlParams),
             expandedTagIds: new Set(),
             leftOthersExpanded: false,
             rightModeExpanded: false,
@@ -424,6 +425,10 @@
             return params.get('without_tags') === '1';
         }
 
+        function parseLongTextOnly(params) {
+            return params.get('long_text') === '1';
+        }
+
         function parseSelectedTagLinkTypes(params) {
             const allowedTypes = ['subject', 'object', 'lexical_chunk'];
             if (!params.has('tag_link_types')) return [...allowedTypes];
@@ -541,6 +546,7 @@
             if (state.viewMode !== 'cards') params.set('mode', state.viewMode);
             if (isTagsGridMode() && state.tagSortDirection !== 'asc') params.set('tag_sort', state.tagSortDirection);
             if (state.withoutTagsOnly && isCardListMode()) params.set('without_tags', '1');
+            if (state.longTextOnly && isCardListMode()) params.set('long_text', '1');
             if (state.selectedTagIds.length) {
                 params.set('tag_ids', state.selectedTagIds.join(','));
                 if (state.selectedTagLabels.length) params.set('tag_names', state.selectedTagLabels.join('|'));
@@ -797,6 +803,9 @@
                 { type: 'object', label: 'Objeto' },
                 { type: 'lexical_chunk', label: 'Lexical Chunk' }
             ];
+            const cardOptions = [
+                { flag: 'longTextOnly', label: '+80 ch', description: 'Cards com mais de 80 caracteres no front ou no back.' }
+            ];
             const intentOptions = [
                 { type: 'all', label: 'Todos os tipos' },
                 { type: '0', label: 'Afirmations' },
@@ -842,6 +851,12 @@
                         return `<button type="button" data-tag-link-type="${option.type}" aria-pressed="${isActive ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${isActive ? 'border-violet-400/80 bg-violet-950/40 text-violet-100' : 'border-sky-500/20 bg-sky-950/20 text-slate-100 hover:border-sky-400/60 hover:bg-sky-950/40 hover:text-sky-100'}">${escapeHtml(option.label)}</button>`;
                     }).join('')}</div>` : ''}
                 </article>
+                <article class="rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-3 transition hover:border-emerald-400/60 hover:bg-emerald-950/40">
+                    <div class="space-y-2">${cardOptions.map((option) => {
+                        const isActive = !!state[option.flag];
+                        return `<button type="button" data-card-option="${option.flag}" aria-pressed="${isActive ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${isActive ? 'border-emerald-300/80 bg-emerald-500/20 text-emerald-100' : 'border-emerald-500/20 bg-emerald-950/20 text-slate-100 hover:border-emerald-400/60 hover:bg-emerald-950/40 hover:text-emerald-100'}"><span class="block">${escapeHtml(option.label)}</span><span class="mt-1 block text-xs font-normal text-emerald-100/70">${escapeHtml(option.description)}</span></button>`;
+                    }).join('')}</div>
+                </article>
                 <article class="rounded-xl border border-cyan-500/20 bg-cyan-950/20 p-3 transition hover:border-cyan-400/60 hover:bg-cyan-950/40">
                     <div class="flex items-center gap-2">
                         <button type="button" id="rightIntentFiltersAccordionBtn" aria-expanded="${state.rightIntentFiltersExpanded ? 'true' : 'false'}" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-xs text-cyan-200 hover:border-cyan-400 hover:text-white" title="Mostrar filtros intencionais">
@@ -859,6 +874,15 @@
             `;
 
             rightOptionsMenu.querySelector('#toggleSelectedPinnedTagsBtn')?.addEventListener('click', pinSelectedTags);
+            rightOptionsMenu.querySelectorAll('[data-card-option]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const option = button.dataset.cardOption || '';
+                    if (option !== 'longTextOnly') return;
+                    state.longTextOnly = !state.longTextOnly;
+                    renderRightOptionsMenu();
+                    loadPage(1);
+                });
+            });
             rightOptionsMenu.querySelectorAll('[data-view-mode]').forEach((button) => {
                 button.addEventListener('click', () => {
                     state.viewMode = ['cards', 'tags', 'tag_sessions', 'interactive_story'].includes(button.dataset.viewMode) ? button.dataset.viewMode : 'cards';
@@ -1789,6 +1813,7 @@
             try {
                 const params = new URLSearchParams({ action: 'list_graph_cards_for_user', page: String(page) });
                 if (state.withoutTagsOnly) params.set('without_tags', '1');
+                if (state.longTextOnly) params.set('long_text', '1');
                 if (state.selectedTagIds.length) params.set('tag_ids', state.selectedTagIds.join(','));
                 params.set('tag_link_types', state.selectedTagLinkTypes.join(','));
                 params.set('info_types', state.selectedInfoTypes.join(','));
