@@ -5905,9 +5905,12 @@ elseif ($action === 'list_graph_cards_for_user') {
     $rawTagId = is_array($input) ? ($input['tag_id'] ?? ($_GET['tag_id'] ?? 0)) : ($_GET['tag_id'] ?? 0);
     $rawTagLinkTypes = is_array($input) ? ($input['tag_link_types'] ?? ($_GET['tag_link_types'] ?? ['subject', 'object', 'lexical_chunk'])) : ($_GET['tag_link_types'] ?? ['subject', 'object', 'lexical_chunk']);
     $rawWithoutTags = is_array($input) ? ($input['without_tags'] ?? ($_GET['without_tags'] ?? 0)) : ($_GET['without_tags'] ?? 0);
+    $rawLongText = is_array($input) ? ($input['long_text'] ?? ($_GET['long_text'] ?? 0)) : ($_GET['long_text'] ?? 0);
     $rawInfoTypes = is_array($input) ? ($input['info_types'] ?? ($_GET['info_types'] ?? [0, 1, 2, 3, 4, 5, 6])) : ($_GET['info_types'] ?? [0, 1, 2, 3, 4, 5, 6]);
     $withoutTagsOnly = filter_var($rawWithoutTags, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
     $withoutTagsOnly = $withoutTagsOnly === null ? ((string)$rawWithoutTags === '1') : $withoutTagsOnly;
+    $longTextOnly = filter_var($rawLongText, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+    $longTextOnly = $longTextOnly === null ? ((string)$rawLongText === '1') : $longTextOnly;
     $page = filter_var($rawPage, FILTER_VALIDATE_INT, ['options' => ['default' => 1, 'min_range' => 1]]);
     $tagIds = sanitizeTagIds($rawTagIds ?? $rawTagId);
     $tagLinkTypes = sanitizeGraphTagLinkTypes($rawTagLinkTypes);
@@ -5977,6 +5980,8 @@ elseif ($action === 'list_graph_cards_for_user') {
         $offset = ($page - 1) * $perPage;
     }
 
+    $paginationSql = $longTextOnly ? '' : "LIMIT {$perPage} OFFSET {$offset}";
+
     $stmt = $pdo->prepare("
         SELECT
             f.id,
@@ -6002,10 +6007,28 @@ elseif ($action === 'list_graph_cards_for_user') {
           {$tagFilterSql}
           {$infoTypeFilterSql}
         ORDER BY f.id DESC
-        LIMIT {$perPage} OFFSET {$offset}
+        {$paginationSql}
     ");
     $stmt->execute(array_merge([$user_id, $user_id], $tagFilterParams, $infoTypeFilterParams));
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if ($longTextOnly) {
+        $rows = array_values(array_filter($rows, static function ($card) {
+            $front = !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '';
+            $back = !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '';
+            $frontText = trim(strip_tags((string)$front));
+            $backText = trim(strip_tags((string)$back));
+            $frontLength = function_exists('mb_strlen') ? mb_strlen($frontText, 'UTF-8') : strlen($frontText);
+            $backLength = function_exists('mb_strlen') ? mb_strlen($backText, 'UTF-8') : strlen($backText);
+            return $frontLength > 80 || $backLength > 80;
+        }));
+        $totalCards = count($rows);
+        $totalPages = max(1, (int)ceil($totalCards / $perPage));
+        if ($page > $totalPages) {
+            $page = $totalPages;
+            $offset = ($page - 1) * $perPage;
+        }
+        $rows = array_slice($rows, $offset, $perPage);
+    }
     $cardIds = array_values(array_map(static fn($card) => (int)$card['id'], $rows));
     $tagsByCard = [];
     foreach (getCardTagLinkColumnsByTable() as $linkTable => $columns) {
