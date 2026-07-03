@@ -592,17 +592,15 @@
                 <button onclick="flashcardApp.prevCard()" id="btnPrev" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center text-base shadow-md transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Card anterior" aria-label="Card anterior">
                     <i class="fa-solid fa-arrow-left"></i>
                 </button>
+                <button type="button" onclick="flashcardApp.answerQuestion(1)" id="btnQuestionYes" class="hidden h-11 items-center justify-center gap-2 rounded-full border border-emerald-400/60 bg-emerald-500/20 px-4 text-sm font-semibold text-emerald-100 transition-all hover:bg-emerald-500/30" title="Responder Sim" aria-label="Responder Sim">
+                    <i class="fa-solid fa-check"></i><span>Sim</span>
+                </button>
                 <button onclick="event.stopPropagation(); flashcardApp.playCurrentCardAudio()" id="btnPlayCurrentAudio" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center text-base shadow-md transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Ouvir áudio do card" aria-label="Ouvir áudio do card" disabled>
                     <i class="fa-solid fa-play"></i>
                 </button>
-                <div id="questionAnswerControls" class="hidden items-center gap-2">
-                    <button type="button" onclick="flashcardApp.answerQuestion(1)" id="btnQuestionYes" class="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-emerald-400/60 bg-emerald-500/20 px-4 text-sm font-semibold text-emerald-100 transition-all hover:bg-emerald-500/30" title="Responder Sim" aria-label="Responder Sim">
-                        <i class="fa-solid fa-check"></i><span>Sim</span>
-                    </button>
-                    <button type="button" onclick="flashcardApp.answerQuestion(0)" id="btnQuestionNo" class="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-rose-400/60 bg-rose-500/20 px-4 text-sm font-semibold text-rose-100 transition-all hover:bg-rose-500/30" title="Responder Não" aria-label="Responder Não">
-                        <i class="fa-solid fa-xmark"></i><span>Não</span>
-                    </button>
-                </div>
+                <button type="button" onclick="flashcardApp.answerQuestion(0)" id="btnQuestionNo" class="hidden h-11 items-center justify-center gap-2 rounded-full border border-rose-400/60 bg-rose-500/20 px-4 text-sm font-semibold text-rose-100 transition-all hover:bg-rose-500/30" title="Responder Não" aria-label="Responder Não">
+                    <i class="fa-solid fa-xmark"></i><span>Não</span>
+                </button>
                 <button onclick="flashcardApp.nextCard()" id="btnNext" class="w-11 h-11 rounded-full bg-gluon-primary hover:bg-blue-600 text-white flex items-center justify-center text-base shadow-md shadow-blue-500/25 transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Próximo card" aria-label="Próximo card">
                     <i class="fa-solid fa-arrow-right"></i>
                 </button>
@@ -980,6 +978,7 @@
             autoFlowToken: 0,
             autoFlowTransitionDelayMs: 250,
             scoredCardIds: new Set(),
+            answeredQuestionCardIds: new Set(),
             isGeneratingMissingAudios: false,
             cardSheetEmbed: false,
             cardSheetMode: null,
@@ -1848,14 +1847,26 @@
             },
 
             updateQuestionAnswerControls(card) {
-                const controls = document.getElementById('questionAnswerControls');
+                const btnYes = document.getElementById('btnQuestionYes');
+                const btnNo = document.getElementById('btnQuestionNo');
+                const btnPrev = document.getElementById('btnPrev');
                 const btnNext = document.getElementById('btnNext');
-                if (!controls || !btnNext) return;
-                const showQuestionControls = this.isQuestionCard(card);
-                controls.classList.toggle('hidden', !showQuestionControls);
-                controls.classList.toggle('flex', showQuestionControls);
-                btnNext.classList.toggle('hidden', showQuestionControls);
-                btnNext.disabled = showQuestionControls || (this.deckMode !== 'livro' && !['aleatorio', 'grafo'].includes(this.deckMode) && this.currentIndex === this.cards.length - 1);
+                if (!btnYes || !btnNo || !btnPrev || !btnNext) return;
+
+                const isQuestion = this.isQuestionCard(card);
+                const isAnswered = isQuestion && this.answeredQuestionCardIds.has(Number(card.id));
+                const showQuestionAnswers = isQuestion && !isAnswered && !this.isFlipped;
+                const shouldHideNavigation = isQuestion && !isAnswered;
+
+                [btnYes, btnNo].forEach((button) => {
+                    button.classList.toggle('hidden', !showQuestionAnswers);
+                    button.classList.toggle('inline-flex', showQuestionAnswers);
+                });
+
+                btnPrev.classList.toggle('hidden', shouldHideNavigation);
+                btnNext.classList.toggle('hidden', shouldHideNavigation);
+                btnPrev.disabled = shouldHideNavigation || this.currentIndex === 0;
+                btnNext.disabled = shouldHideNavigation || (this.deckMode !== 'livro' && !['aleatorio', 'grafo'].includes(this.deckMode) && this.currentIndex === this.cards.length - 1);
             },
 
             renderCurrentCard() {
@@ -2045,7 +2056,6 @@
                 this.updateAudioControlsVisibility();
                 this.updateHeaderCardActions();
 
-                document.getElementById('btnPrev').disabled = this.currentIndex === 0;
                 this.updateQuestionAnswerControls(card);
             },
 
@@ -2159,6 +2169,7 @@
                 const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
 
                 if (this.isTranslationLikeCard(card) || !hasFront || !hasBack) return;
+                if (this.isQuestionCard(card) && !this.answeredQuestionCardIds.has(Number(card.id))) return;
 
                 this.isFlipped = !this.isFlipped;
                 const cardEl = document.getElementById('flashcard');
@@ -2173,13 +2184,14 @@
 
                 this.updateAudioControlsVisibility();
                 this.updateHeaderCardActions();
+                this.updateQuestionAnswerControls(card);
                 this.handleAutoPlaybackAndFlow();
             },
 
             async nextCard(options = {}) {
                 if (this.cards.length === 0) return;
-                const allowQuestionAdvance = Boolean(options.allowQuestionAdvance);
-                if (this.isQuestionCard(this.cards[this.currentIndex]) && !allowQuestionAdvance) return;
+                const currentCard = this.cards[this.currentIndex];
+                if (this.isQuestionCard(currentCard) && !this.answeredQuestionCardIds.has(Number(currentCard.id))) return;
                 this.autoFlowToken++;
                 this.clearAutoFlowTimer();
 
@@ -2229,15 +2241,16 @@
                 const selectedAnswer = Number(answer) === 0 ? 0 : 1;
                 const correctAnswer = this.getQuestionAnswer(card);
                 const isCorrect = correctAnswer === null || selectedAnswer === correctAnswer;
+                this.answeredQuestionCardIds.add(Number(card.id));
                 if (correctAnswer !== null) {
                     this.showToast(isCorrect ? 'Resposta correta!' : `Resposta incorreta. O correto era ${correctAnswer === 1 ? 'Sim' : 'Não'}.`, isCorrect ? 'success' : 'error');
                 }
                 if (!isCorrect && ['aleatorio', 'grafo'].includes(this.deckMode)) {
                     await this.registerScore(card, { reset: true });
-                    this.nextCard({ allowQuestionAdvance: true, skipScore: true });
+                    this.nextCard({ skipScore: true });
                     return;
                 }
-                this.nextCard({ allowQuestionAdvance: true });
+                this.nextCard();
             },
 
             prevCard() {
