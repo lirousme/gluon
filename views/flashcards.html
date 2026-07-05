@@ -2347,11 +2347,15 @@
                 document.getElementById('editCardId').value = card.id;
                 document.getElementById('singleFront').value = card.front;
                 document.getElementById('singleBack').value = card.back;
-                document.getElementById('selectedTagIds').value = JSON.stringify((card.subject_tags || card.tags || []).map(tag => Number(tag.id)));
+                document.getElementById('selectedTagIds').value = this.deckMode === 'grafo'
+                    ? JSON.stringify((card.subject_tags || card.tags || []).map(tag => Number(tag.id)))
+                    : '[]';
                 this.tagSearchQuery = '';
                 const tagSearchInput = document.getElementById('cardTagSearchInput');
                 if (tagSearchInput) tagSearchInput.value = '';
                 this.renderTagSelector();
+                const createCardTagsPanel = document.getElementById('cardTagsPanelCreatCardModal');
+                if (createCardTagsPanel) createCardTagsPanel.classList.toggle('hidden', this.deckMode !== 'grafo');
                 document.getElementById('modalTitleText').innerText = 'Editar Flashcard';
                 const deleteButton = document.getElementById('btnDeleteSingleCard');
                 if (deleteButton) {
@@ -3465,7 +3469,10 @@
                 const backVal = document.getElementById('singleBack').value.trim();
                 const imageFront = document.getElementById('frontImageBase64').value;
                 const imageBack = document.getElementById('backImageBase64').value;
-                const tagIds = JSON.parse(document.getElementById('selectedTagIds').value || '[]');
+                const tagIds = this.deckMode === 'grafo'
+                    ? JSON.parse(document.getElementById('selectedTagIds').value || '[]')
+                    : [];
+                const infoType = this.deckMode === 'grafo' ? 2 : 0;
                 
                 if (!frontVal && !backVal && !imageFront && !imageBack) return this.showToast('Preencha pelo menos um lado do card com texto ou imagem.', 'error');
                 
@@ -3479,7 +3486,8 @@
                     back: backVal,
                     image_front: imageFront,
                     image_back: imageBack,
-                    tag_ids: tagIds,
+                    info_type: infoType,
+                    tag_ids: [],
                     subject_tag_ids: tagIds
                 };
                 if (editId) payload.card_id = editId;
