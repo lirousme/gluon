@@ -3265,7 +3265,7 @@
                 document.getElementById('editCardId').value = '';
                 document.getElementById('singleFront').value = '';
                 document.getElementById('singleBack').value = '';
-                document.getElementById('selectedTagIds').value = this.deckInitialTagId ? JSON.stringify([this.deckInitialTagId]) : '[]';
+                document.getElementById('selectedTagIds').value = (this.deckMode === 'grafo' && this.deckInitialTagId) ? JSON.stringify([this.deckInitialTagId]) : '[]';
                 this.tagSearchQuery = '';
                 const tagSearchInput = document.getElementById('cardTagSearchInput');
                 if (tagSearchInput) tagSearchInput.value = '';
