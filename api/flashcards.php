@@ -2557,11 +2557,11 @@ function findNextPendingAudioJobForDeck($pdo, $deck_id, $front_language, $back_l
  */
 function verifyCardOwnership($pdo, $card_id, $user_id, bool $allowPublicUserFive = false) {
     if ($allowPublicUserFive) {
-        $stmt = $pdo->prepare("SELECT f.id, f.directory_id, f.created_by_user_id, f.private_directory_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND (d.user_id IN (?, 5) OR f.created_by_user_id = ?)");
+        $stmt = $pdo->prepare("SELECT f.id, f.directory_id, f.created_by_user_id, f.private_directory_id, d.deck_mode FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND (d.user_id IN (?, 5) OR f.created_by_user_id = ?)");
         $stmt->execute([$card_id, $user_id, $user_id]);
         return $stmt->fetch();
     }
-    $stmt = $pdo->prepare("SELECT f.id, f.directory_id, f.created_by_user_id, f.private_directory_id FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND (d.user_id = ? OR f.created_by_user_id = ?)");
+    $stmt = $pdo->prepare("SELECT f.id, f.directory_id, f.created_by_user_id, f.private_directory_id, d.deck_mode FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND (d.user_id = ? OR f.created_by_user_id = ?)");
     $stmt->execute([$card_id, $user_id, $user_id]);
     return $stmt->fetch();
 }
@@ -5441,9 +5441,6 @@ elseif ($action === 'add_single') {
     if ($deck_id === 0 || (!$has_front && !$has_back)) {
         die(json_encode(['status' => 'error', 'message' => 'Preencha pelo menos um lado do card com texto ou imagem.']));
     }
-    if (empty($subject_tag_ids)) {
-        die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos 1 tag na categoria Subject para salvar o card.']));
-    }
     if ($info_type === 5) {
         if ($back === '' && empty($image_back)) {
             die(json_encode(['status' => 'error', 'message' => 'Preencha o verso do Tag Expansion com texto ou imagem.']));
@@ -5455,6 +5452,9 @@ elseif ($action === 'add_single') {
     $deck = verifyDeckOwnership($pdo, $deck_id, $user_id);
     if (!$deck) {
         die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
+    }
+    if (($deck['deck_mode'] ?? 'aleatorio') === 'grafo' && empty($subject_tag_ids)) {
+        die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos 1 tag na categoria Subject para salvar o card no modo grafo.']));
     }
 
     $dynamicSubjectMothers = $dynamic_text_type === 'subject' ? getDynamicSubjectMotherTags($pdo, $user_id, $subject_tag_ids) : [];
@@ -5625,9 +5625,6 @@ elseif ($action === 'update_card') {
     if ($card_id === 0 || (!$has_front && !$has_back)) {
         die(json_encode(['status' => 'error', 'message' => 'Dados inválidos. Preencha pelo menos um lado do card com texto ou imagem.']));
     }
-    if (empty($subject_tag_ids)) {
-        die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos 1 tag na categoria Subject para salvar o card.']));
-    }
     if ($info_type === 5) {
         if ($back === '' && empty($image_back)) {
             die(json_encode(['status' => 'error', 'message' => 'Preencha o verso do Tag Expansion com texto ou imagem.']));
@@ -5638,8 +5635,12 @@ elseif ($action === 'update_card') {
         $dynamic_text_type_id = 0;
     }
 
-    if (!verifyCardOwnership($pdo, $card_id, $user_id)) {
+    $cardOwnership = verifyCardOwnership($pdo, $card_id, $user_id);
+    if (!$cardOwnership) {
         die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
+    }
+    if (($cardOwnership['deck_mode'] ?? 'aleatorio') === 'grafo' && empty($subject_tag_ids)) {
+        die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos 1 tag na categoria Subject para salvar o card no modo grafo.']));
     }
 
     $front_enc = !empty($front) ? Security::encryptData($front) : null;
