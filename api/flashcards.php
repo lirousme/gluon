@@ -5453,8 +5453,17 @@ elseif ($action === 'add_single') {
     if (!$deck) {
         die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
     }
-    if (($deck['deck_mode'] ?? 'aleatorio') === 'grafo' && empty($subject_tag_ids)) {
+    $deckMode = $deck['deck_mode'] ?? 'aleatorio';
+    if ($deckMode === 'grafo' && empty($subject_tag_ids)) {
         die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos 1 tag na categoria Subject para salvar o card no modo grafo.']));
+    }
+    if ($deckMode !== 'grafo') {
+        $info_type = 0;
+        $question_answer = null;
+        $subject_tag_ids = [];
+        $object_tag_ids = [];
+        $lexical_chunk_tag_ids = [];
+        $dynamic_text_type = 'none';
     }
 
     $dynamicSubjectMothers = $dynamic_text_type === 'subject' ? getDynamicSubjectMotherTags($pdo, $user_id, $subject_tag_ids) : [];
@@ -5639,8 +5648,18 @@ elseif ($action === 'update_card') {
     if (!$cardOwnership) {
         die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
     }
-    if (($cardOwnership['deck_mode'] ?? 'aleatorio') === 'grafo' && empty($subject_tag_ids)) {
+    $deckMode = $cardOwnership['deck_mode'] ?? 'aleatorio';
+    if ($deckMode === 'grafo' && empty($subject_tag_ids)) {
         die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos 1 tag na categoria Subject para salvar o card no modo grafo.']));
+    }
+    if ($deckMode !== 'grafo') {
+        $info_type = 0;
+        $question_answer = null;
+        $subject_tag_ids = [];
+        $object_tag_ids = [];
+        $lexical_chunk_tag_ids = [];
+        $dynamic_text_type = 'none';
+        $dynamic_text_type_id = 0;
     }
 
     $front_enc = !empty($front) ? Security::encryptData($front) : null;
