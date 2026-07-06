@@ -164,6 +164,17 @@
         <input id="lexicalChunkTagSearchInput" type="text" placeholder="Buscar lexical chunks..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
       </section>
 
+      <section id="FrequenciaInformacionalPanel" class="pt-3 border-t border-slate-700 space-y-2">
+        <div class="flex items-center justify-between gap-3">
+          <label for="frequenciaInformacionalSelect" class="block text-xs font-semibold uppercase tracking-wide text-emerald-200">Frequência informacional</label>
+          <a href="/crud_frequencias_informacionais" class="text-xs font-semibold text-emerald-200 transition hover:text-emerald-100">Gerenciar</a>
+        </div>
+        <select id="frequenciaInformacionalSelect" required class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white">
+          <option value="">Carregando frequências...</option>
+        </select>
+        <p class="text-xs text-slate-400">Todo card deve estar vinculado a uma frequência informacional.</p>
+      </section>
+
       <div id="questionAnswerPanel" class="hidden rounded-lg border border-purple-400/30 bg-purple-950/20 p-3">
         <div class="flex items-center justify-between gap-3">
           <div>
@@ -332,6 +343,7 @@ const app = {
   frontLanguage: 'pt-BR',
   backLanguage: 'en-GB',
   availableTags: [],
+  frequenciasInformacionais: [],
   sessionUserId: null,
   pendingFrontSentenceTagCandidates: null,
   publicDirectoryId: 6452,
@@ -705,6 +717,26 @@ const app = {
     const res = await this.api('list_tags');
     this.availableTags = res?.data || [];
     this.renderAllTagSelectors();
+  },
+  renderFrequenciasInformacionaisSelect(selectedId = null) {
+    const select = document.getElementById('frequenciaInformacionalSelect');
+    if (!select) return;
+    const currentValue = selectedId !== null ? String(selectedId || '') : select.value;
+    if (!this.frequenciasInformacionais.length) {
+      select.innerHTML = '<option value="">Nenhuma frequência cadastrada</option>';
+      return;
+    }
+    select.innerHTML = '<option value="">Selecione uma frequência</option>' + this.frequenciasInformacionais.map((frequencia) => {
+      const id = Number(frequencia?.id || 0);
+      const nome = this.escapeHTML(String(frequencia?.nome || 'Sem nome'));
+      return `<option value="${id}">${nome}</option>`;
+    }).join('');
+    select.value = currentValue;
+  },
+  async loadFrequenciasInformacionais() {
+    const res = await this.api('list_frequencias_informacionais');
+    this.frequenciasInformacionais = Array.isArray(res?.data) ? res.data : [];
+    this.renderFrequenciasInformacionaisSelect();
   },
   applyInitialSubjectTag() {
     if (this.editCardId || !this.initialSubjectTagIds.length) return;
@@ -1352,6 +1384,7 @@ const app = {
     this.setInfoType(card.info_type);
     this.setQuestionAnswer(card.question_answer === 0 ? 0 : 1);
     dynamicTextType.value = ['none', 'subject', 'object', 'verb'].includes(card.dynamic_text_type) ? card.dynamic_text_type : 'none';
+    this.renderFrequenciasInformacionaisSelect(card.id_frequencia_informacional || '');
     const subjectTags = Array.isArray(card.subject_tags) ? card.subject_tags.map(t => Number(t.id)).filter(Boolean) : [];
     const objectTags = Array.isArray(card.object_tags) ? card.object_tags.map(t => Number(t.id)).filter(Boolean) : [];
     const lexicalChunkTags = Array.isArray(card.lexical_chunks_tags) ? card.lexical_chunks_tags.map(t => Number(t.id)).filter(Boolean) : [];
@@ -1436,6 +1469,7 @@ const app = {
     let subject_tag_ids = this.getSelectedTagIds('subject');
     let object_tag_ids = this.getSelectedTagIds('object');
     let lexical_chunk_tag_ids = this.getSelectedTagIds('lexicalChunk');
+    const id_frequencia_informacional = Number(frequenciaInformacionalSelect.value || 0);
     const isTagExpansion = this.isTagExpansionType();
     const generatedFront = isTagExpansion ? '' : front;
     if (isTagExpansion) {
@@ -1443,6 +1477,7 @@ const app = {
       if (!back && !image_back) return this.setStatus('Preencha o verso do Tag Expansion com texto ou imagem.', 'error');
     } else if (!front && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
     if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag na categoria Subject para salvar o card.', 'error');
+    if (!id_frequencia_informacional) return this.setStatus('Selecione uma frequência informacional para salvar o card.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
@@ -1456,7 +1491,7 @@ const app = {
       }
       const return_to = this.getReturnTarget();
       const question_answer = this.infoType === 2 ? this.questionAnswer : null;
-      const payload = { deck_id: this.deckId, front: generatedFront, back, image_front: isTagExpansion ? '' : image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, info_type: this.infoType, question_answer, dynamic_text_type: isTagExpansion ? 'none' : dynamicTextType.value, return_to };
+      const payload = { deck_id: this.deckId, front: generatedFront, back, image_front: isTagExpansion ? '' : image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, id_frequencia_informacional, info_type: this.infoType, question_answer, dynamic_text_type: isTagExpansion ? 'none' : dynamicTextType.value, return_to };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
@@ -1501,7 +1536,7 @@ document.addEventListener('keydown', (e) => {
   app.setQuestionAnswer(app.questionAnswer);
   await app.setPageTitleWithDirectoryName();
   await app.loadSessionUserId();
-  await app.loadTags();
+  await Promise.all([app.loadTags(), app.loadFrequenciasInformacionais()]);
   app.applyInitialSubjectTag();
   await app.preloadEditCard();
 })();
