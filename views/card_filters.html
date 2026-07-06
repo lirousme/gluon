@@ -220,6 +220,15 @@
         </div>
     </div>
 
+    <div id="deleteFilteredCardsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 opacity-0 transition-opacity duration-200 p-4" role="dialog" aria-modal="true" aria-labelledby="deleteFilteredCardsTitle">
+        <div id="deleteFilteredCardsModalContent" class="w-[92%] max-w-md rounded-xl border border-red-500/40 bg-slate-900 p-5 scale-95 transition-transform duration-200">
+            <div class="flex items-start justify-between gap-3"><div><p class="text-xs font-semibold uppercase tracking-[0.25em] text-red-300">Exclusão em massa</p><h3 id="deleteFilteredCardsTitle" class="mt-1 text-lg font-semibold text-white">Excluir cards filtrados?</h3></div><button id="btnCloseDeleteFilteredCardsModal" type="button" class="text-slate-400 hover:text-white text-xl">&times;</button></div>
+            <p id="deleteFilteredCardsMessage" class="mt-4 text-sm leading-6 text-slate-300"></p>
+            <p class="mt-3 rounded-lg border border-red-500/30 bg-red-950/30 p-3 text-xs text-red-100">Esta ação é permanente e só afetará os cards que correspondem aos filtros atuais do modo Cards.</p>
+            <div class="mt-5 flex justify-end gap-2"><button id="btnCancelDeleteFilteredCards" type="button" class="rounded-lg border border-slate-600 px-4 py-2 text-slate-200 hover:bg-slate-800">Cancelar</button><button id="btnConfirmDeleteFilteredCards" type="button" class="rounded-lg bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60">Excluir cards</button></div>
+        </div>
+    </div>
+
 
 
     <script>
@@ -255,7 +264,8 @@
             pinningSelectedTags: false,
             updatingSelectedTagsVisibility: false,
             mainFormMode: null,
-            tagSortDirection: ['asc', 'desc'].includes(urlParams.get('tag_sort')) ? urlParams.get('tag_sort') : 'asc'
+            tagSortDirection: ['asc', 'desc'].includes(urlParams.get('tag_sort')) ? urlParams.get('tag_sort') : 'asc',
+            deletingFilteredCards: false
         };
         
         state.selectedInfoTypes = normalizeSelectedInfoTypes(state.selectedInfoTypes);
@@ -294,6 +304,8 @@
         const openRightMenuBtnTags = document.getElementById('openRightMenuBtnTags');
         const cardFiltersLayout = document.getElementById('cardFiltersLayout');
         const desktopMenuMinWidthPx = 16 * 16;
+        const deleteFilteredCardsModalMessage = document.getElementById('deleteFilteredCardsMessage');
+        const confirmDeleteFilteredCardsBtn = document.getElementById('btnConfirmDeleteFilteredCards');
 
         function clampDesktopMenuWidth(width) {
             const viewportLimit = Math.floor(window.innerWidth * 0.34);
@@ -811,6 +823,12 @@
                 { type: '2', label: 'Pergunta' }
             ];
             const pinToggleConfig = getSelectedPinToggleConfig();
+            const deleteFilteredCardsButton = isCardListMode() && state.totalCards > 0 ? `
+                <button type="button" id="openDeleteFilteredCardsBtn" class="w-full rounded-xl border border-red-500/60 bg-red-500/10 p-3 text-left text-sm font-semibold text-red-100 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60" ${state.deletingFilteredCards ? 'disabled' : ''}>
+                    <span class="flex items-center gap-2"><i class="fa-solid ${state.deletingFilteredCards ? 'fa-spinner fa-spin' : 'fa-trash-can'}"></i>Excluir cards filtrados</span>
+                    <span class="mt-1 block text-xs font-normal text-red-100/80">Remove os ${state.totalCards} card(s) encontrados pelos filtros atuais.</span>
+                </button>
+            ` : '';
             const pinToggleButton = pinToggleConfig.selectedCount > 0 ? `
                 <button type="button" id="toggleSelectedPinnedTagsBtn" class="w-full rounded-xl border border-amber-400/60 bg-amber-500/10 p-3 text-left text-sm font-semibold text-amber-100 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60" ${state.pinningSelectedTags ? 'disabled' : ''}>
                     <span class="flex items-center gap-2"><i class="fa-solid ${state.pinningSelectedTags ? 'fa-spinner fa-spin' : pinToggleConfig.icon}"></i>${escapeHtml(pinToggleConfig.label)}</span>
@@ -818,6 +836,7 @@
                 </button>
             ` : '';
             rightOptionsMenu.innerHTML = `
+                ${deleteFilteredCardsButton}
                 ${pinToggleButton}
                 <article class="rounded-xl border border-violet-500/20 bg-violet-950/20 p-3 transition hover:border-violet-400/60 hover:bg-violet-950/40">
                     <div class="flex items-center gap-2">
@@ -866,6 +885,7 @@
                 </article>
             `;
 
+            rightOptionsMenu.querySelector('#openDeleteFilteredCardsBtn')?.addEventListener('click', openDeleteFilteredCardsModal);
             rightOptionsMenu.querySelector('#toggleSelectedPinnedTagsBtn')?.addEventListener('click', pinSelectedTags);
             rightOptionsMenu.querySelectorAll('[data-card-option]').forEach((button) => {
                 button.addEventListener('click', () => {
@@ -1492,6 +1512,53 @@
             showModal('editRelationTypeModal', 'editRelationTypeModalContent', 'editRelationTypeNameInput');
         }
         function closeRelationTypeActionsModal() { closeModal('editRelationTypeModal', 'editRelationTypeModalContent'); state.editingRelationTypeId = null; }
+
+        function buildCurrentCardFilterPayload() {
+            return {
+                without_tags: state.withoutTagsOnly ? 1 : 0,
+                long_text: state.longTextOnly ? 1 : 0,
+                tag_ids: state.selectedTagIds,
+                tag_link_types: state.selectedTagLinkTypes,
+                info_types: state.selectedInfoTypes
+            };
+        }
+
+        function openDeleteFilteredCardsModal() {
+            if (!isCardListMode() || state.totalCards < 1 || state.deletingFilteredCards) return;
+            const filters = [];
+            if (state.selectedTagIds.length) filters.push(`tags: ${getSelectedTagSummary()}`);
+            if (state.withoutTagsOnly) filters.push('sem tags');
+            if (state.longTextOnly) filters.push('+80 ch');
+            const filterText = filters.length ? ` com os filtros atuais (${filters.join(', ')})` : ' atualmente listados';
+            deleteFilteredCardsModalMessage.textContent = `Você está prestes a excluir ${state.totalCards} card(s)${filterText}. Se a seleção de tags mudar a quantidade, somente a quantidade filtrada agora será excluída.`;
+            confirmDeleteFilteredCardsBtn.disabled = false;
+            confirmDeleteFilteredCardsBtn.innerHTML = 'Excluir cards';
+            showModal('deleteFilteredCardsModal', 'deleteFilteredCardsModalContent', 'btnConfirmDeleteFilteredCards');
+        }
+
+        function closeDeleteFilteredCardsModal() {
+            if (state.deletingFilteredCards) return;
+            closeModal('deleteFilteredCardsModal', 'deleteFilteredCardsModalContent');
+        }
+
+        async function confirmDeleteFilteredCards() {
+            if (!isCardListMode() || state.deletingFilteredCards) return;
+            state.deletingFilteredCards = true;
+            confirmDeleteFilteredCardsBtn.disabled = true;
+            confirmDeleteFilteredCardsBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>Excluindo...';
+            renderRightOptionsMenu();
+            try {
+                const result = await api('delete_filtered_graph_cards', buildCurrentCardFilterPayload());
+                closeModal('deleteFilteredCardsModal', 'deleteFilteredCardsModalContent');
+                alert(result.message || 'Cards excluídos com sucesso.');
+                await loadPage(1);
+            } catch (error) {
+                alert(error.message || 'Não foi possível excluir os cards filtrados.');
+            } finally {
+                state.deletingFilteredCards = false;
+                renderRightOptionsMenu();
+            }
+        }
         async function submitEditRelationType(event) {
             event.preventDefault();
             const id = Number(state.editingRelationTypeId || 0);
@@ -1724,6 +1791,7 @@
                 state.totalCards = result.pagination.total_cards;
                 window.history.replaceState(null, '', buildCardsRoute(state.page));
                 updateFooter();
+                renderRightOptionsMenu();
 
                 if (!result.data.length) {
                     statusBox.textContent = 'Nenhum card encontrado em decks do modo grafo.';
@@ -1797,6 +1865,9 @@
         document.getElementById('btnCancelEditRelationType').addEventListener('click', closeRelationTypeActionsModal);
         document.getElementById('btnCloseEditRelationTypeModal').addEventListener('click', closeRelationTypeActionsModal);
         document.getElementById('btnDeleteRelationType').addEventListener('click', deleteEditingRelationType);
+        document.getElementById('btnCloseDeleteFilteredCardsModal').addEventListener('click', closeDeleteFilteredCardsModal);
+        document.getElementById('btnCancelDeleteFilteredCards').addEventListener('click', closeDeleteFilteredCardsModal);
+        document.getElementById('btnConfirmDeleteFilteredCards').addEventListener('click', confirmDeleteFilteredCards);
         document.getElementById('editRelationTypeForm').addEventListener('submit', submitEditRelationType);
         clearTagFilterBtn.addEventListener('click', () => {
             state.selectedTagIds = [];
