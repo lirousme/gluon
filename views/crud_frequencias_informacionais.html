@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <script src="/assets/zoom-lock.js" defer></script>
+  <title>Frequências informacionais - Gluon</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100">
+  <main class="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-5 px-4 py-6">
+    <header class="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-300">CRUD</p>
+        <h1 class="mt-1 text-2xl font-bold text-white">Frequências informacionais</h1>
+        <p class="mt-2 text-sm text-slate-400">Cadastre as opções usadas no acordeon de filtros dos cards.</p>
+      </div>
+      <a href="/card_filters" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-emerald-400 hover:text-white">
+        <i class="fa-solid fa-arrow-left"></i> Voltar aos filtros
+      </a>
+    </header>
+
+    <section class="rounded-2xl border border-emerald-500/20 bg-emerald-950/20 p-5">
+      <form id="formFrequencia" class="flex flex-col gap-3 sm:flex-row">
+        <input id="frequenciaId" type="hidden">
+        <label class="sr-only" for="frequenciaNome">Nome</label>
+        <input id="frequenciaNome" maxlength="160" required placeholder="Nome da frequência informacional" class="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20">
+        <button id="btnSalvar" type="submit" class="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-emerald-500">Criar</button>
+        <button id="btnCancelar" type="button" class="hidden rounded-xl border border-slate-700 px-5 py-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500">Cancelar</button>
+      </form>
+      <p id="status" class="mt-3 min-h-5 text-sm text-slate-400"></p>
+    </section>
+
+    <section class="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+      <div class="mb-4 flex items-center justify-between gap-3">
+        <h2 class="text-lg font-semibold text-white">Cadastradas</h2>
+        <button id="btnRecarregar" type="button" class="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-emerald-400 hover:text-white"><i class="fa-solid fa-rotate mr-1"></i>Recarregar</button>
+      </div>
+      <div id="lista" class="space-y-2 text-sm text-slate-300">Carregando...</div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById('formFrequencia');
+    const inputId = document.getElementById('frequenciaId');
+    const inputNome = document.getElementById('frequenciaNome');
+    const btnSalvar = document.getElementById('btnSalvar');
+    const btnCancelar = document.getElementById('btnCancelar');
+    const statusBox = document.getElementById('status');
+    const lista = document.getElementById('lista');
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+    }
+
+    async function api(action, payload = {}) {
+      const response = await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify({ ...payload, action }) });
+      const result = await response.json();
+      if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Erro na requisição.');
+      return result;
+    }
+
+    function setStatus(message, ok = true) {
+      statusBox.textContent = message || '';
+      statusBox.className = `mt-3 min-h-5 text-sm ${ok ? 'text-emerald-300' : 'text-red-300'}`;
+    }
+
+    function resetForm() {
+      inputId.value = '';
+      inputNome.value = '';
+      btnSalvar.textContent = 'Criar';
+      btnCancelar.classList.add('hidden');
+    }
+
+    async function carregar() {
+      lista.innerHTML = '<p class="text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Carregando...</p>';
+      try {
+        const result = await api('list_frequencias_informacionais');
+        const items = result.data || [];
+        if (!items.length) {
+          lista.innerHTML = '<p class="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-slate-400">Nenhuma frequência informacional cadastrada.</p>';
+          return;
+        }
+        lista.innerHTML = items.map((item) => `
+          <article class="flex flex-col gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div class="min-w-0"><p class="break-words font-semibold text-slate-100">${escapeHtml(item.nome)}</p><p class="mt-1 text-xs text-slate-500">ID ${Number(item.id) || 0}</p></div>
+            <div class="flex gap-2">
+              <button type="button" data-edit-id="${Number(item.id) || 0}" data-edit-nome="${escapeHtml(item.nome)}" class="rounded-lg border border-amber-500/50 px-3 py-2 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/10"><i class="fa-solid fa-pen mr-1"></i>Editar</button>
+              <button type="button" data-delete-id="${Number(item.id) || 0}" class="rounded-lg border border-red-500/50 px-3 py-2 text-xs font-semibold text-red-200 transition hover:bg-red-500/10"><i class="fa-solid fa-trash mr-1"></i>Excluir</button>
+            </div>
+          </article>
+        `).join('');
+      } catch (error) {
+        lista.innerHTML = `<p class="rounded-xl border border-red-500/30 bg-red-950/20 p-4 text-red-200">${escapeHtml(error.message)}</p>`;
+      }
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const id = Number(inputId.value || 0);
+      const nome = inputNome.value.trim();
+      if (!nome) return;
+      btnSalvar.disabled = true;
+      try {
+        const action = id ? 'update_frequencia_informacional' : 'create_frequencia_informacional';
+        const result = await api(action, id ? { id, nome } : { nome });
+        setStatus(result.message || 'Salvo com sucesso.');
+        resetForm();
+        await carregar();
+      } catch (error) {
+        setStatus(error.message, false);
+      } finally {
+        btnSalvar.disabled = false;
+      }
+    });
+
+    btnCancelar.addEventListener('click', resetForm);
+    document.getElementById('btnRecarregar').addEventListener('click', carregar);
+    lista.addEventListener('click', async (event) => {
+      const editButton = event.target.closest('[data-edit-id]');
+      const deleteButton = event.target.closest('[data-delete-id]');
+      if (editButton) {
+        inputId.value = editButton.dataset.editId || '';
+        inputNome.value = editButton.dataset.editNome || '';
+        btnSalvar.textContent = 'Salvar';
+        btnCancelar.classList.remove('hidden');
+        inputNome.focus();
+        return;
+      }
+      if (deleteButton) {
+        const id = Number(deleteButton.dataset.deleteId || 0);
+        if (!id || !confirm('Excluir esta frequência informacional? Os cards vinculados ficarão sem frequência.')) return;
+        try {
+          const result = await api('delete_frequencia_informacional', { id });
+          setStatus(result.message || 'Excluída com sucesso.');
+          await carregar();
+        } catch (error) {
+          setStatus(error.message, false);
+        }
+      }
+    });
+
+    carregar();
+  </script>
+</body>
+</html>
