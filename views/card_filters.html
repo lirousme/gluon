@@ -241,6 +241,8 @@
             selectedTagLabels: parseSelectedTagLabels(urlParams),
             selectedTagLinkTypes: parseSelectedTagLinkTypes(urlParams),
             selectedInfoTypes: parseSelectedInfoTypes(urlParams),
+            selectedFrequenciaInformacionalIds: (urlParams.get('frequencia_informacional_ids') || '').split(',').map((id) => Number(id)).filter((id, index, ids) => id > 0 && ids.indexOf(id) === index),
+            frequenciasInformacionais: [],
             viewMode: parseViewMode(urlParams),
             withoutTagsOnly: parseWithoutTagsOnly(urlParams),
             longTextOnly: parseLongTextOnly(urlParams),
@@ -249,6 +251,7 @@
             rightModeExpanded: false,
             rightOptionsExpanded: false,
             rightIntentFiltersExpanded: false,
+            rightFrequenciasInformacionaisExpanded: false,
             tagFamily: { mothers: [], children: [] },
             relationTypes: [],
             tagFamilyLoading: false,
@@ -480,6 +483,16 @@
             } catch (_) {}
         }
 
+        async function loadFrequenciasInformacionais() {
+            try {
+                const result = await api('list_frequencias_informacionais');
+                state.frequenciasInformacionais = Array.isArray(result.data) ? result.data : [];
+            } catch (_) {
+                state.frequenciasInformacionais = [];
+            }
+            renderRightOptionsMenu();
+        }
+
         function canEditTag(tag = {}) {
             const sessionId = Number(state.sessionUserId);
             return Number.isInteger(sessionId) && sessionId > 0 && [Number(tag.user_id), Number(tag.created_by_user_id)].includes(sessionId);
@@ -562,6 +575,7 @@
             }
             if (state.selectedTagLinkTypes.length !== 3) params.set('tag_link_types', state.selectedTagLinkTypes.join(','));
             if (state.selectedInfoTypes.length !== 5) params.set('info_types', state.selectedInfoTypes.join(','));
+            if (state.selectedFrequenciaInformacionalIds.length) params.set('frequencia_informacional_ids', state.selectedFrequenciaInformacionalIds.join(','));
             return `/card_filters?${params.toString()}`;
         }
 
@@ -866,6 +880,21 @@
                         return `<button type="button" data-tag-link-type="${option.type}" aria-pressed="${isActive ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${isActive ? 'border-violet-400/80 bg-violet-950/40 text-violet-100' : 'border-sky-500/20 bg-sky-950/20 text-slate-100 hover:border-sky-400/60 hover:bg-sky-950/40 hover:text-sky-100'}">${escapeHtml(option.label)}</button>`;
                     }).join('')}</div>` : ''}
                 </article>
+                <article class="rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-3 transition hover:border-emerald-400/60 hover:bg-emerald-950/40">
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="rightFrequenciasInformacionaisAccordionBtn" aria-expanded="${state.rightFrequenciasInformacionaisExpanded ? 'true' : 'false'}" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-xs text-emerald-200 hover:border-emerald-400 hover:text-white" title="Mostrar frequências informacionais">
+                            <i class="fa-solid ${state.rightFrequenciasInformacionaisExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}"></i>
+                        </button>
+                        <button type="button" id="rightFrequenciasInformacionaisTitleBtn" class="min-w-0 flex-1 text-left text-sm font-semibold text-slate-100 transition hover:text-emerald-100">
+                            <span class="break-words">Frequências informacionais</span>
+                        </button>
+                    </div>
+                    ${state.rightFrequenciasInformacionaisExpanded ? `<div class="mt-2 space-y-2 border-l border-emerald-500/20 pl-3">${state.frequenciasInformacionais.length ? state.frequenciasInformacionais.map((option) => {
+                        const id = Number(option.id) || 0;
+                        const isActive = state.selectedFrequenciaInformacionalIds.includes(id);
+                        return `<button type="button" data-frequencia-informacional-id="${id}" aria-pressed="${isActive ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${isActive ? 'border-emerald-300/80 bg-emerald-500/20 text-emerald-100' : 'border-emerald-500/20 bg-emerald-950/20 text-slate-100 hover:border-emerald-400/60 hover:bg-emerald-950/40 hover:text-emerald-100'}">${escapeHtml(option.nome || 'Sem nome')}</button>`;
+                    }).join('') : '<p class="rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-3 text-xs text-emerald-100/80">Nenhuma frequência cadastrada.</p>'}<a href="/crud_frequencias_informacionais" class="block rounded-xl border border-emerald-500/30 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/10">Gerenciar frequências</a></div>` : ''}
+                </article>
                 <article class="rounded-xl border border-cyan-500/20 bg-cyan-950/20 p-3 transition hover:border-cyan-400/60 hover:bg-cyan-950/40">
                     <div class="flex items-center gap-2">
                         <button type="button" id="rightIntentFiltersAccordionBtn" aria-expanded="${state.rightIntentFiltersExpanded ? 'true' : 'false'}" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-xs text-cyan-200 hover:border-cyan-400 hover:text-white" title="Mostrar filtros intencionais">
@@ -926,8 +955,21 @@
                     loadPage(1);
                 });
             });
+            rightOptionsMenu.querySelectorAll('[data-frequencia-informacional-id]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const id = Number(button.dataset.frequenciaInformacionalId || 0);
+                    if (!id) return;
+                    if (state.selectedFrequenciaInformacionalIds.includes(id)) state.selectedFrequenciaInformacionalIds = state.selectedFrequenciaInformacionalIds.filter((selectedId) => selectedId !== id);
+                    else state.selectedFrequenciaInformacionalIds.push(id);
+                    renderRightOptionsMenu();
+                    loadPage(1);
+                });
+            });
             rightOptionsMenu.querySelectorAll('#rightModeAccordionBtn, #rightModeTitleBtn').forEach((button) => {
                 button.addEventListener('click', () => { state.rightModeExpanded = !state.rightModeExpanded; renderRightOptionsMenu(); });
+            });
+            rightOptionsMenu.querySelectorAll('#rightFrequenciasInformacionaisAccordionBtn, #rightFrequenciasInformacionaisTitleBtn').forEach((button) => {
+                button.addEventListener('click', () => { state.rightFrequenciasInformacionaisExpanded = !state.rightFrequenciasInformacionaisExpanded; renderRightOptionsMenu(); });
             });
             rightOptionsMenu.querySelectorAll('#rightOptionsAccordionBtn, #rightOptionsTitleBtn').forEach((button) => {
                 button.addEventListener('click', () => { state.rightOptionsExpanded = !state.rightOptionsExpanded; renderRightOptionsMenu(); });
@@ -1519,7 +1561,8 @@
                 long_text: state.longTextOnly ? 1 : 0,
                 tag_ids: state.selectedTagIds,
                 tag_link_types: state.selectedTagLinkTypes,
-                info_types: state.selectedInfoTypes
+                info_types: state.selectedInfoTypes,
+                frequencia_informacional_ids: state.selectedFrequenciaInformacionalIds
             };
         }
 
@@ -1782,6 +1825,7 @@
                 if (state.selectedTagIds.length) params.set('tag_ids', state.selectedTagIds.join(','));
                 params.set('tag_link_types', state.selectedTagLinkTypes.join(','));
                 params.set('info_types', state.selectedInfoTypes.join(','));
+                if (state.selectedFrequenciaInformacionalIds.length) params.set('frequencia_informacional_ids', state.selectedFrequenciaInformacionalIds.join(','));
                 const response = await fetch(`/api/flashcards?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
                 const result = await response.json();
                 if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível carregar os cards.');
@@ -1882,6 +1926,7 @@
         renderRightOptionsMenu();
         renderLeftOthersMenu();
         setupDesktopMenuResizing();
+        loadFrequenciasInformacionais();
         loadSavedFilters();
         loadPage(state.page);
     </script>

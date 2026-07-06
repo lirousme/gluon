@@ -45,6 +45,7 @@ ensureTagFamilyOrderSchema($pdo);
 ensureFlashcardsPublicToggleSchema($pdo);
 ensureFlashcardsDynamicTextTypeSchema($pdo);
 ensureFlashcardsQuestionAnswerSchema($pdo);
+ensureFrequenciasInformacionaisSchema($pdo);
 $user_id = $_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? ($_GET['action'] ?? '');
@@ -598,6 +599,52 @@ function ensureFlashcardsQuestionAnswerSchema(PDO $pdo): void
         }
     } catch (Throwable $e) {
         error_log('[flashcards][question_answer_schema] ' . $e->getMessage());
+    }
+}
+
+function ensureFrequenciasInformacionaisSchema(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS frequencias_informacionais (
+                id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                user_id INT NOT NULL,
+                nome VARCHAR(160) NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY uniq_frequencias_informacionais_user_nome (user_id, nome),
+                KEY idx_frequencias_informacionais_user_id (user_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+
+        $column = $pdo->query("SHOW COLUMNS FROM flashcards LIKE 'id_frequencia_informacional'")->fetch(PDO::FETCH_ASSOC);
+        if (!$column) {
+            $pdo->exec('ALTER TABLE flashcards ADD COLUMN id_frequencia_informacional INT UNSIGNED NULL DEFAULT NULL AFTER dynamic_parent_flashcard_id');
+        }
+
+        $index = $pdo->query("SHOW INDEX FROM flashcards WHERE Key_name = 'idx_flashcards_id_frequencia_informacional'")->fetch(PDO::FETCH_ASSOC);
+        if (!$index) {
+            $pdo->exec('CREATE INDEX idx_flashcards_id_frequencia_informacional ON flashcards (id_frequencia_informacional)');
+        }
+
+        $fkStmt = $pdo->prepare("
+            SELECT CONSTRAINT_NAME
+            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'flashcards'
+              AND CONSTRAINT_NAME = 'fk_flashcards_frequencia_informacional'
+            LIMIT 1
+        ");
+        $fkStmt->execute();
+        if (!$fkStmt->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->exec('ALTER TABLE flashcards ADD CONSTRAINT fk_flashcards_frequencia_informacional FOREIGN KEY (id_frequencia_informacional) REFERENCES frequencias_informacionais(id) ON DELETE SET NULL');
+        }
+    } catch (Throwable $e) {
+        error_log('[flashcards][frequencias_informacionais_schema] ' . $e->getMessage());
     }
 }
 
@@ -5759,6 +5806,7 @@ elseif ($action === 'delete_filtered_graph_cards') {
     $rawWithoutTags = is_array($input) ? ($input['without_tags'] ?? 0) : 0;
     $rawLongText = is_array($input) ? ($input['long_text'] ?? 0) : 0;
     $rawInfoTypes = is_array($input) ? ($input['info_types'] ?? [0, 1, 2, 3, 4, 5, 6]) : [0, 1, 2, 3, 4, 5, 6];
+    $rawFrequenciaInformacionalIds = is_array($input) ? ($input['frequencia_informacional_ids'] ?? null) : null;
     $withoutTagsOnly = filter_var($rawWithoutTags, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
     $withoutTagsOnly = $withoutTagsOnly === null ? ((string)$rawWithoutTags === '1') : $withoutTagsOnly;
     $longTextOnly = filter_var($rawLongText, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
@@ -5766,11 +5814,14 @@ elseif ($action === 'delete_filtered_graph_cards') {
     $tagIds = sanitizeTagIds($rawTagIds);
     $tagLinkTypes = sanitizeGraphTagLinkTypes($rawTagLinkTypes);
     $infoTypes = sanitizeGraphInfoTypes($rawInfoTypes);
+    $frequenciaInformacionalIds = array_values(array_unique(array_filter(array_map('intval', is_array($rawFrequenciaInformacionalIds) ? $rawFrequenciaInformacionalIds : explode(',', (string)$rawFrequenciaInformacionalIds)), static fn($id) => $id > 0)));
     $tagLinkColumnsByTable = getGraphTagLinkColumnsForTypes($tagLinkTypes);
     $tagFilterSql = '';
     $tagFilterParams = [];
     $infoTypeFilterSql = '';
     $infoTypeFilterParams = [];
+    $frequenciaFilterSql = '';
+    $frequenciaFilterParams = [];
 
     if (!empty($infoTypes) && count($infoTypes) < 7) {
         $infoTypePlaceholders = implode(',', array_fill(0, count($infoTypes), '?'));
@@ -5812,6 +5863,18 @@ elseif ($action === 'delete_filtered_graph_cards') {
         $tagFilterSql = ' AND ' . implode(' AND ', $tagFilterSqlParts);
     }
 
+    if (!empty($frequenciaInformacionalIds)) {
+        $placeholders = implode(',', array_fill(0, count($frequenciaInformacionalIds), '?'));
+        $stmtFrequencias = $pdo->prepare("SELECT id FROM frequencias_informacionais WHERE id IN ($placeholders) AND user_id = ?");
+        $stmtFrequencias->execute(array_merge($frequenciaInformacionalIds, [$user_id]));
+        $allowedFrequenciaIds = array_map('intval', $stmtFrequencias->fetchAll(PDO::FETCH_COLUMN));
+        if (count($allowedFrequenciaIds) !== count($frequenciaInformacionalIds)) {
+            die(json_encode(['status' => 'error', 'message' => 'Uma ou mais frequências informacionais não foram encontradas ou estão sem permissão.']));
+        }
+        $frequenciaFilterSql = " AND f.id_frequencia_informacional IN ({$placeholders})";
+        $frequenciaFilterParams = $frequenciaInformacionalIds;
+    }
+
     try {
         $stmt = $pdo->prepare("
             SELECT f.id, f.front_encrypted, f.back_encrypted
@@ -5822,9 +5885,10 @@ elseif ($action === 'delete_filtered_graph_cards') {
               AND d.type IN (4, 10)
               {$tagFilterSql}
               {$infoTypeFilterSql}
+              {$frequenciaFilterSql}
             ORDER BY f.id DESC
         ");
-        $stmt->execute(array_merge([$user_id], $tagFilterParams, $infoTypeFilterParams));
+        $stmt->execute(array_merge([$user_id], $tagFilterParams, $infoTypeFilterParams, $frequenciaFilterParams));
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $cardIds = [];
@@ -5856,8 +5920,9 @@ elseif ($action === 'delete_filtered_graph_cards') {
               AND d.user_id = ?
               AND d.deck_mode = 'grafo'
               AND d.type IN (4, 10)
+              {$frequenciaFilterSql}
         ");
-        $deleteStmt->execute(array_merge($cardIds, [$user_id]));
+        $deleteStmt->execute(array_merge($cardIds, [$user_id], $frequenciaFilterParams));
         $deletedCount = $deleteStmt->rowCount();
         $pdo->commit();
 
@@ -5873,6 +5938,66 @@ elseif ($action === 'delete_filtered_graph_cards') {
     }
 }
 
+elseif ($action === 'list_frequencias_informacionais') {
+    try {
+        $stmt = $pdo->prepare("
+            SELECT id, nome, created_at, updated_at
+            FROM frequencias_informacionais
+            WHERE user_id = ?
+            ORDER BY nome ASC, id ASC
+        ");
+        $stmt->execute([$user_id]);
+        echo json_encode(['status' => 'success', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+    } catch (Throwable $e) {
+        error_log('[flashcards][list_frequencias_informacionais] ' . $e->getMessage());
+        echo json_encode(['status' => 'error', 'message' => 'Não foi possível carregar as frequências informacionais.']);
+    }
+}
+
+elseif ($action === 'create_frequencia_informacional') {
+    $nome = trim((string)($input['nome'] ?? ''));
+    if ($nome === '' || (function_exists('mb_strlen') ? mb_strlen($nome, 'UTF-8') : strlen($nome)) > 160) {
+        die(json_encode(['status' => 'error', 'message' => 'Informe um nome com até 160 caracteres.']));
+    }
+    try {
+        $stmt = $pdo->prepare("INSERT INTO frequencias_informacionais (user_id, nome) VALUES (?, ?)");
+        $stmt->execute([$user_id, $nome]);
+        echo json_encode(['status' => 'success', 'message' => 'Frequência informacional criada com sucesso.', 'id' => (int)$pdo->lastInsertId()]);
+    } catch (Throwable $e) {
+        error_log('[flashcards][create_frequencia_informacional] ' . $e->getMessage());
+        echo json_encode(['status' => 'error', 'message' => 'Não foi possível criar a frequência informacional. Verifique se já existe uma com esse nome.']);
+    }
+}
+
+elseif ($action === 'update_frequencia_informacional') {
+    $id = (int)($input['id'] ?? 0);
+    $nome = trim((string)($input['nome'] ?? ''));
+    if ($id <= 0 || $nome === '' || (function_exists('mb_strlen') ? mb_strlen($nome, 'UTF-8') : strlen($nome)) > 160) {
+        die(json_encode(['status' => 'error', 'message' => 'Dados inválidos para atualizar a frequência informacional.']));
+    }
+    try {
+        $stmt = $pdo->prepare("UPDATE frequencias_informacionais SET nome = ? WHERE id = ? AND user_id = ?");
+        $stmt->execute([$nome, $id, $user_id]);
+        echo json_encode(['status' => 'success', 'message' => 'Frequência informacional atualizada com sucesso.']);
+    } catch (Throwable $e) {
+        error_log('[flashcards][update_frequencia_informacional] ' . $e->getMessage());
+        echo json_encode(['status' => 'error', 'message' => 'Não foi possível atualizar a frequência informacional.']);
+    }
+}
+
+elseif ($action === 'delete_frequencia_informacional') {
+    $id = (int)($input['id'] ?? 0);
+    if ($id <= 0) die(json_encode(['status' => 'error', 'message' => 'ID inválido.']));
+    try {
+        $stmt = $pdo->prepare("DELETE FROM frequencias_informacionais WHERE id = ? AND user_id = ?");
+        $stmt->execute([$id, $user_id]);
+        echo json_encode(['status' => 'success', 'message' => 'Frequência informacional excluída com sucesso.']);
+    } catch (Throwable $e) {
+        error_log('[flashcards][delete_frequencia_informacional] ' . $e->getMessage());
+        echo json_encode(['status' => 'error', 'message' => 'Não foi possível excluir a frequência informacional.']);
+    }
+}
+
 elseif ($action === 'list_graph_cards_for_user') {
     $rawPage = is_array($input) ? ($input['page'] ?? ($_GET['page'] ?? 1)) : ($_GET['page'] ?? 1);
     $rawTagIds = is_array($input) ? ($input['tag_ids'] ?? ($_GET['tag_ids'] ?? null)) : ($_GET['tag_ids'] ?? null);
@@ -5881,6 +6006,7 @@ elseif ($action === 'list_graph_cards_for_user') {
     $rawWithoutTags = is_array($input) ? ($input['without_tags'] ?? ($_GET['without_tags'] ?? 0)) : ($_GET['without_tags'] ?? 0);
     $rawLongText = is_array($input) ? ($input['long_text'] ?? ($_GET['long_text'] ?? 0)) : ($_GET['long_text'] ?? 0);
     $rawInfoTypes = is_array($input) ? ($input['info_types'] ?? ($_GET['info_types'] ?? [0, 1, 2, 3, 4, 5, 6])) : ($_GET['info_types'] ?? [0, 1, 2, 3, 4, 5, 6]);
+    $rawFrequenciaInformacionalIds = is_array($input) ? ($input['frequencia_informacional_ids'] ?? ($_GET['frequencia_informacional_ids'] ?? null)) : ($_GET['frequencia_informacional_ids'] ?? null);
     $withoutTagsOnly = filter_var($rawWithoutTags, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
     $withoutTagsOnly = $withoutTagsOnly === null ? ((string)$rawWithoutTags === '1') : $withoutTagsOnly;
     $longTextOnly = filter_var($rawLongText, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
@@ -5889,6 +6015,7 @@ elseif ($action === 'list_graph_cards_for_user') {
     $tagIds = sanitizeTagIds($rawTagIds ?? $rawTagId);
     $tagLinkTypes = sanitizeGraphTagLinkTypes($rawTagLinkTypes);
     $infoTypes = sanitizeGraphInfoTypes($rawInfoTypes);
+    $frequenciaInformacionalIds = array_values(array_unique(array_filter(array_map('intval', is_array($rawFrequenciaInformacionalIds) ? $rawFrequenciaInformacionalIds : explode(',', (string)$rawFrequenciaInformacionalIds)), static fn($id) => $id > 0)));
     $tagLinkColumnsByTable = getGraphTagLinkColumnsForTypes($tagLinkTypes);
     $perPage = 20;
     $offset = ($page - 1) * $perPage;
@@ -5896,6 +6023,8 @@ elseif ($action === 'list_graph_cards_for_user') {
     $tagFilterParams = [];
     $infoTypeFilterSql = '';
     $infoTypeFilterParams = [];
+    $frequenciaFilterSql = '';
+    $frequenciaFilterParams = [];
     if (!empty($infoTypes) && count($infoTypes) < 7) {
         $infoTypePlaceholders = implode(',', array_fill(0, count($infoTypes), '?'));
         $infoTypeFilterSql = " AND f.info_type IN ({$infoTypePlaceholders})";
@@ -5936,6 +6065,18 @@ elseif ($action === 'list_graph_cards_for_user') {
         $tagFilterSql = ' AND ' . implode(' AND ', $tagFilterSqlParts);
     }
 
+    if (!empty($frequenciaInformacionalIds)) {
+        $placeholders = implode(',', array_fill(0, count($frequenciaInformacionalIds), '?'));
+        $stmtFrequencias = $pdo->prepare("SELECT id FROM frequencias_informacionais WHERE id IN ($placeholders) AND user_id = ?");
+        $stmtFrequencias->execute(array_merge($frequenciaInformacionalIds, [$user_id]));
+        $allowedFrequenciaIds = array_map('intval', $stmtFrequencias->fetchAll(PDO::FETCH_COLUMN));
+        if (count($allowedFrequenciaIds) !== count($frequenciaInformacionalIds)) {
+            die(json_encode(['status' => 'error', 'message' => 'Uma ou mais frequências informacionais não foram encontradas ou estão sem permissão.']));
+        }
+        $frequenciaFilterSql = " AND f.id_frequencia_informacional IN ({$placeholders})";
+        $frequenciaFilterParams = $frequenciaInformacionalIds;
+    }
+
     $stmtTotal = $pdo->prepare("
         SELECT COUNT(f.id)
         FROM flashcards f
@@ -5945,8 +6086,9 @@ elseif ($action === 'list_graph_cards_for_user') {
           AND d.type IN (4, 10)
           {$tagFilterSql}
           {$infoTypeFilterSql}
+          {$frequenciaFilterSql}
     ");
-    $stmtTotal->execute(array_merge([$user_id], $tagFilterParams, $infoTypeFilterParams));
+    $stmtTotal->execute(array_merge([$user_id], $tagFilterParams, $infoTypeFilterParams, $frequenciaFilterParams));
     $totalCards = (int)$stmtTotal->fetchColumn();
     $totalPages = max(1, (int)ceil($totalCards / $perPage));
     if ($page > $totalPages) {
@@ -5968,22 +6110,26 @@ elseif ($action === 'list_graph_cards_for_user') {
             f.question_answer,
             f.dynamic_text_type,
             f.dynamic_parent_flashcard_id,
+            f.id_frequencia_informacional,
+            fi.nome AS frequencia_informacional_nome,
             f.has_audio_front,
             f.has_audio_back,
             d.name_encrypted AS directory_name_encrypted,
             COALESCE(fs.score, 0) AS score
         FROM flashcards f
         INNER JOIN directories d ON d.id = f.directory_id
+        LEFT JOIN frequencias_informacionais fi ON fi.id = f.id_frequencia_informacional AND fi.user_id = ?
         LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
         WHERE d.user_id = ?
           AND d.deck_mode = 'grafo'
           AND d.type IN (4, 10)
           {$tagFilterSql}
           {$infoTypeFilterSql}
+          {$frequenciaFilterSql}
         ORDER BY f.id DESC
         {$paginationSql}
     ");
-    $stmt->execute(array_merge([$user_id, $user_id], $tagFilterParams, $infoTypeFilterParams));
+    $stmt->execute(array_merge([$user_id, $user_id, $user_id], $tagFilterParams, $infoTypeFilterParams, $frequenciaFilterParams));
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     if ($longTextOnly) {
         $rowsWithLongTextLength = [];
@@ -6049,6 +6195,8 @@ elseif ($action === 'list_graph_cards_for_user') {
             'question_answer' => $card['question_answer'] === null ? null : (int)$card['question_answer'],
             'dynamic_text_type' => dynamicTextTypeFromInt($card['dynamic_text_type'] ?? 0),
             'dynamic_parent_flashcard_id' => !empty($card['dynamic_parent_flashcard_id']) ? (int)$card['dynamic_parent_flashcard_id'] : null,
+            'id_frequencia_informacional' => !empty($card['id_frequencia_informacional']) ? (int)$card['id_frequencia_informacional'] : null,
+            'frequencia_informacional_nome' => $card['frequencia_informacional_nome'] ?? null,
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
             'score' => (int)$card['score'],
