@@ -5752,6 +5752,127 @@ elseif ($action === 'delete_card') {
 }
 
 
+
+elseif ($action === 'delete_filtered_graph_cards') {
+    $rawTagIds = is_array($input) ? ($input['tag_ids'] ?? ($input['tag_id'] ?? null)) : null;
+    $rawTagLinkTypes = is_array($input) ? ($input['tag_link_types'] ?? ['subject', 'object', 'lexical_chunk']) : ['subject', 'object', 'lexical_chunk'];
+    $rawWithoutTags = is_array($input) ? ($input['without_tags'] ?? 0) : 0;
+    $rawLongText = is_array($input) ? ($input['long_text'] ?? 0) : 0;
+    $rawInfoTypes = is_array($input) ? ($input['info_types'] ?? [0, 1, 2, 3, 4, 5, 6]) : [0, 1, 2, 3, 4, 5, 6];
+    $withoutTagsOnly = filter_var($rawWithoutTags, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+    $withoutTagsOnly = $withoutTagsOnly === null ? ((string)$rawWithoutTags === '1') : $withoutTagsOnly;
+    $longTextOnly = filter_var($rawLongText, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+    $longTextOnly = $longTextOnly === null ? ((string)$rawLongText === '1') : $longTextOnly;
+    $tagIds = sanitizeTagIds($rawTagIds);
+    $tagLinkTypes = sanitizeGraphTagLinkTypes($rawTagLinkTypes);
+    $infoTypes = sanitizeGraphInfoTypes($rawInfoTypes);
+    $tagLinkColumnsByTable = getGraphTagLinkColumnsForTypes($tagLinkTypes);
+    $tagFilterSql = '';
+    $tagFilterParams = [];
+    $infoTypeFilterSql = '';
+    $infoTypeFilterParams = [];
+
+    if (!empty($infoTypes) && count($infoTypes) < 7) {
+        $infoTypePlaceholders = implode(',', array_fill(0, count($infoTypes), '?'));
+        $infoTypeFilterSql = " AND f.info_type IN ({$infoTypePlaceholders})";
+        $infoTypeFilterParams = $infoTypes;
+    } elseif (empty($infoTypes)) {
+        $infoTypeFilterSql = ' AND 0 = 1';
+    }
+
+    if ($withoutTagsOnly) {
+        $withoutTagClauses = [];
+        foreach ($tagLinkColumnsByTable as $linkTable => $columns) {
+            foreach ($columns as $column) {
+                $withoutTagClauses[] = "NOT EXISTS (SELECT 1 FROM {$linkTable} l WHERE l.flashcard_id = f.id AND l.{$column} IS NOT NULL)";
+            }
+        }
+        $tagFilterSql = !empty($withoutTagClauses) ? ' AND ' . implode(' AND ', $withoutTagClauses) : ' AND 0 = 1';
+        $tagIds = [];
+    } elseif (!empty($tagIds)) {
+        $placeholders = implode(',', array_fill(0, count($tagIds), '?'));
+        $stmtTag = $pdo->prepare("SELECT id FROM flashcard_tags WHERE id IN ($placeholders) AND user_id IN (?, 5)");
+        $stmtTag->execute(array_merge($tagIds, [$user_id]));
+        $allowedTagIds = array_map('intval', $stmtTag->fetchAll(PDO::FETCH_COLUMN));
+        if (count($allowedTagIds) !== count($tagIds)) {
+            die(json_encode(['status' => 'error', 'message' => 'Uma ou mais tags não foram encontradas ou estão sem permissão.']));
+        }
+
+        $tagFilterSqlParts = [];
+        foreach ($tagIds as $tagId) {
+            $tagExistsClauses = [];
+            foreach ($tagLinkColumnsByTable as $linkTable => $columns) {
+                foreach ($columns as $column) {
+                    $tagExistsClauses[] = "EXISTS (SELECT 1 FROM {$linkTable} l WHERE l.flashcard_id = f.id AND l.{$column} = ?)";
+                    $tagFilterParams[] = $tagId;
+                }
+            }
+            $tagFilterSqlParts[] = !empty($tagExistsClauses) ? '(' . implode(' OR ', $tagExistsClauses) . ')' : '0 = 1';
+        }
+        $tagFilterSql = ' AND ' . implode(' AND ', $tagFilterSqlParts);
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            SELECT f.id, f.front_encrypted, f.back_encrypted
+            FROM flashcards f
+            INNER JOIN directories d ON d.id = f.directory_id
+            WHERE d.user_id = ?
+              AND d.deck_mode = 'grafo'
+              AND d.type IN (4, 10)
+              {$tagFilterSql}
+              {$infoTypeFilterSql}
+            ORDER BY f.id DESC
+        ");
+        $stmt->execute(array_merge([$user_id], $tagFilterParams, $infoTypeFilterParams));
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $cardIds = [];
+        foreach ($rows as $card) {
+            if ($longTextOnly) {
+                $front = !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '';
+                $back = !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '';
+                $frontText = trim(strip_tags((string)$front));
+                $backText = trim(strip_tags((string)$back));
+                $frontLength = function_exists('mb_strlen') ? mb_strlen($frontText, 'UTF-8') : strlen($frontText);
+                $backLength = function_exists('mb_strlen') ? mb_strlen($backText, 'UTF-8') : strlen($backText);
+                if (max($frontLength, $backLength) <= 80) continue;
+            }
+            $cardIds[] = (int)$card['id'];
+        }
+
+        if (empty($cardIds)) {
+            echo json_encode(['status' => 'success', 'message' => 'Nenhum card encontrado para excluir.', 'deleted_count' => 0]);
+            return;
+        }
+
+        $pdo->beginTransaction();
+        $idPlaceholders = implode(',', array_fill(0, count($cardIds), '?'));
+        $deleteStmt = $pdo->prepare("
+            DELETE f
+            FROM flashcards f
+            INNER JOIN directories d ON d.id = f.directory_id
+            WHERE f.id IN ({$idPlaceholders})
+              AND d.user_id = ?
+              AND d.deck_mode = 'grafo'
+              AND d.type IN (4, 10)
+        ");
+        $deleteStmt->execute(array_merge($cardIds, [$user_id]));
+        $deletedCount = $deleteStmt->rowCount();
+        $pdo->commit();
+
+        echo json_encode([
+            'status' => 'success',
+            'message' => "{$deletedCount} card(s) filtrado(s) excluído(s) com sucesso.",
+            'deleted_count' => $deletedCount,
+        ]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('[flashcards][delete_filtered_graph_cards] ' . $e->getMessage());
+        echo json_encode(['status' => 'error', 'message' => 'Erro interno ao excluir os cards filtrados.']);
+    }
+}
+
 elseif ($action === 'list_graph_cards_for_user') {
     $rawPage = is_array($input) ? ($input['page'] ?? ($_GET['page'] ?? 1)) : ($_GET['page'] ?? 1);
     $rawTagIds = is_array($input) ? ($input['tag_ids'] ?? ($_GET['tag_ids'] ?? null)) : ($_GET['tag_ids'] ?? null);
