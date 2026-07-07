@@ -592,14 +592,14 @@
                 <button onclick="flashcardApp.prevCard()" id="btnPrev" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center text-base shadow-md transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Card anterior" aria-label="Card anterior">
                     <i class="fa-solid fa-arrow-left"></i>
                 </button>
-                <button type="button" onclick="flashcardApp.answerQuestion(1)" id="btnQuestionYes" class="hidden h-11 items-center justify-center gap-2 rounded-full border border-emerald-400/60 bg-emerald-500/20 px-4 text-sm font-semibold text-emerald-100 transition-all hover:bg-emerald-500/30" title="Responder Sim" aria-label="Responder Sim">
-                    <i class="fa-solid fa-check"></i><span>Sim</span>
+                <button type="button" onclick="flashcardApp.answerQuestion(1)" id="btnQuestionYes" class="hidden h-11 items-center justify-center gap-2 rounded-full border border-emerald-400/60 bg-emerald-500/20 px-4 text-sm font-semibold text-emerald-100 transition-all hover:bg-emerald-500/30" title="Responder Certo" aria-label="Responder Certo">
+                    <i class="fa-solid fa-check"></i><span>Certo</span>
                 </button>
                 <button onclick="event.stopPropagation(); flashcardApp.playCurrentCardAudio()" id="btnPlayCurrentAudio" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white flex items-center justify-center text-base shadow-md transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Ouvir áudio do card" aria-label="Ouvir áudio do card" disabled>
                     <i class="fa-solid fa-play"></i>
                 </button>
-                <button type="button" onclick="flashcardApp.answerQuestion(0)" id="btnQuestionNo" class="hidden h-11 items-center justify-center gap-2 rounded-full border border-rose-400/60 bg-rose-500/20 px-4 text-sm font-semibold text-rose-100 transition-all hover:bg-rose-500/30" title="Responder Não" aria-label="Responder Não">
-                    <i class="fa-solid fa-xmark"></i><span>Não</span>
+                <button type="button" onclick="flashcardApp.answerQuestion(0)" id="btnQuestionNo" class="hidden h-11 items-center justify-center gap-2 rounded-full border border-rose-400/60 bg-rose-500/20 px-4 text-sm font-semibold text-rose-100 transition-all hover:bg-rose-500/30" title="Responder Errado" aria-label="Responder Errado">
+                    <i class="fa-solid fa-xmark"></i><span>Errado</span>
                 </button>
                 <button onclick="flashcardApp.nextCard()" id="btnNext" class="w-11 h-11 rounded-full bg-gluon-primary hover:bg-blue-600 text-white flex items-center justify-center text-base shadow-md shadow-blue-500/25 transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Próximo card" aria-label="Próximo card">
                     <i class="fa-solid fa-arrow-right"></i>
@@ -2243,7 +2243,7 @@
                 const isCorrect = correctAnswer === null || selectedAnswer === correctAnswer;
                 this.answeredQuestionCardIds.add(Number(card.id));
                 if (correctAnswer !== null) {
-                    this.showToast(isCorrect ? 'Resposta correta!' : `Resposta incorreta. O correto era ${correctAnswer === 1 ? 'Sim' : 'Não'}.`, isCorrect ? 'success' : 'error');
+                    this.showToast(isCorrect ? 'Resposta correta!' : `Resposta incorreta. O correto era ${correctAnswer === 1 ? 'Certo' : 'Errado'}.`, isCorrect ? 'success' : 'error');
                 }
                 if (!isCorrect && ['aleatorio', 'grafo'].includes(this.deckMode)) {
                     await this.registerScore(card, { reset: true });
