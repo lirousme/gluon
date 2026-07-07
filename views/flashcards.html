@@ -1520,6 +1520,43 @@
                 return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
             },
 
+            sanitizeRichTextHTML(html = '') {
+                const template = document.createElement('template');
+                template.innerHTML = String(html || '');
+                const allowedTags = new Set(['B','STRONG','I','EM','U','S','STRIKE','BR','DIV','P','SPAN','UL','OL','LI','FONT']);
+                const allowedStyles = new Set(['color','background-color','font-size','text-align']);
+                const walk = (node) => {
+                    [...node.childNodes].forEach((child) => {
+                        if (child.nodeType === Node.COMMENT_NODE) return child.remove();
+                        if (child.nodeType !== Node.ELEMENT_NODE) return;
+                        if (!allowedTags.has(child.tagName)) {
+                            child.replaceWith(...child.childNodes);
+                            return;
+                        }
+                        [...child.attributes].forEach((attr) => {
+                            const name = attr.name.toLowerCase();
+                            if (name === 'style') {
+                                const safeStyle = [...child.style]
+                                    .filter(prop => allowedStyles.has(prop))
+                                    .map(prop => `${prop}: ${child.style.getPropertyValue(prop)}`)
+                                    .join('; ');
+                                if (safeStyle) child.setAttribute('style', safeStyle); else child.removeAttribute('style');
+                            } else if (!(child.tagName === 'FONT' && ['color','size'].includes(name))) {
+                                child.removeAttribute(attr.name);
+                            }
+                        });
+                        walk(child);
+                    });
+                };
+                walk(template.content);
+                return template.innerHTML;
+            },
+
+            renderCardText(text = '') {
+                const raw = String(text || '');
+                return /<[^>]+>/.test(raw) ? this.sanitizeRichTextHTML(raw) : this.escapeHTML(raw);
+            },
+
 
             getDeckScoreColor(percentage = 0) {
                 const p = Math.max(0, Math.min(100, Number(percentage) || 0));
@@ -1898,7 +1935,7 @@
                     document.getElementById('cardFrontText').innerHTML = `
                         <div class="card-text-content translation-card-content">
                             ${centeredPillsHtml ? `<div id="centeredCardPills" class="centered-card-pills flex flex-wrap items-center justify-center gap-2">${centeredPillsHtml}</div>` : ''}
-                            ${card.back ? `<div class="translation-card-back-text">${this.escapeHTML(card.back)}</div>` : ''}
+                            ${card.back ? `<div class="translation-card-back-text">${this.renderCardText(card.back)}</div>` : ''}
                             ${backImageHtml}
                             ${frontImageHtml}
                         </div>
@@ -1907,14 +1944,14 @@
                 } else {
                     document.getElementById('cardFrontText').innerHTML = `
                         <div class="card-text-content">
-                            ${card.front ? `<div class="text-center w-full">${this.escapeHTML(card.front)}</div>` : ''}
+                            ${card.front ? `<div class="text-center w-full">${this.renderCardText(card.front)}</div>` : ''}
                             ${frontImageHtml}
                         </div>
                     `;
 
                     document.getElementById('cardBackText').innerHTML = `
                         <div class="card-text-content">
-                            ${card.back ? `<div class="text-center w-full">${this.escapeHTML(card.back)}</div>` : ''}
+                            ${card.back ? `<div class="text-center w-full">${this.renderCardText(card.back)}</div>` : ''}
                             ${backImageHtml}
                         </div>
                     `;
@@ -3063,12 +3100,12 @@
                                 <td class="px-4 py-2 text-center text-slate-500 font-medium">${index + 1}</td>
                                 <td class="px-4 py-2 border-l border-slate-700">
                                     <div class="truncate w-full max-w-[120px] sm:max-w-[250px] md:max-w-[350px]" title="${this.escapeHTML(card.front)}">
-                                        ${this.escapeHTML(card.front)}
+                                        ${this.renderCardText(card.front)}
                                     </div>
                                 </td>
                                 <td class="px-4 py-2 border-l border-slate-700">
                                     <div class="truncate w-full max-w-[120px] sm:max-w-[250px] md:max-w-[350px]" title="${this.escapeHTML(card.back)}">
-                                        ${this.escapeHTML(card.back)}
+                                        ${this.renderCardText(card.back)}
                                     </div>
                                 </td>
                             </tr>
