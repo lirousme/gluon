@@ -530,6 +530,83 @@ function ensureTagFamilyOrderSchema(PDO $pdo): void
     }
 }
 
+function relacoesTaguineasHasIdCardColumn(PDO $pdo): bool
+{
+    static $hasColumn = null;
+    if ($hasColumn !== null) return $hasColumn;
+    try {
+        $hasColumn = (bool)$pdo->query("SHOW COLUMNS FROM relacoes_taguineas LIKE 'id_card'")->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        error_log('[flashcards][relacoes_taguineas_id_card_schema] ' . $e->getMessage());
+        $hasColumn = false;
+    }
+    return $hasColumn;
+}
+
+function insertInformationalFrequencyRelation(PDO $pdo, int $userId, int $cardId, int $relationType, int $motherTagId, int $childTagId): void
+{
+    if ($motherTagId <= 0 || $childTagId <= 0 || $motherTagId === $childTagId) return;
+
+    if (relacoesTaguineasHasIdCardColumn($pdo)) {
+        $stmt = $pdo->prepare("
+            INSERT IGNORE INTO relacoes_taguineas (id_user, id_tag_mother, id_tag_child, tipo_de_relacao, id_card, ordem)
+            SELECT ?, mother.id, child.id, ?, ?, 0
+            FROM flashcard_tags mother
+            INNER JOIN flashcard_tags child ON child.id = ?
+            WHERE mother.id = ?
+              AND mother.user_id IN (?, 5)
+              AND child.user_id IN (?, 5)
+        ");
+        $stmt->execute([$userId, $relationType, $cardId, $childTagId, $motherTagId, $userId, $userId]);
+        return;
+    }
+
+    $stmt = $pdo->prepare("
+        INSERT IGNORE INTO relacoes_taguineas (id_user, id_tag_mother, id_tag_child, tipo_de_relacao, ordem)
+        SELECT ?, mother.id, child.id, ?, 0
+        FROM flashcard_tags mother
+        INNER JOIN flashcard_tags child ON child.id = ?
+        WHERE mother.id = ?
+          AND mother.user_id IN (?, 5)
+          AND child.user_id IN (?, 5)
+    ");
+    $stmt->execute([$userId, $relationType, $childTagId, $motherTagId, $userId, $userId]);
+}
+
+function syncInformationalFrequencyCardRelations(PDO $pdo, int $userId, int $cardId, int $frequencyId, array $subjectTagIds, array $objectTagIds, array $lexicalChunkTagIds): void
+{
+    $relationTypes = [24, 25, 28];
+    if (relacoesTaguineasHasIdCardColumn($pdo)) {
+        $placeholders = implode(',', array_fill(0, count($relationTypes), '?'));
+        $pdo->prepare("DELETE FROM relacoes_taguineas WHERE id_user = ? AND id_card = ? AND tipo_de_relacao IN ({$placeholders})")
+            ->execute(array_merge([$userId, $cardId], $relationTypes));
+    }
+
+    $insertPairs = static function (array $mothers, array $children, int $relationType) use ($pdo, $userId, $cardId): void {
+        foreach ($mothers as $motherTagId) {
+            foreach ($children as $childTagId) {
+                insertInformationalFrequencyRelation($pdo, $userId, $cardId, $relationType, (int)$motherTagId, (int)$childTagId);
+            }
+        }
+    };
+
+    if ($frequencyId === 1) {
+        $insertPairs($subjectTagIds, $objectTagIds, 24);
+        $insertPairs($subjectTagIds, $lexicalChunkTagIds, 24);
+        $insertPairs($lexicalChunkTagIds, $subjectTagIds, 24);
+        syncCardTagLinks($pdo, 'relation_links', $cardId, $lexicalChunkTagIds, $userId);
+        return;
+    }
+
+    syncCardTagLinks($pdo, 'relation_links', $cardId, [], $userId);
+
+    if ($frequencyId === 2 && !empty($objectTagIds)) {
+        $insertPairs($objectTagIds, $lexicalChunkTagIds, 25);
+    } elseif ($frequencyId === 3) {
+        $insertPairs($subjectTagIds, $lexicalChunkTagIds, 28);
+    }
+}
+
 
 function getTableIdSqlType(PDO $pdo, string $table, string $fallback = 'int unsigned'): string
 {
@@ -5575,6 +5652,7 @@ elseif ($action === 'add_single') {
         syncCardTagLinks($pdo, 'subjects_links', $new_card_id, $cardSubjectTagIds, $user_id);
         syncCardTagLinks($pdo, 'objects_links', $new_card_id, $object_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'lexical_chunks_links', $new_card_id, $lexical_chunk_tag_ids, $user_id);
+        syncInformationalFrequencyCardRelations($pdo, $user_id, $new_card_id, $id_frequencia_informacional, $cardSubjectTagIds, $object_tag_ids, $lexical_chunk_tag_ids);
     }
 
     $createdCount = count($created_card_ids);
@@ -5740,7 +5818,7 @@ elseif ($action === 'update_card') {
         syncCardTagLinks($pdo, 'tipo_frasal_links', $card_id, [], $user_id);
         syncCardTagLinks($pdo, 'tense_links', $card_id, [], $user_id);
         syncCardTagLinks($pdo, 'lexical_chunks_links', $card_id, $lexical_chunk_tag_ids, $user_id);
-        syncCardTagLinks($pdo, 'relation_links', $card_id, [], $user_id);
+        syncInformationalFrequencyCardRelations($pdo, $user_id, $card_id, $id_frequencia_informacional, $subject_tag_ids, $object_tag_ids, $lexical_chunk_tag_ids);
         syncCardTagLinks($pdo, 'words_links', $card_id, [], $user_id);
         syncCardIdiomaLinks($pdo, $card_id, [], [], $user_id);
         echo json_encode(['status' => 'success', 'message' => 'Card atualizado.']);
