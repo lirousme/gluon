@@ -602,7 +602,7 @@ function syncInformationalFrequencyCardRelations(PDO $pdo, int $userId, int $car
     if ($frequencyId === 2 && !empty($objectTagIds)) {
         $insertPairs($objectTagIds, $subjectTagIds, 25);
     } elseif ($frequencyId === 3) {
-        $insertPairs($subjectTagIds, $lexicalChunkTagIds, 28);
+        $insertPairs($subjectTagIds, $objectTagIds, 28);
     }
 }
 
