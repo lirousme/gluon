@@ -147,19 +147,19 @@
       </section>
 
       <section id="SubjectTagsPanel" class="pt-3 border-t border-slate-700 space-y-2">
-        <label class="block text-xs font-semibold uppercase tracking-wide text-emerald-200">Subject</label>
+        <label id="SubjectTagsPanelTitle" class="block text-xs font-semibold uppercase tracking-wide text-emerald-200">Subject</label>
         <div id="subjectTagSelector" class="flex flex-wrap gap-1.5 bg-slate-900/70 border border-slate-700 rounded-lg p-2 min-h-[44px]"></div>
         <input id="subjectTagSearchInput" type="text" placeholder="Buscar subjects..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
       </section>
 
       <section id="ObjectTagsPanel" class="pt-3 border-t border-slate-700 space-y-2">
-        <label class="block text-xs font-semibold uppercase tracking-wide text-sky-200">Objects</label>
+        <label id="ObjectTagsPanelTitle" class="block text-xs font-semibold uppercase tracking-wide text-sky-200">Objects</label>
         <div id="objectTagSelector" class="flex flex-wrap gap-1.5 bg-slate-900/70 border border-slate-700 rounded-lg p-2 min-h-[44px]"></div>
         <input id="objectTagSearchInput" type="text" placeholder="Buscar objects..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
       </section>
 
       <section id="LexicalChunkTagsPanel" class="pt-3 border-t border-slate-700 space-y-2">
-        <label class="block text-xs font-semibold uppercase tracking-wide text-cyan-200">Lexical chunks (Flexões)</label>
+        <label id="LexicalChunkTagsPanelTitle" class="block text-xs font-semibold uppercase tracking-wide text-cyan-200">Lexical chunks (Flexões)</label>
         <div id="lexicalChunkTagSelector" class="flex flex-wrap gap-1.5 bg-slate-900/70 border border-slate-700 rounded-lg p-2 min-h-[44px]"></div>
         <input id="lexicalChunkTagSearchInput" type="text" placeholder="Buscar lexical chunks..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
       </section>
@@ -718,12 +718,44 @@ const app = {
     this.availableTags = res?.data || [];
     this.renderAllTagSelectors();
   },
+  informationalFrequencyTagPanelTitles: {
+    1: {
+      subject: 'Quem é (Ex.: Moranguinho, Max)',
+      object: 'O que é (Ex.: Diminutivo, Cachorro)',
+      lexicalChunk: 'Sujeito composto resultante (Ex.: Diminutivo de morango, Cachorro do João)'
+    },
+    2: {
+      subject: 'Ações compostas (Ex.: Fazer torta de morango)',
+      object: 'Sujeitos',
+      lexicalChunk: 'Substantivos completos (Ex.: Torta de morango, leite)'
+    },
+    3: {
+      subject: 'Proprietário (Ex.: Morango maduro)',
+      object: 'Propriedade (Ex.: Cor)',
+      lexicalChunk: 'Tag composta SE HOUVER composição (Ex.: Cor do morango maduro)'
+    }
+  },
+  updateInformationalFrequencyTagPanelTitles() {
+    const selectedId = Number(document.getElementById('frequenciaInformacionalSelect')?.value || 0);
+    const titles = this.informationalFrequencyTagPanelTitles[selectedId] || {
+      subject: 'Subject',
+      object: 'Objects',
+      lexicalChunk: 'Lexical chunks (Flexões)'
+    };
+    const subjectTitle = document.getElementById('SubjectTagsPanelTitle');
+    const objectTitle = document.getElementById('ObjectTagsPanelTitle');
+    const lexicalChunkTitle = document.getElementById('LexicalChunkTagsPanelTitle');
+    if (subjectTitle) subjectTitle.textContent = titles.subject;
+    if (objectTitle) objectTitle.textContent = titles.object;
+    if (lexicalChunkTitle) lexicalChunkTitle.textContent = titles.lexicalChunk;
+  },
   renderFrequenciasInformacionaisSelect(selectedId = null) {
     const select = document.getElementById('frequenciaInformacionalSelect');
     if (!select) return;
     const currentValue = selectedId !== null ? String(selectedId || '') : select.value;
     if (!this.frequenciasInformacionais.length) {
       select.innerHTML = '<option value="">Nenhuma frequência cadastrada</option>';
+      this.updateInformationalFrequencyTagPanelTitles();
       return;
     }
     select.innerHTML = '<option value="">Selecione uma frequência</option>' + this.frequenciasInformacionais.map((frequencia) => {
@@ -732,11 +764,13 @@ const app = {
       return `<option value="${id}">${nome}</option>`;
     }).join('');
     select.value = currentValue;
+    this.updateInformationalFrequencyTagPanelTitles();
   },
   async loadFrequenciasInformacionais() {
     const res = await this.api('list_frequencias_informacionais');
     this.frequenciasInformacionais = Array.isArray(res?.data) ? res.data : [];
     this.renderFrequenciasInformacionaisSelect();
+    this.updateInformationalFrequencyTagPanelTitles();
   },
   applyInitialSubjectTag() {
     if (this.editCardId || !this.initialSubjectTagIds.length) return;
@@ -1514,6 +1548,7 @@ btnRemoveBackImage.onclick = () => app.removeCardImage('back');
 btnInfoType.onclick = () => app.cycleInfoType();
 btnQuestionAnswer.onclick = () => app.toggleQuestionAnswer();
 btnDeleteCard.onclick = () => app.deleteCard();
+frequenciaInformacionalSelect.onchange = () => app.updateInformationalFrequencyTagPanelTitles();
 subjectTagSearchInput.oninput = (e) => app.handleTagSearch('subject', e.target.value);
   objectTagSearchInput.oninput = (e) => app.handleTagSearch('object', e.target.value);
   lexicalChunkTagSearchInput.oninput = (e) => app.handleTagSearch('lexicalChunk', e.target.value);
