@@ -95,11 +95,8 @@
         <button type="button" id="btnOpenCreateTagModal" onclick="app.openCreateTagModal()" class="inline-flex h-9 items-center justify-center rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800" title="Criar nova tag" aria-label="Criar nova tag">
           <i class="fa-solid fa-plus" aria-hidden="true"></i>
         </button>
-        <button type="button" id="btnGenerateFrontTagsGemini" onclick="app.generateFrontSentenceTagsWithGemini()" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-fuchsia-400/20 p-2 text-sm font-medium text-fuchsia-400 transition-colors hover:bg-fuchsia-400/10 hover:text-fuchsia-300" title="Gerar tags da frase da frente com Gemini" aria-label="Gerar tags da frase da frente com Gemini">
-          <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
-        </button>
-        <button type="button" id="btnTranslateGemini" onclick="app.translateCardWithGemini()" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-300/30 p-2 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-300/10 hover:text-amber-200" title="Traduzir com Gemini" aria-label="Traduzir com Gemini">
-          <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+        <button type="button" id="btnCopyCurrentCard" onclick="app.copyCurrentCardToNewSheet()" class="hidden h-9 w-9 items-center justify-center rounded-lg border border-slate-600 p-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-800 hover:text-white" title="Copiar card atual" aria-label="Copiar card atual">
+          <i class="fa-solid fa-copy" aria-hidden="true"></i>
         </button>
       </div>
       <h1 id="pageTitle" class="text-base sm:text-lg font-semibold">Criar ficha de card</h1>
@@ -1291,35 +1288,6 @@ const app = {
       properNounOwnerModal.classList.remove('flex');
     }, 200);
   },
-  async generateFrontSentenceTagsWithGemini() {
-    const sentence = this.getTextFieldPlainText('front').trim();
-    if (!sentence) return this.setStatus('Preencha a frente do card com uma frase para gerar as tags com Gemini.', 'error');
-
-    const originalHtml = btnGenerateFrontTagsGemini.innerHTML;
-    btnGenerateFrontTagsGemini.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>';
-    btnGenerateFrontTagsGemini.disabled = true;
-
-    try {
-      const res = await this.api('generate_front_sentence_tags_gemini', { sentence });
-      if (!res || !res.candidates) throw new Error('A API não retornou tags válidas.');
-      if (res.english_sentence && String(res.english_sentence).trim()) {
-        this.setTextFieldValue('front', String(res.english_sentence).trim());
-        this.updateTextCharacterCount('front');
-      }
-      this.pendingFrontSentenceTagCandidates = res.candidates;
-      if (res.needs_ownership_choice) {
-        this.openProperNounOwnerModal(res.proper_nouns || []);
-        this.setStatus('Escolha o dono dos nomes próprios para concluir a criação das tags.', 'neutral');
-        return;
-      }
-      await this.createFrontSentenceTags({});
-    } catch (err) {
-      this.setStatus('Falha ao gerar tags com Gemini: ' + (err.message || 'erro desconhecido'), 'error');
-    } finally {
-      btnGenerateFrontTagsGemini.innerHTML = originalHtml;
-      btnGenerateFrontTagsGemini.disabled = false;
-    }
-  },
   getProperNounOwnerChoices() {
     const choices = {};
     document.querySelectorAll('[data-proper-noun-owner]:checked').forEach(input => {
@@ -1363,16 +1331,6 @@ const app = {
     } finally {
       buttons.forEach(button => { button.disabled = false; });
     }
-  },
-  async translateCardWithGemini() {
-    return this.translateCardWithProvider({
-      action: 'translate_text_gemini',
-      button: btnTranslateGemini,
-      loadingLabel: 'Gemini...',
-      successLabel: 'Tradução com Gemini concluída!',
-      autoDetectOpposite: true,
-      replaceSource: true
-    });
   },
   async answerFrontQuestionWithGemini() {
     const frontText = this.getTextFieldPlainText('front').trim();
@@ -1623,6 +1581,13 @@ const app = {
     this.setSelectedTagIds('lexicalChunk', lexicalChunkTags);
     this.renderAllTagSelectors();
   },
+  copyCurrentCardToNewSheet() {
+    if (!this.editCardId) return;
+    const params = new URLSearchParams({ id: this.deckId, duplicate_card_id: String(this.editCardId) });
+    const returnTarget = this.getReturnTarget();
+    if (returnTarget) params.set('from', returnTarget);
+    window.location.href = `/ficha_do_card?${params.toString()}`;
+  },
   async preloadEditCard() {
     if (!this.editCardId) return;
     pageTitle.textContent = 'Editar ficha de card';
@@ -1630,6 +1595,8 @@ const app = {
     this.setStatus('Carregando card para edição...');
     await this.loadCardIntoForm(this.editCardId);
     btnDeleteCard.classList.remove('hidden');
+    btnCopyCurrentCard.classList.remove('hidden');
+    btnCopyCurrentCard.classList.add('inline-flex');
     this.setStatus('Você está editando um card.', 'neutral');
   },
   async preloadDuplicateCard() {
@@ -1639,6 +1606,8 @@ const app = {
     this.setStatus('Carregando card para cópia...');
     await this.loadCardIntoForm(this.duplicateCardId, { duplicate: true });
     btnDeleteCard.classList.add('hidden');
+    btnCopyCurrentCard.classList.add('hidden');
+    btnCopyCurrentCard.classList.remove('inline-flex');
     this.setStatus('Revise a cópia e salve para criar um novo card.', 'neutral');
   },
   async deleteCard() {
