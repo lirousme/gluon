@@ -382,6 +382,7 @@ const app = {
   deckId: params.get('id'),
   from: params.get('from') || '',
   editCardId: params.get('edit_card_id'),
+  duplicateCardId: params.get('duplicate_card_id'),
   initialSubjectTagIds: parseInitialSubjectTagIds(params),
   infoType: 5,
   infoTypeOptions: {
@@ -972,7 +973,7 @@ const app = {
     this.updateInformationalFrequencyTagPanelTitles();
   },
   applyInitialSubjectTag() {
-    if (this.editCardId || !this.initialSubjectTagIds.length) return;
+    if (this.editCardId || this.duplicateCardId || !this.initialSubjectTagIds.length) return;
     const visibleTagIds = new Set(this.getVisibleTags().map(tag => Number(tag.id)).filter(Boolean));
     const selectedIds = this.getSelectedTagIds('subject');
     this.initialSubjectTagIds.forEach((tagId) => {
@@ -1597,18 +1598,14 @@ const app = {
       this.updatePublicToggleButton();
     }
   },
-  async preloadEditCard() {
-    if (!this.editCardId) return;
-    pageTitle.textContent = 'Editar ficha de card';
-    editCardId.value = this.editCardId;
-    this.setStatus('Carregando card para edição...');
-    const res = await this.api('get_card_for_edit', { deck_id: this.deckId, card_id: this.editCardId });
+  async loadCardIntoForm(cardId, { duplicate = false } = {}) {
+    const res = await this.api('get_card_for_edit', { deck_id: this.deckId, card_id: cardId });
     const card = res?.data || null;
-    if (!card) throw new Error('Card não encontrado para edição.');
+    if (!card) throw new Error(duplicate ? 'Card não encontrado para cópia.' : 'Card não encontrado para edição.');
     this.currentCardDirectoryId = Number(card.directory_id || 0) || null;
     this.currentCardPrivateDirectoryId = Number(card.private_directory_id || 0) || null;
     this.currentCardIsPublic = Number(card.is_public) === 1 || this.currentCardDirectoryId === this.publicDirectoryId;
-    this.updatePublicToggleButton();
+    if (!duplicate) this.updatePublicToggleButton();
     this.setTextFieldValue('front', card.front || '');
     this.setTextFieldValue('back', String(card.back || ''));
     this.updateAllTextCharacterCounts();
@@ -1625,8 +1622,24 @@ const app = {
     this.setSelectedTagIds('object', objectTags);
     this.setSelectedTagIds('lexicalChunk', lexicalChunkTags);
     this.renderAllTagSelectors();
+  },
+  async preloadEditCard() {
+    if (!this.editCardId) return;
+    pageTitle.textContent = 'Editar ficha de card';
+    editCardId.value = this.editCardId;
+    this.setStatus('Carregando card para edição...');
+    await this.loadCardIntoForm(this.editCardId);
     btnDeleteCard.classList.remove('hidden');
     this.setStatus('Você está editando um card.', 'neutral');
+  },
+  async preloadDuplicateCard() {
+    if (!this.duplicateCardId || this.editCardId) return;
+    pageTitle.textContent = 'Copiar ficha de card';
+    editCardId.value = '';
+    this.setStatus('Carregando card para cópia...');
+    await this.loadCardIntoForm(this.duplicateCardId, { duplicate: true });
+    btnDeleteCard.classList.add('hidden');
+    this.setStatus('Revise a cópia e salve para criar um novo card.', 'neutral');
   },
   async deleteCard() {
     if (!this.editCardId) return;
@@ -1776,6 +1789,7 @@ document.addEventListener('keydown', (e) => {
   await Promise.all([app.loadTags(), app.loadFrequenciasInformacionais()]);
   app.applyInitialSubjectTag();
   await app.preloadEditCard();
+  await app.preloadDuplicateCard();
 })();
 </script>
 </body>
