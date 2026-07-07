@@ -263,6 +263,7 @@
         body #btnPlayCurrentAudio:not(:disabled),
         body #btnGenerateCurrentAudioTop:not(.hidden),
         body #btnEditCurrentTop:not(.hidden),
+        body #btnCopyCurrentTop:not(.hidden),
         body #btnAddSingleTop,
         body #btnRightPanel,
         body #btnToggleMobileTags:not(.hidden) {
@@ -379,6 +380,9 @@
             </button>
             <button id="btnEditCurrentTop" onclick="flashcardApp.editCurrentCard()" class="hidden w-10 h-10 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white items-center justify-center transition-colors" title="Editar card" aria-label="Editar card">
                 <i class="fa-solid fa-pen"></i>
+            </button>
+            <button id="btnCopyCurrentTop" onclick="flashcardApp.copyCurrentCard()" class="hidden w-10 h-10 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white items-center justify-center transition-colors" title="Copiar card atual" aria-label="Copiar card atual">
+                <i class="fa-solid fa-copy"></i>
             </button>
             <button id="btnAddSingleTop" onclick="flashcardApp.openSingleModal()" class="text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 font-medium py-2 px-3 sm:px-4 rounded-lg shadow transition-all flex items-center gap-2 text-sm" title="Adicionar Card Unitário">
                 <i class="fa-solid fa-plus text-gluon-primary"></i> <span class="hidden sm:inline">Add</span>
@@ -2151,11 +2155,14 @@
                 const card = this.cards[this.currentIndex];
                 const btnGenerate = document.getElementById('btnGenerateCurrentAudioTop') || document.querySelector('[data-current-audio-button="true"]');
                 const btnEdit = document.getElementById('btnEditCurrentTop');
-                if (!btnGenerate || !btnEdit) return;
+                const btnCopy = document.getElementById('btnCopyCurrentTop');
+                if (!btnGenerate || !btnEdit || !btnCopy) return;
 
                 const hasCard = Boolean(card);
                 btnEdit.classList.toggle('hidden', !hasCard);
                 btnEdit.classList.toggle('flex', hasCard);
+                btnCopy.classList.toggle('hidden', !hasCard);
+                btnCopy.classList.toggle('flex', hasCard);
 
                 if (!card) {
                     btnGenerate.classList.add('hidden');
@@ -3286,12 +3293,19 @@
             },
 
 
-            openCardSheetView(editCardId = null) {
+            openCardSheetView(editCardId = null, duplicateCardId = null) {
                 const from = window.location.pathname + window.location.search;
                 const params = new URLSearchParams({ id: this.deckId, from });
-                if (!editCardId && this.deckInitialTagId) params.set('tag_id', String(this.deckInitialTagId));
+                if (!editCardId && !duplicateCardId && this.deckInitialTagId) params.set('tag_id', String(this.deckInitialTagId));
                 if (editCardId) params.set('edit_card_id', String(editCardId));
+                if (duplicateCardId) params.set('duplicate_card_id', String(duplicateCardId));
                 window.location.href = `/ficha_do_card?${params.toString()}`;
+            },
+
+            copyCurrentCard() {
+                const card = this.cards[this.currentIndex];
+                if (!card) return;
+                this.openCardSheetView(null, card.id);
             },
 
             openSingleModal() {
