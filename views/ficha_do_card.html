@@ -721,14 +721,14 @@ const app = {
   informationalFrequencyTagPanelTitles: {
     1: {
       subject: 'Quem é (Ex.: Moranguinho, Max)',
-      object: 'Sujeito composto resultante (Ex.: Diminutivo de morango, Cachorro do João)',
+      object: 'O que é completo (Ex.: Diminutivo de morango, Cachorro do João)',
       lexicalChunk: 'Lexical chunks (Flexões)',
       hideLexicalChunk: true
     },
     2: {
-      subject: 'Ações compostas (Ex.: Fazer torta de morango)',
+      subject: 'Ações compostas (Ex.: Latir alto, Fazer torta de morango)',
       object: 'Sujeitos',
-      lexicalChunk: 'Substantivos completos (Ex.: Torta de morango, leite)'
+      lexicalChunk: 'Complementares (Ex.: Noite, dentro, canil)'
     },
     3: {
       subject: 'Proprietário (Ex.: Morango maduro)',
@@ -1507,6 +1507,7 @@ const app = {
     let object_tag_ids = this.getSelectedTagIds('object');
     let lexical_chunk_tag_ids = this.getSelectedTagIds('lexicalChunk');
     const id_frequencia_informacional = Number(frequenciaInformacionalSelect.value || 0);
+    if (id_frequencia_informacional === 1) lexical_chunk_tag_ids = [];
     const isTagExpansion = this.isTagExpansionType();
     const generatedFront = isTagExpansion ? '' : front;
     if (isTagExpansion) {
@@ -1521,10 +1522,10 @@ const app = {
       if (!this.editCardId) {
         const [descendantObjectTagIds, lexicalChunkChildTagIds] = await Promise.all([
           this.getDescendantObjectTagIdsFromFamily([...subject_tag_ids, ...object_tag_ids]),
-          this.getLexicalChunkChildTagIdsFromFamily(lexical_chunk_tag_ids)
+          id_frequencia_informacional === 1 ? Promise.resolve([]) : this.getLexicalChunkChildTagIdsFromFamily(lexical_chunk_tag_ids)
         ]);
         object_tag_ids = Array.from(new Set([...object_tag_ids, ...descendantObjectTagIds]));
-        lexical_chunk_tag_ids = Array.from(new Set([...lexical_chunk_tag_ids, ...lexicalChunkChildTagIds]));
+        lexical_chunk_tag_ids = id_frequencia_informacional === 1 ? [] : Array.from(new Set([...lexical_chunk_tag_ids, ...lexicalChunkChildTagIds]));
       }
       const return_to = this.getReturnTarget();
       const question_answer = this.infoType === 2 ? this.questionAnswer : null;

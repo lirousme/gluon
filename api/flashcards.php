@@ -593,14 +593,14 @@ function syncInformationalFrequencyCardRelations(PDO $pdo, int $userId, int $car
     if ($frequencyId === 1) {
         $insertPairs($subjectTagIds, $objectTagIds, 24);
         $insertPairs($objectTagIds, $subjectTagIds, 24);
-        syncCardTagLinks($pdo, 'relation_links', $cardId, $lexicalChunkTagIds, $userId);
+        syncCardTagLinks($pdo, 'relation_links', $cardId, [], $userId);
         return;
     }
 
     syncCardTagLinks($pdo, 'relation_links', $cardId, [], $userId);
 
     if ($frequencyId === 2 && !empty($objectTagIds)) {
-        $insertPairs($objectTagIds, $lexicalChunkTagIds, 25);
+        $insertPairs($objectTagIds, $subjectTagIds, 25);
     } elseif ($frequencyId === 3) {
         $insertPairs($subjectTagIds, $lexicalChunkTagIds, 28);
     }
@@ -5571,6 +5571,9 @@ elseif ($action === 'add_single') {
     $dynamic_text_type = sanitizeDynamicTextType($input['dynamic_text_type'] ?? 'none');
     $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
     $id_frequencia_informacional = validateFrequenciaInformacionalId($pdo, $user_id, $input['id_frequencia_informacional'] ?? null);
+    if ($id_frequencia_informacional === 1) {
+        $lexical_chunk_tag_ids = [];
+    }
 
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
@@ -5766,6 +5769,9 @@ elseif ($action === 'update_card') {
     $dynamic_text_type = sanitizeDynamicTextType($input['dynamic_text_type'] ?? 'none');
     $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
     $id_frequencia_informacional = validateFrequenciaInformacionalId($pdo, $user_id, $input['id_frequencia_informacional'] ?? null);
+    if ($id_frequencia_informacional === 1) {
+        $lexical_chunk_tag_ids = [];
+    }
     $dynamic_text_type_id = dynamicTextTypeToInt($dynamic_text_type);
 
     $has_front = !empty($front) || !empty($image_front);
