@@ -2409,6 +2409,7 @@ function buildGraphCardsSequence(array $cards, array $subjectTagsByCard, array $
 
     $cardIdsBySubjectTag = buildGraphTagCardIndex($subjectTagsByCard);
     $cardIdsByObjectTag = buildGraphTagCardIndex($objectTagsByCard);
+    $cardIdsByLexicalChunkTag = buildGraphTagCardIndex($lexicalChunksTagsByCard);
     $baseCardId = pickGraphBaseCardId(
         $cards,
         $subjectTagsByCard,
@@ -2421,18 +2422,29 @@ function buildGraphCardsSequence(array $cards, array $subjectTagsByCard, array $
     );
     if ($baseCardId === null) return [];
 
-    $pickSubjectDecisionTag = static function (int $cardId, ?int $preferredTagId = null) use (&$subjectTagsByCard, &$tagScoreByTag): ?int {
-        $subjectTags = sortGraphCardTagsByUserScore($subjectTagsByCard[$cardId] ?? [], $tagScoreByTag);
-        if (empty($subjectTags)) return null;
+    $pickGraphDecisionTag = static function (int $cardId, ?int $preferredTagId = null) use (&$subjectTagsByCard, &$objectTagsByCard, &$lexicalChunksTagsByCard, &$tagScoreByTag): ?int {
+        $tagGroups = [
+            $subjectTagsByCard[$cardId] ?? [],
+            $lexicalChunksTagsByCard[$cardId] ?? [],
+            $objectTagsByCard[$cardId] ?? [],
+        ];
 
         if ($preferredTagId !== null && $preferredTagId > 0) {
-            foreach ($subjectTags as $tag) {
-                if ((int)($tag['id'] ?? 0) === $preferredTagId) return $preferredTagId;
+            foreach ($tagGroups as $tags) {
+                foreach ($tags as $tag) {
+                    if ((int)($tag['id'] ?? 0) === $preferredTagId) return $preferredTagId;
+                }
             }
         }
 
-        $tagId = (int)($subjectTags[0]['id'] ?? 0);
-        return $tagId > 0 ? $tagId : null;
+        foreach ($tagGroups as $tags) {
+            $sortedTags = sortGraphCardTagsByUserScore($tags, $tagScoreByTag);
+            if (empty($sortedTags)) continue;
+            $tagId = (int)($sortedTags[0]['id'] ?? 0);
+            if ($tagId > 0) return $tagId;
+        }
+
+        return null;
     };
 
     $pickNextGraphCardId = static function (int $tagId, array $candidateIndex, array $usedCards) use (&$scoreByCard): ?int {
@@ -2450,7 +2462,7 @@ function buildGraphCardsSequence(array $cards, array $subjectTagsByCard, array $
         return null;
     };
 
-    $firstDecisionTagId = $pickSubjectDecisionTag($baseCardId, $initialTagId);
+    $firstDecisionTagId = $pickGraphDecisionTag($baseCardId, $initialTagId);
     if ($firstDecisionTagId === null) return [[
         'card_id' => $baseCardId,
         'decision_tag' => null,
@@ -2472,6 +2484,10 @@ function buildGraphCardsSequence(array $cards, array $subjectTagsByCard, array $
         $nextCardId = $isEvenPosition
             ? $pickNextGraphCardId($firstDecisionTagId, $cardIdsByObjectTag, $usedCards)
             : $pickNextGraphCardId($firstDecisionTagId, $cardIdsBySubjectTag, $usedCards);
+
+        if ($nextCardId === null) {
+            $nextCardId = $pickNextGraphCardId($firstDecisionTagId, $cardIdsByLexicalChunkTag, $usedCards);
+        }
 
         if ($nextCardId === null && $isEvenPosition) {
             $nextCardId = $pickNextGraphCardId($firstDecisionTagId, $cardIdsBySubjectTag, $usedCards);
@@ -2556,6 +2572,19 @@ function pickGraphBaseCardId(array $cards, array $subjectTagsByCard, array $obje
 
         return ((int)($a['id'] ?? 0) <=> (int)($b['id'] ?? 0));
     });
+
+    if ($initialTagId !== null && $initialTagId > 0) {
+        $initialTagCardIds = array_fill_keys(array_map('intval', array_merge(
+            $cardIdsBySubjectTag[$initialTagId] ?? [],
+            buildGraphTagCardIndex($objectTagsByCard)[$initialTagId] ?? [],
+            buildGraphTagCardIndex($lexicalChunksTagsByCard)[$initialTagId] ?? []
+        )), true);
+
+        foreach ($cards as $card) {
+            $candidateId = (int)($card['id'] ?? 0);
+            if ($candidateId > 0 && isset($initialTagCardIds[$candidateId])) return $candidateId;
+        }
+    }
 
     $baseCardId = (int)($cards[0]['id'] ?? 0);
     return $baseCardId > 0 ? $baseCardId : null;
