@@ -401,6 +401,7 @@ const app = {
   frequenciasInformacionais: [],
   sessionUserId: null,
   pendingFrontSentenceTagCandidates: null,
+  richTextSelections: {},
   publicDirectoryId: 6452,
   currentCardDirectoryId: null,
   currentCardPrivateDirectoryId: null,
@@ -529,14 +530,38 @@ const app = {
     if (!input || !editor) return;
     input.value = this.sanitizeRichTextHTML(editor.innerHTML);
   },
+  saveRichTextSelection(field) {
+    const editor = this.getTextEditor(field);
+    const selection = window.getSelection();
+    if (!editor || !selection || !selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return;
+    this.richTextSelections[field] = range.cloneRange();
+  },
+  restoreRichTextSelection(field) {
+    const editor = this.getTextEditor(field);
+    const range = this.richTextSelections[field];
+    const selection = window.getSelection();
+    if (!editor || !range || !selection || !editor.isConnected) return false;
+    const startInside = editor.contains(range.startContainer);
+    const endInside = editor.contains(range.endContainer);
+    if (!startInside || !endInside) return false;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
+  },
   setupRichTextEditors() {
     ['front', 'back'].forEach((field) => {
       const editor = this.getTextEditor(field);
       if (!editor) return;
       editor.addEventListener('input', () => {
+        this.saveRichTextSelection(field);
         this.syncRichTextInput(field);
         this.updateTextCharacterCount(field);
       });
+      editor.addEventListener('mouseup', () => this.saveRichTextSelection(field));
+      editor.addEventListener('keyup', () => this.saveRichTextSelection(field));
+      editor.addEventListener('focus', () => this.saveRichTextSelection(field));
       editor.addEventListener('paste', (event) => {
         event.preventDefault();
         const html = event.clipboardData?.getData('text/html');
@@ -548,16 +573,26 @@ const app = {
     });
     document.querySelectorAll('[data-editor-toolbar]').forEach((toolbar) => {
       const field = toolbar.dataset.editorToolbar;
-      toolbar.addEventListener('mousedown', (event) => event.preventDefault());
+      toolbar.addEventListener('mousedown', (event) => {
+        const control = event.target.closest('[data-command]');
+        if (!control) return;
+        this.saveRichTextSelection(field);
+        if (control.type !== 'color') event.preventDefault();
+      });
       toolbar.addEventListener('click', (event) => {
         const control = event.target.closest('[data-command]');
         if (!control || control.tagName === 'SELECT' || control.type === 'color') return;
         this.applyRichTextCommand(field, control.dataset.command);
       });
-      toolbar.addEventListener('change', (event) => {
+      const applyControlCommand = (event) => {
         const control = event.target.closest('[data-command]');
         if (!control) return;
         this.applyRichTextCommand(field, control.dataset.command, control.value);
+      };
+      toolbar.addEventListener('change', applyControlCommand);
+      toolbar.addEventListener('input', (event) => {
+        const control = event.target.closest('[data-command]');
+        if (control?.type === 'color') applyControlCommand(event);
       });
     });
   },
@@ -565,7 +600,12 @@ const app = {
     const editor = this.getTextEditor(field);
     if (!editor || editor.getAttribute('contenteditable') !== 'true') return;
     editor.focus();
+    this.restoreRichTextSelection(field);
+    if (['foreColor', 'hiliteColor', 'backColor'].includes(command)) {
+      document.execCommand('styleWithCSS', false, true);
+    }
     document.execCommand(command, false, value);
+    this.saveRichTextSelection(field);
     this.syncRichTextInput(field);
     this.updateTextCharacterCount(field);
   },
