@@ -450,7 +450,7 @@
         }
 
         function getAllowedIntentTypes() {
-            return ['0', '5', '4', '1', '2'];
+            return ['0', '5', '4', '1', '2', '3', '6'];
         }
 
         function normalizeSelectedInfoTypes(types = []) {
@@ -574,7 +574,7 @@
                 if (state.selectedTagLabels.length) params.set('tag_names', state.selectedTagLabels.join('|'));
             }
             if (state.selectedTagLinkTypes.length !== 3) params.set('tag_link_types', state.selectedTagLinkTypes.join(','));
-            if (state.selectedInfoTypes.length !== 5) params.set('info_types', state.selectedInfoTypes.join(','));
+            if (state.selectedInfoTypes.length !== getAllowedIntentTypes().length) params.set('info_types', state.selectedInfoTypes.join(','));
             if (state.selectedFrequenciaInformacionalIds.length) params.set('frequencia_informacional_ids', state.selectedFrequenciaInformacionalIds.join(','));
             return `/card_filters?${params.toString()}`;
         }
@@ -834,7 +834,9 @@
                 { type: '5', label: 'Tag Expansion' },
                 { type: '4', label: 'Tcoins' },
                 { type: '1', label: 'Tradução' },
-                { type: '2', label: 'Pergunta' }
+                { type: '2', label: 'Pergunta' },
+                { type: '3', label: 'Frase de Exemplo' },
+                { type: '6', label: 'Pílulas' }
             ];
             const pinToggleConfig = getSelectedPinToggleConfig();
             const deleteFilteredCardsButton = isCardListMode() && state.totalCards > 0 ? `
@@ -905,7 +907,7 @@
                         </button>
                     </div>
                     ${state.rightIntentFiltersExpanded ? `<div class="mt-2 space-y-2 border-l border-cyan-500/20 pl-3">${intentOptions.map((option) => {
-                        const isActive = option.type === 'all' ? state.selectedInfoTypes.length === 5 : state.selectedInfoTypes.includes(option.type);
+                        const isActive = option.type === 'all' ? state.selectedInfoTypes.length === getAllowedIntentTypes().length : state.selectedInfoTypes.includes(option.type);
                         return `<button type="button" data-info-type="${option.type}" aria-pressed="${isActive ? 'true' : 'false'}" class="w-full rounded-xl border p-3 text-left text-sm font-semibold transition ${isActive ? 'border-violet-400/80 bg-violet-950/40 text-violet-100' : 'border-cyan-500/20 bg-cyan-950/20 text-slate-100 hover:border-cyan-400/60 hover:bg-cyan-950/40 hover:text-cyan-100'}">${escapeHtml(option.label)}</button>`;
                     }).join('')}${cardOptions.map((option) => {
                         const isActive = !!state[option.flag];
