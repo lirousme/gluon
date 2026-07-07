@@ -29,7 +29,28 @@
       font-size: 0.6875rem !important;
       line-height: 0.875rem;
     }
-  </style>
+
+    .rich-text-toolbar button,
+    .rich-text-toolbar select,
+    .rich-text-toolbar input {
+      font-size: 14px !important;
+    }
+
+    .rich-text-editor:empty::before {
+      color: #64748b;
+      content: attr(data-placeholder);
+      pointer-events: none;
+    }
+
+    .rich-text-editor ul,
+    .rich-text-editor ol {
+      margin-left: 1.25rem;
+      padding-left: 1rem;
+    }
+
+    .rich-text-editor ul { list-style: disc; }
+    .rich-text-editor ol { list-style: decimal; }
+    </style>
 </head>
 <body class="min-h-[100dvh] bg-gluon-dark text-slate-100 selection:bg-blue-600/60">
   <aside class="fixed left-4 top-6 z-30 hidden w-48 rounded-2xl border border-slate-700 bg-gluon-secondary/95 p-4 shadow-2xl shadow-slate-950/40 backdrop-blur lg:block" aria-label="Menu lateral esquerdo">
@@ -106,7 +127,24 @@
       </div>
 
       <section id="singleFrontTabContent" class="space-y-3">
-        <textarea id="singleFront" rows="4" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white resize-none" placeholder="Frente do flashcard"></textarea>
+        <textarea id="singleFront" class="hidden" aria-hidden="true"></textarea>
+        <div class="rich-text-wrapper rounded-lg border border-slate-600 bg-slate-900">
+          <div class="rich-text-toolbar flex flex-wrap items-center gap-1 border-b border-slate-700 p-2" data-editor-toolbar="front" aria-label="Ferramentas de formatação da frente">
+            <button type="button" data-command="bold" class="rounded border border-slate-600 px-2 py-1 font-bold text-slate-100 hover:bg-slate-800" title="Negrito">B</button>
+            <button type="button" data-command="italic" class="rounded border border-slate-600 px-2 py-1 italic text-slate-100 hover:bg-slate-800" title="Itálico">I</button>
+            <button type="button" data-command="underline" class="rounded border border-slate-600 px-2 py-1 underline text-slate-100 hover:bg-slate-800" title="Sublinhado">U</button>
+            <button type="button" data-command="strikeThrough" class="rounded border border-slate-600 px-2 py-1 line-through text-slate-100 hover:bg-slate-800" title="Tachado">S</button>
+            <button type="button" data-command="insertUnorderedList" class="rounded border border-slate-600 px-2 py-1 text-slate-100 hover:bg-slate-800" title="Lista"><i class="fa-solid fa-list-ul"></i></button>
+            <button type="button" data-command="insertOrderedList" class="rounded border border-slate-600 px-2 py-1 text-slate-100 hover:bg-slate-800" title="Lista numerada"><i class="fa-solid fa-list-ol"></i></button>
+            <select data-command="fontSize" class="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-slate-100" title="Tamanho do texto">
+              <option value="3">Normal</option><option value="2">Pequeno</option><option value="4">Médio</option><option value="5">Grande</option><option value="6">Muito grande</option>
+            </select>
+            <input type="color" data-command="foreColor" value="#ffffff" class="h-8 w-9 rounded border border-slate-600 bg-slate-950 p-1" title="Cor do texto">
+            <input type="color" data-command="hiliteColor" value="#1e40af" class="h-8 w-9 rounded border border-slate-600 bg-slate-950 p-1" title="Realce do texto">
+            <button type="button" data-command="removeFormat" class="rounded border border-slate-600 px-2 py-1 text-slate-100 hover:bg-slate-800" title="Limpar formatação"><i class="fa-solid fa-eraser"></i></button>
+          </div>
+          <div id="singleFrontEditor" contenteditable="true" data-text-field="front" data-placeholder="Frente do flashcard" class="rich-text-editor min-h-[132px] w-full overflow-auto rounded-b-lg px-4 py-3 text-white outline-none focus:ring-1 focus:ring-gluon-primary"></div>
+        </div>
         <p id="singleFrontCharCount" class="text-right text-[0.6875rem] leading-4 text-slate-500" aria-live="polite">0 caracteres</p>
         <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-3">
           <label for="dynamicTextType" class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-300">Texto dinâmico</label>
@@ -122,7 +160,24 @@
       </section>
 
       <section id="singleBackTabContent" class="hidden">
-        <textarea id="singleBack" rows="4" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white resize-none" placeholder="Verso do flashcard"></textarea>
+        <textarea id="singleBack" class="hidden" aria-hidden="true"></textarea>
+        <div class="rich-text-wrapper rounded-lg border border-slate-600 bg-slate-900">
+          <div class="rich-text-toolbar flex flex-wrap items-center gap-1 border-b border-slate-700 p-2" data-editor-toolbar="back" aria-label="Ferramentas de formatação do verso">
+            <button type="button" data-command="bold" class="rounded border border-slate-600 px-2 py-1 font-bold text-slate-100 hover:bg-slate-800" title="Negrito">B</button>
+            <button type="button" data-command="italic" class="rounded border border-slate-600 px-2 py-1 italic text-slate-100 hover:bg-slate-800" title="Itálico">I</button>
+            <button type="button" data-command="underline" class="rounded border border-slate-600 px-2 py-1 underline text-slate-100 hover:bg-slate-800" title="Sublinhado">U</button>
+            <button type="button" data-command="strikeThrough" class="rounded border border-slate-600 px-2 py-1 line-through text-slate-100 hover:bg-slate-800" title="Tachado">S</button>
+            <button type="button" data-command="insertUnorderedList" class="rounded border border-slate-600 px-2 py-1 text-slate-100 hover:bg-slate-800" title="Lista"><i class="fa-solid fa-list-ul"></i></button>
+            <button type="button" data-command="insertOrderedList" class="rounded border border-slate-600 px-2 py-1 text-slate-100 hover:bg-slate-800" title="Lista numerada"><i class="fa-solid fa-list-ol"></i></button>
+            <select data-command="fontSize" class="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-slate-100" title="Tamanho do texto">
+              <option value="3">Normal</option><option value="2">Pequeno</option><option value="4">Médio</option><option value="5">Grande</option><option value="6">Muito grande</option>
+            </select>
+            <input type="color" data-command="foreColor" value="#ffffff" class="h-8 w-9 rounded border border-slate-600 bg-slate-950 p-1" title="Cor do texto">
+            <input type="color" data-command="hiliteColor" value="#1e40af" class="h-8 w-9 rounded border border-slate-600 bg-slate-950 p-1" title="Realce do texto">
+            <button type="button" data-command="removeFormat" class="rounded border border-slate-600 px-2 py-1 text-slate-100 hover:bg-slate-800" title="Limpar formatação"><i class="fa-solid fa-eraser"></i></button>
+          </div>
+          <div id="singleBackEditor" contenteditable="true" data-text-field="back" data-placeholder="Verso do flashcard" class="rich-text-editor min-h-[132px] w-full overflow-auto rounded-b-lg px-4 py-3 text-white outline-none focus:ring-1 focus:ring-gluon-primary"></div>
+        </div>
         <p id="singleBackCharCount" class="mt-1 text-right text-[0.6875rem] leading-4 text-slate-500" aria-live="polite">0 caracteres</p>
       </section>
 
@@ -407,20 +462,115 @@ const app = {
     const textarea = field === 'front' ? document.getElementById('singleFront') : document.getElementById('singleBack');
     const counter = field === 'front' ? document.getElementById('singleFrontCharCount') : document.getElementById('singleBackCharCount');
     if (!textarea || !counter) return;
-    counter.textContent = this.getCharacterCountLabel(textarea.value.length);
+    counter.textContent = this.getCharacterCountLabel(this.getTextFieldPlainText(field).length);
   },
   updateAllTextCharacterCounts() {
     this.updateTextCharacterCount('front');
     this.updateTextCharacterCount('back');
   },
-  setupTextCharacterCounters() {
-    [
-      { el: document.getElementById('singleFront'), field: 'front' },
-      { el: document.getElementById('singleBack'), field: 'back' }
-    ].forEach(({ el, field }) => {
-      if (!el) return;
-      el.addEventListener('input', () => this.updateTextCharacterCount(field));
+
+  getTextEditor(field) {
+    return document.getElementById(field === 'front' ? 'singleFrontEditor' : 'singleBackEditor');
+  },
+  getTextInput(field) {
+    return document.getElementById(field === 'front' ? 'singleFront' : 'singleBack');
+  },
+  getTextFieldPlainText(field) {
+    return (this.getTextEditor(field)?.innerText || this.getTextInput(field)?.value || '').replace(/\u00a0/g, ' ');
+  },
+  getTextFieldValue(field) {
+    const editor = this.getTextEditor(field);
+    if (!editor) return this.getTextInput(field)?.value || '';
+    this.syncRichTextInput(field);
+    return this.getTextInput(field)?.value || '';
+  },
+  sanitizeRichTextHTML(html = '') {
+    const template = document.createElement('template');
+    template.innerHTML = String(html || '');
+    const allowedTags = new Set(['B','STRONG','I','EM','U','S','STRIKE','BR','DIV','P','SPAN','UL','OL','LI','FONT']);
+    const allowedStyles = new Set(['color','background-color','font-size','text-align']);
+    const walk = (node) => {
+      [...node.childNodes].forEach((child) => {
+        if (child.nodeType === Node.COMMENT_NODE) return child.remove();
+        if (child.nodeType !== Node.ELEMENT_NODE) return;
+        if (!allowedTags.has(child.tagName)) {
+          child.replaceWith(...child.childNodes);
+          return;
+        }
+        [...child.attributes].forEach((attr) => {
+          const name = attr.name.toLowerCase();
+          if (name === 'style') {
+            const safeStyle = [...child.style]
+              .filter(prop => allowedStyles.has(prop))
+              .map(prop => `${prop}: ${child.style.getPropertyValue(prop)}`)
+              .join('; ');
+            if (safeStyle) child.setAttribute('style', safeStyle); else child.removeAttribute('style');
+          } else if (!(child.tagName === 'FONT' && ['color','size'].includes(name))) {
+            child.removeAttribute(attr.name);
+          }
+        });
+        walk(child);
+      });
+    };
+    walk(template.content);
+    return template.innerHTML.trim();
+  },
+  setTextFieldValue(field, value = '') {
+    const input = this.getTextInput(field);
+    const editor = this.getTextEditor(field);
+    const safeValue = this.sanitizeRichTextHTML(value);
+    if (input) input.value = safeValue;
+    if (editor) editor.innerHTML = safeValue;
+    this.updateTextCharacterCount(field);
+  },
+  syncRichTextInput(field) {
+    const input = this.getTextInput(field);
+    const editor = this.getTextEditor(field);
+    if (!input || !editor) return;
+    input.value = this.sanitizeRichTextHTML(editor.innerHTML);
+  },
+  setupRichTextEditors() {
+    ['front', 'back'].forEach((field) => {
+      const editor = this.getTextEditor(field);
+      if (!editor) return;
+      editor.addEventListener('input', () => {
+        this.syncRichTextInput(field);
+        this.updateTextCharacterCount(field);
+      });
+      editor.addEventListener('paste', (event) => {
+        event.preventDefault();
+        const html = event.clipboardData?.getData('text/html');
+        const text = event.clipboardData?.getData('text/plain') || '';
+        document.execCommand('insertHTML', false, html ? this.sanitizeRichTextHTML(html) : this.escapeHTML(text).replace(/\n/g, '<br>'));
+        this.syncRichTextInput(field);
+        this.updateTextCharacterCount(field);
+      });
     });
+    document.querySelectorAll('[data-editor-toolbar]').forEach((toolbar) => {
+      const field = toolbar.dataset.editorToolbar;
+      toolbar.addEventListener('mousedown', (event) => event.preventDefault());
+      toolbar.addEventListener('click', (event) => {
+        const control = event.target.closest('[data-command]');
+        if (!control || control.tagName === 'SELECT' || control.type === 'color') return;
+        this.applyRichTextCommand(field, control.dataset.command);
+      });
+      toolbar.addEventListener('change', (event) => {
+        const control = event.target.closest('[data-command]');
+        if (!control) return;
+        this.applyRichTextCommand(field, control.dataset.command, control.value);
+      });
+    });
+  },
+  applyRichTextCommand(field, command, value = null) {
+    const editor = this.getTextEditor(field);
+    if (!editor || editor.getAttribute('contenteditable') !== 'true') return;
+    editor.focus();
+    document.execCommand(command, false, value);
+    this.syncRichTextInput(field);
+    this.updateTextCharacterCount(field);
+  },
+  setupTextCharacterCounters() {
+    this.setupRichTextEditors();
     this.updateAllTextCharacterCounts();
   },
   normalizeInfoType(value) {
@@ -461,8 +611,14 @@ const app = {
     const tagExpansion = this.isTagExpansionType();
     if (window.singleFront) {
       singleFront.disabled = tagExpansion;
-      singleFront.placeholder = tagExpansion ? 'A frente do Tag Expansion é montada pelas tags Subject na tela de estudo' : 'Frente do flashcard';
-      if (tagExpansion) singleFront.value = '';
+      const frontEditor = this.getTextEditor('front');
+      if (frontEditor) {
+        frontEditor.setAttribute('contenteditable', tagExpansion ? 'false' : 'true');
+        frontEditor.dataset.placeholder = tagExpansion ? 'A frente do Tag Expansion é montada pelas tags Subject na tela de estudo' : 'Frente do flashcard';
+        frontEditor.classList.toggle('opacity-60', tagExpansion);
+      }
+      document.querySelector('[data-editor-toolbar="front"]')?.classList.toggle('hidden', tagExpansion);
+      if (tagExpansion) this.setTextFieldValue('front', '');
       this.updateTextCharacterCount('front');
     }
     if (['front', 'frontImage'].includes(this.activeTab)) this.setActiveTab('back');
@@ -1095,7 +1251,7 @@ const app = {
     }, 200);
   },
   async generateFrontSentenceTagsWithGemini() {
-    const sentence = singleFront.value.trim();
+    const sentence = this.getTextFieldPlainText('front').trim();
     if (!sentence) return this.setStatus('Preencha a frente do card com uma frase para gerar as tags com Gemini.', 'error');
 
     const originalHtml = btnGenerateFrontTagsGemini.innerHTML;
@@ -1106,7 +1262,7 @@ const app = {
       const res = await this.api('generate_front_sentence_tags_gemini', { sentence });
       if (!res || !res.candidates) throw new Error('A API não retornou tags válidas.');
       if (res.english_sentence && String(res.english_sentence).trim()) {
-        singleFront.value = String(res.english_sentence).trim();
+        this.setTextFieldValue('front', String(res.english_sentence).trim());
         this.updateTextCharacterCount('front');
       }
       this.pendingFrontSentenceTagCandidates = res.candidates;
@@ -1141,7 +1297,7 @@ const app = {
     buttons.forEach(button => { button.disabled = true; });
     try {
       const res = await this.api('generate_front_sentence_tags_gemini', {
-        sentence: singleFront.value.trim(),
+        sentence: this.getTextFieldPlainText('front').trim(),
         create: true,
         proper_noun_owners: ownerChoices,
         candidates
@@ -1178,7 +1334,7 @@ const app = {
     });
   },
   async answerFrontQuestionWithGemini() {
-    const frontText = singleFront.value.trim();
+    const frontText = this.getTextFieldPlainText('front').trim();
 
     if (!frontText) return this.setStatus('Preencha a frente com uma pergunta para o Gemini responder.', 'error');
 
@@ -1190,7 +1346,7 @@ const app = {
       const res = await this.api('answer_question_gemini', { question: frontText, answer_language: 'en-US' });
       if (!res || !res.answer) throw new Error('A API não retornou uma resposta válida.');
 
-      singleBack.value = res.answer;
+      this.setTextFieldValue('back', res.answer);
       this.updateTextCharacterCount('back');
       this.setActiveTab('back');
       this.setStatus('Resposta do Gemini adicionada ao verso!', 'success');
@@ -1276,8 +1432,8 @@ const app = {
       }
       if (!res || !res.english || !res.pt_br || !Array.isArray(res.chunks)) throw new Error('A API não retornou frase e lexical chunks válidos.');
 
-      singleFront.value = res.english;
-      singleBack.value = res.pt_br;
+      this.setTextFieldValue('front', res.english);
+      this.setTextFieldValue('back', res.pt_br);
       this.updateAllTextCharacterCounts();
       const allChunks = Array.isArray(res.examples)
         ? res.examples.flatMap(example => Array.isArray(example.chunks) ? example.chunks : [])
@@ -1331,8 +1487,8 @@ const app = {
     }
   },
   async translateCardWithProvider({ action, button, loadingLabel, successLabel, frontSourceLanguage, backSourceLanguage, autoDetectOpposite = false, replaceSource = false }) {
-    const frontText = singleFront.value.trim();
-    const backText = singleBack.value.trim();
+    const frontText = this.getTextFieldPlainText('front').trim();
+    const backText = this.getTextFieldPlainText('back').trim();
     const activeTextField = this.activeTab === 'back' ? 'back' : this.activeTab === 'front' ? 'front' : '';
     const fieldToTranslate = replaceSource
       ? (activeTextField && (activeTextField === 'front' ? frontText : backText) ? activeTextField : (frontText && !backText ? 'front' : !frontText && backText ? 'back' : ''))
@@ -1361,7 +1517,7 @@ const app = {
       const res = await this.api(action, payload);
       if (!res || !res.translation) throw new Error('A API não retornou uma tradução válida.');
 
-      targetEl.value = res.translation;
+      this.setTextFieldValue(targetEl === singleFront ? 'front' : 'back', res.translation);
       this.updateTextCharacterCount(targetEl === singleFront ? 'front' : 'back');
       this.setActiveTab(targetTab);
       this.setStatus(successLabel, 'success');
@@ -1413,8 +1569,8 @@ const app = {
     this.currentCardPrivateDirectoryId = Number(card.private_directory_id || 0) || null;
     this.currentCardIsPublic = Number(card.is_public) === 1 || this.currentCardDirectoryId === this.publicDirectoryId;
     this.updatePublicToggleButton();
-    singleFront.value = card.front || '';
-    singleBack.value = String(card.back || '');
+    this.setTextFieldValue('front', card.front || '');
+    this.setTextFieldValue('back', String(card.back || ''));
     this.updateAllTextCharacterCounts();
     if (card.image_front) this.setBase64ImagePreview('front', card.image_front);
     if (card.image_back) this.setBase64ImagePreview('back', card.image_back);
@@ -1499,8 +1655,10 @@ const app = {
   },
   async save(e) {
     e.preventDefault();
-    const front = singleFront.value.trim();
-    const back = singleBack.value.trim();
+    const front = this.getTextFieldValue('front').trim();
+    const frontPlainText = this.getTextFieldPlainText('front').trim();
+    const back = this.getTextFieldValue('back').trim();
+    const backPlainText = this.getTextFieldPlainText('back').trim();
     const image_front = frontImageBase64.value;
     const image_back = backImageBase64.value;
     let subject_tag_ids = this.getSelectedTagIds('subject');
@@ -1512,8 +1670,8 @@ const app = {
     const generatedFront = isTagExpansion ? '' : front;
     if (isTagExpansion) {
       if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag Subject para o Tag Expansion.', 'error');
-      if (!back && !image_back) return this.setStatus('Preencha o verso do Tag Expansion com texto ou imagem.', 'error');
-    } else if (!front && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
+      if (!backPlainText && !image_back) return this.setStatus('Preencha o verso do Tag Expansion com texto ou imagem.', 'error');
+    } else if (!frontPlainText && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
     if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag na categoria Subject para salvar o card.', 'error');
     if (!id_frequencia_informacional) return this.setStatus('Selecione uma frequência informacional para salvar o card.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
