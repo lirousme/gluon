@@ -592,8 +592,7 @@ function syncInformationalFrequencyCardRelations(PDO $pdo, int $userId, int $car
 
     if ($frequencyId === 1) {
         $insertPairs($subjectTagIds, $objectTagIds, 24);
-        $insertPairs($subjectTagIds, $lexicalChunkTagIds, 24);
-        $insertPairs($lexicalChunkTagIds, $subjectTagIds, 24);
+        $insertPairs($objectTagIds, $subjectTagIds, 24);
         syncCardTagLinks($pdo, 'relation_links', $cardId, $lexicalChunkTagIds, $userId);
         return;
     }

@@ -721,8 +721,9 @@ const app = {
   informationalFrequencyTagPanelTitles: {
     1: {
       subject: 'Quem é (Ex.: Moranguinho, Max)',
-      object: 'O que é (Ex.: Diminutivo, Cachorro)',
-      lexicalChunk: 'Sujeito composto resultante (Ex.: Diminutivo de morango, Cachorro do João)'
+      object: 'Sujeito composto resultante (Ex.: Diminutivo de morango, Cachorro do João)',
+      lexicalChunk: 'Lexical chunks (Flexões)',
+      hideLexicalChunk: true
     },
     2: {
       subject: 'Ações compostas (Ex.: Fazer torta de morango)',
@@ -745,9 +746,11 @@ const app = {
     const subjectTitle = document.getElementById('SubjectTagsPanelTitle');
     const objectTitle = document.getElementById('ObjectTagsPanelTitle');
     const lexicalChunkTitle = document.getElementById('LexicalChunkTagsPanelTitle');
+    const lexicalChunkPanel = document.getElementById('LexicalChunkTagsPanel');
     if (subjectTitle) subjectTitle.textContent = titles.subject;
     if (objectTitle) objectTitle.textContent = titles.object;
     if (lexicalChunkTitle) lexicalChunkTitle.textContent = titles.lexicalChunk;
+    if (lexicalChunkPanel) lexicalChunkPanel.classList.toggle('hidden', Boolean(titles.hideLexicalChunk));
   },
   renderFrequenciasInformacionaisSelect(selectedId = null) {
     const select = document.getElementById('frequenciaInformacionalSelect');
