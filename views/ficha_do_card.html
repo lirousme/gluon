@@ -227,6 +227,16 @@
         <p class="text-xs text-slate-400">Todo card deve estar vinculado a uma frequência informacional.</p>
       </section>
 
+      <section id="RelacaoAcaoPanel" class="hidden pt-3 border-t border-slate-700 space-y-2">
+        <label for="relacaoAcaoSelect" class="block text-xs font-semibold uppercase tracking-wide text-amber-200">Relação da ação</label>
+        <select id="relacaoAcaoSelect" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white">
+          <option value="">Selecione a relação da ação</option>
+          <option value="confirmacao">Confirmação da ação</option>
+          <option value="negacao">Negação da ação</option>
+        </select>
+        <p class="text-xs text-slate-400">Obrigatório para frequência informacional do tipo 2.</p>
+      </section>
+
       <div id="questionAnswerPanel" class="hidden rounded-lg border border-purple-400/30 bg-purple-950/20 p-3">
         <div class="flex items-center justify-between gap-3">
           <div>
@@ -945,6 +955,18 @@ const app = {
     if (objectTitle) objectTitle.textContent = titles.object;
     if (lexicalChunkTitle) lexicalChunkTitle.textContent = titles.lexicalChunk;
     if (lexicalChunkPanel) lexicalChunkPanel.classList.toggle('hidden', Boolean(titles.hideLexicalChunk));
+    this.updateRelacaoAcaoPanel();
+  },
+  updateRelacaoAcaoPanel() {
+    const selectedId = Number(document.getElementById('frequenciaInformacionalSelect')?.value || 0);
+    const panel = document.getElementById('RelacaoAcaoPanel');
+    const select = document.getElementById('relacaoAcaoSelect');
+    const shouldShow = selectedId === 2;
+    if (panel) panel.classList.toggle('hidden', !shouldShow);
+    if (select) {
+      select.required = shouldShow;
+      if (!shouldShow) select.value = '';
+    }
   },
   renderFrequenciasInformacionaisSelect(selectedId = null) {
     const select = document.getElementById('frequenciaInformacionalSelect');
@@ -1573,6 +1595,7 @@ const app = {
     this.setQuestionAnswer(card.question_answer === 0 ? 0 : 1);
     dynamicTextType.value = ['none', 'subject', 'object', 'verb'].includes(card.dynamic_text_type) ? card.dynamic_text_type : 'none';
     this.renderFrequenciasInformacionaisSelect(card.id_frequencia_informacional || '');
+    if (relacaoAcaoSelect) relacaoAcaoSelect.value = ['confirmacao', 'negacao'].includes(card.relacao_acao) ? card.relacao_acao : '';
     const subjectTags = Array.isArray(card.subject_tags) ? card.subject_tags.map(t => Number(t.id)).filter(Boolean) : [];
     const objectTags = Array.isArray(card.object_tags) ? card.object_tags.map(t => Number(t.id)).filter(Boolean) : [];
     const lexicalChunkTags = Array.isArray(card.lexical_chunks_tags) ? card.lexical_chunks_tags.map(t => Number(t.id)).filter(Boolean) : [];
@@ -1696,6 +1719,10 @@ const app = {
     } else if (!frontPlainText && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
     if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag na categoria Subject para salvar o card.', 'error');
     if (!id_frequencia_informacional) return this.setStatus('Selecione uma frequência informacional para salvar o card.', 'error');
+    const relacao_acao = id_frequencia_informacional === 2 ? String(relacaoAcaoSelect?.value || '') : null;
+    if (id_frequencia_informacional === 2 && !['confirmacao', 'negacao'].includes(relacao_acao)) {
+      return this.setStatus('Selecione se a relação é Negação da ação ou Confirmação da ação.', 'error');
+    }
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
@@ -1709,7 +1736,7 @@ const app = {
       }
       const return_to = this.getReturnTarget();
       const question_answer = this.infoType === 2 ? this.questionAnswer : null;
-      const payload = { deck_id: this.deckId, front: generatedFront, back, image_front: isTagExpansion ? '' : image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, id_frequencia_informacional, info_type: this.infoType, question_answer, dynamic_text_type: isTagExpansion ? 'none' : dynamicTextType.value, return_to };
+      const payload = { deck_id: this.deckId, front: generatedFront, back, image_front: isTagExpansion ? '' : image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, id_frequencia_informacional, relacao_acao, info_type: this.infoType, question_answer, dynamic_text_type: isTagExpansion ? 'none' : dynamicTextType.value, return_to };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
@@ -1733,6 +1760,7 @@ btnInfoType.onclick = () => app.cycleInfoType();
 btnQuestionAnswer.onclick = () => app.toggleQuestionAnswer();
 btnDeleteCard.onclick = () => app.deleteCard();
 frequenciaInformacionalSelect.onchange = () => app.updateInformationalFrequencyTagPanelTitles();
+relacaoAcaoSelect.onchange = () => app.updateRelacaoAcaoPanel();
 subjectTagSearchInput.oninput = (e) => app.handleTagSearch('subject', e.target.value);
   objectTagSearchInput.oninput = (e) => app.handleTagSearch('object', e.target.value);
   lexicalChunkTagSearchInput.oninput = (e) => app.handleTagSearch('lexicalChunk', e.target.value);

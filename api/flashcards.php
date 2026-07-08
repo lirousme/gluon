@@ -573,9 +573,35 @@ function insertInformationalFrequencyRelation(PDO $pdo, int $userId, int $cardId
     $stmt->execute([$userId, $relationType, $childTagId, $motherTagId, $userId, $userId]);
 }
 
-function syncInformationalFrequencyCardRelations(PDO $pdo, int $userId, int $cardId, int $frequencyId, array $subjectTagIds, array $objectTagIds, array $lexicalChunkTagIds): void
+function sanitizeRelacaoAcao(?string $value, int $frequencyId): ?string
 {
-    $relationTypes = [24, 25, 28];
+    if ($frequencyId !== 2) return null;
+    $value = trim((string)$value);
+    if (!in_array($value, ['confirmacao', 'negacao'], true)) {
+        die(json_encode(['status' => 'error', 'message' => 'Selecione se a relação é Negação da ação ou Confirmação da ação.']));
+    }
+    return $value;
+}
+
+function relacaoAcaoToRelationType(?string $relacaoAcao): int
+{
+    return $relacaoAcao === 'negacao' ? 26 : 25;
+}
+
+function getCardRelacaoAcao(PDO $pdo, int $userId, int $cardId): ?string
+{
+    if (!relacoesTaguineasHasIdCardColumn($pdo)) return null;
+    $stmt = $pdo->prepare("SELECT tipo_de_relacao FROM relacoes_taguineas WHERE id_user = ? AND id_card = ? AND tipo_de_relacao IN (25, 26) ORDER BY tipo_de_relacao DESC LIMIT 1");
+    $stmt->execute([$userId, $cardId]);
+    $relationType = (int)($stmt->fetchColumn() ?: 0);
+    if ($relationType === 26) return 'negacao';
+    if ($relationType === 25) return 'confirmacao';
+    return null;
+}
+
+function syncInformationalFrequencyCardRelations(PDO $pdo, int $userId, int $cardId, int $frequencyId, array $subjectTagIds, array $objectTagIds, array $lexicalChunkTagIds, ?string $relacaoAcao = null): void
+{
+    $relationTypes = [24, 25, 26, 28];
     if (relacoesTaguineasHasIdCardColumn($pdo)) {
         $placeholders = implode(',', array_fill(0, count($relationTypes), '?'));
         $pdo->prepare("DELETE FROM relacoes_taguineas WHERE id_user = ? AND id_card = ? AND tipo_de_relacao IN ({$placeholders})")
@@ -600,7 +626,7 @@ function syncInformationalFrequencyCardRelations(PDO $pdo, int $userId, int $car
     syncCardTagLinks($pdo, 'relation_links', $cardId, [], $userId);
 
     if ($frequencyId === 2 && !empty($objectTagIds)) {
-        $insertPairs($objectTagIds, $subjectTagIds, 25);
+        $insertPairs($objectTagIds, $subjectTagIds, relacaoAcaoToRelationType($relacaoAcao));
     } elseif ($frequencyId === 3) {
         $insertPairs($subjectTagIds, $objectTagIds, 28);
     }
@@ -5600,6 +5626,7 @@ elseif ($action === 'add_single') {
     $dynamic_text_type = sanitizeDynamicTextType($input['dynamic_text_type'] ?? 'none');
     $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
     $id_frequencia_informacional = validateFrequenciaInformacionalId($pdo, $user_id, $input['id_frequencia_informacional'] ?? null);
+    $relacao_acao = sanitizeRelacaoAcao($input['relacao_acao'] ?? null, $id_frequencia_informacional);
     if ($id_frequencia_informacional === 1) {
         $lexical_chunk_tag_ids = [];
     }
@@ -5683,7 +5710,7 @@ elseif ($action === 'add_single') {
         syncCardTagLinks($pdo, 'subjects_links', $new_card_id, $cardSubjectTagIds, $user_id);
         syncCardTagLinks($pdo, 'objects_links', $new_card_id, $object_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'lexical_chunks_links', $new_card_id, $lexical_chunk_tag_ids, $user_id);
-        syncInformationalFrequencyCardRelations($pdo, $user_id, $new_card_id, $id_frequencia_informacional, $cardSubjectTagIds, $object_tag_ids, $lexical_chunk_tag_ids);
+        syncInformationalFrequencyCardRelations($pdo, $user_id, $new_card_id, $id_frequencia_informacional, $cardSubjectTagIds, $object_tag_ids, $lexical_chunk_tag_ids, $relacao_acao);
     }
 
     $createdCount = count($created_card_ids);
@@ -5746,7 +5773,8 @@ elseif ($action === 'get_card_for_edit') {
             'has_audio_back' => (int)$card['has_audio_back'],
             'subject_tags' => $subjectTagsByCard[$card_id] ?? [],
             'object_tags' => $objectTagsByCard[$card_id] ?? [],
-            'lexical_chunks_tags' => $lexicalChunksTagsByCard[$card_id] ?? []
+            'lexical_chunks_tags' => $lexicalChunksTagsByCard[$card_id] ?? [],
+            'relacao_acao' => getCardRelacaoAcao($pdo, $user_id, $card_id)
         ]
     ]);
 }
@@ -5798,6 +5826,7 @@ elseif ($action === 'update_card') {
     $dynamic_text_type = sanitizeDynamicTextType($input['dynamic_text_type'] ?? 'none');
     $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
     $id_frequencia_informacional = validateFrequenciaInformacionalId($pdo, $user_id, $input['id_frequencia_informacional'] ?? null);
+    $relacao_acao = sanitizeRelacaoAcao($input['relacao_acao'] ?? null, $id_frequencia_informacional);
     if ($id_frequencia_informacional === 1) {
         $lexical_chunk_tag_ids = [];
     }
@@ -5852,7 +5881,7 @@ elseif ($action === 'update_card') {
         syncCardTagLinks($pdo, 'tipo_frasal_links', $card_id, [], $user_id);
         syncCardTagLinks($pdo, 'tense_links', $card_id, [], $user_id);
         syncCardTagLinks($pdo, 'lexical_chunks_links', $card_id, $lexical_chunk_tag_ids, $user_id);
-        syncInformationalFrequencyCardRelations($pdo, $user_id, $card_id, $id_frequencia_informacional, $subject_tag_ids, $object_tag_ids, $lexical_chunk_tag_ids);
+        syncInformationalFrequencyCardRelations($pdo, $user_id, $card_id, $id_frequencia_informacional, $subject_tag_ids, $object_tag_ids, $lexical_chunk_tag_ids, $relacao_acao);
         syncCardTagLinks($pdo, 'words_links', $card_id, [], $user_id);
         syncCardIdiomaLinks($pdo, $card_id, [], [], $user_id);
         echo json_encode(['status' => 'success', 'message' => 'Card atualizado.']);
