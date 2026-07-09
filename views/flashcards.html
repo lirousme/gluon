@@ -785,6 +785,14 @@
 
 
     <!-- Modal: Adicionar/Editar Card Unitário -->
+
+    <div id="audioLanguageModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-[75] opacity-0 transition-opacity duration-300 px-4">
+        <div id="audioLanguageModalContent" class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-sm p-5 transform scale-95 transition-transform duration-300">
+            <div class="flex items-center justify-between mb-4"><h3 class="text-lg font-bold text-white">Gerar áudio</h3><button type="button" onclick="flashcardApp.closeAudioLanguageModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button></div>
+            <p class="text-sm text-slate-300 mb-3">Escolha o idioma do texto para gerar o áudio deste lado do card.</p>
+            <div id="audioLanguageOptions" class="space-y-2"></div>
+        </div>
+    </div>
     <div id="singleModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
         <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg p-0 transform scale-95 transition-transform duration-300 flex flex-col max-h-[95vh]" id="singleModalContent">
             
@@ -806,6 +814,13 @@
                 <div id="singleFrontTabContent" style="margin-top: -22px;">
                     <label class="block text-sm font-medium text-slate-300 mb-2">Frente (Obrigatório texto ou imagem)</label>
                     <textarea id="singleFront" rows="2" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors resize-none"></textarea>
+                    <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input data-card-front-lang="en" type="text" placeholder="Frente em Inglês" class="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 px-3 text-sm text-white">
+                        <input data-card-front-lang="pt_br" type="text" placeholder="Frente em Português" class="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 px-3 text-sm text-white">
+                        <input data-card-front-lang="es" type="text" placeholder="Frente em Espanhol" class="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 px-3 text-sm text-white">
+                        <input data-card-front-lang="fr" type="text" placeholder="Frente em Francês" class="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 px-3 text-sm text-white">
+                        <input data-card-front-lang="zh" type="text" placeholder="Frente em Mandarim" class="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 px-3 text-sm text-white sm:col-span-2">
+                    </div>
                     
                     <div class="mt-3 bg-slate-800/50 p-3 rounded-lg border border-slate-700">
                         <label class="block text-xs font-medium text-slate-400 mb-2"><i class="fa-regular fa-image"></i> Imagem da Frente (Opcional, Máx: 4MB)</label>
@@ -819,6 +834,13 @@
                 <div id="singleBackTabContent" class="pt-3 border-t border-slate-700 hidden">
                     <label class="block text-sm font-medium text-blue-300 mb-2">Verso (Opcional)</label>
                     <textarea id="singleBack" rows="2" class="w-full bg-slate-900 border border-blue-500/50 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors resize-none"></textarea>
+                    <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input data-card-back-lang="en" type="text" placeholder="Verso em Inglês" class="w-full bg-slate-950 border border-blue-900/50 rounded-lg py-2 px-3 text-sm text-white">
+                        <input data-card-back-lang="pt_br" type="text" placeholder="Verso em Português" class="w-full bg-slate-950 border border-blue-900/50 rounded-lg py-2 px-3 text-sm text-white">
+                        <input data-card-back-lang="es" type="text" placeholder="Verso em Espanhol" class="w-full bg-slate-950 border border-blue-900/50 rounded-lg py-2 px-3 text-sm text-white">
+                        <input data-card-back-lang="fr" type="text" placeholder="Verso em Francês" class="w-full bg-slate-950 border border-blue-900/50 rounded-lg py-2 px-3 text-sm text-white">
+                        <input data-card-back-lang="zh" type="text" placeholder="Verso em Mandarim" class="w-full bg-slate-950 border border-blue-900/50 rounded-lg py-2 px-3 text-sm text-white sm:col-span-2">
+                    </div>
                     
                     <div class="mt-3 bg-blue-900/10 p-3 rounded-lg border border-blue-900/50">
                         <label class="block text-xs font-medium text-blue-400 mb-2"><i class="fa-regular fa-image"></i> Imagem do Verso (Opcional, Máx: 4MB)</label>
@@ -957,6 +979,24 @@
         }
 
         
+
+function collectCardTranslationPayload(root = document) {
+  const collect = (selector, attr) => Array.from(root.querySelectorAll(selector)).reduce((acc, el) => {
+    const lang = el.getAttribute(attr);
+    const value = (el.value || '').trim();
+    if (lang && value) acc[lang] = value;
+    return acc;
+  }, {});
+  return { front_translations: collect('[data-card-front-lang]', 'data-card-front-lang'), back_translations: collect('[data-card-back-lang]', 'data-card-back-lang') };
+}
+
+function fillCardTranslationInputs(root, side, translations = {}) {
+  root.querySelectorAll(`[data-card-${side}-lang]`).forEach((el) => {
+    const lang = el.getAttribute(`data-card-${side}-lang`);
+    el.value = translations && translations[lang] ? translations[lang] : '';
+  });
+}
+
 function collectTagTranslationPayload(root = document) {
   const read = (selector) => Array.from(root.querySelectorAll(selector)).reduce((acc, el) => {
     const lang = el.getAttribute(selector.includes('name') ? 'data-tag-name-lang' : selector.includes('description') ? 'data-tag-description-lang' : 'data-tag-symbol-lang');
@@ -2211,7 +2251,40 @@ const flashcardApp = {
                 if (!card) return;
                 const side = this.getCurrentAudioSide(card);
                 if (!side) return;
-                this.generateAudio(card.id, side);
+                this.openAudioLanguageModal(card.id, side);
+            },
+
+            getCardTextLanguageOptions(card, side) {
+                const labels = { en: 'Inglês', pt_br: 'Português', es: 'Espanhol', fr: 'Francês', zh: 'Mandarim' };
+                const translations = side === 'front' ? (card.front_translations || {}) : (card.back_translations || {});
+                const fallback = side === 'front' ? card.front : card.back;
+                const options = Object.keys(labels).filter((lang) => translations[lang] && String(translations[lang]).trim() !== '').map((lang) => ({ lang, label: labels[lang], text: translations[lang] }));
+                const defaultLang = side === 'front' ? 'pt_br' : 'en';
+                if (fallback && String(fallback).trim() !== '' && !options.some((item) => item.lang === defaultLang)) options.unshift({ lang: defaultLang, label: labels[defaultLang], text: fallback });
+                return options;
+            },
+
+            openAudioLanguageModal(cardId, side) {
+                const card = this.cards.find((item) => Number(item.id) === Number(cardId));
+                const options = this.getCardTextLanguageOptions(card, side);
+                if (options.length <= 1) {
+                    this.generateAudio(cardId, side, options[0]?.lang || '');
+                    return;
+                }
+                const container = document.getElementById('audioLanguageOptions');
+                container.innerHTML = options.map((option) => `<button type="button" onclick="flashcardApp.closeAudioLanguageModal(); flashcardApp.generateAudio(${Number(cardId)}, '${side}', '${option.lang}')" class="w-full text-left rounded-lg border border-slate-600 bg-slate-900 hover:bg-slate-800 px-3 py-2 text-sm text-white"><span class="font-semibold">${option.label}</span><span class="block text-xs text-slate-400 truncate">${this.escapeHTML(option.text)}</span></button>`).join('');
+                const modal = document.getElementById('audioLanguageModal');
+                const content = document.getElementById('audioLanguageModalContent');
+                modal.classList.remove('hidden'); modal.classList.add('flex');
+                setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); }, 20);
+            },
+
+            closeAudioLanguageModal() {
+                const modal = document.getElementById('audioLanguageModal');
+                const content = document.getElementById('audioLanguageModalContent');
+                if (!modal) return;
+                modal.classList.add('opacity-0'); if (content) content.classList.add('scale-95');
+                setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 200);
             },
 
             flipCard(e) {
@@ -2408,6 +2481,8 @@ const flashcardApp = {
                 document.getElementById('editCardId').value = card.id;
                 document.getElementById('singleFront').value = card.front;
                 document.getElementById('singleBack').value = card.back;
+                fillCardTranslationInputs(document.getElementById('singleModal'), 'front', card.front_translations || {});
+                fillCardTranslationInputs(document.getElementById('singleModal'), 'back', card.back_translations || {});
                 document.getElementById('selectedTagIds').value = this.deckMode === 'grafo'
                     ? JSON.stringify((card.subject_tags || card.tags || []).map(tag => Number(tag.id)))
                     : '[]';
@@ -2602,7 +2677,7 @@ const flashcardApp = {
                 }
             },
 
-            async generateAudio(cardId, side) {
+            async generateAudio(cardId, side, language = '') {
                 const btn = document.getElementById(`btnGenAudio_${side}_${cardId}`) || document.querySelector('[data-current-audio-button="true"]');
                 if (!btn) return;
 
@@ -2612,7 +2687,7 @@ const flashcardApp = {
                 btn.setAttribute('aria-busy', 'true');
 
                 try {
-                    const res = await this.api('generate_audio', { card_id: cardId, side: side });
+                    const res = await this.api('generate_audio', { card_id: cardId, side: side, language });
 
                     if (!res) return;
 
@@ -3337,6 +3412,8 @@ const flashcardApp = {
                 document.getElementById('editCardId').value = '';
                 document.getElementById('singleFront').value = '';
                 document.getElementById('singleBack').value = '';
+                fillCardTranslationInputs(document.getElementById('singleModal'), 'front', {});
+                fillCardTranslationInputs(document.getElementById('singleModal'), 'back', {});
                 document.getElementById('selectedTagIds').value = (this.deckMode === 'grafo' && this.deckInitialTagId) ? JSON.stringify([this.deckInitialTagId]) : '[]';
                 this.tagSearchQuery = '';
                 const tagSearchInput = document.getElementById('cardTagSearchInput');
@@ -3554,6 +3631,7 @@ const flashcardApp = {
                     back: backVal,
                     image_front: imageFront,
                     image_back: imageBack,
+                    ...collectCardTranslationPayload(document.getElementById('singleModal')),
                     info_type: infoType,
                     tag_ids: [],
                     subject_tag_ids: tagIds
@@ -3572,7 +3650,8 @@ const flashcardApp = {
                                 front: frontVal,
                                 back: backVal,
                                 image_front: imageFront || null,
-                                image_back: imageBack || null
+                                image_back: imageBack || null,
+                                ...collectCardTranslationPayload(document.getElementById('singleModal'))
                             };
                             this.currentIndex = cardIndex;
                             this.renderCurrentCard();

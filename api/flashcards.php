@@ -40,6 +40,7 @@ if (!isset($_SESSION['user_id'])) {
 
 $pdo = Database::getConnection();
 ensureFlashcardTagsNumericMetadataSchema($pdo);
+ensureFlashcardI18nSchema($pdo);
 ensureFlashcardTagsCreatorSchema($pdo);
 ensureTagFamilyOrderSchema($pdo);
 ensureFlashcardsPublicToggleSchema($pdo);
@@ -505,6 +506,84 @@ function ensureFlashcardTagsNumericMetadataSchema(PDO $pdo): void
     }
 }
 
+
+
+function ensureFlashcardI18nSchema(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $cols = [
+            'front_translations_encrypted' => 'ALTER TABLE flashcards ADD COLUMN front_translations_encrypted LONGTEXT NULL AFTER back_encrypted',
+            'back_translations_encrypted' => 'ALTER TABLE flashcards ADD COLUMN back_translations_encrypted LONGTEXT NULL AFTER front_translations_encrypted',
+            'audio_front_translations_encrypted' => 'ALTER TABLE flashcards ADD COLUMN audio_front_translations_encrypted LONGTEXT NULL AFTER audio_back_encrypted',
+            'audio_back_translations_encrypted' => 'ALTER TABLE flashcards ADD COLUMN audio_back_translations_encrypted LONGTEXT NULL AFTER audio_front_translations_encrypted'
+        ];
+        foreach ($cols as $col => $sql) {
+            $exists = $pdo->query("SHOW COLUMNS FROM flashcards LIKE " . $pdo->quote($col))->fetch(PDO::FETCH_ASSOC);
+            if (!$exists) $pdo->exec($sql);
+        }
+    } catch (Throwable $e) {
+        error_log('[flashcards][flashcard_i18n_schema] ' . $e->getMessage());
+    }
+}
+
+function normalizeFlashcardTranslationMap($value): array
+{
+    if (is_string($value)) {
+        $decoded = json_decode($value, true);
+        $value = is_array($decoded) ? $decoded : [];
+    }
+    if (!is_array($value)) return [];
+    $allowed = ['en', 'pt_br', 'es', 'fr', 'zh'];
+    $normalized = [];
+    foreach ($allowed as $lang) {
+        $text = trim((string)($value[$lang] ?? ''));
+        $text = preg_replace('/\s+/u', ' ', $text);
+        if ($text !== '') $normalized[$lang] = $text;
+    }
+    return $normalized;
+}
+
+function encryptFlashcardJsonMap(array $map): ?string
+{
+    return $map ? Security::encryptData(json_encode($map, JSON_UNESCAPED_UNICODE)) : null;
+}
+
+function decryptFlashcardJsonMap(?string $encrypted): array
+{
+    if (!$encrypted) return [];
+    $json = Security::decryptData($encrypted);
+    $decoded = json_decode((string)$json, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function encryptedFlashcardTranslationMap(?string $encrypted): array
+{
+    return normalizeFlashcardTranslationMap(decryptFlashcardJsonMap($encrypted));
+}
+
+function encryptFlashcardTranslationMap(array $translations): ?string
+{
+    return encryptFlashcardJsonMap(normalizeFlashcardTranslationMap($translations));
+}
+
+function buildFlashcardTranslationsFromInput(array $input, string $legacyFront, string $legacyBack): array
+{
+    $front = normalizeFlashcardTranslationMap($input['front_translations'] ?? []);
+    $back = normalizeFlashcardTranslationMap($input['back_translations'] ?? []);
+    if ($legacyFront !== '' && empty($front['pt_br'])) $front['pt_br'] = $legacyFront;
+    if ($legacyBack !== '' && empty($back['en'])) $back['en'] = $legacyBack;
+    return [$front, $back];
+}
+
+function cardHasAudioForLanguage(array $card, string $side, string $lang): int
+{
+    $legacy = $side === 'front' ? (int)($card['has_audio_front'] ?? 0) : (int)($card['has_audio_back'] ?? 0);
+    $audioMap = decryptFlashcardJsonMap($side === 'front' ? ($card['audio_front_translations_encrypted'] ?? null) : ($card['audio_back_translations_encrypted'] ?? null));
+    return ($legacy === 1 || !empty($audioMap[$lang])) ? 1 : 0;
+}
 
 function normalizeTagTranslationMap($value): array
 {
@@ -3866,7 +3945,7 @@ if ($action === 'fetch') {
         $placeholders = implode(',', array_fill(0, count($deck_ids), '?'));
 
         $stmtCards = $pdo->prepare("
-            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.question_answer, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, COALESCE(fs.score, 0) as score
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.front_translations_encrypted, f.back_translations_encrypted, f.audio_front_translations_encrypted, f.audio_back_translations_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.question_answer, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, COALESCE(fs.score, 0) as score
             FROM flashcards f
             JOIN directories d ON d.id = f.directory_id
             LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
@@ -3990,7 +4069,7 @@ if ($action === 'fetch') {
             // No modo grafo, busca cards de qualquer deck do usuário
             // e também dos decks pertencentes ao usuário de id 5.
             $stmt = $pdo->prepare("
-                SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.question_answer, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, COALESCE(fs.score, 0) as score
+                SELECT f.id, f.front_encrypted, f.back_encrypted, f.front_translations_encrypted, f.back_translations_encrypted, f.audio_front_translations_encrypted, f.audio_back_translations_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.question_answer, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, COALESCE(fs.score, 0) as score
                 FROM flashcards f
                 JOIN directories d ON d.id = f.directory_id
                 LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
@@ -4001,7 +4080,7 @@ if ($action === 'fetch') {
         } else {
             // No modo aleatório, mantém filtro por deck e cards vencidos.
             $stmt = $pdo->prepare("
-                SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.question_answer, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, COALESCE(fs.score, 0) as score
+                SELECT f.id, f.front_encrypted, f.back_encrypted, f.front_translations_encrypted, f.back_translations_encrypted, f.audio_front_translations_encrypted, f.audio_back_translations_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.question_answer, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, COALESCE(fs.score, 0) as score
                 FROM flashcards f
                 JOIN directories d ON d.id = f.directory_id
                 LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
@@ -4026,7 +4105,7 @@ if ($action === 'fetch') {
         $random_next_review_at = $stmtNextRandomReview->fetchColumn() ?: null;
     } else {
         $stmt = $pdo->prepare("
-            SELECT f.id, f.front_encrypted, f.back_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.question_answer, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, 0 as score
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.front_translations_encrypted, f.back_translations_encrypted, f.audio_front_translations_encrypted, f.audio_back_translations_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.question_answer, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, 0 as score
             FROM flashcards f
             JOIN directories d ON d.id = f.directory_id
             WHERE f.directory_id = ? 
@@ -4136,6 +4215,10 @@ if ($action === 'fetch') {
             'id' => $card['id'],
             'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
             'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
+            'front_translations' => encryptedFlashcardTranslationMap($card['front_translations_encrypted'] ?? null),
+            'back_translations' => encryptedFlashcardTranslationMap($card['back_translations_encrypted'] ?? null),
+            'audio_front_languages' => array_keys(decryptFlashcardJsonMap($card['audio_front_translations_encrypted'] ?? null)),
+            'audio_back_languages' => array_keys(decryptFlashcardJsonMap($card['audio_back_translations_encrypted'] ?? null)),
             'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
             'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
             'info_type' => sanitizeInfoType($card['info_type'] ?? 2),
@@ -4192,6 +4275,7 @@ if ($action === 'fetch') {
 elseif ($action === 'get_audio') {
     $card_id = (int)($_GET['card_id'] ?? 0);
     $side = ($_GET['side'] ?? '') === 'back' ? 'back' : 'front';
+    $language_key = array_key_first(normalizeFlashcardTranslationMap([($_GET['language'] ?? '') => 'x'])) ?: '';
 
     if ($card_id === 0) {
         http_response_code(400);
@@ -4205,11 +4289,17 @@ elseif ($action === 'get_audio') {
 
     $audioCol = $side === 'front' ? 'audio_front_encrypted' : 'audio_back_encrypted';
     $hasAudioCol = $side === 'front' ? 'has_audio_front' : 'has_audio_back';
-    $stmt = $pdo->prepare("SELECT $audioCol AS audio_encrypted, $hasAudioCol AS has_audio FROM flashcards WHERE id = ? LIMIT 1");
+    $mapCol = $side === 'front' ? 'audio_front_translations_encrypted' : 'audio_back_translations_encrypted';
+    $stmt = $pdo->prepare("SELECT $audioCol AS audio_encrypted, $hasAudioCol AS has_audio, $mapCol AS audio_map_encrypted FROM flashcards WHERE id = ? LIMIT 1");
     $stmt->execute([$card_id]);
     $card = $stmt->fetch();
 
-    if (!$card || (int)$card['has_audio'] !== 1 || empty($card['audio_encrypted'])) {
+    if ($card && $language_key !== '') {
+        $audioMap = decryptFlashcardJsonMap($card['audio_map_encrypted'] ?? null);
+        if (!empty($audioMap[$language_key])) $card['audio_encrypted'] = $audioMap[$language_key];
+    }
+
+    if (!$card || empty($card['audio_encrypted'])) {
         http_response_code(404);
         die('Áudio não encontrado');
     }
@@ -4277,7 +4367,7 @@ elseif ($action === 'generate_audio') {
         die(json_encode(['status' => 'error', 'message' => 'Parâmetros inválidos.']));
     }
 
-    $stmt = $pdo->prepare("SELECT f.front_encrypted, f.back_encrypted, d.user_id, d.deck_front_language, d.deck_back_language, d.deck_structure FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ?");
+    $stmt = $pdo->prepare("SELECT f.front_encrypted, f.back_encrypted, f.front_translations_encrypted, f.back_translations_encrypted, f.audio_front_encrypted, f.audio_back_encrypted, f.has_audio_front, f.has_audio_back, f.audio_front_translations_encrypted, f.audio_back_translations_encrypted, d.user_id, d.deck_front_language, d.deck_back_language, d.deck_structure FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ?");
     $stmt->execute([$card_id]);
     $card = $stmt->fetch();
 
@@ -4285,8 +4375,14 @@ elseif ($action === 'generate_audio') {
         die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
     }
 
+    $requested_language = normalizeFlashcardTranslationMap([$input['language'] ?? '' => 'x']);
+    $language_key = array_key_first($requested_language) ?: '';
+    $translations = encryptedFlashcardTranslationMap($side === 'front' ? ($card['front_translations_encrypted'] ?? null) : ($card['back_translations_encrypted'] ?? null));
     $text_encrypted = $side === 'front' ? $card['front_encrypted'] : $card['back_encrypted'];
-    $clean_text = trim(strip_tags(Security::decryptData($text_encrypted)));
+    $defaultLang = $side === 'front' ? 'pt_br' : 'en';
+    if ($language_key === '') $language_key = $defaultLang;
+    $clean_text = trim(strip_tags((string)($translations[$language_key] ?? '')));
+    if ($clean_text === '') $clean_text = trim(strip_tags(Security::decryptData($text_encrypted)));
 
     if (empty($clean_text)) {
         die(json_encode(['status' => 'error', 'message' => 'O lado selecionado deste card não possui texto.']));
@@ -4301,8 +4397,25 @@ elseif ($action === 'generate_audio') {
     $deck_structure = normalizeDeckStructure($card['deck_structure'] ?? 'traducoes', 'traducoes');
     $side_language = $side === 'front' ? $front_language : $back_language;
 
+    $audioColForLanguage = $side === 'front' ? 'audio_front_encrypted' : 'audio_back_encrypted';
+    $hasAudioColForLanguage = $side === 'front' ? 'has_audio_front' : 'has_audio_back';
+    $previousLegacyAudio = $card[$audioColForLanguage] ?? null;
+    $previousLegacyHasAudio = (int)($card[$hasAudioColForLanguage] ?? 0);
     $tts_error_details = null;
-    $ok = generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $clean_text, $side_language, $deck_structure, $front_language, $back_language, $tts_error_details);
+    $ttsLanguage = ['en' => 'en-GB', 'pt_br' => 'pt-BR', 'es' => 'es-ES', 'fr' => 'fr-FR', 'zh' => 'cmn-CN'][$language_key] ?? $side_language;
+    $ok = generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $clean_text, $ttsLanguage, $deck_structure, $front_language, $back_language, $tts_error_details);
+    if ($ok && $language_key !== $defaultLang) {
+        $audioCol = $side === 'front' ? 'audio_front_encrypted' : 'audio_back_encrypted';
+        $mapCol = $side === 'front' ? 'audio_front_translations_encrypted' : 'audio_back_translations_encrypted';
+        $stmtAudio = $pdo->prepare("SELECT $audioCol AS audio_encrypted, $mapCol AS audio_map_encrypted FROM flashcards WHERE id = ? LIMIT 1");
+        $stmtAudio->execute([$card_id]);
+        $audioRow = $stmtAudio->fetch(PDO::FETCH_ASSOC) ?: [];
+        $audioMap = decryptFlashcardJsonMap($audioRow['audio_map_encrypted'] ?? null);
+        if (!empty($audioRow['audio_encrypted'])) $audioMap[$language_key] = $audioRow['audio_encrypted'];
+        $col = $side === 'front' ? 'has_audio_front' : 'has_audio_back';
+        $stmtAudioUpdate = $pdo->prepare("UPDATE flashcards SET $mapCol = ?, $audioCol = ?, $col = ? WHERE id = ?");
+        $stmtAudioUpdate->execute([encryptFlashcardJsonMap($audioMap), $previousLegacyAudio, $previousLegacyHasAudio, $card_id]);
+    }
     if (!$ok) {
         die(json_encode([
             'status' => 'error',
@@ -5113,7 +5226,7 @@ PROMPT, $example_count, $tag_text_en, $tag_text_pt_br, $existing_sentences_block
     }
 
     if ($create_cards) {
-        $stmtInsertCard = $pdo->prepare("INSERT INTO flashcards (directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, 0, 0)");
+        $stmtInsertCard = $pdo->prepare("INSERT INTO flashcards (directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, front_translations_encrypted, back_translations_encrypted, image_front_encrypted, image_back_encrypted, info_type, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, 0, 0)");
         foreach ($examples as &$example) {
             $front_enc = Security::encryptData($example['english']);
             $back_enc = Security::encryptData($example['pt_br']);
@@ -5679,6 +5792,7 @@ elseif ($action === 'add_single') {
     $deck_id = (int)($input['deck_id'] ?? 0);
     $front = trim($input['front'] ?? '');
     $back = trim($input['back'] ?? '');
+    [$frontTranslations, $backTranslations] = buildFlashcardTranslationsFromInput($input, $front, $back);
     $image_front = $input['image_front'] ?? null;
     $image_back = $input['image_back'] ?? null; 
     $tag_ids = [];
@@ -5733,7 +5847,7 @@ elseif ($action === 'add_single') {
         die(json_encode(['status' => 'error', 'message' => 'Use $sujeitoDinamico, {{sujeitoDinamico}} ou {sujeitoDinamico} no texto da frente para criar sujeito dinâmico.']));
     }
 
-    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, question_answer, dynamic_text_type, dynamic_parent_flashcard_id, id_frequencia_informacional, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)");
+    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, front_translations_encrypted, back_translations_encrypted, image_front_encrypted, image_back_encrypted, info_type, question_answer, dynamic_text_type, dynamic_parent_flashcard_id, id_frequencia_informacional, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)");
     $created_card_ids = [];
     $template_card_id = null;
     $templateDynamicTextType = dynamicTextTypeToInt($dynamic_text_type);
@@ -5756,10 +5870,12 @@ elseif ($action === 'add_single') {
         $dynamicParentFlashcardId = $isGeneratedDynamicSubjectCard ? $template_card_id : null;
         $front_enc = !empty($cardFront) ? Security::encryptData($cardFront) : null;
         $back_enc = !empty($back) ? Security::encryptData($back) : null;
+        $front_translations_enc = encryptFlashcardTranslationMap($frontTranslations);
+        $back_translations_enc = encryptFlashcardTranslationMap($backTranslations);
         $img_front_enc = !empty($image_front) ? Security::encryptData($image_front) : null;
         $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
 
-        if (!$stmt->execute([$deck_id, $user_id, $deck_id, $front_enc, $back_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $cardDynamicTextType, $dynamicParentFlashcardId, $id_frequencia_informacional])) {
+        if (!$stmt->execute([$deck_id, $user_id, $deck_id, $front_enc, $back_enc, $front_translations_enc, $back_translations_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $cardDynamicTextType, $dynamicParentFlashcardId, $id_frequencia_informacional])) {
             echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
             return;
         }
@@ -5800,7 +5916,7 @@ elseif ($action === 'get_card_for_edit') {
     }
 
     $stmt = $pdo->prepare("
-        SELECT id, directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, image_front_encrypted, image_back_encrypted, info_type, question_answer, dynamic_text_type, dynamic_parent_flashcard_id, id_frequencia_informacional, has_audio_front, has_audio_back
+        SELECT id, directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, front_translations_encrypted, back_translations_encrypted, audio_front_translations_encrypted, audio_back_translations_encrypted, image_front_encrypted, image_back_encrypted, info_type, question_answer, dynamic_text_type, dynamic_parent_flashcard_id, id_frequencia_informacional, has_audio_front, has_audio_back
         FROM flashcards
         WHERE id = ?
         LIMIT 1
@@ -5825,6 +5941,10 @@ elseif ($action === 'get_card_for_edit') {
             'is_public' => (int)$card['directory_id'] === 6452 ? 1 : 0,
             'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
             'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
+            'front_translations' => encryptedFlashcardTranslationMap($card['front_translations_encrypted'] ?? null),
+            'back_translations' => encryptedFlashcardTranslationMap($card['back_translations_encrypted'] ?? null),
+            'audio_front_languages' => array_keys(decryptFlashcardJsonMap($card['audio_front_translations_encrypted'] ?? null)),
+            'audio_back_languages' => array_keys(decryptFlashcardJsonMap($card['audio_back_translations_encrypted'] ?? null)),
             'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
             'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
             'info_type' => sanitizeInfoType($card['info_type'] ?? 2),
@@ -5879,6 +5999,7 @@ elseif ($action === 'update_card') {
     $card_id = (int)($input['card_id'] ?? 0);
     $front = trim($input['front'] ?? '');
     $back = trim($input['back'] ?? '');
+    [$frontTranslations, $backTranslations] = buildFlashcardTranslationsFromInput($input, $front, $back);
     $image_front = $input['image_front'] ?? null;
     $image_back = $input['image_back'] ?? null;
     $tag_ids = [];
@@ -5935,9 +6056,12 @@ elseif ($action === 'update_card') {
     $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
 
     // Mantém os áudios existentes. Eles só devem ser alterados quando o usuário solicitar nova geração.
-    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, info_type = ?, question_answer = ?, dynamic_text_type = ?, id_frequencia_informacional = ? WHERE id = ?");
+    $front_translations_enc = encryptFlashcardTranslationMap($frontTranslations);
+    $back_translations_enc = encryptFlashcardTranslationMap($backTranslations);
+
+    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, front_translations_encrypted = ?, back_translations_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, info_type = ?, question_answer = ?, dynamic_text_type = ?, id_frequencia_informacional = ? WHERE id = ?");
     
-    if ($stmt->execute([$front_enc, $back_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $dynamic_text_type_id, $id_frequencia_informacional, $card_id])) {
+    if ($stmt->execute([$front_enc, $back_enc, $front_translations_enc, $back_translations_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $dynamic_text_type_id, $id_frequencia_informacional, $card_id])) {
         syncCardTagLinks($pdo, 'flashcard_tag_links', $card_id, $tag_ids, $user_id);
         syncCardTagLinks($pdo, 'subjects_links', $card_id, $subject_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'objects_links', $card_id, $object_tag_ids, $user_id);
@@ -6409,6 +6533,10 @@ elseif ($action === 'list_graph_cards_for_user') {
             'directory_name' => !empty($card['directory_name_encrypted']) ? Security::decryptData($card['directory_name_encrypted']) : '',
             'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
             'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
+            'front_translations' => encryptedFlashcardTranslationMap($card['front_translations_encrypted'] ?? null),
+            'back_translations' => encryptedFlashcardTranslationMap($card['back_translations_encrypted'] ?? null),
+            'audio_front_languages' => array_keys(decryptFlashcardJsonMap($card['audio_front_translations_encrypted'] ?? null)),
+            'audio_back_languages' => array_keys(decryptFlashcardJsonMap($card['audio_back_translations_encrypted'] ?? null)),
             'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
             'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
             'info_type' => sanitizeInfoType($card['info_type'] ?? 2),
@@ -6488,6 +6616,10 @@ elseif ($action === 'list_subject_cards_by_tag') {
             'directory_name' => !empty($card['directory_name_encrypted']) ? Security::decryptData($card['directory_name_encrypted']) : '',
             'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
             'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
+            'front_translations' => encryptedFlashcardTranslationMap($card['front_translations_encrypted'] ?? null),
+            'back_translations' => encryptedFlashcardTranslationMap($card['back_translations_encrypted'] ?? null),
+            'audio_front_languages' => array_keys(decryptFlashcardJsonMap($card['audio_front_translations_encrypted'] ?? null)),
+            'audio_back_languages' => array_keys(decryptFlashcardJsonMap($card['audio_back_translations_encrypted'] ?? null)),
             'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
             'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
             'can_edit' => (int)$card['directory_user_id'] === (int)$user_id ? 1 : 0,
@@ -6531,6 +6663,10 @@ elseif ($action === 'list_cards_for_tag_filtering') {
             'id' => $cardId,
             'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
             'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
+            'front_translations' => encryptedFlashcardTranslationMap($card['front_translations_encrypted'] ?? null),
+            'back_translations' => encryptedFlashcardTranslationMap($card['back_translations_encrypted'] ?? null),
+            'audio_front_languages' => array_keys(decryptFlashcardJsonMap($card['audio_front_translations_encrypted'] ?? null)),
+            'audio_back_languages' => array_keys(decryptFlashcardJsonMap($card['audio_back_translations_encrypted'] ?? null)),
             'all_tags' => $allTagsByCard[$cardId] ?? [],
             'subject_tags' => $subjectTagsByCard[$cardId] ?? [],
             'object_tags' => $objectTagsByCard[$cardId] ?? [],
