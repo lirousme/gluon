@@ -765,6 +765,12 @@
                 <input id="tagNameInput" type="text" maxlength="80" placeholder="Ex.: Gramática, Verbos, Trabalho..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
                 <input id="tagNamePtBrInput" type="text" maxlength="80" placeholder="Nome em pt-BR (ex.: Cachorro)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
                 <input id="tagNumeroInput" type="number" placeholder="Número (ex.: 2026)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+                <div class="rounded-lg border border-slate-700 p-3 space-y-3" data-tag-i18n>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Variações por idioma (opcional)</p>
+                  <div class="space-y-2" data-lang="en"><p class="text-xs text-slate-300">Inglês</p><input data-tag-name-lang="en" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="en" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="en" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div>
+                  <div class="space-y-2" data-lang="pt_br"><p class="text-xs text-slate-300">Português</p><input data-tag-name-lang="pt_br" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="pt_br" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="pt_br" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div>
+                  <details class="space-y-2"><summary class="cursor-pointer text-xs text-slate-400">Espanhol, Francês e Mandarim</summary><div class="mt-2 space-y-3"><div class="space-y-2"><p class="text-xs text-slate-300">Espanhol</p><input data-tag-name-lang="es" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="es" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="es" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div><div class="space-y-2"><p class="text-xs text-slate-300">Francês</p><input data-tag-name-lang="fr" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="fr" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="fr" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div><div class="space-y-2"><p class="text-xs text-slate-300">Mandarim</p><input data-tag-name-lang="zh" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="zh" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="zh" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div></div></details>
+                </div>
                 <p class="text-xs text-slate-400">Novas tags serão criadas automaticamente na categoria Palavra.</p>
                 <div class="flex justify-end gap-3">
                     <button type="button" onclick="flashcardApp.closeModals()" class="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-800">Cancelar</button>
@@ -950,7 +956,18 @@
             window.location.href = getMarkedBackRoute();
         }
 
-        const flashcardApp = {
+        
+function collectTagTranslationPayload(root = document) {
+  const read = (selector) => Array.from(root.querySelectorAll(selector)).reduce((acc, el) => {
+    const lang = el.getAttribute(selector.includes('name') ? 'data-tag-name-lang' : selector.includes('description') ? 'data-tag-description-lang' : 'data-tag-symbol-lang');
+    const value = (el.value || '').trim();
+    if (lang && value) acc[lang] = value;
+    return acc;
+  }, {});
+  return { name_translations: read('[data-tag-name-lang]'), description_translations: read('[data-tag-description-lang]'), sigla_simbolo_translations: read('[data-tag-symbol-lang]') };
+}
+
+const flashcardApp = {
             deckId: null,
             studyScope: 'deck',
             deckMode: 'aleatorio',
@@ -3587,6 +3604,7 @@
                     name,
                     name_pt_br: namePtBr,
                     numero: document.getElementById('tagNumeroInput').value.trim(),
+                    ...collectTagTranslationPayload(document.getElementById('tagModal')),
                     is_book: 0,
                     is_verb_tense: 0,
                     is_sentence_type: 0,

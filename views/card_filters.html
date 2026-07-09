@@ -1323,6 +1323,20 @@
             setTimeout(() => document.getElementById(focusId)?.focus(), 20);
         }
 
+
+        function renderTagTranslationInputs(tag = {}) {
+            const names = tag.name_translations || {};
+            const descriptions = tag.description_translations || {};
+            const symbols = tag.sigla_simbolo_translations || {};
+            const languages = [['en','Inglês'], ['pt_br','Português'], ['es','Espanhol'], ['fr','Francês'], ['zh','Mandarim']];
+            return `<div class="rounded-lg border border-slate-700 p-3 space-y-3"><p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Variações por idioma (opcional)</p>${languages.map(([code,label]) => `<div class="space-y-2"><p class="text-xs text-slate-300">${label}</p><input data-tag-name-lang="${code}" type="text" maxlength="80" placeholder="Nome" value="${escapeHtml(String(names[code] || ''))}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2"><textarea data-tag-description-lang="${code}" rows="2" placeholder="Descrição" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">${escapeHtml(String(descriptions[code] || ''))}</textarea><input data-tag-symbol-lang="${code}" type="text" maxlength="191" placeholder="Sigla/símbolo" value="${escapeHtml(String(symbols[code] || ''))}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2"></div>`).join('')}</div>`;
+        }
+
+        function collectTagTranslationPayload(root = document) {
+            const collect = (selector, attr) => Array.from(root.querySelectorAll(selector)).reduce((acc, input) => { const value = input.value.trim(); const lang = input.getAttribute(attr); if (lang && value) acc[lang] = value; return acc; }, {});
+            return { name_translations: collect('[data-tag-name-lang]', 'data-tag-name-lang'), description_translations: collect('[data-tag-description-lang]', 'data-tag-description-lang'), sigla_simbolo_translations: collect('[data-tag-symbol-lang]', 'data-tag-symbol-lang') };
+        }
+
         function renderCreateTagForm() {
             return `
                 <article class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-xl shadow-black/20">
@@ -1331,6 +1345,7 @@
                         <input id="createTagNameInput" type="text" maxlength="80" placeholder="Nome" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
                         <input id="createTagNamePtBrInput" type="text" maxlength="80" placeholder="Nome pt-br" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
                         <input id="createTagNumeroInput" type="number" placeholder="Número" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
+                        ${renderTagTranslationInputs()}
                         <label for="createTagPinnedInput" class="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-slate-100"><span><span class="block font-semibold text-amber-100">Criar tag fixada</span><span class="block text-xs text-amber-100/70">A tag já aparecerá nas tags fixadas do menu esquerdo.</span></span><span class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-slate-700 transition has-[:checked]:bg-amber-500"><input id="createTagPinnedInput" type="checkbox" class="peer sr-only" checked><span class="ml-0.5 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5"></span></span></label>
                         <p class="text-xs text-slate-400">Novas tags serão criadas automaticamente na categoria Palavra.</p>
                         <div class="flex justify-end gap-2 pt-2"><button id="btnCancelCreateTag" type="button" class="rounded-lg border border-slate-600 px-4 py-2">Cancelar</button><button id="btnSubmitCreateTag" type="submit" class="rounded-lg bg-violet-600 px-4 py-2 hover:bg-violet-500">Criar tag</button></div>
@@ -1347,6 +1362,7 @@
                         <input id="editTagNameInput" type="text" maxlength="80" placeholder="Nome" value="${escapeHtml(String(tag.name || ''))}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
                         <input id="editTagNamePtBrInput" type="text" maxlength="80" placeholder="Nome pt-br" value="${escapeHtml(String(tag.name_pt_br || ''))}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
                         <input id="editTagNumeroInput" type="number" placeholder="Número" value="${escapeHtml(String(tag.numero ?? ''))}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
+                        ${renderTagTranslationInputs(tag)}
                         <div class="flex justify-end gap-2 pt-2"><button id="btnCancelEditTag" type="button" class="rounded-lg border border-slate-600 px-4 py-2">Cancelar</button><button type="submit" class="rounded-lg bg-amber-600 px-4 py-2 hover:bg-amber-500">Salvar</button></div>
                     </form>
                 </article>`;
@@ -1377,7 +1393,7 @@
             const name = nameFromEnglish || namePtBr;
             if (!name) { alert('Preencha o nome em inglês ou em pt-BR para criar a tag.'); return; }
             if (!nameFromEnglish) { nameInput.value = name; namePtBrInput.value = ''; namePtBr = ''; }
-            const createResult = await api('create_tag', { name, name_pt_br: namePtBr, numero: document.getElementById('createTagNumeroInput').value.trim(), is_book: 0, is_verb_tense: 0, is_sentence_type: 0, is_lexical_chunk: 0, is_relation_type: 0, is_word: 1, is_month: 0, is_day: 0, is_year: 0 });
+            const createResult = await api('create_tag', { name, name_pt_br: namePtBr, numero: document.getElementById('createTagNumeroInput').value.trim(), ...collectTagTranslationPayload(document.getElementById('createTagForm')), is_book: 0, is_verb_tense: 0, is_sentence_type: 0, is_lexical_chunk: 0, is_relation_type: 0, is_word: 1, is_month: 0, is_day: 0, is_year: 0 });
             const shouldPinTag = document.getElementById('createTagPinnedInput').checked;
             const createdTagId = Number(createResult.tag_id || 0);
             if (shouldPinTag && createdTagId > 0) {
@@ -1407,7 +1423,7 @@
             const name = nameFromEnglish || namePtBr;
             if (!name) { alert('Preencha o nome em inglês ou em pt-BR para editar a tag.'); return; }
             if (!nameFromEnglish) { nameInput.value = name; namePtBrInput.value = ''; namePtBr = ''; }
-            await api('update_tag', { id, name, name_pt_br: namePtBr, numero: document.getElementById('editTagNumeroInput').value.trim(), is_book: Number(original.is_book || 0), is_verb_tense: Number(original.is_verb_tense || 0), is_sentence_type: Number(original.is_sentence_type || 0), is_lexical_chunk: Number(original.is_lexical_chunk || 0), is_relation_type: Number(original.is_relation_type || 0), is_word: Number(original.is_word || 0), is_month: Number(original.is_month || 0), is_day: Number(original.is_day || 0), is_year: Number(original.is_year || 0) });
+            await api('update_tag', { id, name, name_pt_br: namePtBr, numero: document.getElementById('editTagNumeroInput').value.trim(), ...collectTagTranslationPayload(document.getElementById('editTagForm')), is_book: Number(original.is_book || 0), is_verb_tense: Number(original.is_verb_tense || 0), is_sentence_type: Number(original.is_sentence_type || 0), is_lexical_chunk: Number(original.is_lexical_chunk || 0), is_relation_type: Number(original.is_relation_type || 0), is_word: Number(original.is_word || 0), is_month: Number(original.is_month || 0), is_day: Number(original.is_day || 0), is_year: Number(original.is_year || 0) });
             state.selectedTagLabels = [name];
             hideTagFormSection();
             await loadSavedFilters();
