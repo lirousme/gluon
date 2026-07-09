@@ -494,9 +494,72 @@ function ensureFlashcardTagsNumericMetadataSchema(PDO $pdo): void
         }
         $siglaColumn = $pdo->query("SHOW COLUMNS FROM flashcard_tags LIKE 'sigla_simbolo'")->fetch(PDO::FETCH_ASSOC);
         if (!$siglaColumn) $pdo->exec('ALTER TABLE flashcard_tags ADD COLUMN sigla_simbolo VARCHAR(191) NULL AFTER numero');
+        $descriptionColumn = $pdo->query("SHOW COLUMNS FROM flashcard_tags LIKE 'description_translations_encrypted'")->fetch(PDO::FETCH_ASSOC);
+        if (!$descriptionColumn) $pdo->exec('ALTER TABLE flashcard_tags ADD COLUMN description_translations_encrypted LONGTEXT NULL AFTER name_pt_br_encrypted');
+        $nameTranslationsColumn = $pdo->query("SHOW COLUMNS FROM flashcard_tags LIKE 'name_translations_encrypted'")->fetch(PDO::FETCH_ASSOC);
+        if (!$nameTranslationsColumn) $pdo->exec('ALTER TABLE flashcard_tags ADD COLUMN name_translations_encrypted LONGTEXT NULL AFTER name_pt_br_encrypted');
+        $symbolTranslationsColumn = $pdo->query("SHOW COLUMNS FROM flashcard_tags LIKE 'sigla_simbolo_translations_encrypted'")->fetch(PDO::FETCH_ASSOC);
+        if (!$symbolTranslationsColumn) $pdo->exec('ALTER TABLE flashcard_tags ADD COLUMN sigla_simbolo_translations_encrypted LONGTEXT NULL AFTER sigla_simbolo');
     } catch (Throwable $e) {
         error_log('[flashcards][flashcard_tags_numeric_metadata_schema] ' . $e->getMessage());
     }
+}
+
+
+function normalizeTagTranslationMap($value): array
+{
+    if (is_string($value)) {
+        $decoded = json_decode($value, true);
+        $value = is_array($decoded) ? $decoded : [];
+    }
+    if (!is_array($value)) return [];
+    $allowed = ['en', 'pt_br', 'es', 'fr', 'zh'];
+    $normalized = [];
+    foreach ($allowed as $lang) {
+        $text = trim((string)($value[$lang] ?? ''));
+        $text = preg_replace('/\s+/u', ' ', $text);
+        if ($text !== '') $normalized[$lang] = $text;
+    }
+    return $normalized;
+}
+
+function encryptedTagTranslationMap(?string $encrypted): array
+{
+    if (!$encrypted) return [];
+    $json = Security::decryptData($encrypted);
+    $decoded = json_decode((string)$json, true);
+    return normalizeTagTranslationMap(is_array($decoded) ? $decoded : []);
+}
+
+function encryptTagTranslationMap(array $translations): ?string
+{
+    $translations = normalizeTagTranslationMap($translations);
+    return $translations ? Security::encryptData(json_encode($translations, JSON_UNESCAPED_UNICODE)) : null;
+}
+
+function buildTagTranslationsFromInput(array $input, string $legacyName, ?string $legacyPtBr, ?string $legacySymbol): array
+{
+    $names = normalizeTagTranslationMap($input['name_translations'] ?? []);
+    $descriptions = normalizeTagTranslationMap($input['description_translations'] ?? []);
+    $symbols = normalizeTagTranslationMap($input['sigla_simbolo_translations'] ?? []);
+    if ($legacyName !== '' && empty($names['en'])) $names['en'] = $legacyName;
+    if ($legacyPtBr !== null && $legacyPtBr !== '' && empty($names['pt_br'])) $names['pt_br'] = $legacyPtBr;
+    if ($legacySymbol !== null && $legacySymbol !== '' && empty($symbols['en'])) $symbols['en'] = $legacySymbol;
+    return [$names, $descriptions, $symbols];
+}
+
+function hydrateTagTranslationFields(array $tag): array
+{
+    $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
+    $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
+    $tag['name_translations'] = encryptedTagTranslationMap($tag['name_translations_encrypted'] ?? null);
+    $tag['description_translations'] = encryptedTagTranslationMap($tag['description_translations_encrypted'] ?? null);
+    $tag['sigla_simbolo_translations'] = encryptedTagTranslationMap($tag['sigla_simbolo_translations_encrypted'] ?? null);
+    if ($tag['name'] !== '' && empty($tag['name_translations']['en'])) $tag['name_translations']['en'] = $tag['name'];
+    if (!empty($tag['name_pt_br']) && empty($tag['name_translations']['pt_br'])) $tag['name_translations']['pt_br'] = $tag['name_pt_br'];
+    if (!empty($tag['sigla_simbolo']) && empty($tag['sigla_simbolo_translations']['en'])) $tag['sigla_simbolo_translations']['en'] = $tag['sigla_simbolo'];
+    unset($tag['name_encrypted'], $tag['name_pt_br_encrypted'], $tag['name_translations_encrypted'], $tag['description_translations_encrypted'], $tag['sigla_simbolo_translations_encrypted']);
+    return $tag;
 }
 
 function ensureFlashcardTagsCreatorSchema(PDO $pdo): void
@@ -6532,6 +6595,9 @@ elseif ($action === 'list_graph_tags_for_user') {
             t.created_by_user_id,
             t.name_encrypted,
             t.name_pt_br_encrypted,
+            t.name_translations_encrypted,
+            t.description_translations_encrypted,
+            t.sigla_simbolo_translations_encrypted,
             t.numero,
             t.sigla_simbolo,
             t.color,
@@ -6566,11 +6632,9 @@ elseif ($action === 'list_graph_tags_for_user') {
     $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $parsed = [];
     foreach ($tags as $tag) {
-        $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
-        $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
+        $tag = hydrateTagTranslationFields($tag);
         $tag['related_cards_count'] = (int)($tag['related_cards_count'] ?? 0);
         $tag['subjects_count'] = (int)($tag['subjects_count'] ?? 0);
-        unset($tag['name_encrypted'], $tag['name_pt_br_encrypted']);
         $parsed[] = $tag;
     }
     echo json_encode(['status' => 'success', 'data' => $parsed, 'pagination' => ['page' => $page, 'total_pages' => $totalPages, 'total_tags' => $totalTags, 'per_page' => $perPage]]);
@@ -6585,6 +6649,9 @@ elseif ($action === 'list_tags') {
             t.created_by_user_id,
             t.name_encrypted,
             t.name_pt_br_encrypted,
+            t.name_translations_encrypted,
+            t.description_translations_encrypted,
+            t.sigla_simbolo_translations_encrypted,
             t.numero,
             t.sigla_simbolo,
             t.color,
@@ -6621,13 +6688,11 @@ elseif ($action === 'list_tags') {
     $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $parsed = [];
     foreach ($tags as $tag) {
-        $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
-        $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
+        $tag = hydrateTagTranslationFields($tag);
         $tag['subjects_count'] = (int)($tag['subjects_count'] ?? 0);
         $tag['subject_cards_count'] = (int)($tag['subject_cards_count'] ?? 0);
         $tag['object_cards_count'] = (int)($tag['object_cards_count'] ?? 0);
         $tag['lexical_chunk_cards_count'] = (int)($tag['lexical_chunk_cards_count'] ?? 0);
-        unset($tag['name_encrypted'], $tag['name_pt_br_encrypted']);
         $parsed[] = $tag;
     }
     echo json_encode(['status' => 'success', 'data' => $parsed]);
@@ -6657,6 +6722,9 @@ elseif ($action === 'list_user_tags_by_subject_card_count' || $action === 'list_
             t.user_id,
             t.name_encrypted,
             t.name_pt_br_encrypted,
+            t.name_translations_encrypted,
+            t.description_translations_encrypted,
+            t.sigla_simbolo_translations_encrypted,
             t.numero,
             t.sigla_simbolo,
             t.color,
@@ -6678,10 +6746,8 @@ elseif ($action === 'list_user_tags_by_subject_card_count' || $action === 'list_
     $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $parsed = [];
     foreach ($tags as $tag) {
-        $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
-        $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
+        $tag = hydrateTagTranslationFields($tag);
         $tag['subjects_count'] = (int)($tag['subjects_count'] ?? 0);
-        unset($tag['name_encrypted'], $tag['name_pt_br_encrypted']);
         $parsed[] = $tag;
     }
     echo json_encode([
@@ -6719,6 +6785,9 @@ elseif ($action === 'list_saved_filters') {
             t.created_by_user_id,
             t.name_encrypted,
             t.name_pt_br_encrypted,
+            t.name_translations_encrypted,
+            t.description_translations_encrypted,
+            t.sigla_simbolo_translations_encrypted,
             t.numero,
             t.sigla_simbolo,
             t.color,
@@ -6735,13 +6804,11 @@ elseif ($action === 'list_saved_filters') {
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $parsed = [];
     foreach ($rows as $row) {
-        $row['name'] = !empty($row['name_encrypted']) ? Security::decryptData($row['name_encrypted']) : '';
-        $row['name_pt_br'] = !empty($row['name_pt_br_encrypted']) ? Security::decryptData($row['name_pt_br_encrypted']) : null;
+        $row = hydrateTagTranslationFields($row);
         $row['ativo'] = (int)$row['ativo'];
         $row['id_tag'] = (int)$row['id_tag'];
         $row['id'] = (int)$row['id'];
         $row['subjects_count'] = (int)($row['subjects_count'] ?? 0);
-        unset($row['name_encrypted'], $row['name_pt_br_encrypted']);
         $parsed[] = $row;
     }
     echo json_encode(['status' => 'success', 'data' => $parsed]);
@@ -6790,8 +6857,10 @@ elseif ($action === 'remove_saved_filter') {
 }
 
 elseif ($action === 'create_tag') {
-    $name = trim((string)($input['name'] ?? ''));
-    $name_pt_br = trim((string)($input['name_pt_br'] ?? ''));
+    $inputNameTranslations = normalizeTagTranslationMap($input['name_translations'] ?? []);
+    $name = trim((string)($input['name'] ?? ($inputNameTranslations['en'] ?? '')));
+    $name_pt_br = trim((string)($input['name_pt_br'] ?? ($inputNameTranslations['pt_br'] ?? '')));
+    if ($name === '' && $name_pt_br !== '') $name = $name_pt_br;
     $numero = normalizeNullableTagMetadataText($input['numero'] ?? null);
     $siglaSimbolo = normalizeNullableTagMetadataText($input['sigla_simbolo'] ?? null);
     $is_book = !empty($input['is_book']) ? 1 : 0;
@@ -6821,13 +6890,17 @@ elseif ($action === 'create_tag') {
         'is_year' => $is_year,
     ]);
 
+    [$nameTranslations, $descriptionTranslations, $symbolTranslations] = buildTagTranslationsFromInput($input, $name, $name_pt_br, $siglaSimbolo);
     $name_enc = Security::encryptData($name);
     $name_pt_br_enc = $name_pt_br !== null ? Security::encryptData($name_pt_br) : null;
-    $stmt = $pdo->prepare("INSERT INTO flashcard_tags (user_id, created_by_user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $name_translations_enc = encryptTagTranslationMap($nameTranslations);
+    $description_translations_enc = encryptTagTranslationMap($descriptionTranslations);
+    $symbol_translations_enc = encryptTagTranslationMap($symbolTranslations);
+    $stmt = $pdo->prepare("INSERT INTO flashcard_tags (user_id, created_by_user_id, name_encrypted, name_pt_br_encrypted, name_translations_encrypted, description_translations_encrypted, numero, sigla_simbolo, sigla_simbolo_translations_encrypted, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $tagId = 0;
     try {
         $pdo->beginTransaction();
-        $stmt->execute([$user_id, $user_id, $name_enc, $name_pt_br_enc, $numero, $siglaSimbolo, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year]);
+        $stmt->execute([$user_id, $user_id, $name_enc, $name_pt_br_enc, $name_translations_enc, $description_translations_enc, $numero, $siglaSimbolo, $symbol_translations_enc, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year]);
         $tagId = (int)$pdo->lastInsertId();
         executeTagCreationCustomRules($pdo, $user_id, $tagId);
         $pdo->commit();
@@ -6848,8 +6921,10 @@ elseif ($action === 'create_tag') {
 
 elseif ($action === 'update_tag') {
     $tag_id = (int)($input['id'] ?? 0);
-    $name = trim((string)($input['name'] ?? ''));
-    $name_pt_br = trim((string)($input['name_pt_br'] ?? ''));
+    $inputNameTranslations = normalizeTagTranslationMap($input['name_translations'] ?? []);
+    $name = trim((string)($input['name'] ?? ($inputNameTranslations['en'] ?? '')));
+    $name_pt_br = trim((string)($input['name_pt_br'] ?? ($inputNameTranslations['pt_br'] ?? '')));
+    if ($name === '' && $name_pt_br !== '') $name = $name_pt_br;
     $numero = normalizeNullableTagMetadataText($input['numero'] ?? null);
     $siglaSimbolo = normalizeNullableTagMetadataText($input['sigla_simbolo'] ?? null);
     if (!array_key_exists('sigla_simbolo', $input) && $tag_id > 0) {
@@ -6877,8 +6952,12 @@ elseif ($action === 'update_tag') {
         die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com essa combinação de nome, nome pt-br e número.']));
     }
 
+    [$nameTranslations, $descriptionTranslations, $symbolTranslations] = buildTagTranslationsFromInput($input, $name, $name_pt_br, $siglaSimbolo);
     $name_enc = Security::encryptData($name);
     $name_pt_br_enc = $name_pt_br !== null ? Security::encryptData($name_pt_br) : null;
+    $name_translations_enc = encryptTagTranslationMap($nameTranslations);
+    $description_translations_enc = encryptTagTranslationMap($descriptionTranslations);
+    $symbol_translations_enc = encryptTagTranslationMap($symbolTranslations);
     $color = resolveTagColorByCategory([
         'is_book' => $is_book,
         'is_verb_tense' => $is_verb_tense,
@@ -6890,9 +6969,9 @@ elseif ($action === 'update_tag') {
         'is_day' => $is_day,
         'is_year' => $is_year
     ]);
-    $stmt = $pdo->prepare("UPDATE flashcard_tags SET name_encrypted = ?, name_pt_br_encrypted = ?, numero = ?, sigla_simbolo = ?, color = ?, is_book = ?, is_verb_tense = ?, is_sentence_type = ?, is_lexical_chunk = ?, is_relation_type = ?, is_word = ?, is_month = ?, is_day = ?, is_year = ? WHERE id = ? AND (user_id = ? OR created_by_user_id = ?)");
+    $stmt = $pdo->prepare("UPDATE flashcard_tags SET name_encrypted = ?, name_pt_br_encrypted = ?, name_translations_encrypted = ?, description_translations_encrypted = ?, numero = ?, sigla_simbolo = ?, sigla_simbolo_translations_encrypted = ?, color = ?, is_book = ?, is_verb_tense = ?, is_sentence_type = ?, is_lexical_chunk = ?, is_relation_type = ?, is_word = ?, is_month = ?, is_day = ?, is_year = ? WHERE id = ? AND (user_id = ? OR created_by_user_id = ?)");
     try {
-        $stmt->execute([$name_enc, $name_pt_br_enc, $numero, $siglaSimbolo, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year, $tag_id, $user_id, $user_id]);
+        $stmt->execute([$name_enc, $name_pt_br_enc, $name_translations_enc, $description_translations_enc, $numero, $siglaSimbolo, $symbol_translations_enc, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year, $tag_id, $user_id, $user_id]);
     } catch (PDOException $e) {
         die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com esse nome.']));
     }
