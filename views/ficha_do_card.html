@@ -407,6 +407,7 @@ const app = {
   backLanguage: 'en-GB',
   availableTags: [],
   frequenciasInformacionais: [],
+  defaultNewCardFrequenciaInformacionalId: 7,
   sessionUserId: null,
   pendingFrontSentenceTagCandidates: null,
   richTextSelections: {},
@@ -968,10 +969,15 @@ const app = {
       if (!shouldShow) select.value = '';
     }
   },
+  isCreatingCardFromScratch() {
+    return !this.editCardId && !this.duplicateCardId;
+  },
   renderFrequenciasInformacionaisSelect(selectedId = null) {
     const select = document.getElementById('frequenciaInformacionalSelect');
     if (!select) return;
-    const currentValue = selectedId !== null ? String(selectedId || '') : select.value;
+    const currentValue = selectedId !== null
+      ? String(selectedId || '')
+      : (select.value || (this.isCreatingCardFromScratch() ? String(this.defaultNewCardFrequenciaInformacionalId) : ''));
     if (!this.frequenciasInformacionais.length) {
       select.innerHTML = '<option value="">Nenhuma frequência cadastrada</option>';
       this.updateInformationalFrequencyTagPanelTitles();
