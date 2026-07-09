@@ -48,8 +48,20 @@ try {
 
 try { $pdo->exec("ALTER TABLE users ADD COLUMN home_directory_id INT UNSIGNED NULL DEFAULT NULL AFTER copied_directory_id"); } catch (PDOException $e) {}
 try { $pdo->exec("ALTER TABLE users ADD COLUMN source_directory_id INT UNSIGNED NULL DEFAULT NULL AFTER home_directory_id"); } catch (PDOException $e) {}
+try { $pdo->exec("ALTER TABLE users ADD COLUMN native_language VARCHAR(20) NOT NULL DEFAULT 'Português' AFTER source_directory_id"); } catch (PDOException $e) {}
+try { $pdo->exec("ALTER TABLE users ADD COLUMN learning_language VARCHAR(20) NOT NULL DEFAULT 'Inglês' AFTER native_language"); } catch (PDOException $e) {}
 try { $pdo->exec("ALTER TABLE directories ADD COLUMN deck_mode VARCHAR(20) DEFAULT 'aleatorio' AFTER type"); } catch (PDOException $e) {}
 try { $pdo->exec("ALTER TABLE directories ADD COLUMN deck_system INT NOT NULL DEFAULT 0 AFTER deck_structure"); } catch (PDOException $e) {}
+
+
+function getAllowedUserLanguages(): array {
+    return ['Inglês', 'Português', 'Espanhol', 'Francês', 'Mandarim'];
+}
+
+function normalizeUserLanguage($language, string $fallback): string {
+    $language = trim((string)$language);
+    return in_array($language, getAllowedUserLanguages(), true) ? $language : $fallback;
+}
 
 function ensureSourceDirectory(PDO $pdo, int $user_id): int {
     $stmtUser = $pdo->prepare("SELECT source_directory_id FROM users WHERE id = ? LIMIT 1");
@@ -425,7 +437,7 @@ elseif ($action === 'toggle_save') {
 // === GERENCIAMENTO DE PERFIL E CONTA ===
 
 elseif ($action === 'get_profile') {
-    $stmt = $pdo->prepare("SELECT username, email FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT username, email, native_language, learning_language FROM users WHERE id = ?");
     $stmt->execute([$user_id]);
     $user = $stmt->fetch();
 
@@ -439,6 +451,8 @@ elseif ($action === 'get_profile') {
 elseif ($action === 'update_profile') {
     $username = trim($input['username'] ?? '');
     $email = trim($input['email'] ?? '');
+    $native_language = normalizeUserLanguage($input['native_language'] ?? 'Português', 'Português');
+    $learning_language = normalizeUserLanguage($input['learning_language'] ?? 'Inglês', 'Inglês');
     $current_password = $input['current_password'] ?? '';
     $new_password = $input['new_password'] ?? '';
 
@@ -462,11 +476,11 @@ elseif ($action === 'update_profile') {
 
     if (!empty($new_password)) {
         $hash = password_hash($new_password, PASSWORD_ARGON2ID);
-        $stmt = $pdo->prepare("UPDATE users SET username = ?, email = ?, password_hash = ? WHERE id = ?");
-        $stmt->execute([$username, $email, $hash, $user_id]);
+        $stmt = $pdo->prepare("UPDATE users SET username = ?, email = ?, native_language = ?, learning_language = ?, password_hash = ? WHERE id = ?");
+        $stmt->execute([$username, $email, $native_language, $learning_language, $hash, $user_id]);
     } else {
-        $stmt = $pdo->prepare("UPDATE users SET username = ?, email = ? WHERE id = ?");
-        $stmt->execute([$username, $email, $user_id]);
+        $stmt = $pdo->prepare("UPDATE users SET username = ?, email = ?, native_language = ?, learning_language = ? WHERE id = ?");
+        $stmt->execute([$username, $email, $native_language, $learning_language, $user_id]);
     }
 
     $_SESSION['username'] = $username;
