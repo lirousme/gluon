@@ -536,7 +536,7 @@ function normalizeFlashcardTranslationMap($value): array
         $value = is_array($decoded) ? $decoded : [];
     }
     if (!is_array($value)) return [];
-    $allowed = ['en', 'pt_br', 'es', 'fr', 'zh'];
+    $allowed = ['en', 'en_us', 'en_gb', 'pt_br', 'es', 'fr', 'zh'];
     $normalized = [];
     foreach ($allowed as $lang) {
         $text = trim((string)($value[$lang] ?? ''));
@@ -592,7 +592,7 @@ function normalizeTagTranslationMap($value): array
         $value = is_array($decoded) ? $decoded : [];
     }
     if (!is_array($value)) return [];
-    $allowed = ['en', 'pt_br', 'es', 'fr', 'zh'];
+    $allowed = ['en', 'en_us', 'en_gb', 'pt_br', 'es', 'fr', 'zh'];
     $normalized = [];
     foreach ($allowed as $lang) {
         $text = trim((string)($value[$lang] ?? ''));
@@ -2908,7 +2908,7 @@ function verifyCardOwnership($pdo, $card_id, $user_id, bool $allowPublicUserFive
  * Função normalizeDeckLanguage: Normaliza o idioma do deck para um valor permitido, aplicando fallback padrão.
  */
 function normalizeDeckLanguage($value, $default = 'pt-BR') {
-    $allowed = ['pt-BR', 'en-US', 'en-GB'];
+    $allowed = ['pt-BR', 'en-US', 'en-GB', 'es-ES', 'fr-FR', 'cmn-CN'];
     return in_array($value, $allowed, true) ? $value : $default;
 }
 
@@ -2940,6 +2940,9 @@ function getGoogleTtsVoiceByLanguage($language) {
         case 'pt-BR': return 'pt-BR-Chirp3-HD-Algieba'; //Algenib* //Charon //Enceladus** //Fenrir** //Iapetus //Vindemiatrix*FEMME //Pulcherrima*FEMME
         case 'en-US': return 'en-US-Chirp3-HD-Algieba';
         case 'en-GB': return 'en-GB-Chirp3-HD-Algieba';
+        case 'es-ES': return 'es-ES-Chirp3-HD-Algieba';
+        case 'fr-FR': return 'fr-FR-Chirp3-HD-Algieba';
+        case 'cmn-CN': return 'cmn-CN-Chirp3-HD-Algieba';
         default: return 'en-US-Chirp3-HD-Algieba';
     }
 }
@@ -2952,6 +2955,9 @@ function getGoogleTtsAlternateVoiceByLanguage($language) {
         case 'pt-BR': return 'pt-BR-Chirp3-HD-Algieba';
         case 'en-US': return 'en-US-Chirp3-HD-Enceladus';
         case 'en-GB': return 'en-GB-Chirp3-HD-Algieba';
+        case 'es-ES': return 'es-ES-Chirp3-HD-Algieba';
+        case 'fr-FR': return 'fr-FR-Chirp3-HD-Algieba';
+        case 'cmn-CN': return 'cmn-CN-Chirp3-HD-Algieba';
         default: return 'en-US-Chirp3-HD-Enceladus';
     }
 }
@@ -3013,7 +3019,10 @@ function getLanguageLabel($language) {
     $map = [
         'pt-BR' => 'Português Brasileiro',
         'en-US' => 'Inglês Americano',
-        'en-GB' => 'Inglês Britânico'
+        'en-GB' => 'Inglês Britânico',
+        'es-ES' => 'Espanhol',
+        'fr-FR' => 'Francês',
+        'cmn-CN' => 'Mandarim'
     ];
     return $map[$language] ?? $language;
 }
@@ -3022,7 +3031,7 @@ function getLanguageLabel($language) {
  * Função adjustPronunciationForTTS: Aplica substituições fonéticas cadastradas para melhorar a pronúncia do TTS.
  */
 function adjustPronunciationForTTS($pdo, $text, $language) {
-    $allowed = ['pt-BR', 'en-US', 'en-GB'];
+    $allowed = ['pt-BR', 'en-US', 'en-GB', 'es-ES', 'fr-FR', 'cmn-CN'];
     if (!in_array($language, $allowed, true)) {
         return $text;
     }
@@ -4423,9 +4432,9 @@ elseif ($action === 'generate_audio') {
     $language_key = $auto_detect_language ? '' : (array_key_first($requested_language) ?: '');
     $translations = encryptedFlashcardTranslationMap($side === 'front' ? ($card['front_translations_encrypted'] ?? null) : ($card['back_translations_encrypted'] ?? null));
     $text_encrypted = $side === 'front' ? $card['front_encrypted'] : $card['back_encrypted'];
-    $defaultLang = $side === 'front' ? 'pt_br' : 'en';
+    $defaultLang = $side === 'front' ? 'pt_br' : 'en_gb';
     if ($language_key === '') $language_key = $defaultLang;
-    $clean_text = $auto_detect_language ? '' : trim(strip_tags((string)($translations[$language_key] ?? '')));
+    $clean_text = $auto_detect_language ? '' : trim(strip_tags((string)($translations[$language_key] ?? ($language_key === 'en_gb' ? ($translations['en'] ?? '') : ''))));
     if ($clean_text === '') $clean_text = trim(strip_tags(Security::decryptData($text_encrypted)));
 
     if (empty($clean_text)) {
@@ -4452,7 +4461,7 @@ elseif ($action === 'generate_audio') {
     $tts_error_details = null;
     $ttsLanguage = $auto_detect_language
         ? detectFlashcardTextTtsLanguage($clean_text, $side_language)
-        : (['en' => 'en-GB', 'pt_br' => 'pt-BR', 'es' => 'es-ES', 'fr' => 'fr-FR', 'zh' => 'cmn-CN'][$language_key] ?? $side_language);
+        : (['en' => 'en-GB', 'en_us' => 'en-US', 'en_gb' => 'en-GB', 'pt_br' => 'pt-BR', 'es' => 'es-ES', 'fr' => 'fr-FR', 'zh' => 'cmn-CN'][$language_key] ?? $side_language);
     $ok = generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $clean_text, $ttsLanguage, $deck_structure, $front_language, $back_language, $tts_error_details);
     if ($ok && $language_key !== $defaultLang) {
         $audioCol = $side === 'front' ? 'audio_front_encrypted' : 'audio_back_encrypted';

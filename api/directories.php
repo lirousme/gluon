@@ -254,7 +254,7 @@ function getSortOrderForNewSibling($pdo, $user_id, $parent_id, $parentPref) {
 }
 
 function normalizeDeckLanguageForDirectory($value, $default = 'pt-BR') {
-    $allowed = ['pt-BR', 'en-US', 'en-GB'];
+    $allowed = ['pt-BR', 'en-US', 'en-GB', 'es-ES', 'fr-FR', 'cmn-CN'];
     return in_array($value, $allowed, true) ? $value : $default;
 }
 
