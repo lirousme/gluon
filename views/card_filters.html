@@ -1320,7 +1320,7 @@
             tagFormSection.classList.remove('hidden');
             updateFooter();
             closeMobileMenus();
-            setTimeout(() => document.getElementById(focusId)?.focus(), 20);
+            setTimeout(() => (document.getElementById(focusId) || tagFormSection.querySelector('[data-tag-visible-name]'))?.focus(), 20);
         }
 
 
@@ -1392,8 +1392,8 @@
                         <div class="flex items-center justify-between"><h3 class="text-lg font-semibold">Criar nova tag</h3><button id="btnCloseCreateTagModal" type="button" class="text-slate-400 hover:text-white text-xl">&times;</button></div>
                         <input id="createTagNameInput" type="hidden" maxlength="80" placeholder="Nome" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
                         <input id="createTagNamePtBrInput" type="hidden" maxlength="80" placeholder="Nome pt-br" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
-                        <input id="createTagNumeroInput" type="number" placeholder="Número" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
                         ${renderTagTranslationInputs()}
+                        <input id="createTagNumeroInput" type="number" placeholder="Número" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
                         <label for="createTagPinnedInput" class="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-slate-100"><span><span class="block font-semibold text-amber-100">Criar tag fixada</span><span class="block text-xs text-amber-100/70">A tag já aparecerá nas tags fixadas do menu esquerdo.</span></span><span class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-slate-700 transition has-[:checked]:bg-amber-500"><input id="createTagPinnedInput" type="checkbox" class="peer sr-only" checked><span class="ml-0.5 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5"></span></span></label>
                         <p class="text-xs text-slate-400">Novas tags serão criadas automaticamente na categoria Palavra.</p>
                         <div class="flex justify-end gap-2 pt-2"><button id="btnCancelCreateTag" type="button" class="rounded-lg border border-slate-600 px-4 py-2">Cancelar</button><button id="btnSubmitCreateTag" type="submit" class="rounded-lg bg-violet-600 px-4 py-2 hover:bg-violet-500">Criar tag</button></div>
@@ -1409,15 +1409,15 @@
                         <input id="editTagIdInput" type="hidden" value="${escapeHtml(String(tag.id || ''))}">
                         <input id="editTagNameInput" type="hidden" maxlength="80" placeholder="Nome" value="${escapeHtml(String(tag.name || ''))}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
                         <input id="editTagNamePtBrInput" type="hidden" maxlength="80" placeholder="Nome pt-br" value="${escapeHtml(String(tag.name_pt_br || ''))}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
-                        <input id="editTagNumeroInput" type="number" placeholder="Número" value="${escapeHtml(String(tag.numero ?? ''))}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
                         ${renderTagTranslationInputs(tag)}
+                        <input id="editTagNumeroInput" type="number" placeholder="Número" value="${escapeHtml(String(tag.numero ?? ''))}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
                         <div class="flex justify-end gap-2 pt-2"><button id="btnCancelEditTag" type="button" class="rounded-lg border border-slate-600 px-4 py-2">Cancelar</button><button type="submit" class="rounded-lg bg-amber-600 px-4 py-2 hover:bg-amber-500">Salvar</button></div>
                     </form>
                 </article>`;
         }
 
         function openCreateTagModal() {
-            showTagFormSection(renderCreateTagForm(), 'createTagNumeroInput');
+            showTagFormSection(renderCreateTagForm(), '');
             setupTagLanguageSwitcher(tagFormSection);
             document.getElementById('btnCancelCreateTag').addEventListener('click', () => loadPage(state.page));
             document.getElementById('btnCloseCreateTagModal').addEventListener('click', () => loadPage(state.page));
@@ -1427,7 +1427,7 @@
         function openEditCurrentTagModal() {
             const tag = getCurrentTag();
             if (!canEditTag(tag)) return;
-            showTagFormSection(renderEditTagForm(tag), 'editTagNumeroInput');
+            showTagFormSection(renderEditTagForm(tag), '');
             setupTagLanguageSwitcher(tagFormSection);
             document.getElementById('btnCancelEditTag').addEventListener('click', () => loadPage(state.page));
             document.getElementById('btnCloseEditTagModal').addEventListener('click', () => loadPage(state.page));

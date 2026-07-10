@@ -291,7 +291,6 @@
           <input id="tagNameInput" type="hidden" maxlength="80" placeholder="Ex.: Gramática, Verbos, Trabalho..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
           <input id="tagNamePtBrInput" type="hidden" maxlength="80" placeholder="Nome em pt-BR (ex.: Cachorro)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
           <input id="tagSiglaSimboloInput" type="hidden" maxlength="191" placeholder="Sigla ou símbolo (ex.: °C, π, TCU)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
-          <input id="tagNumeroInput" type="text" maxlength="191" placeholder="Número, valor ou medida (ex.: R$42,40, 1,60m)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
           <div class="rounded-lg border border-slate-700 p-3 space-y-3" data-tag-i18n data-tag-language-switcher>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Variações por idioma (opcional)</p>
@@ -305,6 +304,7 @@
               <input data-tag-visible-symbol type="text" maxlength="191" placeholder="Sigla/símbolo no idioma selecionado" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white">
             </div>
           </div>
+          <input id="tagNumeroInput" type="text" maxlength="191" placeholder="Número, valor ou medida (ex.: R$42,40, 1,60m)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
           <p class="text-xs text-slate-400">Novas tags serão criadas automaticamente na categoria Palavra.</p>
         </div>
         <div class="flex justify-end gap-2">
@@ -318,27 +318,33 @@
     </div>
   </div>
   <div id="editTagModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-[75] opacity-0 transition-opacity duration-300 p-4">
-    <div id="editTagModalContent" class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md transform scale-95 transition-transform duration-300">
-      <form id="editTagForm" class="p-5 space-y-4">
+    <div id="editTagModalContent" class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md transform scale-95 transition-transform duration-300 flex max-h-[90vh] flex-col">
+      <form id="editTagForm" class="min-h-0 flex-1 overflow-y-auto p-5 space-y-4">
         <input type="hidden" id="editTagIdInput">
         <div class="flex items-center justify-between"><h3 class="text-lg font-semibold text-white">Editar tag</h3><button type="button" id="btnCloseEditTagModalIcon" onclick="app.closeEditTagModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button></div>
-        <input id="editTagNameInput" type="text" maxlength="80" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
-        <input id="editTagNamePtBrInput" type="text" maxlength="80" placeholder="Nome em pt-BR" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
-        <input id="editTagSiglaSimboloInput" type="text" maxlength="191" placeholder="Sigla ou símbolo (ex.: °C, π, TCU)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+        <input id="editTagNameInput" type="hidden" maxlength="80" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+        <input id="editTagNamePtBrInput" type="hidden" maxlength="80" placeholder="Nome em pt-BR" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+        <input id="editTagSiglaSimboloInput" type="hidden" maxlength="191" placeholder="Sigla ou símbolo (ex.: °C, π, TCU)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+        <div class="rounded-lg border border-slate-700 p-3 space-y-3" data-tag-i18n data-tag-language-switcher>
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Variações por idioma (opcional)</p>
+            <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-300">Idioma
+              <select data-tag-language-select class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-1.5 text-xs text-white outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary"><option value="en_us">Inglês Americano</option><option value="en_gb">Inglês Britânico</option><option value="pt_br">Português</option><option value="es">Espanhol</option><option value="fr">Francês</option><option value="zh">Mandarim</option></select>
+            </label>
+          </div>
+          <div class="space-y-2 rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+            <input data-tag-visible-name type="text" maxlength="80" placeholder="Nome no idioma selecionado" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white">
+            <textarea data-tag-visible-description rows="3" placeholder="Descrição no idioma selecionado" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea>
+            <input data-tag-visible-symbol type="text" maxlength="191" placeholder="Sigla/símbolo no idioma selecionado" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white">
+          </div>
+        </div>
         <input id="editTagNumeroInput" type="text" maxlength="191" placeholder="Número, valor ou medida (opcional)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-slate-300">
           <label class="inline-flex items-center gap-2"><input id="editTagIsBookInput" type="checkbox" class="h-4 w-4"><span>Livro</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsVerbTenseInput" type="checkbox" class="h-4 w-4"><span>Tempo Verbal</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsSentenceTypeInput" type="checkbox" class="h-4 w-4"><span>Tipo Frasal</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsLexicalChunkInput" type="checkbox" class="h-4 w-4"><span>Lexical Chunk</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsRelationTypeInput" type="checkbox" class="h-4 w-4"><span>Tipo de Relação</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsWordInput" type="checkbox" class="h-4 w-4"><span>Palavra</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsMonthInput" type="checkbox" class="h-4 w-4"><span>Mês</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsDayInput" type="checkbox" class="h-4 w-4"><span>Dia</span></label><label class="inline-flex items-center gap-2"><input id="editTagIsYearInput" type="checkbox" class="h-4 w-4"><span>Ano</span></label>
         </div>
         <div class="flex flex-wrap justify-between gap-2">
           <button type="button" id="btnViewTagFamily" onclick="app.viewTagFamily()" class="px-4 py-2 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-800">Ver família</button>
-          <div class="flex gap-2">
-            <button type="button" id="btnTranslateEditTagGemini" onclick="app.translateEditTagWithGemini()" class="px-4 py-2 rounded-lg border border-amber-300/30 text-amber-300 hover:bg-amber-300/10 hover:text-amber-200" title="Traduzir tag com Gemini">
-              <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Gemini
-            </button>
-            <button type="button" id="btnDeleteTag" onclick="app.deleteTag()" class="px-4 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white">Excluir tag</button>
-            <button type="button" id="btnCancelEditTag" onclick="app.closeEditTagModal()" class="px-4 py-2 rounded-lg bg-slate-700">Cancelar</button>
-            <button id="btnUpdateTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600">Salvar</button>
-          </div>
+          <div class="flex flex-wrap gap-2 justify-end"><button type="button" id="btnDeleteTag" onclick="app.deleteTag()" class="px-4 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white">Excluir tag</button><button type="button" id="btnCancelEditTag" onclick="app.closeEditTagModal()" class="px-4 py-2 rounded-lg bg-slate-700">Cancelar</button><button id="btnUpdateTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600">Salvar</button></div>
         </div>
       </form>
     </div>
@@ -923,9 +929,21 @@ const app = {
     const tag = this.availableTags.find(item => Number(item.id) === Number(tagId));
     if (!tag || !this.canEditTag(tag)) return;
     editTagIdInput.value = String(tag.id || ''); editTagNameInput.value = String(tag.name || ''); editTagNameInput.dataset.tagName = String(tag.name || ''); editTagNamePtBrInput.value = String(tag.name_pt_br || ''); editTagSiglaSimboloInput.value = tag.sigla_simbolo ?? ''; editTagNumeroInput.value = tag.numero ?? '';
+    const editSwitcher = editTagModal.querySelector('[data-tag-language-switcher], [data-tag-i18n]');
+    if (editSwitcher) {
+      editSwitcher.dataset.initialized = '';
+      const names = { ...(tag.name_translations || {}) };
+      if (tag.name && !names.en_us) names.en_us = tag.name;
+      if (tag.name_pt_br && !names.pt_br) names.pt_br = tag.name_pt_br;
+      const symbols = { ...(tag.sigla_simbolo_translations || {}) };
+      if (tag.sigla_simbolo && !symbols.en_us) symbols.en_us = tag.sigla_simbolo;
+      editSwitcher.__tagTranslations = { name: names, description: { ...(tag.description_translations || {}) }, symbol: symbols };
+      const select = editSwitcher.querySelector('[data-tag-language-select]');
+      if (select) select.value = names.en_us ? 'en_us' : (names.en_gb ? 'en_gb' : (names.pt_br ? 'pt_br' : 'en_us'));
+    }
     editTagIsBookInput.checked = Number(tag.is_book) === 1; editTagIsVerbTenseInput.checked = Number(tag.is_verb_tense) === 1; editTagIsSentenceTypeInput.checked = Number(tag.is_sentence_type) === 1; editTagIsLexicalChunkInput.checked = Number(tag.is_lexical_chunk) === 1; editTagIsRelationTypeInput.checked = Number(tag.is_relation_type) === 1; editTagIsWordInput.checked = Number(tag.is_word) === 1; editTagIsMonthInput.checked = Number(tag.is_month) === 1; editTagIsDayInput.checked = Number(tag.is_day) === 1; editTagIsYearInput.checked = Number(tag.is_year) === 1;
     editTagModal.classList.remove('hidden'); editTagModal.classList.add('flex');
-    setTimeout(() => { editTagModal.classList.remove('opacity-0'); editTagModalContent.classList.remove('scale-95'); editTagNameInput.focus(); }, 20);
+    setTimeout(() => { editTagModal.classList.remove('opacity-0'); editTagModalContent.classList.remove('scale-95'); setupTagLanguageSwitcher(editTagModal); editTagModal.querySelector('[data-tag-visible-name]')?.focus(); }, 20);
   },
   closeEditTagModal() {
     editTagModal.classList.add('opacity-0'); editTagModalContent.classList.add('scale-95');
@@ -978,16 +996,12 @@ const app = {
     if (!this.canEditTag(tag)) return this.setStatus('Você não tem permissão para editar esta tag.', 'error');
     btnUpdateTag.disabled = true;
     try {
-      let namePtBr = editTagNamePtBrInput.value.trim();
-      const nameFromEnglish = editTagNameInput.value.trim();
-      const name = nameFromEnglish || namePtBr;
-      if (!name) return this.setStatus('Preencha o nome em inglês ou em pt-BR para editar a tag.', 'error');
-      if (!nameFromEnglish) {
-        editTagNameInput.value = name;
-        editTagNamePtBrInput.value = '';
-        namePtBr = '';
-      }
-      const res = await this.api('update_tag', { id:Number(editTagIdInput.value), name, name_pt_br:namePtBr, numero:editTagNumeroInput.value.trim(), sigla_simbolo:editTagSiglaSimboloInput.value.trim(), is_book:editTagIsBookInput.checked?1:0, is_verb_tense:editTagIsVerbTenseInput.checked?1:0, is_sentence_type:editTagIsSentenceTypeInput.checked?1:0, is_lexical_chunk:editTagIsLexicalChunkInput.checked?1:0, is_relation_type:editTagIsRelationTypeInput.checked?1:0, is_word:editTagIsWordInput.checked?1:0, is_month:editTagIsMonthInput.checked?1:0, is_day:editTagIsDayInput.checked?1:0, is_year:editTagIsYearInput.checked?1:0 });
+      const translations = collectTagTranslationPayload(editTagModal);
+      const name = translations.name_translations.en_us || translations.name_translations.en_gb || translations.name_translations.pt_br || Object.values(translations.name_translations)[0] || '';
+      const namePtBr = translations.name_translations.pt_br || '';
+      const siglaSimbolo = translations.sigla_simbolo_translations.en_us || translations.sigla_simbolo_translations.en_gb || Object.values(translations.sigla_simbolo_translations)[0] || '';
+      if (!name) return this.setStatus('Preencha o nome da tag no idioma selecionado para editar a tag.', 'error');
+      const res = await this.api('update_tag', { id:Number(editTagIdInput.value), name, name_pt_br:namePtBr, numero:editTagNumeroInput.value.trim(), sigla_simbolo:siglaSimbolo, ...translations, is_book:editTagIsBookInput.checked?1:0, is_verb_tense:editTagIsVerbTenseInput.checked?1:0, is_sentence_type:editTagIsSentenceTypeInput.checked?1:0, is_lexical_chunk:editTagIsLexicalChunkInput.checked?1:0, is_relation_type:editTagIsRelationTypeInput.checked?1:0, is_word:editTagIsWordInput.checked?1:0, is_month:editTagIsMonthInput.checked?1:0, is_day:editTagIsDayInput.checked?1:0, is_year:editTagIsYearInput.checked?1:0 });
       await this.loadTags(); this.closeEditTagModal(); this.setStatus(res?.message || 'Tag atualizada com sucesso.', 'success');
     } catch (err) { this.setStatus(err.message || 'Erro ao atualizar tag.', 'error'); }
     finally { btnUpdateTag.disabled = false; }
