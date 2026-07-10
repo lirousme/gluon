@@ -378,16 +378,7 @@
         id,
         numero: document.getElementById('editSavedTagNumero').value,
         name: document.getElementById('editSavedTagName').value,
-        name_pt_br: document.getElementById('editSavedTagNamePtBr').value,
-        is_book: Number(old.is_book) === 1 ? 1 : 0,
-        is_verb_tense: Number(old.is_verb_tense) === 1 ? 1 : 0,
-        is_sentence_type: Number(old.is_sentence_type) === 1 ? 1 : 0,
-        is_lexical_chunk: Number(old.is_lexical_chunk) === 1 ? 1 : 0,
-        is_relation_type: Number(old.is_relation_type) === 1 ? 1 : 0,
-        is_word: Number(old.is_word) === 1 ? 1 : 0,
-        is_month: Number(old.is_month) === 1 ? 1 : 0,
-        is_day: Number(old.is_day) === 1 ? 1 : 0,
-        is_year: Number(old.is_year) === 1 ? 1 : 0
+        name_pt_br: document.getElementById('editSavedTagNamePtBr').value
       });
       closeEditSavedTagModal();
       await load();
