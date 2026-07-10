@@ -2290,7 +2290,7 @@ const flashcardApp = {
                 if (!card) return;
                 const side = this.getCurrentAudioSide(card);
                 if (!side) return;
-                this.openAudioLanguageModal(card.id, side);
+                this.generateAudio(card.id, side, 'auto');
             },
 
             getCardTextLanguageOptions(card, side) {
