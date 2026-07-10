@@ -339,9 +339,8 @@
           </div>
         </div>
         <input id="editTagNumeroInput" type="text" maxlength="191" placeholder="Número, valor ou medida (opcional)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
-        <div class="flex flex-wrap justify-between gap-2">
-          <button type="button" id="btnViewTagFamily" onclick="app.viewTagFamily()" class="px-4 py-2 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-800">Ver família</button>
-          <div class="flex flex-wrap gap-2 justify-end"><button type="button" id="btnDeleteTag" onclick="app.deleteTag()" class="px-4 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white">Excluir tag</button><button type="button" id="btnCancelEditTag" onclick="app.closeEditTagModal()" class="px-4 py-2 rounded-lg bg-slate-700">Cancelar</button><button id="btnUpdateTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600">Salvar</button></div>
+        <div class="flex flex-wrap justify-end gap-2">
+          <button type="button" id="btnDeleteTag" onclick="app.deleteTag()" class="px-4 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white">Excluir tag</button><button type="button" id="btnCancelEditTag" onclick="app.closeEditTagModal()" class="px-4 py-2 rounded-lg bg-slate-700">Cancelar</button><button id="btnUpdateTag" type="submit" class="px-4 py-2 rounded-lg bg-violet-600">Salvar</button>
         </div>
       </form>
     </div>
@@ -939,12 +938,6 @@ const app = {
   closeEditTagModal() {
     editTagModal.classList.add('opacity-0'); editTagModalContent.classList.add('scale-95');
     setTimeout(() => { editTagModal.classList.add('hidden'); editTagModal.classList.remove('flex'); }, 200);
-  },
-  viewTagFamily() {
-    const rawName = String(editTagNameInput?.dataset?.tagName || editTagNameInput?.value || '').trim();
-    if (!rawName) return;
-    const tagId = Number(editTagIdInput?.value || 0);
-    window.location.href = `/views/tag_family.html?tag_id=${encodeURIComponent(tagId)}&tag_name=${encodeURIComponent(rawName)}`;
   },
   async createTag(e) {
     e.preventDefault();

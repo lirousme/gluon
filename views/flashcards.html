@@ -1470,20 +1470,6 @@ const flashcardApp = {
                 hidden.value = JSON.stringify(next);
                 this.renderTagSelector(next);
             },
-            viewTagFamily(tagId) {
-                const parsedId = Number(tagId);
-                if (!parsedId) return;
-
-                const tag = this.availableTags.find(t => Number(t.id) === parsedId);
-                if (!tag) {
-                    this.showToast('Tag não encontrada.', 'error');
-                    return;
-                }
-
-                const rawName = String(tag.name || '').trim();
-                window.location.href = `/views/tag_family.html?tag_id=${encodeURIComponent(parsedId)}&tag_name=${encodeURIComponent(rawName)}`;
-            },
-
             async generateMissingAudiosFromDeckFromPanel() {
                 this.closeRightPanel();
                 await this.generateMissingAudiosFromCurrentDeck();
@@ -2131,8 +2117,8 @@ const flashcardApp = {
                     const buildTagButton = (tag, categoryLabel = '') => {
                         const tagId = Number(tag.id);
                         const isDecisionTag = decisionTagId > 0 && tagId === decisionTagId;
-                        const title = isDecisionTag ? 'Tag responsável por encontrar este card' : 'Ver família da tag';
-                        return `<button type="button" onclick="flashcardApp.viewTagFamily(${tagId})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${this.getCardTagDisplayClass(tag, decisionTagId)}" title="${title}">${this.renderTagButtonContent(tag, numeroPtBrCounts, categoryLabel)}</button>`;
+                        const title = isDecisionTag ? 'Tag responsável por encontrar este card' : 'Tag do card';
+                        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${this.getCardTagDisplayClass(tag, decisionTagId)}" title="${title}">${this.renderTagButtonContent(tag, numeroPtBrCounts, categoryLabel)}</span>`;
                     };
 
                     tagsList.innerHTML = tagsByPanel.map(group => {
