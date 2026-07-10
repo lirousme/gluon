@@ -280,8 +280,8 @@
     </form>
   </main>
   <div id="tagModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-[70] opacity-0 transition-opacity duration-300 p-4">
-    <div id="tagModalContent" class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md transform scale-95 transition-transform duration-300">
-      <form id="tagForm" class="p-5 space-y-4">
+    <div id="tagModalContent" class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-md transform scale-95 transition-transform duration-300 flex max-h-[90vh] flex-col">
+      <form id="tagForm" class="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
         <div class="flex items-center justify-between">
           <h3 class="text-lg font-semibold text-white">Criar nova tag</h3>
           <button type="button" id="btnCloseCreateTagModalIcon" onclick="app.closeCreateTagModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
@@ -292,11 +292,21 @@
           <input id="tagNamePtBrInput" type="text" maxlength="80" placeholder="Nome em pt-BR (ex.: Cachorro)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
           <input id="tagSiglaSimboloInput" type="text" maxlength="191" placeholder="Sigla ou símbolo (ex.: °C, π, TCU)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
           <input id="tagNumeroInput" type="text" maxlength="191" placeholder="Número, valor ou medida (ex.: R$42,40, 1,60m)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
-          <div class="rounded-lg border border-slate-700 p-3 space-y-3" data-tag-i18n>
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Variações por idioma (opcional)</p>
-            <div class="space-y-2" data-lang="en"><p class="text-xs text-slate-300">Inglês</p><input data-tag-name-lang="en" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="en" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="en" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div>
-            <div class="space-y-2" data-lang="pt_br"><p class="text-xs text-slate-300">Português</p><input data-tag-name-lang="pt_br" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="pt_br" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="pt_br" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div>
-            <details class="space-y-2"><summary class="cursor-pointer text-xs text-slate-400">Espanhol, Francês e Mandarim</summary><div class="mt-2 space-y-3"><div class="space-y-2"><p class="text-xs text-slate-300">Espanhol</p><input data-tag-name-lang="es" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="es" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="es" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div><div class="space-y-2"><p class="text-xs text-slate-300">Francês</p><input data-tag-name-lang="fr" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="fr" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="fr" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div><div class="space-y-2"><p class="text-xs text-slate-300">Mandarim</p><input data-tag-name-lang="zh" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="zh" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="zh" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div></div></details>
+          <div class="rounded-lg border border-slate-700 p-3 space-y-3" data-tag-i18n data-tag-language-switcher>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Variações por idioma (opcional)</p>
+              <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-300">Idioma
+                <select data-tag-language-select class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-1.5 text-xs text-white outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary"><option value="en">Inglês</option><option value="pt_br">Português</option><option value="es">Espanhol</option><option value="fr">Francês</option><option value="zh">Mandarim</option></select>
+              </label>
+            </div>
+            <div class="space-y-2 rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+              <input data-tag-visible-name type="text" maxlength="80" placeholder="Nome no idioma selecionado" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white">
+              <textarea data-tag-visible-description rows="3" placeholder="Descrição no idioma selecionado" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea>
+              <input data-tag-visible-symbol type="text" maxlength="191" placeholder="Sigla/símbolo no idioma selecionado" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white">
+            </div>
+            <div class="hidden space-y-2" data-lang="en"><p class="text-xs text-slate-300">Inglês</p><input data-tag-name-lang="en" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="en" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="en" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div>
+            <div class="hidden space-y-2" data-lang="pt_br"><p class="text-xs text-slate-300">Português</p><input data-tag-name-lang="pt_br" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="pt_br" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="pt_br" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div>
+            <details class="hidden space-y-2"><summary class="cursor-pointer text-xs text-slate-400">Espanhol, Francês e Mandarim</summary><div class="mt-2 space-y-3"><div class="space-y-2"><p class="text-xs text-slate-300">Espanhol</p><input data-tag-name-lang="es" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="es" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="es" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div><div class="space-y-2"><p class="text-xs text-slate-300">Francês</p><input data-tag-name-lang="fr" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="fr" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="fr" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div><div class="space-y-2"><p class="text-xs text-slate-300">Mandarim</p><input data-tag-name-lang="zh" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="zh" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="zh" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div></div></details>
           </div>
           <p class="text-xs text-slate-400">Novas tags serão criadas automaticamente na categoria Palavra.</p>
         </div>
@@ -409,6 +419,35 @@ const FLASHCARD_TRANSLATION_LANGUAGES = [
 function parseInitialSubjectTagIds(params) {
   const rawTagIds = params.get('tag_ids') || params.get('tag_id') || '';
   return rawTagIds.split(',').map(id => Number(id)).filter((id, index, ids) => id > 0 && ids.indexOf(id) === index);
+}
+
+function setupTagLanguageSwitcher(root = document) {
+  const wrapper = root.querySelector('[data-tag-language-switcher], [data-tag-i18n]');
+  if (!wrapper || wrapper.dataset.initialized === '1') return;
+  wrapper.dataset.initialized = '1';
+  const select = wrapper.querySelector('[data-tag-language-select]');
+  const visibleName = wrapper.querySelector('[data-tag-visible-name]');
+  const visibleDescription = wrapper.querySelector('[data-tag-visible-description]');
+  const visibleSymbol = wrapper.querySelector('[data-tag-visible-symbol]');
+  const getHidden = (kind, lang) => wrapper.querySelector(`[data-tag-${kind}-lang="${lang}"]`);
+  const load = () => {
+    const lang = select.value;
+    visibleName.value = getHidden('name', lang)?.value || '';
+    visibleDescription.value = getHidden('description', lang)?.value || '';
+    visibleSymbol.value = getHidden('symbol', lang)?.value || '';
+  };
+  const save = () => {
+    const lang = select.value;
+    const name = getHidden('name', lang);
+    const description = getHidden('description', lang);
+    const symbol = getHidden('symbol', lang);
+    if (name) name.value = visibleName.value;
+    if (description) description.value = visibleDescription.value;
+    if (symbol) symbol.value = visibleSymbol.value;
+  };
+  select.addEventListener('change', load);
+  [visibleName, visibleDescription, visibleSymbol].forEach((el) => el.addEventListener('input', save));
+  load();
 }
 
 function collectTagTranslationPayload(root = document) {
@@ -822,7 +861,8 @@ const app = {
     setTimeout(() => {
       tagModal.classList.remove('opacity-0');
       tagModalContent.classList.remove('scale-95');
-      tagNameInput.focus();
+      setupTagLanguageSwitcher(tagModal);
+      tagModal.querySelector('[data-tag-visible-name]')?.focus();
     }, 20);
   },
   closeCreateTagModal() {
