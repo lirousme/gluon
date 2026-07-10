@@ -142,13 +142,12 @@
           </div>
           <div id="singleFrontEditor" contenteditable="true" data-text-field="front" data-placeholder="Frente do flashcard" class="rich-text-editor min-h-[132px] w-full overflow-auto rounded-b-lg px-4 py-3 text-white outline-none focus:ring-1 focus:ring-gluon-primary"></div>
         </div>
-        <p id="singleFrontCharCount" class="text-right text-[0.6875rem] leading-4 text-slate-500" aria-live="polite">0 caracteres</p>
-        <div class="rounded-lg border border-blue-400/20 bg-blue-950/10 p-3 space-y-3">
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-blue-200">Variações da frente por idioma (opcional)</p>
-            <p class="mt-1 text-xs text-slate-400">Preencha somente os idiomas que quiser. O texto principal acima continua sendo usado como fallback.</p>
-          </div>
-          <div id="frontTranslationsFields" class="grid grid-cols-1 gap-3 md:grid-cols-2"></div>
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <label class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-blue-200">
+            Idioma da frente
+            <select id="frontLanguageSelect" data-card-language-select="front" class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-1.5 text-xs normal-case tracking-normal text-white outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary"></select>
+          </label>
+          <p id="singleFrontCharCount" class="text-right text-[0.6875rem] leading-4 text-slate-500" aria-live="polite">0 caracteres</p>
         </div>
         <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-3">
           <label for="dynamicTextType" class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-300">Texto dinâmico</label>
@@ -182,13 +181,12 @@
           </div>
           <div id="singleBackEditor" contenteditable="true" data-text-field="back" data-placeholder="Verso do flashcard" class="rich-text-editor min-h-[132px] w-full overflow-auto rounded-b-lg px-4 py-3 text-white outline-none focus:ring-1 focus:ring-gluon-primary"></div>
         </div>
-        <p id="singleBackCharCount" class="mt-1 text-right text-[0.6875rem] leading-4 text-slate-500" aria-live="polite">0 caracteres</p>
-        <div class="mt-3 rounded-lg border border-purple-400/20 bg-purple-950/10 p-3 space-y-3">
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-purple-200">Variações do verso por idioma (opcional)</p>
-            <p class="mt-1 text-xs text-slate-400">Preencha somente os idiomas que quiser. O texto principal acima continua sendo usado como fallback.</p>
-          </div>
-          <div id="backTranslationsFields" class="grid grid-cols-1 gap-3 md:grid-cols-2"></div>
+        <div class="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <label class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-purple-200">
+            Idioma do verso
+            <select id="backLanguageSelect" data-card-language-select="back" class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-1.5 text-xs normal-case tracking-normal text-white outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary"></select>
+          </label>
+          <p id="singleBackCharCount" class="text-right text-[0.6875rem] leading-4 text-slate-500" aria-live="polite">0 caracteres</p>
         </div>
       </section>
 
@@ -449,6 +447,8 @@ const app = {
   sessionUserId: null,
   pendingFrontSentenceTagCandidates: null,
   richTextSelections: {},
+  activeTextLanguageKey: { front: 'en', back: 'en' },
+  textLanguageDrafts: { front: {}, back: {} },
   publicDirectoryId: 6452,
   currentCardDirectoryId: null,
   currentCardPrivateDirectoryId: null,
@@ -458,31 +458,85 @@ const app = {
     object: { selectedInputId: 'selectedObjectTagIds', selectorId: 'objectTagSelector', activeClass: 'bg-sky-500/20 text-sky-200 border-sky-400', searchQuery: '' },
     lexicalChunk: { selectedInputId: 'selectedLexicalChunkTagIds', selectorId: 'lexicalChunkTagSelector', activeClass: 'bg-cyan-500/20 text-cyan-200 border-cyan-400', searchQuery: '' }
   },
+  getLanguageByKey(key) {
+    return FLASHCARD_TRANSLATION_LANGUAGES.find(lang => lang.key === key) || FLASHCARD_TRANSLATION_LANGUAGES[0];
+  },
+  normalizeFlashcardLanguageKey(key, fallback = 'en') {
+    const normalized = String(key || '').trim().toLowerCase().replace('-', '_');
+    return FLASHCARD_TRANSLATION_LANGUAGES.some(lang => lang.key === normalized) ? normalized : fallback;
+  },
+  deckLanguageToTranslationKey(language, fallback = 'en') {
+    const value = String(language || '').trim().toLowerCase();
+    if (value.startsWith('pt')) return 'pt_br';
+    if (value.startsWith('es')) return 'es';
+    if (value.startsWith('fr')) return 'fr';
+    if (value.startsWith('zh') || value.includes('mandarin')) return 'zh';
+    if (value.startsWith('en')) return 'en';
+    return fallback;
+  },
+  getPrimaryTextLanguageKey(side) {
+    return this.deckLanguageToTranslationKey(side === 'front' ? this.frontLanguage : this.backLanguage, 'en');
+  },
+  getTextLanguageSelect(side) {
+    return document.getElementById(side === 'front' ? 'frontLanguageSelect' : 'backLanguageSelect');
+  },
   renderFlashcardTranslationFields() {
-    const render = (side) => FLASHCARD_TRANSLATION_LANGUAGES.map((lang) => `
-      <label class="block space-y-1">
-        <span class="text-xs font-medium text-slate-300">${this.escapeHTML(lang.label)}</span>
-        <textarea data-card-translation-side="${side}" data-card-translation-lang="${lang.key}" rows="3" placeholder="${side === 'front' ? 'Frente' : 'Verso'} em ${this.escapeHTML(lang.label)}" class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary"></textarea>
-      </label>
-    `).join('');
-    const frontEl = document.getElementById('frontTranslationsFields');
-    const backEl = document.getElementById('backTranslationsFields');
-    if (frontEl) frontEl.innerHTML = render('front');
-    if (backEl) backEl.innerHTML = render('back');
+    ['front', 'back'].forEach((side) => {
+      const select = this.getTextLanguageSelect(side);
+      if (!select) return;
+      select.innerHTML = FLASHCARD_TRANSLATION_LANGUAGES.map((lang) => `<option value="${this.escapeHTML(lang.key)}">${this.escapeHTML(lang.label)}</option>`).join('');
+      const preferredKey = this.getPrimaryTextLanguageKey(side);
+      this.activeTextLanguageKey[side] = preferredKey;
+      select.value = preferredKey;
+    });
+  },
+  persistActiveLanguageText(side) {
+    const key = this.normalizeFlashcardLanguageKey(this.activeTextLanguageKey[side], this.getPrimaryTextLanguageKey(side));
+    this.syncRichTextInput(side);
+    const value = this.getTextInput(side)?.value || '';
+    this.textLanguageDrafts[side][key] = value;
+  },
+  setActiveTextLanguage(side, key, { persistCurrent = true } = {}) {
+    const normalizedKey = this.normalizeFlashcardLanguageKey(key, this.getPrimaryTextLanguageKey(side));
+    if (persistCurrent) this.persistActiveLanguageText(side);
+    this.activeTextLanguageKey[side] = normalizedKey;
+    const select = this.getTextLanguageSelect(side);
+    if (select) select.value = normalizedKey;
+    this.setTextFieldValue(side, this.textLanguageDrafts[side]?.[normalizedKey] || '');
+  },
+  setupFlashcardLanguageSelectors() {
+    this.renderFlashcardTranslationFields();
+    document.querySelectorAll('[data-card-language-select]').forEach((select) => {
+      select.addEventListener('change', () => this.setActiveTextLanguage(select.dataset.cardLanguageSelect, select.value));
+    });
   },
   collectFlashcardTranslations(side) {
-    return Array.from(document.querySelectorAll(`[data-card-translation-side="${side}"]`)).reduce((acc, el) => {
-      const lang = String(el.dataset.cardTranslationLang || '').trim();
-      const value = String(el.value || '').trim();
-      if (lang && value) acc[lang] = value;
+    this.persistActiveLanguageText(side);
+    return FLASHCARD_TRANSLATION_LANGUAGES.reduce((acc, lang) => {
+      const value = this.sanitizeRichTextHTML(this.textLanguageDrafts[side]?.[lang.key] || '').trim();
+      if (value) acc[lang.key] = value;
       return acc;
     }, {});
   },
-  setFlashcardTranslations(side, translations = {}) {
-    document.querySelectorAll(`[data-card-translation-side="${side}"]`).forEach((el) => {
-      const lang = String(el.dataset.cardTranslationLang || '').trim();
-      el.value = String(translations?.[lang] || '');
+  getPrimaryFlashcardText(side) {
+    const translations = this.collectFlashcardTranslations(side);
+    const primaryKey = this.getPrimaryTextLanguageKey(side);
+    const primary = translations[primaryKey] || '';
+    if (primary) return primary;
+    const activeKey = this.normalizeFlashcardLanguageKey(this.activeTextLanguageKey[side], primaryKey);
+    if (translations[activeKey]) return translations[activeKey];
+    const firstFilled = FLASHCARD_TRANSLATION_LANGUAGES.map(lang => translations[lang.key]).find(Boolean);
+    return firstFilled || '';
+  },
+  setFlashcardTranslations(side, translations = {}, primaryText = '') {
+    const drafts = {};
+    FLASHCARD_TRANSLATION_LANGUAGES.forEach((lang) => {
+      drafts[lang.key] = this.sanitizeRichTextHTML(translations?.[lang.key] || '');
     });
+    const primaryKey = this.getPrimaryTextLanguageKey(side);
+    if (primaryText && !drafts[primaryKey]) drafts[primaryKey] = this.sanitizeRichTextHTML(primaryText);
+    this.textLanguageDrafts[side] = drafts;
+    this.setActiveTextLanguage(side, primaryKey, { persistCurrent: false });
   },
   setupEditTagCategorySingleSelect() {
     const ids = ['editTagIsBookInput','editTagIsVerbTenseInput','editTagIsSentenceTypeInput','editTagIsLexicalChunkInput','editTagIsRelationTypeInput','editTagIsWordInput','editTagIsMonthInput','editTagIsDayInput','editTagIsYearInput'];
@@ -536,7 +590,9 @@ const app = {
     const textarea = field === 'front' ? document.getElementById('singleFront') : document.getElementById('singleBack');
     const counter = field === 'front' ? document.getElementById('singleFrontCharCount') : document.getElementById('singleBackCharCount');
     if (!textarea || !counter) return;
-    counter.textContent = this.getCharacterCountLabel(this.getTextFieldPlainText(field).length);
+    const langLabel = this.getLanguageByKey(this.activeTextLanguageKey[field])?.label || '';
+    const countLabel = this.getCharacterCountLabel(this.getTextFieldPlainText(field).length);
+    counter.textContent = langLabel ? `${countLabel} · ${langLabel}` : countLabel;
   },
   updateAllTextCharacterCounts() {
     this.updateTextCharacterCount('front');
@@ -630,6 +686,7 @@ const app = {
       editor.addEventListener('input', () => {
         this.saveRichTextSelection(field);
         this.syncRichTextInput(field);
+        this.persistActiveLanguageText(field);
         this.updateTextCharacterCount(field);
       });
       editor.addEventListener('mouseup', () => this.saveRichTextSelection(field));
@@ -641,6 +698,7 @@ const app = {
         const text = event.clipboardData?.getData('text/plain') || '';
         document.execCommand('insertHTML', false, html ? this.sanitizeRichTextHTML(html) : this.escapeHTML(text).replace(/\n/g, '<br>'));
         this.syncRichTextInput(field);
+        this.persistActiveLanguageText(field);
         this.updateTextCharacterCount(field);
       });
     });
@@ -1657,10 +1715,8 @@ const app = {
     this.currentCardPrivateDirectoryId = Number(card.private_directory_id || 0) || null;
     this.currentCardIsPublic = Number(card.is_public) === 1 || this.currentCardDirectoryId === this.publicDirectoryId;
     if (!duplicate) this.updatePublicToggleButton();
-    this.setTextFieldValue('front', card.front || '');
-    this.setTextFieldValue('back', String(card.back || ''));
-    this.setFlashcardTranslations('front', card.front_translations || {});
-    this.setFlashcardTranslations('back', card.back_translations || {});
+    this.setFlashcardTranslations('front', card.front_translations || {}, card.front || '');
+    this.setFlashcardTranslations('back', card.back_translations || {}, String(card.back || ''));
     this.updateAllTextCharacterCounts();
     if (card.image_front) this.setBase64ImagePreview('front', card.image_front);
     if (card.image_back) this.setBase64ImagePreview('back', card.image_back);
@@ -1773,10 +1829,12 @@ const app = {
   },
   async save(e) {
     e.preventDefault();
-    const front = this.getTextFieldValue('front').trim();
-    const frontPlainText = this.getTextFieldPlainText('front').trim();
-    const back = this.getTextFieldValue('back').trim();
-    const backPlainText = this.getTextFieldPlainText('back').trim();
+    this.persistActiveLanguageText('front');
+    this.persistActiveLanguageText('back');
+    const front = this.getPrimaryFlashcardText('front').trim();
+    const frontPlainText = this.sanitizeRichTextHTML(front).replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim();
+    const back = this.getPrimaryFlashcardText('back').trim();
+    const backPlainText = this.sanitizeRichTextHTML(back).replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim();
     const image_front = frontImageBase64.value;
     const image_back = backImageBase64.value;
     let subject_tag_ids = this.getSelectedTagIds('subject');
@@ -1844,7 +1902,6 @@ tagForm.onsubmit = (e) => app.createTag(e);
 editTagForm.onsubmit = (e) => app.updateTag(e);
 app.setupEditTagCategorySingleSelect();
 app.setupButtonIdContextCopy();
-app.renderFlashcardTranslationFields();
 app.setupTextCharacterCounters();
 tagModal.onclick = (e) => { if (e.target === tagModal) app.closeCreateTagModal(); };
 editTagModal.onclick = (e) => { if (e.target === editTagModal) app.closeEditTagModal(); };
@@ -1858,6 +1915,7 @@ document.addEventListener('keydown', (e) => {
   app.setInfoType(app.infoType);
   app.setQuestionAnswer(app.questionAnswer);
   await app.setPageTitleWithDirectoryName();
+  app.setupFlashcardLanguageSelectors();
   await app.loadSessionUserId();
   await Promise.all([app.loadTags(), app.loadFrequenciasInformacionais()]);
   app.applyInitialSubjectTag();
