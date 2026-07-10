@@ -1328,7 +1328,7 @@
             const names = tag.name_translations || {};
             const descriptions = tag.description_translations || {};
             const symbols = tag.sigla_simbolo_translations || {};
-            const languages = [['en','Inglês'], ['pt_br','Português'], ['es','Espanhol'], ['fr','Francês'], ['zh','Mandarim']];
+            const languages = [['en_us','Inglês Americano'], ['en_gb','Inglês Britânico'], ['pt_br','Português'], ['es','Espanhol'], ['fr','Francês'], ['zh','Mandarim']];
             return `<div class="rounded-lg border border-slate-700 p-3 space-y-3" data-tag-language-switcher>
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Variações por idioma (opcional)</p>
@@ -1341,7 +1341,7 @@
                     <textarea data-tag-visible-description rows="3" placeholder="Descrição no idioma selecionado" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2"></textarea>
                     <input data-tag-visible-symbol type="text" maxlength="191" placeholder="Sigla/símbolo no idioma selecionado" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
                 </div>
-                <div class="hidden">${languages.map(([code,label]) => `<div><input data-tag-name-lang="${code}" type="text" value="${escapeHtml(String(names[code] || ''))}"><textarea data-tag-description-lang="${code}">${escapeHtml(String(descriptions[code] || ''))}</textarea><input data-tag-symbol-lang="${code}" type="text" value="${escapeHtml(String(symbols[code] || ''))}"></div>`).join('')}</div>
+                <div class="hidden">${languages.map(([code,label]) => `<div><input data-tag-name-lang="${code}" type="text" value="${escapeHtml(String(names[code] || (code === 'en_gb' ? (names.en || '') : '')))}"><textarea data-tag-description-lang="${code}">${escapeHtml(String(descriptions[code] || (code === 'en_gb' ? (descriptions.en || '') : '')))}</textarea><input data-tag-symbol-lang="${code}" type="text" value="${escapeHtml(String(symbols[code] || (code === 'en_gb' ? (symbols.en || '') : '')))}"></div>`).join('')}</div>
             </div>`;
         }
 
