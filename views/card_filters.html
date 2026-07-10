@@ -1325,11 +1325,11 @@
 
 
         function renderTagTranslationInputs(tag = {}) {
-            const names = tag.name_translations || {};
+            const names = { ...(tag.name_translations || {}) }; if (tag.name && !names.en_us) names.en_us = tag.name; if (tag.name_pt_br && !names.pt_br) names.pt_br = tag.name_pt_br;
             const descriptions = tag.description_translations || {};
             const symbols = tag.sigla_simbolo_translations || {};
             const languages = [['en_us','Inglês Americano'], ['en_gb','Inglês Britânico'], ['pt_br','Português'], ['es','Espanhol'], ['fr','Francês'], ['zh','Mandarim']];
-            return `<div class="rounded-lg border border-slate-700 p-3 space-y-3" data-tag-language-switcher>
+            return `<div class="rounded-lg border border-slate-700 p-3 space-y-3" data-tag-language-switcher data-names='${escapeHtml(JSON.stringify(names))}' data-descriptions='${escapeHtml(JSON.stringify(descriptions))}' data-symbols='${escapeHtml(JSON.stringify(symbols))}'>
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Variações por idioma (opcional)</p>
                     <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-300">Idioma
@@ -1341,7 +1341,6 @@
                     <textarea data-tag-visible-description rows="3" placeholder="Descrição no idioma selecionado" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2"></textarea>
                     <input data-tag-visible-symbol type="text" maxlength="191" placeholder="Sigla/símbolo no idioma selecionado" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
                 </div>
-                <div class="hidden">${languages.map(([code,label]) => `<div><input data-tag-name-lang="${code}" type="text" value="${escapeHtml(String(names[code] || (code === 'en_gb' ? (names.en || '') : '')))}"><textarea data-tag-description-lang="${code}">${escapeHtml(String(descriptions[code] || (code === 'en_gb' ? (descriptions.en || '') : '')))}</textarea><input data-tag-symbol-lang="${code}" type="text" value="${escapeHtml(String(symbols[code] || (code === 'en_gb' ? (symbols.en || '') : '')))}"></div>`).join('')}</div>
             </div>`;
         }
 
@@ -1353,17 +1352,37 @@
             const visibleName = wrapper.querySelector('[data-tag-visible-name]');
             const visibleDescription = wrapper.querySelector('[data-tag-visible-description]');
             const visibleSymbol = wrapper.querySelector('[data-tag-visible-symbol]');
-            const getHidden = (kind, lang) => wrapper.querySelector(`[data-tag-${kind}-lang="${lang}"]`);
-            const load = () => { const lang = select.value; visibleName.value = getHidden('name', lang)?.value || ''; visibleDescription.value = getHidden('description', lang)?.value || ''; visibleSymbol.value = getHidden('symbol', lang)?.value || ''; };
-            const save = () => { const lang = select.value; const name = getHidden('name', lang); const description = getHidden('description', lang); const symbol = getHidden('symbol', lang); if (name) name.value = visibleName.value; if (description) description.value = visibleDescription.value; if (symbol) symbol.value = visibleSymbol.value; };
-            select.addEventListener('change', load);
+            const names = JSON.parse(wrapper.dataset.names || '{}');
+            const descriptions = JSON.parse(wrapper.dataset.descriptions || '{}');
+            const symbols = JSON.parse(wrapper.dataset.symbols || '{}');
+            wrapper.__tagTranslations = wrapper.__tagTranslations || { name: names, description: descriptions, symbol: symbols };
+            let currentLang = select.value;
+            const save = () => { wrapper.__tagTranslations.name[currentLang] = visibleName.value; wrapper.__tagTranslations.description[currentLang] = visibleDescription.value; wrapper.__tagTranslations.symbol[currentLang] = visibleSymbol.value; };
+            const load = () => { const lang = currentLang; visibleName.value = wrapper.__tagTranslations.name[lang] || ''; visibleDescription.value = wrapper.__tagTranslations.description[lang] || ''; visibleSymbol.value = wrapper.__tagTranslations.symbol[lang] || ''; };
+            select.addEventListener('change', () => { save(); currentLang = select.value; load(); });
             [visibleName, visibleDescription, visibleSymbol].forEach((el) => el.addEventListener('input', save));
             load();
         }
 
         function collectTagTranslationPayload(root = document) {
-            const collect = (selector, attr) => Array.from(root.querySelectorAll(selector)).reduce((acc, input) => { const value = input.value.trim(); const lang = input.getAttribute(attr); if (lang && value) acc[lang] = value; return acc; }, {});
-            return { name_translations: collect('[data-tag-name-lang]', 'data-tag-name-lang'), description_translations: collect('[data-tag-description-lang]', 'data-tag-description-lang'), sigla_simbolo_translations: collect('[data-tag-symbol-lang]', 'data-tag-symbol-lang') };
+            const wrapper = root.querySelector('[data-tag-language-switcher]');
+            if (wrapper) {
+                setupTagLanguageSwitcher(root);
+                const select = wrapper.querySelector('[data-tag-language-select]');
+                const visibleName = wrapper.querySelector('[data-tag-visible-name]');
+                const visibleDescription = wrapper.querySelector('[data-tag-visible-description]');
+                const visibleSymbol = wrapper.querySelector('[data-tag-visible-symbol]');
+                if (select && visibleName && visibleDescription && visibleSymbol) {
+                    const lang = select.value;
+                    wrapper.__tagTranslations ||= { name: {}, description: {}, symbol: {} };
+                    wrapper.__tagTranslations.name[lang] = visibleName.value;
+                    wrapper.__tagTranslations.description[lang] = visibleDescription.value;
+                    wrapper.__tagTranslations.symbol[lang] = visibleSymbol.value;
+                }
+                const clean = (obj = {}) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, String(v || '').trim()]).filter(([, v]) => v));
+                return { name_translations: clean(wrapper.__tagTranslations?.name), description_translations: clean(wrapper.__tagTranslations?.description), sigla_simbolo_translations: clean(wrapper.__tagTranslations?.symbol) };
+            }
+            return { name_translations: {}, description_translations: {}, sigla_simbolo_translations: {} };
         }
 
         function renderCreateTagForm() {
@@ -1371,8 +1390,8 @@
                 <article class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-xl shadow-black/20">
                     <form id="createTagForm" class="space-y-3">
                         <div class="flex items-center justify-between"><h3 class="text-lg font-semibold">Criar nova tag</h3><button id="btnCloseCreateTagModal" type="button" class="text-slate-400 hover:text-white text-xl">&times;</button></div>
-                        <input id="createTagNameInput" type="text" maxlength="80" placeholder="Nome" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
-                        <input id="createTagNamePtBrInput" type="text" maxlength="80" placeholder="Nome pt-br" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
+                        <input id="createTagNameInput" type="hidden" maxlength="80" placeholder="Nome" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
+                        <input id="createTagNamePtBrInput" type="hidden" maxlength="80" placeholder="Nome pt-br" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
                         <input id="createTagNumeroInput" type="number" placeholder="Número" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
                         ${renderTagTranslationInputs()}
                         <label for="createTagPinnedInput" class="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-slate-100"><span><span class="block font-semibold text-amber-100">Criar tag fixada</span><span class="block text-xs text-amber-100/70">A tag já aparecerá nas tags fixadas do menu esquerdo.</span></span><span class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-slate-700 transition has-[:checked]:bg-amber-500"><input id="createTagPinnedInput" type="checkbox" class="peer sr-only" checked><span class="ml-0.5 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5"></span></span></label>
@@ -1388,8 +1407,8 @@
                     <form id="editTagForm" class="space-y-3">
                         <div class="flex items-center justify-between"><h3 class="text-lg font-semibold">Editar tag</h3><button id="btnCloseEditTagModal" type="button" class="text-slate-400 hover:text-white text-xl">&times;</button></div>
                         <input id="editTagIdInput" type="hidden" value="${escapeHtml(String(tag.id || ''))}">
-                        <input id="editTagNameInput" type="text" maxlength="80" placeholder="Nome" value="${escapeHtml(String(tag.name || ''))}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
-                        <input id="editTagNamePtBrInput" type="text" maxlength="80" placeholder="Nome pt-br" value="${escapeHtml(String(tag.name_pt_br || ''))}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
+                        <input id="editTagNameInput" type="hidden" maxlength="80" placeholder="Nome" value="${escapeHtml(String(tag.name || ''))}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
+                        <input id="editTagNamePtBrInput" type="hidden" maxlength="80" placeholder="Nome pt-br" value="${escapeHtml(String(tag.name_pt_br || ''))}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
                         <input id="editTagNumeroInput" type="number" placeholder="Número" value="${escapeHtml(String(tag.numero ?? ''))}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
                         ${renderTagTranslationInputs(tag)}
                         <div class="flex justify-end gap-2 pt-2"><button id="btnCancelEditTag" type="button" class="rounded-lg border border-slate-600 px-4 py-2">Cancelar</button><button type="submit" class="rounded-lg bg-amber-600 px-4 py-2 hover:bg-amber-500">Salvar</button></div>
@@ -1398,7 +1417,7 @@
         }
 
         function openCreateTagModal() {
-            showTagFormSection(renderCreateTagForm(), 'createTagNameInput');
+            showTagFormSection(renderCreateTagForm(), 'createTagNumeroInput');
             setupTagLanguageSwitcher(tagFormSection);
             document.getElementById('btnCancelCreateTag').addEventListener('click', () => loadPage(state.page));
             document.getElementById('btnCloseCreateTagModal').addEventListener('click', () => loadPage(state.page));
@@ -1408,7 +1427,7 @@
         function openEditCurrentTagModal() {
             const tag = getCurrentTag();
             if (!canEditTag(tag)) return;
-            showTagFormSection(renderEditTagForm(tag), 'editTagNameInput');
+            showTagFormSection(renderEditTagForm(tag), 'editTagNumeroInput');
             setupTagLanguageSwitcher(tagFormSection);
             document.getElementById('btnCancelEditTag').addEventListener('click', () => loadPage(state.page));
             document.getElementById('btnCloseEditTagModal').addEventListener('click', () => loadPage(state.page));
@@ -1417,14 +1436,11 @@
 
         async function submitCreateTag(event) {
             event.preventDefault();
-            const nameInput = document.getElementById('createTagNameInput');
-            const namePtBrInput = document.getElementById('createTagNamePtBrInput');
-            let namePtBr = namePtBrInput.value.trim();
-            const nameFromEnglish = nameInput.value.trim();
-            const name = nameFromEnglish || namePtBr;
-            if (!name) { alert('Preencha o nome em inglês ou em pt-BR para criar a tag.'); return; }
-            if (!nameFromEnglish) { nameInput.value = name; namePtBrInput.value = ''; namePtBr = ''; }
-            const createResult = await api('create_tag', { name, name_pt_br: namePtBr, numero: document.getElementById('createTagNumeroInput').value.trim(), ...collectTagTranslationPayload(document.getElementById('createTagForm')), is_book: 0, is_verb_tense: 0, is_sentence_type: 0, is_lexical_chunk: 0, is_relation_type: 0, is_word: 1, is_month: 0, is_day: 0, is_year: 0 });
+            const translations = collectTagTranslationPayload(document.getElementById('createTagForm'));
+            const name = translations.name_translations.en_us || translations.name_translations.en_gb || translations.name_translations.pt_br || Object.values(translations.name_translations)[0] || '';
+            const namePtBr = translations.name_translations.pt_br || '';
+            if (!name) { alert('Preencha o nome da tag no idioma selecionado para criar a tag.'); return; }
+            const createResult = await api('create_tag', { name, name_pt_br: namePtBr, numero: document.getElementById('createTagNumeroInput').value.trim(), ...translations, is_book: 0, is_verb_tense: 0, is_sentence_type: 0, is_lexical_chunk: 0, is_relation_type: 0, is_word: 1, is_month: 0, is_day: 0, is_year: 0 });
             const shouldPinTag = document.getElementById('createTagPinnedInput').checked;
             const createdTagId = Number(createResult.tag_id || 0);
             if (shouldPinTag && createdTagId > 0) {
@@ -1447,14 +1463,11 @@
             const id = Number(document.getElementById('editTagIdInput').value || 0);
             const original = state.tags.find((tag) => Number(tag.id) === id) || {};
             if (!canEditTag(original)) return;
-            const nameInput = document.getElementById('editTagNameInput');
-            const namePtBrInput = document.getElementById('editTagNamePtBrInput');
-            let namePtBr = namePtBrInput.value.trim();
-            const nameFromEnglish = nameInput.value.trim();
-            const name = nameFromEnglish || namePtBr;
-            if (!name) { alert('Preencha o nome em inglês ou em pt-BR para editar a tag.'); return; }
-            if (!nameFromEnglish) { nameInput.value = name; namePtBrInput.value = ''; namePtBr = ''; }
-            await api('update_tag', { id, name, name_pt_br: namePtBr, numero: document.getElementById('editTagNumeroInput').value.trim(), ...collectTagTranslationPayload(document.getElementById('editTagForm')), is_book: Number(original.is_book || 0), is_verb_tense: Number(original.is_verb_tense || 0), is_sentence_type: Number(original.is_sentence_type || 0), is_lexical_chunk: Number(original.is_lexical_chunk || 0), is_relation_type: Number(original.is_relation_type || 0), is_word: Number(original.is_word || 0), is_month: Number(original.is_month || 0), is_day: Number(original.is_day || 0), is_year: Number(original.is_year || 0) });
+            const translations = collectTagTranslationPayload(document.getElementById('editTagForm'));
+            const name = translations.name_translations.en_us || translations.name_translations.en_gb || translations.name_translations.pt_br || Object.values(translations.name_translations)[0] || '';
+            const namePtBr = translations.name_translations.pt_br || '';
+            if (!name) { alert('Preencha o nome da tag no idioma selecionado para editar a tag.'); return; }
+            await api('update_tag', { id, name, name_pt_br: namePtBr, numero: document.getElementById('editTagNumeroInput').value.trim(), ...translations, is_book: Number(original.is_book || 0), is_verb_tense: Number(original.is_verb_tense || 0), is_sentence_type: Number(original.is_sentence_type || 0), is_lexical_chunk: Number(original.is_lexical_chunk || 0), is_relation_type: Number(original.is_relation_type || 0), is_word: Number(original.is_word || 0), is_month: Number(original.is_month || 0), is_day: Number(original.is_day || 0), is_year: Number(original.is_year || 0) });
             state.selectedTagLabels = [name];
             hideTagFormSection();
             await loadSavedFilters();

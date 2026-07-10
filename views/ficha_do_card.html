@@ -288,9 +288,9 @@
         </div>
         <div class="space-y-2">
           <label class="text-sm text-slate-300">Nome da tag</label>
-          <input id="tagNameInput" type="text" maxlength="80" placeholder="Ex.: Gramática, Verbos, Trabalho..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
-          <input id="tagNamePtBrInput" type="text" maxlength="80" placeholder="Nome em pt-BR (ex.: Cachorro)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
-          <input id="tagSiglaSimboloInput" type="text" maxlength="191" placeholder="Sigla ou símbolo (ex.: °C, π, TCU)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+          <input id="tagNameInput" type="hidden" maxlength="80" placeholder="Ex.: Gramática, Verbos, Trabalho..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+          <input id="tagNamePtBrInput" type="hidden" maxlength="80" placeholder="Nome em pt-BR (ex.: Cachorro)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
+          <input id="tagSiglaSimboloInput" type="hidden" maxlength="191" placeholder="Sigla ou símbolo (ex.: °C, π, TCU)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
           <input id="tagNumeroInput" type="text" maxlength="191" placeholder="Número, valor ou medida (ex.: R$42,40, 1,60m)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2.5 px-3 text-white">
           <div class="rounded-lg border border-slate-700 p-3 space-y-3" data-tag-i18n data-tag-language-switcher>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -304,10 +304,6 @@
               <textarea data-tag-visible-description rows="3" placeholder="Descrição no idioma selecionado" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea>
               <input data-tag-visible-symbol type="text" maxlength="191" placeholder="Sigla/símbolo no idioma selecionado" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white">
             </div>
-            <div class="hidden space-y-2" data-lang="en_us"><p class="text-xs text-slate-300">Inglês Americano</p><input data-tag-name-lang="en_us" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="en_us" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="en_us" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div>
-            <div class="hidden space-y-2" data-lang="en_gb"><p class="text-xs text-slate-300">Inglês Britânico</p><input data-tag-name-lang="en_gb" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="en_gb" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="en_gb" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div>
-            <div class="hidden space-y-2" data-lang="pt_br"><p class="text-xs text-slate-300">Português</p><input data-tag-name-lang="pt_br" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="pt_br" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="pt_br" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div>
-            <details class="hidden space-y-2"><summary class="cursor-pointer text-xs text-slate-400">Espanhol, Francês e Mandarim</summary><div class="mt-2 space-y-3"><div class="space-y-2"><p class="text-xs text-slate-300">Espanhol</p><input data-tag-name-lang="es" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="es" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="es" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div><div class="space-y-2"><p class="text-xs text-slate-300">Francês</p><input data-tag-name-lang="fr" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="fr" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="fr" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div><div class="space-y-2"><p class="text-xs text-slate-300">Mandarim</p><input data-tag-name-lang="zh" type="text" maxlength="80" placeholder="Nome" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"><textarea data-tag-description-lang="zh" rows="2" placeholder="Descrição" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></textarea><input data-tag-symbol-lang="zh" type="text" maxlength="191" placeholder="Sigla/símbolo" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white"></div></div></details>
           </div>
           <p class="text-xs text-slate-400">Novas tags serão criadas automaticamente na categoria Palavra.</p>
         </div>
@@ -431,35 +427,67 @@ function setupTagLanguageSwitcher(root = document) {
   const visibleName = wrapper.querySelector('[data-tag-visible-name]');
   const visibleDescription = wrapper.querySelector('[data-tag-visible-description]');
   const visibleSymbol = wrapper.querySelector('[data-tag-visible-symbol]');
-  const getHidden = (kind, lang) => wrapper.querySelector(`[data-tag-${kind}-lang="${lang}"]`);
-  const load = () => {
-    const lang = select.value;
-    visibleName.value = getHidden('name', lang)?.value || '';
-    visibleDescription.value = getHidden('description', lang)?.value || '';
-    visibleSymbol.value = getHidden('symbol', lang)?.value || '';
+  const readExisting = (selector, attr) => Array.from(wrapper.querySelectorAll(selector)).reduce((acc, el) => {
+    const lang = el.getAttribute(attr);
+    if (lang) acc[lang] = el.value || el.textContent || '';
+    return acc;
+  }, {});
+  const state = wrapper.__tagTranslations || {
+    name: readExisting('[data-tag-name-lang]', 'data-tag-name-lang'),
+    description: readExisting('[data-tag-description-lang]', 'data-tag-description-lang'),
+    symbol: readExisting('[data-tag-symbol-lang]', 'data-tag-symbol-lang')
   };
+  wrapper.__tagTranslations = state;
+  let currentLang = select.value;
   const save = () => {
-    const lang = select.value;
-    const name = getHidden('name', lang);
-    const description = getHidden('description', lang);
-    const symbol = getHidden('symbol', lang);
-    if (name) name.value = visibleName.value;
-    if (description) description.value = visibleDescription.value;
-    if (symbol) symbol.value = visibleSymbol.value;
+    state.name[currentLang] = visibleName.value;
+    state.description[currentLang] = visibleDescription.value;
+    state.symbol[currentLang] = visibleSymbol.value;
   };
-  select.addEventListener('change', load);
+  const load = () => {
+    const lang = currentLang;
+    visibleName.value = state.name[lang] || '';
+    visibleDescription.value = state.description[lang] || '';
+    visibleSymbol.value = state.symbol[lang] || '';
+  };
+  select.addEventListener('change', () => { save(); currentLang = select.value; load(); });
   [visibleName, visibleDescription, visibleSymbol].forEach((el) => el.addEventListener('input', save));
   load();
 }
 
+
+function resetTagLanguageSwitcher(root = document) {
+  const wrapper = root.querySelector('[data-tag-language-switcher], [data-tag-i18n]');
+  if (!wrapper) return;
+  wrapper.dataset.initialized = '';
+  wrapper.__tagTranslations = { name: {}, description: {}, symbol: {} };
+  const select = wrapper.querySelector('[data-tag-language-select]');
+  if (select) select.value = 'en_us';
+  wrapper.querySelectorAll('[data-tag-visible-name], [data-tag-visible-description], [data-tag-visible-symbol]').forEach((el) => { el.value = ''; });
+}
 function collectTagTranslationPayload(root = document) {
-  const read = (selector) => Array.from(root.querySelectorAll(selector)).reduce((acc, el) => {
-    const lang = el.getAttribute(selector.includes('name') ? 'data-tag-name-lang' : selector.includes('description') ? 'data-tag-description-lang' : 'data-tag-symbol-lang');
-    const value = (el.value || '').trim();
-    if (lang && value) acc[lang] = value;
-    return acc;
-  }, {});
-  return { name_translations: read('[data-tag-name-lang]'), description_translations: read('[data-tag-description-lang]'), sigla_simbolo_translations: read('[data-tag-symbol-lang]') };
+  const wrapper = root.querySelector('[data-tag-language-switcher], [data-tag-i18n]');
+  if (wrapper) {
+    setupTagLanguageSwitcher(root);
+    const select = wrapper.querySelector('[data-tag-language-select]');
+    const visibleName = wrapper.querySelector('[data-tag-visible-name]');
+    const visibleDescription = wrapper.querySelector('[data-tag-visible-description]');
+    const visibleSymbol = wrapper.querySelector('[data-tag-visible-symbol]');
+    if (select && visibleName && visibleDescription && visibleSymbol) {
+      const lang = select.value;
+      wrapper.__tagTranslations ||= { name: {}, description: {}, symbol: {} };
+      wrapper.__tagTranslations.name[lang] = visibleName.value;
+      wrapper.__tagTranslations.description[lang] = visibleDescription.value;
+      wrapper.__tagTranslations.symbol[lang] = visibleSymbol.value;
+    }
+    const clean = (obj = {}) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, String(v || '').trim()]).filter(([, v]) => v));
+    return {
+      name_translations: clean(wrapper.__tagTranslations?.name),
+      description_translations: clean(wrapper.__tagTranslations?.description),
+      sigla_simbolo_translations: clean(wrapper.__tagTranslations?.symbol)
+    };
+  }
+  return { name_translations: {}, description_translations: {}, sigla_simbolo_translations: {} };
 }
 
 const app = {
@@ -861,6 +889,7 @@ const app = {
     tagNamePtBrInput.value = '';
     tagSiglaSimboloInput.value = '';
     tagNumeroInput.value = '';
+    resetTagLanguageSwitcher(tagModal);
     tagModal.classList.remove('hidden');
     tagModal.classList.add('flex');
     setTimeout(() => {
@@ -912,21 +941,16 @@ const app = {
     e.preventDefault();
     btnSaveTag.disabled = true;
     try {
-      let namePtBr = tagNamePtBrInput.value.trim();
-      const nameFromEnglish = tagNameInput.value.trim();
-      const name = nameFromEnglish || namePtBr;
-      if (!name) return this.setStatus('Preencha o nome em inglês ou em pt-BR para criar a tag.', 'error');
-      if (!nameFromEnglish) {
-        tagNameInput.value = name;
-        tagNamePtBrInput.value = '';
-        namePtBr = '';
-      }
+      const translations = collectTagTranslationPayload(tagModal);
+      const name = translations.name_translations.en_us || translations.name_translations.en_gb || translations.name_translations.pt_br || Object.values(translations.name_translations)[0] || '';
+      const namePtBr = translations.name_translations.pt_br || '';
+      if (!name) return this.setStatus('Preencha o nome da tag no idioma selecionado para criar a tag.', 'error');
       const res = await this.api('create_tag', {
         name,
         name_pt_br: namePtBr,
         numero: tagNumeroInput.value.trim(),
         sigla_simbolo: tagSiglaSimboloInput.value.trim(),
-        ...collectTagTranslationPayload(tagModal),
+        ...translations,
         is_book: 0,
         is_verb_tense: 0,
         is_sentence_type: 0,
