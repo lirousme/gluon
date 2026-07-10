@@ -3049,6 +3049,48 @@ function adjustPronunciationForTTS($pdo, $text, $language) {
     return $text;
 }
 
+
+/**
+ * Função detectFlashcardTextTtsLanguage: infere o idioma do texto visível do card para escolher a voz do TTS.
+ */
+function detectFlashcardTextTtsLanguage($text, $fallback = 'en-GB') {
+    $value = trim(strip_tags((string)$text));
+    $value = function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+    if ($value === '') {
+        return $fallback;
+    }
+
+    if (preg_match('/[\x{3400}-\x{9FFF}\x{F900}-\x{FAFF}]/u', $value) === 1) {
+        return 'cmn-CN';
+    }
+
+    $scores = [
+        'pt-BR' => 0,
+        'en-GB' => 0,
+        'es-ES' => 0,
+        'fr-FR' => 0,
+    ];
+
+    $patterns = [
+        'pt-BR' => ['/\b(o|a|os|as|um|uma|de|do|da|dos|das|que|para|com|não|você|está|é|ser|ter|por|como)\b/u', '/[ãõç]/u'],
+        'en-GB' => ['/\b(the|a|an|and|or|to|of|in|on|for|with|is|are|you|your|this|that|what|how|why)\b/u'],
+        'es-ES' => ['/\b(el|la|los|las|un|una|de|del|que|para|con|no|usted|está|es|ser|tener|por|como|qué)\b/u', '/[ñ¿¡]/u'],
+        'fr-FR' => ['/\b(le|la|les|un|une|des|de|du|que|pour|avec|pas|vous|être|est|sont|avoir|par|comme|quoi|comment)\b/u', '/[àâæçéèêëîïôœùûüÿ]/u'],
+    ];
+
+    foreach ($patterns as $language => $languagePatterns) {
+        foreach ($languagePatterns as $pattern) {
+            if (preg_match_all($pattern, $value, $matches) > 0) {
+                $scores[$language] += count($matches[0]);
+            }
+        }
+    }
+
+    arsort($scores);
+    $detected = array_key_first($scores);
+    return (($scores[$detected] ?? 0) > 0) ? $detected : $fallback;
+}
+
 /**
  * Função cardTextContainsMathNotation: Detecta se o texto contém notação matemática/LaTeX para evitar geração indevida de áudio.
  */
@@ -4375,13 +4417,15 @@ elseif ($action === 'generate_audio') {
         die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
     }
 
-    $requested_language = normalizeFlashcardTranslationMap([$input['language'] ?? '' => 'x']);
-    $language_key = array_key_first($requested_language) ?: '';
+    $requested_language_raw = trim((string)($input['language'] ?? ''));
+    $auto_detect_language = $requested_language_raw === 'auto';
+    $requested_language = normalizeFlashcardTranslationMap([$requested_language_raw => 'x']);
+    $language_key = $auto_detect_language ? '' : (array_key_first($requested_language) ?: '');
     $translations = encryptedFlashcardTranslationMap($side === 'front' ? ($card['front_translations_encrypted'] ?? null) : ($card['back_translations_encrypted'] ?? null));
     $text_encrypted = $side === 'front' ? $card['front_encrypted'] : $card['back_encrypted'];
     $defaultLang = $side === 'front' ? 'pt_br' : 'en';
     if ($language_key === '') $language_key = $defaultLang;
-    $clean_text = trim(strip_tags((string)($translations[$language_key] ?? '')));
+    $clean_text = $auto_detect_language ? '' : trim(strip_tags((string)($translations[$language_key] ?? '')));
     if ($clean_text === '') $clean_text = trim(strip_tags(Security::decryptData($text_encrypted)));
 
     if (empty($clean_text)) {
@@ -4397,12 +4441,18 @@ elseif ($action === 'generate_audio') {
     $deck_structure = normalizeDeckStructure($card['deck_structure'] ?? 'traducoes', 'traducoes');
     $side_language = $side === 'front' ? $front_language : $back_language;
 
+    if ($auto_detect_language) {
+        $language_key = $defaultLang;
+    }
+
     $audioColForLanguage = $side === 'front' ? 'audio_front_encrypted' : 'audio_back_encrypted';
     $hasAudioColForLanguage = $side === 'front' ? 'has_audio_front' : 'has_audio_back';
     $previousLegacyAudio = $card[$audioColForLanguage] ?? null;
     $previousLegacyHasAudio = (int)($card[$hasAudioColForLanguage] ?? 0);
     $tts_error_details = null;
-    $ttsLanguage = ['en' => 'en-GB', 'pt_br' => 'pt-BR', 'es' => 'es-ES', 'fr' => 'fr-FR', 'zh' => 'cmn-CN'][$language_key] ?? $side_language;
+    $ttsLanguage = $auto_detect_language
+        ? detectFlashcardTextTtsLanguage($clean_text, $side_language)
+        : (['en' => 'en-GB', 'pt_br' => 'pt-BR', 'es' => 'es-ES', 'fr' => 'fr-FR', 'zh' => 'cmn-CN'][$language_key] ?? $side_language);
     $ok = generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $clean_text, $ttsLanguage, $deck_structure, $front_language, $back_language, $tts_error_details);
     if ($ok && $language_key !== $defaultLang) {
         $audioCol = $side === 'front' ? 'audio_front_encrypted' : 'audio_back_encrypted';
