@@ -1545,8 +1545,7 @@ function findOrCreateLexicalChunkTag(PDO $pdo, int $userId, string $name, string
         throw new InvalidArgumentException('Lexical chunk inválido.');
     }
 
-    $stmt = $pdo->prepare("\n        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, is_lexical_chunk\n        FROM flashcard_tags\n        WHERE user_id IN (?, 5)\n        ORDER BY
-            CASE WHEN is_lexical_chunk = 1 THEN 0 ELSE 1 END,
+    $stmt = $pdo->prepare("\n        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo\n        FROM flashcard_tags\n        WHERE user_id IN (?, 5)\n        ORDER BY
             CASE WHEN user_id = ? THEN 0 ELSE 1 END,
             id ASC\n    ");
     $stmt->execute([$userId, $userId]);
@@ -1568,10 +1567,10 @@ function findOrCreateLexicalChunkTag(PDO $pdo, int $userId, string $name, string
         }
     }
 
-    $color = resolveTagColorByCategory(['is_lexical_chunk' => 1]);
+    $color = resolveTagColorByCategory([]);
     $nameEnc = Security::encryptData($name);
     $namePtBrEnc = Security::encryptData($namePtBr);
-    $insert = $pdo->prepare("\n        INSERT INTO flashcard_tags\n            (user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year)\n        VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 1, 0, 0, 0, 0, 0)\n    ");
+    $insert = $pdo->prepare("\n        INSERT INTO flashcard_tags\n            (user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, color)\n        VALUES (?, ?, ?, ?, ?, ?)\n    ");
 
     $tagId = 0;
     try {
@@ -1611,10 +1610,10 @@ function findOrCreateLexicalChunkTagForOwner(PDO $pdo, int $ownerUserId, string 
     }
 
     $stmt = $pdo->prepare("
-        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, is_lexical_chunk
+        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo
         FROM flashcard_tags
         WHERE user_id = ?
-        ORDER BY CASE WHEN is_lexical_chunk = 1 THEN 0 ELSE 1 END, id ASC
+        ORDER BY id ASC
     ");
     $stmt->execute([$ownerUserId]);
     $targetName = normalizeLexicalChunkLookupValue($name);
@@ -1636,11 +1635,11 @@ function findOrCreateLexicalChunkTagForOwner(PDO $pdo, int $ownerUserId, string 
         }
     }
 
-    $color = resolveTagColorByCategory(['is_lexical_chunk' => 1]);
+    $color = resolveTagColorByCategory([]);
     $insert = $pdo->prepare("
         INSERT INTO flashcard_tags
-            (user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year)
-        VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 1, 0, 0, 0, 0, 0)
+            (user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, color)
+        VALUES (?, ?, ?, ?, ?, ?)
     ");
 
     try {
@@ -1702,11 +1701,10 @@ function findOrCreateWordTag(PDO $pdo, int $userId, string $name, string $namePt
     }
 
     $stmt = $pdo->prepare("
-        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, is_word
+        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo
         FROM flashcard_tags
         WHERE user_id IN (?, 5)
         ORDER BY
-            CASE WHEN is_word = 1 THEN 0 ELSE 1 END,
             CASE WHEN user_id = ? THEN 0 ELSE 1 END,
             id ASC
     ");
@@ -1729,11 +1727,11 @@ function findOrCreateWordTag(PDO $pdo, int $userId, string $name, string $namePt
         }
     }
 
-    $color = resolveTagColorByCategory(['is_word' => 1]);
+    $color = resolveTagColorByCategory([]);
     $insert = $pdo->prepare("
         INSERT INTO flashcard_tags
-            (user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year)
-        VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 1, 0, 0, 0)
+            (user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, color)
+        VALUES (?, ?, ?, ?, ?, ?)
     ");
 
     try {
@@ -1771,10 +1769,10 @@ function findOrCreateWordTagForOwner(PDO $pdo, int $ownerUserId, string $name, s
     }
 
     $stmt = $pdo->prepare("
-        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, is_word
+        SELECT id, user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo
         FROM flashcard_tags
         WHERE user_id = ?
-        ORDER BY CASE WHEN is_word = 1 THEN 0 ELSE 1 END, id ASC
+        ORDER BY id ASC
     ");
     $stmt->execute([$ownerUserId]);
     $targetName = normalizeWordTagLookupValue($name);
@@ -1796,11 +1794,11 @@ function findOrCreateWordTagForOwner(PDO $pdo, int $ownerUserId, string $name, s
         }
     }
 
-    $color = resolveTagColorByCategory(['is_word' => 1]);
+    $color = resolveTagColorByCategory([]);
     $insert = $pdo->prepare("
         INSERT INTO flashcard_tags
-            (user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year)
-        VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 1, 0, 0, 0)
+            (user_id, name_encrypted, name_pt_br_encrypted, numero, sigla_simbolo, color)
+        VALUES (?, ?, ?, ?, ?, ?)
     ");
 
     try {
@@ -2029,15 +2027,6 @@ function dedupeFrontSentenceCandidates(array $candidates, string $type): array
 }
 
 function resolveTagColorByCategory(array $tagFlags): string {
-    if (($tagFlags['is_book'] ?? 0) === 1) return '#f59e0b';
-    if (($tagFlags['is_verb_tense'] ?? 0) === 1) return '#38bdf8';
-    if (($tagFlags['is_sentence_type'] ?? 0) === 1) return '#fb7185';
-    if (($tagFlags['is_lexical_chunk'] ?? 0) === 1) return '#d946ef';
-    if (($tagFlags['is_relation_type'] ?? 0) === 1) return '#22d3ee';
-    if (($tagFlags['is_word'] ?? 0) === 1) return '#84cc16';
-    if (($tagFlags['is_month'] ?? 0) === 1) return '#14b8a6';
-    if (($tagFlags['is_day'] ?? 0) === 1) return '#6366f1';
-    if (($tagFlags['is_year'] ?? 0) === 1) return '#a855f7';
     return '#334155';
 }
 
@@ -6796,15 +6785,6 @@ elseif ($action === 'list_graph_tags_for_user') {
             t.numero,
             t.sigla_simbolo,
             t.color,
-            t.is_book,
-            t.is_verb_tense,
-            t.is_sentence_type,
-            t.is_lexical_chunk,
-            t.is_relation_type,
-            t.is_word,
-            t.is_month,
-            t.is_day,
-            t.is_year,
             COALESCE(card_counts.related_cards_count, 0) AS related_cards_count,
             COALESCE(card_counts.related_cards_count, 0) AS subjects_count
         FROM flashcard_tags t
@@ -6850,15 +6830,6 @@ elseif ($action === 'list_tags') {
             t.numero,
             t.sigla_simbolo,
             t.color,
-            t.is_book,
-            t.is_verb_tense,
-            t.is_sentence_type,
-            t.is_lexical_chunk,
-            t.is_relation_type,
-            t.is_word,
-            t.is_month,
-            t.is_day,
-            t.is_year,
             COALESCE(subject_counts.subjects_count, 0) AS subjects_count,
             COALESCE(subject_card_counts.subject_cards_count, 0) AS subject_cards_count,
             COALESCE(object_card_counts.object_cards_count, 0) AS object_cards_count,
@@ -7058,32 +7029,13 @@ elseif ($action === 'create_tag') {
     if ($name === '' && $name_pt_br !== '') $name = $name_pt_br;
     $numero = normalizeNullableTagMetadataText($input['numero'] ?? null);
     $siglaSimbolo = normalizeNullableTagMetadataText($input['sigla_simbolo'] ?? null);
-    $is_book = !empty($input['is_book']) ? 1 : 0;
-    $is_verb_tense = !empty($input['is_verb_tense']) ? 1 : 0;
-    $is_sentence_type = !empty($input['is_sentence_type']) ? 1 : 0;
-    $is_lexical_chunk = !empty($input['is_lexical_chunk']) ? 1 : 0;
-    $is_relation_type = !empty($input['is_relation_type']) ? 1 : 0;
-    $is_word = !empty($input['is_word']) ? 1 : 0;
-    $is_month = !empty($input['is_month']) ? 1 : 0;
-    $is_day = !empty($input['is_day']) ? 1 : 0;
-    $is_year = !empty($input['is_year']) ? 1 : 0;
     if ($name === '') die(json_encode(['status' => 'error', 'message' => 'Nome da tag é obrigatório.']));
     if ($name_pt_br === '') $name_pt_br = null;
     if (tagCombinationAlreadyExists($pdo, $user_id, $name, $name_pt_br, $numero, $siglaSimbolo)) {
         die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com essa combinação de nome, nome pt-br e número.']));
     }
 
-    $color = resolveTagColorByCategory([
-        'is_book' => $is_book,
-        'is_verb_tense' => $is_verb_tense,
-        'is_sentence_type' => $is_sentence_type,
-        'is_lexical_chunk' => $is_lexical_chunk,
-        'is_relation_type' => $is_relation_type,
-        'is_word' => $is_word,
-        'is_month' => $is_month,
-        'is_day' => $is_day,
-        'is_year' => $is_year,
-    ]);
+    $color = resolveTagColorByCategory([]);
 
     [$nameTranslations, $descriptionTranslations, $symbolTranslations] = buildTagTranslationsFromInput($input, $name, $name_pt_br, $siglaSimbolo);
     $name_enc = Security::encryptData($name);
@@ -7091,11 +7043,11 @@ elseif ($action === 'create_tag') {
     $name_translations_enc = encryptTagTranslationMap($nameTranslations);
     $description_translations_enc = encryptTagTranslationMap($descriptionTranslations);
     $symbol_translations_enc = encryptTagTranslationMap($symbolTranslations);
-    $stmt = $pdo->prepare("INSERT INTO flashcard_tags (user_id, created_by_user_id, name_encrypted, name_pt_br_encrypted, name_translations_encrypted, description_translations_encrypted, numero, sigla_simbolo, sigla_simbolo_translations_encrypted, color, is_book, is_verb_tense, is_sentence_type, is_lexical_chunk, is_relation_type, is_word, is_month, is_day, is_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $pdo->prepare("INSERT INTO flashcard_tags (user_id, created_by_user_id, name_encrypted, name_pt_br_encrypted, name_translations_encrypted, description_translations_encrypted, numero, sigla_simbolo, sigla_simbolo_translations_encrypted, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $tagId = 0;
     try {
         $pdo->beginTransaction();
-        $stmt->execute([$user_id, $user_id, $name_enc, $name_pt_br_enc, $name_translations_enc, $description_translations_enc, $numero, $siglaSimbolo, $symbol_translations_enc, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year]);
+        $stmt->execute([$user_id, $user_id, $name_enc, $name_pt_br_enc, $name_translations_enc, $description_translations_enc, $numero, $siglaSimbolo, $symbol_translations_enc, $color]);
         $tagId = (int)$pdo->lastInsertId();
         executeTagCreationCustomRules($pdo, $user_id, $tagId);
         $pdo->commit();
@@ -7129,15 +7081,6 @@ elseif ($action === 'update_tag') {
     }
     $name = preg_replace('/\s+/u', ' ', $name);
     $name_pt_br = preg_replace('/\s+/u', ' ', $name_pt_br);
-    $is_book = !empty($input['is_book']) ? 1 : 0;
-    $is_verb_tense = !empty($input['is_verb_tense']) ? 1 : 0;
-    $is_sentence_type = !empty($input['is_sentence_type']) ? 1 : 0;
-    $is_lexical_chunk = !empty($input['is_lexical_chunk']) ? 1 : 0;
-    $is_relation_type = !empty($input['is_relation_type']) ? 1 : 0;
-    $is_word = !empty($input['is_word']) ? 1 : 0;
-    $is_month = !empty($input['is_month']) ? 1 : 0;
-    $is_day = !empty($input['is_day']) ? 1 : 0;
-    $is_year = !empty($input['is_year']) ? 1 : 0;
 
     if ($tag_id <= 0 || $name === '') {
         die(json_encode(['status' => 'error', 'message' => 'Dados da tag inválidos.']));
@@ -7153,20 +7096,10 @@ elseif ($action === 'update_tag') {
     $name_translations_enc = encryptTagTranslationMap($nameTranslations);
     $description_translations_enc = encryptTagTranslationMap($descriptionTranslations);
     $symbol_translations_enc = encryptTagTranslationMap($symbolTranslations);
-    $color = resolveTagColorByCategory([
-        'is_book' => $is_book,
-        'is_verb_tense' => $is_verb_tense,
-        'is_sentence_type' => $is_sentence_type,
-        'is_lexical_chunk' => $is_lexical_chunk,
-        'is_relation_type' => $is_relation_type,
-        'is_word' => $is_word,
-        'is_month' => $is_month,
-        'is_day' => $is_day,
-        'is_year' => $is_year
-    ]);
-    $stmt = $pdo->prepare("UPDATE flashcard_tags SET name_encrypted = ?, name_pt_br_encrypted = ?, name_translations_encrypted = ?, description_translations_encrypted = ?, numero = ?, sigla_simbolo = ?, sigla_simbolo_translations_encrypted = ?, color = ?, is_book = ?, is_verb_tense = ?, is_sentence_type = ?, is_lexical_chunk = ?, is_relation_type = ?, is_word = ?, is_month = ?, is_day = ?, is_year = ? WHERE id = ? AND (user_id = ? OR created_by_user_id = ?)");
+    $color = resolveTagColorByCategory([]);
+    $stmt = $pdo->prepare("UPDATE flashcard_tags SET name_encrypted = ?, name_pt_br_encrypted = ?, name_translations_encrypted = ?, description_translations_encrypted = ?, numero = ?, sigla_simbolo = ?, sigla_simbolo_translations_encrypted = ?, color = ? WHERE id = ? AND (user_id = ? OR created_by_user_id = ?)");
     try {
-        $stmt->execute([$name_enc, $name_pt_br_enc, $name_translations_enc, $description_translations_enc, $numero, $siglaSimbolo, $symbol_translations_enc, $color, $is_book, $is_verb_tense, $is_sentence_type, $is_lexical_chunk, $is_relation_type, $is_word, $is_month, $is_day, $is_year, $tag_id, $user_id, $user_id]);
+        $stmt->execute([$name_enc, $name_pt_br_enc, $name_translations_enc, $description_translations_enc, $numero, $siglaSimbolo, $symbol_translations_enc, $color, $tag_id, $user_id, $user_id]);
     } catch (PDOException $e) {
         die(json_encode(['status' => 'error', 'message' => 'Já existe uma tag com esse nome.']));
     }
