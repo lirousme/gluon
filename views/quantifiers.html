@@ -197,10 +197,10 @@ const quantifiersApp = {
 
 
     rootDropZoneHtml(position) {
-        const label = this.currentFather ? 'Solte aqui para virar filho desta página' : 'Solte aqui para virar quantificador raiz';
+        const label = this.currentFather ? 'Solte aqui para virar kanban desta página' : 'Solte aqui para virar kanban raiz';
         return `
             <div ondragover="quantifiersApp.onKanbanSlotDragOver(event, ${position})" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onKanbanSlotDrop(event, ${position})" class="w-3 self-stretch rounded-full transition"></div>
-            <div ondragover="quantifiersApp.onRootDragOver(event)" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onRootDrop(event)" class="min-w-[16rem] self-stretch rounded-2xl border border-dashed border-slate-800 bg-slate-900/35 p-4 text-sm text-slate-500 flex items-center justify-center text-center transition">
+            <div data-page-drop-zone="1" ondragover="quantifiersApp.onPageDropZoneDragOver(event)" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onPageDropZoneDrop(event)" class="min-w-[16rem] self-stretch rounded-2xl border border-dashed border-slate-800 bg-slate-900/35 p-4 text-sm text-slate-500 flex items-center justify-center text-center transition">
                 <span><i class="fa-solid fa-arrow-up-from-bracket mr-2"></i>${label}</span>
             </div>`;
     },
@@ -276,12 +276,12 @@ const quantifiersApp = {
         event.preventDefault();
         event.stopPropagation();
         this.clearDropStyles(event);
-        this.moveDragged(this.currentFather, index);
+        this.moveDraggedToCurrentPage(index);
     },
 
     onRootDragOver(event) {
         if (!this.draggedId) return;
-        if (event.target.closest('article[data-quantifier-id], [data-children-of]')) return;
+        if (event.target.closest('article[data-quantifier-id], [data-children-of], [data-page-drop-zone]')) return;
         event.preventDefault();
         event.stopPropagation();
         event.currentTarget.classList.add('drop-target');
@@ -289,11 +289,26 @@ const quantifiersApp = {
 
     onRootDrop(event) {
         if (!this.draggedId) return;
-        if (event.target.closest('article[data-quantifier-id], [data-children-of]')) return;
+        if (event.target.closest('article[data-quantifier-id], [data-children-of], [data-page-drop-zone]')) return;
         event.preventDefault();
         event.stopPropagation();
         this.clearDropStyles(event);
-        this.moveDragged(this.currentFather, this.childrenOf(this.currentFather).length);
+        this.moveDraggedToCurrentPage(this.childrenOf(this.currentFather).length);
+    },
+
+    onPageDropZoneDragOver(event) {
+        if (!this.draggedId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.currentTarget.classList.add('drop-target');
+    },
+
+    onPageDropZoneDrop(event) {
+        if (!this.draggedId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.clearDropStyles(event);
+        this.moveDraggedToCurrentPage(this.childrenOf(this.currentFather).length);
     },
 
     onCardDragOver(event, targetId) {
@@ -339,11 +354,17 @@ const quantifiersApp = {
         this.moveDragged(parentId, index);
     },
 
+    moveDraggedToCurrentPage(position) {
+        // Dropping outside a kanban must promote the item to the currently open dashboard.
+        // On the root dashboard this sends null, so the item becomes a root kanban.
+        this.moveDragged(this.currentFather, position);
+    },
+
     async moveDragged(parentId, position) {
         const id = this.draggedId;
         if (!id) return;
         try {
-            await this.api('move', { id, id_quantifier_father: parentId, position });
+            await this.api('move', { id, id_quantifier_father: parentId ? Number(parentId) : null, position });
             await this.load();
             this.toast('Ordem e filiação salvas.');
         } catch (error) { this.toast(error.message, false); }
