@@ -75,10 +75,6 @@
                 <label class="block text-sm text-slate-300 mb-1">Nome</label>
                 <input id="title" required class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 outline-none focus:border-violet-500" placeholder="Ex.: Ler 10 artigos">
             </div>
-            <div>
-                <label class="block text-sm text-slate-300 mb-1">Quantificador pai</label>
-                <select id="fatherId" class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 outline-none focus:border-violet-500"></select>
-            </div>
             <label class="flex items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-800/60 p-3 cursor-pointer">
                 <span>
                     <span class="block text-sm font-medium">Quantidade derivada dos filhos</span>
@@ -113,6 +109,7 @@
 const quantifiersApp = {
     items: [],
     currentFather: null,
+    modalFather: null,
 
     async api(action, payload = {}) {
         const res = await fetch('/api/quantifiers', {
@@ -203,7 +200,6 @@ const quantifiersApp = {
                 <div class="flex flex-wrap gap-2">
                     <button onclick="quantifiersApp.complete(${item.id})" ${Number(item.is_completed) === 1 ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-sm bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-400">Concluir</button>
                     <button onclick="quantifiersApp.openCreateModal(${item.id})" class="px-3 py-1.5 rounded-lg text-sm bg-slate-800 hover:bg-slate-700">Adicionar filho</button>
-                    <button onclick="quantifiersApp.goTo(${item.id})" class="px-3 py-1.5 rounded-lg text-sm bg-blue-600 hover:bg-blue-500">Abrir página</button>
                 </div>
                 <div class="border-t border-slate-800 pt-3">
                     <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
@@ -215,7 +211,7 @@ const quantifiersApp = {
                                 <div class="min-w-0"><p class="text-sm font-medium truncate ${Number(child.is_completed) === 1 ? 'line-through text-slate-500' : ''}">${this.escape(child.title)}</p><p class="text-xs text-slate-500">${child.current_quantity}/${child.maximum_quantity} · ${this.childrenOf(child.id).length} filhos</p></div>
                                 <i class="fa-solid fa-arrow-right text-slate-500"></i>
                             </div>
-                        </button>`).join('')}</div>` : '<p class="text-sm text-slate-500">Sem filhos. Use “Adicionar filho” ou abra esta página e clique em “+ Novo”.</p>'}
+                        </button>`).join('')}</div>` : '<p class="text-sm text-slate-500">Sem filhos. Use “Adicionar filho” ou clique no nome deste kanban e depois em “+ Novo”.</p>'}
                 </div>
             </article>`;
     },
@@ -234,21 +230,6 @@ const quantifiersApp = {
         this.render();
     },
 
-    populateFatherOptions(selected = null, editingId = null) {
-        const select = document.getElementById('fatherId');
-        const descendants = editingId ? this.collectDescendants(editingId) : [];
-        select.innerHTML = '<option value="">Nenhum (raiz)</option>' + this.items
-            .filter(item => Number(item.id) !== Number(editingId) && !descendants.includes(Number(item.id)))
-            .map(item => `<option value="${item.id}" ${Number(selected) === Number(item.id) ? 'selected' : ''}>${this.escape(item.title)}</option>`).join('');
-    },
-
-    collectDescendants(id) {
-        const result = [];
-        const walk = parentId => this.childrenOf(parentId).forEach(child => { result.push(Number(child.id)); walk(child.id); });
-        walk(id);
-        return result;
-    },
-
     openCreateModal(fatherId = this.currentFather) {
         document.getElementById('modalTitle').textContent = 'Novo quantificador';
         document.getElementById('quantifierId').value = '';
@@ -257,7 +238,7 @@ const quantifiersApp = {
         document.getElementById('current').value = 0;
         document.getElementById('derivative').checked = false;
         document.getElementById('editActions').classList.add('hidden');
-        this.populateFatherOptions(fatherId, null);
+        this.modalFather = fatherId ? Number(fatherId) : null;
         this.toggleDerivativeField();
         this.showModal();
     },
@@ -272,7 +253,7 @@ const quantifiersApp = {
         document.getElementById('current').value = item.current_quantity;
         document.getElementById('derivative').checked = Number(item.derivative_quantities) === 1;
         document.getElementById('editActions').classList.remove('hidden');
-        this.populateFatherOptions(item.id_quantifier_father, item.id);
+        this.modalFather = item.id_quantifier_father ? Number(item.id_quantifier_father) : null;
         this.toggleDerivativeField();
         this.showModal();
     },
@@ -292,11 +273,13 @@ const quantifiersApp = {
         const payload = {
             id,
             title: document.getElementById('title').value,
-            id_quantifier_father: document.getElementById('fatherId').value || null,
             maximum_quantity: document.getElementById('maximum').value || 0,
             current_quantity: document.getElementById('current').value || 0,
             derivative_quantities: document.getElementById('derivative').checked ? 1 : 0
         };
+        if (!id) {
+            payload.id_quantifier_father = this.modalFather;
+        }
         try {
             await this.api(id ? 'update' : 'create', payload);
             this.closeModal();
