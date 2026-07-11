@@ -365,16 +365,27 @@ const quantifiersApp = {
 
     moveDraggedToCurrentPage(position) {
         // Dropping outside a kanban must promote the item to the currently open dashboard.
-        // On the root dashboard this sends null, so the item becomes a root kanban.
-        this.moveDragged(this.currentFather, position);
+        // On the root dashboard this explicitly sends null, so the item becomes a root kanban (orphan).
+        const pageParentId = this.currentFather === null || this.currentFather === undefined || this.currentFather === ''
+            ? null
+            : Number(this.currentFather);
+        this.moveDragged(pageParentId, position);
     },
 
     async moveDragged(parentId, position) {
         const id = this.draggedId;
         if (!id) return;
+        const normalizedParentId = parentId === null || parentId === undefined || parentId === '' ? null : Number(parentId);
         try {
-            await this.api('move', { id, id_quantifier_father: parentId ? Number(parentId) : null, position });
+            await this.api('move', { id, id_quantifier_father: normalizedParentId, position });
             await this.load();
+            const moved = this.getItem(id);
+            const savedParentId = moved && moved.id_quantifier_father ? Number(moved.id_quantifier_father) : null;
+            if (savedParentId !== normalizedParentId) {
+                throw new Error(normalizedParentId === null
+                    ? 'O servidor não transformou o quantificador em kanban raiz. Tente novamente.'
+                    : 'O servidor não salvou a nova filiação do quantificador.');
+            }
             this.toast('Ordem e filiação salvas.');
         } catch (error) { this.toast(error.message, false); }
     },
