@@ -203,7 +203,8 @@ try {
             throw new Exception('Quantificador não encontrado.');
         }
         $old_parent_id = !empty($q['id_quantifier_father']) ? (int)$q['id_quantifier_father'] : null;
-        $new_parent_id = normalizeQuantifierParentInput($input);
+        $force_root = !empty($input['force_root']);
+        $new_parent_id = $force_root ? null : normalizeQuantifierParentInput($input);
         if ($new_parent_id && !quantifierBelongsToUser($pdo, $new_parent_id, $user_id)) {
             throw new Exception('Quantificador pai inválido.');
         }
@@ -212,7 +213,15 @@ try {
         }
         $new_index = max(0, (int)($input['position'] ?? 0));
         $pdo->beginTransaction();
-        $pdo->prepare('UPDATE quantifiers SET id_quantifier_father = ?, order_position = 999999 WHERE id = ? AND id_user = ?')->execute([$new_parent_id, $id, $user_id]);
+        $update = $pdo->prepare('UPDATE quantifiers SET id_quantifier_father = :parent_id, order_position = 999999 WHERE id = :id AND id_user = :user_id');
+        if ($new_parent_id === null) {
+            $update->bindValue(':parent_id', null, PDO::PARAM_NULL);
+        } else {
+            $update->bindValue(':parent_id', $new_parent_id, PDO::PARAM_INT);
+        }
+        $update->bindValue(':id', $id, PDO::PARAM_INT);
+        $update->bindValue(':user_id', $user_id, PDO::PARAM_INT);
+        $update->execute();
         normalizeSiblingOrder($pdo, $old_parent_id, $user_id);
         if ($new_parent_id) {
             $stmt = $pdo->prepare('SELECT id FROM quantifiers WHERE id_user = ? AND id_quantifier_father = ? AND id <> ? ORDER BY order_position, id');
