@@ -107,6 +107,26 @@
                     <input id="current" type="number" min="0" class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 outline-none focus:border-violet-500">
                 </div>
             </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm text-slate-300 mb-1">Período</label>
+                    <select id="periodType" onchange="quantifiersApp.togglePeriodFields()" class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 outline-none focus:border-violet-500">
+                        <option value="">Nenhum</option>
+                        <option value="years">Anos</option>
+                        <option value="months">Meses</option>
+                        <option value="days">Dias</option>
+                    </select>
+                </div>
+                <div id="startDatetimeWrap" class="hidden">
+                    <label class="block text-sm text-slate-300 mb-1">Datetime inicial</label>
+                    <input id="startDatetime" type="datetime-local" class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 outline-none focus:border-violet-500">
+                </div>
+            </div>
+            <div id="repeatUntilWrap" class="hidden">
+                <label class="block text-sm text-slate-300 mb-1">Repetir até (opcional)</label>
+                <input id="repeatUntil" type="datetime-local" class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 outline-none focus:border-violet-500">
+                <p class="mt-1 text-xs text-slate-500">Quando preenchido, ignora o Maximum quantity para criar os períodos até este datetime.</p>
+            </div>
             <div id="editActions" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-2 border-t border-slate-800 pt-4">
                 <button type="button" onclick="quantifiersApp.deleteCurrent()" class="px-3 py-2 rounded-lg bg-red-600/20 text-red-200 border border-red-500/40 hover:bg-red-600/30">Excluir quantificador</button>
                 <button type="button" onclick="quantifiersApp.deleteDescendants()" class="px-3 py-2 rounded-lg bg-orange-600/20 text-orange-200 border border-orange-500/40 hover:bg-orange-600/30">Excluir descendência</button>
@@ -209,7 +229,7 @@ const quantifiersApp = {
                 <div class="flex items-start justify-between gap-3 cursor-grab active:cursor-grabbing">
                     <button onclick="quantifiersApp.goTo(${item.id})" class="min-w-0 flex-1 text-left group">
                         <h3 class="font-semibold truncate group-hover:text-violet-300 ${Number(item.is_completed) === 1 ? 'line-through text-slate-500' : ''}">${this.escape(item.title)}</h3>
-                        <p class="text-xs text-slate-500">ID #${item.id}${Number(item.derivative_quantities) === 1 ? ' · máximo derivado dos filhos' : ''}</p>
+                        <p class="text-xs text-slate-500">ID #${item.id}${Number(item.derivative_quantities) === 1 ? ' · máximo derivado dos filhos' : ''}${this.periodLabel(item)}</p>
                     </button>
                     <button onclick="event.stopPropagation(); quantifiersApp.openEditModal(${item.id})" class="text-slate-400 hover:text-white"><i class="fa-solid fa-pen"></i></button>
                 </div>
@@ -228,7 +248,7 @@ const quantifiersApp = {
 
     childHtml(child) {
         return `<div data-quantifier-id="${child.id}" onclick="quantifiersApp.openChildPage(event, ${child.id})" class="quantifier-draggable w-full rounded-xl bg-slate-800/70 border border-slate-700 p-3 text-left hover:border-violet-500 hover:bg-slate-800 transition cursor-grab active:cursor-grabbing">
-            <div class="flex items-center justify-between gap-2"><div class="min-w-0"><p class="text-sm font-medium truncate ${Number(child.is_completed) === 1 ? 'line-through text-slate-500' : ''}">${this.escape(child.title)}</p><p class="text-xs text-slate-500">${child.current_quantity}/${child.maximum_quantity} · ${this.childrenOf(child.id).length} filhos</p></div><i class="fa-solid fa-arrow-right text-slate-500"></i></div>
+            <div class="flex items-center justify-between gap-2"><div class="min-w-0"><p class="text-sm font-medium truncate ${Number(child.is_completed) === 1 ? 'line-through text-slate-500' : ''}">${this.escape(child.title)}</p><p class="text-xs text-slate-500">${child.current_quantity}/${child.maximum_quantity} · ${this.childrenOf(child.id).length} filhos${this.periodLabel(child)}</p></div><i class="fa-solid fa-arrow-right text-slate-500"></i></div>
         </div>`;
     },
 
@@ -286,6 +306,9 @@ const quantifiersApp = {
         document.getElementById('maximum').value = 0;
         document.getElementById('current').value = 0;
         document.getElementById('derivative').checked = false;
+        document.getElementById('periodType').value = '';
+        document.getElementById('startDatetime').value = '';
+        document.getElementById('repeatUntil').value = '';
         document.getElementById('editActions').classList.add('hidden');
         this.modalFather = fatherId ? Number(fatherId) : null;
         this.toggleDerivativeField();
@@ -301,6 +324,9 @@ const quantifiersApp = {
         document.getElementById('maximum').value = item.maximum_quantity;
         document.getElementById('current').value = item.current_quantity;
         document.getElementById('derivative').checked = Number(item.derivative_quantities) === 1;
+        document.getElementById('periodType').value = item.period_type || '';
+        document.getElementById('startDatetime').value = this.toDatetimeLocal(item.start_datetime);
+        document.getElementById('repeatUntil').value = this.toDatetimeLocal(item.repeat_until);
         document.getElementById('editActions').classList.remove('hidden');
         this.modalFather = item.id_quantifier_father ? Number(item.id_quantifier_father) : null;
         this.toggleDerivativeField();
@@ -309,7 +335,20 @@ const quantifiersApp = {
 
     toggleDerivativeField() {
         const maximum = document.getElementById('maximum');
-        maximum.disabled = document.getElementById('derivative').checked;
+        const derivative = document.getElementById('derivative').checked;
+        const hasPeriod = Boolean(document.getElementById('periodType').value);
+        maximum.disabled = derivative && !hasPeriod;
+        maximum.classList.toggle('opacity-50', maximum.disabled);
+        this.togglePeriodFields();
+    },
+
+    togglePeriodFields() {
+        const hasPeriod = Boolean(document.getElementById('periodType').value);
+        document.getElementById('startDatetimeWrap').classList.toggle('hidden', !hasPeriod);
+        document.getElementById('repeatUntilWrap').classList.toggle('hidden', !hasPeriod);
+        document.getElementById('startDatetime').required = document.getElementById('derivative').checked && hasPeriod;
+        const maximum = document.getElementById('maximum');
+        maximum.disabled = document.getElementById('derivative').checked && !hasPeriod;
         maximum.classList.toggle('opacity-50', maximum.disabled);
     },
 
@@ -324,7 +363,10 @@ const quantifiersApp = {
             title: document.getElementById('title').value,
             maximum_quantity: document.getElementById('maximum').value || 0,
             current_quantity: document.getElementById('current').value || 0,
-            derivative_quantities: document.getElementById('derivative').checked ? 1 : 0
+            derivative_quantities: document.getElementById('derivative').checked ? 1 : 0,
+            period_type: document.getElementById('periodType').value,
+            start_datetime: document.getElementById('startDatetime').value,
+            repeat_until: document.getElementById('repeatUntil').value
         };
         if (!id) {
             payload.id_quantifier_father = this.modalFather;
@@ -354,6 +396,26 @@ const quantifiersApp = {
         if (!id || !confirm('Excluir apenas filhos, netos, bisnetos e demais descendentes?')) return;
         try { await this.api('delete_descendants', {id}); this.closeModal(); await this.load(); this.toast('Descendência excluída.'); }
         catch (error) { this.toast(error.message, false); }
+    },
+
+    periodLabel(item) {
+        const labels = {years: 'anos', months: 'meses', days: 'dias'};
+        if (!item.period_type && !item.start_datetime) return '';
+        const period = labels[item.period_type] ? ` · ${labels[item.period_type]}` : '';
+        const start = item.start_datetime ? ` · início ${this.formatDateTime(item.start_datetime)}` : '';
+        const end = item.end_datetime ? ` · fim ${this.formatDateTime(item.end_datetime)}` : '';
+        return `${period}${start}${end}`;
+    },
+
+    formatDateTime(value) {
+        if (!value) return '';
+        const date = new Date(String(value).replace(' ', 'T'));
+        return Number.isNaN(date.getTime()) ? value : date.toLocaleString('pt-BR');
+    },
+
+    toDatetimeLocal(value) {
+        if (!value) return '';
+        return String(value).replace(' ', 'T').slice(0, 16);
     },
 
     escape(value) {

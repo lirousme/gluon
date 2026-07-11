@@ -13,6 +13,7 @@ $action = $input['action'] ?? '';
 
 ensureQuantifiersTable($pdo);
 ensureQuantifiersOrderColumn($pdo);
+ensureQuantifiersDatetimeColumns($pdo);
 
 function ensureQuantifiersTable($pdo) {
     $pdo->exec("CREATE TABLE IF NOT EXISTS quantifiers (
@@ -23,6 +24,10 @@ function ensureQuantifiersTable($pdo) {
         maximum_quantity INT UNSIGNED NOT NULL DEFAULT 0,
         current_quantity INT UNSIGNED NOT NULL DEFAULT 0,
         derivative_quantities TINYINT(1) NOT NULL DEFAULT 0,
+        period_type ENUM('years', 'months', 'days') NULL DEFAULT NULL,
+        start_datetime DATETIME NULL DEFAULT NULL,
+        end_datetime DATETIME NULL DEFAULT NULL,
+        repeat_until DATETIME NULL DEFAULT NULL,
         is_completed TINYINT(1) NOT NULL DEFAULT 0,
         order_position INT UNSIGNED NOT NULL DEFAULT 0,
         completed_at TIMESTAMP NULL DEFAULT NULL,
@@ -45,6 +50,91 @@ function ensureQuantifiersOrderColumn($pdo) {
         $pdo->exec('ALTER TABLE quantifiers ADD INDEX idx_quantifiers_order (id_user, id_quantifier_father, order_position)');
     } catch (Exception $e) {
         // Index already exists or database driver does not support this ALTER variant.
+    }
+}
+function ensureQuantifiersDatetimeColumns($pdo) {
+    $columns = [
+        'period_type' => "ALTER TABLE quantifiers ADD COLUMN period_type ENUM('years', 'months', 'days') NULL DEFAULT NULL AFTER derivative_quantities",
+        'start_datetime' => "ALTER TABLE quantifiers ADD COLUMN start_datetime DATETIME NULL DEFAULT NULL AFTER period_type",
+        'end_datetime' => "ALTER TABLE quantifiers ADD COLUMN end_datetime DATETIME NULL DEFAULT NULL AFTER start_datetime",
+        'repeat_until' => "ALTER TABLE quantifiers ADD COLUMN repeat_until DATETIME NULL DEFAULT NULL AFTER end_datetime",
+    ];
+    foreach ($columns as $column => $sql) {
+        $stmt = $pdo->query("SHOW COLUMNS FROM quantifiers LIKE " . $pdo->quote($column));
+        if (!$stmt->fetch()) {
+            $pdo->exec($sql);
+        }
+    }
+}
+
+function normalizePeriodType($value) {
+    $value = $value === null ? '' : (string)$value;
+    return in_array($value, ['years', 'months', 'days'], true) ? $value : null;
+}
+
+function normalizeDateTimeInput($value, $endOfDay = false) {
+    $value = trim((string)($value ?? ''));
+    if ($value === '') {
+        return null;
+    }
+    $dt = new DateTime($value);
+    if (strlen($value) <= 10) {
+        $dt->setTime($endOfDay ? 23 : 0, $endOfDay ? 59 : 0, $endOfDay ? 59 : 0);
+    }
+    return $dt->format('Y-m-d H:i:s');
+}
+
+function addCalendarUnitsNoOverflow(DateTime $date, $period_type) {
+    $year = (int)$date->format('Y');
+    $month = (int)$date->format('n');
+    $day = (int)$date->format('j');
+    if ($period_type === 'years') {
+        $year++;
+    } elseif ($period_type === 'months') {
+        $month++;
+        if ($month > 12) {
+            $month = 1;
+            $year++;
+        }
+    } else {
+        $next = clone $date;
+        $next->add(new DateInterval('P1D'));
+        return $next;
+    }
+    $lastDay = (int)(new DateTime(sprintf('%04d-%02d-01', $year, $month)))->format('t');
+    $next = clone $date;
+    $next->setDate($year, $month, min($day, $lastDay));
+    return $next;
+}
+
+function calculatePeriodEnd(DateTime $start, $period_type) {
+    $end = addCalendarUnitsNoOverflow($start, $period_type);
+    $end->sub(new DateInterval($period_type === 'days' ? 'PT1S' : 'P1D'));
+    if ($period_type !== 'days') {
+        $end->setTime(23, 59, 59);
+    }
+    return $end;
+}
+
+function nextPeriodStart(DateTime $start, $period_type) {
+    return addCalendarUnitsNoOverflow($start, $period_type);
+}
+
+function createDerivedQuantifiers($pdo, $parent_id, $user_id, $title, $period_type, $start_datetime, $repeat_until, $max) {
+    if (!$period_type || !$start_datetime) return;
+    $start = new DateTime($start_datetime);
+    $until = $repeat_until ? new DateTime($repeat_until) : null;
+    $limit = $until ? 1000 : max(0, (int)$max);
+    for ($i = 1; $i <= $limit; $i++) {
+        $end = calculatePeriodEnd($start, $period_type);
+        if ($until && $start > $until) break;
+        if ($until && $end > $until) $end = clone $until;
+        $position = nextOrderPosition($pdo, $parent_id, $user_id);
+        $childTitle = $title . ' ' . $i . 'º';
+        $stmt = $pdo->prepare('INSERT INTO quantifiers (id_user, id_quantifier_father, title, maximum_quantity, current_quantity, derivative_quantities, period_type, start_datetime, end_datetime, repeat_until, order_position) VALUES (?, ?, ?, 0, 0, 0, ?, ?, ?, NULL, ?)');
+        $stmt->execute([$user_id, $parent_id, $childTitle, $period_type, $start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s'), $position]);
+        if ($until && $end >= $until) break;
+        $start = nextPeriodStart($start, $period_type);
     }
 }
 
@@ -146,16 +236,29 @@ try {
             throw new Exception('Quantificador pai inválido.');
         }
         $derivative = !empty($input['derivative_quantities']) ? 1 : 0;
+        $period_type = normalizePeriodType($input['period_type'] ?? null);
+        $start_datetime = normalizeDateTimeInput($input['start_datetime'] ?? null);
+        $repeat_until = normalizeDateTimeInput($input['repeat_until'] ?? null, true);
         $max = max(0, (int)($input['maximum_quantity'] ?? 0));
-        if ($derivative === 1) {
+        if ($derivative === 1 && !$period_type) {
             $max = 0;
+        }
+        if ($derivative === 1 && $period_type && !$start_datetime) {
+            throw new Exception('Informe o datetime inicial para gerar quantificadores derivados por período.');
         }
         $title = trim((string)($input['title'] ?? '')) ?: 'Novo quantificador';
         $position = nextOrderPosition($pdo, $father_id, $user_id);
-        $stmt = $pdo->prepare('INSERT INTO quantifiers (id_user, id_quantifier_father, title, maximum_quantity, current_quantity, derivative_quantities, order_position) VALUES (?, ?, ?, ?, ?, ?, ?)');
-        $stmt->execute([$user_id, $father_id, $title, $max, max(0, (int)($input['current_quantity'] ?? 0)), $derivative, $position]);
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare('INSERT INTO quantifiers (id_user, id_quantifier_father, title, maximum_quantity, current_quantity, derivative_quantities, period_type, start_datetime, end_datetime, repeat_until, order_position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)');
+        $stmt->execute([$user_id, $father_id, $title, $max, max(0, (int)($input['current_quantity'] ?? 0)), $derivative, $period_type, $start_datetime, $repeat_until, $position]);
+        $newId = (int)$pdo->lastInsertId();
+        if ($derivative === 1 && $period_type) {
+            createDerivedQuantifiers($pdo, $newId, $user_id, $title, $period_type, $start_datetime, $repeat_until, $max);
+            recalculateParentMaximum($pdo, $newId, $user_id);
+        }
         recalculateParentMaximum($pdo, $father_id, $user_id);
-        echo json_encode(['status' => 'success', 'id' => (int)$pdo->lastInsertId()]);
+        $pdo->commit();
+        echo json_encode(['status' => 'success', 'id' => $newId]);
         exit;
     }
 
@@ -167,10 +270,16 @@ try {
         }
         $father_id = !empty($current['id_quantifier_father']) ? (int)$current['id_quantifier_father'] : null;
         $derivative = !empty($input['derivative_quantities']) ? 1 : 0;
-        $max = $derivative ? (int)$current['maximum_quantity'] : max(0, (int)($input['maximum_quantity'] ?? 0));
+        $period_type = normalizePeriodType($input['period_type'] ?? null);
+        $start_datetime = normalizeDateTimeInput($input['start_datetime'] ?? null);
+        $repeat_until = normalizeDateTimeInput($input['repeat_until'] ?? null, true);
+        $max = ($derivative && !$period_type) ? (int)$current['maximum_quantity'] : max(0, (int)($input['maximum_quantity'] ?? 0));
+        if ($derivative === 1 && $period_type && !$start_datetime) {
+            throw new Exception('Informe o datetime inicial para quantificadores derivados por período.');
+        }
         $title = trim((string)($input['title'] ?? '')) ?: 'Novo quantificador';
-        $pdo->prepare('UPDATE quantifiers SET title = ?, maximum_quantity = ?, current_quantity = ?, derivative_quantities = ? WHERE id = ? AND id_user = ?')
-            ->execute([$title, $max, max(0, (int)($input['current_quantity'] ?? 0)), $derivative, $id, $user_id]);
+        $pdo->prepare('UPDATE quantifiers SET title = ?, maximum_quantity = ?, current_quantity = ?, derivative_quantities = ?, period_type = ?, start_datetime = ?, repeat_until = ? WHERE id = ? AND id_user = ?')
+            ->execute([$title, $max, max(0, (int)($input['current_quantity'] ?? 0)), $derivative, $period_type, $start_datetime, $repeat_until, $id, $user_id]);
         if ($derivative) {
             recalculateParentMaximum($pdo, $id, $user_id);
         }
