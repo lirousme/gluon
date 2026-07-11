@@ -192,7 +192,17 @@ const quantifiersApp = {
         const kanban = document.getElementById('kanban');
         const visible = this.childrenOf(this.currentFather);
         document.getElementById('emptyState').classList.toggle('hidden', visible.length > 0);
-        kanban.innerHTML = visible.map((item, index) => this.cardHtml(item, index)).join('');
+        kanban.innerHTML = visible.map((item, index) => this.cardHtml(item, index)).join('') + this.rootDropZoneHtml(visible.length);
+    },
+
+
+    rootDropZoneHtml(position) {
+        const label = this.currentFather ? 'Solte aqui para virar filho desta página' : 'Solte aqui para virar quantificador raiz';
+        return `
+            <div ondragover="quantifiersApp.onKanbanSlotDragOver(event, ${position})" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onKanbanSlotDrop(event, ${position})" class="w-3 self-stretch rounded-full transition"></div>
+            <div ondragover="quantifiersApp.onRootDragOver(event)" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onRootDrop(event)" class="min-w-[16rem] self-stretch rounded-2xl border border-dashed border-slate-800 bg-slate-900/35 p-4 text-sm text-slate-500 flex items-center justify-center text-center transition">
+                <span><i class="fa-solid fa-arrow-up-from-bracket mr-2"></i>${label}</span>
+            </div>`;
     },
 
     cardHtml(item, index = 0) {
@@ -270,14 +280,18 @@ const quantifiersApp = {
     },
 
     onRootDragOver(event) {
-        if (!this.draggedId || event.target.closest('[data-quantifier-id]')) return;
+        if (!this.draggedId) return;
+        if (event.target.closest('article[data-quantifier-id], [data-children-of]')) return;
         event.preventDefault();
+        event.stopPropagation();
         event.currentTarget.classList.add('drop-target');
     },
 
     onRootDrop(event) {
-        if (!this.draggedId || event.target.closest('[data-quantifier-id]')) return;
+        if (!this.draggedId) return;
+        if (event.target.closest('article[data-quantifier-id], [data-children-of]')) return;
         event.preventDefault();
+        event.stopPropagation();
         this.clearDropStyles(event);
         this.moveDragged(this.currentFather, this.childrenOf(this.currentFather).length);
     },
