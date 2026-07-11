@@ -279,12 +279,18 @@ const quantifiersApp = {
         event.currentTarget.classList.add('drop-target');
     },
 
+    getDraggedId(event) {
+        const transferId = event?.dataTransfer?.getData('text/plain');
+        const id = this.draggedId || (transferId ? Number(transferId) : null);
+        return Number.isFinite(Number(id)) && Number(id) > 0 ? Number(id) : null;
+    },
+
     onKanbanSlotDrop(event, index) {
-        if (!this.draggedId) return;
+        if (!this.getDraggedId(event)) return;
         event.preventDefault();
         event.stopPropagation();
         this.clearDropStyles(event);
-        this.moveDraggedToCurrentPage(index);
+        this.moveDraggedToCurrentPage(index, event);
     },
 
     onRootDragOver(event) {
@@ -296,12 +302,12 @@ const quantifiersApp = {
     },
 
     onRootDrop(event) {
-        if (!this.draggedId) return;
+        if (!this.getDraggedId(event)) return;
         if (event.target.closest('[data-children-of], [data-page-drop-zone]')) return;
         event.preventDefault();
         event.stopPropagation();
         this.clearDropStyles(event);
-        this.moveDraggedToCurrentPage(this.childrenOf(this.currentFather).length);
+        this.moveDraggedToCurrentPage(this.childrenOf(this.currentFather).length, event);
     },
 
     onPageDropZoneDragOver(event) {
@@ -312,12 +318,12 @@ const quantifiersApp = {
     },
 
     onPageDropZoneDrop(event, position = null) {
-        if (!this.draggedId) return;
+        if (!this.getDraggedId(event)) return;
         event.preventDefault();
         event.stopPropagation();
         this.clearDropStyles(event);
         const targetPosition = position === null ? this.childrenOf(this.currentFather).length : position;
-        this.moveDraggedToCurrentPage(targetPosition);
+        this.moveDraggedToCurrentPage(targetPosition, event);
     },
 
     onCardDragOver(event, targetId) {
@@ -363,21 +369,21 @@ const quantifiersApp = {
         this.moveDragged(parentId, index);
     },
 
-    moveDraggedToCurrentPage(position) {
+    moveDraggedToCurrentPage(position, event = null) {
         // Dropping outside a kanban must promote the item to the currently open dashboard.
-        // On the root dashboard this explicitly sends null, so the item becomes a root kanban (orphan).
+        // On the root dashboard this explicitly sends null plus force_root, so the item becomes a root kanban (orphan).
         const pageParentId = this.currentFather === null || this.currentFather === undefined || this.currentFather === ''
             ? null
             : Number(this.currentFather);
-        this.moveDragged(pageParentId, position);
+        this.moveDragged(pageParentId, position, event);
     },
 
-    async moveDragged(parentId, position) {
-        const id = this.draggedId;
+    async moveDragged(parentId, position, event = null) {
+        const id = this.getDraggedId(event);
         if (!id) return;
         const normalizedParentId = parentId === null || parentId === undefined || parentId === '' ? null : Number(parentId);
         try {
-            await this.api('move', { id, id_quantifier_father: normalizedParentId, position });
+            await this.api('move', { id, id_quantifier_father: normalizedParentId, force_root: normalizedParentId === null ? 1 : 0, position });
             await this.load();
             const moved = this.getItem(id);
             const savedParentId = moved && moved.id_quantifier_father ? Number(moved.id_quantifier_father) : null;
