@@ -121,9 +121,20 @@ function nextPeriodStart(DateTime $start, $period_type) {
 }
 
 function createDerivedQuantifiers($pdo, $parent_id, $user_id, $title, $period_type, $start_datetime, $repeat_until, $max, $offset = 0) {
-    if (!$period_type || !$start_datetime) return 0;
-    $start = new DateTime($start_datetime);
     $offset = max(0, (int)$offset);
+    if (!$period_type || !$start_datetime) {
+        $limit = max(0, (int)$max) - $offset;
+        $created = 0;
+        for ($i = $offset + 1; $created < $limit; $i++) {
+            $position = nextOrderPosition($pdo, $parent_id, $user_id);
+            $childTitle = $title . ' ' . $i . 'º';
+            $stmt = $pdo->prepare('INSERT INTO quantifiers (id_user, id_quantifier_father, title, maximum_quantity, current_quantity, derivative_quantities, period_type, start_datetime, end_datetime, repeat_until, order_position) VALUES (?, ?, ?, 0, 0, 0, NULL, NULL, NULL, NULL, ?)');
+            $stmt->execute([$user_id, $parent_id, $childTitle, $position]);
+            $created++;
+        }
+        return $created;
+    }
+    $start = new DateTime($start_datetime);
     for ($skip = 0; $skip < $offset; $skip++) {
         $start = nextPeriodStart($start, $period_type);
     }
@@ -146,9 +157,6 @@ function createDerivedQuantifiers($pdo, $parent_id, $user_id, $title, $period_ty
 }
 
 function ensureDerivedPeriodChildren($pdo, $parent_id, $user_id, $title, $period_type, $start_datetime, $repeat_until, $max) {
-    if (!$period_type || !$start_datetime) {
-        return;
-    }
     $stmt = $pdo->prepare('SELECT COUNT(*) FROM quantifiers WHERE id_quantifier_father = ? AND id_user = ?');
     $stmt->execute([(int)$parent_id, (int)$user_id]);
     $existing = (int)$stmt->fetchColumn();
@@ -260,9 +268,6 @@ try {
         $start_datetime = normalizeDateTimeInput($input['start_datetime'] ?? null);
         $repeat_until = normalizeDateTimeInput($input['repeat_until'] ?? null, true);
         $max = max(0, (int)($input['maximum_quantity'] ?? 0));
-        if ($derivative === 1 && !$period_type) {
-            $max = 0;
-        }
         if ($derivative === 1 && $period_type && !$start_datetime) {
             throw new Exception('Informe o datetime inicial para gerar quantificadores derivados por período.');
         }
@@ -272,7 +277,7 @@ try {
         $stmt = $pdo->prepare('INSERT INTO quantifiers (id_user, id_quantifier_father, title, maximum_quantity, current_quantity, derivative_quantities, period_type, start_datetime, end_datetime, repeat_until, order_position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)');
         $stmt->execute([$user_id, $father_id, $title, $max, max(0, (int)($input['current_quantity'] ?? 0)), $derivative, $period_type, $start_datetime, $repeat_until, $position]);
         $newId = (int)$pdo->lastInsertId();
-        if ($derivative === 1 && $period_type) {
+        if ($derivative === 1) {
             createDerivedQuantifiers($pdo, $newId, $user_id, $title, $period_type, $start_datetime, $repeat_until, $max);
             recalculateParentMaximum($pdo, $newId, $user_id);
         }
@@ -293,7 +298,7 @@ try {
         $period_type = normalizePeriodType($input['period_type'] ?? null);
         $start_datetime = normalizeDateTimeInput($input['start_datetime'] ?? null);
         $repeat_until = normalizeDateTimeInput($input['repeat_until'] ?? null, true);
-        $max = ($derivative && !$period_type) ? (int)$current['maximum_quantity'] : max(0, (int)($input['maximum_quantity'] ?? 0));
+        $max = max(0, (int)($input['maximum_quantity'] ?? 0));
         if ($derivative === 1 && $period_type && !$start_datetime) {
             throw new Exception('Informe o datetime inicial para quantificadores derivados por período.');
         }
@@ -301,7 +306,7 @@ try {
         $pdo->beginTransaction();
         $pdo->prepare('UPDATE quantifiers SET title = ?, maximum_quantity = ?, current_quantity = ?, derivative_quantities = ?, period_type = ?, start_datetime = ?, repeat_until = ? WHERE id = ? AND id_user = ?')
             ->execute([$title, $max, max(0, (int)($input['current_quantity'] ?? 0)), $derivative, $period_type, $start_datetime, $repeat_until, $id, $user_id]);
-        if ($derivative && $period_type) {
+        if ($derivative) {
             ensureDerivedPeriodChildren($pdo, $id, $user_id, $title, $period_type, $start_datetime, $repeat_until, $max);
         }
         if ($derivative) {

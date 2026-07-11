@@ -337,8 +337,8 @@ const quantifiersApp = {
         const maximum = document.getElementById('maximum');
         const derivative = document.getElementById('derivative').checked;
         const hasPeriod = Boolean(document.getElementById('periodType').value);
-        maximum.disabled = derivative && !hasPeriod;
-        maximum.classList.toggle('opacity-50', maximum.disabled);
+        maximum.disabled = false;
+        maximum.classList.remove('opacity-50');
         this.togglePeriodFields();
     },
 
@@ -348,8 +348,8 @@ const quantifiersApp = {
         document.getElementById('repeatUntilWrap').classList.toggle('hidden', !hasPeriod);
         document.getElementById('startDatetime').required = document.getElementById('derivative').checked && hasPeriod;
         const maximum = document.getElementById('maximum');
-        maximum.disabled = document.getElementById('derivative').checked && !hasPeriod;
-        maximum.classList.toggle('opacity-50', maximum.disabled);
+        maximum.disabled = false;
+        maximum.classList.remove('opacity-50');
     },
 
     showModal() { document.getElementById('modal').classList.remove('hidden'); document.getElementById('modal').classList.add('flex'); },
