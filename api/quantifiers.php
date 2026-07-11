@@ -103,22 +103,15 @@ try {
         if (!$current) {
             throw new Exception('Quantificador não encontrado.');
         }
-        $father_id = !empty($input['id_quantifier_father']) ? (int)$input['id_quantifier_father'] : null;
-        if ($father_id === $id || ($father_id && !quantifierBelongsToUser($pdo, $father_id, $user_id))) {
-            throw new Exception('Quantificador pai inválido.');
-        }
-        if ($father_id && in_array($father_id, descendantsIds($pdo, $id, $user_id), true)) {
-            throw new Exception('O pai não pode ser descendente do próprio quantificador.');
-        }
+        $father_id = !empty($current['id_quantifier_father']) ? (int)$current['id_quantifier_father'] : null;
         $derivative = !empty($input['derivative_quantities']) ? 1 : 0;
         $max = $derivative ? (int)$current['maximum_quantity'] : max(0, (int)($input['maximum_quantity'] ?? 0));
         $title = trim((string)($input['title'] ?? '')) ?: 'Novo quantificador';
-        $pdo->prepare('UPDATE quantifiers SET title = ?, id_quantifier_father = ?, maximum_quantity = ?, current_quantity = ?, derivative_quantities = ? WHERE id = ? AND id_user = ?')
-            ->execute([$title, $father_id, $max, max(0, (int)($input['current_quantity'] ?? 0)), $derivative, $id, $user_id]);
+        $pdo->prepare('UPDATE quantifiers SET title = ?, maximum_quantity = ?, current_quantity = ?, derivative_quantities = ? WHERE id = ? AND id_user = ?')
+            ->execute([$title, $max, max(0, (int)($input['current_quantity'] ?? 0)), $derivative, $id, $user_id]);
         if ($derivative) {
             recalculateParentMaximum($pdo, $id, $user_id);
         }
-        recalculateParentMaximum($pdo, $current['id_quantifier_father'], $user_id);
         recalculateParentMaximum($pdo, $father_id, $user_id);
         echo json_encode(['status' => 'success']);
         exit;
