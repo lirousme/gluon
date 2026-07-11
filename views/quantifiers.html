@@ -124,6 +124,7 @@ const quantifiersApp = {
     currentFather: null,
     modalFather: null,
     draggedId: null,
+    suppressClickUntil: 0,
 
     async api(action, payload = {}) {
         const res = await fetch('/api/quantifiers', {
@@ -192,17 +193,22 @@ const quantifiersApp = {
         const kanban = document.getElementById('kanban');
         const visible = this.childrenOf(this.currentFather);
         document.getElementById('emptyState').classList.toggle('hidden', visible.length > 0);
-        kanban.innerHTML = visible.map((item, index) => this.cardHtml(item, index)).join('') + this.rootDropZoneHtml(visible.length);
+        kanban.innerHTML = this.pageDropZoneHtml() + visible.map((item, index) => this.cardHtml(item, index)).join('') + this.rootDropZoneHtml(visible.length);
     },
 
 
-    rootDropZoneHtml(position) {
-        const label = this.currentFather ? 'Solte aqui para virar kanban desta página' : 'Solte aqui para virar kanban raiz';
+    pageDropZoneHtml() {
+        const label = this.currentFather ? 'Solte aqui para virar kanban desta página aberta' : 'Solte aqui para virar kanban raiz';
         return `
-            <div ondragover="quantifiersApp.onKanbanSlotDragOver(event, ${position})" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onKanbanSlotDrop(event, ${position})" class="w-3 self-stretch rounded-full transition"></div>
-            <div data-page-drop-zone="1" ondragover="quantifiersApp.onPageDropZoneDragOver(event)" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onPageDropZoneDrop(event)" class="min-w-[16rem] self-stretch rounded-2xl border border-dashed border-slate-800 bg-slate-900/35 p-4 text-sm text-slate-500 flex items-center justify-center text-center transition">
+            <div data-page-drop-zone="1" ondragover="quantifiersApp.onPageDropZoneDragOver(event)" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onPageDropZoneDrop(event, 0)" class="min-w-[18rem] sm:min-w-[22rem] self-stretch rounded-2xl border border-dashed border-violet-500/40 bg-violet-950/20 p-4 text-sm text-violet-200 flex items-center justify-center text-center transition">
                 <span><i class="fa-solid fa-arrow-up-from-bracket mr-2"></i>${label}</span>
-            </div>`;
+            </div>
+            <div ondragover="quantifiersApp.onKanbanSlotDragOver(event, 0)" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onKanbanSlotDrop(event, 0)" class="w-3 self-stretch rounded-full transition"></div>`;
+    },
+
+    rootDropZoneHtml(position) {
+        return `
+            <div ondragover="quantifiersApp.onKanbanSlotDragOver(event, ${position})" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onKanbanSlotDrop(event, ${position})" class="w-3 self-stretch rounded-full transition"></div>`;
     },
 
     cardHtml(item, index = 0) {
@@ -234,7 +240,7 @@ const quantifiersApp = {
                     </div>
                     <div data-children-of="${item.id}" ondragover="quantifiersApp.onChildrenDragOver(event, ${item.id})" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onChildrenDrop(event, ${item.id})" class="min-h-16 space-y-2 max-h-72 overflow-y-auto pr-1 rounded-xl border border-transparent p-1 transition">
                         ${children.length ? children.map((child, index) => `
-                        <button draggable="true" data-quantifier-id="${child.id}" ondragstart="quantifiersApp.onDragStart(event, ${child.id})" ondragend="quantifiersApp.onDragEnd(event)" ondragover="quantifiersApp.onChildDragOver(event, ${item.id}, ${index})" ondrop="quantifiersApp.onChildDrop(event, ${item.id}, ${index})" onclick="quantifiersApp.goTo(${child.id})" class="w-full rounded-xl bg-slate-800/70 border border-slate-700 p-3 text-left hover:border-violet-500 hover:bg-slate-800 transition cursor-grab active:cursor-grabbing">
+                        <button draggable="true" data-quantifier-id="${child.id}" ondragstart="quantifiersApp.onDragStart(event, ${child.id})" ondragend="quantifiersApp.onDragEnd(event)" ondragover="quantifiersApp.onChildDragOver(event, ${item.id}, ${index})" ondrop="quantifiersApp.onChildDrop(event, ${item.id}, ${index})" onclick="quantifiersApp.openChildPage(event, ${child.id})" class="w-full rounded-xl bg-slate-800/70 border border-slate-700 p-3 text-left hover:border-violet-500 hover:bg-slate-800 transition cursor-grab active:cursor-grabbing">
                             <div class="flex items-center justify-between gap-2">
                                 <div class="min-w-0"><p class="text-sm font-medium truncate ${Number(child.is_completed) === 1 ? 'line-through text-slate-500' : ''}">${this.escape(child.title)}</p><p class="text-xs text-slate-500">${child.current_quantity}/${child.maximum_quantity} · ${this.childrenOf(child.id).length} filhos</p></div>
                                 <i class="fa-solid fa-arrow-right text-slate-500"></i>
@@ -248,12 +254,14 @@ const quantifiersApp = {
 
     onDragStart(event, id) {
         this.draggedId = Number(id);
+        this.suppressClickUntil = 0;
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('text/plain', String(id));
         event.currentTarget.classList.add('dragging');
     },
 
     onDragEnd(event) {
+        this.suppressClickUntil = Date.now() + 300;
         this.draggedId = null;
         event.currentTarget.classList.remove('dragging');
         document.querySelectorAll('.drop-target, .drop-target-children').forEach(el => el.classList.remove('drop-target', 'drop-target-children'));
@@ -281,7 +289,7 @@ const quantifiersApp = {
 
     onRootDragOver(event) {
         if (!this.draggedId) return;
-        if (event.target.closest('article[data-quantifier-id], [data-children-of], [data-page-drop-zone]')) return;
+        if (event.target.closest('[data-children-of], [data-page-drop-zone]')) return;
         event.preventDefault();
         event.stopPropagation();
         event.currentTarget.classList.add('drop-target');
@@ -289,7 +297,7 @@ const quantifiersApp = {
 
     onRootDrop(event) {
         if (!this.draggedId) return;
-        if (event.target.closest('article[data-quantifier-id], [data-children-of], [data-page-drop-zone]')) return;
+        if (event.target.closest('[data-children-of], [data-page-drop-zone]')) return;
         event.preventDefault();
         event.stopPropagation();
         this.clearDropStyles(event);
@@ -303,12 +311,13 @@ const quantifiersApp = {
         event.currentTarget.classList.add('drop-target');
     },
 
-    onPageDropZoneDrop(event) {
+    onPageDropZoneDrop(event, position = null) {
         if (!this.draggedId) return;
         event.preventDefault();
         event.stopPropagation();
         this.clearDropStyles(event);
-        this.moveDraggedToCurrentPage(this.childrenOf(this.currentFather).length);
+        const targetPosition = position === null ? this.childrenOf(this.currentFather).length : position;
+        this.moveDraggedToCurrentPage(targetPosition);
     },
 
     onCardDragOver(event, targetId) {
@@ -368,6 +377,15 @@ const quantifiersApp = {
             await this.load();
             this.toast('Ordem e filiação salvas.');
         } catch (error) { this.toast(error.message, false); }
+    },
+
+    openChildPage(event, id) {
+        if (Date.now() < this.suppressClickUntil) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+        this.goTo(id);
     },
 
     goTo(id, push = true) {
