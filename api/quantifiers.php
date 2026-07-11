@@ -120,12 +120,17 @@ function nextPeriodStart(DateTime $start, $period_type) {
     return addCalendarUnitsNoOverflow($start, $period_type);
 }
 
-function createDerivedQuantifiers($pdo, $parent_id, $user_id, $title, $period_type, $start_datetime, $repeat_until, $max) {
-    if (!$period_type || !$start_datetime) return;
+function createDerivedQuantifiers($pdo, $parent_id, $user_id, $title, $period_type, $start_datetime, $repeat_until, $max, $offset = 0) {
+    if (!$period_type || !$start_datetime) return 0;
     $start = new DateTime($start_datetime);
+    $offset = max(0, (int)$offset);
+    for ($skip = 0; $skip < $offset; $skip++) {
+        $start = nextPeriodStart($start, $period_type);
+    }
     $until = $repeat_until ? new DateTime($repeat_until) : null;
-    $limit = $until ? 1000 : max(0, (int)$max);
-    for ($i = 1; $i <= $limit; $i++) {
+    $limit = $until ? 1000 : max(0, (int)$max) - $offset;
+    $created = 0;
+    for ($i = $offset + 1; $created < $limit; $i++) {
         $end = calculatePeriodEnd($start, $period_type);
         if ($until && $start > $until) break;
         if ($until && $end > $until) $end = clone $until;
@@ -133,9 +138,24 @@ function createDerivedQuantifiers($pdo, $parent_id, $user_id, $title, $period_ty
         $childTitle = $title . ' ' . $i . 'º';
         $stmt = $pdo->prepare('INSERT INTO quantifiers (id_user, id_quantifier_father, title, maximum_quantity, current_quantity, derivative_quantities, period_type, start_datetime, end_datetime, repeat_until, order_position) VALUES (?, ?, ?, 0, 0, 0, ?, ?, ?, NULL, ?)');
         $stmt->execute([$user_id, $parent_id, $childTitle, $period_type, $start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s'), $position]);
+        $created++;
         if ($until && $end >= $until) break;
         $start = nextPeriodStart($start, $period_type);
     }
+    return $created;
+}
+
+function ensureDerivedPeriodChildren($pdo, $parent_id, $user_id, $title, $period_type, $start_datetime, $repeat_until, $max) {
+    if (!$period_type || !$start_datetime) {
+        return;
+    }
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM quantifiers WHERE id_quantifier_father = ? AND id_user = ?');
+    $stmt->execute([(int)$parent_id, (int)$user_id]);
+    $existing = (int)$stmt->fetchColumn();
+    if (!$repeat_until && $existing >= max(0, (int)$max)) {
+        return;
+    }
+    createDerivedQuantifiers($pdo, $parent_id, $user_id, $title, $period_type, $start_datetime, $repeat_until, $max, $existing);
 }
 
 function normalizeSiblingOrder($pdo, $parent_id, $user_id) {
@@ -278,12 +298,17 @@ try {
             throw new Exception('Informe o datetime inicial para quantificadores derivados por período.');
         }
         $title = trim((string)($input['title'] ?? '')) ?: 'Novo quantificador';
+        $pdo->beginTransaction();
         $pdo->prepare('UPDATE quantifiers SET title = ?, maximum_quantity = ?, current_quantity = ?, derivative_quantities = ?, period_type = ?, start_datetime = ?, repeat_until = ? WHERE id = ? AND id_user = ?')
             ->execute([$title, $max, max(0, (int)($input['current_quantity'] ?? 0)), $derivative, $period_type, $start_datetime, $repeat_until, $id, $user_id]);
+        if ($derivative && $period_type) {
+            ensureDerivedPeriodChildren($pdo, $id, $user_id, $title, $period_type, $start_datetime, $repeat_until, $max);
+        }
         if ($derivative) {
             recalculateParentMaximum($pdo, $id, $user_id);
         }
         recalculateParentMaximum($pdo, $father_id, $user_id);
+        $pdo->commit();
         echo json_encode(['status' => 'success']);
         exit;
     }
