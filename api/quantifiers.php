@@ -12,6 +12,7 @@ $input = json_decode(file_get_contents('php://input'), true) ?: [];
 $action = $input['action'] ?? '';
 
 ensureQuantifiersTable($pdo);
+ensureQuantifiersOrderColumn($pdo);
 
 function ensureQuantifiersTable($pdo) {
     $pdo->exec("CREATE TABLE IF NOT EXISTS quantifiers (
@@ -23,13 +24,64 @@ function ensureQuantifiersTable($pdo) {
         current_quantity INT UNSIGNED NOT NULL DEFAULT 0,
         derivative_quantities TINYINT(1) NOT NULL DEFAULT 0,
         is_completed TINYINT(1) NOT NULL DEFAULT 0,
+        order_position INT UNSIGNED NOT NULL DEFAULT 0,
         completed_at TIMESTAMP NULL DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_quantifiers_user (id_user),
         INDEX idx_quantifiers_father (id_quantifier_father),
+        INDEX idx_quantifiers_order (id_user, id_quantifier_father, order_position),
         CONSTRAINT fk_quantifiers_father FOREIGN KEY (id_quantifier_father) REFERENCES quantifiers(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+
+
+function ensureQuantifiersOrderColumn($pdo) {
+    $stmt = $pdo->query("SHOW COLUMNS FROM quantifiers LIKE 'order_position'");
+    if (!$stmt->fetch()) {
+        $pdo->exec('ALTER TABLE quantifiers ADD COLUMN order_position INT UNSIGNED NOT NULL DEFAULT 0 AFTER is_completed');
+    }
+    try {
+        $pdo->exec('ALTER TABLE quantifiers ADD INDEX idx_quantifiers_order (id_user, id_quantifier_father, order_position)');
+    } catch (Exception $e) {
+        // Index already exists or database driver does not support this ALTER variant.
+    }
+}
+
+function normalizeSiblingOrder($pdo, $parent_id, $user_id) {
+    if ($parent_id) {
+        $stmt = $pdo->prepare('SELECT id FROM quantifiers WHERE id_user = ? AND id_quantifier_father = ? ORDER BY order_position, id');
+        $stmt->execute([(int)$user_id, (int)$parent_id]);
+    } else {
+        $stmt = $pdo->prepare('SELECT id FROM quantifiers WHERE id_user = ? AND id_quantifier_father IS NULL ORDER BY order_position, id');
+        $stmt->execute([(int)$user_id]);
+    }
+    $ids = array_map('intval', array_column($stmt->fetchAll(), 'id'));
+    foreach ($ids as $position => $id) {
+        $pdo->prepare('UPDATE quantifiers SET order_position = ? WHERE id = ? AND id_user = ?')->execute([$position, $id, (int)$user_id]);
+    }
+}
+
+function nextOrderPosition($pdo, $parent_id, $user_id) {
+    if ($parent_id) {
+        $stmt = $pdo->prepare('SELECT COALESCE(MAX(order_position), -1) + 1 FROM quantifiers WHERE id_user = ? AND id_quantifier_father = ?');
+        $stmt->execute([(int)$user_id, (int)$parent_id]);
+    } else {
+        $stmt = $pdo->prepare('SELECT COALESCE(MAX(order_position), -1) + 1 FROM quantifiers WHERE id_user = ? AND id_quantifier_father IS NULL');
+        $stmt->execute([(int)$user_id]);
+    }
+    return (int)$stmt->fetchColumn();
+}
+
+function wouldCreateCycle($pdo, $id, $new_parent_id, $user_id) {
+    $cursor = $new_parent_id ? quantifierBelongsToUser($pdo, $new_parent_id, $user_id) : null;
+    while ($cursor) {
+        if ((int)$cursor['id'] === (int)$id) {
+            return true;
+        }
+        $cursor = !empty($cursor['id_quantifier_father']) ? quantifierBelongsToUser($pdo, (int)$cursor['id_quantifier_father'], $user_id) : null;
+    }
+    return false;
 }
 
 function quantifierBelongsToUser($pdo, $id, $user_id) {
@@ -73,7 +125,7 @@ function recalculateParentMaximum($pdo, $parent_id, $user_id) {
 
 try {
     if ($action === 'fetch') {
-        $stmt = $pdo->prepare('SELECT * FROM quantifiers WHERE id_user = ? ORDER BY id_quantifier_father IS NOT NULL, id_quantifier_father, id');
+        $stmt = $pdo->prepare('SELECT * FROM quantifiers WHERE id_user = ? ORDER BY id_quantifier_father IS NOT NULL, id_quantifier_father, order_position, id');
         $stmt->execute([$user_id]);
         echo json_encode(['status' => 'success', 'quantifiers' => $stmt->fetchAll()]);
         exit;
@@ -90,8 +142,9 @@ try {
             $max = 0;
         }
         $title = trim((string)($input['title'] ?? '')) ?: 'Novo quantificador';
-        $stmt = $pdo->prepare('INSERT INTO quantifiers (id_user, id_quantifier_father, title, maximum_quantity, current_quantity, derivative_quantities) VALUES (?, ?, ?, ?, ?, ?)');
-        $stmt->execute([$user_id, $father_id, $title, $max, max(0, (int)($input['current_quantity'] ?? 0)), $derivative]);
+        $position = nextOrderPosition($pdo, $father_id, $user_id);
+        $stmt = $pdo->prepare('INSERT INTO quantifiers (id_user, id_quantifier_father, title, maximum_quantity, current_quantity, derivative_quantities, order_position) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        $stmt->execute([$user_id, $father_id, $title, $max, max(0, (int)($input['current_quantity'] ?? 0)), $derivative, $position]);
         recalculateParentMaximum($pdo, $father_id, $user_id);
         echo json_encode(['status' => 'success', 'id' => (int)$pdo->lastInsertId()]);
         exit;
@@ -133,6 +186,44 @@ try {
         exit;
     }
 
+
+    if ($action === 'move') {
+        $id = (int)($input['id'] ?? 0);
+        $q = quantifierBelongsToUser($pdo, $id, $user_id);
+        if (!$q) {
+            throw new Exception('Quantificador não encontrado.');
+        }
+        $old_parent_id = !empty($q['id_quantifier_father']) ? (int)$q['id_quantifier_father'] : null;
+        $new_parent_id = !empty($input['id_quantifier_father']) ? (int)$input['id_quantifier_father'] : null;
+        if ($new_parent_id && !quantifierBelongsToUser($pdo, $new_parent_id, $user_id)) {
+            throw new Exception('Quantificador pai inválido.');
+        }
+        if ($new_parent_id === $id || wouldCreateCycle($pdo, $id, $new_parent_id, $user_id)) {
+            throw new Exception('Não é possível mover um quantificador para dentro da própria descendência.');
+        }
+        $new_index = max(0, (int)($input['position'] ?? 0));
+        $pdo->beginTransaction();
+        $pdo->prepare('UPDATE quantifiers SET id_quantifier_father = ?, order_position = 999999 WHERE id = ? AND id_user = ?')->execute([$new_parent_id, $id, $user_id]);
+        normalizeSiblingOrder($pdo, $old_parent_id, $user_id);
+        if ($new_parent_id) {
+            $stmt = $pdo->prepare('SELECT id FROM quantifiers WHERE id_user = ? AND id_quantifier_father = ? AND id <> ? ORDER BY order_position, id');
+            $stmt->execute([$user_id, $new_parent_id, $id]);
+        } else {
+            $stmt = $pdo->prepare('SELECT id FROM quantifiers WHERE id_user = ? AND id_quantifier_father IS NULL AND id <> ? ORDER BY order_position, id');
+            $stmt->execute([$user_id, $id]);
+        }
+        $ids = array_map('intval', array_column($stmt->fetchAll(), 'id'));
+        array_splice($ids, min($new_index, count($ids)), 0, [$id]);
+        foreach ($ids as $position => $sibling_id) {
+            $pdo->prepare('UPDATE quantifiers SET order_position = ? WHERE id = ? AND id_user = ?')->execute([$position, $sibling_id, $user_id]);
+        }
+        recalculateParentMaximum($pdo, $old_parent_id, $user_id);
+        recalculateParentMaximum($pdo, $new_parent_id, $user_id);
+        $pdo->commit();
+        echo json_encode(['status' => 'success']);
+        exit;
+    }
+
     if ($action === 'delete_descendants') {
         $id = (int)($input['id'] ?? 0);
         $q = quantifierBelongsToUser($pdo, $id, $user_id);
@@ -163,6 +254,9 @@ try {
 
     throw new Exception('Ação inválida.');
 } catch (Exception $e) {
+    if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     http_response_code(400);
     echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
 }

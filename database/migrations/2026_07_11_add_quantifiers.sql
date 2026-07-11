@@ -7,10 +7,12 @@ CREATE TABLE IF NOT EXISTS quantifiers (
     current_quantity INT UNSIGNED NOT NULL DEFAULT 0,
     derivative_quantities TINYINT(1) NOT NULL DEFAULT 0,
     is_completed TINYINT(1) NOT NULL DEFAULT 0,
+    order_position INT UNSIGNED NOT NULL DEFAULT 0,
     completed_at TIMESTAMP NULL DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_quantifiers_user (id_user),
     INDEX idx_quantifiers_father (id_quantifier_father),
+    INDEX idx_quantifiers_order (id_user, id_quantifier_father, order_position),
     CONSTRAINT fk_quantifiers_father FOREIGN KEY (id_quantifier_father) REFERENCES quantifiers(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
