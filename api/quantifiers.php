@@ -84,6 +84,15 @@ function wouldCreateCycle($pdo, $id, $new_parent_id, $user_id) {
     return false;
 }
 
+
+function normalizeQuantifierParentInput($input, $key = 'id_quantifier_father') {
+    if (!array_key_exists($key, $input) || $input[$key] === null || $input[$key] === '') {
+        return null;
+    }
+    $parent_id = (int)$input[$key];
+    return $parent_id > 0 ? $parent_id : null;
+}
+
 function quantifierBelongsToUser($pdo, $id, $user_id) {
     if (!$id) {
         return null;
@@ -132,7 +141,7 @@ try {
     }
 
     if ($action === 'create') {
-        $father_id = !empty($input['id_quantifier_father']) ? (int)$input['id_quantifier_father'] : null;
+        $father_id = normalizeQuantifierParentInput($input);
         if ($father_id && !quantifierBelongsToUser($pdo, $father_id, $user_id)) {
             throw new Exception('Quantificador pai inválido.');
         }
@@ -194,7 +203,7 @@ try {
             throw new Exception('Quantificador não encontrado.');
         }
         $old_parent_id = !empty($q['id_quantifier_father']) ? (int)$q['id_quantifier_father'] : null;
-        $new_parent_id = !empty($input['id_quantifier_father']) ? (int)$input['id_quantifier_father'] : null;
+        $new_parent_id = normalizeQuantifierParentInput($input);
         if ($new_parent_id && !quantifierBelongsToUser($pdo, $new_parent_id, $user_id)) {
             throw new Exception('Quantificador pai inválido.');
         }
@@ -220,7 +229,8 @@ try {
         recalculateParentMaximum($pdo, $old_parent_id, $user_id);
         recalculateParentMaximum($pdo, $new_parent_id, $user_id);
         $pdo->commit();
-        echo json_encode(['status' => 'success']);
+        $moved = quantifierBelongsToUser($pdo, $id, $user_id);
+        echo json_encode(['status' => 'success', 'quantifier' => $moved]);
         exit;
     }
 
