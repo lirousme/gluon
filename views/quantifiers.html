@@ -6,6 +6,7 @@
     <script src="/assets/zoom-lock.js" defer></script>
     <title>Gluon - Quantificadores</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
     * {
@@ -69,7 +70,7 @@
             <i class="fa-solid fa-house mr-2"></i>Voltar para raiz
         </button>
     </div>
-    <section id="kanban" ondragover="quantifiersApp.onRootDragOver(event)" ondrop="quantifiersApp.onRootDrop(event)" class="kanban-scroll flex flex-nowrap items-start gap-4 overflow-x-auto overflow-y-auto pb-4 pr-4"></section>
+    <section id="kanban" class="kanban-scroll flex flex-nowrap items-start gap-4 overflow-x-auto overflow-y-auto pb-4 pr-4"></section>
     <div id="emptyState" class="hidden border border-dashed border-slate-700 rounded-2xl p-10 text-center text-slate-400">
         <i class="fa-solid fa-layer-group text-4xl mb-3 text-slate-600"></i>
         <p>Nenhum quantificador neste nível.</p>
@@ -123,7 +124,7 @@ const quantifiersApp = {
     items: [],
     currentFather: null,
     modalFather: null,
-    draggedId: null,
+    sortables: [],
     suppressClickUntil: 0,
 
     async api(action, payload = {}) {
@@ -150,13 +151,9 @@ const quantifiersApp = {
         try {
             const data = await this.api('fetch');
             this.items = data.quantifiers || [];
-            if (this.currentFather && !this.getItem(this.currentFather)) {
-                this.currentFather = null;
-            }
+            if (this.currentFather && !this.getItem(this.currentFather)) this.currentFather = null;
             this.render();
-        } catch (error) {
-            this.toast(error.message, false);
-        }
+        } catch (error) { this.toast(error.message, false); }
     },
 
     childrenOf(id) {
@@ -165,9 +162,7 @@ const quantifiersApp = {
             .sort((a, b) => Number(a.order_position || 0) - Number(b.order_position || 0) || Number(a.id) - Number(b.id));
     },
 
-    getItem(id) {
-        return this.items.find(item => Number(item.id) === Number(id));
-    },
+    getItem(id) { return this.items.find(item => Number(item.id) === Number(id)); },
 
     pathToCurrent() {
         const path = [];
@@ -188,37 +183,29 @@ const quantifiersApp = {
     },
 
     render() {
+        this.destroySortables();
         this.renderBreadcrumb();
         document.getElementById('rootButton').classList.toggle('hidden', !this.currentFather);
-        const kanban = document.getElementById('kanban');
         const visible = this.childrenOf(this.currentFather);
         document.getElementById('emptyState').classList.toggle('hidden', visible.length > 0);
-        kanban.innerHTML = this.pageDropZoneHtml() + visible.map((item, index) => this.cardHtml(item, index)).join('') + this.rootDropZoneHtml(visible.length);
+        const kanban = document.getElementById('kanban');
+        kanban.dataset.parentId = this.currentFather || '';
+        kanban.innerHTML = visible.map(item => this.cardHtml(item)).join('') + this.pageDropZoneHtml();
+        this.initSortables();
     },
-
 
     pageDropZoneHtml() {
-        const label = this.currentFather ? 'Solte aqui para virar kanban desta página aberta' : 'Solte aqui para virar kanban raiz';
-        return `
-            <div data-page-drop-zone="1" ondragover="quantifiersApp.onPageDropZoneDragOver(event)" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onPageDropZoneDrop(event, 0)" class="min-w-[18rem] sm:min-w-[22rem] self-stretch rounded-2xl border border-dashed border-violet-500/40 bg-violet-950/20 p-4 text-sm text-violet-200 flex items-center justify-center text-center transition">
-                <span><i class="fa-solid fa-arrow-up-from-bracket mr-2"></i>${label}</span>
-            </div>
-            <div ondragover="quantifiersApp.onKanbanSlotDragOver(event, 0)" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onKanbanSlotDrop(event, 0)" class="w-3 self-stretch rounded-full transition"></div>`;
+        const label = this.currentFather ? 'Arraste e solte aqui para virar kanban desta página' : 'Arraste e solte aqui para virar kanban raiz';
+        return `<div class="root-drop-hint min-w-[18rem] sm:min-w-[22rem] self-stretch rounded-2xl border border-dashed border-violet-500/40 bg-violet-950/20 p-4 text-sm text-violet-200 flex items-center justify-center text-center transition pointer-events-none"><span><i class="fa-solid fa-arrow-up-from-bracket mr-2"></i>${label}</span></div>`;
     },
 
-    rootDropZoneHtml(position) {
-        return `
-            <div ondragover="quantifiersApp.onKanbanSlotDragOver(event, ${position})" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onKanbanSlotDrop(event, ${position})" class="w-3 self-stretch rounded-full transition"></div>`;
-    },
-
-    cardHtml(item, index = 0) {
+    cardHtml(item) {
         const children = this.childrenOf(item.id);
         const max = Number(item.maximum_quantity || 0);
         const current = Number(item.current_quantity || 0);
         const pct = max > 0 ? Math.min(100, Math.round((current / max) * 100)) : 0;
         return `
-            <div ondragover="quantifiersApp.onKanbanSlotDragOver(event, ${index})" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onKanbanSlotDrop(event, ${index})" class="w-3 self-stretch rounded-full transition"></div>
-            <article draggable="true" data-quantifier-id="${item.id}" ondragstart="quantifiersApp.onDragStart(event, ${item.id})" ondragend="quantifiersApp.onDragEnd(event)" ondragover="quantifiersApp.onCardDragOver(event, ${item.id})" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onCardDrop(event, ${item.id})" class="w-[20rem] sm:w-[22rem] shrink-0 rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-lg shadow-black/20 space-y-3 transition">
+            <article data-quantifier-id="${item.id}" class="quantifier-draggable w-[20rem] sm:w-[22rem] shrink-0 rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-lg shadow-black/20 space-y-3 transition">
                 <div class="flex items-start justify-between gap-3 cursor-grab active:cursor-grabbing">
                     <button onclick="quantifiersApp.goTo(${item.id})" class="min-w-0 flex-1 text-left group">
                         <h3 class="font-semibold truncate group-hover:text-violet-300 ${Number(item.is_completed) === 1 ? 'line-through text-slate-500' : ''}">${this.escape(item.title)}</h3>
@@ -226,182 +213,59 @@ const quantifiersApp = {
                     </button>
                     <button onclick="event.stopPropagation(); quantifiersApp.openEditModal(${item.id})" class="text-slate-400 hover:text-white"><i class="fa-solid fa-pen"></i></button>
                 </div>
-                <div>
-                    <div class="flex justify-between text-xs text-slate-400 mb-1"><span>${current}/${max}</span><span>${pct}%</span></div>
-                    <div class="h-2 rounded-full bg-slate-800 overflow-hidden"><div class="h-full bg-violet-500" style="width:${pct}%"></div></div>
-                </div>
+                <div><div class="flex justify-between text-xs text-slate-400 mb-1"><span>${current}/${max}</span><span>${pct}%</span></div><div class="h-2 rounded-full bg-slate-800 overflow-hidden"><div class="h-full bg-violet-500" style="width:${pct}%"></div></div></div>
                 <div class="flex flex-wrap gap-2">
                     <button onclick="quantifiersApp.complete(${item.id})" ${Number(item.is_completed) === 1 ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-sm bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-400">Concluir</button>
                     <button onclick="quantifiersApp.openCreateModal(${item.id})" class="px-3 py-1.5 rounded-lg text-sm bg-slate-800 hover:bg-slate-700">Adicionar filho</button>
                 </div>
-                <div class="border-t border-slate-800 pt-3">
-                    <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
-                        <span>Filhos</span><span>${children.length}</span>
-                    </div>
-                    <div data-children-of="${item.id}" ondragover="quantifiersApp.onChildrenDragOver(event, ${item.id})" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onChildrenDrop(event, ${item.id})" class="min-h-16 space-y-2 max-h-72 overflow-y-auto pr-1 rounded-xl border border-transparent p-1 transition">
-                        ${children.length ? children.map((child, index) => `
-                        <button draggable="true" data-quantifier-id="${child.id}" ondragstart="quantifiersApp.onDragStart(event, ${child.id})" ondragend="quantifiersApp.onDragEnd(event)" ondragover="quantifiersApp.onChildDragOver(event, ${item.id}, ${index})" ondrop="quantifiersApp.onChildDrop(event, ${item.id}, ${index})" onclick="quantifiersApp.openChildPage(event, ${child.id})" class="w-full rounded-xl bg-slate-800/70 border border-slate-700 p-3 text-left hover:border-violet-500 hover:bg-slate-800 transition cursor-grab active:cursor-grabbing">
-                            <div class="flex items-center justify-between gap-2">
-                                <div class="min-w-0"><p class="text-sm font-medium truncate ${Number(child.is_completed) === 1 ? 'line-through text-slate-500' : ''}">${this.escape(child.title)}</p><p class="text-xs text-slate-500">${child.current_quantity}/${child.maximum_quantity} · ${this.childrenOf(child.id).length} filhos</p></div>
-                                <i class="fa-solid fa-arrow-right text-slate-500"></i>
-                            </div>
-                        </button>`).join('') : '<p class="text-sm text-slate-500 p-2">Sem filhos. Arraste quantificadores para cá ou use “Adicionar filho”.</p>'}
+                <div class="border-t border-slate-800 pt-3"><div class="flex items-center justify-between text-xs text-slate-400 mb-2"><span>Filhos</span><span>${children.length}</span></div>
+                    <div data-parent-id="${item.id}" class="quantifier-list min-h-16 space-y-2 max-h-72 overflow-y-auto pr-1 rounded-xl border border-transparent p-1 transition">
+                        ${children.length ? children.map(child => this.childHtml(child)).join('') : '<p class="empty-child-message text-sm text-slate-500 p-2 pointer-events-none">Sem filhos. Arraste quantificadores para cá ou use “Adicionar filho”.</p>'}
                     </div>
                 </div>
             </article>`;
     },
 
-
-    onDragStart(event, id) {
-        this.draggedId = Number(id);
-        this.suppressClickUntil = 0;
-        event.dataTransfer.effectAllowed = 'move';
-        event.dataTransfer.setData('text/plain', String(id));
-        event.currentTarget.classList.add('dragging');
+    childHtml(child) {
+        return `<div data-quantifier-id="${child.id}" onclick="quantifiersApp.openChildPage(event, ${child.id})" class="quantifier-draggable w-full rounded-xl bg-slate-800/70 border border-slate-700 p-3 text-left hover:border-violet-500 hover:bg-slate-800 transition cursor-grab active:cursor-grabbing">
+            <div class="flex items-center justify-between gap-2"><div class="min-w-0"><p class="text-sm font-medium truncate ${Number(child.is_completed) === 1 ? 'line-through text-slate-500' : ''}">${this.escape(child.title)}</p><p class="text-xs text-slate-500">${child.current_quantity}/${child.maximum_quantity} · ${this.childrenOf(child.id).length} filhos</p></div><i class="fa-solid fa-arrow-right text-slate-500"></i></div>
+        </div>`;
     },
 
-    onDragEnd(event) {
-        this.suppressClickUntil = Date.now() + 300;
-        this.draggedId = null;
-        event.currentTarget.classList.remove('dragging');
-        document.querySelectorAll('.drop-target, .drop-target-children').forEach(el => el.classList.remove('drop-target', 'drop-target-children'));
+    initSortables() {
+        if (typeof Sortable === 'undefined') { this.toast('Biblioteca de arrastar e soltar indisponível.', false); return; }
+        const options = {
+            group: 'quantifiers', animation: 180, draggable: '.quantifier-draggable', filter: 'button, input, textarea, .root-drop-hint, .empty-child-message', preventOnFilter: false,
+            ghostClass: 'drop-target', dragClass: 'dragging', forceFallback: true, fallbackOnBody: true, scroll: true, scrollSensitivity: 90, scrollSpeed: 16,
+            onStart: () => { this.suppressClickUntil = 0; },
+            onEnd: (evt) => this.persistSortableMove(evt)
+        };
+        this.sortables.push(new Sortable(document.getElementById('kanban'), {...options, direction: 'horizontal'}));
+        document.querySelectorAll('.quantifier-list').forEach(list => this.sortables.push(new Sortable(list, {...options, direction: 'vertical'})));
     },
 
-    clearDropStyles(event) {
-        event.currentTarget.classList.remove('drop-target', 'drop-target-children');
-    },
+    destroySortables() { this.sortables.forEach(s => s.destroy()); this.sortables = []; },
 
-
-    onKanbanSlotDragOver(event, index) {
-        if (!this.draggedId) return;
-        event.preventDefault();
-        event.stopPropagation();
-        event.currentTarget.classList.add('drop-target');
-    },
-
-    getDraggedId(event) {
-        const transferId = event?.dataTransfer?.getData('text/plain');
-        const id = this.draggedId || (transferId ? Number(transferId) : null);
-        return Number.isFinite(Number(id)) && Number(id) > 0 ? Number(id) : null;
-    },
-
-    onKanbanSlotDrop(event, index) {
-        if (!this.getDraggedId(event)) return;
-        event.preventDefault();
-        event.stopPropagation();
-        this.clearDropStyles(event);
-        this.moveDraggedToCurrentPage(index, event);
-    },
-
-    onRootDragOver(event) {
-        if (!this.draggedId) return;
-        if (event.target.closest('[data-children-of], [data-page-drop-zone]')) return;
-        event.preventDefault();
-        event.stopPropagation();
-        event.currentTarget.classList.add('drop-target');
-    },
-
-    onRootDrop(event) {
-        if (!this.getDraggedId(event)) return;
-        if (event.target.closest('[data-children-of], [data-page-drop-zone]')) return;
-        event.preventDefault();
-        event.stopPropagation();
-        this.clearDropStyles(event);
-        this.moveDraggedToCurrentPage(this.childrenOf(this.currentFather).length, event);
-    },
-
-    onPageDropZoneDragOver(event) {
-        if (!this.draggedId) return;
-        event.preventDefault();
-        event.stopPropagation();
-        event.currentTarget.classList.add('drop-target');
-    },
-
-    onPageDropZoneDrop(event, position = null) {
-        if (!this.getDraggedId(event)) return;
-        event.preventDefault();
-        event.stopPropagation();
-        this.clearDropStyles(event);
-        const targetPosition = position === null ? this.childrenOf(this.currentFather).length : position;
-        this.moveDraggedToCurrentPage(targetPosition, event);
-    },
-
-    onCardDragOver(event, targetId) {
-        if (!this.draggedId || Number(this.draggedId) === Number(targetId) || event.target.closest('[data-children-of]')) return;
-        event.preventDefault();
-        event.currentTarget.classList.add('drop-target');
-    },
-
-    onCardDrop(event, targetId) {
-        if (!this.draggedId || Number(this.draggedId) === Number(targetId) || event.target.closest('[data-children-of]')) return;
-        event.preventDefault();
-        event.stopPropagation();
-        this.clearDropStyles(event);
-        this.moveDragged(targetId, this.childrenOf(targetId).length);
-    },
-
-    onChildrenDragOver(event, parentId) {
-        if (!this.draggedId) return;
-        event.preventDefault();
-        event.currentTarget.classList.add('drop-target-children');
-    },
-
-    onChildrenDrop(event, parentId) {
-        if (!this.draggedId) return;
-        event.preventDefault();
-        event.stopPropagation();
-        this.clearDropStyles(event);
-        this.moveDragged(parentId, this.childrenOf(parentId).length);
-    },
-
-    onChildDragOver(event, parentId, index) {
-        if (!this.draggedId) return;
-        event.preventDefault();
-        event.stopPropagation();
-        event.currentTarget.classList.add('drop-target');
-    },
-
-    onChildDrop(event, parentId, index) {
-        if (!this.draggedId) return;
-        event.preventDefault();
-        event.stopPropagation();
-        this.clearDropStyles(event);
-        this.moveDragged(parentId, index);
-    },
-
-    moveDraggedToCurrentPage(position, event = null) {
-        // Dropping outside a kanban must promote the item to the currently open dashboard.
-        // On the root dashboard this explicitly sends null plus force_root, so the item becomes a root kanban (orphan).
-        const pageParentId = this.currentFather === null || this.currentFather === undefined || this.currentFather === ''
-            ? null
-            : Number(this.currentFather);
-        this.moveDragged(pageParentId, position, event);
-    },
-
-    async moveDragged(parentId, position, event = null) {
-        const id = this.getDraggedId(event);
-        if (!id) return;
-        const normalizedParentId = parentId === null || parentId === undefined || parentId === '' ? null : Number(parentId);
+    async persistSortableMove(evt) {
+        this.suppressClickUntil = Date.now() + 350;
+        const id = Number(evt.item?.dataset?.quantifierId || 0);
+        if (!id || !evt.to) return;
+        const parentRaw = evt.to.dataset.parentId || '';
+        const parentId = parentRaw === '' ? null : Number(parentRaw);
+        const siblings = [...evt.to.children].filter(el => el.matches?.('.quantifier-draggable'));
+        const position = Math.max(0, siblings.findIndex(el => Number(el.dataset.quantifierId) === id));
         try {
-            await this.api('move', { id, id_quantifier_father: normalizedParentId, force_root: normalizedParentId === null ? 1 : 0, position });
+            await this.api('move', { id, id_quantifier_father: parentId, force_root: parentId === null ? 1 : 0, position });
             await this.load();
             const moved = this.getItem(id);
             const savedParentId = moved && moved.id_quantifier_father ? Number(moved.id_quantifier_father) : null;
-            if (savedParentId !== normalizedParentId) {
-                throw new Error(normalizedParentId === null
-                    ? 'O servidor não transformou o quantificador em kanban raiz. Tente novamente.'
-                    : 'O servidor não salvou a nova filiação do quantificador.');
-            }
+            if (savedParentId !== parentId) throw new Error(parentId === null ? 'O servidor não transformou o quantificador em kanban raiz.' : 'O servidor não salvou a nova filiação.');
             this.toast('Ordem e filiação salvas.');
-        } catch (error) { this.toast(error.message, false); }
+        } catch (error) { await this.load(); this.toast(error.message, false); }
     },
 
     openChildPage(event, id) {
-        if (Date.now() < this.suppressClickUntil) {
-            event.preventDefault();
-            event.stopPropagation();
-            return;
-        }
+        if (Date.now() < this.suppressClickUntil) { event.preventDefault(); event.stopPropagation(); return; }
         this.goTo(id);
     },
 
@@ -409,11 +273,7 @@ const quantifiersApp = {
         this.currentFather = id ? Number(id) : null;
         if (push) {
             const url = new URL(window.location.href);
-            if (this.currentFather) {
-                url.searchParams.set('father', this.currentFather);
-            } else {
-                url.searchParams.delete('father');
-            }
+            if (this.currentFather) url.searchParams.set('father', this.currentFather); else url.searchParams.delete('father');
             window.history.pushState({ father: this.currentFather }, '', url);
         }
         this.render();
