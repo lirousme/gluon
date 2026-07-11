@@ -2311,11 +2311,24 @@ const flashcardApp = {
 
             getCurrentAudioSide(card = this.cards[this.currentIndex]) {
                 if (!card) return null;
-                const hasFront = (card.front && card.front.trim() !== '') || card.image_front;
-                const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
-                if (this.isTranslationLikeCard(card)) return 'front';
+                const hasFrontText = Boolean(card.front && String(card.front).trim() !== '');
+                const hasBackText = Boolean(card.back && String(card.back).trim() !== '');
+                const hasFront = hasFrontText || Boolean(card.image_front);
+                const hasBack = hasBackText || Boolean(card.image_back);
+
+                // Cards especiais (ex.: Tradução/Tag Expansion) são exibidos em uma única face.
+                // Mesmo assim, o áudio deve mirar o texto que existe; em muitos desses cards a
+                // frente é vazia/dinâmica e somente o verso possui texto para gerar/tocar.
+                if (this.isTranslationLikeCard(card)) {
+                    if (hasBackText || (!hasFrontText && card.has_audio_back === 1)) return 'back';
+                    if (hasFrontText || card.has_audio_front === 1) return 'front';
+                    return hasBack ? 'back' : (hasFront ? 'front' : null);
+                }
+
                 if (this.isFlipped || (!hasFront && hasBack)) return 'back';
-                return 'front';
+                if (hasFront || card.has_audio_front === 1) return 'front';
+                if (hasBack || card.has_audio_back === 1) return 'back';
+                return null;
             },
 
             generateCurrentCardAudio() {
@@ -2684,7 +2697,8 @@ const flashcardApp = {
                 const card = this.cards[this.currentIndex];
                 if (!card) return;
 
-                const side = this.isFlipped ? 'back' : 'front';
+                const side = this.getCurrentAudioSide(card);
+                if (!side) return;
                 const hasBack = (card.back && card.back.trim() !== '') || card.image_back;
                 const hasAudio = side === 'back' ? card.has_audio_back === 1 : card.has_audio_front === 1;
 
