@@ -32,6 +32,19 @@
         min-height: calc(100vh - 9rem);
         scrollbar-gutter: stable both-edges;
     }
+    .dragging {
+        opacity: .45;
+        transform: rotate(1deg) scale(.98);
+    }
+    .drop-target {
+        outline: 2px dashed #8b5cf6;
+        outline-offset: 4px;
+        background: rgba(124, 58, 237, .12);
+    }
+    .drop-target-children {
+        border-color: rgba(139, 92, 246, .8);
+        background: rgba(30, 41, 59, .95);
+    }
 </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen">
@@ -56,7 +69,7 @@
             <i class="fa-solid fa-house mr-2"></i>Voltar para raiz
         </button>
     </div>
-    <section id="kanban" class="kanban-scroll flex flex-nowrap items-start gap-4 overflow-x-auto overflow-y-auto pb-4 pr-4"></section>
+    <section id="kanban" ondragover="quantifiersApp.onRootDragOver(event)" ondrop="quantifiersApp.onRootDrop(event)" class="kanban-scroll flex flex-nowrap items-start gap-4 overflow-x-auto overflow-y-auto pb-4 pr-4"></section>
     <div id="emptyState" class="hidden border border-dashed border-slate-700 rounded-2xl p-10 text-center text-slate-400">
         <i class="fa-solid fa-layer-group text-4xl mb-3 text-slate-600"></i>
         <p>Nenhum quantificador neste nível.</p>
@@ -110,6 +123,7 @@ const quantifiersApp = {
     items: [],
     currentFather: null,
     modalFather: null,
+    draggedId: null,
 
     async api(action, payload = {}) {
         const res = await fetch('/api/quantifiers', {
@@ -145,7 +159,9 @@ const quantifiersApp = {
     },
 
     childrenOf(id) {
-        return this.items.filter(item => String(item.id_quantifier_father || '') === String(id || ''));
+        return this.items
+            .filter(item => String(item.id_quantifier_father || '') === String(id || ''))
+            .sort((a, b) => Number(a.order_position || 0) - Number(b.order_position || 0) || Number(a.id) - Number(b.id));
     },
 
     getItem(id) {
@@ -176,17 +192,18 @@ const quantifiersApp = {
         const kanban = document.getElementById('kanban');
         const visible = this.childrenOf(this.currentFather);
         document.getElementById('emptyState').classList.toggle('hidden', visible.length > 0);
-        kanban.innerHTML = visible.map(item => this.cardHtml(item)).join('');
+        kanban.innerHTML = visible.map((item, index) => this.cardHtml(item, index)).join('');
     },
 
-    cardHtml(item) {
+    cardHtml(item, index = 0) {
         const children = this.childrenOf(item.id);
         const max = Number(item.maximum_quantity || 0);
         const current = Number(item.current_quantity || 0);
         const pct = max > 0 ? Math.min(100, Math.round((current / max) * 100)) : 0;
         return `
-            <article class="w-[20rem] sm:w-[22rem] shrink-0 rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-lg shadow-black/20 space-y-3">
-                <div class="flex items-start justify-between gap-3">
+            <div ondragover="quantifiersApp.onKanbanSlotDragOver(event, ${index})" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onKanbanSlotDrop(event, ${index})" class="w-3 self-stretch rounded-full transition"></div>
+            <article draggable="true" data-quantifier-id="${item.id}" ondragstart="quantifiersApp.onDragStart(event, ${item.id})" ondragend="quantifiersApp.onDragEnd(event)" ondragover="quantifiersApp.onCardDragOver(event, ${item.id})" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onCardDrop(event, ${item.id})" class="w-[20rem] sm:w-[22rem] shrink-0 rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-lg shadow-black/20 space-y-3 transition">
+                <div class="flex items-start justify-between gap-3 cursor-grab active:cursor-grabbing">
                     <button onclick="quantifiersApp.goTo(${item.id})" class="min-w-0 flex-1 text-left group">
                         <h3 class="font-semibold truncate group-hover:text-violet-300 ${Number(item.is_completed) === 1 ? 'line-through text-slate-500' : ''}">${this.escape(item.title)}</h3>
                         <p class="text-xs text-slate-500">ID #${item.id}${Number(item.derivative_quantities) === 1 ? ' · máximo derivado dos filhos' : ''}</p>
@@ -205,15 +222,117 @@ const quantifiersApp = {
                     <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
                         <span>Filhos</span><span>${children.length}</span>
                     </div>
-                    ${children.length ? `<div class="space-y-2 max-h-72 overflow-y-auto pr-1">${children.map(child => `
-                        <button onclick="quantifiersApp.goTo(${child.id})" class="w-full rounded-xl bg-slate-800/70 border border-slate-700 p-3 text-left hover:border-violet-500 hover:bg-slate-800 transition">
+                    <div data-children-of="${item.id}" ondragover="quantifiersApp.onChildrenDragOver(event, ${item.id})" ondragleave="quantifiersApp.clearDropStyles(event)" ondrop="quantifiersApp.onChildrenDrop(event, ${item.id})" class="min-h-16 space-y-2 max-h-72 overflow-y-auto pr-1 rounded-xl border border-transparent p-1 transition">
+                        ${children.length ? children.map((child, index) => `
+                        <button draggable="true" data-quantifier-id="${child.id}" ondragstart="quantifiersApp.onDragStart(event, ${child.id})" ondragend="quantifiersApp.onDragEnd(event)" ondragover="quantifiersApp.onChildDragOver(event, ${item.id}, ${index})" ondrop="quantifiersApp.onChildDrop(event, ${item.id}, ${index})" onclick="quantifiersApp.goTo(${child.id})" class="w-full rounded-xl bg-slate-800/70 border border-slate-700 p-3 text-left hover:border-violet-500 hover:bg-slate-800 transition cursor-grab active:cursor-grabbing">
                             <div class="flex items-center justify-between gap-2">
                                 <div class="min-w-0"><p class="text-sm font-medium truncate ${Number(child.is_completed) === 1 ? 'line-through text-slate-500' : ''}">${this.escape(child.title)}</p><p class="text-xs text-slate-500">${child.current_quantity}/${child.maximum_quantity} · ${this.childrenOf(child.id).length} filhos</p></div>
                                 <i class="fa-solid fa-arrow-right text-slate-500"></i>
                             </div>
-                        </button>`).join('')}</div>` : '<p class="text-sm text-slate-500">Sem filhos. Use “Adicionar filho” ou clique no nome deste kanban e depois em “+ Novo”.</p>'}
+                        </button>`).join('') : '<p class="text-sm text-slate-500 p-2">Sem filhos. Arraste quantificadores para cá ou use “Adicionar filho”.</p>'}
+                    </div>
                 </div>
             </article>`;
+    },
+
+
+    onDragStart(event, id) {
+        this.draggedId = Number(id);
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', String(id));
+        event.currentTarget.classList.add('dragging');
+    },
+
+    onDragEnd(event) {
+        this.draggedId = null;
+        event.currentTarget.classList.remove('dragging');
+        document.querySelectorAll('.drop-target, .drop-target-children').forEach(el => el.classList.remove('drop-target', 'drop-target-children'));
+    },
+
+    clearDropStyles(event) {
+        event.currentTarget.classList.remove('drop-target', 'drop-target-children');
+    },
+
+
+    onKanbanSlotDragOver(event, index) {
+        if (!this.draggedId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.currentTarget.classList.add('drop-target');
+    },
+
+    onKanbanSlotDrop(event, index) {
+        if (!this.draggedId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.clearDropStyles(event);
+        this.moveDragged(this.currentFather, index);
+    },
+
+    onRootDragOver(event) {
+        if (!this.draggedId || event.target.closest('[data-quantifier-id]')) return;
+        event.preventDefault();
+        event.currentTarget.classList.add('drop-target');
+    },
+
+    onRootDrop(event) {
+        if (!this.draggedId || event.target.closest('[data-quantifier-id]')) return;
+        event.preventDefault();
+        this.clearDropStyles(event);
+        this.moveDragged(this.currentFather, this.childrenOf(this.currentFather).length);
+    },
+
+    onCardDragOver(event, targetId) {
+        if (!this.draggedId || Number(this.draggedId) === Number(targetId) || event.target.closest('[data-children-of]')) return;
+        event.preventDefault();
+        event.currentTarget.classList.add('drop-target');
+    },
+
+    onCardDrop(event, targetId) {
+        if (!this.draggedId || Number(this.draggedId) === Number(targetId) || event.target.closest('[data-children-of]')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.clearDropStyles(event);
+        this.moveDragged(targetId, this.childrenOf(targetId).length);
+    },
+
+    onChildrenDragOver(event, parentId) {
+        if (!this.draggedId) return;
+        event.preventDefault();
+        event.currentTarget.classList.add('drop-target-children');
+    },
+
+    onChildrenDrop(event, parentId) {
+        if (!this.draggedId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.clearDropStyles(event);
+        this.moveDragged(parentId, this.childrenOf(parentId).length);
+    },
+
+    onChildDragOver(event, parentId, index) {
+        if (!this.draggedId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.currentTarget.classList.add('drop-target');
+    },
+
+    onChildDrop(event, parentId, index) {
+        if (!this.draggedId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.clearDropStyles(event);
+        this.moveDragged(parentId, index);
+    },
+
+    async moveDragged(parentId, position) {
+        const id = this.draggedId;
+        if (!id) return;
+        try {
+            await this.api('move', { id, id_quantifier_father: parentId, position });
+            await this.load();
+            this.toast('Ordem e filiação salvas.');
+        } catch (error) { this.toast(error.message, false); }
     },
 
     goTo(id, push = true) {
