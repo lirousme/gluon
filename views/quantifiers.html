@@ -7,6 +7,32 @@
     <title>Gluon - Quantificadores</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: #7c3aed #0f172a;
+    }
+    *::-webkit-scrollbar {
+        width: 12px;
+        height: 12px;
+    }
+    *::-webkit-scrollbar-track {
+        background: #0f172a;
+        border-radius: 999px;
+    }
+    *::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #7c3aed, #2563eb);
+        border: 3px solid #0f172a;
+        border-radius: 999px;
+    }
+    *::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+    }
+    .kanban-scroll {
+        min-height: calc(100vh - 9rem);
+        scrollbar-gutter: stable both-edges;
+    }
+</style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen">
 <nav class="h-16 px-4 sm:px-6 border-b border-slate-800 bg-slate-900/90 backdrop-blur flex items-center justify-between sticky top-0 z-20">
@@ -20,9 +46,17 @@
     <button onclick="quantifiersApp.openCreateModal()" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 font-medium"><i class="fa-solid fa-plus mr-2"></i>Novo</button>
 </nav>
 
-<main class="p-4 sm:p-6 space-y-4">
-    <div id="breadcrumb" class="flex flex-wrap items-center gap-2 text-sm text-slate-400"></div>
-    <section id="kanban" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></section>
+<main class="p-4 sm:p-6 space-y-4 overflow-y-auto">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <div id="breadcrumb" class="flex flex-wrap items-center gap-2 text-sm text-slate-400"></div>
+            <p id="levelHint" class="mt-1 text-xs text-slate-500">Clique em um filho para abrir o dashboard dele. O botão + Novo cria no nível aberto.</p>
+        </div>
+        <button id="rootButton" onclick="quantifiersApp.goTo(null)" class="hidden w-fit px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm text-slate-300 hover:bg-slate-800 hover:text-white">
+            <i class="fa-solid fa-house mr-2"></i>Voltar para raiz
+        </button>
+    </div>
+    <section id="kanban" class="kanban-scroll flex flex-nowrap items-start gap-4 overflow-x-auto overflow-y-auto pb-4 pr-4"></section>
     <div id="emptyState" class="hidden border border-dashed border-slate-700 rounded-2xl p-10 text-center text-slate-400">
         <i class="fa-solid fa-layer-group text-4xl mb-3 text-slate-600"></i>
         <p>Nenhum quantificador neste nível.</p>
@@ -104,6 +138,9 @@ const quantifiersApp = {
         try {
             const data = await this.api('fetch');
             this.items = data.quantifiers || [];
+            if (this.currentFather && !this.getItem(this.currentFather)) {
+                this.currentFather = null;
+            }
             this.render();
         } catch (error) {
             this.toast(error.message, false);
@@ -138,6 +175,7 @@ const quantifiersApp = {
 
     render() {
         this.renderBreadcrumb();
+        document.getElementById('rootButton').classList.toggle('hidden', !this.currentFather);
         const kanban = document.getElementById('kanban');
         const visible = this.childrenOf(this.currentFather);
         document.getElementById('emptyState').classList.toggle('hidden', visible.length > 0);
@@ -146,18 +184,17 @@ const quantifiersApp = {
 
     cardHtml(item) {
         const children = this.childrenOf(item.id);
-        const hasGrandchildren = children.some(child => this.childrenOf(child.id).length > 0);
         const max = Number(item.maximum_quantity || 0);
         const current = Number(item.current_quantity || 0);
         const pct = max > 0 ? Math.min(100, Math.round((current / max) * 100)) : 0;
         return `
-            <article class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-lg space-y-3">
+            <article class="w-[20rem] sm:w-[22rem] shrink-0 rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-lg shadow-black/20 space-y-3">
                 <div class="flex items-start justify-between gap-3">
-                    <div>
-                        <h3 class="font-semibold ${Number(item.is_completed) === 1 ? 'line-through text-slate-500' : ''}">${this.escape(item.title)}</h3>
-                        <p class="text-xs text-slate-500">ID #${item.id}${Number(item.derivative_quantities) === 1 ? ' · derivado dos filhos' : ''}</p>
-                    </div>
-                    <button onclick="quantifiersApp.openEditModal(${item.id})" class="text-slate-400 hover:text-white"><i class="fa-solid fa-pen"></i></button>
+                    <button onclick="quantifiersApp.goTo(${item.id})" class="min-w-0 flex-1 text-left group">
+                        <h3 class="font-semibold truncate group-hover:text-violet-300 ${Number(item.is_completed) === 1 ? 'line-through text-slate-500' : ''}">${this.escape(item.title)}</h3>
+                        <p class="text-xs text-slate-500">ID #${item.id}${Number(item.derivative_quantities) === 1 ? ' · máximo derivado dos filhos' : ''}</p>
+                    </button>
+                    <button onclick="event.stopPropagation(); quantifiersApp.openEditModal(${item.id})" class="text-slate-400 hover:text-white"><i class="fa-solid fa-pen"></i></button>
                 </div>
                 <div>
                     <div class="flex justify-between text-xs text-slate-400 mb-1"><span>${current}/${max}</span><span>${pct}%</span></div>
@@ -166,18 +203,36 @@ const quantifiersApp = {
                 <div class="flex flex-wrap gap-2">
                     <button onclick="quantifiersApp.complete(${item.id})" ${Number(item.is_completed) === 1 ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-sm bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-400">Concluir</button>
                     <button onclick="quantifiersApp.openCreateModal(${item.id})" class="px-3 py-1.5 rounded-lg text-sm bg-slate-800 hover:bg-slate-700">Adicionar filho</button>
-                    ${children.length ? `<button onclick="quantifiersApp.goTo(${item.id})" class="px-3 py-1.5 rounded-lg text-sm bg-blue-600 hover:bg-blue-500">Abrir filhos</button>` : ''}
+                    <button onclick="quantifiersApp.goTo(${item.id})" class="px-3 py-1.5 rounded-lg text-sm bg-blue-600 hover:bg-blue-500">Abrir página</button>
                 </div>
-                ${children.length && !hasGrandchildren ? `<div class="space-y-2 border-t border-slate-800 pt-3">${children.map(child => `
-                    <div class="rounded-xl bg-slate-800/70 border border-slate-700 p-3 flex items-center justify-between gap-2">
-                        <div><p class="text-sm font-medium ${Number(child.is_completed) === 1 ? 'line-through text-slate-500' : ''}">${this.escape(child.title)}</p><p class="text-xs text-slate-500">${child.current_quantity}/${child.maximum_quantity}</p></div>
-                        <div class="flex gap-2"><button onclick="quantifiersApp.complete(${child.id})" class="text-emerald-300 hover:text-emerald-200"><i class="fa-solid fa-check"></i></button><button onclick="quantifiersApp.openEditModal(${child.id})" class="text-slate-400 hover:text-white"><i class="fa-solid fa-pen"></i></button></div>
-                    </div>`).join('')}</div>` : ''}
-                ${hasGrandchildren ? '<p class="text-xs text-blue-300 border-t border-slate-800 pt-3">Este quantificador tem netos. Abra os filhos para mudar o layout para o próximo nível.</p>' : ''}
+                <div class="border-t border-slate-800 pt-3">
+                    <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+                        <span>Filhos</span><span>${children.length}</span>
+                    </div>
+                    ${children.length ? `<div class="space-y-2 max-h-72 overflow-y-auto pr-1">${children.map(child => `
+                        <button onclick="quantifiersApp.goTo(${child.id})" class="w-full rounded-xl bg-slate-800/70 border border-slate-700 p-3 text-left hover:border-violet-500 hover:bg-slate-800 transition">
+                            <div class="flex items-center justify-between gap-2">
+                                <div class="min-w-0"><p class="text-sm font-medium truncate ${Number(child.is_completed) === 1 ? 'line-through text-slate-500' : ''}">${this.escape(child.title)}</p><p class="text-xs text-slate-500">${child.current_quantity}/${child.maximum_quantity} · ${this.childrenOf(child.id).length} filhos</p></div>
+                                <i class="fa-solid fa-arrow-right text-slate-500"></i>
+                            </div>
+                        </button>`).join('')}</div>` : '<p class="text-sm text-slate-500">Sem filhos. Use “Adicionar filho” ou abra esta página e clique em “+ Novo”.</p>'}
+                </div>
             </article>`;
     },
 
-    goTo(id) { this.currentFather = id; this.render(); },
+    goTo(id, push = true) {
+        this.currentFather = id ? Number(id) : null;
+        if (push) {
+            const url = new URL(window.location.href);
+            if (this.currentFather) {
+                url.searchParams.set('father', this.currentFather);
+            } else {
+                url.searchParams.delete('father');
+            }
+            window.history.pushState({ father: this.currentFather }, '', url);
+        }
+        this.render();
+    },
 
     populateFatherOptions(selected = null, editingId = null) {
         const select = document.getElementById('fatherId');
@@ -274,6 +329,11 @@ const quantifiersApp = {
     }
 };
 
+const initialFather = new URLSearchParams(window.location.search).get('father');
+quantifiersApp.currentFather = initialFather ? Number(initialFather) : null;
+window.addEventListener('popstate', event => {
+    quantifiersApp.goTo(event.state?.father || new URLSearchParams(window.location.search).get('father') || null, false);
+});
 quantifiersApp.load();
 </script>
 </body>
