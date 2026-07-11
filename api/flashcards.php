@@ -501,6 +501,8 @@ function ensureFlashcardTagsNumericMetadataSchema(PDO $pdo): void
         if (!$nameTranslationsColumn) $pdo->exec('ALTER TABLE flashcard_tags ADD COLUMN name_translations_encrypted LONGTEXT NULL AFTER name_pt_br_encrypted');
         $symbolTranslationsColumn = $pdo->query("SHOW COLUMNS FROM flashcard_tags LIKE 'sigla_simbolo_translations_encrypted'")->fetch(PDO::FETCH_ASSOC);
         if (!$symbolTranslationsColumn) $pdo->exec('ALTER TABLE flashcard_tags ADD COLUMN sigla_simbolo_translations_encrypted LONGTEXT NULL AFTER sigla_simbolo');
+        $audioTranslationsColumn = $pdo->query("SHOW COLUMNS FROM flashcard_tags LIKE 'audio_translations_encrypted'")->fetch(PDO::FETCH_ASSOC);
+        if (!$audioTranslationsColumn) $pdo->exec('ALTER TABLE flashcard_tags ADD COLUMN audio_translations_encrypted LONGTEXT NULL AFTER sigla_simbolo_translations_encrypted');
     } catch (Throwable $e) {
         error_log('[flashcards][flashcard_tags_numeric_metadata_schema] ' . $e->getMessage());
     }
@@ -629,6 +631,8 @@ function buildTagTranslationsFromInput(array $input, string $legacyName, ?string
 
 function hydrateTagTranslationFields(array $tag): array
 {
+    $tagAudioMap = decryptFlashcardJsonMap($tag['audio_translations_encrypted'] ?? null);
+    $tag['audio_languages'] = array_keys($tagAudioMap);
     $tag['name'] = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
     $tag['name_pt_br'] = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : null;
     $tag['name_translations'] = encryptedTagTranslationMap($tag['name_translations_encrypted'] ?? null);
@@ -637,7 +641,7 @@ function hydrateTagTranslationFields(array $tag): array
     if ($tag['name'] !== '' && empty($tag['name_translations']['en'])) $tag['name_translations']['en'] = $tag['name'];
     if (!empty($tag['name_pt_br']) && empty($tag['name_translations']['pt_br'])) $tag['name_translations']['pt_br'] = $tag['name_pt_br'];
     if (!empty($tag['sigla_simbolo']) && empty($tag['sigla_simbolo_translations']['en'])) $tag['sigla_simbolo_translations']['en'] = $tag['sigla_simbolo'];
-    unset($tag['name_encrypted'], $tag['name_pt_br_encrypted'], $tag['name_translations_encrypted'], $tag['description_translations_encrypted'], $tag['sigla_simbolo_translations_encrypted']);
+    unset($tag['name_encrypted'], $tag['name_pt_br_encrypted'], $tag['name_translations_encrypted'], $tag['description_translations_encrypted'], $tag['sigla_simbolo_translations_encrypted'], $tag['audio_translations_encrypted']);
     return $tag;
 }
 
@@ -2233,7 +2237,7 @@ function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int 
 
     $tagPlaceholders = implode(',', array_fill(0, count($cardIds), '?'));
     $stmtTags = $pdo->prepare("
-        SELECT l.flashcard_id, t.id AS tag_id, t.user_id AS tag_user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo, t.color
+        SELECT l.flashcard_id, t.id AS tag_id, t.user_id AS tag_user_id, t.name_encrypted, t.name_pt_br_encrypted, t.name_translations_encrypted, t.description_translations_encrypted, t.sigla_simbolo_translations_encrypted, t.audio_translations_encrypted, t.numero, t.sigla_simbolo, t.color
         FROM {$linkTable} l
         JOIN flashcard_tags t ON t.id = l.tag_id
         WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id IN (?, 5)
@@ -2251,6 +2255,10 @@ function fetchLinkedTagsByCard(PDO $pdo, string $linkTable, array $cardIds, int 
             'is_user_owned' => ((int)$tagRow['tag_user_id'] === $user_id),
             'name' => !empty($tagRow['name_encrypted']) ? Security::decryptData($tagRow['name_encrypted']) : '',
             'name_pt_br' => !empty($tagRow['name_pt_br_encrypted']) ? Security::decryptData($tagRow['name_pt_br_encrypted']) : null,
+            'name_translations' => encryptedTagTranslationMap($tagRow['name_translations_encrypted'] ?? null),
+            'description_translations' => encryptedTagTranslationMap($tagRow['description_translations_encrypted'] ?? null),
+            'sigla_simbolo_translations' => encryptedTagTranslationMap($tagRow['sigla_simbolo_translations_encrypted'] ?? null),
+            'audio_languages' => array_keys(decryptFlashcardJsonMap($tagRow['audio_translations_encrypted'] ?? null)),
             'numero' => normalizeNullableTagMetadataText($tagRow['numero'] ?? null),
             'sigla_simbolo' => normalizeNullableTagMetadataText($tagRow['sigla_simbolo'] ?? null),
             'color' => $tagRow['color']
@@ -2269,7 +2277,7 @@ function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagCol
 
     $tagPlaceholders = implode(',', array_fill(0, count($cardIds), '?'));
     $stmtTags = $pdo->prepare("
-        SELECT l.flashcard_id, t.id AS tag_id, t.user_id AS tag_user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo, t.color
+        SELECT l.flashcard_id, t.id AS tag_id, t.user_id AS tag_user_id, t.name_encrypted, t.name_pt_br_encrypted, t.name_translations_encrypted, t.description_translations_encrypted, t.sigla_simbolo_translations_encrypted, t.audio_translations_encrypted, t.numero, t.sigla_simbolo, t.color
         FROM {$linkTable} l
         JOIN flashcard_tags t ON t.id = l.{$tagColumn}
         WHERE l.flashcard_id IN ($tagPlaceholders) AND t.user_id IN (?, 5)
@@ -2287,6 +2295,10 @@ function fetchLinkedTagsByCardColumn(PDO $pdo, string $linkTable, string $tagCol
             'is_user_owned' => ((int)$tagRow['tag_user_id'] === $user_id),
             'name' => !empty($tagRow['name_encrypted']) ? Security::decryptData($tagRow['name_encrypted']) : '',
             'name_pt_br' => !empty($tagRow['name_pt_br_encrypted']) ? Security::decryptData($tagRow['name_pt_br_encrypted']) : null,
+            'name_translations' => encryptedTagTranslationMap($tagRow['name_translations_encrypted'] ?? null),
+            'description_translations' => encryptedTagTranslationMap($tagRow['description_translations_encrypted'] ?? null),
+            'sigla_simbolo_translations' => encryptedTagTranslationMap($tagRow['sigla_simbolo_translations_encrypted'] ?? null),
+            'audio_languages' => array_keys(decryptFlashcardJsonMap($tagRow['audio_translations_encrypted'] ?? null)),
             'numero' => normalizeNullableTagMetadataText($tagRow['numero'] ?? null),
             'sigla_simbolo' => normalizeNullableTagMetadataText($tagRow['sigla_simbolo'] ?? null),
             'color' => $tagRow['color']
@@ -3390,6 +3402,36 @@ function requestGoogleCloudTts($text_to_speech, $language, $side = null, $deck_s
 /**
  * Função generateAndPersistCardAudio: Gera áudio para um lado do card com o provedor configurado e persiste no banco criptografado.
  */
+function generateAndPersistTagAudio($pdo, $user_id, $tag_id, $text, $language, $languageKey, &$error_details = null) {
+    $text_to_speech = adjustPronunciationForTTS($pdo, $text, $language);
+    $provider = getUserTtsProvider($pdo, (int)$user_id);
+    $provider_error = null;
+    if ($provider === 'openai') {
+        $audio_binary = requestOpenAITts($text_to_speech, $provider_error);
+    } elseif ($provider === 'google') {
+        $audio_binary = requestGoogleCloudTts($text_to_speech, $language, 'front', 'traducoes', $language, $language, $provider_error);
+    } else {
+        $audio_binary = requestFishAudioTts($text_to_speech, $language, $provider_error);
+    }
+    if (!is_string($audio_binary) || $audio_binary === '') {
+        $error_details = $provider_error ?: ('Falha ao gerar áudio da tag com o provider ' . strtoupper($provider) . '.');
+        return false;
+    }
+    $stmt = $pdo->prepare('SELECT audio_translations_encrypted FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5) LIMIT 1');
+    $stmt->execute([$tag_id, $user_id]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        $error_details = 'Tag não encontrada.';
+        return false;
+    }
+    $audioMap = decryptFlashcardJsonMap($row['audio_translations_encrypted'] ?? null);
+    $audioMap[$languageKey] = Security::encryptData(base64_encode($audio_binary));
+    $update = $pdo->prepare('UPDATE flashcard_tags SET audio_translations_encrypted = ? WHERE id = ? AND user_id IN (?, 5)');
+    $update->execute([encryptFlashcardJsonMap($audioMap), $tag_id, $user_id]);
+    $error_details = null;
+    return true;
+}
+
 function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $language, $deck_structure = 'traducoes', $front_language = 'pt-BR', $back_language = 'en-GB', &$error_details = null) {
     $text_to_speech = adjustPronunciationForTTS($pdo, $text, $language);
     $provider = getUserTtsProvider($pdo, (int)$user_id);
@@ -6782,6 +6824,7 @@ elseif ($action === 'list_graph_tags_for_user') {
             t.name_translations_encrypted,
             t.description_translations_encrypted,
             t.sigla_simbolo_translations_encrypted,
+            t.audio_translations_encrypted,
             t.numero,
             t.sigla_simbolo,
             t.color,
@@ -6827,6 +6870,7 @@ elseif ($action === 'list_tags') {
             t.name_translations_encrypted,
             t.description_translations_encrypted,
             t.sigla_simbolo_translations_encrypted,
+            t.audio_translations_encrypted,
             t.numero,
             t.sigla_simbolo,
             t.color,
@@ -6891,6 +6935,7 @@ elseif ($action === 'list_user_tags_by_subject_card_count' || $action === 'list_
             t.name_translations_encrypted,
             t.description_translations_encrypted,
             t.sigla_simbolo_translations_encrypted,
+            t.audio_translations_encrypted,
             t.numero,
             t.sigla_simbolo,
             t.color,
@@ -6954,6 +6999,7 @@ elseif ($action === 'list_saved_filters') {
             t.name_translations_encrypted,
             t.description_translations_encrypted,
             t.sigla_simbolo_translations_encrypted,
+            t.audio_translations_encrypted,
             t.numero,
             t.sigla_simbolo,
             t.color,
@@ -7020,6 +7066,46 @@ elseif ($action === 'remove_saved_filter') {
     $stmt = $pdo->prepare("DELETE FROM filtros WHERE id_user = ? AND id_tag = ?");
     $stmt->execute([$user_id, $tag_id]);
     echo json_encode(['status' => 'success', 'message' => 'Tag desfixada.']);
+}
+
+elseif ($action === 'get_tag_audio') {
+    $tag_id = (int)($_GET['tag_id'] ?? 0);
+    $language_key = array_key_first(normalizeTagTranslationMap([($_GET['language'] ?? '') => 'x'])) ?: '';
+    if ($tag_id <= 0 || $language_key === '') { http_response_code(400); die('Tag inválida'); }
+    $stmt = $pdo->prepare('SELECT audio_translations_encrypted FROM flashcard_tags WHERE id = ? AND user_id IN (?, 5) LIMIT 1');
+    $stmt->execute([$tag_id, $user_id]);
+    $tag = $stmt->fetch(PDO::FETCH_ASSOC);
+    $audioMap = $tag ? decryptFlashcardJsonMap($tag['audio_translations_encrypted'] ?? null) : [];
+    if (!$tag || empty($audioMap[$language_key])) { http_response_code(404); die('Áudio da tag não encontrado'); }
+    $audio_binary = normalizeStoredAudioToBinary(Security::decryptData($audioMap[$language_key]));
+    if ($audio_binary === null || $audio_binary === '') { http_response_code(500); die('Falha ao ler áudio da tag'); }
+    header('Content-Type: audio/mpeg');
+    header('Content-Length: ' . strlen($audio_binary));
+    echo $audio_binary;
+    exit;
+}
+
+elseif ($action === 'generate_tag_audio') {
+    $tag_id = (int)($input['tag_id'] ?? 0);
+    $language_key = array_key_first(normalizeTagTranslationMap([($input['language'] ?? '') => 'x'])) ?: '';
+    if ($tag_id <= 0 || $language_key === '') die(json_encode(['status' => 'error', 'message' => 'Parâmetros inválidos.']));
+    $stmt = $pdo->prepare('SELECT name_encrypted, name_pt_br_encrypted, name_translations_encrypted, audio_translations_encrypted FROM flashcard_tags WHERE id = ? AND (user_id = ? OR created_by_user_id = ? OR user_id = 5) LIMIT 1');
+    $stmt->execute([$tag_id, $user_id, $user_id]);
+    $tag = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$tag) die(json_encode(['status' => 'error', 'message' => 'Tag não encontrada.']));
+    $translations = encryptedTagTranslationMap($tag['name_translations_encrypted'] ?? null);
+    $legacyName = !empty($tag['name_encrypted']) ? Security::decryptData($tag['name_encrypted']) : '';
+    $legacyPtBr = !empty($tag['name_pt_br_encrypted']) ? Security::decryptData($tag['name_pt_br_encrypted']) : '';
+    if ($legacyName !== '' && empty($translations['en'])) $translations['en'] = $legacyName;
+    if ($legacyPtBr !== '' && empty($translations['pt_br'])) $translations['pt_br'] = $legacyPtBr;
+    $text = trim((string)($translations[$language_key] ?? ($language_key === 'en_gb' ? ($translations['en'] ?? '') : '')));
+    if ($text === '') die(json_encode(['status' => 'error', 'message' => 'Essa tag não possui nome no idioma selecionado.']));
+    if (cardTextContainsMathNotation($text)) die(json_encode(['status' => 'error', 'message' => 'Este conteúdo possui notação matemática e não pode ter áudio gerado.']));
+    $ttsLanguage = ['en' => 'en-GB', 'en_us' => 'en-US', 'en_gb' => 'en-GB', 'pt_br' => 'pt-BR', 'es' => 'es-ES', 'fr' => 'fr-FR', 'zh' => 'cmn-CN'][$language_key] ?? detectFlashcardTextTtsLanguage($text, 'en-GB');
+    $tts_error_details = null;
+    $ok = generateAndPersistTagAudio($pdo, $user_id, $tag_id, $text, $ttsLanguage, $language_key, $tts_error_details);
+    if (!$ok) die(json_encode(['status' => 'error', 'message' => 'Erro ao gerar áudio da tag.', 'details' => $tts_error_details ?: 'Sem detalhes adicionais.']));
+    echo json_encode(['status' => 'success', 'message' => 'Áudio da tag gerado com sucesso!', 'language' => $language_key]);
 }
 
 elseif ($action === 'create_tag') {
@@ -7544,11 +7630,11 @@ elseif ($action === 'get_tag_family') {
         $relationTypeHierarchy[$typeId] = (int)($typeRow['hierarquia'] ?? 0);
     }
 
-    $stmtChildren = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo, t.color, tf.tipo_de_relacao, tf.id_user AS family_user_id, tf.ordem FROM relacoes_taguineas tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_child LEFT JOIN tipos_de_relacoes tr ON tr.id = tf.tipo_de_relacao WHERE tf.id_user IN (?, 5) AND tf.id_tag_mother = ? AND t.user_id IN (?,5) ORDER BY (tf.id_user = ?) DESC, CASE WHEN COALESCE(tr.hierarquia, 0) = 2 THEN tf.ordem ELSE 0 END ASC, t.id ASC");
+    $stmtChildren = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.name_translations_encrypted, t.description_translations_encrypted, t.sigla_simbolo_translations_encrypted, t.audio_translations_encrypted, t.numero, t.sigla_simbolo, t.color, tf.tipo_de_relacao, tf.id_user AS family_user_id, tf.ordem FROM relacoes_taguineas tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_child LEFT JOIN tipos_de_relacoes tr ON tr.id = tf.tipo_de_relacao WHERE tf.id_user IN (?, 5) AND tf.id_tag_mother = ? AND t.user_id IN (?,5) ORDER BY (tf.id_user = ?) DESC, CASE WHEN COALESCE(tr.hierarquia, 0) = 2 THEN tf.ordem ELSE 0 END ASC, t.id ASC");
     $stmtChildren->execute([$user_id, $tag_id, $user_id, $user_id]);
     $children = $stmtChildren->fetchAll(PDO::FETCH_ASSOC);
 
-    $stmtMothers = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.numero, t.sigla_simbolo, t.color, tf.tipo_de_relacao, tf.id_user AS family_user_id, tf.ordem FROM relacoes_taguineas tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_mother WHERE tf.id_user IN (?, 5) AND tf.id_tag_child = ? AND t.user_id IN (?,5) ORDER BY (tf.id_user = ?) DESC, t.id ASC");
+    $stmtMothers = $pdo->prepare("SELECT t.id, t.user_id, t.name_encrypted, t.name_pt_br_encrypted, t.name_translations_encrypted, t.description_translations_encrypted, t.sigla_simbolo_translations_encrypted, t.audio_translations_encrypted, t.numero, t.sigla_simbolo, t.color, tf.tipo_de_relacao, tf.id_user AS family_user_id, tf.ordem FROM relacoes_taguineas tf INNER JOIN flashcard_tags t ON t.id = tf.id_tag_mother WHERE tf.id_user IN (?, 5) AND tf.id_tag_child = ? AND t.user_id IN (?,5) ORDER BY (tf.id_user = ?) DESC, t.id ASC");
     $stmtMothers->execute([$user_id, $tag_id, $user_id, $user_id]);
     $mothers = $stmtMothers->fetchAll(PDO::FETCH_ASSOC);
 

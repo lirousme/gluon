@@ -806,6 +806,15 @@
             <div id="audioLanguageOptions" class="space-y-2"></div>
         </div>
     </div>
+    <div id="tagAudioModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-[76] opacity-0 transition-opacity duration-300 px-4">
+        <div id="tagAudioModalContent" class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-sm p-5 transform scale-95 transition-transform duration-300">
+            <div class="flex items-center justify-between mb-4"><h3 class="text-lg font-bold text-white">Áudio da tag</h3><button type="button" onclick="flashcardApp.closeTagAudioModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button></div>
+            <p id="tagAudioModalTitle" class="text-sm font-semibold text-slate-100 mb-2"></p>
+            <p class="text-sm text-slate-300 mb-3">Escolha o idioma do nome da tag para tocar ou gerar o áudio.</p>
+            <div id="tagAudioLanguageOptions" class="space-y-2 max-h-[55vh] overflow-y-auto pr-1"></div>
+        </div>
+    </div>
+
     <div id="singleModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4">
         <div class="bg-gluon-secondary border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg p-0 transform scale-95 transition-transform duration-300 flex flex-col max-h-[95vh]" id="singleModalContent">
 
@@ -2118,7 +2127,7 @@ const flashcardApp = {
                         const tagId = Number(tag.id);
                         const isDecisionTag = decisionTagId > 0 && tagId === decisionTagId;
                         const title = isDecisionTag ? 'Tag responsável por encontrar este card' : 'Tag do card';
-                        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${this.getCardTagDisplayClass(tag, decisionTagId)}" title="${title}">${this.renderTagButtonContent(tag, numeroPtBrCounts, categoryLabel)}</span>`;
+                        return `<button type="button" onclick="event.stopPropagation(); flashcardApp.openTagAudioModal(${tagId})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${this.getCardTagDisplayClass(tag, decisionTagId)}" title="${title}. Clique para áudio da tag.">${this.renderTagButtonContent(tag, numeroPtBrCounts, categoryLabel)}${Array.isArray(tag.audio_languages) && tag.audio_languages.length ? ' <i class="fa-solid fa-volume-high text-emerald-300"></i>' : ''}</button>`;
                     };
 
                     tagsList.innerHTML = tagsByPanel.map(group => {
@@ -2711,7 +2720,47 @@ const flashcardApp = {
                 }
             },
 
-            playCardAudio(cardId, side, onEnded = null) {
+            getTagAudioLanguage(tag = {}) {
+                const languages = Array.isArray(tag.audio_languages) ? tag.audio_languages : [];
+                const names = tag.name_translations || {};
+                const preferred = ['en_gb', 'en_us', 'en', 'pt_br', 'es', 'fr', 'zh'];
+                return preferred.find(lang => languages.includes(lang) && String(names[lang] || '').trim() !== '') || languages[0] || '';
+            },
+
+            getPrimaryPlayableTag(card = this.cards[this.currentIndex]) {
+                if (!card || ![1, 5].includes(Number(card.info_type))) return null;
+                const pools = [card.subject_tags, card.tags, card.idioma_principal_tags, card.object_tags, card.lexical_chunks_tags];
+                for (const pool of pools) {
+                    const tag = (Array.isArray(pool) ? pool : []).find(item => Array.isArray(item?.audio_languages) && item.audio_languages.length);
+                    if (tag) return tag;
+                }
+                return null;
+            },
+
+            playTagAudio(tagId, language, onEnded = null, append = false) {
+                if (!append) this.stopAudio();
+                const ts = new Date().getTime();
+                this.currentAudioElement = new Audio(`/api/flashcards?action=get_tag_audio&tag_id=${tagId}&language=${encodeURIComponent(language)}&t=${ts}`);
+                this.currentAudioElement.volume = language === 'en_gb' ? 1 : 0.6;
+                if (typeof onEnded === 'function') {
+                    this.currentAudioEndedHandler = onEnded;
+                    this.currentAudioElement.addEventListener('ended', this.currentAudioEndedHandler, { once: true });
+                } else {
+                    this.currentAudioEndedHandler = null;
+                }
+                this.currentAudioElement.play().catch(e => console.error("Erro ao tocar áudio da tag:", e));
+            },
+
+            playCardAudio(cardId, side, onEnded = null, skipTagIntro = false) {
+                const card = this.cards.find(c => Number(c.id) === Number(cardId)) || this.cards[this.currentIndex];
+                const tag = !skipTagIntro ? this.getPrimaryPlayableTag(card) : null;
+                if (tag) {
+                    const lang = this.getTagAudioLanguage(tag);
+                    if (lang) {
+                        this.playTagAudio(Number(tag.id), lang, () => this.playCardAudio(cardId, side, onEnded, true));
+                        return;
+                    }
+                }
                 this.stopAudio();
                 const ts = new Date().getTime(); // Bypassa o cache do navegador para ouvir o novo audio regerado
                 this.currentAudioElement = new Audio(`/api/flashcards?action=get_audio&card_id=${cardId}&side=${side}&t=${ts}`);
@@ -2771,6 +2820,57 @@ const flashcardApp = {
                     btn.removeAttribute('aria-busy');
                     this.updateHeaderCardActions();
                 }
+            },
+
+            getTagTextLanguageOptions(tag) {
+                const labels = { en: 'Inglês', en_us: 'Inglês Americano', en_gb: 'Inglês Britânico', pt_br: 'Português', es: 'Espanhol', fr: 'Francês', zh: 'Mandarim' };
+                const translations = tag?.name_translations || {};
+                const options = Object.keys(labels).filter(lang => translations[lang] && String(translations[lang]).trim() !== '').map(lang => ({ lang, label: labels[lang], text: translations[lang], hasAudio: Array.isArray(tag.audio_languages) && tag.audio_languages.includes(lang) }));
+                if (tag?.name && !options.some(item => item.lang === 'en')) options.unshift({ lang: 'en', label: labels.en, text: tag.name, hasAudio: Array.isArray(tag.audio_languages) && tag.audio_languages.includes('en') });
+                if (tag?.name_pt_br && !options.some(item => item.lang === 'pt_br')) options.push({ lang: 'pt_br', label: labels.pt_br, text: tag.name_pt_br, hasAudio: Array.isArray(tag.audio_languages) && tag.audio_languages.includes('pt_br') });
+                return options;
+            },
+
+            openTagAudioModal(tagId) {
+                const tag = this.availableTags.find(item => Number(item.id) === Number(tagId)) || this.cards.flatMap(card => [card.subject_tags, card.object_tags, card.lexical_chunks_tags, card.tags].flat().filter(Boolean)).find(item => Number(item.id) === Number(tagId));
+                if (!tag) return;
+                const options = this.getTagTextLanguageOptions(tag);
+                const title = document.getElementById('tagAudioModalTitle');
+                if (title) title.textContent = this.getTagLabel(tag);
+                const container = document.getElementById('tagAudioLanguageOptions');
+                container.innerHTML = options.length ? options.map(option => `<div class="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white"><div class="flex items-center justify-between gap-2"><div class="min-w-0"><span class="font-semibold">${option.label}</span><span class="block text-xs text-slate-400 truncate">${this.escapeHTML(option.text)}</span></div><button type="button" onclick="flashcardApp.${option.hasAudio ? 'playTagAudio' : 'generateTagAudio'}(${Number(tagId)}, '${option.lang}')" class="shrink-0 rounded-lg border ${option.hasAudio ? 'border-emerald-400/50 text-emerald-200 hover:bg-emerald-400/10' : 'border-violet-400/50 text-violet-200 hover:bg-violet-400/10'} px-3 py-1.5 text-xs font-semibold"><i class="fa-solid ${option.hasAudio ? 'fa-play' : 'fa-wand-magic-sparkles'} mr-1"></i>${option.hasAudio ? 'Tocar' : 'Gerar'}</button></div></div>`).join('') : '<p class="text-sm text-slate-400">Esta tag não possui nome em nenhum idioma.</p>';
+                const modal = document.getElementById('tagAudioModal');
+                const content = document.getElementById('tagAudioModalContent');
+                modal.classList.remove('hidden'); modal.classList.add('flex');
+                setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); }, 20);
+            },
+
+            closeTagAudioModal() {
+                const modal = document.getElementById('tagAudioModal');
+                const content = document.getElementById('tagAudioModalContent');
+                if (!modal) return;
+                modal.classList.add('opacity-0'); if (content) content.classList.add('scale-95');
+                setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 200);
+            },
+
+            async generateTagAudio(tagId, language) {
+                const res = await this.api('generate_tag_audio', { tag_id: tagId, language });
+                if (!res) return;
+                const updateTag = (tag) => {
+                    if (!tag || Number(tag.id) !== Number(tagId)) return tag;
+                    const audioLanguages = Array.from(new Set([...(tag.audio_languages || []), language]));
+                    return { ...tag, audio_languages: audioLanguages };
+                };
+                this.availableTags = this.availableTags.map(updateTag);
+                this.cards = this.cards.map(card => {
+                    ['subject_tags','object_tags','lexical_chunks_tags','tags','idioma_principal_tags','idioma_secundario_tags'].forEach(key => {
+                        if (Array.isArray(card[key])) card[key] = card[key].map(updateTag);
+                    });
+                    return card;
+                });
+                this.showToast(res.message, 'success');
+                this.openTagAudioModal(tagId);
+                this.renderCurrentCard();
             },
 
             async generateMissingAudiosFromCurrentDeck() {
