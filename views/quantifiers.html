@@ -57,7 +57,10 @@
             <h1 class="font-semibold">Quantificadores</h1>
         </div>
     </div>
-    <button onclick="quantifiersApp.openCreateModal()" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 font-medium"><i class="fa-solid fa-plus mr-2"></i>Novo</button>
+    <div class="flex items-center gap-2">
+        <button id="visibilityButton" onclick="quantifiersApp.openVisibilityModal()" title="Opções de visualização" class="w-11 h-11 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-200"><i id="visibilityIcon" class="fa-solid fa-eye"></i></button>
+        <button onclick="quantifiersApp.openCreateModal()" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 font-medium"><i class="fa-solid fa-plus mr-2"></i>Novo</button>
+    </div>
 </nav>
 
 <main class="p-4 sm:p-6 space-y-4 overflow-y-auto">
@@ -156,6 +159,25 @@
     </div>
 </div>
 
+<div id="visibilityModal" class="hidden fixed inset-0 z-40 bg-black/70 p-4 items-center justify-center">
+    <div class="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 shadow-xl">
+        <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+            <h2 class="font-semibold">Visualização</h2>
+            <button onclick="quantifiersApp.closeVisibilityModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="p-4 space-y-4">
+            <label class="flex items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-800/60 p-3 cursor-pointer">
+                <span>
+                    <span class="block text-sm font-medium">Ocultar concluídos</span>
+                    <span class="block text-xs text-slate-400">Remove da tela os quantificadores marcados como concluídos.</span>
+                </span>
+                <input id="hideCompleted" type="checkbox" class="sr-only peer" onchange="quantifiersApp.setHideCompleted(this.checked)">
+                <span class="w-12 h-7 bg-slate-700 rounded-full relative after:content-[''] after:absolute after:w-5 after:h-5 after:bg-white after:rounded-full after:left-1 after:top-1 peer-checked:bg-violet-600 peer-checked:after:translate-x-5 after:transition"></span>
+            </label>
+        </div>
+    </div>
+</div>
+
 <script>
 const quantifiersApp = {
     items: [],
@@ -163,6 +185,7 @@ const quantifiersApp = {
     modalFather: null,
     sortables: [],
     suppressClickUntil: 0,
+    hideCompleted: localStorage.getItem('quantifiers_hide_completed') === '1',
 
     async api(action, payload = {}) {
         const res = await fetch('/api/quantifiers', {
@@ -193,9 +216,10 @@ const quantifiersApp = {
         } catch (error) { this.toast(error.message, false); }
     },
 
-    childrenOf(id) {
+    childrenOf(id, includeCompleted = false) {
         return this.items
             .filter(item => String(item.id_quantifier_father || '') === String(id || ''))
+            .filter(item => includeCompleted || !this.hideCompleted || Number(item.is_completed) !== 1)
             .sort((a, b) => Number(a.order_position || 0) - Number(b.order_position || 0) || Number(a.id) - Number(b.id));
     },
 
@@ -223,6 +247,7 @@ const quantifiersApp = {
         this.destroySortables();
         this.renderBreadcrumb();
         document.getElementById('rootButton').classList.toggle('hidden', !this.currentFather);
+        this.updateVisibilityButton();
         const visible = this.childrenOf(this.currentFather);
         document.getElementById('emptyState').classList.toggle('hidden', visible.length > 0);
         const kanban = document.getElementById('kanban');
@@ -380,6 +405,24 @@ const quantifiersApp = {
 
     showModal() { document.getElementById('modal').classList.remove('hidden'); document.getElementById('modal').classList.add('flex'); },
     closeModal() { document.getElementById('modal').classList.add('hidden'); document.getElementById('modal').classList.remove('flex'); },
+    openVisibilityModal() {
+        document.getElementById('hideCompleted').checked = this.hideCompleted;
+        document.getElementById('visibilityModal').classList.remove('hidden');
+        document.getElementById('visibilityModal').classList.add('flex');
+    },
+    closeVisibilityModal() { document.getElementById('visibilityModal').classList.add('hidden'); document.getElementById('visibilityModal').classList.remove('flex'); },
+    setHideCompleted(value) {
+        this.hideCompleted = Boolean(value);
+        localStorage.setItem('quantifiers_hide_completed', this.hideCompleted ? '1' : '0');
+        this.updateVisibilityButton();
+        this.render();
+    },
+    updateVisibilityButton() {
+        const icon = document.getElementById('visibilityIcon');
+        if (!icon) return;
+        icon.className = `fa-solid ${this.hideCompleted ? 'fa-eye-slash' : 'fa-eye'}`;
+        document.getElementById('visibilityButton')?.classList.toggle('text-violet-300', this.hideCompleted);
+    },
 
     async save(event) {
         event.preventDefault();
@@ -393,8 +436,8 @@ const quantifiersApp = {
             period_type: document.getElementById('periodType').value,
             custom_period_unit: document.getElementById('customPeriodUnit').value,
             custom_period_amount: document.getElementById('customPeriodAmount').value,
-            start_datetime: document.getElementById('startDatetime').value,
-            repeat_until: document.getElementById('repeatUntil').value
+            start_datetime: this.localDatetimeToUtc(document.getElementById('startDatetime').value),
+            repeat_until: this.localDatetimeToUtc(document.getElementById('repeatUntil').value)
         };
         if (!id) {
             payload.id_quantifier_father = this.modalFather;
@@ -438,15 +481,31 @@ const quantifiersApp = {
         return `${period}${start}${end}`;
     },
 
+    utcDate(value) {
+        if (!value) return null;
+        const normalized = String(value).trim().replace(' ', 'T');
+        const date = new Date(/(Z|[+-]\d{2}:?\d{2})$/.test(normalized) ? normalized : `${normalized}Z`);
+        return Number.isNaN(date.getTime()) ? null : date;
+    },
+
     formatDateTime(value) {
-        if (!value) return '';
-        const date = new Date(String(value).replace(' ', 'T'));
-        return Number.isNaN(date.getTime()) ? value : date.toLocaleString('pt-BR');
+        const date = this.utcDate(value);
+        return date ? date.toLocaleString('pt-BR') : (value || '');
     },
 
     toDatetimeLocal(value) {
+        const date = this.utcDate(value);
+        if (!date) return '';
+        const pad = number => String(number).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    },
+
+    localDatetimeToUtc(value) {
         if (!value) return '';
-        return String(value).replace(' ', 'T').slice(0, 16);
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '';
+        const pad = number => String(number).padStart(2, '0');
+        return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`;
     },
 
     escape(value) {
