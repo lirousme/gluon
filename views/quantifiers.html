@@ -115,11 +115,28 @@
                         <option value="years">Anos</option>
                         <option value="months">Meses</option>
                         <option value="days">Dias</option>
+                        <option value="custom">Personalizado</option>
                     </select>
                 </div>
                 <div id="startDatetimeWrap" class="hidden">
                     <label class="block text-sm text-slate-300 mb-1">Datetime inicial</label>
                     <input id="startDatetime" type="datetime-local" class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 outline-none focus:border-violet-500">
+                </div>
+            </div>
+            <div id="customPeriodWrap" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm text-slate-300 mb-1">Unidade personalizada</label>
+                    <select id="customPeriodUnit" class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 outline-none focus:border-violet-500">
+                        <option value="minutes">Minutos</option>
+                        <option value="hours">Horas</option>
+                        <option value="days">Dias</option>
+                        <option value="months">Meses</option>
+                        <option value="years">Anos</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-300 mb-1">Quantidade da unidade</label>
+                    <input id="customPeriodAmount" type="number" min="1" step="1" inputmode="numeric" class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 outline-none focus:border-violet-500" placeholder="Ex.: 15">
                 </div>
             </div>
             <div id="repeatUntilWrap" class="hidden">
@@ -307,6 +324,8 @@ const quantifiersApp = {
         document.getElementById('current').value = 0;
         document.getElementById('derivative').checked = false;
         document.getElementById('periodType').value = '';
+        document.getElementById('customPeriodUnit').value = 'minutes';
+        document.getElementById('customPeriodAmount').value = '';
         document.getElementById('startDatetime').value = '';
         document.getElementById('repeatUntil').value = '';
         document.getElementById('editActions').classList.add('hidden');
@@ -325,6 +344,8 @@ const quantifiersApp = {
         document.getElementById('current').value = item.current_quantity;
         document.getElementById('derivative').checked = Number(item.derivative_quantities) === 1;
         document.getElementById('periodType').value = item.period_type || '';
+        document.getElementById('customPeriodUnit').value = item.custom_period_unit || 'minutes';
+        document.getElementById('customPeriodAmount').value = item.custom_period_amount || '';
         document.getElementById('startDatetime').value = this.toDatetimeLocal(item.start_datetime);
         document.getElementById('repeatUntil').value = this.toDatetimeLocal(item.repeat_until);
         document.getElementById('editActions').classList.remove('hidden');
@@ -343,10 +364,15 @@ const quantifiersApp = {
     },
 
     togglePeriodFields() {
-        const hasPeriod = Boolean(document.getElementById('periodType').value);
+        const periodType = document.getElementById('periodType').value;
+        const hasPeriod = Boolean(periodType);
+        const isCustom = periodType === 'custom';
         document.getElementById('startDatetimeWrap').classList.toggle('hidden', !hasPeriod);
         document.getElementById('repeatUntilWrap').classList.toggle('hidden', !hasPeriod);
+        document.getElementById('customPeriodWrap').classList.toggle('hidden', !isCustom);
         document.getElementById('startDatetime').required = document.getElementById('derivative').checked && hasPeriod;
+        document.getElementById('customPeriodUnit').required = isCustom;
+        document.getElementById('customPeriodAmount').required = isCustom;
         const maximum = document.getElementById('maximum');
         maximum.disabled = false;
         maximum.classList.remove('opacity-50');
@@ -365,6 +391,8 @@ const quantifiersApp = {
             current_quantity: document.getElementById('current').value || 0,
             derivative_quantities: document.getElementById('derivative').checked ? 1 : 0,
             period_type: document.getElementById('periodType').value,
+            custom_period_unit: document.getElementById('customPeriodUnit').value,
+            custom_period_amount: document.getElementById('customPeriodAmount').value,
             start_datetime: document.getElementById('startDatetime').value,
             repeat_until: document.getElementById('repeatUntil').value
         };
@@ -400,8 +428,11 @@ const quantifiersApp = {
 
     periodLabel(item) {
         const labels = {years: 'anos', months: 'meses', days: 'dias'};
+        const customLabels = {minutes: 'minutos', hours: 'horas', days: 'dias', months: 'meses', years: 'anos'};
         if (!item.period_type && !item.start_datetime) return '';
-        const period = labels[item.period_type] ? ` · ${labels[item.period_type]}` : '';
+        const period = item.period_type === 'custom'
+            ? ` · a cada ${item.custom_period_amount || 1} ${customLabels[item.custom_period_unit] || 'unidades'}`
+            : (labels[item.period_type] ? ` · ${labels[item.period_type]}` : '');
         const start = item.start_datetime ? ` · início ${this.formatDateTime(item.start_datetime)}` : '';
         const end = item.end_datetime ? ` · fim ${this.formatDateTime(item.end_datetime)}` : '';
         return `${period}${start}${end}`;
