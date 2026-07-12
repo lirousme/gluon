@@ -365,13 +365,20 @@ try {
         if (!$q) {
             throw new Exception('Quantificador não encontrado.');
         }
-        if ((int)$q['is_completed'] !== 1) {
-            $pdo->prepare('UPDATE quantifiers SET is_completed = 1, completed_at = CURRENT_TIMESTAMP WHERE id = ? AND id_user = ?')->execute([$id, $user_id]);
+        if ((int)$q['is_completed'] === 1) {
+            $pdo->prepare('UPDATE quantifiers SET is_completed = 0, completed_at = NULL WHERE id = ? AND id_user = ?')->execute([$id, $user_id]);
             if (!empty($q['id_quantifier_father'])) {
-                $pdo->prepare('UPDATE quantifiers SET current_quantity = current_quantity + 1 WHERE id = ? AND id_user = ?')->execute([(int)$q['id_quantifier_father'], $user_id]);
+                $pdo->prepare('UPDATE quantifiers SET current_quantity = GREATEST(current_quantity - 1, 0) WHERE id = ? AND id_user = ?')->execute([(int)$q['id_quantifier_father'], $user_id]);
             }
+            echo json_encode(['status' => 'success', 'is_completed' => 0]);
+            exit;
         }
-        echo json_encode(['status' => 'success']);
+
+        $pdo->prepare('UPDATE quantifiers SET is_completed = 1, completed_at = CURRENT_TIMESTAMP WHERE id = ? AND id_user = ?')->execute([$id, $user_id]);
+        if (!empty($q['id_quantifier_father'])) {
+            $pdo->prepare('UPDATE quantifiers SET current_quantity = current_quantity + 1 WHERE id = ? AND id_user = ?')->execute([(int)$q['id_quantifier_father'], $user_id]);
+        }
+        echo json_encode(['status' => 'success', 'is_completed' => 1]);
         exit;
     }
 

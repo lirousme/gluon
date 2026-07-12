@@ -277,7 +277,7 @@ const quantifiersApp = {
                 </div>
                 <div><div class="flex justify-between text-xs text-slate-400 mb-1"><span>${current}/${max}</span><span>${pct}%</span></div><div class="h-2 rounded-full bg-slate-800 overflow-hidden"><div class="h-full bg-violet-500" style="width:${pct}%"></div></div></div>
                 <div class="flex flex-wrap gap-2">
-                    <button onclick="quantifiersApp.complete(${item.id})" ${Number(item.is_completed) === 1 ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-sm bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-400">Concluir</button>
+                    <button onclick="quantifiersApp.complete(${item.id})" class="px-3 py-1.5 rounded-lg text-sm ${Number(item.is_completed) === 1 ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'}">${Number(item.is_completed) === 1 ? 'Desconcluir' : 'Concluir'}</button>
                     <button onclick="quantifiersApp.openCreateModal(${item.id})" class="px-3 py-1.5 rounded-lg text-sm bg-slate-800 hover:bg-slate-700">Adicionar filho</button>
                 </div>
                 <div class="border-t border-slate-800 pt-3"><div class="flex items-center justify-between text-xs text-slate-400 mb-2"><span>Filhos</span><span>${children.length}</span></div>
@@ -451,7 +451,11 @@ const quantifiersApp = {
     },
 
     async complete(id) {
-        try { await this.api('complete', {id}); await this.load(); this.toast('Quantificador concluído.'); }
+        try {
+            const res = await this.api('complete', {id});
+            await this.load();
+            this.toast(Number(res.is_completed) === 1 ? 'Quantificador concluído.' : 'Quantificador desconcluído.');
+        }
         catch (error) { this.toast(error.message, false); }
     },
 
