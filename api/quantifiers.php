@@ -85,7 +85,8 @@ function normalizeDateTimeInput($value, $endOfDay = false) {
     if ($value === '') {
         return null;
     }
-    $dt = new DateTime($value);
+    $dt = new DateTime($value, new DateTimeZone('UTC'));
+    $dt->setTimezone(new DateTimeZone('UTC'));
     if (strlen($value) <= 10) {
         $dt->setTime($endOfDay ? 23 : 0, $endOfDay ? 59 : 0, $endOfDay ? 59 : 0);
     }
@@ -164,11 +165,11 @@ function createDerivedQuantifiers($pdo, $parent_id, $user_id, $title, $period_ty
         }
         return $created;
     }
-    $start = new DateTime($start_datetime);
+    $start = new DateTime($start_datetime, new DateTimeZone('UTC'));
     for ($skip = 0; $skip < $offset; $skip++) {
         $start = nextPeriodStart($start, $period_type, $custom_unit, $custom_amount);
     }
-    $until = $repeat_until ? new DateTime($repeat_until) : null;
+    $until = $repeat_until ? new DateTime($repeat_until, new DateTimeZone('UTC')) : null;
     $limit = $until ? 1000 : max(0, (int)$max) - $offset;
     $created = 0;
     for ($i = $offset + 1; $created < $limit; $i++) {
