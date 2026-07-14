@@ -1104,50 +1104,24 @@ const app = {
     this.availableTags = res?.data || [];
     this.renderAllTagSelectors();
   },
-  informationalFrequencyTagPanelTitles: {
-    1: {
-      subject: 'Quem é (Ex.: Moranguinho, Max)',
-      object: 'O que é completo (Ex.: Diminutivo de morango, Cachorro do João)',
-      lexicalChunk: 'Lexical chunks (Flexões)',
-      hideLexicalChunk: true
-    },
-    2: {
-      subject: 'Ações compostas (Ex.: Latir alto, Fazer torta de morango)',
-      object: 'Sujeitos',
-      lexicalChunk: 'Complementares (Ex.: Noite, dentro, canil)'
-    },
-    3: {
-      subject: 'Proprietário (Ex.: Chat)',
-      object: 'Propriedade (Ex.: Tag roxa)',
-      lexicalChunk: 'Complementares (Ex.: Indicar, implementado)'
-    }
-  },
   updateInformationalFrequencyTagPanelTitles() {
-    const selectedId = Number(document.getElementById('frequenciaInformacionalSelect')?.value || 0);
-    const titles = this.informationalFrequencyTagPanelTitles[selectedId] || {
-      subject: 'Subject',
-      object: 'Objects',
-      lexicalChunk: 'Lexical chunks (Flexões)'
-    };
     const subjectTitle = document.getElementById('SubjectTagsPanelTitle');
     const objectTitle = document.getElementById('ObjectTagsPanelTitle');
     const lexicalChunkTitle = document.getElementById('LexicalChunkTagsPanelTitle');
     const lexicalChunkPanel = document.getElementById('LexicalChunkTagsPanel');
-    if (subjectTitle) subjectTitle.textContent = titles.subject;
-    if (objectTitle) objectTitle.textContent = titles.object;
-    if (lexicalChunkTitle) lexicalChunkTitle.textContent = titles.lexicalChunk;
-    if (lexicalChunkPanel) lexicalChunkPanel.classList.toggle('hidden', Boolean(titles.hideLexicalChunk));
+    if (subjectTitle) subjectTitle.textContent = 'Subject';
+    if (objectTitle) objectTitle.textContent = 'Objects';
+    if (lexicalChunkTitle) lexicalChunkTitle.textContent = 'Lexical chunks (Flexões)';
+    if (lexicalChunkPanel) lexicalChunkPanel.classList.remove('hidden');
     this.updateRelacaoAcaoPanel();
   },
   updateRelacaoAcaoPanel() {
-    const selectedId = Number(document.getElementById('frequenciaInformacionalSelect')?.value || 0);
     const panel = document.getElementById('RelacaoAcaoPanel');
     const select = document.getElementById('relacaoAcaoSelect');
-    const shouldShow = selectedId === 2;
-    if (panel) panel.classList.toggle('hidden', !shouldShow);
+    if (panel) panel.classList.add('hidden');
     if (select) {
-      select.required = shouldShow;
-      if (!shouldShow) select.value = '';
+      select.required = false;
+      select.value = '';
     }
   },
   isCreatingCardFromScratch() {
@@ -1899,7 +1873,6 @@ const app = {
     let object_tag_ids = this.getSelectedTagIds('object');
     let lexical_chunk_tag_ids = this.getSelectedTagIds('lexicalChunk');
     const id_frequencia_informacional = Number(frequenciaInformacionalSelect.value || 0);
-    if (id_frequencia_informacional === 1) lexical_chunk_tag_ids = [];
     const isTagExpansion = this.isTagExpansionType();
     const generatedFront = isTagExpansion ? '' : front;
     if (isTagExpansion) {
@@ -1908,26 +1881,22 @@ const app = {
     } else if (!frontPlainText && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
     if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag na categoria Subject para salvar o card.', 'error');
     if (!id_frequencia_informacional) return this.setStatus('Selecione uma frequência informacional para salvar o card.', 'error');
-    const relacao_acao = id_frequencia_informacional === 2 ? String(relacaoAcaoSelect?.value || '') : null;
-    if (id_frequencia_informacional === 2 && !['confirmacao', 'negacao'].includes(relacao_acao)) {
-      return this.setStatus('Selecione se a relação é Negação da ação ou Confirmação da ação.', 'error');
-    }
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
       if (!this.editCardId) {
         const [descendantObjectTagIds, lexicalChunkChildTagIds] = await Promise.all([
           this.getDescendantObjectTagIdsFromFamily([...subject_tag_ids, ...object_tag_ids]),
-          id_frequencia_informacional === 1 ? Promise.resolve([]) : this.getLexicalChunkChildTagIdsFromFamily(lexical_chunk_tag_ids)
+          this.getLexicalChunkChildTagIdsFromFamily(lexical_chunk_tag_ids)
         ]);
         object_tag_ids = Array.from(new Set([...object_tag_ids, ...descendantObjectTagIds]));
-        lexical_chunk_tag_ids = id_frequencia_informacional === 1 ? [] : Array.from(new Set([...lexical_chunk_tag_ids, ...lexicalChunkChildTagIds]));
+        lexical_chunk_tag_ids = Array.from(new Set([...lexical_chunk_tag_ids, ...lexicalChunkChildTagIds]));
       }
       const return_to = this.getReturnTarget();
       const question_answer = this.infoType === 2 ? this.questionAnswer : null;
       const front_translations = isTagExpansion ? {} : this.collectFlashcardTranslations('front');
       const back_translations = this.collectFlashcardTranslations('back');
-      const payload = { deck_id: this.deckId, front: generatedFront, back, front_translations, back_translations, image_front: isTagExpansion ? '' : image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, id_frequencia_informacional, relacao_acao, info_type: this.infoType, question_answer, dynamic_text_type: isTagExpansion ? 'none' : dynamicTextType.value, return_to };
+      const payload = { deck_id: this.deckId, front: generatedFront, back, front_translations, back_translations, image_front: isTagExpansion ? '' : image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, id_frequencia_informacional, info_type: this.infoType, question_answer, dynamic_text_type: isTagExpansion ? 'none' : dynamicTextType.value, return_to };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');

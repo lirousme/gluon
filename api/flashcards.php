@@ -689,51 +689,6 @@ function relacoesTaguineasHasIdCardColumn(PDO $pdo): bool
     return $hasColumn;
 }
 
-function insertInformationalFrequencyRelation(PDO $pdo, int $userId, int $cardId, int $relationType, int $motherTagId, int $childTagId): void
-{
-    if ($motherTagId <= 0 || $childTagId <= 0 || $motherTagId === $childTagId) return;
-
-    if (relacoesTaguineasHasIdCardColumn($pdo)) {
-        $stmt = $pdo->prepare("
-            INSERT IGNORE INTO relacoes_taguineas (id_user, id_tag_mother, id_tag_child, tipo_de_relacao, id_card, ordem)
-            SELECT ?, mother.id, child.id, ?, ?, 0
-            FROM flashcard_tags mother
-            INNER JOIN flashcard_tags child ON child.id = ?
-            WHERE mother.id = ?
-              AND mother.user_id IN (?, 5)
-              AND child.user_id IN (?, 5)
-        ");
-        $stmt->execute([$userId, $relationType, $cardId, $childTagId, $motherTagId, $userId, $userId]);
-        return;
-    }
-
-    $stmt = $pdo->prepare("
-        INSERT IGNORE INTO relacoes_taguineas (id_user, id_tag_mother, id_tag_child, tipo_de_relacao, ordem)
-        SELECT ?, mother.id, child.id, ?, 0
-        FROM flashcard_tags mother
-        INNER JOIN flashcard_tags child ON child.id = ?
-        WHERE mother.id = ?
-          AND mother.user_id IN (?, 5)
-          AND child.user_id IN (?, 5)
-    ");
-    $stmt->execute([$userId, $relationType, $childTagId, $motherTagId, $userId, $userId]);
-}
-
-function sanitizeRelacaoAcao(?string $value, int $frequencyId): ?string
-{
-    if ($frequencyId !== 2) return null;
-    $value = trim((string)$value);
-    if (!in_array($value, ['confirmacao', 'negacao'], true)) {
-        die(json_encode(['status' => 'error', 'message' => 'Selecione se a relação é Negação da ação ou Confirmação da ação.']));
-    }
-    return $value;
-}
-
-function relacaoAcaoToRelationType(?string $relacaoAcao): int
-{
-    return $relacaoAcao === 'negacao' ? 26 : 25;
-}
-
 function getCardRelacaoAcao(PDO $pdo, int $userId, int $cardId): ?string
 {
     if (!relacoesTaguineasHasIdCardColumn($pdo)) return null;
@@ -744,40 +699,6 @@ function getCardRelacaoAcao(PDO $pdo, int $userId, int $cardId): ?string
     if ($relationType === 25) return 'confirmacao';
     return null;
 }
-
-function syncInformationalFrequencyCardRelations(PDO $pdo, int $userId, int $cardId, int $frequencyId, array $subjectTagIds, array $objectTagIds, array $lexicalChunkTagIds, ?string $relacaoAcao = null): void
-{
-    $relationTypes = [24, 25, 26, 28];
-    if (relacoesTaguineasHasIdCardColumn($pdo)) {
-        $placeholders = implode(',', array_fill(0, count($relationTypes), '?'));
-        $pdo->prepare("DELETE FROM relacoes_taguineas WHERE id_user = ? AND id_card = ? AND tipo_de_relacao IN ({$placeholders})")
-            ->execute(array_merge([$userId, $cardId], $relationTypes));
-    }
-
-    $insertPairs = static function (array $mothers, array $children, int $relationType) use ($pdo, $userId, $cardId): void {
-        foreach ($mothers as $motherTagId) {
-            foreach ($children as $childTagId) {
-                insertInformationalFrequencyRelation($pdo, $userId, $cardId, $relationType, (int)$motherTagId, (int)$childTagId);
-            }
-        }
-    };
-
-    if ($frequencyId === 1) {
-        $insertPairs($subjectTagIds, $objectTagIds, 24);
-        $insertPairs($objectTagIds, $subjectTagIds, 24);
-        syncCardTagLinks($pdo, 'relation_links', $cardId, [], $userId);
-        return;
-    }
-
-    syncCardTagLinks($pdo, 'relation_links', $cardId, [], $userId);
-
-    if ($frequencyId === 2 && !empty($objectTagIds)) {
-        $insertPairs($objectTagIds, $subjectTagIds, relacaoAcaoToRelationType($relacaoAcao));
-    } elseif ($frequencyId === 3) {
-        $insertPairs($subjectTagIds, $objectTagIds, 28);
-    }
-}
-
 
 function getTableIdSqlType(PDO $pdo, string $table, string $fallback = 'int unsigned'): string
 {
@@ -5893,10 +5814,6 @@ elseif ($action === 'add_single') {
     $dynamic_text_type = sanitizeDynamicTextType($input['dynamic_text_type'] ?? 'none');
     $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
     $id_frequencia_informacional = validateFrequenciaInformacionalId($pdo, $user_id, $input['id_frequencia_informacional'] ?? null);
-    $relacao_acao = sanitizeRelacaoAcao($input['relacao_acao'] ?? null, $id_frequencia_informacional);
-    if ($id_frequencia_informacional === 1) {
-        $lexical_chunk_tag_ids = [];
-    }
 
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
@@ -5979,7 +5896,6 @@ elseif ($action === 'add_single') {
         syncCardTagLinks($pdo, 'subjects_links', $new_card_id, $cardSubjectTagIds, $user_id);
         syncCardTagLinks($pdo, 'objects_links', $new_card_id, $object_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'lexical_chunks_links', $new_card_id, $lexical_chunk_tag_ids, $user_id);
-        syncInformationalFrequencyCardRelations($pdo, $user_id, $new_card_id, $id_frequencia_informacional, $cardSubjectTagIds, $object_tag_ids, $lexical_chunk_tag_ids, $relacao_acao);
     }
 
     $createdCount = count($created_card_ids);
@@ -6100,10 +6016,6 @@ elseif ($action === 'update_card') {
     $dynamic_text_type = sanitizeDynamicTextType($input['dynamic_text_type'] ?? 'none');
     $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
     $id_frequencia_informacional = validateFrequenciaInformacionalId($pdo, $user_id, $input['id_frequencia_informacional'] ?? null);
-    $relacao_acao = sanitizeRelacaoAcao($input['relacao_acao'] ?? null, $id_frequencia_informacional);
-    if ($id_frequencia_informacional === 1) {
-        $lexical_chunk_tag_ids = [];
-    }
     $dynamic_text_type_id = dynamicTextTypeToInt($dynamic_text_type);
 
     $has_front = !empty($front) || !empty($image_front);
@@ -6158,7 +6070,6 @@ elseif ($action === 'update_card') {
         syncCardTagLinks($pdo, 'tipo_frasal_links', $card_id, [], $user_id);
         syncCardTagLinks($pdo, 'tense_links', $card_id, [], $user_id);
         syncCardTagLinks($pdo, 'lexical_chunks_links', $card_id, $lexical_chunk_tag_ids, $user_id);
-        syncInformationalFrequencyCardRelations($pdo, $user_id, $card_id, $id_frequencia_informacional, $subject_tag_ids, $object_tag_ids, $lexical_chunk_tag_ids, $relacao_acao);
         syncCardTagLinks($pdo, 'words_links', $card_id, [], $user_id);
         syncCardIdiomaLinks($pdo, $card_id, [], [], $user_id);
         echo json_encode(['status' => 'success', 'message' => 'Card atualizado.']);
