@@ -46,6 +46,17 @@
         border-color: rgba(139, 92, 246, .8);
         background: rgba(30, 41, 59, .95);
     }
+    .child-drop-hint {
+        display: none;
+    }
+    body.dragging-quantifier .child-drop-hint {
+        display: flex;
+    }
+    body.dragging-quantifier .quantifier-list {
+        border-color: rgba(139, 92, 246, .55);
+        background: rgba(88, 28, 135, .14);
+        min-height: 6.5rem;
+    }
 </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen">
@@ -282,10 +293,15 @@ const quantifiersApp = {
                 </div>
                 <div class="border-t border-slate-800 pt-3"><div class="flex items-center justify-between text-xs text-slate-400 mb-2"><span>Filhos</span><span>${children.length}</span></div>
                     <div data-parent-id="${item.id}" class="quantifier-list min-h-16 space-y-2 max-h-72 overflow-y-auto pr-1 rounded-xl border border-transparent p-1 transition">
+                        ${this.childDropHintHtml(item)}
                         ${children.length ? children.map(child => this.childHtml(child)).join('') : '<p class="empty-child-message text-sm text-slate-500 p-2 pointer-events-none">Sem filhos. Arraste quantificadores para cá ou use “Adicionar filho”.</p>'}
                     </div>
                 </div>
             </article>`;
+    },
+
+    childDropHintHtml(item) {
+        return `<div class="child-drop-hint rounded-xl border border-dashed border-violet-500/60 bg-violet-950/30 p-3 text-center text-sm text-violet-200 items-center justify-center pointer-events-none"><span><i class="fa-solid fa-arrow-turn-down mr-2"></i>Arraste e solte aqui para virar filho de ${this.escape(item.title)}</span></div>`;
     },
 
     childHtml(child) {
@@ -297,16 +313,34 @@ const quantifiersApp = {
     initSortables() {
         if (typeof Sortable === 'undefined') { this.toast('Biblioteca de arrastar e soltar indisponível.', false); return; }
         const options = {
-            group: 'quantifiers', animation: 180, draggable: '.quantifier-draggable', filter: 'button, input, textarea, .root-drop-hint, .empty-child-message', preventOnFilter: false,
+            group: 'quantifiers', animation: 180, draggable: '.quantifier-draggable', filter: 'button, input, textarea, .root-drop-hint, .child-drop-hint, .empty-child-message', preventOnFilter: false,
             ghostClass: 'drop-target', dragClass: 'dragging', forceFallback: true, fallbackOnBody: true, scroll: true, scrollSensitivity: 90, scrollSpeed: 16,
-            onStart: () => { this.suppressClickUntil = 0; },
-            onEnd: (evt) => this.persistSortableMove(evt)
+            onStart: () => { this.suppressClickUntil = 0; document.body.classList.add('dragging-quantifier'); },
+            onMove: (evt) => this.canMoveTo(evt),
+            onEnd: (evt) => { document.body.classList.remove('dragging-quantifier'); this.persistSortableMove(evt); }
         };
         this.sortables.push(new Sortable(document.getElementById('kanban'), {...options, direction: 'horizontal'}));
         document.querySelectorAll('.quantifier-list').forEach(list => this.sortables.push(new Sortable(list, {...options, direction: 'vertical'})));
     },
 
     destroySortables() { this.sortables.forEach(s => s.destroy()); this.sortables = []; },
+
+    canMoveTo(evt) {
+        const draggedId = Number(evt.dragged?.dataset?.quantifierId || 0);
+        const targetParentRaw = evt.to?.dataset?.parentId || '';
+        const targetParentId = targetParentRaw === '' ? null : Number(targetParentRaw);
+        return !draggedId || !targetParentId || draggedId !== targetParentId && !this.isDescendantOf(targetParentId, draggedId);
+    },
+
+    isDescendantOf(id, possibleAncestorId) {
+        let cursor = this.getItem(id);
+        while (cursor?.id_quantifier_father) {
+            const fatherId = Number(cursor.id_quantifier_father);
+            if (fatherId === Number(possibleAncestorId)) return true;
+            cursor = this.getItem(fatherId);
+        }
+        return false;
+    },
 
     async persistSortableMove(evt) {
         this.suppressClickUntil = Date.now() + 350;
