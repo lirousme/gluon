@@ -509,9 +509,19 @@
             return removalMode ? `${base} ring-1 ring-amber-300/70` : base;
         }
 
+        function getTagRelatedCardsCount(tag = {}) {
+            const values = [
+                tag?.related_cards_count,
+                tag?.subjects_count,
+                tag?.subject_cards_count,
+                tag?.object_cards_count,
+                tag?.lexical_chunk_cards_count
+            ].map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0);
+            return values.length ? Math.max(...values) : 0;
+        }
+
         function getSubjectsCount(tag = {}) {
-            const value = Number(tag?.subjects_count ?? 0);
-            return Number.isFinite(value) && value >= 0 ? value : 0;
+            return getTagRelatedCardsCount(tag);
         }
 
         function buildNumeroPtBrCounts(tags = []) {
@@ -1402,6 +1412,11 @@
         }
 
         function renderEditTagForm(tag = {}) {
+            const relatedCardsCount = getTagRelatedCardsCount(tag);
+            const deleteDisabled = relatedCardsCount > 0;
+            const deleteTitle = deleteDisabled
+                ? `Esta tag não pode ser excluída porque está relacionada a ${relatedCardsCount} card(s). Remova as relações antes de excluir.`
+                : 'Excluir tag';
             return `
                 <article class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-xl shadow-black/20">
                     <form id="editTagForm" class="space-y-3">
@@ -1411,7 +1426,11 @@
                         <input id="editTagNamePtBrInput" type="hidden" maxlength="80" placeholder="Nome pt-br" value="${escapeHtml(String(tag.name_pt_br || ''))}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
                         ${renderTagTranslationInputs(tag)}
                         <input id="editTagNumeroInput" type="number" placeholder="Número" value="${escapeHtml(String(tag.numero ?? ''))}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
-                        <div class="flex justify-end gap-2 pt-2"><button id="btnCancelEditTag" type="button" class="rounded-lg border border-slate-600 px-4 py-2">Cancelar</button><button type="submit" class="rounded-lg bg-amber-600 px-4 py-2 hover:bg-amber-500">Salvar</button></div>
+                        ${deleteDisabled ? `<p class="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-100">Esta tag está relacionada a ${relatedCardsCount} card(s) e não pode ser excluída.</p>` : ''}
+                        <div class="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
+                            <button id="btnDeleteEditTag" type="button" title="${escapeHtml(deleteTitle)}" class="rounded-lg bg-red-700 px-4 py-2 text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50" ${deleteDisabled ? 'disabled' : ''}>Excluir tag</button>
+                            <div class="flex justify-end gap-2"><button id="btnCancelEditTag" type="button" class="rounded-lg border border-slate-600 px-4 py-2">Cancelar</button><button type="submit" class="rounded-lg bg-amber-600 px-4 py-2 hover:bg-amber-500">Salvar</button></div>
+                        </div>
                     </form>
                 </article>`;
         }
@@ -1431,7 +1450,34 @@
             setupTagLanguageSwitcher(tagFormSection);
             document.getElementById('btnCancelEditTag').addEventListener('click', () => loadPage(state.page));
             document.getElementById('btnCloseEditTagModal').addEventListener('click', () => loadPage(state.page));
+            document.getElementById('btnDeleteEditTag')?.addEventListener('click', deleteCurrentTag);
             document.getElementById('editTagForm').addEventListener('submit', submitEditCurrentTag);
+        }
+
+        async function deleteCurrentTag() {
+            const tag = getCurrentTag();
+            const tagId = Number(tag?.id || 0);
+            if (!tagId || !canEditTag(tag)) return;
+            const relatedCardsCount = getTagRelatedCardsCount(tag);
+            if (relatedCardsCount > 0) {
+                alert(`Esta tag está relacionada a ${relatedCardsCount} card(s) e não pode ser excluída.`);
+                return;
+            }
+            if (!confirm('Tem certeza que deseja excluir esta tag? Essa ação não pode ser desfeita.')) return;
+            const deleteButton = document.getElementById('btnDeleteEditTag');
+            if (deleteButton) deleteButton.disabled = true;
+            try {
+                await api('delete_tag', { id: tagId });
+                state.selectedTagIds = state.selectedTagIds.filter((id) => Number(id) !== tagId);
+                state.selectedTagLabels = [];
+                hideTagFormSection();
+                await loadSavedFilters();
+                await loadPage(1);
+            } catch (error) {
+                alert(error.message || 'Erro ao excluir tag.');
+            } finally {
+                if (deleteButton) deleteButton.disabled = false;
+            }
         }
 
         async function submitCreateTag(event) {
