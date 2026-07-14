@@ -2006,6 +2006,25 @@ function getTagCardCountSubqueryForLinkTable(string $linkTable, string $alias): 
     ";
 }
 
+function countCardsRelatedToTag(PDO $pdo, int $tagId, int $userId): int {
+    $stmt = $pdo->prepare("
+        SELECT COUNT(DISTINCT linked.flashcard_id)
+        FROM (
+            SELECT tag_id, flashcard_id FROM subjects_links
+            UNION ALL
+            SELECT tag_id, flashcard_id FROM objects_links
+            UNION ALL
+            SELECT tag_id, flashcard_id FROM lexical_chunks_links
+        ) linked
+        INNER JOIN flashcards f ON f.id = linked.flashcard_id
+        INNER JOIN directories d ON d.id = f.directory_id
+        WHERE linked.tag_id = ?
+          AND d.user_id = ?
+    ");
+    $stmt->execute([$tagId, $userId]);
+    return (int)$stmt->fetchColumn();
+}
+
 function ensureFlashcardTagScoresTable(PDO $pdo): void {
     static $checked = false;
     if ($checked) return;
@@ -7274,6 +7293,16 @@ elseif ($action === 'delete_tag') {
         if ((int)$tag['user_id'] !== (int)$user_id) {
             $pdo->rollBack();
             die(json_encode(['status' => 'error', 'message' => 'Você não tem permissão para excluir esta tag.']));
+        }
+
+        $relatedCardsCount = countCardsRelatedToTag($pdo, $tag_id, (int)$user_id);
+        if ($relatedCardsCount > 0) {
+            $pdo->rollBack();
+            die(json_encode([
+                'status' => 'error',
+                'message' => 'Esta tag não pode ser excluída porque está relacionada a cards. Remova a tag dos cards antes de excluir.',
+                'related_cards_count' => $relatedCardsCount,
+            ]));
         }
 
         $orphanCheck = findSubjectCardIdsOrphanedByTagDeletion($pdo, $tag_id, (int)$user_id);
