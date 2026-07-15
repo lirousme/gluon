@@ -572,6 +572,78 @@ function encryptedFlashcardTranslationMap(?string $encrypted): array
     return normalizeFlashcardTranslationMap(decryptFlashcardJsonMap($encrypted));
 }
 
+
+function normalizeI18nLanguageKey($value, string $fallback = 'en'): string
+{
+    $lang = strtolower(trim((string)$value));
+    $lang = str_replace('-', '_', $lang);
+    $aliases = [
+        'pt' => 'pt_br',
+        'pt_br' => 'pt_br',
+        'pt_brazil' => 'pt_br',
+        'en' => 'en',
+        'en_us' => 'en_us',
+        'en_gb' => 'en_gb',
+        'es' => 'es',
+        'fr' => 'fr',
+        'zh' => 'zh',
+        'zh_cn' => 'zh',
+        'mandarin' => 'zh',
+    ];
+    return $aliases[$lang] ?? $fallback;
+}
+
+function getI18nLanguageLabel(string $lang): string
+{
+    return [
+        'en' => 'Inglês',
+        'en_us' => 'Inglês Americano',
+        'en_gb' => 'Inglês Britânico',
+        'pt_br' => 'Português',
+        'es' => 'Espanhol',
+        'fr' => 'Francês',
+        'zh' => 'Mandarim',
+    ][$lang] ?? strtoupper(str_replace('_', '-', $lang));
+}
+
+function missingI18nText(string $lang): string
+{
+    return 'NO TEXT FOR ' . getI18nLanguageLabel($lang);
+}
+
+function selectTranslatedText(array $translations, string $lang, ?string $legacyText = null, ?string $legacyLang = null): string
+{
+    $lang = normalizeI18nLanguageKey($lang);
+    $candidates = [$lang];
+    if ($lang === 'en_gb' || $lang === 'en_us') $candidates[] = 'en';
+    if ($lang === 'en') $candidates = array_merge($candidates, ['en_gb', 'en_us']);
+    if ($lang === 'pt_br') $candidates[] = 'pt';
+
+    foreach (array_values(array_unique($candidates)) as $candidate) {
+        $text = trim((string)($translations[$candidate] ?? ''));
+        if ($text !== '') return $text;
+    }
+
+    $legacy = trim((string)$legacyText);
+    $normalizedLegacyLang = $legacyLang !== null ? normalizeI18nLanguageKey($legacyLang) : '';
+    if ($legacy !== '' && ($normalizedLegacyLang === '' || $normalizedLegacyLang === $lang || ($lang === 'en' && in_array($normalizedLegacyLang, ['en_gb', 'en_us'], true)) || (in_array($lang, ['en_gb', 'en_us'], true) && $normalizedLegacyLang === 'en'))) {
+        return $legacy;
+    }
+
+    return missingI18nText($lang);
+}
+
+function getUserStudyLanguagePreferences(PDO $pdo, int $userId): array
+{
+    $stmt = $pdo->prepare('SELECT native_language, learning_language FROM users WHERE id = ? LIMIT 1');
+    $stmt->execute([$userId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    return [
+        'native' => normalizeI18nLanguageKey($row['native_language'] ?? 'pt_br', 'pt_br'),
+        'learning' => normalizeI18nLanguageKey($row['learning_language'] ?? 'en_gb', 'en_gb'),
+    ];
+}
+
 function encryptFlashcardTranslationMap(array $translations): ?string
 {
     return encryptFlashcardJsonMap(normalizeFlashcardTranslationMap($translations));
@@ -4253,13 +4325,20 @@ if ($action === 'fetch') {
     }
 
     $response = [];
+    $studyLanguages = getUserStudyLanguagePreferences($pdo, $user_id);
     foreach ($cards as $idx => $card) {
-        $response[] = [
+        $cardId = (int)$card['id'];
+        $frontTranslations = encryptedFlashcardTranslationMap($card['front_translations_encrypted'] ?? null);
+        $backTranslations = encryptedFlashcardTranslationMap($card['back_translations_encrypted'] ?? null);
+        $legacyFront = !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '';
+        $legacyBack = !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '';
+        $decisionTagId = $deck_mode === 'grafo' ? ($graphDecisionByCardId[$idx] ?? null) : ($graphDecisionByCardId[$cardId] ?? null);
+        $baseCardPayload = [
             'id' => $card['id'],
-            'front' => !empty($card['front_encrypted']) ? Security::decryptData($card['front_encrypted']) : '',
-            'back' => !empty($card['back_encrypted']) ? Security::decryptData($card['back_encrypted']) : '',
-            'front_translations' => encryptedFlashcardTranslationMap($card['front_translations_encrypted'] ?? null),
-            'back_translations' => encryptedFlashcardTranslationMap($card['back_translations_encrypted'] ?? null),
+            'front' => $legacyFront,
+            'back' => $legacyBack,
+            'front_translations' => $frontTranslations,
+            'back_translations' => $backTranslations,
             'audio_front_languages' => array_keys(decryptFlashcardJsonMap($card['audio_front_translations_encrypted'] ?? null)),
             'audio_back_languages' => array_keys(decryptFlashcardJsonMap($card['audio_back_translations_encrypted'] ?? null)),
             'image_front' => !empty($card['image_front_encrypted']) ? Security::decryptData($card['image_front_encrypted']) : null,
@@ -4272,18 +4351,36 @@ if ($action === 'fetch') {
             'score' => (int)$card['score'],
             'card_owner_user_id' => isset($card['card_owner_user_id']) ? (int)$card['card_owner_user_id'] : $user_id,
             'is_public_card' => (isset($card['card_owner_user_id']) && (int)$card['card_owner_user_id'] !== (int)$user_id) ? 1 : 0,
-            'subject_tags' => $subjectTagsByCard[(int)$card['id']] ?? [],
-            'object_tags' => $objectTagsByCard[(int)$card['id']] ?? [],
-            'tipo_frasal_tags' => $tipoFrasalTagsByCard[(int)$card['id']] ?? [],
-            'tense_tags' => $tenseTagsByCard[(int)$card['id']] ?? [],
-            'lexical_chunks_tags' => $lexicalChunksTagsByCard[(int)$card['id']] ?? [],
-            'relation_tags' => $relationTagsByCard[(int)$card['id']] ?? [],
-            'words_tags' => $wordsTagsByCard[(int)$card['id']] ?? [],
-            'idioma_principal_tags' => $idiomaPrincipalTagsByCard[(int)$card['id']] ?? [],
-            'idioma_secundario_tags' => $idiomaSecundarioTagsByCard[(int)$card['id']] ?? [],
-            'idiomas_tags' => $idiomaPrincipalTagsByCard[(int)$card['id']] ?? [],
-            'graph_decision_tag_id' => ($deck_mode === 'grafo' ? ($graphDecisionByCardId[$idx] ?? null) : ($graphDecisionByCardId[(int)$card['id']] ?? null))
+            'subject_tags' => $subjectTagsByCard[$cardId] ?? [],
+            'object_tags' => $objectTagsByCard[$cardId] ?? [],
+            'tipo_frasal_tags' => $tipoFrasalTagsByCard[$cardId] ?? [],
+            'tense_tags' => $tenseTagsByCard[$cardId] ?? [],
+            'lexical_chunks_tags' => $lexicalChunksTagsByCard[$cardId] ?? [],
+            'relation_tags' => $relationTagsByCard[$cardId] ?? [],
+            'words_tags' => $wordsTagsByCard[$cardId] ?? [],
+            'idioma_principal_tags' => $idiomaPrincipalTagsByCard[$cardId] ?? [],
+            'idioma_secundario_tags' => $idiomaSecundarioTagsByCard[$cardId] ?? [],
+            'idiomas_tags' => $idiomaPrincipalTagsByCard[$cardId] ?? [],
+            'graph_decision_tag_id' => $decisionTagId
         ];
+
+        if ($deck_mode === 'grafo') {
+            $scoreIsOdd = ((int)$card['score'] % 2) === 1;
+            $variants = $scoreIsOdd
+                ? [['tag' => $studyLanguages['native'], 'explanation' => $studyLanguages['learning']], ['tag' => $studyLanguages['learning'], 'explanation' => $studyLanguages['native']]]
+                : [['tag' => $studyLanguages['learning'], 'explanation' => $studyLanguages['native']], ['tag' => $studyLanguages['native'], 'explanation' => $studyLanguages['learning']]];
+            foreach ($variants as $variantIndex => $variant) {
+                $response[] = array_merge($baseCardPayload, [
+                    'graph_variant_index' => $variantIndex,
+                    'graph_tag_language' => $variant['tag'],
+                    'graph_explanation_language' => $variant['explanation'],
+                    'front' => selectTranslatedText($frontTranslations, $variant['explanation'], $legacyFront, 'pt_br'),
+                    'back' => selectTranslatedText($backTranslations, $variant['explanation'], $legacyBack, 'en'),
+                ]);
+            }
+        } else {
+            $response[] = $baseCardPayload;
+        }
     }
 
     $stored_base_prompt = trim((string)($deck['deck_generation_base_prompt'] ?? ''));
