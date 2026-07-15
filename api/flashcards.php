@@ -46,6 +46,7 @@ ensureTagFamilyOrderSchema($pdo);
 ensureFlashcardsPublicToggleSchema($pdo);
 ensureFlashcardsDynamicTextTypeSchema($pdo);
 ensureFlashcardsQuestionAnswerSchema($pdo);
+ensureFlashcardsStatusInformacionalSchema($pdo);
 ensureFrequenciasInformacionaisSchema($pdo);
 $user_id = $_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true);
@@ -108,6 +109,11 @@ function sanitizeQuestionAnswer($value, int $infoType): ?int {
     if ($value === null || $value === '') return null;
     $answer = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['default' => null]]);
     return in_array($answer, [0, 1], true) ? $answer : null;
+}
+
+function sanitizeStatusInformacional($value): int {
+    $status = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['default' => 0]]);
+    return in_array($status, [0, 1, 2], true) ? $status : 0;
 }
 
 function sanitizeTagIds($rawTagIds): array {
@@ -781,6 +787,21 @@ function ensureFlashcardsQuestionAnswerSchema(PDO $pdo): void
         }
     } catch (Throwable $e) {
         error_log('[flashcards][question_answer_schema] ' . $e->getMessage());
+    }
+}
+
+function ensureFlashcardsStatusInformacionalSchema(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $column = $pdo->query("SHOW COLUMNS FROM flashcards LIKE 'status_informacional'")->fetch(PDO::FETCH_ASSOC);
+        if (!$column) {
+            $pdo->exec('ALTER TABLE flashcards ADD COLUMN status_informacional TINYINT NOT NULL DEFAULT 0 AFTER id_frequencia_informacional');
+        }
+    } catch (Throwable $e) {
+        error_log('[flashcards][status_informacional_schema] ' . $e->getMessage());
     }
 }
 
@@ -5833,6 +5854,7 @@ elseif ($action === 'add_single') {
     $dynamic_text_type = sanitizeDynamicTextType($input['dynamic_text_type'] ?? 'none');
     $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
     $id_frequencia_informacional = validateFrequenciaInformacionalId($pdo, $user_id, $input['id_frequencia_informacional'] ?? null);
+    $status_informacional = sanitizeStatusInformacional($input['status_informacional'] ?? 0);
 
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
@@ -5873,7 +5895,7 @@ elseif ($action === 'add_single') {
         die(json_encode(['status' => 'error', 'message' => 'Use $sujeitoDinamico, {{sujeitoDinamico}} ou {sujeitoDinamico} no texto da frente para criar sujeito dinâmico.']));
     }
 
-    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, front_translations_encrypted, back_translations_encrypted, image_front_encrypted, image_back_encrypted, info_type, question_answer, dynamic_text_type, dynamic_parent_flashcard_id, id_frequencia_informacional, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)");
+    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, front_translations_encrypted, back_translations_encrypted, image_front_encrypted, image_back_encrypted, info_type, question_answer, dynamic_text_type, dynamic_parent_flashcard_id, id_frequencia_informacional, status_informacional, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)");
     $created_card_ids = [];
     $template_card_id = null;
     $templateDynamicTextType = dynamicTextTypeToInt($dynamic_text_type);
@@ -5901,7 +5923,7 @@ elseif ($action === 'add_single') {
         $img_front_enc = !empty($image_front) ? Security::encryptData($image_front) : null;
         $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
 
-        if (!$stmt->execute([$deck_id, $user_id, $deck_id, $front_enc, $back_enc, $front_translations_enc, $back_translations_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $cardDynamicTextType, $dynamicParentFlashcardId, $id_frequencia_informacional])) {
+        if (!$stmt->execute([$deck_id, $user_id, $deck_id, $front_enc, $back_enc, $front_translations_enc, $back_translations_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $cardDynamicTextType, $dynamicParentFlashcardId, $id_frequencia_informacional, $status_informacional])) {
             echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
             return;
         }
@@ -5941,7 +5963,7 @@ elseif ($action === 'get_card_for_edit') {
     }
 
     $stmt = $pdo->prepare("
-        SELECT id, directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, front_translations_encrypted, back_translations_encrypted, audio_front_translations_encrypted, audio_back_translations_encrypted, image_front_encrypted, image_back_encrypted, info_type, question_answer, dynamic_text_type, dynamic_parent_flashcard_id, id_frequencia_informacional, has_audio_front, has_audio_back
+        SELECT id, directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, front_translations_encrypted, back_translations_encrypted, audio_front_translations_encrypted, audio_back_translations_encrypted, image_front_encrypted, image_back_encrypted, info_type, question_answer, dynamic_text_type, dynamic_parent_flashcard_id, id_frequencia_informacional, status_informacional, has_audio_front, has_audio_back
         FROM flashcards
         WHERE id = ?
         LIMIT 1
@@ -5977,6 +5999,7 @@ elseif ($action === 'get_card_for_edit') {
             'dynamic_text_type' => dynamicTextTypeFromInt($card['dynamic_text_type'] ?? 0),
             'dynamic_parent_flashcard_id' => !empty($card['dynamic_parent_flashcard_id']) ? (int)$card['dynamic_parent_flashcard_id'] : null,
             'id_frequencia_informacional' => !empty($card['id_frequencia_informacional']) ? (int)$card['id_frequencia_informacional'] : null,
+            'status_informacional' => sanitizeStatusInformacional($card['status_informacional'] ?? 0),
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
             'subject_tags' => $subjectTagsByCard[$card_id] ?? [],
@@ -6035,6 +6058,7 @@ elseif ($action === 'update_card') {
     $dynamic_text_type = sanitizeDynamicTextType($input['dynamic_text_type'] ?? 'none');
     $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
     $id_frequencia_informacional = validateFrequenciaInformacionalId($pdo, $user_id, $input['id_frequencia_informacional'] ?? null);
+    $status_informacional = sanitizeStatusInformacional($input['status_informacional'] ?? 0);
     $dynamic_text_type_id = dynamicTextTypeToInt($dynamic_text_type);
 
     $has_front = !empty($front) || !empty($image_front);
@@ -6080,9 +6104,9 @@ elseif ($action === 'update_card') {
     $front_translations_enc = encryptFlashcardTranslationMap($frontTranslations);
     $back_translations_enc = encryptFlashcardTranslationMap($backTranslations);
 
-    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, front_translations_encrypted = ?, back_translations_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, info_type = ?, question_answer = ?, dynamic_text_type = ?, id_frequencia_informacional = ? WHERE id = ?");
+    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, front_translations_encrypted = ?, back_translations_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, info_type = ?, question_answer = ?, dynamic_text_type = ?, id_frequencia_informacional = ?, status_informacional = ? WHERE id = ?");
     
-    if ($stmt->execute([$front_enc, $back_enc, $front_translations_enc, $back_translations_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $dynamic_text_type_id, $id_frequencia_informacional, $card_id])) {
+    if ($stmt->execute([$front_enc, $back_enc, $front_translations_enc, $back_translations_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $dynamic_text_type_id, $id_frequencia_informacional, $status_informacional, $card_id])) {
         syncCardTagLinks($pdo, 'flashcard_tag_links', $card_id, $tag_ids, $user_id);
         syncCardTagLinks($pdo, 'subjects_links', $card_id, $subject_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'objects_links', $card_id, $object_tag_ids, $user_id);
