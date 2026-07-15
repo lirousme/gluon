@@ -1348,7 +1348,39 @@ const flashcardApp = {
                 }
                 return this.getTagOwnershipClass(tag);
             },
-            getTagLabel(tag = {}, numeroPtBrCounts = null) {
+            normalizeI18nLanguageKey(language, fallback = 'en') {
+                const normalized = String(language || '').trim().toLowerCase().replace(/-/g, '_');
+                const aliases = { pt: 'pt_br', pt_br: 'pt_br', pt_brazil: 'pt_br', en: 'en', en_us: 'en_us', en_gb: 'en_gb', es: 'es', fr: 'fr', zh: 'zh', zh_cn: 'zh', mandarin: 'zh' };
+                return aliases[normalized] || fallback;
+            },
+            getI18nLanguageLabel(language) {
+                const labels = { en: 'Inglês', en_us: 'Inglês Americano', en_gb: 'Inglês Britânico', pt_br: 'Português', es: 'Espanhol', fr: 'Francês', zh: 'Mandarim' };
+                const key = this.normalizeI18nLanguageKey(language, String(language || ''));
+                return labels[key] || String(language || '').replace(/_/g, '-').toUpperCase();
+            },
+            getNoTextForLanguage(language) {
+                return `NO TEXT FOR ${this.getI18nLanguageLabel(language)}`;
+            },
+            getTranslatedTagField(tag = {}, field = 'name', language = '') {
+                const lang = this.normalizeI18nLanguageKey(language || '');
+                const translations = field === 'description' ? (tag.description_translations || {}) : (tag.name_translations || {});
+                const candidates = [lang];
+                if (lang === 'en_gb' || lang === 'en_us') candidates.push('en');
+                if (lang === 'en') candidates.push('en_gb', 'en_us');
+                for (const candidate of [...new Set(candidates)]) {
+                    const text = String(translations?.[candidate] || '').trim();
+                    if (text) return text;
+                }
+                if (field === 'name') {
+                    const legacyLangValue = lang === 'pt_br' ? tag.name_pt_br : tag.name;
+                    const legacyText = String(legacyLangValue || '').trim();
+                    if (legacyText) return legacyText;
+                }
+                return this.getNoTextForLanguage(lang);
+            },
+            getTagLabel(tag = {}, numeroPtBrCounts = null, language = '') {
+                const displayLanguage = language ? this.normalizeI18nLanguageKey(language) : '';
+                if (displayLanguage) return this.getTranslatedTagField(tag, 'name', displayLanguage);
                 const numero = tag?.numero;
                 const hasNumero = numero !== null && numero !== undefined && String(numero).trim() !== '';
                 const name = String(tag?.name || '').trim();
@@ -1382,8 +1414,10 @@ const flashcardApp = {
                 });
                 return counts;
             },
-            renderTagButtonContent(tag = {}, numeroPtBrCounts = null, categoryLabel = '') {
-                return `${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts))} <span class="text-[10px] text-slate-400">(${this.getSubjectsCount(tag, categoryLabel)})</span>`;
+            renderTagButtonContent(tag = {}, numeroPtBrCounts = null, categoryLabel = '', language = '') {
+                const description = language ? this.getTranslatedTagField(tag, 'description', language) : '';
+                const title = description ? ` title="${this.escapeHTML(description)}"` : '';
+                return `<span${title}>${this.escapeHTML(this.getTagLabel(tag, numeroPtBrCounts, language))}</span> <span class="text-[10px] text-slate-400">(${this.getSubjectsCount(tag, categoryLabel)})</span>`;
             },
             renderTagSelector(selectedIds = null) {
                 const el = document.getElementById('cardTagSelector');
@@ -2129,7 +2163,7 @@ const flashcardApp = {
                         const tagId = Number(tag.id);
                         const isDecisionTag = decisionTagId > 0 && tagId === decisionTagId;
                         const title = isDecisionTag ? 'Tag responsável por encontrar este card' : 'Tag do card';
-                        return `<button type="button" onclick="event.stopPropagation(); flashcardApp.openTagAudioModal(${tagId})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${this.getCardTagDisplayClass(tag, decisionTagId)}" title="${title}. Clique para áudio da tag.">${this.renderTagButtonContent(tag, numeroPtBrCounts, categoryLabel)}</button>`;
+                        return `<button type="button" onclick="event.stopPropagation(); flashcardApp.openTagAudioModal(${tagId})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${this.getCardTagDisplayClass(tag, decisionTagId)}" title="${title}. Clique para áudio da tag.">${this.renderTagButtonContent(tag, numeroPtBrCounts, categoryLabel, card.graph_tag_language || '')}</button>`;
                     };
 
                     tagsList.innerHTML = tagsByPanel.map(group => {
