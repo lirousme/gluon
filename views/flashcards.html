@@ -1359,14 +1359,19 @@ const flashcardApp = {
                 return labels[key] || String(language || '').replace(/_/g, '-').toUpperCase();
             },
             getNoTextForLanguage(language) {
-                return `NO TEXT FOR ${this.getI18nLanguageLabel(language)}`;
+                const lang = this.normalizeI18nLanguageKey(language, String(language || ''));
+                const label = this.getI18nLanguageLabel(lang).toLocaleUpperCase('pt-BR');
+                const messages = {
+                    pt_br: `SEM TEXTO PARA ${label}`,
+                    es: `SIN TEXTO EN ${label}`,
+                    fr: `AUCUN TEXTE POUR LE ${label}`,
+                };
+                return messages[lang] || `NO TEXT FOR ${label}`;
             },
             getTranslatedTagField(tag = {}, field = 'name', language = '') {
                 const lang = this.normalizeI18nLanguageKey(language || '');
                 const translations = field === 'description' ? (tag.description_translations || {}) : (tag.name_translations || {});
                 const candidates = [lang];
-                if (lang === 'en_gb' || lang === 'en_us') candidates.push('en');
-                if (lang === 'en') candidates.push('en_gb', 'en_us');
                 for (const candidate of [...new Set(candidates)]) {
                     const text = String(translations?.[candidate] || '').trim();
                     if (text) return text;

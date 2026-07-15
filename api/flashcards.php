@@ -608,15 +608,20 @@ function getI18nLanguageLabel(string $lang): string
 
 function missingI18nText(string $lang): string
 {
-    return 'NO TEXT FOR ' . getI18nLanguageLabel($lang);
+    $lang = normalizeI18nLanguageKey($lang, $lang);
+    $label = getI18nLanguageLabel($lang);
+    $messages = [
+        'pt_br' => 'SEM TEXTO PARA ' . mb_strtoupper($label, 'UTF-8'),
+        'es' => 'SIN TEXTO EN ' . mb_strtoupper($label, 'UTF-8'),
+        'fr' => 'AUCUN TEXTE POUR LE ' . mb_strtoupper($label, 'UTF-8'),
+    ];
+    return $messages[$lang] ?? ('NO TEXT FOR ' . mb_strtoupper($label, 'UTF-8'));
 }
 
 function selectTranslatedText(array $translations, string $lang, ?string $legacyText = null, ?string $legacyLang = null): string
 {
     $lang = normalizeI18nLanguageKey($lang);
     $candidates = [$lang];
-    if ($lang === 'en_gb' || $lang === 'en_us') $candidates[] = 'en';
-    if ($lang === 'en') $candidates = array_merge($candidates, ['en_gb', 'en_us']);
     if ($lang === 'pt_br') $candidates[] = 'pt';
 
     foreach (array_values(array_unique($candidates)) as $candidate) {
@@ -626,7 +631,7 @@ function selectTranslatedText(array $translations, string $lang, ?string $legacy
 
     $legacy = trim((string)$legacyText);
     $normalizedLegacyLang = $legacyLang !== null ? normalizeI18nLanguageKey($legacyLang) : '';
-    if ($legacy !== '' && ($normalizedLegacyLang === '' || $normalizedLegacyLang === $lang || ($lang === 'en' && in_array($normalizedLegacyLang, ['en_gb', 'en_us'], true)) || (in_array($lang, ['en_gb', 'en_us'], true) && $normalizedLegacyLang === 'en'))) {
+    if ($legacy !== '' && ($normalizedLegacyLang === '' || $normalizedLegacyLang === $lang)) {
         return $legacy;
     }
 
