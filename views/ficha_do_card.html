@@ -1823,54 +1823,6 @@ const app = {
     }
   },
 
-  async getTagFamilyRelationsByMother(relationType) {
-    const res = await this.api('list_tag_family_relations');
-    const relations = Array.isArray(res?.data) ? res.data : [];
-    const childrenByMother = new Map();
-    relations.forEach((relation) => {
-      if (Number(relation?.tipo_de_relacao) !== Number(relationType)) return;
-      const motherId = Number(relation?.id_tag_mother || 0);
-      const childId = Number(relation?.id_tag_child || 0);
-      if (!motherId || !childId) return;
-      if (!childrenByMother.has(motherId)) childrenByMother.set(motherId, []);
-      childrenByMother.get(motherId).push(childId);
-    });
-    return childrenByMother;
-  },
-
-  async getDescendantObjectTagIdsFromFamily(seedTagIds = []) {
-    const seeds = Array.from(new Set((Array.isArray(seedTagIds) ? seedTagIds : []).map(Number).filter(Boolean)));
-    if (!seeds.length) return [];
-
-    const childrenByMother = await this.getTagFamilyRelationsByMother(19);
-    const found = new Set();
-    const visitedMothers = new Set();
-    const queue = [...seeds];
-    while (queue.length) {
-      const motherId = queue.shift();
-      if (visitedMothers.has(motherId)) continue;
-      visitedMothers.add(motherId);
-      (childrenByMother.get(motherId) || []).forEach((childId) => {
-        if (!found.has(childId)) {
-          found.add(childId);
-          queue.push(childId);
-        }
-      });
-    }
-    return Array.from(found);
-  },
-
-  async getLexicalChunkChildTagIdsFromFamily(seedTagIds = []) {
-    const seeds = Array.from(new Set((Array.isArray(seedTagIds) ? seedTagIds : []).map(Number).filter(Boolean)));
-    if (!seeds.length) return [];
-
-    const childrenByMother = await this.getTagFamilyRelationsByMother(21);
-    const found = new Set();
-    seeds.forEach((motherId) => {
-      (childrenByMother.get(motherId) || []).forEach((childId) => found.add(childId));
-    });
-    return Array.from(found);
-  },
   async save(e) {
     e.preventDefault();
     this.persistActiveLanguageText('front');
@@ -1897,14 +1849,6 @@ const app = {
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
-      if (!this.editCardId) {
-        const [descendantObjectTagIds, lexicalChunkChildTagIds] = await Promise.all([
-          this.getDescendantObjectTagIdsFromFamily([...subject_tag_ids, ...object_tag_ids]),
-          this.getLexicalChunkChildTagIdsFromFamily(lexical_chunk_tag_ids)
-        ]);
-        object_tag_ids = Array.from(new Set([...object_tag_ids, ...descendantObjectTagIds]));
-        lexical_chunk_tag_ids = Array.from(new Set([...lexical_chunk_tag_ids, ...lexicalChunkChildTagIds]));
-      }
       const return_to = this.getReturnTarget();
       const question_answer = this.infoType === 2 ? this.questionAnswer : null;
       const front_translations = isTagExpansion ? {} : this.collectFlashcardTranslations('front');
