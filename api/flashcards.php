@@ -110,12 +110,17 @@ function ensureFlashcardSentenceSyntaxSchema(PDO $pdo): void {
             id_frequencia_informacional INT UNSIGNED NOT NULL, PRIMARY KEY (id),
             UNIQUE KEY uniq_flashcard_frases_ordem (flashcard_id, ordem), KEY idx_flashcard_frases_frequencia (id_frequencia_informacional)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS subjects_links (flashcard_id INT NOT NULL, tag_id INT NOT NULL, id_frase INT NULL, KEY idx_subjects_links_card (flashcard_id), KEY idx_subjects_links_sentence (id_frase)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $subjectSentenceColumn = $pdo->query("SHOW COLUMNS FROM subjects_links LIKE 'id_frase'")->fetch(PDO::FETCH_ASSOC);
+        if (!$subjectSentenceColumn) $pdo->exec('ALTER TABLE subjects_links ADD COLUMN id_frase INT NULL AFTER tag_id');
         foreach (['objects_links', 'inflexion_type_links', 'verb_links', 'adverb_links', 'local_links', 'tempo_links'] as $table) {
-            $pdo->exec("CREATE TABLE IF NOT EXISTS {$table} (flashcard_id INT NOT NULL, tag_id INT NOT NULL, id_frase INT NULL, id_sujeito_relativo INT NULL, KEY idx_{$table}_card (flashcard_id), KEY idx_{$table}_subject (id_sujeito_relativo)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+            $pdo->exec("CREATE TABLE IF NOT EXISTS {$table} (flashcard_id INT NOT NULL, tag_id INT NOT NULL, id_frase INT NULL, id_sujeito_relativo INT NULL, tipo_elemento VARCHAR(32) NULL, KEY idx_{$table}_card (flashcard_id), KEY idx_{$table}_subject (id_sujeito_relativo)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
             $sentenceColumn = $pdo->query("SHOW COLUMNS FROM {$table} LIKE 'id_frase'")->fetch(PDO::FETCH_ASSOC);
             if (!$sentenceColumn) $pdo->exec("ALTER TABLE {$table} ADD COLUMN id_frase INT NULL AFTER tag_id");
             $column = $pdo->query("SHOW COLUMNS FROM {$table} LIKE 'id_sujeito_relativo'")->fetch(PDO::FETCH_ASSOC);
             if (!$column) $pdo->exec("ALTER TABLE {$table} ADD COLUMN id_sujeito_relativo INT NULL AFTER id_frase");
+            $typeColumn = $pdo->query("SHOW COLUMNS FROM {$table} LIKE 'tipo_elemento'")->fetch(PDO::FETCH_ASSOC);
+            if (!$typeColumn) $pdo->exec("ALTER TABLE {$table} ADD COLUMN tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo");
         }
     } catch (Throwable $e) {
         error_log('[flashcards][sentence_syntax_schema] ' . $e->getMessage());
@@ -151,13 +156,34 @@ function syncSentenceSyntax(PDO $pdo, int $user_id, int $cardId, array $sentence
     foreach ($sentences as $sentence) {
         $insertSentence->execute([$cardId, $sentence['ordem'], $sentence['frequency_id']]);
         $sentenceId = (int)$pdo->lastInsertId();
-        foreach ($sentence['elements']['subject'] as $tagId) $pdo->prepare('INSERT INTO subjects_links (flashcard_id, tag_id) VALUES (?, ?)')->execute([$cardId, $tagId]);
+        foreach ($sentence['elements']['subject'] as $tagId) $pdo->prepare('INSERT INTO subjects_links (flashcard_id, tag_id, id_frase) VALUES (?, ?, ?)')->execute([$cardId, $tagId, $sentenceId]);
         foreach ($tables as $type => $table) foreach ($sentence['elements'][$type] ?? [] as $tagId) foreach ($sentence['elements']['subject'] as $subjectId) {
-            $pdo->prepare("INSERT INTO {$table} (flashcard_id, tag_id, id_frase, id_sujeito_relativo) VALUES (?, ?, ?, ?)")->execute([$cardId, $tagId, $sentenceId, $subjectId]);
+            $pdo->prepare("INSERT INTO {$table} (flashcard_id, tag_id, id_frase, id_sujeito_relativo, tipo_elemento) VALUES (?, ?, ?, ?, ?)")->execute([$cardId, $tagId, $sentenceId, $subjectId, $type]);
             if ($type === 'isolated_object') $relation->execute([$cardId, $subjectId, $tagId, 21, $user_id]);
             if ($type === 'compound_object' || ($sentence['frequency_id'] === 2 && $type === 'object')) $relation->execute([$cardId, $subjectId, $tagId, 22, $user_id]);
         }
     }
+}
+
+
+function fetchSentenceSyntax(PDO $pdo, int $cardId): array {
+    $stmt = $pdo->prepare('SELECT id, id_frequencia_informacional FROM flashcard_frases WHERE flashcard_id = ? ORDER BY ordem');
+    $stmt->execute([$cardId]);
+    $sentences = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $sentences[(int)$row['id']] = ['id_frequencia_informacional' => (int)$row['id_frequencia_informacional'], 'active' => 'subject', 'elements' => ['subject' => [], 'compound_object' => [], 'inflexion_type' => [], 'isolated_object' => [], 'verb' => [], 'adverb' => [], 'object' => [], 'local' => [], 'tempo' => []]];
+    }
+    if (!$sentences) return [];
+    $tables = ['objects_links', 'inflexion_type_links', 'verb_links', 'adverb_links', 'local_links', 'tempo_links'];
+    $subjectStmt = $pdo->prepare('SELECT sl.id_frase, sl.tag_id FROM subjects_links sl WHERE sl.flashcard_id = ? AND sl.id_frase IS NOT NULL');
+    $subjectStmt->execute([$cardId]);
+    foreach ($subjectStmt->fetchAll(PDO::FETCH_ASSOC) as $row) if (isset($sentences[(int)$row['id_frase']])) $sentences[(int)$row['id_frase']]['elements']['subject'][] = (int)$row['tag_id'];
+    foreach ($tables as $table) {
+        $rows = $pdo->prepare("SELECT id_frase, tag_id, tipo_elemento FROM {$table} WHERE flashcard_id = ? AND id_frase IS NOT NULL");
+        $rows->execute([$cardId]);
+        foreach ($rows->fetchAll(PDO::FETCH_ASSOC) as $row) { $id = (int)$row['id_frase']; $type = (string)($row['tipo_elemento'] ?? ''); if (isset($sentences[$id]['elements'][$type])) $sentences[$id]['elements'][$type][] = (int)$row['tag_id']; }
+    }
+    return array_values($sentences);
 }
 
 function sanitizeInfoType($value): int {
@@ -6043,7 +6069,8 @@ elseif ($action === 'get_card_for_edit') {
             'subject_tags' => $subjectTagsByCard[$card_id] ?? [],
             'object_tags' => $objectTagsByCard[$card_id] ?? [],
             'lexical_chunks_tags' => $lexicalChunksTagsByCard[$card_id] ?? [],
-            'relacao_acao' => getCardRelacaoAcao($pdo, $user_id, $card_id)
+            'relacao_acao' => getCardRelacaoAcao($pdo, $user_id, $card_id),
+            'sentence_syntax' => fetchSentenceSyntax($pdo, $card_id)
         ]
     ]);
 }
