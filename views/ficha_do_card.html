@@ -1110,16 +1110,42 @@ const app = {
     const previous = activeIndex === null ? Number(sentenceSelect.value || 0) : activeIndex;
     sentenceSelect.innerHTML = this.sentenceSyntax.map((_, i) => `<option value="${i}">Frase ${i + 1}</option>`).join('');
     sentenceSelect.value = String(Math.min(Math.max(previous, 0), this.sentenceSyntax.length - 1));
-    const index = Number(sentenceSelect.value); const state = this.sentenceSyntax[index];
+    const index = Number(sentenceSelect.value);
+    const state = this.sentenceSyntax[index];
     const elements = this.syntaxElementsForFrequency(state.frequency_id);
     if (!elements.some(item => item.key === state.element)) state.element = 'subject';
-    sentenceSyntaxControls.innerHTML = `<div class="space-y-2"><label class="block text-xs font-semibold uppercase tracking-wide text-emerald-200">Frequência informacional</label><select id="frequenciaInformacionalSelect" required class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Selecione uma frequência</option>${this.frequenciasInformacionais.map(f => `<option value="${Number(f.id)}">${this.escapeHTML(String(f.nome || 'Sem nome'))}</option>`).join('')}</select></div><div class="space-y-2"><label class="block text-xs font-semibold uppercase tracking-wide text-sky-200">Elemento sintático</label><select id="syntacticElementSelect" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white">${elements.map(item => `<option value="${item.key}">${item.label}</option>`).join('')}</select></div><div class="space-y-2"><label class="block text-xs font-semibold uppercase tracking-wide text-cyan-200" id="sentenceTagPanelTitle"></label><div id="sentenceTagSelector" class="flex flex-wrap gap-1.5 bg-slate-900/70 border border-slate-700 rounded-lg p-2 min-h-[44px]"></div><input id="sentenceTagSearchInput" type="text" placeholder="Buscar tags..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off"></div>`;
-    frequenciaInformacionalSelect.value = String(state.frequency_id || ''); syntacticElementSelect.value = state.element;
-    document.getElementById('sentenceTagPanelTitle').textContent = elements.find(item => item.key === state.element)?.label || 'Sujeito';
-    const render = () => { const query = sentenceTagSearchInput.value.trim().toLowerCase(); const ids = state.tags[state.element] || []; const tags = this.getVisibleTags().filter(t => !query || this.getTagLabel(t).toLowerCase().includes(query)); sentenceTagSelector.innerHTML = tags.length ? tags.map(t => `<button type="button" data-sentence-tag="${Number(t.id)}" class="tag-pill px-2 py-1 rounded-full border ${ids.includes(Number(t.id)) ? 'bg-emerald-500/25 border-emerald-300' : 'bg-slate-800 border-slate-600'}">${this.escapeHTML(this.getTagLabel(t))}</button>`).join('') : '<span class="text-xs text-slate-400">Nenhuma tag para exibir.</span>'; sentenceTagSelector.querySelectorAll('[data-sentence-tag]').forEach(b => b.onclick = () => { const id = Number(b.dataset.sentenceTag); state.tags[state.element] = ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]; render(); }); }; render();
-    frequenciaInformacionalSelect.onchange = () => { state.frequency_id = Number(frequenciaInformacionalSelect.value || 0) || ''; this.renderSentenceSyntax(index); };
-    syntacticElementSelect.onchange = () => { state.element = syntacticElementSelect.value; this.renderSentenceSyntax(index); };
-    sentenceTagSearchInput.oninput = render;
+
+    sentenceSyntaxControls.innerHTML = `<div class="space-y-2"><label class="block text-xs font-semibold uppercase tracking-wide text-emerald-200">Frequência informacional</label><select id="frequenciaInformacionalSelect" required class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Selecione uma frequência</option>${this.frequenciasInformacionais.map(f => `<option value="${Number(f.id)}">${this.escapeHTML(String(f.nome || 'Sem nome'))}</option>`).join('')}</select></div><div class="space-y-2"><label class="block text-xs font-semibold uppercase tracking-wide text-sky-200">Elemento sintático</label><select id="syntacticElementSelect" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white">${elements.map(item => `<option value="${item.key}">${item.label}</option>`).join('')}</select></div><div class="space-y-2"><label class="block text-xs font-semibold uppercase tracking-wide text-cyan-200" id="sentenceTagPanelTitle"></label><input id="sentenceTagSearchInput" type="text" placeholder="Digite para buscar tags..." class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off"><div id="sentenceTagSelector" class="flex flex-wrap gap-1.5 bg-slate-900/70 border border-slate-700 rounded-lg p-2 min-h-[44px]"></div></div>`;
+    const frequencySelect = document.getElementById('frequenciaInformacionalSelect');
+    const elementSelect = document.getElementById('syntacticElementSelect');
+    const title = document.getElementById('sentenceTagPanelTitle');
+    const searchInput = document.getElementById('sentenceTagSearchInput');
+    const selector = document.getElementById('sentenceTagSelector');
+    frequencySelect.value = String(state.frequency_id || '');
+    elementSelect.value = state.element;
+    title.textContent = elements.find(item => item.key === state.element)?.label || 'Sujeito';
+    const render = () => {
+      const query = searchInput.value.trim().toLowerCase();
+      const ids = (state.tags[state.element] || []).map(Number);
+      // Sem busca, exiba apenas escolhas já salvas: a lista completa só aparece após digitação.
+      const tags = query
+        ? this.getVisibleTags().filter(t => this.getTagLabel(t).toLowerCase().includes(query))
+        : this.getVisibleTags().filter(t => ids.includes(Number(t.id)));
+      selector.innerHTML = tags.length
+        ? tags.map(t => `<button type="button" data-sentence-tag="${Number(t.id)}" class="tag-pill px-2 py-1 rounded-full border ${ids.includes(Number(t.id)) ? 'bg-emerald-500/25 border-emerald-300' : 'bg-slate-800 border-slate-600'}">${this.escapeHTML(this.getTagLabel(t))}</button>`).join('')
+        : `<span class="text-xs text-slate-400">${query ? 'Nenhuma tag para exibir.' : 'Digite para buscar tags.'}</span>`;
+      selector.querySelectorAll('[data-sentence-tag]').forEach(button => {
+        button.onclick = () => {
+          const tagId = Number(button.dataset.sentenceTag);
+          state.tags[state.element] = ids.includes(tagId) ? ids.filter(id => id !== tagId) : [...ids, tagId];
+          render();
+        };
+      });
+    };
+    render();
+    frequencySelect.onchange = () => { state.frequency_id = Number(frequencySelect.value || 0) || ''; this.renderSentenceSyntax(index); };
+    elementSelect.onchange = () => { state.element = elementSelect.value; this.renderSentenceSyntax(index); };
+    searchInput.oninput = render;
   },
   getSentenceSyntaxPayload() { return (this.sentenceSyntax || []).map((sentence, index) => ({ ordem:index + 1, id_frequencia_informacional:Number(sentence.frequency_id || 0), elements:Object.entries(sentence.tags || {}).map(([element, tag_ids]) => ({element, tag_ids})) })); },
   updateInformationalFrequencyTagPanelTitles() {
@@ -1342,6 +1368,8 @@ const app = {
   renderTagSelector(panel = 'subject', selectedIds = null) {
     const config = this.getPanelConfig(panel);
     const el = document.getElementById(config.selectorId);
+    // Os painéis legados não existem mais nesta ficha: a sintaxe por frase é o único painel ativo.
+    if (!el) return;
     const currentSelected = selectedIds ?? this.getSelectedTagIds(panel);
     if (!this.availableTags.length) { el.innerHTML = '<span class="text-xs text-slate-400">Sem tags cadastradas.</span>'; return; }
     const visibleTags = this.getVisibleTags();
@@ -1838,6 +1866,8 @@ const app = {
     } else if (!frontPlainText && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
     if (sentences.some(sentence => !sentence.id_frequencia_informacional)) return this.setStatus('Selecione uma frequência informacional para cada frase.', 'error');
     if (sentences.some(sentence => !sentence.elements.find(element => element.element === 'subject')?.tag_ids?.length)) return this.setStatus('Selecione ao menos uma tag de Sujeito em cada frase.', 'error');
+    if (sentences.some(sentence => sentence.id_frequencia_informacional === 1 && !sentence.elements.some(element => ['isolated_object', 'compound_object'].includes(element.element) && element.tag_ids?.length))) return this.setStatus('Na frequência 1, selecione ao menos um objeto isolado ou composto em cada frase.', 'error');
+    if (sentences.some(sentence => sentence.id_frequencia_informacional === 2 && !sentence.elements.find(element => element.element === 'object')?.tag_ids?.length)) return this.setStatus('Na frequência 2, selecione ao menos um objeto em cada frase.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
