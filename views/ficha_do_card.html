@@ -1095,7 +1095,9 @@ const app = {
   syntaxElementsForFrequency(frequencyId) {
     const common = [{key:'subject', label:'Sujeito', table:'subjects_links'}];
     if (Number(frequencyId) === 1) return [...common, {key:'compound_object',label:'Objeto composto',table:'objects_links'}, {key:'inflexion_type',label:'Tipo da flexão',table:'inflexion_type_links'}, {key:'isolated_object',label:'Objeto isolado',table:'objects_links'}];
-    if (Number(frequencyId) === 2) return [...common, {key:'verb',label:'Verbo ou locução verbal',table:'verb_links'}, {key:'adverb',label:'Advérbio ou locução adverbial',table:'adverb_links'}, {key:'object',label:'Objeto',table:'objects_links'}, {key:'local',label:'Local',table:'local_links'}, {key:'tempo',label:'Tempo',table:'tempo_links'}];
+    // Frequências 2 e 3 possuem o mesmo conjunto de elementos, mas ambas precisam
+    // ser tratadas explicitamente: a frequência faz parte do estado de cada frase.
+    if ([2, 3].includes(Number(frequencyId))) return [...common, {key:'verb',label:'Verbo ou locução verbal',table:'verb_links'}, {key:'adverb',label:'Advérbio ou locução adverbial',table:'adverb_links'}, {key:'object',label:'Objeto',table:'objects_links'}, {key:'local',label:'Local',table:'local_links'}, {key:'tempo',label:'Tempo',table:'tempo_links'}];
     return common;
   },
   ensureSentenceSyntax(count = 1) {
