@@ -414,7 +414,7 @@
             const mode = params.get('mode') || 'cards';
             if (['affirmations', 'translations', 'questions', 'tcoins', 'tag_expansion'].includes(mode)) return 'cards';
             if (mode === 'tag_sessions') return 'tag_sessions';
-            return ['tags', 'cards'].includes(mode) ? mode : 'cards';
+            return ['tags', 'cards', 'dialelos'].includes(mode) ? mode : 'cards';
         }
 
         function isTagsGridMode() {
@@ -431,7 +431,11 @@
         }
 
         function isCardListMode() {
-            return state.viewMode === 'cards';
+            return ['cards', 'dialelos'].includes(state.viewMode);
+        }
+
+        function isDialelosMode() {
+            return state.viewMode === 'dialelos';
         }
 
         function parseWithoutTagsOnly(params) {
@@ -828,6 +832,7 @@
         function renderRightOptionsMenu() {
             const modes = [
                 { mode: 'cards', label: 'Cards' },
+                { mode: 'dialelos', label: 'Dialelos' },
                 { mode: 'tags', label: 'Tags Grid' },
                 { mode: 'tag_sessions', label: 'Tags Sessões' }
             ];
@@ -850,7 +855,7 @@
                 { type: '6', label: 'Pílulas' }
             ];
             const pinToggleConfig = getSelectedPinToggleConfig();
-            const deleteFilteredCardsButton = isCardListMode() && state.totalCards > 0 ? `
+            const deleteFilteredCardsButton = state.viewMode === 'cards' && state.totalCards > 0 ? `
                 <button type="button" id="openDeleteFilteredCardsBtn" class="w-full rounded-xl border border-red-500/60 bg-red-500/10 p-3 text-left text-sm font-semibold text-red-100 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60" ${state.deletingFilteredCards ? 'disabled' : ''}>
                     <span class="flex items-center gap-2"><i class="fa-solid ${state.deletingFilteredCards ? 'fa-spinner fa-spin' : 'fa-trash-can'}"></i>Excluir cards filtrados</span>
                     <span class="mt-1 block text-xs font-normal text-red-100/80">Remove os ${state.totalCards} card(s) encontrados pelos filtros atuais.</span>
@@ -940,7 +945,7 @@
             });
             rightOptionsMenu.querySelectorAll('[data-view-mode]').forEach((button) => {
                 button.addEventListener('click', () => {
-                    state.viewMode = ['cards', 'tags', 'tag_sessions'].includes(button.dataset.viewMode) ? button.dataset.viewMode : 'cards';
+                    state.viewMode = ['cards', 'dialelos', 'tags', 'tag_sessions'].includes(button.dataset.viewMode) ? button.dataset.viewMode : 'cards';
                     if (isAnyTagMode()) state.withoutTagsOnly = false;
                     renderRightOptionsMenu();
                     loadPage(1);
@@ -1930,6 +1935,7 @@
             statusBox.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2 text-violet-300"></i>Carregando cards...';
             try {
                 const params = new URLSearchParams({ action: 'list_graph_cards_for_user', page: String(page) });
+                if (isDialelosMode()) params.set('dialelos_only', '1');
                 if (state.withoutTagsOnly) params.set('without_tags', '1');
                 if (state.longTextOnly) params.set('long_text', '1');
                 if (state.selectedTagIds.length) params.set('tag_ids', state.selectedTagIds.join(','));
