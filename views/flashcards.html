@@ -885,6 +885,12 @@
                     <div id="cardTagSelector" class="flex flex-wrap gap-2 bg-slate-900/70 border border-slate-700 rounded-lg p-3 min-h-[48px]"></div>
                 </div>
 
+                <section id="sentenceSyntaxPanel" class="pt-3 border-t border-slate-700 space-y-3">
+                    <label class="block text-sm font-medium text-indigo-300" for="sentenceCountInput">Quantidade de frases ou sujeitos</label>
+                    <input id="sentenceCountInput" type="number" min="1" value="1" oninput="flashcardApp.setSentenceCount(this.value)" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-white">
+                    <div id="sentenceSyntaxSelector" class="space-y-3"></div>
+                </section>
+
                 <div class="flex flex-col sm:flex-row justify-between items-center pt-2 border-t border-slate-700 mt-6 gap-3 shrink-0">
                     <button type="button" id="btnTranslate" onclick="flashcardApp.translateCard()" class="w-full sm:w-auto px-4 py-2.5 rounded-lg text-fuchsia-400 hover:bg-fuchsia-400/10 hover:text-fuchsia-300 transition-colors font-medium flex items-center justify-center gap-2 text-sm border border-fuchsia-400/20">
                         <i class="fa-solid fa-language"></i> Traduzir via IA
@@ -1131,6 +1137,7 @@ const flashcardApp = {
             cardSheetEmbed: false,
             cardSheetMode: null,
             cardSheetEditCardId: null,
+            sentenceSyntax: [],
 
             audioGeneration: {
                 running: false,
@@ -1324,6 +1331,8 @@ const flashcardApp = {
                 const res = await this.api('list_tags');
                 this.availableTags = res?.data || [];
                 this.renderTagSelector();
+                this.sentenceSyntax = [];
+                this.setSentenceCount(1);
                 this.renderInitialTagSelector();
             },
             handleTagSearch(query = '') {
@@ -1519,6 +1528,37 @@ const flashcardApp = {
                 const next = ids.includes(tagId) ? ids.filter(id => id !== tagId) : [...ids, tagId];
                 hidden.value = JSON.stringify(next);
                 this.renderTagSelector(next);
+            },
+            setSentenceCount(value) {
+                const count = Math.max(1, Math.min(50, Number.parseInt(value, 10) || 1));
+                const input = document.getElementById('sentenceCountInput');
+                if (input) input.value = count;
+                while (this.sentenceSyntax.length < count) this.sentenceSyntax.push({ id_frequencia_informacional: 1, active: 'subject', elements: { subject: [], compound_object: [], inflexion_type: [], isolated_object: [], verb: [], adverb: [], object: [], local: [], tempo: [] } });
+                this.sentenceSyntax.length = count;
+                this.renderSentenceSyntax();
+            },
+            setSentenceFrequency(index, value) {
+                this.sentenceSyntax[index].id_frequencia_informacional = Number(value);
+                this.sentenceSyntax[index].active = 'subject';
+                this.renderSentenceSyntax();
+            },
+            setSentenceElement(index, value) { this.sentenceSyntax[index].active = value; this.renderSentenceSyntax(); },
+            toggleSentenceTag(index, type, tagId) {
+                const ids = this.sentenceSyntax[index].elements[type] || [];
+                this.sentenceSyntax[index].elements[type] = ids.includes(tagId) ? ids.filter(id => id !== tagId) : [...ids, tagId];
+                this.renderSentenceSyntax();
+            },
+            renderSentenceSyntax() {
+                const container = document.getElementById('sentenceSyntaxSelector');
+                if (!container) return;
+                const labels = { subject: 'Sujeito', compound_object: 'Objeto composto', inflexion_type: 'Tipo da flexão', isolated_object: 'Objeto isolado', verb: 'Verbo ou locução verbal', adverb: 'Advérbio ou locução adverbial', object: 'Objeto', local: 'Local', tempo: 'Tempo' };
+                container.innerHTML = this.sentenceSyntax.map((sentence, index) => {
+                    const types = sentence.id_frequencia_informacional === 1 ? ['subject', 'compound_object', 'inflexion_type', 'isolated_object'] : ['subject', 'verb', 'adverb', 'object', 'local', 'tempo'];
+                    const active = sentence.active || 'subject';
+                    const selected = sentence.elements[active] || [];
+                    const tags = this.availableTags.map(tag => `<button type="button" onclick="flashcardApp.toggleSentenceTag(${index}, '${active}', ${Number(tag.id)})" class="px-2 py-1 rounded text-xs border ${selected.includes(Number(tag.id)) ? 'bg-emerald-500/20 border-emerald-400 text-emerald-100' : 'bg-slate-900 border-slate-600 text-slate-300'}">${this.escapeHTML(this.getTagLabel(tag))}</button>`).join('') || '<span class="text-xs text-slate-400">Sem tags disponíveis.</span>';
+                    return `<div class="rounded-lg border border-slate-700 bg-slate-800/40 p-3 space-y-2"><label class="block text-sm font-semibold text-white">Frase ${index + 1}</label><select onchange="flashcardApp.setSentenceFrequency(${index}, this.value)" class="w-full bg-slate-900 border border-slate-600 rounded py-2 px-3 text-sm text-white"><option value="1" ${sentence.id_frequencia_informacional === 1 ? 'selected' : ''}>Frequência informacional 1</option><option value="2" ${sentence.id_frequencia_informacional === 2 ? 'selected' : ''}>Frequência informacional 2</option></select><select id="frequenciaInformacionalSelect" onchange="flashcardApp.setSentenceElement(${index}, this.value)" class="w-full bg-slate-900 border border-slate-600 rounded py-2 px-3 text-sm text-white">${types.map(type => `<option value="${type}" ${active === type ? 'selected' : ''}>${labels[type]}</option>`).join('')}</select><div class="flex flex-wrap gap-2 pt-1">${tags}</div></div>`;
+                }).join('');
             },
             async generateMissingAudiosFromDeckFromPanel() {
                 this.closeRightPanel();
@@ -2615,6 +2655,8 @@ const flashcardApp = {
                 const tagSearchInput = document.getElementById('cardTagSearchInput');
                 if (tagSearchInput) tagSearchInput.value = '';
                 this.renderTagSelector();
+                this.sentenceSyntax = [];
+                this.setSentenceCount(1);
                 const createCardTagsPanel = document.getElementById('cardTagsPanelCreatCardModal');
                 if (createCardTagsPanel) createCardTagsPanel.classList.toggle('hidden', this.deckMode !== 'grafo');
                 document.getElementById('modalTitleText').innerText = 'Editar Flashcard';
@@ -3636,6 +3678,8 @@ const flashcardApp = {
                 const tagSearchInput = document.getElementById('cardTagSearchInput');
                 if (tagSearchInput) tagSearchInput.value = '';
                 this.renderTagSelector([]);
+                this.sentenceSyntax = [];
+                this.setSentenceCount(1);
                 const createCardTagsPanel = document.getElementById('cardTagsPanelCreatCardModal');
                 if (createCardTagsPanel) createCardTagsPanel.classList.toggle('hidden', this.deckMode !== 'grafo');
                 this.switchSingleModalTab('front');
@@ -3851,7 +3895,11 @@ const flashcardApp = {
                     ...collectCardTranslationPayload(document.getElementById('singleModal')),
                     info_type: infoType,
                     tag_ids: [],
-                    subject_tag_ids: tagIds
+                    subject_tag_ids: tagIds,
+                    sentence_syntax: this.sentenceSyntax.map(sentence => ({
+                        id_frequencia_informacional: sentence.id_frequencia_informacional,
+                        elements: sentence.elements
+                    }))
                 };
                 if (editId) payload.card_id = editId;
 
