@@ -212,6 +212,7 @@
             <form id="editRelationTypeForm" class="space-y-4">
                 <div class="flex items-center justify-between gap-3"><h3 class="text-lg font-semibold">Editar sessão</h3><button id="btnCloseEditRelationTypeModal" type="button" class="text-slate-400 hover:text-white text-xl">&times;</button></div>
                 <input id="editRelationTypeNameInput" type="text" maxlength="120" placeholder="Nome da sessão" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2">
+                <select id="editRelationTypeHierarchyInput" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2"><option value="0">0 - Conjunto simples</option><option value="1">1 - Árvore parental</option><option value="2">2 - Sequência</option><option value="3">3 - Componente conexo</option><option value="4">4 - Replicação familiar</option></select>
                 <div class="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
                     <button type="button" id="btnDeleteRelationType" class="rounded-lg border border-red-500/60 px-4 py-2 text-red-300 hover:bg-red-500/10">Excluir sessão</button>
                     <div class="flex justify-end gap-2"><button type="button" id="btnCancelEditRelationType" class="rounded-lg border border-slate-600 px-4 py-2">Cancelar</button><button type="submit" id="btnSubmitEditRelationType" class="rounded-lg bg-violet-600 px-4 py-2 hover:bg-violet-500">Salvar</button></div>
@@ -1658,6 +1659,7 @@
             if (!canEditRelationType(relationType)) return;
             state.editingRelationTypeId = Number(relationType.id);
             document.getElementById('editRelationTypeNameInput').value = String(relationType.nome || relationType.name || '');
+            document.getElementById('editRelationTypeHierarchyInput').value = String(Number(relationType.hierarquia) || 0);
             showModal('editRelationTypeModal', 'editRelationTypeModalContent', 'editRelationTypeNameInput');
         }
         function closeRelationTypeActionsModal() { closeModal('editRelationTypeModal', 'editRelationTypeModalContent'); state.editingRelationTypeId = null; }
@@ -1716,7 +1718,8 @@
             if (!canEditRelationType(relationType)) return;
             const name = document.getElementById('editRelationTypeNameInput').value.trim();
             if (!name) { alert('Preencha o nome da sessão.'); return; }
-            await api('update_relation_type', { id, nome: name });
+            const hierarquia = Number(document.getElementById('editRelationTypeHierarchyInput').value);
+            await api('update_relation_type', { id, nome: name, hierarquia });
             closeRelationTypeActionsModal();
             await loadPage(1);
         }

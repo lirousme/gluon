@@ -7496,13 +7496,15 @@ elseif ($action === 'update_relation_type') {
     $relationTypeId = (int)($input['id'] ?? 0);
     $nome = trim((string)($input['nome'] ?? ''));
     $nome = preg_replace('/\s+/u', ' ', $nome);
+    $hierarquia = (int)($input['hierarquia'] ?? -1);
 
     if ($relationTypeId <= 0) die(json_encode(['status'=>'error','message'=>'Sessão inválida.']));
     if ($nome === '') die(json_encode(['status'=>'error','message'=>'Nome é obrigatório.']));
+    if (!in_array($hierarquia, [0,1,2,3,4], true)) die(json_encode(['status'=>'error','message'=>'Hierarquia inválida.']));
 
     $nomeEnc = Security::encryptData($nome);
-    $stmt = $pdo->prepare("UPDATE tipos_de_relacoes SET nome = ? WHERE id = ? AND id_user = ?");
-    $stmt->execute([$nomeEnc, $relationTypeId, $user_id]);
+    $stmt = $pdo->prepare("UPDATE tipos_de_relacoes SET nome = ?, hierarquia = ? WHERE id = ? AND id_user = ?");
+    $stmt->execute([$nomeEnc, $hierarquia, $relationTypeId, $user_id]);
 
     if ($stmt->rowCount() === 0) {
         $checkStmt = $pdo->prepare("SELECT id FROM tipos_de_relacoes WHERE id = ? AND id_user = ? LIMIT 1");
