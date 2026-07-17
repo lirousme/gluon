@@ -109,7 +109,13 @@ function ensureFlashcardSentenceSyntaxSchema(PDO $pdo): void {
 }
 function normalizeSentenceSyntax(PDO $pdo, int $userId, $raw): array {
     if (!is_array($raw) || !$raw) die(json_encode(['status' => 'error', 'message' => 'Informe ao menos uma frase ou sujeito.']));
-    $allowedByFrequency = [1 => ['subject', 'compound_object', 'isolated_object', 'inflexion_type'], 2 => ['subject', 'verb', 'adverb', 'object', 'local', 'tempo']];
+    // Although frequencies 2 and 3 currently expose the same elements, they are
+    // distinct persisted frequencies and must both accept their respective syntax.
+    $allowedByFrequency = [
+        1 => ['subject', 'compound_object', 'isolated_object', 'inflexion_type'],
+        2 => ['subject', 'verb', 'adverb', 'object', 'local', 'tempo'],
+        3 => ['subject', 'verb', 'adverb', 'object', 'local', 'tempo'],
+    ];
     $out = [];
     foreach (array_values($raw) as $i => $sentence) {
         $frequency = validateFrequenciaInformacionalId($pdo, $userId, $sentence['id_frequencia_informacional'] ?? 0);
