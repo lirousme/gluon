@@ -1253,6 +1253,23 @@
             return `<a href="${escapeHtml(editUrl)}" class="rounded-lg px-3 py-1.5 font-semibold text-slate-400 transition hover:bg-slate-800 hover:text-white">Editar</a>`;
         }
 
+        function renderCardCopyButton(card = {}) {
+            const cardId = Number(card?.id || 0);
+            const deckId = Number(card?.directory_id || 0);
+            if (!cardId || !deckId) return '';
+            return `<button type="button" data-copy-card-id="${cardId}" data-copy-deck-id="${deckId}" class="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-600 p-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-800 hover:text-white" title="Copiar card atual" aria-label="Copiar card atual"><i class="fa-solid fa-copy"></i></button>`;
+        }
+
+        function copyCardToNewSheet(card = {}) {
+            const cardId = Number(card?.id || 0);
+            const deckId = Number(card?.directory_id || 0);
+            if (!cardId || !deckId) return;
+
+            const params = new URLSearchParams({ id: String(deckId), duplicate_card_id: String(cardId) });
+            params.set('from', window.location.pathname + window.location.search);
+            window.location.href = `/ficha_do_card?${params.toString()}`;
+        }
+
         function renderCards(cards) {
             cardsGrid.innerHTML = cards.map((card) => {
                 const activeTab = card.active_tab || 'texts';
@@ -1260,10 +1277,12 @@
                     <article class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80 shadow-xl shadow-black/20" data-card-id="${card.id}">
                         <div class="flex items-center justify-end border-b border-slate-800 px-4 py-3 text-xs text-slate-400">
                             <div id="card-tabs-nav-${card.id}" class="flex shrink-0 items-center gap-1 rounded-xl border border-slate-800 bg-slate-950/40 p-1">
-                                ${renderCardTabButton(card.id, 'texts', 'Textos', activeTab)}
-                                ${renderCardTabButton(card.id, 'status', 'Status', activeTab)}
-                                ${renderCardTabButton(card.id, 'tags', 'Tags', activeTab)}
-                                ${renderCardEditButton(card)}
+                                ${isDialelosMode() ? renderCardCopyButton(card) : `
+                                    ${renderCardTabButton(card.id, 'texts', 'Textos', activeTab)}
+                                    ${renderCardTabButton(card.id, 'status', 'Status', activeTab)}
+                                    ${renderCardTabButton(card.id, 'tags', 'Tags', activeTab)}
+                                    ${renderCardEditButton(card)}
+                                `}
                             </div>
                         </div>
                         <div data-card-panel="${card.id}">${renderCardPanel(card, activeTab)}</div>
@@ -1278,6 +1297,15 @@
                     if (!card) return;
                     card.active_tab = button.dataset.cardTab || 'texts';
                     renderCards(cards);
+                });
+            });
+
+            cardsGrid.querySelectorAll('[data-copy-card-id]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    copyCardToNewSheet({
+                        id: button.dataset.copyCardId,
+                        directory_id: button.dataset.copyDeckId
+                    });
                 });
             });
         }
