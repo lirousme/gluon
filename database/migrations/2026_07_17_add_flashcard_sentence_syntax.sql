@@ -18,3 +18,6 @@ ALTER TABLE verb_links ADD COLUMN id_frase INT NULL AFTER tag_id, ADD COLUMN id_
 ALTER TABLE adverb_links ADD COLUMN id_frase INT NULL AFTER tag_id, ADD COLUMN id_sujeito_relativo INT NULL AFTER id_frase, ADD COLUMN tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo;
 ALTER TABLE local_links ADD COLUMN id_frase INT NULL AFTER tag_id, ADD COLUMN id_sujeito_relativo INT NULL AFTER id_frase, ADD COLUMN tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo;
 ALTER TABLE tempo_links ADD COLUMN id_frase INT NULL AFTER tag_id, ADD COLUMN id_sujeito_relativo INT NULL AFTER id_frase, ADD COLUMN tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo;
+
+-- Relações sintáticas são específicas do card e não podem sobrescrever relações globais.
+ALTER TABLE relacoes_taguineas ADD COLUMN id_card INT NULL AFTER id_user;
