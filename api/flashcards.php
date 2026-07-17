@@ -6370,10 +6370,13 @@ elseif ($action === 'list_graph_cards_for_user') {
     $rawLongText = is_array($input) ? ($input['long_text'] ?? ($_GET['long_text'] ?? 0)) : ($_GET['long_text'] ?? 0);
     $rawInfoTypes = is_array($input) ? ($input['info_types'] ?? ($_GET['info_types'] ?? [0, 1, 2, 3, 4, 5, 6])) : ($_GET['info_types'] ?? [0, 1, 2, 3, 4, 5, 6]);
     $rawFrequenciaInformacionalIds = is_array($input) ? ($input['frequencia_informacional_ids'] ?? ($_GET['frequencia_informacional_ids'] ?? null)) : ($_GET['frequencia_informacional_ids'] ?? null);
+    $rawDialelosOnly = is_array($input) ? ($input['dialelos_only'] ?? ($_GET['dialelos_only'] ?? 0)) : ($_GET['dialelos_only'] ?? 0);
     $withoutTagsOnly = filter_var($rawWithoutTags, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
     $withoutTagsOnly = $withoutTagsOnly === null ? ((string)$rawWithoutTags === '1') : $withoutTagsOnly;
     $longTextOnly = filter_var($rawLongText, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
     $longTextOnly = $longTextOnly === null ? ((string)$rawLongText === '1') : $longTextOnly;
+    $dialelosOnly = filter_var($rawDialelosOnly, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+    $dialelosOnly = $dialelosOnly === null ? ((string)$rawDialelosOnly === '1') : $dialelosOnly;
     $page = filter_var($rawPage, FILTER_VALIDATE_INT, ['options' => ['default' => 1, 'min_range' => 1]]);
     $tagIds = sanitizeTagIds($rawTagIds ?? $rawTagId);
     $tagLinkTypes = sanitizeGraphTagLinkTypes($rawTagLinkTypes);
@@ -6388,6 +6391,32 @@ elseif ($action === 'list_graph_cards_for_user') {
     $infoTypeFilterParams = [];
     $frequenciaFilterSql = '';
     $frequenciaFilterParams = [];
+    $dialelosFilterSql = '';
+    $dialelosFilterParams = [];
+
+    if ($dialelosOnly) {
+        if (!relacoesTaguineasHasIdCardColumn($pdo)) {
+            die(json_encode(['status' => 'error', 'message' => 'A coluna id_card não está disponível para localizar os dialelos.']));
+        }
+        $dialelosFilterSql = "
+            AND EXISTS (
+                SELECT 1
+                FROM relacoes_taguineas r
+                WHERE r.id_card = f.id
+                  AND r.id_user = ?
+                  AND r.tipo_de_relacao = 21
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM relacoes_taguineas r_inverso
+                      WHERE r_inverso.id_user = r.id_user
+                        AND r_inverso.tipo_de_relacao = 21
+                        AND r_inverso.id_tag_child = r.id_tag_mother
+                        AND r_inverso.id_tag_mother = r.id_tag_child
+                        AND r_inverso.id <> r.id
+                  )
+            )";
+        $dialelosFilterParams[] = $user_id;
+    }
     if (!empty($infoTypes) && count($infoTypes) < 7) {
         $infoTypePlaceholders = implode(',', array_fill(0, count($infoTypes), '?'));
         $infoTypeFilterSql = " AND f.info_type IN ({$infoTypePlaceholders})";
@@ -6447,11 +6476,12 @@ elseif ($action === 'list_graph_cards_for_user') {
         WHERE d.user_id = ?
           AND d.deck_mode = 'grafo'
           AND d.type IN (4, 10)
+          {$dialelosFilterSql}
           {$tagFilterSql}
           {$infoTypeFilterSql}
           {$frequenciaFilterSql}
     ");
-    $stmtTotal->execute(array_merge([$user_id], $tagFilterParams, $infoTypeFilterParams, $frequenciaFilterParams));
+    $stmtTotal->execute(array_merge([$user_id], $dialelosFilterParams, $tagFilterParams, $infoTypeFilterParams, $frequenciaFilterParams));
     $totalCards = (int)$stmtTotal->fetchColumn();
     $totalPages = max(1, (int)ceil($totalCards / $perPage));
     if ($page > $totalPages) {
@@ -6486,13 +6516,14 @@ elseif ($action === 'list_graph_cards_for_user') {
         WHERE d.user_id = ?
           AND d.deck_mode = 'grafo'
           AND d.type IN (4, 10)
+          {$dialelosFilterSql}
           {$tagFilterSql}
           {$infoTypeFilterSql}
           {$frequenciaFilterSql}
         ORDER BY f.id DESC
         {$paginationSql}
     ");
-    $stmt->execute(array_merge([$user_id, $user_id, $user_id], $tagFilterParams, $infoTypeFilterParams, $frequenciaFilterParams));
+    $stmt->execute(array_merge([$user_id, $user_id, $user_id], $dialelosFilterParams, $tagFilterParams, $infoTypeFilterParams, $frequenciaFilterParams));
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     if ($longTextOnly) {
         $rowsWithLongTextLength = [];
