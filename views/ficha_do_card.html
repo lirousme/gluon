@@ -210,35 +210,14 @@
         </div>
       </section>
 
-      <section id="SubjectTagsPanel" class="pt-3 border-t border-slate-700 space-y-2">
-        <label id="SubjectTagsPanelTitle" class="block text-xs font-semibold uppercase tracking-wide text-emerald-200">Subject</label>
-        <div id="subjectTagSelector" class="flex flex-wrap gap-1.5 bg-slate-900/70 border border-slate-700 rounded-lg p-2 min-h-[44px]"></div>
-        <input id="subjectTagSearchInput" type="text" placeholder="Buscar subjects..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
-      </section>
-
-      <section id="ObjectTagsPanel" class="pt-3 border-t border-slate-700 space-y-2">
-        <label id="ObjectTagsPanelTitle" class="block text-xs font-semibold uppercase tracking-wide text-sky-200">Objects</label>
-        <div id="objectTagSelector" class="flex flex-wrap gap-1.5 bg-slate-900/70 border border-slate-700 rounded-lg p-2 min-h-[44px]"></div>
-        <input id="objectTagSearchInput" type="text" placeholder="Buscar objects..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
-      </section>
-
-      <section id="LexicalChunkTagsPanel" class="pt-3 border-t border-slate-700 space-y-2">
-        <label id="LexicalChunkTagsPanelTitle" class="block text-xs font-semibold uppercase tracking-wide text-cyan-200">Lexical chunks (Flexões)</label>
-        <div id="lexicalChunkTagSelector" class="flex flex-wrap gap-1.5 bg-slate-900/70 border border-slate-700 rounded-lg p-2 min-h-[44px]"></div>
-        <input id="lexicalChunkTagSearchInput" type="text" placeholder="Buscar lexical chunks..." class="w-full mb-2 bg-slate-900 border border-slate-600 rounded-lg py-2 px-3 text-sm" autocomplete="off">
-      </section>
-
-      <section id="FrequenciaInformacionalPanel" class="pt-3 border-t border-slate-700 space-y-2">
-        <div class="flex items-center justify-between gap-3">
-          <label for="frequenciaInformacionalSelect" class="block text-xs font-semibold uppercase tracking-wide text-emerald-200">Frequência informacional</label>
-          <a href="/crud_frequencias_informacionais" class="text-xs font-semibold text-emerald-200 transition hover:text-emerald-100">Gerenciar</a>
+      <section id="SentenceSyntaxPanel" class="pt-3 border-t border-slate-700 space-y-3">
+        <div>
+          <label for="sentenceCountInput" class="block text-xs font-semibold uppercase tracking-wide text-emerald-200">Quantidade de frases ou sujeitos</label>
+          <input id="sentenceCountInput" type="number" min="1" max="50" value="1" inputmode="numeric" class="mt-2 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white">
+          <p class="mt-1 text-xs text-slate-400">Configure a frequência, os elementos sintáticos e as tags de cada frase separadamente.</p>
         </div>
-        <select id="frequenciaInformacionalSelect" required class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white">
-          <option value="">Carregando frequências...</option>
-        </select>
-        <p class="text-xs text-slate-400">Todo card deve estar vinculado a uma frequência informacional.</p>
+        <div id="sentenceSyntaxSelector" class="space-y-3"></div>
       </section>
-
 
       <section id="StatusInformacionalPanel" class="pt-3 border-t border-slate-700 space-y-2">
         <label for="statusInformacionalSelect" class="block text-xs font-semibold uppercase tracking-wide text-amber-200">Status informacional</label>
@@ -526,6 +505,7 @@ const app = {
   availableTags: [],
   frequenciasInformacionais: [],
   defaultNewCardFrequenciaInformacionalId: 7,
+  sentenceSyntax: [],
   sessionUserId: null,
   pendingFrontSentenceTagCandidates: null,
   richTextSelections: {},
@@ -1114,64 +1094,62 @@ const app = {
     const res = await this.api('list_tags');
     this.availableTags = res?.data || [];
     this.renderAllTagSelectors();
+    this.renderSentenceSyntax();
   },
-  updateInformationalFrequencyTagPanelTitles() {
-    const subjectTitle = document.getElementById('SubjectTagsPanelTitle');
-    const objectTitle = document.getElementById('ObjectTagsPanelTitle');
-    const lexicalChunkTitle = document.getElementById('LexicalChunkTagsPanelTitle');
-    const lexicalChunkPanel = document.getElementById('LexicalChunkTagsPanel');
-    if (subjectTitle) subjectTitle.textContent = 'Subject';
-    if (objectTitle) objectTitle.textContent = 'Objects';
-    if (lexicalChunkTitle) lexicalChunkTitle.textContent = 'Lexical chunks (Flexões)';
-    if (lexicalChunkPanel) lexicalChunkPanel.classList.remove('hidden');
-    this.updateRelacaoAcaoPanel();
+  createEmptySentenceSyntax() {
+    return { id_frequencia_informacional: 1, active: 'subject', elements: { subject: [], compound_object: [], inflexion_type: [], isolated_object: [], verb: [], adverb: [], object: [], local: [], tempo: [] } };
   },
-  updateRelacaoAcaoPanel() {
-    const panel = document.getElementById('RelacaoAcaoPanel');
-    const select = document.getElementById('relacaoAcaoSelect');
-    if (panel) panel.classList.add('hidden');
-    if (select) {
-      select.required = false;
-      select.value = '';
-    }
+  setSentenceCount(value) {
+    const count = Math.max(1, Math.min(50, Number.parseInt(value, 10) || 1));
+    const input = document.getElementById('sentenceCountInput');
+    if (input) input.value = count;
+    while (this.sentenceSyntax.length < count) this.sentenceSyntax.push(this.createEmptySentenceSyntax());
+    this.sentenceSyntax.length = count;
+    this.renderSentenceSyntax();
   },
-  isCreatingCardFromScratch() {
-    return !this.editCardId && !this.duplicateCardId;
+  setSentenceFrequency(index, value) {
+    const sentence = this.sentenceSyntax[index];
+    if (!sentence) return;
+    sentence.id_frequencia_informacional = Number(value);
+    const types = sentence.id_frequencia_informacional === 1 ? ['subject', 'compound_object', 'inflexion_type', 'isolated_object'] : ['subject', 'verb', 'adverb', 'object', 'local', 'tempo'];
+    if (!types.includes(sentence.active)) sentence.active = 'subject';
+    this.renderSentenceSyntax();
   },
-  renderFrequenciasInformacionaisSelect(selectedId = null) {
-    const select = document.getElementById('frequenciaInformacionalSelect');
-    if (!select) return;
-    const currentValue = selectedId !== null
-      ? String(selectedId || '')
-      : (select.value || (this.isCreatingCardFromScratch() ? String(this.defaultNewCardFrequenciaInformacionalId) : ''));
-    if (!this.frequenciasInformacionais.length) {
-      select.innerHTML = '<option value="">Nenhuma frequência cadastrada</option>';
-      this.updateInformationalFrequencyTagPanelTitles();
-      return;
-    }
-    select.innerHTML = '<option value="">Selecione uma frequência</option>' + this.frequenciasInformacionais.map((frequencia) => {
-      const id = Number(frequencia?.id || 0);
-      const nome = this.escapeHTML(String(frequencia?.nome || 'Sem nome'));
-      return `<option value="${id}">${nome}</option>`;
+  setSentenceElement(index, value) { if (this.sentenceSyntax[index]) { this.sentenceSyntax[index].active = value; this.renderSentenceSyntax(); } },
+  toggleSentenceTag(index, type, tagId) {
+    const sentence = this.sentenceSyntax[index];
+    if (!sentence) return;
+    const ids = sentence.elements[type] || [];
+    sentence.elements[type] = ids.includes(tagId) ? ids.filter(id => id !== tagId) : [...ids, tagId];
+    this.renderSentenceSyntax();
+  },
+  renderSentenceSyntax() {
+    const container = document.getElementById('sentenceSyntaxSelector');
+    if (!container) return;
+    const labels = { subject: 'Sujeito', compound_object: 'Objeto composto', inflexion_type: 'Tipo da flexão', isolated_object: 'Objeto isolado', verb: 'Verbo ou locução verbal', adverb: 'Advérbio ou locução adverbial', object: 'Objeto', local: 'Local', tempo: 'Tempo' };
+    const frequencies = this.frequenciasInformacionais.filter(item => [1, 2].includes(Number(item.id)));
+    container.innerHTML = this.sentenceSyntax.map((sentence, index) => {
+      const types = Number(sentence.id_frequencia_informacional) === 1 ? ['subject', 'compound_object', 'inflexion_type', 'isolated_object'] : ['subject', 'verb', 'adverb', 'object', 'local', 'tempo'];
+      const active = types.includes(sentence.active) ? sentence.active : 'subject';
+      const selected = sentence.elements[active] || [];
+      const tags = this.availableTags.map(tag => { const id = Number(tag.id); return `<button type="button" onclick="app.toggleSentenceTag(${index}, '${active}', ${id})" class="rounded-full border px-2 py-1 text-xs ${selected.includes(id) ? 'border-emerald-400 bg-emerald-500/20 text-emerald-100' : 'border-slate-600 bg-slate-900 text-slate-300'}">${this.escapeHTML(this.getTagLabel(tag))}</button>`; }).join('') || '<span class="text-xs text-slate-400">Sem tags disponíveis.</span>';
+      const frequencyOptions = frequencies.map(item => `<option value="${Number(item.id)}" ${Number(sentence.id_frequencia_informacional) === Number(item.id) ? 'selected' : ''}>${this.escapeHTML(String(item.nome || `Frequência ${item.id}`))}</option>`).join('');
+      return `<article class="space-y-2 rounded-lg border border-slate-700 bg-slate-800/40 p-3"><h3 class="text-sm font-semibold text-white">Frase ${index + 1}</h3><label class="block text-xs font-semibold uppercase tracking-wide text-emerald-200">Tags-sujeitos</label><div class="flex min-h-11 flex-wrap gap-1.5 rounded-lg border border-slate-700 bg-slate-900/70 p-2">${types.includes('subject') && active === 'subject' ? tags : (sentence.elements.subject || []).map(id => this.escapeHTML(this.getTagLabel(this.availableTags.find(tag => Number(tag.id) === id) || {}))).join(', ') || '<span class="text-xs text-slate-400">Selecione Sujeito no elemento sintático.</span>'}</div><label class="block text-xs font-semibold uppercase tracking-wide text-emerald-200">Frequência informacional</label><select data-frequency-select="${index}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white">${frequencyOptions || '<option value="">Cadastre as frequências 1 e 2</option>'}</select><label class="block text-xs font-semibold uppercase tracking-wide text-emerald-200">Elemento sintático</label><select data-element-select="${index}" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white">${types.map(type => `<option value="${type}" ${active === type ? 'selected' : ''}>${labels[type]}</option>`).join('')}</select><div class="flex min-h-11 flex-wrap gap-1.5 rounded-lg border border-slate-700 bg-slate-900/70 p-2">${active === 'subject' ? '' : tags}</div></article>`;
     }).join('');
-    select.value = currentValue;
-    this.updateInformationalFrequencyTagPanelTitles();
+    container.querySelectorAll('[data-frequency-select]').forEach(select => select.onchange = () => this.setSentenceFrequency(Number(select.dataset.frequencySelect), select.value));
+    container.querySelectorAll('[data-element-select]').forEach(select => select.onchange = () => this.setSentenceElement(Number(select.dataset.elementSelect), select.value));
   },
   async loadFrequenciasInformacionais() {
     const res = await this.api('list_frequencias_informacionais');
     this.frequenciasInformacionais = Array.isArray(res?.data) ? res.data : [];
-    this.renderFrequenciasInformacionaisSelect();
-    this.updateInformationalFrequencyTagPanelTitles();
+    if (!this.sentenceSyntax.length) this.sentenceSyntax = [this.createEmptySentenceSyntax()];
+    this.renderSentenceSyntax();
   },
   applyInitialSubjectTag() {
     if (this.editCardId || this.duplicateCardId || !this.initialSubjectTagIds.length) return;
-    const visibleTagIds = new Set(this.getVisibleTags().map(tag => Number(tag.id)).filter(Boolean));
-    const selectedIds = this.getSelectedTagIds('subject');
-    this.initialSubjectTagIds.forEach((tagId) => {
-      if (visibleTagIds.has(tagId) && !selectedIds.includes(tagId)) selectedIds.push(tagId);
-    });
-    this.setSelectedTagIds('subject', selectedIds);
-    this.renderTagSelector('subject');
+    const sentence = this.sentenceSyntax[0] || (this.sentenceSyntax[0] = this.createEmptySentenceSyntax());
+    sentence.elements.subject = [...new Set([...sentence.elements.subject, ...this.initialSubjectTagIds])];
+    this.renderSentenceSyntax();
   },
   async loadSessionUserId() {
     try {
@@ -1316,7 +1294,9 @@ const app = {
   },
   setSelectedTagIds(panel, ids) {
     const normalizedIds = ids.map(Number).filter(Boolean);
-    document.getElementById(this.getPanelConfig(panel).selectedInputId).value = JSON.stringify(normalizedIds);
+    const input = document.getElementById(this.getPanelConfig(panel).selectedInputId);
+    if (!input) return;
+    input.value = JSON.stringify(normalizedIds);
     this.updateTagExpansionMode();
   },
   handleTagSearch(panel, query='') {
@@ -1353,6 +1333,7 @@ const app = {
   renderTagSelector(panel = 'subject', selectedIds = null) {
     const config = this.getPanelConfig(panel);
     const el = document.getElementById(config.selectorId);
+    if (!el) return;
     const currentSelected = selectedIds ?? this.getSelectedTagIds(panel);
     if (!this.availableTags.length) { el.innerHTML = '<span class="text-xs text-slate-400">Sem tags cadastradas.</span>'; return; }
     const visibleTags = this.getVisibleTags();
@@ -1766,7 +1747,9 @@ const app = {
     this.setInfoType(card.info_type);
     this.setQuestionAnswer(card.question_answer === 0 ? 0 : 1);
     dynamicTextType.value = ['none', 'subject', 'object', 'verb'].includes(card.dynamic_text_type) ? card.dynamic_text_type : 'none';
-    this.renderFrequenciasInformacionaisSelect(card.id_frequencia_informacional || '');
+    this.sentenceSyntax = Array.isArray(card.sentence_syntax) && card.sentence_syntax.length ? card.sentence_syntax : [this.createEmptySentenceSyntax()];
+    document.getElementById('sentenceCountInput').value = this.sentenceSyntax.length;
+    this.renderSentenceSyntax();
     if (statusInformacionalSelect) statusInformacionalSelect.value = ['0', '1', '2'].includes(String(card.status_informacional ?? 0)) ? String(card.status_informacional ?? 0) : '0';
     if (relacaoAcaoSelect) relacaoAcaoSelect.value = ['confirmacao', 'negacao'].includes(card.relacao_acao) ? card.relacao_acao : '';
     const subjectTags = Array.isArray(card.subject_tags) ? card.subject_tags.map(t => Number(t.id)).filter(Boolean) : [];
@@ -1833,10 +1816,10 @@ const app = {
     const backPlainText = this.sanitizeRichTextHTML(back).replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim();
     const image_front = frontImageBase64.value;
     const image_back = backImageBase64.value;
-    let subject_tag_ids = this.getSelectedTagIds('subject');
-    let object_tag_ids = this.getSelectedTagIds('object');
-    let lexical_chunk_tag_ids = this.getSelectedTagIds('lexicalChunk');
-    const id_frequencia_informacional = Number(frequenciaInformacionalSelect.value || 0);
+    const sentence_syntax = this.sentenceSyntax;
+    let subject_tag_ids = [...new Set(sentence_syntax.flatMap(sentence => sentence.elements.subject || []))];
+    let object_tag_ids = [];
+    let lexical_chunk_tag_ids = [];
     const status_informacional = Number(statusInformacionalSelect?.value || 0);
     const isTagExpansion = this.isTagExpansionType();
     const generatedFront = isTagExpansion ? '' : front;
@@ -1844,8 +1827,7 @@ const app = {
       if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag Subject para o Tag Expansion.', 'error');
       if (!backPlainText && !image_back) return this.setStatus('Preencha o verso do Tag Expansion com texto ou imagem.', 'error');
     } else if (!frontPlainText && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
-    if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag na categoria Subject para salvar o card.', 'error');
-    if (!id_frequencia_informacional) return this.setStatus('Selecione uma frequência informacional para salvar o card.', 'error');
+    if (sentence_syntax.some(sentence => !(sentence.elements.subject || []).length)) return this.setStatus('Selecione ao menos uma tag-sujeito para cada frase.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
@@ -1853,7 +1835,7 @@ const app = {
       const question_answer = this.infoType === 2 ? this.questionAnswer : null;
       const front_translations = isTagExpansion ? {} : this.collectFlashcardTranslations('front');
       const back_translations = this.collectFlashcardTranslations('back');
-      const payload = { deck_id: this.deckId, front: generatedFront, back, front_translations, back_translations, image_front: isTagExpansion ? '' : image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, id_frequencia_informacional, status_informacional, info_type: this.infoType, question_answer, dynamic_text_type: isTagExpansion ? 'none' : dynamicTextType.value, return_to };
+      const payload = { deck_id: this.deckId, front: generatedFront, back, front_translations, back_translations, image_front: isTagExpansion ? '' : image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, sentence_syntax, status_informacional, info_type: this.infoType, question_answer, dynamic_text_type: isTagExpansion ? 'none' : dynamicTextType.value, return_to };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
@@ -1876,11 +1858,7 @@ btnRemoveBackImage.onclick = () => app.removeCardImage('back');
 btnInfoType.onclick = () => app.cycleInfoType();
 btnQuestionAnswer.onclick = () => app.toggleQuestionAnswer();
 btnDeleteCard.onclick = () => app.deleteCard();
-frequenciaInformacionalSelect.onchange = () => app.updateInformationalFrequencyTagPanelTitles();
-relacaoAcaoSelect.onchange = () => app.updateRelacaoAcaoPanel();
-subjectTagSearchInput.oninput = (e) => app.handleTagSearch('subject', e.target.value);
-  objectTagSearchInput.oninput = (e) => app.handleTagSearch('object', e.target.value);
-  lexicalChunkTagSearchInput.oninput = (e) => app.handleTagSearch('lexicalChunk', e.target.value);
+sentenceCountInput.oninput = () => app.setSentenceCount(sentenceCountInput.value);
 cardForm.onsubmit = (e) => app.save(e);
 tagForm.onsubmit = (e) => app.createTag(e);
 editTagForm.onsubmit = (e) => app.updateTag(e);

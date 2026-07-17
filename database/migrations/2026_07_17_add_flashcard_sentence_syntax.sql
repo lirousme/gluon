@@ -10,7 +10,11 @@ CREATE TABLE IF NOT EXISTS flashcard_frases (
     CONSTRAINT fk_flashcard_frases_frequencia FOREIGN KEY (id_frequencia_informacional) REFERENCES frequencias_informacionais(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- A coluna antiga em flashcards permanece apenas para compatibilidade com filtros legados.
--- A frequência por frase passa a ser armazenada em flashcard_frases.
--- As tabelas de elementos sintáticos também precisam de id_frase para que elementos
--- iguais em frases distintas não sejam mesclados; id_sujeito_relativo identifica o sujeito.
+-- A frequência passa a ser armazenada por frase; a coluna em flashcards é mantida para filtros legados.
+ALTER TABLE subjects_links ADD COLUMN id_frase INT NULL AFTER tag_id;
+ALTER TABLE objects_links ADD COLUMN id_frase INT NULL AFTER tag_id, ADD COLUMN id_sujeito_relativo INT NULL AFTER id_frase, ADD COLUMN tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo;
+ALTER TABLE inflexion_type_links ADD COLUMN id_frase INT NULL AFTER tag_id, ADD COLUMN id_sujeito_relativo INT NULL AFTER id_frase, ADD COLUMN tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo;
+ALTER TABLE verb_links ADD COLUMN id_frase INT NULL AFTER tag_id, ADD COLUMN id_sujeito_relativo INT NULL AFTER id_frase, ADD COLUMN tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo;
+ALTER TABLE adverb_links ADD COLUMN id_frase INT NULL AFTER tag_id, ADD COLUMN id_sujeito_relativo INT NULL AFTER id_frase, ADD COLUMN tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo;
+ALTER TABLE local_links ADD COLUMN id_frase INT NULL AFTER tag_id, ADD COLUMN id_sujeito_relativo INT NULL AFTER id_frase, ADD COLUMN tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo;
+ALTER TABLE tempo_links ADD COLUMN id_frase INT NULL AFTER tag_id, ADD COLUMN id_sujeito_relativo INT NULL AFTER id_frase, ADD COLUMN tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo;
