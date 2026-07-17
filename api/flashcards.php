@@ -48,6 +48,7 @@ ensureFlashcardsDynamicTextTypeSchema($pdo);
 ensureFlashcardsQuestionAnswerSchema($pdo);
 ensureFlashcardsStatusInformacionalSchema($pdo);
 ensureFrequenciasInformacionaisSchema($pdo);
+ensureFlashcardSentenceSyntaxSchema($pdo);
 $user_id = $_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? ($_GET['action'] ?? '');
@@ -97,6 +98,66 @@ function validateFrequenciaInformacionalId(PDO $pdo, int $user_id, $value): int 
         die(json_encode(['status' => 'error', 'message' => 'Frequência informacional inválida ou sem permissão.']));
     }
     return $id;
+}
+
+function ensureFlashcardSentenceSyntaxSchema(PDO $pdo): void {
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS flashcard_frases (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT, flashcard_id INT NOT NULL, ordem INT UNSIGNED NOT NULL,
+            id_frequencia_informacional INT UNSIGNED NOT NULL, PRIMARY KEY (id),
+            UNIQUE KEY uniq_flashcard_frases_ordem (flashcard_id, ordem), KEY idx_flashcard_frases_frequencia (id_frequencia_informacional)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        foreach (['objects_links', 'inflexion_type_links', 'verb_links', 'adverb_links', 'local_links', 'tempo_links'] as $table) {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS {$table} (flashcard_id INT NOT NULL, tag_id INT NOT NULL, id_frase INT NULL, id_sujeito_relativo INT NULL, KEY idx_{$table}_card (flashcard_id), KEY idx_{$table}_subject (id_sujeito_relativo)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+            $sentenceColumn = $pdo->query("SHOW COLUMNS FROM {$table} LIKE 'id_frase'")->fetch(PDO::FETCH_ASSOC);
+            if (!$sentenceColumn) $pdo->exec("ALTER TABLE {$table} ADD COLUMN id_frase INT NULL AFTER tag_id");
+            $column = $pdo->query("SHOW COLUMNS FROM {$table} LIKE 'id_sujeito_relativo'")->fetch(PDO::FETCH_ASSOC);
+            if (!$column) $pdo->exec("ALTER TABLE {$table} ADD COLUMN id_sujeito_relativo INT NULL AFTER id_frase");
+        }
+    } catch (Throwable $e) {
+        error_log('[flashcards][sentence_syntax_schema] ' . $e->getMessage());
+    }
+}
+
+function sanitizeSentenceSyntax(PDO $pdo, int $user_id, $raw): array {
+    if (!is_array($raw) || !$raw) die(json_encode(['status' => 'error', 'message' => 'Informe ao menos uma frase ou sujeito.']));
+    $allowed = [1 => ['subject', 'compound_object', 'inflexion_type', 'isolated_object'], 2 => ['subject', 'verb', 'adverb', 'object', 'local', 'tempo']];
+    $result = [];
+    foreach (array_values($raw) as $index => $sentence) {
+        $frequencyId = validateFrequenciaInformacionalId($pdo, $user_id, $sentence['id_frequencia_informacional'] ?? null);
+        if (!isset($allowed[$frequencyId])) die(json_encode(['status' => 'error', 'message' => 'A frequência informacional deve ser 1 ou 2.']));
+        $elements = is_array($sentence['elements'] ?? null) ? $sentence['elements'] : [];
+        $subjects = sanitizeTagIds($elements['subject'] ?? []);
+        if (!$subjects) die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos uma tag-sujeito para cada frase.']));
+        $clean = ['subject' => $subjects];
+        foreach ($allowed[$frequencyId] as $type) if ($type !== 'subject') $clean[$type] = sanitizeTagIds($elements[$type] ?? []);
+        $result[] = ['ordem' => $index + 1, 'frequency_id' => $frequencyId, 'elements' => $clean];
+    }
+    return $result;
+}
+
+function syncSentenceSyntax(PDO $pdo, int $user_id, int $cardId, array $sentences): void {
+    $pdo->prepare('DELETE FROM flashcard_frases WHERE flashcard_id = ?')->execute([$cardId]);
+    foreach (['subjects_links', 'objects_links', 'inflexion_type_links', 'verb_links', 'adverb_links', 'local_links', 'tempo_links'] as $table) {
+        $pdo->prepare("DELETE FROM {$table} WHERE flashcard_id = ?")->execute([$cardId]);
+    }
+    $insertSentence = $pdo->prepare('INSERT INTO flashcard_frases (flashcard_id, ordem, id_frequencia_informacional) VALUES (?, ?, ?)');
+    $relation = $pdo->prepare('INSERT INTO relacoes_taguineas (id_card, id_tag_mother, id_tag_child, tipo_de_relacao, id_user) VALUES (?, ?, ?, ?, ?)');
+    $pdo->prepare('DELETE FROM relacoes_taguineas WHERE id_card = ? AND tipo_de_relacao IN (21, 22)')->execute([$cardId]);
+    $tables = ['compound_object' => 'objects_links', 'isolated_object' => 'objects_links', 'inflexion_type' => 'inflexion_type_links', 'verb' => 'verb_links', 'adverb' => 'adverb_links', 'object' => 'objects_links', 'local' => 'local_links', 'tempo' => 'tempo_links'];
+    foreach ($sentences as $sentence) {
+        $insertSentence->execute([$cardId, $sentence['ordem'], $sentence['frequency_id']]);
+        $sentenceId = (int)$pdo->lastInsertId();
+        foreach ($sentence['elements']['subject'] as $tagId) $pdo->prepare('INSERT INTO subjects_links (flashcard_id, tag_id) VALUES (?, ?)')->execute([$cardId, $tagId]);
+        foreach ($tables as $type => $table) foreach ($sentence['elements'][$type] ?? [] as $tagId) foreach ($sentence['elements']['subject'] as $subjectId) {
+            $pdo->prepare("INSERT INTO {$table} (flashcard_id, tag_id, id_frase, id_sujeito_relativo) VALUES (?, ?, ?, ?)")->execute([$cardId, $tagId, $sentenceId, $subjectId]);
+            if ($type === 'isolated_object') $relation->execute([$cardId, $subjectId, $tagId, 21, $user_id]);
+            if ($type === 'compound_object' || ($sentence['frequency_id'] === 2 && $type === 'object')) $relation->execute([$cardId, $subjectId, $tagId, 22, $user_id]);
+        }
+    }
 }
 
 function sanitizeInfoType($value): int {
@@ -5828,7 +5889,8 @@ elseif ($action === 'add_single') {
     $info_type = sanitizeInfoType($input['info_type'] ?? 2);
     $dynamic_text_type = sanitizeDynamicTextType($input['dynamic_text_type'] ?? 'none');
     $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
-    $id_frequencia_informacional = validateFrequenciaInformacionalId($pdo, $user_id, $input['id_frequencia_informacional'] ?? null);
+    $sentenceSyntax = sanitizeSentenceSyntax($pdo, $user_id, $input['sentence_syntax'] ?? null);
+    $id_frequencia_informacional = $sentenceSyntax[0]['frequency_id']; // compatibilidade com filtros antigos
     $status_informacional = sanitizeStatusInformacional($input['status_informacional'] ?? 0);
 
     $has_front = !empty($front) || !empty($image_front);
@@ -5912,6 +5974,7 @@ elseif ($action === 'add_single') {
         syncCardTagLinks($pdo, 'subjects_links', $new_card_id, $cardSubjectTagIds, $user_id);
         syncCardTagLinks($pdo, 'objects_links', $new_card_id, $object_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'lexical_chunks_links', $new_card_id, $lexical_chunk_tag_ids, $user_id);
+        syncSentenceSyntax($pdo, $user_id, $new_card_id, $sentenceSyntax);
     }
 
     $createdCount = count($created_card_ids);
@@ -6032,7 +6095,8 @@ elseif ($action === 'update_card') {
     $info_type = sanitizeInfoType($input['info_type'] ?? 2);
     $dynamic_text_type = sanitizeDynamicTextType($input['dynamic_text_type'] ?? 'none');
     $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
-    $id_frequencia_informacional = validateFrequenciaInformacionalId($pdo, $user_id, $input['id_frequencia_informacional'] ?? null);
+    $sentenceSyntax = sanitizeSentenceSyntax($pdo, $user_id, $input['sentence_syntax'] ?? null);
+    $id_frequencia_informacional = $sentenceSyntax[0]['frequency_id']; // compatibilidade com filtros antigos
     $status_informacional = sanitizeStatusInformacional($input['status_informacional'] ?? 0);
     $dynamic_text_type_id = dynamicTextTypeToInt($dynamic_text_type);
 
@@ -6090,6 +6154,7 @@ elseif ($action === 'update_card') {
         syncCardTagLinks($pdo, 'lexical_chunks_links', $card_id, $lexical_chunk_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'words_links', $card_id, [], $user_id);
         syncCardIdiomaLinks($pdo, $card_id, [], [], $user_id);
+        syncSentenceSyntax($pdo, $user_id, $card_id, $sentenceSyntax);
         echo json_encode(['status' => 'success', 'message' => 'Card atualizado.']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar card.']);
