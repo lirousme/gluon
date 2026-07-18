@@ -2011,7 +2011,7 @@ const app = {
     if (!sentence_syntax.every(s => Number(s.id_frequencia_informacional || 0) > 0)) return this.setStatus('Selecione uma frequência informacional para todas as frases.', 'error');
     if (!sentence_syntax.every(s => Array.isArray(s.tags?.subject) && s.tags.subject.length)) return this.setStatus('Selecione ao menos 1 tag-sujeito para todas as frases.', 'error');
     if (!sentence_syntax.every(s => Number(s.id_frequencia_informacional) !== 1 || ((s.tags?.objectIsolated || []).length && (s.tags?.objectCompound || []).length))) return this.setStatus('Na frequência 1, selecione tags de objeto isolado e objeto composto para cada frase.', 'error');
-    if (!sentence_syntax.every(s => Number(s.id_frequencia_informacional) !== 2 || (s.tags?.objectCompound || s.tags?.object || []).length)) return this.setStatus('Na frequência 2, selecione ao menos uma tag de objeto para cada frase.', 'error');
+    if (!sentence_syntax.every(s => Number(s.id_frequencia_informacional) !== 2 || (s.tags?.objectCompound || []).length || (s.tags?.object || []).length)) return this.setStatus('Na frequência 2, selecione ao menos uma tag de objeto para cada frase.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
