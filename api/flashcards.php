@@ -1070,9 +1070,17 @@ function fetchFlashcardSentenceSyntax(PDO $pdo, int $cardId, int $userId): array
         foreach ($map as $key => [$table, $tipo]) {
             if (!$pdo->query('SHOW TABLES LIKE ' . $pdo->quote($table))->fetchColumn()) continue;
             $hasTipo = (bool)$pdo->query("SHOW COLUMNS FROM {$table} LIKE 'tipo_elemento'")->fetch(PDO::FETCH_ASSOC);
-            $sql = "SELECT tag_id FROM {$table} WHERE flashcard_id = ? AND id_frase = ?" . ($hasTipo && $tipo !== null ? ' AND tipo_elemento = ?' : '');
+            $sql = "SELECT tag_id FROM {$table} WHERE flashcard_id = ? AND id_frase = ?";
+            $params = [$cardId, (int)$sentence['id']];
+            if ($hasTipo) {
+                if ($tipo !== null) {
+                    $sql .= ' AND tipo_elemento = ?';
+                    $params[] = $tipo;
+                } elseif ($table === 'objects_links') {
+                    $sql .= " AND (tipo_elemento = 'object' OR tipo_elemento IS NULL OR tipo_elemento = '')";
+                }
+            }
             $q = $pdo->prepare($sql);
-            $params = [$cardId, (int)$sentence['id']]; if ($hasTipo && $tipo !== null) $params[] = $tipo;
             $q->execute($params);
             $ids = array_map('intval', $q->fetchAll(PDO::FETCH_COLUMN) ?: []);
             if ($ids) $sentence['tags'][$key] = $ids;
