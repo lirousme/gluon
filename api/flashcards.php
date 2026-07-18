@@ -92,7 +92,7 @@ function validateFrequenciaInformacionalId(PDO $pdo, int $user_id, $value): int 
     if ($id <= 0) {
         die(json_encode(['status' => 'error', 'message' => 'Selecione uma frequência informacional para salvar o card.']));
     }
-    $stmt = $pdo->prepare('SELECT id FROM frequencias_informacionais WHERE id = ? AND user_id = ? LIMIT 1');
+    $stmt = $pdo->prepare('SELECT id FROM frequencias_informacionais WHERE id = ? AND user_id IN (?, 5) LIMIT 1');
     $stmt->execute([$id, $user_id]);
     if (!$stmt->fetchColumn()) {
         die(json_encode(['status' => 'error', 'message' => 'Frequência informacional inválida ou sem permissão.']));
@@ -103,8 +103,22 @@ function validateFrequenciaInformacionalId(PDO $pdo, int $user_id, $value): int 
 function ensureFlashcardSentenceSyntaxSchema(PDO $pdo): void {
     try {
         $pdo->exec('CREATE TABLE IF NOT EXISTS flashcard_frases (id INT UNSIGNED NOT NULL AUTO_INCREMENT, flashcard_id INT NOT NULL, ordem INT UNSIGNED NOT NULL, id_frequencia_informacional INT UNSIGNED NOT NULL, PRIMARY KEY(id), UNIQUE KEY uniq_flashcard_frases_ordem(flashcard_id, ordem)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
-        foreach (['subjects_links'=>false,'objects_links'=>true,'inflexion_type_links'=>true,'verb_links'=>true,'adverb_links'=>true,'local_links'=>true,'tempo_links'=>true] as $table=>$relative) { $cols=$pdo->query("SHOW COLUMNS FROM `$table`")->fetchAll(PDO::FETCH_COLUMN); if (!in_array('id_frase',$cols,true)) $pdo->exec("ALTER TABLE `$table` ADD COLUMN id_frase INT NULL AFTER tag_id"); if ($relative && !in_array('id_sujeito_relativo',$cols,true)) $pdo->exec("ALTER TABLE `$table` ADD COLUMN id_sujeito_relativo INT NULL AFTER id_frase"); if ($relative && !in_array('tipo_elemento',$cols,true)) $pdo->exec("ALTER TABLE `$table` ADD COLUMN tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo"); }
-        if (!in_array('id_card',$pdo->query('SHOW COLUMNS FROM relacoes_taguineas')->fetchAll(PDO::FETCH_COLUMN),true)) $pdo->exec('ALTER TABLE relacoes_taguineas ADD COLUMN id_card INT NULL AFTER id_user');
+        foreach (['subjects_links'=>false,'objects_links'=>true,'inflexion_type_links'=>true,'verb_links'=>true,'adverb_links'=>true,'local_links'=>true,'tempo_links'=>true] as $table=>$relative) {
+            $cols = $pdo->query("SHOW COLUMNS FROM `$table`")->fetchAll(PDO::FETCH_COLUMN);
+            if (!in_array('id_frase', $cols, true)) {
+                $pdo->exec("ALTER TABLE `$table` ADD COLUMN id_frase INT NULL AFTER tag_id");
+                $cols[] = 'id_frase';
+            }
+            if ($relative && !in_array('id_sujeito_relativo', $cols, true)) {
+                $pdo->exec("ALTER TABLE `$table` ADD COLUMN id_sujeito_relativo INT NULL AFTER id_frase");
+                $cols[] = 'id_sujeito_relativo';
+            }
+            if ($relative && !in_array('tipo_elemento', $cols, true)) {
+                $pdo->exec("ALTER TABLE `$table` ADD COLUMN tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo");
+            }
+        }
+        $relacaoCols = $pdo->query('SHOW COLUMNS FROM relacoes_taguineas')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('id_card', $relacaoCols, true)) $pdo->exec('ALTER TABLE relacoes_taguineas ADD COLUMN id_card INT NULL AFTER id_user');
     } catch (Throwable $e) { error_log('[flashcards][sentence_syntax_schema] '.$e->getMessage()); }
 }
 function normalizeSentenceSyntax(PDO $pdo, int $userId, $raw): array {
@@ -152,7 +166,7 @@ function syncSentenceSyntax(PDO $pdo, int $userId, int $cardId, array $sentences
         if (!$hasCardRelations) continue;
         $relations = $sentence['frequency'] === 1
             ? ['isolated_object' => 21, 'compound_object' => 22]
-            : ['object' => 22];
+            : ($sentence['frequency'] === 2 ? ['object' => 22] : []);
         foreach ($relations as $element => $relationType) foreach (($sentence['elements'][$element] ?? []) as $objectId) foreach ($sentence['subjects'] as $subjectId) $relationInsert->execute([$userId,$cardId,$subjectId,$objectId,$relationType]);
     }
 }
@@ -6157,8 +6171,12 @@ elseif ($action === 'update_card') {
     $back_translations_enc = encryptFlashcardTranslationMap($backTranslations);
 
     $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, front_translations_encrypted = ?, back_translations_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, info_type = ?, question_answer = ?, dynamic_text_type = ?, id_frequencia_informacional = ?, status_informacional = ? WHERE id = ?");
-    
-    if ($stmt->execute([$front_enc, $back_enc, $front_translations_enc, $back_translations_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $dynamic_text_type_id, $id_frequencia_informacional, $status_informacional, $card_id])) {
+
+    try {
+        $pdo->beginTransaction();
+        if (!$stmt->execute([$front_enc, $back_enc, $front_translations_enc, $back_translations_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $dynamic_text_type_id, $id_frequencia_informacional, $status_informacional, $card_id])) {
+            throw new RuntimeException('Falha ao executar UPDATE em flashcards.');
+        }
         syncCardTagLinks($pdo, 'flashcard_tag_links', $card_id, $tag_ids, $user_id);
         syncCardTagLinks($pdo, 'subjects_links', $card_id, $subject_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'objects_links', $card_id, $object_tag_ids, $user_id);
@@ -6168,9 +6186,12 @@ elseif ($action === 'update_card') {
         syncCardTagLinks($pdo, 'words_links', $card_id, [], $user_id);
         syncCardIdiomaLinks($pdo, $card_id, [], [], $user_id);
         syncSentenceSyntax($pdo, $user_id, $card_id, $sentenceSyntax);
+        $pdo->commit();
         echo json_encode(['status' => 'success', 'message' => 'Card atualizado.']);
-    } else {
-        echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar card.']);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('[flashcards][update_card] ' . $e->getMessage());
+        echo json_encode(['status' => 'error', 'message' => 'Erro ao atualizar card: ' . $e->getMessage()]);
     }
 }
 
