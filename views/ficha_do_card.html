@@ -1354,6 +1354,7 @@ const app = {
     const config = this.getPanelConfig(panel);
     const el = document.getElementById(config.selectorId);
     const currentSelected = selectedIds ?? this.getSelectedTagIds(panel);
+    if (!el) return;
     if (!this.availableTags.length) { el.innerHTML = '<span class="text-xs text-slate-400">Sem tags cadastradas.</span>'; return; }
     const visibleTags = this.getVisibleTags();
     if (!config.searchQuery) {
@@ -1376,6 +1377,10 @@ const app = {
       }).join('');
       el.querySelectorAll('[data-tag-id]').forEach(btn => btn.onclick = () => this.toggleTagSelection(panel, Number(btn.dataset.tagId)));
       el.querySelectorAll('[data-edit-tag-id]').forEach(btn => btn.onclick = () => this.openEditTagModal(Number(btn.dataset.editTagId)));
+      return;
+    }
+    if (!config.searchQuery || config.searchQuery.length < 1) {
+      el.innerHTML = '<span class="text-xs text-slate-400">Digite para buscar tags.</span>';
       return;
     }
     const filtered = visibleTags.filter(t =>
