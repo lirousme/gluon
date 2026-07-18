@@ -569,6 +569,7 @@ const app = {
   sentenceSyntax: [],
   activeSentenceIndex: 0,
   activeSyntacticPanel: 'subject',
+  activeSyntacticKey: 'subject',
   getLanguageByKey(key) {
     return FLASHCARD_TRANSLATION_LANGUAGES.find(lang => lang.key === key) || FLASHCARD_TRANSLATION_LANGUAGES[0];
   },
@@ -1181,17 +1182,18 @@ const app = {
       const input = document.getElementById(config.selectedInputId);
       if (input) input.value = '[]';
     });
-    const key = syntacticElementSelect?.value || 'subject';
+    const key = syntacticElementSelect?.value || this.activeSyntacticKey || 'subject';
     const option = this.getSyntacticOptions(sentence?.id_frequencia_informacional).find(item => item.value === key) || { value: 'subject' };
     const panel = option.panel || option.value;
+    this.activeSyntacticKey = option.value;
     this.activeSyntacticPanel = panel;
     const input = document.getElementById(this.getPanelConfig(panel).selectedInputId);
-    if (input) input.value = JSON.stringify((sentence.tags[key] || []).map(Number).filter(Boolean));
+    if (input) input.value = JSON.stringify((sentence.tags[option.value] || []).map(Number).filter(Boolean));
   },
   persistActivePanelToSentence() {
     const sentence = this.getCurrentSentence();
     if (!sentence || !window.syntacticElementSelect) return;
-    const key = syntacticElementSelect.value || 'subject';
+    const key = this.activeSyntacticKey || syntacticElementSelect.value || 'subject';
     sentence.tags[key] = this.getSelectedTagIds(this.activeSyntacticPanel || 'subject');
   },
   renderSentenceControls() {
@@ -1211,12 +1213,14 @@ const app = {
     const current = options.some(o => o.value === syntacticElementSelect?.value) ? syntacticElementSelect.value : options[0].value;
     syntacticElementSelect.innerHTML = options.map(o => `<option value="${o.value}">${this.escapeHTML(o.label)}</option>`).join('');
     syntacticElementSelect.value = current;
+    this.activeSyntacticKey = current;
     this.syncPanelInputsFromSentence();
     this.showOnlyActiveTagPanel();
   },
   showOnlyActiveTagPanel() {
     const option = this.getSyntacticOptions(this.getCurrentSentence()?.id_frequencia_informacional).find(item => item.value === syntacticElementSelect?.value) || { value: 'subject' };
     const panel = option.panel || option.value;
+    this.activeSyntacticKey = option.value;
     this.activeSyntacticPanel = panel;
     ['SubjectTagsPanel', 'ObjectTagsPanel', 'LexicalChunkTagsPanel'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
     const config = this.getPanelConfig(panel);
@@ -2041,7 +2045,7 @@ btnDeleteCard.onclick = () => app.deleteCard();
 frequenciaInformacionalSelect.onchange = () => app.updateInformationalFrequencyTagPanelTitles();
 sentenceCountInput.oninput = () => { app.persistActivePanelToSentence(); app.ensureSentenceSyntaxState(sentenceCountInput.value); app.renderSentenceControls(); };
 sentenceSelect.onchange = () => { app.persistActivePanelToSentence(); app.activeSentenceIndex = Number(sentenceSelect.value || 0); app.renderSentenceControls(); };
-syntacticElementSelect.onchange = () => { app.persistActivePanelToSentence(); app.renderSyntacticElementSelect(); };
+syntacticElementSelect.onchange = () => { app.persistActivePanelToSentence(); app.activeSyntacticKey = syntacticElementSelect.value || 'subject'; app.renderSyntacticElementSelect(); };
 relacaoAcaoSelect.onchange = () => app.updateRelacaoAcaoPanel();
 subjectTagSearchInput.oninput = (e) => app.handleTagSearch('subject', e.target.value);
   objectTagSearchInput.oninput = (e) => app.handleTagSearch('object', e.target.value);
