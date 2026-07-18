@@ -960,6 +960,7 @@ function ensureFlashcardSentenceSyntaxSchema(PDO $pdo): void
             'adverb_links' => ['id_frase INT NULL AFTER tag_id', 'id_sujeito_relativo INT NULL AFTER id_frase', 'tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo'],
             'local_links' => ['id_frase INT NULL AFTER tag_id', 'id_sujeito_relativo INT NULL AFTER id_frase', 'tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo'],
             'tempo_links' => ['id_frase INT NULL AFTER tag_id', 'id_sujeito_relativo INT NULL AFTER id_frase', 'tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo'],
+            'lexical_chunks_links' => ['id_frase INT NULL AFTER tag_id'],
         ];
         foreach ($linkColumns as $table => $columns) {
             $exists = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($table))->fetchColumn();
@@ -978,6 +979,107 @@ function ensureFlashcardSentenceSyntaxSchema(PDO $pdo): void
     } catch (Throwable $e) {
         error_log('[flashcards][sentence_syntax_schema] ' . $e->getMessage());
     }
+}
+
+function sanitizeSentenceSyntaxPayload(array $input): array {
+    $sentences = $input['sentence_syntax'] ?? [];
+    if (!is_array($sentences) || empty($sentences)) return [];
+    $result = [];
+    foreach ($sentences as $index => $sentence) {
+        if (!is_array($sentence)) continue;
+        $tags = is_array($sentence['tags'] ?? null) ? $sentence['tags'] : [];
+        $cleanTags = [];
+        foreach ($tags as $key => $ids) {
+            if (!is_array($ids)) continue;
+            $cleanTags[(string)$key] = sanitizeTagIds($ids);
+        }
+        $result[] = [
+            'ordem' => max(1, (int)($sentence['ordem'] ?? ($index + 1))),
+            'id_frequencia_informacional' => isset($sentence['id_frequencia_informacional']) ? (int)$sentence['id_frequencia_informacional'] : null,
+            'tags' => $cleanTags,
+        ];
+    }
+    return $result;
+}
+
+function syncFlashcardSentenceSyntax(PDO $pdo, int $cardId, int $userId, array $sentences): void {
+    ensureFlashcardSentenceSyntaxSchema($pdo);
+    if (empty($sentences)) return;
+    $linkMap = [
+        'subject' => ['subjects_links', null],
+        'object' => ['objects_links', 'object'],
+        'objectIsolated' => ['objects_links', 'isolated'],
+        'objectCompound' => ['objects_links', 'compound'],
+        'inflexionType' => ['inflexion_type_links', 'inflexion_type'],
+        'verb' => ['verb_links', 'verb'],
+        'adverb' => ['adverb_links', 'adverb'],
+        'local' => ['local_links', 'local'],
+        'tempo' => ['tempo_links', 'tempo'],
+        'lexicalChunk' => ['lexical_chunks_links', null],
+    ];
+    $pdo->prepare('DELETE FROM flashcard_frases WHERE flashcard_id = ?')->execute([$cardId]);
+    foreach (array_unique(array_column($linkMap, 0)) as $table) {
+        if (!$pdo->query('SHOW TABLES LIKE ' . $pdo->quote($table))->fetchColumn()) continue;
+        $pdo->prepare("DELETE FROM {$table} WHERE flashcard_id = ?")->execute([$cardId]);
+    }
+    $pdo->prepare('DELETE FROM relacoes_taguineas WHERE id_user = ? AND id_card = ? AND tipo_de_relacao IN (21,22)')->execute([$userId, $cardId]);
+
+    $insertSentence = $pdo->prepare('INSERT INTO flashcard_frases (flashcard_id, ordem, id_frequencia_informacional) VALUES (?, ?, ?)');
+    $insertRelation = $pdo->prepare('INSERT INTO relacoes_taguineas (id_user, id_card, id_tag_child, id_tag_mother, tipo_de_relacao, ordem) VALUES (?, ?, ?, ?, ?, 0)');
+    foreach ($sentences as $sentence) {
+        $freqId = !empty($sentence['id_frequencia_informacional']) ? (int)$sentence['id_frequencia_informacional'] : null;
+        $insertSentence->execute([$cardId, (int)$sentence['ordem'], $freqId]);
+        $sentenceId = (int)$pdo->lastInsertId();
+        $tags = $sentence['tags'] ?? [];
+        $subjectIds = sanitizeTagIds($tags['subject'] ?? []);
+        foreach ($linkMap as $key => [$table, $tipo]) {
+            $ids = sanitizeTagIds($tags[$key] ?? []);
+            if (empty($ids) || !$pdo->query('SHOW TABLES LIKE ' . $pdo->quote($table))->fetchColumn()) continue;
+            $hasRelative = (bool)$pdo->query("SHOW COLUMNS FROM {$table} LIKE 'id_sujeito_relativo'")->fetch(PDO::FETCH_ASSOC);
+            $hasTipo = (bool)$pdo->query("SHOW COLUMNS FROM {$table} LIKE 'tipo_elemento'")->fetch(PDO::FETCH_ASSOC);
+            foreach ($ids as $tagId) {
+                if ($hasRelative && $hasTipo) {
+                    $stmt = $pdo->prepare("INSERT IGNORE INTO {$table} (flashcard_id, tag_id, id_frase, id_sujeito_relativo, tipo_elemento) SELECT ?, t.id, ?, ?, ? FROM flashcard_tags t WHERE t.id = ? AND t.user_id IN (?, 5)");
+                    $stmt->execute([$cardId, $sentenceId, $subjectIds[0] ?? null, $tipo, $tagId, $userId]);
+                } else {
+                    $stmt = $pdo->prepare("INSERT IGNORE INTO {$table} (flashcard_id, tag_id, id_frase) SELECT ?, t.id, ? FROM flashcard_tags t WHERE t.id = ? AND t.user_id IN (?, 5)");
+                    $stmt->execute([$cardId, $sentenceId, $tagId, $userId]);
+                }
+            }
+        }
+        if ($freqId === 1 || $freqId === 2) {
+            $relationKeys = $freqId === 1 ? ['objectIsolated' => 21, 'objectCompound' => 22] : ['objectCompound' => 22];
+            foreach ($subjectIds as $subjectId) {
+                foreach ($relationKeys as $key => $relationType) {
+                    foreach (sanitizeTagIds($tags[$key] ?? []) as $childId) $insertRelation->execute([$userId, $cardId, $childId, $subjectId, $relationType]);
+                }
+            }
+        }
+    }
+}
+
+function fetchFlashcardSentenceSyntax(PDO $pdo, int $cardId, int $userId): array {
+    if (!$pdo->query("SHOW TABLES LIKE 'flashcard_frases'")->fetchColumn()) return [];
+    $stmt = $pdo->prepare('SELECT id, ordem, id_frequencia_informacional FROM flashcard_frases WHERE flashcard_id = ? ORDER BY ordem ASC');
+    $stmt->execute([$cardId]);
+    $sentences = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    if (empty($sentences)) return [];
+    $map = ['subject'=>['subjects_links',null], 'object'=>['objects_links','object'], 'objectIsolated'=>['objects_links','isolated'], 'objectCompound'=>['objects_links','compound'], 'inflexionType'=>['inflexion_type_links','inflexion_type'], 'verb'=>['verb_links','verb'], 'adverb'=>['adverb_links','adverb'], 'local'=>['local_links','local'], 'tempo'=>['tempo_links','tempo'], 'lexicalChunk'=>['lexical_chunks_links',null]];
+    foreach ($sentences as &$sentence) {
+        $sentence['tags'] = [];
+        foreach ($map as $key => [$table, $tipo]) {
+            if (!$pdo->query('SHOW TABLES LIKE ' . $pdo->quote($table))->fetchColumn()) continue;
+            $hasTipo = (bool)$pdo->query("SHOW COLUMNS FROM {$table} LIKE 'tipo_elemento'")->fetch(PDO::FETCH_ASSOC);
+            $sql = "SELECT tag_id FROM {$table} WHERE flashcard_id = ? AND id_frase = ?" . ($hasTipo && $tipo !== null ? ' AND tipo_elemento = ?' : '');
+            $q = $pdo->prepare($sql);
+            $params = [$cardId, (int)$sentence['id']]; if ($hasTipo && $tipo !== null) $params[] = $tipo;
+            $q->execute($params);
+            $ids = array_map('intval', $q->fetchAll(PDO::FETCH_COLUMN) ?: []);
+            if ($ids) $sentence['tags'][$key] = $ids;
+        }
+        $sentence = ['ordem'=>(int)$sentence['ordem'], 'id_frequencia_informacional'=>!empty($sentence['id_frequencia_informacional'])?(int)$sentence['id_frequencia_informacional']:null, 'tags'=>$sentence['tags']];
+    }
+    return $sentences;
 }
 
 function ensureFlashcardsPublicToggleSchema(PDO $pdo): void
@@ -5882,6 +5984,7 @@ elseif ($action === 'add_single') {
     $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
     $id_frequencia_informacional = validateFrequenciaInformacionalId($pdo, $user_id, $input['id_frequencia_informacional'] ?? null);
     $status_informacional = sanitizeStatusInformacional($input['status_informacional'] ?? 0);
+    $sentence_syntax = sanitizeSentenceSyntaxPayload($input);
 
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
@@ -5964,6 +6067,7 @@ elseif ($action === 'add_single') {
         syncCardTagLinks($pdo, 'subjects_links', $new_card_id, $cardSubjectTagIds, $user_id);
         syncCardTagLinks($pdo, 'objects_links', $new_card_id, $object_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'lexical_chunks_links', $new_card_id, $lexical_chunk_tag_ids, $user_id);
+        syncFlashcardSentenceSyntax($pdo, $new_card_id, $user_id, $sentence_syntax);
     }
 
     $createdCount = count($created_card_ids);
@@ -6032,7 +6136,8 @@ elseif ($action === 'get_card_for_edit') {
             'subject_tags' => $subjectTagsByCard[$card_id] ?? [],
             'object_tags' => $objectTagsByCard[$card_id] ?? [],
             'lexical_chunks_tags' => $lexicalChunksTagsByCard[$card_id] ?? [],
-            'relacao_acao' => getCardRelacaoAcao($pdo, $user_id, $card_id)
+            'relacao_acao' => getCardRelacaoAcao($pdo, $user_id, $card_id),
+            'sentence_syntax' => fetchFlashcardSentenceSyntax($pdo, $card_id, $user_id)
         ]
     ]);
 }
@@ -6086,6 +6191,7 @@ elseif ($action === 'update_card') {
     $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
     $id_frequencia_informacional = validateFrequenciaInformacionalId($pdo, $user_id, $input['id_frequencia_informacional'] ?? null);
     $status_informacional = sanitizeStatusInformacional($input['status_informacional'] ?? 0);
+    $sentence_syntax = sanitizeSentenceSyntaxPayload($input);
     $dynamic_text_type_id = dynamicTextTypeToInt($dynamic_text_type);
 
     $has_front = !empty($front) || !empty($image_front);
@@ -6140,6 +6246,7 @@ elseif ($action === 'update_card') {
         syncCardTagLinks($pdo, 'tipo_frasal_links', $card_id, [], $user_id);
         syncCardTagLinks($pdo, 'tense_links', $card_id, [], $user_id);
         syncCardTagLinks($pdo, 'lexical_chunks_links', $card_id, $lexical_chunk_tag_ids, $user_id);
+        syncFlashcardSentenceSyntax($pdo, $card_id, $user_id, $sentence_syntax);
         syncCardTagLinks($pdo, 'words_links', $card_id, [], $user_id);
         syncCardIdiomaLinks($pdo, $card_id, [], [], $user_id);
         echo json_encode(['status' => 'success', 'message' => 'Card atualizado.']);

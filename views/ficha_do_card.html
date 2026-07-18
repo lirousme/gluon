@@ -107,6 +107,11 @@
       <input type="hidden" id="selectedSubjectTagIds" value="[]">
       <input type="hidden" id="selectedObjectTagIds" value="[]">
       <input type="hidden" id="selectedLexicalChunkTagIds" value="[]">
+      <input type="hidden" id="selectedVerbTagIds" value="[]">
+      <input type="hidden" id="selectedAdverbTagIds" value="[]">
+      <input type="hidden" id="selectedLocalTagIds" value="[]">
+      <input type="hidden" id="selectedTempoTagIds" value="[]">
+      <input type="hidden" id="selectedInflexionTypeTagIds" value="[]">
 
       <div class="grid grid-cols-4 gap-2 border-b border-slate-700 pb-3 sm:flex sm:items-center" aria-label="Abas da ficha do card">
         <button type="button" id="tabFrontBtn" class="inline-flex items-center justify-center px-3 py-2 rounded-lg text-sm border border-blue-400 bg-blue-500/20 text-blue-200" title="Texto da frente" aria-label="Texto da frente">
@@ -210,6 +215,17 @@
         </div>
       </section>
 
+      <section id="SentenceSyntaxPanel" class="pt-3 border-t border-slate-700 space-y-3">
+        <div>
+          <label for="sentenceCountInput" class="block text-xs font-semibold uppercase tracking-wide text-emerald-200">Quantidade de frases ou sujeitos</label>
+          <input id="sentenceCountInput" type="number" min="1" step="1" value="1" class="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white">
+        </div>
+        <div>
+          <label for="sentenceSelect" class="block text-xs font-semibold uppercase tracking-wide text-emerald-200">Frase ou sujeito</label>
+          <select id="sentenceSelect" class="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white"></select>
+        </div>
+      </section>
+
       <section id="SubjectTagsPanel" class="pt-3 border-t border-slate-700 space-y-2">
         <label id="SubjectTagsPanelTitle" class="block text-xs font-semibold uppercase tracking-wide text-emerald-200">Subject</label>
         <div id="subjectTagSelector" class="flex flex-wrap gap-1.5 bg-slate-900/70 border border-slate-700 rounded-lg p-2 min-h-[44px]"></div>
@@ -236,7 +252,12 @@
         <select id="frequenciaInformacionalSelect" required class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white">
           <option value="">Carregando frequências...</option>
         </select>
-        <p class="text-xs text-slate-400">Todo card deve estar vinculado a uma frequência informacional.</p>
+        <p class="text-xs text-slate-400">Cada frase pode ter uma frequência informacional própria.</p>
+      </section>
+
+      <section id="SyntacticElementPanel" class="pt-3 border-t border-slate-700 space-y-2">
+        <label for="syntacticElementSelect" class="block text-xs font-semibold uppercase tracking-wide text-indigo-200">Elemento sintático</label>
+        <select id="syntacticElementSelect" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white"></select>
       </section>
 
 
@@ -536,10 +557,18 @@ const app = {
   currentCardPrivateDirectoryId: null,
   currentCardIsPublic: false,
   tagPanels: {
-    subject: { selectedInputId: 'selectedSubjectTagIds', selectorId: 'subjectTagSelector', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' },
-    object: { selectedInputId: 'selectedObjectTagIds', selectorId: 'objectTagSelector', activeClass: 'bg-sky-500/20 text-sky-200 border-sky-400', searchQuery: '' },
-    lexicalChunk: { selectedInputId: 'selectedLexicalChunkTagIds', selectorId: 'lexicalChunkTagSelector', activeClass: 'bg-cyan-500/20 text-cyan-200 border-cyan-400', searchQuery: '' }
+    subject: { selectedInputId: 'selectedSubjectTagIds', selectorId: 'subjectTagSelector', panelId: 'SubjectTagsPanel', titleId: 'SubjectTagsPanelTitle', activeClass: 'bg-emerald-500/20 text-emerald-200 border-emerald-400', searchQuery: '' },
+    object: { selectedInputId: 'selectedObjectTagIds', selectorId: 'objectTagSelector', panelId: 'ObjectTagsPanel', titleId: 'ObjectTagsPanelTitle', activeClass: 'bg-sky-500/20 text-sky-200 border-sky-400', searchQuery: '' },
+    lexicalChunk: { selectedInputId: 'selectedLexicalChunkTagIds', selectorId: 'lexicalChunkTagSelector', panelId: 'LexicalChunkTagsPanel', titleId: 'LexicalChunkTagsPanelTitle', activeClass: 'bg-cyan-500/20 text-cyan-200 border-cyan-400', searchQuery: '' },
+    verb: { selectedInputId: 'selectedVerbTagIds', selectorId: 'lexicalChunkTagSelector', panelId: 'LexicalChunkTagsPanel', titleId: 'LexicalChunkTagsPanelTitle', activeClass: 'bg-cyan-500/20 text-cyan-200 border-cyan-400', searchQuery: '' },
+    adverb: { selectedInputId: 'selectedAdverbTagIds', selectorId: 'lexicalChunkTagSelector', panelId: 'LexicalChunkTagsPanel', titleId: 'LexicalChunkTagsPanelTitle', activeClass: 'bg-cyan-500/20 text-cyan-200 border-cyan-400', searchQuery: '' },
+    local: { selectedInputId: 'selectedLocalTagIds', selectorId: 'lexicalChunkTagSelector', panelId: 'LexicalChunkTagsPanel', titleId: 'LexicalChunkTagsPanelTitle', activeClass: 'bg-cyan-500/20 text-cyan-200 border-cyan-400', searchQuery: '' },
+    tempo: { selectedInputId: 'selectedTempoTagIds', selectorId: 'lexicalChunkTagSelector', panelId: 'LexicalChunkTagsPanel', titleId: 'LexicalChunkTagsPanelTitle', activeClass: 'bg-cyan-500/20 text-cyan-200 border-cyan-400', searchQuery: '' },
+    inflexionType: { selectedInputId: 'selectedInflexionTypeTagIds', selectorId: 'lexicalChunkTagSelector', panelId: 'LexicalChunkTagsPanel', titleId: 'LexicalChunkTagsPanelTitle', activeClass: 'bg-cyan-500/20 text-cyan-200 border-cyan-400', searchQuery: '' }
   },
+  sentenceSyntax: [],
+  activeSentenceIndex: 0,
+  activeSyntacticPanel: 'subject',
   getLanguageByKey(key) {
     return FLASHCARD_TRANSLATION_LANGUAGES.find(lang => lang.key === key) || FLASHCARD_TRANSLATION_LANGUAGES[0];
   },
@@ -1115,15 +1144,99 @@ const app = {
     this.availableTags = res?.data || [];
     this.renderAllTagSelectors();
   },
+
+  getSyntacticOptions(freqId) {
+    const common = [
+      { value: 'subject', label: 'Sujeito', table: 'subjects_links' },
+      { value: 'verb', label: 'Verbo ou locução verbal', table: 'verb_links' },
+      { value: 'adverb', label: 'Advérbio ou locução adverbial', table: 'adverb_links' },
+      { value: 'object', label: 'Objeto', table: 'objects_links', tipo: 'object' },
+      { value: 'local', label: 'Local', table: 'local_links' },
+      { value: 'tempo', label: 'Tempo', table: 'tempo_links' }
+    ];
+    if (Number(freqId) === 1) return [
+      { value: 'subject', label: 'Sujeito', table: 'subjects_links' },
+      { value: 'objectCompound', panel: 'object', label: 'Objeto composto', table: 'objects_links', tipo: 'compound' },
+      { value: 'inflexionType', label: 'Tipo da flexão', table: 'inflexion_type_links' },
+      { value: 'objectIsolated', panel: 'object', label: 'Objeto isolado', table: 'objects_links', tipo: 'isolated' }
+    ];
+    if (Number(freqId) === 2) return common;
+    if (Number(freqId) === 3) return common;
+    return [{ value: 'subject', label: 'Sujeito', table: 'subjects_links' }];
+  },
+  getCurrentSentence() {
+    this.ensureSentenceSyntaxState();
+    return this.sentenceSyntax[this.activeSentenceIndex] || this.sentenceSyntax[0];
+  },
+  ensureSentenceSyntaxState(count = null) {
+    const requested = Math.max(1, Number(count ?? sentenceCountInput?.value ?? this.sentenceSyntax.length ?? 1) || 1);
+    while (this.sentenceSyntax.length < requested) this.sentenceSyntax.push({ ordem: this.sentenceSyntax.length + 1, id_frequencia_informacional: null, tags: {} });
+    this.sentenceSyntax = this.sentenceSyntax.slice(0, requested);
+    this.sentenceSyntax.forEach((sentence, index) => { sentence.ordem = index + 1; sentence.tags ||= {}; });
+    this.activeSentenceIndex = Math.min(this.activeSentenceIndex, this.sentenceSyntax.length - 1);
+  },
+  syncPanelInputsFromSentence() {
+    const sentence = this.getCurrentSentence();
+    Object.values(this.tagPanels).forEach(config => {
+      const input = document.getElementById(config.selectedInputId);
+      if (input) input.value = '[]';
+    });
+    const key = syntacticElementSelect?.value || 'subject';
+    const option = this.getSyntacticOptions(sentence?.id_frequencia_informacional).find(item => item.value === key) || { value: 'subject' };
+    const panel = option.panel || option.value;
+    this.activeSyntacticPanel = panel;
+    const input = document.getElementById(this.getPanelConfig(panel).selectedInputId);
+    if (input) input.value = JSON.stringify((sentence.tags[key] || []).map(Number).filter(Boolean));
+  },
+  persistActivePanelToSentence() {
+    const sentence = this.getCurrentSentence();
+    if (!sentence || !window.syntacticElementSelect) return;
+    const key = syntacticElementSelect.value || 'subject';
+    sentence.tags[key] = this.getSelectedTagIds(this.activeSyntacticPanel || 'subject');
+  },
+  renderSentenceControls() {
+    this.ensureSentenceSyntaxState();
+    if (sentenceCountInput) sentenceCountInput.value = String(this.sentenceSyntax.length || 1);
+    if (sentenceSelect) {
+      sentenceSelect.innerHTML = this.sentenceSyntax.map((_, i) => `<option value="${i}">Frase ${i + 1}</option>`).join('');
+      sentenceSelect.value = String(this.activeSentenceIndex);
+    }
+    const sentence = this.getCurrentSentence();
+    if (frequenciaInformacionalSelect) frequenciaInformacionalSelect.value = sentence?.id_frequencia_informacional ? String(sentence.id_frequencia_informacional) : '';
+    this.renderSyntacticElementSelect();
+  },
+  renderSyntacticElementSelect() {
+    const sentence = this.getCurrentSentence();
+    const options = this.getSyntacticOptions(sentence?.id_frequencia_informacional);
+    const current = options.some(o => o.value === syntacticElementSelect?.value) ? syntacticElementSelect.value : options[0].value;
+    syntacticElementSelect.innerHTML = options.map(o => `<option value="${o.value}">${this.escapeHTML(o.label)}</option>`).join('');
+    syntacticElementSelect.value = current;
+    this.syncPanelInputsFromSentence();
+    this.showOnlyActiveTagPanel();
+  },
+  showOnlyActiveTagPanel() {
+    const option = this.getSyntacticOptions(this.getCurrentSentence()?.id_frequencia_informacional).find(item => item.value === syntacticElementSelect?.value) || { value: 'subject' };
+    const panel = option.panel || option.value;
+    this.activeSyntacticPanel = panel;
+    ['SubjectTagsPanel', 'ObjectTagsPanel', 'LexicalChunkTagsPanel'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+    const config = this.getPanelConfig(panel);
+    document.getElementById(config.panelId)?.classList.remove('hidden');
+    const title = document.getElementById(config.titleId);
+    if (title) title.textContent = option.label;
+    this.renderTagSelector(panel);
+  },
+  collectSentenceSyntaxPayload() {
+    this.persistActivePanelToSentence();
+    return this.sentenceSyntax.map(sentence => ({
+      ordem: sentence.ordem,
+      id_frequencia_informacional: Number(sentence.id_frequencia_informacional || 0) || null,
+      tags: sentence.tags || {}
+    }));
+  },
   updateInformationalFrequencyTagPanelTitles() {
-    const subjectTitle = document.getElementById('SubjectTagsPanelTitle');
-    const objectTitle = document.getElementById('ObjectTagsPanelTitle');
-    const lexicalChunkTitle = document.getElementById('LexicalChunkTagsPanelTitle');
-    const lexicalChunkPanel = document.getElementById('LexicalChunkTagsPanel');
-    if (subjectTitle) subjectTitle.textContent = 'Subject';
-    if (objectTitle) objectTitle.textContent = 'Objects';
-    if (lexicalChunkTitle) lexicalChunkTitle.textContent = 'Lexical chunks (Flexões)';
-    if (lexicalChunkPanel) lexicalChunkPanel.classList.remove('hidden');
+    const sentence = this.getCurrentSentence();
+    if (sentence && window.frequenciaInformacionalSelect) sentence.id_frequencia_informacional = Number(frequenciaInformacionalSelect.value || 0) || null;
+    this.renderSyntacticElementSelect();
     this.updateRelacaoAcaoPanel();
   },
   updateRelacaoAcaoPanel() {
@@ -1316,7 +1429,8 @@ const app = {
   },
   setSelectedTagIds(panel, ids) {
     const normalizedIds = ids.map(Number).filter(Boolean);
-    document.getElementById(this.getPanelConfig(panel).selectedInputId).value = JSON.stringify(normalizedIds);
+    const input = document.getElementById(this.getPanelConfig(panel).selectedInputId);
+    if (input) input.value = JSON.stringify(normalizedIds);
     this.updateTagExpansionMode();
   },
   handleTagSearch(panel, query='') {
@@ -1349,7 +1463,7 @@ const app = {
     const b = parseInt(hex.slice(4, 6), 16);
     return `background: rgba(${r}, ${g}, ${b}, .25); border-color: rgba(${r}, ${g}, ${b}, .9);`;
   },
-  renderAllTagSelectors() { Object.keys(this.tagPanels).forEach(panel => this.renderTagSelector(panel)); },
+  renderAllTagSelectors() { this.showOnlyActiveTagPanel(); },
   renderTagSelector(panel = 'subject', selectedIds = null) {
     const config = this.getPanelConfig(panel);
     const el = document.getElementById(config.selectorId);
@@ -1409,6 +1523,7 @@ const app = {
     const config = this.getPanelConfig(panel);
     const ids = this.getSelectedTagIds(panel);
     this.setSelectedTagIds(panel, config.singleSelect ? (ids.includes(tagId) ? [] : [tagId]) : (ids.includes(tagId) ? ids.filter(id => id !== tagId) : [...ids, tagId]));
+    this.persistActivePanelToSentence();
     this.renderTagSelector(panel);
   },
   escapeHTML(str='') { return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[s])); },
@@ -1780,6 +1895,9 @@ const app = {
     this.setSelectedTagIds('subject', subjectTags);
     this.setSelectedTagIds('object', objectTags);
     this.setSelectedTagIds('lexicalChunk', lexicalChunkTags);
+    this.sentenceSyntax = Array.isArray(card.sentence_syntax) && card.sentence_syntax.length ? card.sentence_syntax : [{ ordem: 1, id_frequencia_informacional: card.id_frequencia_informacional || null, tags: { subject: subjectTags, object: objectTags, lexicalChunk: lexicalChunkTags } }];
+    this.activeSentenceIndex = 0;
+    this.renderSentenceControls();
     this.renderAllTagSelectors();
   },
   copyCurrentCardToNewSheet() {
@@ -1841,7 +1959,11 @@ const app = {
     let subject_tag_ids = this.getSelectedTagIds('subject');
     let object_tag_ids = this.getSelectedTagIds('object');
     let lexical_chunk_tag_ids = this.getSelectedTagIds('lexicalChunk');
-    const id_frequencia_informacional = Number(frequenciaInformacionalSelect.value || 0);
+    const sentence_syntax = this.collectSentenceSyntaxPayload();
+    subject_tag_ids = Array.from(new Set(sentence_syntax.flatMap(s => s.tags?.subject || []).concat(subject_tag_ids))).map(Number).filter(Boolean);
+    object_tag_ids = Array.from(new Set(sentence_syntax.flatMap(s => ['object','objectIsolated','objectCompound'].flatMap(k => s.tags?.[k] || [])).concat(object_tag_ids))).map(Number).filter(Boolean);
+    lexical_chunk_tag_ids = Array.from(new Set(sentence_syntax.flatMap(s => ['lexicalChunk','inflexionType','verb','adverb','local','tempo'].flatMap(k => s.tags?.[k] || [])).concat(lexical_chunk_tag_ids))).map(Number).filter(Boolean);
+    const id_frequencia_informacional = Number(sentence_syntax[0]?.id_frequencia_informacional || frequenciaInformacionalSelect.value || 0);
     const status_informacional = Number(statusInformacionalSelect?.value || 0);
     const isTagExpansion = this.isTagExpansionType();
     const generatedFront = isTagExpansion ? '' : front;
@@ -1850,7 +1972,10 @@ const app = {
       if (!backPlainText && !image_back) return this.setStatus('Preencha o verso do Tag Expansion com texto ou imagem.', 'error');
     } else if (!frontPlainText && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
     if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag na categoria Subject para salvar o card.', 'error');
-    if (!id_frequencia_informacional) return this.setStatus('Selecione uma frequência informacional para salvar o card.', 'error');
+    if (!sentence_syntax.every(s => Number(s.id_frequencia_informacional || 0) > 0)) return this.setStatus('Selecione uma frequência informacional para todas as frases.', 'error');
+    if (!sentence_syntax.every(s => Array.isArray(s.tags?.subject) && s.tags.subject.length)) return this.setStatus('Selecione ao menos 1 tag-sujeito para todas as frases.', 'error');
+    if (!sentence_syntax.every(s => Number(s.id_frequencia_informacional) !== 1 || ((s.tags?.objectIsolated || []).length && (s.tags?.objectCompound || []).length))) return this.setStatus('Na frequência 1, selecione tags de objeto isolado e objeto composto para cada frase.', 'error');
+    if (!sentence_syntax.every(s => Number(s.id_frequencia_informacional) !== 2 || (s.tags?.objectCompound || s.tags?.object || []).length)) return this.setStatus('Na frequência 2, selecione ao menos uma tag de objeto para cada frase.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
@@ -1858,7 +1983,7 @@ const app = {
       const question_answer = this.infoType === 2 ? this.questionAnswer : null;
       const front_translations = isTagExpansion ? {} : this.collectFlashcardTranslations('front');
       const back_translations = this.collectFlashcardTranslations('back');
-      const payload = { deck_id: this.deckId, front: generatedFront, back, front_translations, back_translations, image_front: isTagExpansion ? '' : image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, id_frequencia_informacional, status_informacional, info_type: this.infoType, question_answer, dynamic_text_type: isTagExpansion ? 'none' : dynamicTextType.value, return_to };
+      const payload = { deck_id: this.deckId, front: generatedFront, back, front_translations, back_translations, image_front: isTagExpansion ? '' : image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, id_frequencia_informacional, sentence_syntax, status_informacional, info_type: this.infoType, question_answer, dynamic_text_type: isTagExpansion ? 'none' : dynamicTextType.value, return_to };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');
@@ -1882,10 +2007,13 @@ btnInfoType.onclick = () => app.cycleInfoType();
 btnQuestionAnswer.onclick = () => app.toggleQuestionAnswer();
 btnDeleteCard.onclick = () => app.deleteCard();
 frequenciaInformacionalSelect.onchange = () => app.updateInformationalFrequencyTagPanelTitles();
+sentenceCountInput.oninput = () => { app.persistActivePanelToSentence(); app.ensureSentenceSyntaxState(sentenceCountInput.value); app.renderSentenceControls(); };
+sentenceSelect.onchange = () => { app.persistActivePanelToSentence(); app.activeSentenceIndex = Number(sentenceSelect.value || 0); app.renderSentenceControls(); };
+syntacticElementSelect.onchange = () => { app.persistActivePanelToSentence(); app.renderSyntacticElementSelect(); };
 relacaoAcaoSelect.onchange = () => app.updateRelacaoAcaoPanel();
 subjectTagSearchInput.oninput = (e) => app.handleTagSearch('subject', e.target.value);
   objectTagSearchInput.oninput = (e) => app.handleTagSearch('object', e.target.value);
-  lexicalChunkTagSearchInput.oninput = (e) => app.handleTagSearch('lexicalChunk', e.target.value);
+  lexicalChunkTagSearchInput.oninput = (e) => app.handleTagSearch(app.activeSyntacticPanel || 'lexicalChunk', e.target.value);
 cardForm.onsubmit = (e) => app.save(e);
 tagForm.onsubmit = (e) => app.createTag(e);
 editTagForm.onsubmit = (e) => app.updateTag(e);
@@ -1904,6 +2032,7 @@ document.addEventListener('keydown', (e) => {
   app.setQuestionAnswer(app.questionAnswer);
   await app.setPageTitleWithDirectoryName();
   app.setupFlashcardLanguageSelectors();
+  app.renderSentenceControls();
   await app.loadSessionUserId();
   await Promise.all([app.loadTags(), app.loadFrequenciasInformacionais()]);
   app.applyInitialSubjectTag();
