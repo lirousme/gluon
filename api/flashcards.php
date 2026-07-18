@@ -17,18 +17,20 @@ header('Expires: 0');
 header('Content-Type: application/json; charset=utf-8');
 
 set_exception_handler(function (Throwable $e) {
-    error_log('[flashcards][uncaught_exception] ' . $e->getMessage());
+    $errorId = bin2hex(random_bytes(4));
+    error_log('[flashcards][uncaught_exception][' . $errorId . '] ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
     if (!headers_sent()) http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => 'Erro interno da API de flashcards.']);
+    echo json_encode(['status' => 'error', 'message' => 'Erro interno da API de flashcards. Código do erro: ' . $errorId . '.', 'error_id' => $errorId]);
 });
 
 register_shutdown_function(function () {
     $lastError = error_get_last();
     if ($lastError && in_array($lastError['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
-        error_log('[flashcards][fatal] ' . ($lastError['message'] ?? 'fatal') . ' @ ' . ($lastError['file'] ?? '-') . ':' . ($lastError['line'] ?? 0));
+        $errorId = bin2hex(random_bytes(4));
+        error_log('[flashcards][fatal][' . $errorId . '] ' . ($lastError['message'] ?? 'fatal') . ' @ ' . ($lastError['file'] ?? '-') . ':' . ($lastError['line'] ?? 0));
         if (!headers_sent()) http_response_code(500);
         if (!ob_get_length()) {
-            echo json_encode(['status' => 'error', 'message' => 'Falha fatal na API de flashcards.']);
+            echo json_encode(['status' => 'error', 'message' => 'Falha fatal na API de flashcards. Código do erro: ' . $errorId . '.', 'error_id' => $errorId]);
         }
     }
 });
@@ -48,6 +50,7 @@ ensureFlashcardsDynamicTextTypeSchema($pdo);
 ensureFlashcardsQuestionAnswerSchema($pdo);
 ensureFlashcardsStatusInformacionalSchema($pdo);
 ensureFrequenciasInformacionaisSchema($pdo);
+ensureFlashcardSentenceSyntaxSchema($pdo);
 $user_id = $_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? ($_GET['action'] ?? '');
@@ -925,6 +928,55 @@ function ensureFrequenciasInformacionaisSchema(PDO $pdo): void
         }
     } catch (Throwable $e) {
         error_log('[flashcards][frequencias_informacionais_schema] ' . $e->getMessage());
+    }
+}
+
+
+function ensureFlashcardSentenceSyntaxSchema(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS flashcard_frases (
+                id INT NOT NULL AUTO_INCREMENT,
+                flashcard_id INT NOT NULL,
+                ordem INT NOT NULL,
+                id_frequencia_informacional INT UNSIGNED NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY uniq_flashcard_frases_ordem (flashcard_id, ordem),
+                KEY idx_flashcard_frases_frequencia (id_frequencia_informacional)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+
+        $linkColumns = [
+            'subjects_links' => ['id_frase INT NULL AFTER tag_id'],
+            'objects_links' => ['id_frase INT NULL AFTER tag_id', 'id_sujeito_relativo INT NULL AFTER id_frase', 'tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo'],
+            'inflexion_type_links' => ['id_frase INT NULL AFTER tag_id', 'id_sujeito_relativo INT NULL AFTER id_frase', 'tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo'],
+            'verb_links' => ['id_frase INT NULL AFTER tag_id', 'id_sujeito_relativo INT NULL AFTER id_frase', 'tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo'],
+            'adverb_links' => ['id_frase INT NULL AFTER tag_id', 'id_sujeito_relativo INT NULL AFTER id_frase', 'tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo'],
+            'local_links' => ['id_frase INT NULL AFTER tag_id', 'id_sujeito_relativo INT NULL AFTER id_frase', 'tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo'],
+            'tempo_links' => ['id_frase INT NULL AFTER tag_id', 'id_sujeito_relativo INT NULL AFTER id_frase', 'tipo_elemento VARCHAR(32) NULL AFTER id_sujeito_relativo'],
+        ];
+        foreach ($linkColumns as $table => $columns) {
+            $exists = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($table))->fetchColumn();
+            if (!$exists) continue;
+            foreach ($columns as $definition) {
+                $name = strtok($definition, ' ');
+                $column = $pdo->query("SHOW COLUMNS FROM {$table} LIKE " . $pdo->quote($name))->fetch(PDO::FETCH_ASSOC);
+                if (!$column) $pdo->exec("ALTER TABLE {$table} ADD COLUMN {$definition}");
+            }
+        }
+
+        $relacoesExists = $pdo->query("SHOW TABLES LIKE 'relacoes_taguineas'")->fetchColumn();
+        if ($relacoesExists && !$pdo->query("SHOW COLUMNS FROM relacoes_taguineas LIKE 'id_card'")->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->exec('ALTER TABLE relacoes_taguineas ADD COLUMN id_card INT NULL AFTER id_user');
+        }
+    } catch (Throwable $e) {
+        error_log('[flashcards][sentence_syntax_schema] ' . $e->getMessage());
     }
 }
 
