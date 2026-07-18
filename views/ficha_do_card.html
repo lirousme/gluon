@@ -1286,6 +1286,38 @@ const app = {
     this.setSelectedTagIds('subject', selectedIds);
     this.renderTagSelector('subject');
   },
+
+  normalizeSentenceSyntaxForEdit(card = {}, subjectTags = [], objectTags = [], lexicalChunkTags = []) {
+    const normalizeIds = (ids = []) => Array.from(new Set((Array.isArray(ids) ? ids : []).map(Number).filter(Boolean)));
+    const fallbackTags = {
+      subject: normalizeIds(subjectTags),
+      object: normalizeIds(objectTags),
+      objectIsolated: normalizeIds(objectTags),
+      objectCompound: normalizeIds(objectTags),
+      lexicalChunk: normalizeIds(lexicalChunkTags)
+    };
+    const rawSentences = Array.isArray(card.sentence_syntax) && card.sentence_syntax.length
+      ? card.sentence_syntax
+      : [{ ordem: 1, id_frequencia_informacional: card.id_frequencia_informacional || null, tags: {} }];
+    return rawSentences.map((rawSentence, index) => {
+      const frequencyId = Number(rawSentence?.id_frequencia_informacional || card.id_frequencia_informacional || 0) || null;
+      const rawTags = rawSentence && typeof rawSentence.tags === 'object' && rawSentence.tags !== null ? rawSentence.tags : {};
+      const normalizedTags = {};
+      ['subject', 'object', 'objectIsolated', 'objectCompound', 'inflexionType', 'verb', 'adverb', 'local', 'tempo', 'lexicalChunk'].forEach((key) => {
+        normalizedTags[key] = normalizeIds(rawTags[key]);
+      });
+      if (!normalizedTags.subject.length) normalizedTags.subject = fallbackTags.subject;
+      if (!normalizedTags.object.length) normalizedTags.object = fallbackTags.object;
+      if (!normalizedTags.objectIsolated.length) normalizedTags.objectIsolated = normalizedTags.object.length ? normalizedTags.object : fallbackTags.objectIsolated;
+      if (!normalizedTags.objectCompound.length) normalizedTags.objectCompound = normalizedTags.object.length ? normalizedTags.object : fallbackTags.objectCompound;
+      if (!normalizedTags.lexicalChunk.length) normalizedTags.lexicalChunk = fallbackTags.lexicalChunk;
+      return {
+        ordem: Math.max(1, Number(rawSentence?.ordem || index + 1) || index + 1),
+        id_frequencia_informacional: frequencyId,
+        tags: normalizedTags
+      };
+    });
+  },
   async loadSessionUserId() {
     try {
       const res = await fetch('/api/user', {
@@ -1895,7 +1927,7 @@ const app = {
     this.setSelectedTagIds('subject', subjectTags);
     this.setSelectedTagIds('object', objectTags);
     this.setSelectedTagIds('lexicalChunk', lexicalChunkTags);
-    this.sentenceSyntax = Array.isArray(card.sentence_syntax) && card.sentence_syntax.length ? card.sentence_syntax : [{ ordem: 1, id_frequencia_informacional: card.id_frequencia_informacional || null, tags: { subject: subjectTags, object: objectTags, lexicalChunk: lexicalChunkTags } }];
+    this.sentenceSyntax = this.normalizeSentenceSyntaxForEdit(card, subjectTags, objectTags, lexicalChunkTags);
     this.activeSentenceIndex = 0;
     this.renderSentenceControls();
     this.renderAllTagSelectors();
