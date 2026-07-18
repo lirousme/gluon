@@ -1048,7 +1048,7 @@ function syncFlashcardSentenceSyntax(PDO $pdo, int $cardId, int $userId, array $
             }
         }
         if ($freqId === 1 || $freqId === 2) {
-            $relationKeys = $freqId === 1 ? ['objectIsolated' => 21, 'objectCompound' => 22] : ['objectCompound' => 22];
+            $relationKeys = $freqId === 1 ? ['objectIsolated' => 21, 'objectCompound' => 22] : ['object' => 22];
             foreach ($subjectIds as $subjectId) {
                 foreach ($relationKeys as $key => $relationType) {
                     foreach (sanitizeTagIds($tags[$key] ?? []) as $childId) $insertRelation->execute([$userId, $cardId, $childId, $subjectId, $relationType]);
