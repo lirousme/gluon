@@ -2007,11 +2007,7 @@ const app = {
       if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag Subject para o Tag Expansion.', 'error');
       if (!backPlainText && !image_back) return this.setStatus('Preencha o verso do Tag Expansion com texto ou imagem.', 'error');
     } else if (!frontPlainText && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
-    if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag na categoria Subject para salvar o card.', 'error');
     if (!sentence_syntax.every(s => Number(s.id_frequencia_informacional || 0) > 0)) return this.setStatus('Selecione uma frequência informacional para todas as frases.', 'error');
-    if (!sentence_syntax.every(s => Array.isArray(s.tags?.subject) && s.tags.subject.length)) return this.setStatus('Selecione ao menos 1 tag-sujeito para todas as frases.', 'error');
-    if (!sentence_syntax.every(s => Number(s.id_frequencia_informacional) !== 1 || ((s.tags?.objectIsolated || []).length && (s.tags?.objectCompound || []).length))) return this.setStatus('Na frequência 1, selecione tags de objeto isolado e objeto composto para cada frase.', 'error');
-    if (!sentence_syntax.every(s => Number(s.id_frequencia_informacional) !== 2 || (s.tags?.objectCompound || []).length || (s.tags?.object || []).length)) return this.setStatus('Na frequência 2, selecione ao menos uma tag de objeto para cada frase.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
