@@ -836,16 +836,14 @@
                 <input type="hidden" id="selectedTagIds" value="[]">
 
                 <div id="singleFrontTabContent" style="margin-top: -22px;">
-                    <label class="block text-sm font-medium text-slate-300 mb-2">Frente (Obrigatório texto ou imagem)</label>
-                    <textarea id="singleFront" rows="2" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors resize-none"></textarea>
-                    <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <input data-card-front-lang="en_us" type="text" placeholder="Frente em Inglês Americano" class="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 px-3 text-sm text-white">
-                        <input data-card-front-lang="en_gb" type="text" placeholder="Frente em Inglês Britânico" class="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 px-3 text-sm text-white">
-                        <input data-card-front-lang="pt_br" type="text" placeholder="Frente em Português" class="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 px-3 text-sm text-white">
-                        <input data-card-front-lang="es" type="text" placeholder="Frente em Espanhol" class="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 px-3 text-sm text-white">
-                        <input data-card-front-lang="fr" type="text" placeholder="Frente em Francês" class="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 px-3 text-sm text-white">
-                        <input data-card-front-lang="zh" type="text" placeholder="Frente em Mandarim" class="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 px-3 text-sm text-white sm:col-span-2">
+                    <div class="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <label for="singleFront" class="block text-sm font-medium text-slate-300">Frente (Obrigatório texto ou imagem)</label>
+                        <label class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-blue-200">
+                            Idioma da frente
+                            <select id="frontLanguageSelect" data-card-language-select="front" class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-1.5 text-xs normal-case tracking-normal text-white outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary"></select>
+                        </label>
                     </div>
+                    <textarea id="singleFront" rows="2" class="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-gluon-primary focus:ring-1 focus:ring-gluon-primary transition-colors resize-none"></textarea>
 
                     <div class="mt-3 bg-slate-800/50 p-3 rounded-lg border border-slate-700">
                         <label class="block text-xs font-medium text-slate-400 mb-2"><i class="fa-regular fa-image"></i> Imagem da Frente (Opcional, Máx: 4MB)</label>
@@ -857,16 +855,14 @@
                 </div>
 
                 <div id="singleBackTabContent" class="pt-3 border-t border-slate-700 hidden">
-                    <label class="block text-sm font-medium text-blue-300 mb-2">Verso (Opcional)</label>
-                    <textarea id="singleBack" rows="2" class="w-full bg-slate-900 border border-blue-500/50 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors resize-none"></textarea>
-                    <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <input data-card-back-lang="en_us" type="text" placeholder="Verso em Inglês Americano" class="w-full bg-slate-950 border border-blue-900/50 rounded-lg py-2 px-3 text-sm text-white">
-                        <input data-card-back-lang="en_gb" type="text" placeholder="Verso em Inglês Britânico" class="w-full bg-slate-950 border border-blue-900/50 rounded-lg py-2 px-3 text-sm text-white">
-                        <input data-card-back-lang="pt_br" type="text" placeholder="Verso em Português" class="w-full bg-slate-950 border border-blue-900/50 rounded-lg py-2 px-3 text-sm text-white">
-                        <input data-card-back-lang="es" type="text" placeholder="Verso em Espanhol" class="w-full bg-slate-950 border border-blue-900/50 rounded-lg py-2 px-3 text-sm text-white">
-                        <input data-card-back-lang="fr" type="text" placeholder="Verso em Francês" class="w-full bg-slate-950 border border-blue-900/50 rounded-lg py-2 px-3 text-sm text-white">
-                        <input data-card-back-lang="zh" type="text" placeholder="Verso em Mandarim" class="w-full bg-slate-950 border border-blue-900/50 rounded-lg py-2 px-3 text-sm text-white sm:col-span-2">
+                    <div class="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <label for="singleBack" class="block text-sm font-medium text-blue-300">Verso (Opcional)</label>
+                        <label class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-purple-200">
+                            Idioma do verso
+                            <select id="backLanguageSelect" data-card-language-select="back" class="rounded-lg border border-blue-500/50 bg-slate-950 px-3 py-1.5 text-xs normal-case tracking-normal text-white outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"></select>
+                        </label>
                     </div>
+                    <textarea id="singleBack" rows="2" class="w-full bg-slate-900 border border-blue-500/50 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors resize-none"></textarea>
 
                     <div class="mt-3 bg-blue-900/10 p-3 rounded-lg border border-blue-900/50">
                         <label class="block text-xs font-medium text-blue-400 mb-2"><i class="fa-regular fa-image"></i> Imagem do Verso (Opcional, Máx: 4MB)</label>
@@ -998,22 +994,14 @@
 
 
 
-function collectCardTranslationPayload(root = document) {
-  const collect = (selector, attr) => Array.from(root.querySelectorAll(selector)).reduce((acc, el) => {
-    const lang = el.getAttribute(attr);
-    const value = (el.value || '').trim();
-    if (lang && value) acc[lang] = value;
-    return acc;
-  }, {});
-  return { front_translations: collect('[data-card-front-lang]', 'data-card-front-lang'), back_translations: collect('[data-card-back-lang]', 'data-card-back-lang') };
-}
-
-function fillCardTranslationInputs(root, side, translations = {}) {
-  root.querySelectorAll(`[data-card-${side}-lang]`).forEach((el) => {
-    const lang = el.getAttribute(`data-card-${side}-lang`);
-    el.value = translations && translations[lang] ? translations[lang] : (lang === 'en_gb' && translations?.en ? translations.en : '');
-  });
-}
+const FLASHCARD_TRANSLATION_LANGUAGES = [
+  { key: 'en_us', label: 'Inglês Americano' },
+  { key: 'en_gb', label: 'Inglês Britânico' },
+  { key: 'pt_br', label: 'Português' },
+  { key: 'es', label: 'Espanhol' },
+  { key: 'fr', label: 'Francês' },
+  { key: 'zh', label: 'Mandarim' }
+];
 
 function setupTagLanguageSwitcher(root = document) {
   const wrapper = root.querySelector('[data-tag-language-switcher], [data-tag-i18n]');
@@ -1092,6 +1080,8 @@ const flashcardApp = {
             deckMode: 'aleatorio',
             frontLanguage: 'pt-BR',
             backLanguage: 'en-GB',
+            activeTextLanguageKey: { front: 'pt_br', back: 'en_gb' },
+            textLanguageDrafts: { front: {}, back: {} },
             deckStructure: 'fatos',
             deckInitialTagId: null,
             deckPercentage: 0,
@@ -1164,6 +1154,9 @@ const flashcardApp = {
                 this.setupSwipeListeners();
                 this.setupBulkListener();
                 this.setupButtonIdCopyOnRightClick();
+                document.querySelectorAll('[data-card-language-select]').forEach(select => {
+                    select.addEventListener('change', () => this.setActiveTextLanguage(select.dataset.cardLanguageSelect, select.value));
+                });
                 window.addEventListener('resize', () => {
                     this.updateMobileSceneHeight();
                     this.updateCardTextOverflow();
@@ -2596,10 +2589,12 @@ const flashcardApp = {
                 }
 
                 document.getElementById('editCardId').value = card.id;
-                document.getElementById('singleFront').value = card.front;
-                document.getElementById('singleBack').value = card.back;
-                fillCardTranslationInputs(document.getElementById('singleModal'), 'front', card.front_translations || {});
-                fillCardTranslationInputs(document.getElementById('singleModal'), 'back', card.back_translations || {});
+                this.resetCardLanguageEditors(
+                    card.front_translations || {},
+                    card.back_translations || {},
+                    card.front || '',
+                    card.back || ''
+                );
                 document.getElementById('selectedTagIds').value = this.deckMode === 'grafo'
                     ? JSON.stringify((card.subject_tags || card.tags || []).map(tag => Number(tag.id)))
                     : '[]';
@@ -3573,6 +3568,80 @@ const flashcardApp = {
                 setTimeout(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); }, 20);
             },
 
+            deckLanguageToTranslationKey(language, fallback = 'en_gb') {
+                const value = String(language || '').trim().toLowerCase();
+                if (value.startsWith('pt')) return 'pt_br';
+                if (value.startsWith('es')) return 'es';
+                if (value.startsWith('fr')) return 'fr';
+                if (value.startsWith('zh') || value.includes('mandarin')) return 'zh';
+                if (value === 'en-us') return 'en_us';
+                if (value === 'en-gb' || value.startsWith('en')) return 'en_gb';
+                return fallback;
+            },
+
+            getPrimaryTextLanguageKey(side) {
+                return this.deckLanguageToTranslationKey(side === 'front' ? this.frontLanguage : this.backLanguage);
+            },
+
+            getCardTextInput(side) {
+                return document.getElementById(side === 'front' ? 'singleFront' : 'singleBack');
+            },
+
+            persistActiveLanguageText(side) {
+                const key = this.activeTextLanguageKey[side] || this.getPrimaryTextLanguageKey(side);
+                this.textLanguageDrafts[side][key] = this.getCardTextInput(side)?.value || '';
+            },
+
+            setActiveTextLanguage(side, key, persistCurrent = true) {
+                if (persistCurrent) this.persistActiveLanguageText(side);
+                this.activeTextLanguageKey[side] = FLASHCARD_TRANSLATION_LANGUAGES.some(language => language.key === key)
+                    ? key
+                    : this.getPrimaryTextLanguageKey(side);
+                const select = document.getElementById(`${side}LanguageSelect`);
+                if (select) select.value = this.activeTextLanguageKey[side];
+                const input = this.getCardTextInput(side);
+                if (input) input.value = this.textLanguageDrafts[side][this.activeTextLanguageKey[side]] || '';
+            },
+
+            resetCardLanguageEditors(frontTranslations = {}, backTranslations = {}, front = '', back = '') {
+                ['front', 'back'].forEach(side => {
+                    const translations = side === 'front' ? frontTranslations : backTranslations;
+                    const primaryText = side === 'front' ? front : back;
+                    const primaryKey = this.getPrimaryTextLanguageKey(side);
+                    this.textLanguageDrafts[side] = { ...(translations || {}) };
+                    if (!this.textLanguageDrafts[side].en_gb && translations?.en) this.textLanguageDrafts[side].en_gb = translations.en;
+                    if (!this.textLanguageDrafts[side][primaryKey] && primaryText) this.textLanguageDrafts[side][primaryKey] = primaryText;
+                    this.activeTextLanguageKey[side] = primaryKey;
+                    const select = document.getElementById(`${side}LanguageSelect`);
+                    if (select) {
+                        select.innerHTML = FLASHCARD_TRANSLATION_LANGUAGES.map(language => `<option value="${language.key}">${language.label}</option>`).join('');
+                        select.value = primaryKey;
+                    }
+                    this.setActiveTextLanguage(side, primaryKey, false);
+                });
+            },
+
+            collectCardTranslations(side) {
+                this.persistActiveLanguageText(side);
+                return Object.fromEntries(Object.entries(this.textLanguageDrafts[side]).filter(([, value]) => String(value || '').trim()));
+            },
+
+            getPrimaryCardText(side) {
+                const translations = this.collectCardTranslations(side);
+                const primary = translations[this.getPrimaryTextLanguageKey(side)];
+                if (primary) return String(primary).trim();
+                const active = translations[this.activeTextLanguageKey[side]];
+                if (active) return String(active).trim();
+                return String(FLASHCARD_TRANSLATION_LANGUAGES.map(language => translations[language.key]).find(Boolean) || '').trim();
+            },
+
+            getCardTranslationPayload() {
+                return {
+                    front_translations: this.collectCardTranslations('front'),
+                    back_translations: this.collectCardTranslations('back')
+                };
+            },
+
             switchSingleModalTab(tab) {
                 const isFrontTab = tab !== 'back';
                 const frontButton = document.getElementById('singleTabFront');
@@ -3619,10 +3688,7 @@ const flashcardApp = {
                     return;
                 }
                 document.getElementById('editCardId').value = '';
-                document.getElementById('singleFront').value = '';
-                document.getElementById('singleBack').value = '';
-                fillCardTranslationInputs(document.getElementById('singleModal'), 'front', {});
-                fillCardTranslationInputs(document.getElementById('singleModal'), 'back', {});
+                this.resetCardLanguageEditors({}, {}, '', '');
                 document.getElementById('selectedTagIds').value = (this.deckMode === 'grafo' && this.deckInitialTagId) ? JSON.stringify([this.deckInitialTagId]) : '[]';
                 this.tagSearchQuery = '';
                 const tagSearchInput = document.getElementById('cardTagSearchInput');
@@ -3753,6 +3819,8 @@ const flashcardApp = {
             async translateCard() {
                 const frontEl = document.getElementById('singleFront');
                 const backEl = document.getElementById('singleBack');
+                this.persistActiveLanguageText('front');
+                this.persistActiveLanguageText('back');
                 const frontText = frontEl.value.trim();
                 const backText = backEl.value.trim();
 
@@ -3761,8 +3829,8 @@ const flashcardApp = {
 
                 const textToTranslate = frontText || backText;
                 const targetEl = frontText ? backEl : frontEl;
-                const sourceLanguage = frontText ? this.frontLanguage : this.backLanguage;
-                const targetLanguage = frontText ? this.backLanguage : this.frontLanguage;
+                const sourceLanguage = frontText ? this.activeTextLanguageKey.front : this.activeTextLanguageKey.back;
+                const targetLanguage = frontText ? this.activeTextLanguageKey.back : this.activeTextLanguageKey.front;
 
                 const btn = document.getElementById('btnTranslate');
                 const originalHtml = btn.innerHTML;
@@ -3774,6 +3842,7 @@ const flashcardApp = {
                     if (!res || !res.translation) throw new Error('A API não retornou uma tradução válida.');
 
                     targetEl.value = res.translation;
+                    this.persistActiveLanguageText(frontText ? 'back' : 'front');
                     this.showToast("Tradução concluída!", "success");
                 } catch (error) {
                     this.showToast("Falha ao traduzir: " + error.message, "error");
@@ -3819,8 +3888,9 @@ const flashcardApp = {
             async saveSingleCard(e) {
                 e.preventDefault();
                 const editId = document.getElementById('editCardId').value;
-                const frontVal = document.getElementById('singleFront').value.trim();
-                const backVal = document.getElementById('singleBack').value.trim();
+                const frontVal = this.getPrimaryCardText('front');
+                const backVal = this.getPrimaryCardText('back');
+                const translationPayload = this.getCardTranslationPayload();
                 const imageFront = document.getElementById('frontImageBase64').value;
                 const imageBack = document.getElementById('backImageBase64').value;
                 const tagIds = this.deckMode === 'grafo'
@@ -3840,7 +3910,7 @@ const flashcardApp = {
                     back: backVal,
                     image_front: imageFront,
                     image_back: imageBack,
-                    ...collectCardTranslationPayload(document.getElementById('singleModal')),
+                    ...translationPayload,
                     info_type: infoType,
                     tag_ids: [],
                     subject_tag_ids: tagIds
@@ -3860,7 +3930,7 @@ const flashcardApp = {
                                 back: backVal,
                                 image_front: imageFront || null,
                                 image_back: imageBack || null,
-                                ...collectCardTranslationPayload(document.getElementById('singleModal'))
+                                ...translationPayload
                             };
                             this.currentIndex = cardIndex;
                             this.renderCurrentCard();
