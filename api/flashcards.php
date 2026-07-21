@@ -51,9 +51,42 @@ ensureFlashcardsQuestionAnswerSchema($pdo);
 ensureFlashcardsStatusInformacionalSchema($pdo);
 ensureFrequenciasInformacionaisSchema($pdo);
 ensureFlashcardSentenceSyntaxSchema($pdo);
+ensureCharactersSchema($pdo);
 $user_id = $_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? ($_GET['action'] ?? '');
+
+function characterLanguages(): array {
+    return ['pt-BR', 'en-US', 'en-GB', 'es-ES', 'fr-FR', 'cmn-CN'];
+}
+
+function characterNames(): array {
+    return [1 => 'Masculino 1', 2 => 'Masculino 2', 3 => 'Masculino 3', 4 => 'Masculino 4', 5 => 'Masculino 5', 6 => 'Feminino 1', 7 => 'Feminino 2', 8 => 'Feminino 3', 9 => 'Feminino 4', 10 => 'Feminino 5'];
+}
+
+function ensureCharactersSchema(PDO $pdo): void {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS characters (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, character_id TINYINT UNSIGNED NOT NULL, language VARCHAR(10) NOT NULL, voice_id VARCHAR(160) NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (id), UNIQUE KEY uq_characters_character_language (character_id, language)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $column = $pdo->query("SHOW COLUMNS FROM directories LIKE 'character_id'")->fetchColumn();
+    if (!$column) $pdo->exec("ALTER TABLE directories ADD COLUMN character_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER deck_mode");
+
+    $stars = ['Algenib', 'Charon', 'Enceladus', 'Fenrir', 'Iapetus', 'Achernar', 'Aoede', 'Gacrux', 'Kore', 'Leda'];
+    $insert = $pdo->prepare('INSERT IGNORE INTO characters (character_id, language, voice_id) VALUES (?, ?, ?)');
+    foreach (characterLanguages() as $language) {
+        foreach ($stars as $index => $star) $insert->execute([$index + 1, $language, $language . '-Chirp3-HD-' . $star]);
+    }
+}
+
+function normalizeCharacterId($value): int {
+    $id = (int)$value;
+    return $id >= 1 && $id <= 10 ? $id : 1;
+}
+
+function findCharacterVoice(PDO $pdo, int $characterId, string $language): ?string {
+    $stmt = $pdo->prepare('SELECT voice_id FROM characters WHERE character_id = ? AND language = ? LIMIT 1');
+    $stmt->execute([normalizeCharacterId($characterId), normalizeDeckLanguage($language, 'en-US')]);
+    $voice = trim((string)$stmt->fetchColumn());
+    return $voice !== '' ? $voice : null;
+}
 
 /**
  * Normaliza destinos de retorno recebidos do cliente para impedir redirects externos.
@@ -3418,13 +3451,13 @@ function requestOpenAITts($text_to_speech, &$error_details = null) {
 /**
  * Função requestGoogleCloudTts: Solicita áudio ao Google Cloud TTS com voz contextual do deck e retorna o binário.
  */
-function requestGoogleCloudTts($text_to_speech, $language, $side = null, $deck_structure = 'traducoes', $front_language = 'pt-BR', $back_language = 'en-GB', &$error_details = null) {
+function requestGoogleCloudTts($text_to_speech, $language, $side = null, $deck_structure = 'traducoes', $front_language = 'pt-BR', $back_language = 'en-GB', &$error_details = null, ?string $voice_override = null) {
     if (trim((string)GOOGLE_CLOUD_API_KEY) === '') {
         $error_details = 'Chave GOOGLE_CLOUD_API_KEY não configurada.';
         return null;
     }
 
-    $voice_name = getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $front_language, $back_language);
+    $voice_name = trim((string)$voice_override) ?: getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $front_language, $back_language);
     $ch = curl_init('https://texttospeech.googleapis.com/v1/text:synthesize?key=' . rawurlencode(GOOGLE_CLOUD_API_KEY));
     $payload = json_encode([
         'input' => ['text' => $text_to_speech],
@@ -3513,7 +3546,14 @@ function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $la
     if ($provider === 'openai') {
         $audio_binary = requestOpenAITts($text_to_speech, $provider_error);
     } elseif ($provider === 'google') {
-        $audio_binary = requestGoogleCloudTts($text_to_speech, $language, $side, $deck_structure, $front_language, $back_language, $provider_error);
+        $voiceOverride = null;
+        $stmtCharacter = $pdo->prepare("SELECT d.deck_mode, d.character_id FROM flashcards f JOIN directories d ON d.id = f.directory_id WHERE f.id = ? AND d.user_id = ? LIMIT 1");
+        $stmtCharacter->execute([$card_id, $user_id]);
+        $deckCharacter = $stmtCharacter->fetch(PDO::FETCH_ASSOC);
+        if (($deckCharacter['deck_mode'] ?? '') === 'livro') {
+            $voiceOverride = findCharacterVoice($pdo, normalizeCharacterId($deckCharacter['character_id'] ?? 1), $language);
+        }
+        $audio_binary = requestGoogleCloudTts($text_to_speech, $language, $side, $deck_structure, $front_language, $back_language, $provider_error, $voiceOverride);
     } else {
         $audio_binary = requestFishAudioTts($text_to_speech, $language, $provider_error);
     }
@@ -4435,6 +4475,7 @@ if ($action === 'fetch') {
         'status' => 'success', 
         'deck_name' => Security::decryptData($deck['name_encrypted']),
         'deck_mode' => $deck_mode,
+        'character_id' => normalizeCharacterId($deck['character_id'] ?? 1),
         'deck_front_language' => normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR'),
         'deck_back_language' => normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB'),
         'deck_structure' => normalizeDeckStructure($deck['deck_structure'] ?? 'traducoes', 'traducoes'),
@@ -5947,12 +5988,29 @@ elseif ($action === 'reset_book_score') {
     }
 }
 
+elseif ($action === 'list_characters') {
+    $rows = $pdo->query('SELECT id, character_id, language, voice_id FROM characters ORDER BY character_id, FIELD(language, \'pt-BR\', \'en-US\', \'en-GB\', \'es-ES\', \'fr-FR\', \'cmn-CN\')')->fetchAll(PDO::FETCH_ASSOC);
+    echo json_encode(['status' => 'success', 'data' => $rows, 'characters' => characterNames(), 'languages' => characterLanguages()]);
+}
+
+elseif ($action === 'save_character_voice') {
+    $characterId = normalizeCharacterId($input['character_id'] ?? 0);
+    $language = trim((string)($input['language'] ?? ''));
+    $voiceId = trim((string)($input['voice_id'] ?? ''));
+    if (!in_array($language, characterLanguages(), true)) die(json_encode(['status' => 'error', 'message' => 'Idioma inválido.']));
+    if ($voiceId === '' || strlen($voiceId) > 160) die(json_encode(['status' => 'error', 'message' => 'Informe um ID de voz válido (até 160 caracteres).']));
+    $stmt = $pdo->prepare('INSERT INTO characters (character_id, language, voice_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE voice_id = VALUES(voice_id)');
+    $stmt->execute([$characterId, $language, $voiceId]);
+    echo json_encode(['status' => 'success', 'message' => 'Voz do personagem salva com sucesso.']);
+}
+
 elseif ($action === 'update_settings') {
     $deck_id = (int)($input['deck_id'] ?? 0);
     $allowed_modes = ['aleatorio', 'livro', 'grafo'];
     $mode = in_array(($input['deck_mode'] ?? ''), $allowed_modes, true) ? $input['deck_mode'] : 'aleatorio';
     $front_language = normalizeDeckLanguage($input['deck_front_language'] ?? 'pt-BR', 'pt-BR');
     $back_language = normalizeDeckLanguage($input['deck_back_language'] ?? 'en-GB', 'en-GB');
+    $character_id = normalizeCharacterId($input['character_id'] ?? 1);
     $deck_structure = normalizeDeckStructure($input['deck_structure'] ?? 'traducoes', 'traducoes');
     $initial_tag_id = isset($input['id_tag_inicial']) && $input['id_tag_inicial'] !== null && $input['id_tag_inicial'] !== ''
         ? (int)$input['id_tag_inicial']
@@ -5970,8 +6028,8 @@ elseif ($action === 'update_settings') {
         }
     }
 
-    $stmt = $pdo->prepare("UPDATE directories SET deck_mode = ?, deck_front_language = ?, deck_back_language = ?, deck_structure = ?, id_tag_inicial = ? WHERE id = ?");
-    if ($stmt->execute([$mode, $front_language, $back_language, $deck_structure, $initial_tag_id, $deck_id])) echo json_encode(['status' => 'success', 'message' => 'Configurações atualizadas.']);
+    $stmt = $pdo->prepare("UPDATE directories SET deck_mode = ?, deck_front_language = ?, deck_back_language = ?, deck_structure = ?, id_tag_inicial = ?, character_id = ? WHERE id = ?");
+    if ($stmt->execute([$mode, $front_language, $back_language, $deck_structure, $initial_tag_id, $character_id, $deck_id])) echo json_encode(['status' => 'success', 'message' => 'Configurações atualizadas.']);
     else echo json_encode(['status' => 'error', 'message' => 'Erro ao salvar.']);
 }
 
