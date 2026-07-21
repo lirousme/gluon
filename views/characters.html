@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <script src="/assets/zoom-lock.js" defer></script><title>Personagens e vozes - Gluon</title>
+  <script src="https://cdn.tailwindcss.com"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100">
+<main class="mx-auto min-h-screen w-full max-w-6xl px-4 py-6">
+  <header class="mb-5 flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-5 sm:flex-row sm:items-center sm:justify-between">
+    <div><p class="text-xs font-semibold uppercase tracking-[.25em] text-emerald-300">CRUD</p><h1 class="mt-1 text-2xl font-bold">Personagens e vozes Chirp 3</h1><p class="mt-2 text-sm text-slate-400">Edite ou adicione o ID de voz de cada personagem para os mesmos idiomas disponíveis nos flashcards.</p></div>
+    <a href="/dashboard" class="rounded-xl border border-slate-700 px-4 py-2 text-center text-sm font-semibold hover:border-emerald-400"><i class="fa-solid fa-arrow-left mr-2"></i>Voltar</a>
+  </header>
+  <p id="status" class="mb-4 min-h-6 text-sm text-slate-400"></p>
+  <section id="grid" class="grid gap-4 md:grid-cols-2">Carregando...</section>
+</main>
+<script>
+const grid = document.getElementById('grid'), statusBox = document.getElementById('status');
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+async function api(action, payload = {}) { const response = await fetch('/api/flashcards', {method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body:JSON.stringify({...payload, action})}); const result = await response.json(); if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Erro na requisição.'); return result; }
+async function load() {
+  try {
+    const result = await api('list_characters'), rows = new Map((result.data || []).map(row => [`${row.character_id}:${row.language}`, row.voice_id]));
+    grid.innerHTML = Object.entries(result.characters || {}).map(([id, name]) => `<article class="rounded-2xl border border-slate-800 bg-slate-900/70 p-5"><h2 class="mb-4 font-bold text-emerald-200">${escapeHtml(name)} <span class="text-xs font-normal text-slate-500">Personagem ${id}</span></h2><div class="space-y-3">${(result.languages || []).map(language => `<form data-character="${id}" data-language="${language}" class="voice-form"><label class="mb-1 block text-xs font-semibold text-slate-400">${language}</label><div class="flex gap-2"><input value="${escapeHtml(rows.get(`${id}:${language}`) || '')}" maxlength="160" required class="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="${language}-Chirp3-HD-..."><button class="rounded-lg bg-emerald-600 px-3 text-sm font-bold hover:bg-emerald-500" title="Salvar"><i class="fa-solid fa-floppy-disk"></i></button></div></form>`).join('')}</div></article>`).join('');
+  } catch (error) { grid.innerHTML = `<p class="text-red-300">${escapeHtml(error.message)}</p>`; }
+}
+grid.addEventListener('submit', async event => { const form = event.target.closest('.voice-form'); if (!form) return; event.preventDefault(); const button = form.querySelector('button'); button.disabled = true; try { const result = await api('save_character_voice', {character_id:Number(form.dataset.character), language:form.dataset.language, voice_id:form.querySelector('input').value.trim()}); statusBox.textContent = result.message; statusBox.className = 'mb-4 min-h-6 text-sm text-emerald-300'; } catch (error) { statusBox.textContent = error.message; statusBox.className = 'mb-4 min-h-6 text-sm text-red-300'; } finally { button.disabled = false; } });
+load();
+</script>
+</body></html>

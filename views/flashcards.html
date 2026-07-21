@@ -637,7 +637,7 @@
                     <label class="block text-sm font-medium text-slate-300 mb-3">Modo de Estudo / Comportamento</label>
                     <div class="space-y-3">
                         <label class="flex items-start gap-3 cursor-pointer p-3 border border-slate-600 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors">
-                            <input type="radio" name="deckMode" value="aleatorio" class="mt-1 text-gluon-primary bg-slate-900 border-slate-600 focus:ring-gluon-primary">
+                            <input type="radio" name="deckMode" value="aleatorio" onchange="flashcardApp.updateCharacterFieldVisibility()" class="mt-1 text-gluon-primary bg-slate-900 border-slate-600 focus:ring-gluon-primary">
                             <div>
                                 <div class="font-medium text-white mb-0.5"><i class="fa-solid fa-shuffle text-gluon-primary mr-1"></i> Aleatório (Repetição Espaçada)</div>
                                 <div class="text-xs text-slate-400">Exibe cartas vencidas aleatoriamente. Pontua ao virar a carta. Ideal para estudo ativo e memorização de longo prazo.</div>
@@ -645,7 +645,7 @@
                         </label>
 
                         <label class="flex items-start gap-3 cursor-pointer p-3 border border-slate-600 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors">
-                            <input type="radio" name="deckMode" value="grafo" class="mt-1 text-violet-500 bg-slate-900 border-slate-600 focus:ring-violet-500">
+                            <input type="radio" name="deckMode" value="grafo" onchange="flashcardApp.updateCharacterFieldVisibility()" class="mt-1 text-violet-500 bg-slate-900 border-slate-600 focus:ring-violet-500">
                             <div>
                                 <div class="font-medium text-white mb-0.5"><i class="fa-solid fa-diagram-project text-violet-400 mr-1"></i> Modo Grafo</div>
                                 <div class="text-xs text-slate-400">Inicialmente funciona igual ao modo aleatório, exibindo cartas vencidas com repetição espaçada.</div>
@@ -653,7 +653,7 @@
                         </label>
 
                         <label class="flex items-start gap-3 cursor-pointer p-3 border border-slate-600 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-colors">
-                            <input type="radio" name="deckMode" value="livro" class="mt-1 text-emerald-500 bg-slate-900 border-slate-600 focus:ring-emerald-500">
+                            <input type="radio" name="deckMode" value="livro" onchange="flashcardApp.updateCharacterFieldVisibility()" class="mt-1 text-emerald-500 bg-slate-900 border-slate-600 focus:ring-emerald-500">
                             <div>
                                 <div class="font-medium text-white mb-0.5"><i class="fa-solid fa-book-open text-emerald-500 mr-1"></i> Livro (Sequencial)</div>
                                 <div class="text-xs text-slate-400">Exibe cartas na ordem exata de criação. Salva a página onde você parou. Sem repetição espaçada.</div>
@@ -685,6 +685,14 @@
                             <option value="cmn-CN">Mandarim</option>
                         </select>
                     </div>
+                </div>
+                <div id="bookCharacterField" class="hidden">
+                    <label for="deckCharacterId" class="block text-sm font-medium text-slate-300 mb-2">Personagem da voz</label>
+                    <select id="deckCharacterId" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <option value="1">Masculino 1</option><option value="2">Masculino 2</option><option value="3">Masculino 3</option><option value="4">Masculino 4</option><option value="5">Masculino 5</option>
+                        <option value="6">Feminino 1</option><option value="7">Feminino 2</option><option value="8">Feminino 3</option><option value="9">Feminino 4</option><option value="10">Feminino 5</option>
+                    </select>
+                    <p class="mt-2 text-xs text-slate-400">A voz Chirp 3 configurada para este personagem e idioma será usada na geração de áudio do modo livro.</p>
                 </div>
                 </div>
 
@@ -1078,6 +1086,7 @@ const flashcardApp = {
             deckId: null,
             studyScope: 'deck',
             deckMode: 'aleatorio',
+            characterId: 1,
             frontLanguage: 'pt-BR',
             backLanguage: 'en-GB',
             activeTextLanguageKey: { front: 'pt_br', back: 'en_gb' },
@@ -1573,6 +1582,7 @@ const flashcardApp = {
                     this.scoredCardIds = new Set();
                     document.getElementById('deckName').innerText = res.deck_name || 'Flashcards';
                     this.deckMode = res.deck_mode || 'aleatorio';
+                    this.characterId = Number(res.character_id || 1);
                     this.frontLanguage = res.deck_front_language || 'pt-BR';
                     this.backLanguage = res.deck_back_language || 'en-GB';
                     this.deckStructure = res.deck_structure || 'fatos';
@@ -3542,6 +3552,11 @@ const flashcardApp = {
             },
 
             // --- Modais ---
+            updateCharacterFieldVisibility() {
+                const selected = document.querySelector('input[name="deckMode"]:checked')?.value;
+                document.getElementById('bookCharacterField')?.classList.toggle('hidden', selected !== 'livro');
+            },
+
             openSettingsModal() {
                 if (this.isDirectoryRandomStudy()) {
                     this.showToast('As configurações são editáveis apenas no modo deck.', 'error');
@@ -3553,6 +3568,8 @@ const flashcardApp = {
                 }
                 document.getElementById('deckFrontLanguage').value = this.frontLanguage;
                 document.getElementById('deckBackLanguage').value = this.backLanguage;
+                document.getElementById('deckCharacterId').value = String(this.characterId || 1);
+                this.updateCharacterFieldVisibility();
                 const structureRadios = document.getElementsByName('deckStructure');
                 for (let i = 0; i < structureRadios.length; i++) {
                     structureRadios[i].checked = (structureRadios[i].value === this.deckStructure);
@@ -3805,6 +3822,7 @@ const flashcardApp = {
                     deck_front_language: frontLanguage,
                     deck_back_language: backLanguage,
                     deck_structure: deckStructure,
+                    character_id: Number(document.getElementById('deckCharacterId').value || 1),
                     id_tag_inicial: initialTagId
                 });
                 if (res) {
