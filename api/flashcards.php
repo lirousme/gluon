@@ -6013,9 +6013,6 @@ elseif ($action === 'add_single') {
         die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
     }
     $deckMode = $deck['deck_mode'] ?? 'aleatorio';
-    if ($deckMode === 'grafo' && empty($subject_tag_ids)) {
-        die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos 1 tag na categoria Subject para salvar o card no modo grafo.']));
-    }
     if ($deckMode !== 'grafo') {
         $info_type = 0;
         $question_answer = null;
@@ -6223,9 +6220,6 @@ elseif ($action === 'update_card') {
         die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
     }
     $deckMode = $cardOwnership['deck_mode'] ?? 'aleatorio';
-    if ($deckMode === 'grafo' && empty($subject_tag_ids)) {
-        die(json_encode(['status' => 'error', 'message' => 'Selecione ao menos 1 tag na categoria Subject para salvar o card no modo grafo.']));
-    }
     if ($deckMode !== 'grafo') {
         $info_type = 0;
         $question_answer = null;
