@@ -66,8 +66,14 @@ function characterNames(): array {
 
 function ensureCharactersSchema(PDO $pdo): void {
     $pdo->exec("CREATE TABLE IF NOT EXISTS characters (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, character_id TINYINT UNSIGNED NOT NULL, language VARCHAR(10) NOT NULL, voice_id VARCHAR(160) NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (id), UNIQUE KEY uq_characters_character_language (character_id, language)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    $column = $pdo->query("SHOW COLUMNS FROM directories LIKE 'character_id'")->fetchColumn();
-    if (!$column) $pdo->exec("ALTER TABLE directories ADD COLUMN character_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER deck_mode");
+    $column = $pdo->query("SHOW COLUMNS FROM flashcards LIKE 'character_id'")->fetchColumn();
+    if (!$column) {
+        $pdo->exec("ALTER TABLE flashcards ADD COLUMN character_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER directory_id");
+        $directoryColumn = $pdo->query("SHOW COLUMNS FROM directories LIKE 'character_id'")->fetchColumn();
+        if ($directoryColumn) {
+            $pdo->exec("UPDATE flashcards f JOIN directories d ON d.id = f.directory_id SET f.character_id = d.character_id WHERE d.character_id BETWEEN 1 AND 10");
+        }
+    }
 
     $stars = ['Algenib', 'Charon', 'Enceladus', 'Fenrir', 'Iapetus', 'Achernar', 'Aoede', 'Gacrux', 'Kore', 'Leda'];
     $insert = $pdo->prepare('INSERT IGNORE INTO characters (character_id, language, voice_id) VALUES (?, ?, ?)');
@@ -2997,11 +3003,11 @@ function findNextPendingAudioJobForDeck($pdo, $deck_id, $front_language, $back_l
  */
 function verifyCardOwnership($pdo, $card_id, $user_id, bool $allowPublicUserFive = false) {
     if ($allowPublicUserFive) {
-        $stmt = $pdo->prepare("SELECT f.id, f.directory_id, f.created_by_user_id, f.private_directory_id, d.deck_mode FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND (d.user_id IN (?, 5) OR f.created_by_user_id = ?)");
+        $stmt = $pdo->prepare("SELECT f.id, f.directory_id, f.created_by_user_id, f.private_directory_id, f.character_id, d.deck_mode FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND (d.user_id IN (?, 5) OR f.created_by_user_id = ?)");
         $stmt->execute([$card_id, $user_id, $user_id]);
         return $stmt->fetch();
     }
-    $stmt = $pdo->prepare("SELECT f.id, f.directory_id, f.created_by_user_id, f.private_directory_id, d.deck_mode FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND (d.user_id = ? OR f.created_by_user_id = ?)");
+    $stmt = $pdo->prepare("SELECT f.id, f.directory_id, f.created_by_user_id, f.private_directory_id, f.character_id, d.deck_mode FROM flashcards f JOIN directories d ON f.directory_id = d.id WHERE f.id = ? AND (d.user_id = ? OR f.created_by_user_id = ?)");
     $stmt->execute([$card_id, $user_id, $user_id]);
     return $stmt->fetch();
 }
@@ -3547,7 +3553,7 @@ function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $la
         $audio_binary = requestOpenAITts($text_to_speech, $provider_error);
     } elseif ($provider === 'google') {
         $voiceOverride = null;
-        $stmtCharacter = $pdo->prepare("SELECT d.deck_mode, d.character_id FROM flashcards f JOIN directories d ON d.id = f.directory_id WHERE f.id = ? AND d.user_id = ? LIMIT 1");
+        $stmtCharacter = $pdo->prepare("SELECT d.deck_mode, f.character_id FROM flashcards f JOIN directories d ON d.id = f.directory_id WHERE f.id = ? AND d.user_id = ? LIMIT 1");
         $stmtCharacter->execute([$card_id, $user_id]);
         $deckCharacter = $stmtCharacter->fetch(PDO::FETCH_ASSOC);
         if (($deckCharacter['deck_mode'] ?? '') === 'livro') {
@@ -4140,7 +4146,7 @@ if ($action === 'fetch') {
         $placeholders = implode(',', array_fill(0, count($deck_ids), '?'));
 
         $stmtCards = $pdo->prepare("
-            SELECT f.id, f.front_encrypted, f.back_encrypted, f.front_translations_encrypted, f.back_translations_encrypted, f.audio_front_translations_encrypted, f.audio_back_translations_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.question_answer, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, COALESCE(fs.score, 0) as score
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.front_translations_encrypted, f.back_translations_encrypted, f.audio_front_translations_encrypted, f.audio_back_translations_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.question_answer, f.character_id, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, COALESCE(fs.score, 0) as score
             FROM flashcards f
             JOIN directories d ON d.id = f.directory_id
             LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
@@ -4201,6 +4207,7 @@ if ($action === 'fetch') {
                 'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
                 'info_type' => sanitizeInfoType($card['info_type'] ?? 2),
                 'question_answer' => $card['question_answer'] === null ? null : (int)$card['question_answer'],
+                'character_id' => normalizeCharacterId($card['character_id'] ?? 1),
                 'created_at' => $card['created_at'] ?? null,
                 'has_audio_front' => (int)$card['has_audio_front'],
                 'has_audio_back' => (int)$card['has_audio_back'],
@@ -4264,7 +4271,7 @@ if ($action === 'fetch') {
             // No modo grafo, busca cards de qualquer deck do usuário
             // e também dos decks pertencentes ao usuário de id 5.
             $stmt = $pdo->prepare("
-                SELECT f.id, f.front_encrypted, f.back_encrypted, f.front_translations_encrypted, f.back_translations_encrypted, f.audio_front_translations_encrypted, f.audio_back_translations_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.question_answer, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, COALESCE(fs.score, 0) as score
+                SELECT f.id, f.front_encrypted, f.back_encrypted, f.front_translations_encrypted, f.back_translations_encrypted, f.audio_front_translations_encrypted, f.audio_back_translations_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.question_answer, f.character_id, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, COALESCE(fs.score, 0) as score
                 FROM flashcards f
                 JOIN directories d ON d.id = f.directory_id
                 LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
@@ -4275,7 +4282,7 @@ if ($action === 'fetch') {
         } else {
             // No modo aleatório, mantém filtro por deck e cards vencidos.
             $stmt = $pdo->prepare("
-                SELECT f.id, f.front_encrypted, f.back_encrypted, f.front_translations_encrypted, f.back_translations_encrypted, f.audio_front_translations_encrypted, f.audio_back_translations_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.question_answer, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, COALESCE(fs.score, 0) as score
+                SELECT f.id, f.front_encrypted, f.back_encrypted, f.front_translations_encrypted, f.back_translations_encrypted, f.audio_front_translations_encrypted, f.audio_back_translations_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.question_answer, f.character_id, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, COALESCE(fs.score, 0) as score
                 FROM flashcards f
                 JOIN directories d ON d.id = f.directory_id
                 LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
@@ -4300,7 +4307,7 @@ if ($action === 'fetch') {
         $random_next_review_at = $stmtNextRandomReview->fetchColumn() ?: null;
     } else {
         $stmt = $pdo->prepare("
-            SELECT f.id, f.front_encrypted, f.back_encrypted, f.front_translations_encrypted, f.back_translations_encrypted, f.audio_front_translations_encrypted, f.audio_back_translations_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.question_answer, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, 0 as score
+            SELECT f.id, f.front_encrypted, f.back_encrypted, f.front_translations_encrypted, f.back_translations_encrypted, f.audio_front_translations_encrypted, f.audio_back_translations_encrypted, f.image_front_encrypted, f.image_back_encrypted, f.info_type, f.question_answer, f.character_id, f.created_at, f.has_audio_front, f.has_audio_back, COALESCE(f.created_by_user_id, d.user_id) AS card_owner_user_id, 0 as score
             FROM flashcards f
             JOIN directories d ON d.id = f.directory_id
             WHERE f.directory_id = ? 
@@ -4425,6 +4432,7 @@ if ($action === 'fetch') {
             'image_back' => !empty($card['image_back_encrypted']) ? Security::decryptData($card['image_back_encrypted']) : null,
             'info_type' => sanitizeInfoType($card['info_type'] ?? 2),
             'question_answer' => $card['question_answer'] === null ? null : (int)$card['question_answer'],
+            'character_id' => normalizeCharacterId($card['character_id'] ?? 1),
             'created_at' => $card['created_at'] ?? null,
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
@@ -4475,7 +4483,6 @@ if ($action === 'fetch') {
         'status' => 'success', 
         'deck_name' => Security::decryptData($deck['name_encrypted']),
         'deck_mode' => $deck_mode,
-        'character_id' => normalizeCharacterId($deck['character_id'] ?? 1),
         'deck_front_language' => normalizeDeckLanguage($deck['deck_front_language'] ?? 'pt-BR', 'pt-BR'),
         'deck_back_language' => normalizeDeckLanguage($deck['deck_back_language'] ?? 'en-GB', 'en-GB'),
         'deck_structure' => normalizeDeckStructure($deck['deck_structure'] ?? 'traducoes', 'traducoes'),
@@ -6010,7 +6017,6 @@ elseif ($action === 'update_settings') {
     $mode = in_array(($input['deck_mode'] ?? ''), $allowed_modes, true) ? $input['deck_mode'] : 'aleatorio';
     $front_language = normalizeDeckLanguage($input['deck_front_language'] ?? 'pt-BR', 'pt-BR');
     $back_language = normalizeDeckLanguage($input['deck_back_language'] ?? 'en-GB', 'en-GB');
-    $character_id = normalizeCharacterId($input['character_id'] ?? 1);
     $deck_structure = normalizeDeckStructure($input['deck_structure'] ?? 'traducoes', 'traducoes');
     $initial_tag_id = isset($input['id_tag_inicial']) && $input['id_tag_inicial'] !== null && $input['id_tag_inicial'] !== ''
         ? (int)$input['id_tag_inicial']
@@ -6028,8 +6034,8 @@ elseif ($action === 'update_settings') {
         }
     }
 
-    $stmt = $pdo->prepare("UPDATE directories SET deck_mode = ?, deck_front_language = ?, deck_back_language = ?, deck_structure = ?, id_tag_inicial = ?, character_id = ? WHERE id = ?");
-    if ($stmt->execute([$mode, $front_language, $back_language, $deck_structure, $initial_tag_id, $character_id, $deck_id])) echo json_encode(['status' => 'success', 'message' => 'Configurações atualizadas.']);
+    $stmt = $pdo->prepare("UPDATE directories SET deck_mode = ?, deck_front_language = ?, deck_back_language = ?, deck_structure = ?, id_tag_inicial = ? WHERE id = ?");
+    if ($stmt->execute([$mode, $front_language, $back_language, $deck_structure, $initial_tag_id, $deck_id])) echo json_encode(['status' => 'success', 'message' => 'Configurações atualizadas.']);
     else echo json_encode(['status' => 'error', 'message' => 'Erro ao salvar.']);
 }
 
@@ -6050,6 +6056,7 @@ elseif ($action === 'add_single') {
     $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
     $id_frequencia_informacional = validateFrequenciaInformacionalId($pdo, $user_id, $input['id_frequencia_informacional'] ?? null);
     $status_informacional = sanitizeStatusInformacional($input['status_informacional'] ?? 0);
+    $character_id = normalizeCharacterId($input['character_id'] ?? 1);
     $sentence_syntax = sanitizeSentenceSyntaxPayload($input);
 
     $has_front = !empty($front) || !empty($image_front);
@@ -6071,6 +6078,7 @@ elseif ($action === 'add_single') {
         die(json_encode(['status' => 'error', 'message' => 'Deck não encontrado.']));
     }
     $deckMode = $deck['deck_mode'] ?? 'aleatorio';
+    if ($deckMode !== 'livro') $character_id = 1;
     if ($deckMode !== 'grafo') {
         $info_type = 0;
         $question_answer = null;
@@ -6088,7 +6096,7 @@ elseif ($action === 'add_single') {
         die(json_encode(['status' => 'error', 'message' => 'Use $sujeitoDinamico, {{sujeitoDinamico}} ou {sujeitoDinamico} no texto da frente para criar sujeito dinâmico.']));
     }
 
-    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, front_translations_encrypted, back_translations_encrypted, image_front_encrypted, image_back_encrypted, info_type, question_answer, dynamic_text_type, dynamic_parent_flashcard_id, id_frequencia_informacional, status_informacional, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)");
+    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, character_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, front_translations_encrypted, back_translations_encrypted, image_front_encrypted, image_back_encrypted, info_type, question_answer, dynamic_text_type, dynamic_parent_flashcard_id, id_frequencia_informacional, status_informacional, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)");
     $created_card_ids = [];
     $template_card_id = null;
     $templateDynamicTextType = dynamicTextTypeToInt($dynamic_text_type);
@@ -6116,7 +6124,7 @@ elseif ($action === 'add_single') {
         $img_front_enc = !empty($image_front) ? Security::encryptData($image_front) : null;
         $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
 
-        if (!$stmt->execute([$deck_id, $user_id, $deck_id, $front_enc, $back_enc, $front_translations_enc, $back_translations_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $cardDynamicTextType, $dynamicParentFlashcardId, $id_frequencia_informacional, $status_informacional])) {
+        if (!$stmt->execute([$deck_id, $character_id, $user_id, $deck_id, $front_enc, $back_enc, $front_translations_enc, $back_translations_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $cardDynamicTextType, $dynamicParentFlashcardId, $id_frequencia_informacional, $status_informacional])) {
             echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
             return;
         }
@@ -6254,6 +6262,7 @@ elseif ($action === 'update_card') {
     $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
     $id_frequencia_informacional = validateFrequenciaInformacionalId($pdo, $user_id, $input['id_frequencia_informacional'] ?? null);
     $status_informacional = sanitizeStatusInformacional($input['status_informacional'] ?? 0);
+    $character_id = normalizeCharacterId($input['character_id'] ?? 1);
     $sentence_syntax = sanitizeSentenceSyntaxPayload($input);
     $dynamic_text_type_id = dynamicTextTypeToInt($dynamic_text_type);
 
@@ -6278,6 +6287,9 @@ elseif ($action === 'update_card') {
         die(json_encode(['status' => 'error', 'message' => 'Acesso negado.']));
     }
     $deckMode = $cardOwnership['deck_mode'] ?? 'aleatorio';
+    $character_id = $deckMode === 'livro'
+        ? normalizeCharacterId($input['character_id'] ?? ($cardOwnership['character_id'] ?? 1))
+        : 1;
     if ($deckMode !== 'grafo') {
         $info_type = 0;
         $question_answer = null;
@@ -6297,9 +6309,9 @@ elseif ($action === 'update_card') {
     $front_translations_enc = encryptFlashcardTranslationMap($frontTranslations);
     $back_translations_enc = encryptFlashcardTranslationMap($backTranslations);
 
-    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, front_translations_encrypted = ?, back_translations_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, info_type = ?, question_answer = ?, dynamic_text_type = ?, id_frequencia_informacional = ?, status_informacional = ? WHERE id = ?");
+    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, front_translations_encrypted = ?, back_translations_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, info_type = ?, question_answer = ?, dynamic_text_type = ?, id_frequencia_informacional = ?, status_informacional = ?, character_id = ? WHERE id = ?");
     
-    if ($stmt->execute([$front_enc, $back_enc, $front_translations_enc, $back_translations_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $dynamic_text_type_id, $id_frequencia_informacional, $status_informacional, $card_id])) {
+    if ($stmt->execute([$front_enc, $back_enc, $front_translations_enc, $back_translations_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $dynamic_text_type_id, $id_frequencia_informacional, $status_informacional, $character_id, $card_id])) {
         syncCardTagLinks($pdo, 'flashcard_tag_links', $card_id, $tag_ids, $user_id);
         syncCardTagLinks($pdo, 'subjects_links', $card_id, $subject_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'objects_links', $card_id, $object_tag_ids, $user_id);
