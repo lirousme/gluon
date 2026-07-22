@@ -128,11 +128,9 @@ function normalizeReturnTarget(?string $rawTarget): string {
 /**
  * Função sanitizeTagIds: Normaliza uma lista de IDs de tags recebida na requisição, mantendo apenas inteiros positivos únicos.
  */
-function validateFrequenciaInformacionalId(PDO $pdo, int $user_id, $value): int {
+function validateFrequenciaInformacionalId(PDO $pdo, int $user_id, $value): ?int {
     $id = (int)($value ?? 0);
-    if ($id <= 0) {
-        die(json_encode(['status' => 'error', 'message' => 'Selecione uma frequência informacional para salvar o card.']));
-    }
+    if ($id <= 0) return null;
     $stmt = $pdo->prepare('SELECT id FROM frequencias_informacionais WHERE id = ? AND user_id = ? LIMIT 1');
     $stmt->execute([$id, $user_id]);
     if (!$stmt->fetchColumn()) {

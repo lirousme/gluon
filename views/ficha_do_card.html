@@ -249,7 +249,7 @@
           <label for="frequenciaInformacionalSelect" class="block text-xs font-semibold uppercase tracking-wide text-emerald-200">Frequência informacional</label>
           <a href="/crud_frequencias_informacionais" class="text-xs font-semibold text-emerald-200 transition hover:text-emerald-100">Gerenciar</a>
         </div>
-        <select id="frequenciaInformacionalSelect" required class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white">
+        <select id="frequenciaInformacionalSelect" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white">
           <option value="">Carregando frequências...</option>
         </select>
         <p class="text-xs text-slate-400">Cada frase pode ter uma frequência informacional própria.</p>
@@ -1266,7 +1266,7 @@ const app = {
       this.updateInformationalFrequencyTagPanelTitles();
       return;
     }
-    select.innerHTML = '<option value="">Selecione uma frequência</option>' + this.frequenciasInformacionais.map((frequencia) => {
+    select.innerHTML = '<option value="">Sem frequência informacional</option>' + this.frequenciasInformacionais.map((frequencia) => {
       const id = Number(frequencia?.id || 0);
       const nome = this.escapeHTML(String(frequencia?.nome || 'Sem nome'));
       return `<option value="${id}">${nome}</option>`;
@@ -2007,7 +2007,6 @@ const app = {
       if (!subject_tag_ids.length) return this.setStatus('Selecione ao menos 1 tag Subject para o Tag Expansion.', 'error');
       if (!backPlainText && !image_back) return this.setStatus('Preencha o verso do Tag Expansion com texto ou imagem.', 'error');
     } else if (!frontPlainText && !image_front) return this.setStatus('Preencha a frente do card com texto ou imagem.', 'error');
-    if (!sentence_syntax.every(s => Number(s.id_frequencia_informacional || 0) > 0)) return this.setStatus('Selecione uma frequência informacional para todas as frases.', 'error');
     const original = btnSave.innerHTML; btnSave.disabled = true; btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Salvando...';
     try {
       const action = this.editCardId ? 'update_card' : 'add_single';
