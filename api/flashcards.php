@@ -65,7 +65,11 @@ function characterNames(): array {
 }
 
 function ensureCharactersSchema(PDO $pdo): void {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS characters (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, character_id TINYINT UNSIGNED NOT NULL, language VARCHAR(10) NOT NULL, voice_id VARCHAR(160) NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (id), UNIQUE KEY uq_characters_character_language (character_id, language)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS characters (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, character_id TINYINT UNSIGNED NOT NULL, language VARCHAR(10) NOT NULL, voice_id VARCHAR(160) NOT NULL, volume_gain_db DECIMAL(5,2) NOT NULL DEFAULT 0, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (id), UNIQUE KEY uq_characters_character_language (character_id, language)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $volumeColumn = $pdo->query("SHOW COLUMNS FROM characters LIKE 'volume_gain_db'")->fetchColumn();
+    if (!$volumeColumn) {
+        $pdo->exec("ALTER TABLE characters ADD COLUMN volume_gain_db DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER voice_id");
+    }
     $column = $pdo->query("SHOW COLUMNS FROM flashcards LIKE 'character_id'")->fetchColumn();
     if (!$column) {
         $pdo->exec("ALTER TABLE flashcards ADD COLUMN character_id TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER directory_id");
@@ -92,6 +96,13 @@ function findCharacterVoice(PDO $pdo, int $characterId, string $language): ?stri
     $stmt->execute([normalizeCharacterId($characterId), normalizeDeckLanguage($language, 'en-US')]);
     $voice = trim((string)$stmt->fetchColumn());
     return $voice !== '' ? $voice : null;
+}
+
+function findCharacterVolumeGainDb(PDO $pdo, int $characterId, string $language): float {
+    $stmt = $pdo->prepare('SELECT volume_gain_db FROM characters WHERE character_id = ? AND language = ? LIMIT 1');
+    $stmt->execute([normalizeCharacterId($characterId), normalizeDeckLanguage($language, 'en-US')]);
+    $volumeGainDb = $stmt->fetchColumn();
+    return $volumeGainDb !== false ? max(-96.0, min(16.0, (float)$volumeGainDb)) : 0.0;
 }
 
 function getGoogleTtsLanguageForVoice(string $voiceId, string $fallbackLanguage): string {
@@ -3464,7 +3475,7 @@ function requestOpenAITts($text_to_speech, &$error_details = null) {
 /**
  * Função requestGoogleCloudTts: Solicita áudio ao Google Cloud TTS com voz contextual do deck e retorna o binário.
  */
-function requestGoogleCloudTts($text_to_speech, $language, $side = null, $deck_structure = 'traducoes', $front_language = 'pt-BR', $back_language = 'en-GB', &$error_details = null, ?string $voice_override = null) {
+function requestGoogleCloudTts($text_to_speech, $language, $side = null, $deck_structure = 'traducoes', $front_language = 'pt-BR', $back_language = 'en-GB', &$error_details = null, ?string $voice_override = null, float $volume_gain_db = 0.0) {
     if (trim((string)GOOGLE_CLOUD_API_KEY) === '') {
         $error_details = 'Chave GOOGLE_CLOUD_API_KEY não configurada.';
         return null;
@@ -3480,7 +3491,8 @@ function requestGoogleCloudTts($text_to_speech, $language, $side = null, $deck_s
             'name' => $voice_name
         ],
         'audioConfig' => [
-            'audioEncoding' => 'MP3'
+            'audioEncoding' => 'MP3',
+            'volumeGainDb' => max(-96.0, min(16.0, $volume_gain_db))
         ]
     ]);
 
@@ -3561,6 +3573,7 @@ function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $la
         $audio_binary = requestOpenAITts($text_to_speech, $provider_error);
     } elseif ($provider === 'google') {
         $voiceOverride = null;
+        $volumeGainDb = 0.0;
         $stmtCharacter = $pdo->prepare("SELECT d.deck_mode, f.character_id FROM flashcards f JOIN directories d ON d.id = f.directory_id WHERE f.id = ? AND d.user_id = ? LIMIT 1");
         $stmtCharacter->execute([$card_id, $user_id]);
         $deckCharacter = $stmtCharacter->fetch(PDO::FETCH_ASSOC);
@@ -3569,8 +3582,9 @@ function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $la
                 ? normalizeCharacterId($deckCharacter['character_id'] ?? 1)
                 : 1;
             $voiceOverride = findCharacterVoice($pdo, $characterId, $language);
+            $volumeGainDb = findCharacterVolumeGainDb($pdo, $characterId, $language);
         }
-        $audio_binary = requestGoogleCloudTts($text_to_speech, $language, $side, $deck_structure, $front_language, $back_language, $provider_error, $voiceOverride);
+        $audio_binary = requestGoogleCloudTts($text_to_speech, $language, $side, $deck_structure, $front_language, $back_language, $provider_error, $voiceOverride, $volumeGainDb);
     } else {
         $audio_binary = requestFishAudioTts($text_to_speech, $language, $provider_error);
     }
@@ -6007,7 +6021,7 @@ elseif ($action === 'reset_book_score') {
 }
 
 elseif ($action === 'list_characters') {
-    $rows = $pdo->query('SELECT id, character_id, language, voice_id FROM characters ORDER BY character_id, FIELD(language, \'pt-BR\', \'en-US\', \'en-GB\', \'es-ES\', \'fr-FR\', \'cmn-CN\')')->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $pdo->query('SELECT id, character_id, language, voice_id, volume_gain_db FROM characters ORDER BY character_id, FIELD(language, \'pt-BR\', \'en-US\', \'en-GB\', \'es-ES\', \'fr-FR\', \'cmn-CN\')')->fetchAll(PDO::FETCH_ASSOC);
     echo json_encode(['status' => 'success', 'data' => $rows, 'characters' => characterNames(), 'languages' => characterLanguages()]);
 }
 
@@ -6015,10 +6029,12 @@ elseif ($action === 'save_character_voice') {
     $characterId = normalizeCharacterId($input['character_id'] ?? 0);
     $language = trim((string)($input['language'] ?? ''));
     $voiceId = trim((string)($input['voice_id'] ?? ''));
+    $volumeGainDb = filter_var($input['volume_gain_db'] ?? null, FILTER_VALIDATE_FLOAT);
     if (!in_array($language, characterLanguages(), true)) die(json_encode(['status' => 'error', 'message' => 'Idioma inválido.']));
     if ($voiceId === '' || strlen($voiceId) > 160) die(json_encode(['status' => 'error', 'message' => 'Informe um ID de voz válido (até 160 caracteres).']));
-    $stmt = $pdo->prepare('INSERT INTO characters (character_id, language, voice_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE voice_id = VALUES(voice_id)');
-    $stmt->execute([$characterId, $language, $voiceId]);
+    if ($volumeGainDb === false || $volumeGainDb < -96 || $volumeGainDb > 16) die(json_encode(['status' => 'error', 'message' => 'Informe um volume entre -96 e 16 dB.']));
+    $stmt = $pdo->prepare('INSERT INTO characters (character_id, language, voice_id, volume_gain_db) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE voice_id = VALUES(voice_id), volume_gain_db = VALUES(volume_gain_db)');
+    $stmt->execute([$characterId, $language, $voiceId, $volumeGainDb]);
     echo json_encode(['status' => 'success', 'message' => 'Voz do personagem salva com sucesso.']);
 }
 
