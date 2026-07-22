@@ -4651,8 +4651,12 @@ elseif ($action === 'generate_audio') {
     $previousLegacyAudio = $card[$audioColForLanguage] ?? null;
     $previousLegacyHasAudio = (int)($card[$hasAudioColForLanguage] ?? 0);
     $tts_error_details = null;
+    // O texto principal de cada lado deve respeitar o idioma configurado pelo
+    // usuário no deck. A detecção heurística confundia palavras compartilhadas
+    // entre idiomas (por exemplo, "no" em português) e podia selecionar uma
+    // voz espanhola para um texto configurado como pt-BR.
     $ttsLanguage = $auto_detect_language
-        ? detectFlashcardTextTtsLanguage($clean_text, $side_language)
+        ? $side_language
         : (['en' => 'en-GB', 'en_us' => 'en-US', 'en_gb' => 'en-GB', 'pt_br' => 'pt-BR', 'es' => 'es-ES', 'fr' => 'fr-FR', 'zh' => 'cmn-CN'][$language_key] ?? $side_language);
     $ok = generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $clean_text, $ttsLanguage, $deck_structure, $front_language, $back_language, $tts_error_details);
     if ($ok && $language_key !== $defaultLang) {
