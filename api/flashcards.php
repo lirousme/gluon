@@ -94,6 +94,15 @@ function findCharacterVoice(PDO $pdo, int $characterId, string $language): ?stri
     return $voice !== '' ? $voice : null;
 }
 
+function getGoogleTtsLanguageForVoice(string $voiceId, string $fallbackLanguage): string {
+    $voiceId = trim($voiceId);
+    if ($voiceId !== '' && preg_match('/^([a-z]{2,3}-[a-z]{2,4})-Chirp3(?:-|$)/i', $voiceId, $matches)) {
+        return $matches[1];
+    }
+
+    return $fallbackLanguage;
+}
+
 /**
  * Normaliza destinos de retorno recebidos do cliente para impedir redirects externos.
  */
@@ -3462,11 +3471,12 @@ function requestGoogleCloudTts($text_to_speech, $language, $side = null, $deck_s
     }
 
     $voice_name = trim((string)$voice_override) ?: getGoogleTtsVoiceForDeckContext($side, $language, $deck_structure, $front_language, $back_language);
+    $voice_language = getGoogleTtsLanguageForVoice($voice_name, $language);
     $ch = curl_init('https://texttospeech.googleapis.com/v1/text:synthesize?key=' . rawurlencode(GOOGLE_CLOUD_API_KEY));
     $payload = json_encode([
         'input' => ['text' => $text_to_speech],
         'voice' => [
-            'languageCode' => $language,
+            'languageCode' => $voice_language,
             'name' => $voice_name
         ],
         'audioConfig' => [
