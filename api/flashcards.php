@@ -3554,8 +3554,11 @@ function generateAndPersistCardAudio($pdo, $user_id, $card_id, $side, $text, $la
         $stmtCharacter = $pdo->prepare("SELECT d.deck_mode, f.character_id FROM flashcards f JOIN directories d ON d.id = f.directory_id WHERE f.id = ? AND d.user_id = ? LIMIT 1");
         $stmtCharacter->execute([$card_id, $user_id]);
         $deckCharacter = $stmtCharacter->fetch(PDO::FETCH_ASSOC);
-        if (($deckCharacter['deck_mode'] ?? '') === 'livro') {
-            $voiceOverride = findCharacterVoice($pdo, normalizeCharacterId($deckCharacter['character_id'] ?? 1), $language);
+        if ($deckCharacter) {
+            $characterId = ($deckCharacter['deck_mode'] ?? '') === 'livro'
+                ? normalizeCharacterId($deckCharacter['character_id'] ?? 1)
+                : 1;
+            $voiceOverride = findCharacterVoice($pdo, $characterId, $language);
         }
         $audio_binary = requestGoogleCloudTts($text_to_speech, $language, $side, $deck_structure, $front_language, $back_language, $provider_error, $voiceOverride);
     } else {
