@@ -1,8 +1,11 @@
-#!/usr/bin/env python3
 """Interface local e independente para gerar os audios XTTS dos flashcards.
 
 Edite somente o bloco CONFIGURACAO antes de executar. Este utilitario nao le o
 arquivo .env do site e deve ser exposto apenas em localhost.
+
+No Windows, execute o ARQUIVO INTEIRO com ``py api\\xtts_local.py``. A primeira
+linha deste arquivo deliberadamente nao e um shebang Unix: o Code Runner usava
+``/usr/bin/env`` por causa dela, caminho que nao existe no Windows.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ import json
 import re
 import tempfile
 import threading
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -39,6 +43,7 @@ ENCRYPTION_KEY = "CHAVE_DE_CRIPTOGRAFIA_DO_SITE"
 
 BASE_DIR = Path(__file__).resolve().parent
 VOICE_PATH = BASE_DIR / "voices" / "a34 (75).wav"
+TEMP_DIR = BASE_DIR / "outputs"
 MODEL_NAME = "tts_models/multilingual/multi-dataset/xtts_v2"
 HTTP_HOST = "127.0.0.1"
 HTTP_PORT = 8765
@@ -192,13 +197,16 @@ def generate_audio(card_id: int, side: str, lang: str) -> None:
     if not candidates:
         raise ValueError("Texto/idioma nao encontrado para este card.")
     item = candidates[0]
-    if not VOICE_PATH.is_file():
-        raise FileNotFoundError(f"Audio de referencia nao encontrado: {VOICE_PATH}")
-    sf.info(str(VOICE_PATH))
+    validate_voice_file()
 
     temporary_path = None
     try:
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temporary:
+        # O NamedTemporaryFile precisa estar fechado antes de o XTTS abri-lo no
+        # Windows. O finally remove o WAV tanto no sucesso quanto em uma falha.
+        TEMP_DIR.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            suffix=".wav", prefix="xtts_", dir=TEMP_DIR, delete=False
+        ) as temporary:
             temporary_path = Path(temporary.name)
         with _tts_lock:
             tts_model().tts_to_file(
@@ -311,13 +319,34 @@ def validate_configuration() -> None:
         raise RuntimeError("Preencha o bloco CONFIGURACAO no inicio do arquivo antes de executar.")
 
 
+def validate_voice_file() -> None:
+    """Falha com o caminho absoluto, em vez de uma mensagem generica do XTTS."""
+    if not VOICE_PATH.exists():
+        raise FileNotFoundError(
+            "O audio de referencia nao foi encontrado.\n"
+            f"Caminho exato procurado: {VOICE_PATH}\n"
+            f"Pasta deste programa: {BASE_DIR}\n"
+            "Crie a pasta 'voices' ao lado deste arquivo e coloque nela "
+            "o arquivo 'a34 (75).wav'."
+        )
+    if not VOICE_PATH.is_file():
+        raise RuntimeError(f"O caminho da voz existe, mas nao e um arquivo: {VOICE_PATH}")
+    try:
+        sf.info(str(VOICE_PATH))
+    except Exception as error:
+        raise RuntimeError(
+            "O arquivo de referencia existe, mas nao e um WAV valido ou esta "
+            f"corrompido: {VOICE_PATH}"
+        ) from error
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Interface local para geracao XTTS")
     parser.add_argument("--check", action="store_true", help="testa configuracao, banco, voz e criptografia")
     args = parser.parse_args()
     validate_configuration()
     if args.check:
-        sf.info(str(VOICE_PATH))
+        validate_voice_file()
         connection = database_connection()
         connection.close()
         probe = "teste de criptografia"
@@ -326,7 +355,11 @@ def main() -> None:
         print("Configuracao, banco, WAV e criptografia verificados com sucesso.")
         return
     server = ThreadingHTTPServer((HTTP_HOST, HTTP_PORT), Handler)
-    print(f"Interface disponivel em http://{HTTP_HOST}:{HTTP_PORT}")
+    address = f"http://{HTTP_HOST}:{HTTP_PORT}"
+    print(f"Arquivo em execucao: {Path(__file__).resolve()}")
+    print(f"Interface disponivel em {address}")
+    print("Pressione Ctrl+C para encerrar.")
+    threading.Timer(0.5, webbrowser.open, args=(address,)).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
