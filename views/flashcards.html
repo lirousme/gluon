@@ -2263,12 +2263,16 @@ const flashcardApp = {
                 this.updateQuestionAnswerControls(card);
             },
 
-            incrementBookReadProgress() {
-                if (this.deckMode !== 'livro' || this.bookCompletedReads >= this.bookCompletedReadsMax) return;
+            async incrementBookReadProgress() {
+                if (this.deckMode !== 'livro' || this.bookCompletedReads >= this.bookCompletedReadsMax) return false;
 
-                this.bookCompletedReads = Math.min(this.bookCompletedReads + 1, this.bookCompletedReadsMax);
+                const res = await this.api('increment_book_score', { deck_id: this.deckId });
+                if (!res) return false;
+
+                this.bookCompletedReads = Math.min(Number(res.book_completed_reads || 0), this.bookCompletedReadsMax);
+                this.bookNextReviewAt = res.book_next_review_at || null;
                 this.deckPercentage = Math.round((this.bookCompletedReads / this.bookCompletedReadsMax) * 100);
-                this.api('increment_book_score', { deck_id: this.deckId }).catch(e => console.error(e));
+                return true;
             },
 
             updateAudioControlsVisibility() {
@@ -2465,7 +2469,8 @@ const flashcardApp = {
                 if (['aleatorio', 'grafo'].includes(this.deckMode) && !options.skipScore) await this.registerScore(reviewCard);
 
                 if (this.deckMode === 'livro' && this.cards.length === 1) {
-                    this.incrementBookReadProgress();
+                    const reviewRegistered = await this.incrementBookReadProgress();
+                    if (!reviewRegistered) return;
                     await this.loadDeck();
                     return;
                 }
@@ -2478,7 +2483,8 @@ const flashcardApp = {
 
                     this.handleAutoPlaybackAndFlow();
                 } else if (this.deckMode === 'livro') {
-                    this.incrementBookReadProgress();
+                    const reviewRegistered = await this.incrementBookReadProgress();
+                    if (!reviewRegistered) return;
                     await this.loadDeck();
                 } else if (['aleatorio', 'grafo'].includes(this.deckMode)) {
                     // Último card da revisão do dia: recarrega para refletir as cartas vencidas restantes.

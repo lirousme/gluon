@@ -5961,11 +5961,24 @@ elseif ($action === 'increment_book_score') {
         VALUES (?, ?, 0, 1, DATE_ADD(NOW(), INTERVAL 24 HOUR))
         ON DUPLICATE KEY UPDATE
             current_index = 0,
-            completed_reads = LEAST(completed_reads + 1, 3),
-            next_review_at = DATE_ADD(NOW(), INTERVAL (LEAST(completed_reads + 1, 20) * 24) HOUR)
+            next_review_at = DATE_ADD(NOW(), INTERVAL (LEAST(completed_reads + 1, 3) * 24) HOUR),
+            completed_reads = LEAST(completed_reads + 1, 3)
     ");
     $stmt->execute([$user_id, $deck_id]);
-    echo json_encode(['status' => 'success']);
+
+    $stmtProgress = $pdo->prepare("
+        SELECT completed_reads, next_review_at
+        FROM flashcard_book_progress
+        WHERE user_id = ? AND directory_id = ?
+    ");
+    $stmtProgress->execute([$user_id, $deck_id]);
+    $progress = $stmtProgress->fetch();
+
+    echo json_encode([
+        'status' => 'success',
+        'book_completed_reads' => (int)($progress['completed_reads'] ?? 0),
+        'book_next_review_at' => $progress['next_review_at'] ?? null,
+    ]);
 }
 
 elseif ($action === 'reset_book_score') {
