@@ -4587,8 +4587,11 @@ elseif ($action === 'list_text_cards') {
     $page = max(1, (int)($input['page'] ?? 1));
     $perPage = 10;
     $tagIds = sanitizeTagIds($input['tag_ids'] ?? []);
+    $frequenciaInformacionalId = max(0, (int)($input['frequencia_informacional_id'] ?? 0));
     $tagFilterSql = '';
     $tagFilterParams = [];
+    $frequenciaFilterSql = '';
+    $frequenciaFilterParams = [];
     if ($tagIds) {
         $placeholders = implode(',', array_fill(0, count($tagIds), '?'));
         $tagFilterSql = " AND f.id IN (
@@ -4601,8 +4604,23 @@ elseif ($action === 'list_text_cards') {
         $tagFilterParams = array_merge($tagIds, [count($tagIds)]);
     }
 
-    $stmtTotal = $pdo->prepare('SELECT COUNT(*) FROM flashcards f INNER JOIN directories d ON d.id = f.directory_id WHERE d.user_id = ?' . $tagFilterSql);
-    $stmtTotal->execute(array_merge([$user_id], $tagFilterParams));
+    if ($frequenciaInformacionalId > 0) {
+        $stmtFrequencia = $pdo->prepare('SELECT id FROM frequencias_informacionais WHERE id = ? AND user_id = ? LIMIT 1');
+        $stmtFrequencia->execute([$frequenciaInformacionalId, $user_id]);
+        if (!$stmtFrequencia->fetchColumn()) {
+            die(json_encode(['status' => 'error', 'message' => 'Frequência informacional não encontrada ou sem permissão.']));
+        }
+        $frequenciaFilterSql = ' AND EXISTS (
+            SELECT 1
+            FROM flashcard_frases ff
+            WHERE ff.flashcard_id = f.id
+              AND ff.id_frequencia_informacional = ?
+        )';
+        $frequenciaFilterParams[] = $frequenciaInformacionalId;
+    }
+
+    $stmtTotal = $pdo->prepare('SELECT COUNT(*) FROM flashcards f INNER JOIN directories d ON d.id = f.directory_id WHERE d.user_id = ?' . $tagFilterSql . $frequenciaFilterSql);
+    $stmtTotal->execute(array_merge([$user_id], $tagFilterParams, $frequenciaFilterParams));
     $totalCards = (int)$stmtTotal->fetchColumn();
     $totalPages = max(1, (int)ceil($totalCards / $perPage));
     $page = min($page, $totalPages);
@@ -4614,11 +4632,11 @@ elseif ($action === 'list_text_cards') {
                d.deck_front_language, d.deck_back_language
         FROM flashcards f
         INNER JOIN directories d ON d.id = f.directory_id
-        WHERE d.user_id = ? {$tagFilterSql}
+        WHERE d.user_id = ? {$tagFilterSql} {$frequenciaFilterSql}
         ORDER BY f.id DESC
         LIMIT {$perPage} OFFSET {$offset}
     ");
-    $stmt->execute(array_merge([$user_id], $tagFilterParams));
+    $stmt->execute(array_merge([$user_id], $tagFilterParams, $frequenciaFilterParams));
 
     $languageKeys = ['pt_br', 'en_us', 'en_gb', 'es', 'fr', 'zh'];
     $languageAliases = [
