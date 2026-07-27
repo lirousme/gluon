@@ -4561,6 +4561,76 @@ elseif ($action === 'get_audio') {
     exit;
 }
 
+// ==== Tabela paginada de textos dos cards ====
+elseif ($action === 'list_text_cards') {
+    $page = max(1, (int)($input['page'] ?? 1));
+    $perPage = 10;
+
+    $stmtTotal = $pdo->prepare('SELECT COUNT(*) FROM flashcards f INNER JOIN directories d ON d.id = f.directory_id WHERE d.user_id = ?');
+    $stmtTotal->execute([$user_id]);
+    $totalCards = (int)$stmtTotal->fetchColumn();
+    $totalPages = max(1, (int)ceil($totalCards / $perPage));
+    $page = min($page, $totalPages);
+    $offset = ($page - 1) * $perPage;
+
+    $stmt = $pdo->prepare("
+        SELECT f.id, f.front_encrypted, f.back_encrypted,
+               f.front_translations_encrypted, f.back_translations_encrypted,
+               d.deck_front_language, d.deck_back_language
+        FROM flashcards f
+        INNER JOIN directories d ON d.id = f.directory_id
+        WHERE d.user_id = ?
+        ORDER BY f.id DESC
+        LIMIT {$perPage} OFFSET {$offset}
+    ");
+    $stmt->execute([$user_id]);
+
+    $languageKeys = ['pt_br', 'en_us', 'en_gb', 'es', 'fr', 'zh'];
+    $languageAliases = [
+        'pt-BR' => 'pt_br',
+        'en-US' => 'en_us',
+        'en-GB' => 'en_gb',
+        'es-ES' => 'es',
+        'fr-FR' => 'fr',
+        'cmn-CN' => 'zh',
+    ];
+    $cards = [];
+
+    foreach ($stmt->fetchAll() as $card) {
+        $frontTranslations = encryptedFlashcardTranslationMap($card['front_translations_encrypted'] ?? null);
+        $backTranslations = encryptedFlashcardTranslationMap($card['back_translations_encrypted'] ?? null);
+        $frontLanguage = $languageAliases[normalizeDeckLanguage($card['deck_front_language'] ?? 'pt-BR', 'pt-BR')] ?? 'pt_br';
+        $backLanguage = $languageAliases[normalizeDeckLanguage($card['deck_back_language'] ?? 'en-GB', 'en-GB')] ?? 'en_gb';
+
+        if (empty($frontTranslations[$frontLanguage]) && !empty($card['front_encrypted'])) {
+            $frontTranslations[$frontLanguage] = Security::decryptData($card['front_encrypted']);
+        }
+        if (empty($backTranslations[$backLanguage]) && !empty($card['back_encrypted'])) {
+            $backTranslations[$backLanguage] = Security::decryptData($card['back_encrypted']);
+        }
+
+        $texts = [];
+        foreach ($languageKeys as $languageKey) {
+            $texts[$languageKey] = [
+                'front' => (string)($frontTranslations[$languageKey] ?? ($languageKey === 'en_gb' ? ($frontTranslations['en'] ?? '') : '')),
+                'back' => (string)($backTranslations[$languageKey] ?? ($languageKey === 'en_gb' ? ($backTranslations['en'] ?? '') : '')),
+            ];
+        }
+        $cards[] = ['id' => (int)$card['id'], 'texts' => $texts];
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'data' => $cards,
+        'pagination' => [
+            'page' => $page,
+            'per_page' => $perPage,
+            'total_cards' => $totalCards,
+            'total_pages' => $totalPages,
+        ],
+    ]);
+}
+
 // ==== Exportar todos os cards para Excel/CSV ====
 elseif ($action === 'get_all_cards') {
     $deck_id = (int)($input['deck_id'] ?? 0);
