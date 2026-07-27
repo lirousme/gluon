@@ -1302,9 +1302,9 @@ const app = {
     };
     const rawSentences = Array.isArray(card.sentence_syntax) && card.sentence_syntax.length
       ? card.sentence_syntax
-      : [{ ordem: 1, id_frequencia_informacional: card.id_frequencia_informacional || null, tags: {} }];
+      : [{ ordem: 1, id_frequencia_informacional: null, tags: {} }];
     return rawSentences.map((rawSentence, index) => {
-      const frequencyId = Number(rawSentence?.id_frequencia_informacional || card.id_frequencia_informacional || 0) || null;
+      const frequencyId = Number(rawSentence?.id_frequencia_informacional || 0) || null;
       const rawTags = rawSentence && typeof rawSentence.tags === 'object' && rawSentence.tags !== null ? rawSentence.tags : {};
       const normalizedTags = {};
       ['subject', 'object', 'objectIsolated', 'objectCompound', 'inflexionType', 'verb', 'adverb', 'local', 'tempo', 'lexicalChunk'].forEach((key) => {
@@ -1922,7 +1922,7 @@ const app = {
     this.setInfoType(card.info_type);
     this.setQuestionAnswer(card.question_answer === 0 ? 0 : 1);
     dynamicTextType.value = ['none', 'subject', 'object', 'verb'].includes(card.dynamic_text_type) ? card.dynamic_text_type : 'none';
-    this.renderFrequenciasInformacionaisSelect(card.id_frequencia_informacional || '');
+    this.renderFrequenciasInformacionaisSelect();
     if (statusInformacionalSelect) statusInformacionalSelect.value = ['0', '1', '2'].includes(String(card.status_informacional ?? 0)) ? String(card.status_informacional ?? 0) : '0';
     if (relacaoAcaoSelect) relacaoAcaoSelect.value = ['confirmacao', 'negacao'].includes(card.relacao_acao) ? card.relacao_acao : '';
     const subjectTags = Array.isArray(card.subject_tags) ? card.subject_tags.map(t => Number(t.id)).filter(Boolean) : [];
@@ -1999,7 +1999,6 @@ const app = {
     subject_tag_ids = Array.from(new Set(sentence_syntax.flatMap(s => s.tags?.subject || []).concat(subject_tag_ids))).map(Number).filter(Boolean);
     object_tag_ids = Array.from(new Set(sentence_syntax.flatMap(s => ['object','objectIsolated','objectCompound'].flatMap(k => s.tags?.[k] || [])).concat(object_tag_ids))).map(Number).filter(Boolean);
     lexical_chunk_tag_ids = Array.from(new Set(sentence_syntax.flatMap(s => ['lexicalChunk','inflexionType','verb','adverb','local','tempo'].flatMap(k => s.tags?.[k] || [])).concat(lexical_chunk_tag_ids))).map(Number).filter(Boolean);
-    const id_frequencia_informacional = Number(sentence_syntax[0]?.id_frequencia_informacional || frequenciaInformacionalSelect.value || 0);
     const status_informacional = Number(statusInformacionalSelect?.value || 0);
     const isTagExpansion = this.isTagExpansionType();
     const generatedFront = isTagExpansion ? '' : front;
@@ -2014,7 +2013,7 @@ const app = {
       const question_answer = this.infoType === 2 ? this.questionAnswer : null;
       const front_translations = isTagExpansion ? {} : this.collectFlashcardTranslations('front');
       const back_translations = this.collectFlashcardTranslations('back');
-      const payload = { deck_id: this.deckId, front: generatedFront, back, front_translations, back_translations, image_front: isTagExpansion ? '' : image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, id_frequencia_informacional, sentence_syntax, status_informacional, info_type: this.infoType, question_answer, dynamic_text_type: isTagExpansion ? 'none' : dynamicTextType.value, return_to };
+      const payload = { deck_id: this.deckId, front: generatedFront, back, front_translations, back_translations, image_front: isTagExpansion ? '' : image_front, image_back, subject_tag_ids, object_tag_ids, lexical_chunk_tag_ids, sentence_syntax, status_informacional, info_type: this.infoType, question_answer, dynamic_text_type: isTagExpansion ? 'none' : dynamicTextType.value, return_to };
       if (this.editCardId) payload.card_id = this.editCardId;
       const response = await this.api(action, payload);
       this.setStatus(response?.message || 'Card salvo com sucesso.', 'success');

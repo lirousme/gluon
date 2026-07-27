@@ -48,9 +48,9 @@ ensureTagFamilyOrderSchema($pdo);
 ensureFlashcardsPublicToggleSchema($pdo);
 ensureFlashcardsDynamicTextTypeSchema($pdo);
 ensureFlashcardsQuestionAnswerSchema($pdo);
-ensureFlashcardsStatusInformacionalSchema($pdo);
 ensureFrequenciasInformacionaisSchema($pdo);
 ensureFlashcardSentenceSyntaxSchema($pdo);
+ensureFlashcardsStatusInformacionalSchema($pdo);
 ensureCharactersSchema($pdo);
 $user_id = $_SESSION['user_id'];
 $input = json_decode(file_get_contents('php://input'), true);
@@ -926,7 +926,7 @@ function ensureFlashcardsStatusInformacionalSchema(PDO $pdo): void
     try {
         $column = $pdo->query("SHOW COLUMNS FROM flashcards LIKE 'status_informacional'")->fetch(PDO::FETCH_ASSOC);
         if (!$column) {
-            $pdo->exec('ALTER TABLE flashcards ADD COLUMN status_informacional TINYINT NOT NULL DEFAULT 0 AFTER id_frequencia_informacional');
+            $pdo->exec('ALTER TABLE flashcards ADD COLUMN status_informacional TINYINT NOT NULL DEFAULT 0 AFTER dynamic_parent_flashcard_id');
         }
     } catch (Throwable $e) {
         error_log('[flashcards][status_informacional_schema] ' . $e->getMessage());
@@ -952,28 +952,6 @@ function ensureFrequenciasInformacionaisSchema(PDO $pdo): void
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ");
 
-        $column = $pdo->query("SHOW COLUMNS FROM flashcards LIKE 'id_frequencia_informacional'")->fetch(PDO::FETCH_ASSOC);
-        if (!$column) {
-            $pdo->exec('ALTER TABLE flashcards ADD COLUMN id_frequencia_informacional INT UNSIGNED NULL DEFAULT NULL AFTER dynamic_parent_flashcard_id');
-        }
-
-        $index = $pdo->query("SHOW INDEX FROM flashcards WHERE Key_name = 'idx_flashcards_id_frequencia_informacional'")->fetch(PDO::FETCH_ASSOC);
-        if (!$index) {
-            $pdo->exec('CREATE INDEX idx_flashcards_id_frequencia_informacional ON flashcards (id_frequencia_informacional)');
-        }
-
-        $fkStmt = $pdo->prepare("
-            SELECT CONSTRAINT_NAME
-            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = 'flashcards'
-              AND CONSTRAINT_NAME = 'fk_flashcards_frequencia_informacional'
-            LIMIT 1
-        ");
-        $fkStmt->execute();
-        if (!$fkStmt->fetch(PDO::FETCH_ASSOC)) {
-            $pdo->exec('ALTER TABLE flashcards ADD CONSTRAINT fk_flashcards_frequencia_informacional FOREIGN KEY (id_frequencia_informacional) REFERENCES frequencias_informacionais(id) ON DELETE SET NULL');
-        }
     } catch (Throwable $e) {
         error_log('[flashcards][frequencias_informacionais_schema] ' . $e->getMessage());
     }
@@ -999,6 +977,32 @@ function ensureFlashcardSentenceSyntaxSchema(PDO $pdo): void
                 KEY idx_flashcard_frases_frequencia (id_frequencia_informacional)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ");
+
+        // Migra o modelo antigo (uma frequência por card) antes de remover a coluna
+        // redundante. Cards já divididos em frases não são sobrescritos.
+        $legacyFrequencyColumn = $pdo->query("SHOW COLUMNS FROM flashcards LIKE 'id_frequencia_informacional'")->fetch(PDO::FETCH_ASSOC);
+        if ($legacyFrequencyColumn) {
+            $pdo->exec("
+                INSERT INTO flashcard_frases (flashcard_id, ordem, id_frequencia_informacional)
+                SELECT f.id, 1, f.id_frequencia_informacional
+                FROM flashcards f
+                WHERE f.id_frequencia_informacional IS NOT NULL
+                  AND NOT EXISTS (SELECT 1 FROM flashcard_frases ff WHERE ff.flashcard_id = f.id)
+            ");
+            $legacyForeignKey = $pdo->query("
+                SELECT CONSTRAINT_NAME
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'flashcards'
+                  AND COLUMN_NAME = 'id_frequencia_informacional'
+                  AND REFERENCED_TABLE_NAME IS NOT NULL
+                LIMIT 1
+            ")->fetchColumn();
+            if ($legacyForeignKey) {
+                $pdo->exec('ALTER TABLE flashcards DROP FOREIGN KEY `' . str_replace('`', '``', (string)$legacyForeignKey) . '`');
+            }
+            $pdo->exec('ALTER TABLE flashcards DROP COLUMN id_frequencia_informacional');
+        }
 
         $linkColumns = [
             'subjects_links' => ['id_frase INT NULL AFTER tag_id'],
@@ -1048,6 +1052,23 @@ function sanitizeSentenceSyntaxPayload(array $input): array {
         ];
     }
     return $result;
+}
+
+function validateSentenceSyntaxFrequencies(PDO $pdo, int $userId, array $sentences): array {
+    $frequencyIds = array_values(array_unique(array_filter(
+        array_map(static fn($sentence) => (int)($sentence['id_frequencia_informacional'] ?? 0), $sentences),
+        static fn($id) => $id > 0
+    )));
+    if (empty($frequencyIds)) return $sentences;
+
+    $placeholders = implode(',', array_fill(0, count($frequencyIds), '?'));
+    $stmt = $pdo->prepare("SELECT id FROM frequencias_informacionais WHERE id IN ({$placeholders}) AND user_id = ?");
+    $stmt->execute(array_merge($frequencyIds, [$userId]));
+    $allowedIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
+    if (count($allowedIds) !== count($frequencyIds)) {
+        die(json_encode(['status' => 'error', 'message' => 'Uma ou mais frequências informacionais das frases não foram encontradas ou estão sem permissão.']));
+    }
+    return $sentences;
 }
 
 function syncFlashcardSentenceSyntax(PDO $pdo, int $cardId, int $userId, array $sentences): void {
@@ -6172,10 +6193,9 @@ elseif ($action === 'add_single') {
     $info_type = sanitizeInfoType($input['info_type'] ?? 2);
     $dynamic_text_type = sanitizeDynamicTextType($input['dynamic_text_type'] ?? 'none');
     $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
-    $id_frequencia_informacional = validateFrequenciaInformacionalId($pdo, $user_id, $input['id_frequencia_informacional'] ?? null);
     $status_informacional = sanitizeStatusInformacional($input['status_informacional'] ?? 0);
     $character_id = normalizeCharacterId($input['character_id'] ?? 1);
-    $sentence_syntax = sanitizeSentenceSyntaxPayload($input);
+    $sentence_syntax = validateSentenceSyntaxFrequencies($pdo, $user_id, sanitizeSentenceSyntaxPayload($input));
 
     $has_front = !empty($front) || !empty($image_front);
     $has_back = !empty($back) || !empty($image_back);
@@ -6214,7 +6234,7 @@ elseif ($action === 'add_single') {
         die(json_encode(['status' => 'error', 'message' => 'Use $sujeitoDinamico, {{sujeitoDinamico}} ou {sujeitoDinamico} no texto da frente para criar sujeito dinâmico.']));
     }
 
-    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, character_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, front_translations_encrypted, back_translations_encrypted, image_front_encrypted, image_back_encrypted, info_type, question_answer, dynamic_text_type, dynamic_parent_flashcard_id, id_frequencia_informacional, status_informacional, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)");
+    $stmt = $pdo->prepare("INSERT INTO flashcards (directory_id, character_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, front_translations_encrypted, back_translations_encrypted, image_front_encrypted, image_back_encrypted, info_type, question_answer, dynamic_text_type, dynamic_parent_flashcard_id, status_informacional, has_audio_front, has_audio_back) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)");
     $created_card_ids = [];
     $template_card_id = null;
     $templateDynamicTextType = dynamicTextTypeToInt($dynamic_text_type);
@@ -6242,7 +6262,7 @@ elseif ($action === 'add_single') {
         $img_front_enc = !empty($image_front) ? Security::encryptData($image_front) : null;
         $img_back_enc = !empty($image_back) ? Security::encryptData($image_back) : null;
 
-        if (!$stmt->execute([$deck_id, $character_id, $user_id, $deck_id, $front_enc, $back_enc, $front_translations_enc, $back_translations_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $cardDynamicTextType, $dynamicParentFlashcardId, $id_frequencia_informacional, $status_informacional])) {
+        if (!$stmt->execute([$deck_id, $character_id, $user_id, $deck_id, $front_enc, $back_enc, $front_translations_enc, $back_translations_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $cardDynamicTextType, $dynamicParentFlashcardId, $status_informacional])) {
             echo json_encode(['status' => 'error', 'message' => 'Erro ao adicionar card.']);
             return;
         }
@@ -6283,7 +6303,7 @@ elseif ($action === 'get_card_for_edit') {
     }
 
     $stmt = $pdo->prepare("
-        SELECT id, directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, front_translations_encrypted, back_translations_encrypted, audio_front_translations_encrypted, audio_back_translations_encrypted, image_front_encrypted, image_back_encrypted, info_type, question_answer, dynamic_text_type, dynamic_parent_flashcard_id, id_frequencia_informacional, status_informacional, has_audio_front, has_audio_back
+        SELECT id, directory_id, created_by_user_id, private_directory_id, front_encrypted, back_encrypted, front_translations_encrypted, back_translations_encrypted, audio_front_translations_encrypted, audio_back_translations_encrypted, image_front_encrypted, image_back_encrypted, info_type, question_answer, dynamic_text_type, dynamic_parent_flashcard_id, status_informacional, has_audio_front, has_audio_back
         FROM flashcards
         WHERE id = ?
         LIMIT 1
@@ -6318,7 +6338,6 @@ elseif ($action === 'get_card_for_edit') {
             'question_answer' => $card['question_answer'] === null ? null : (int)$card['question_answer'],
             'dynamic_text_type' => dynamicTextTypeFromInt($card['dynamic_text_type'] ?? 0),
             'dynamic_parent_flashcard_id' => !empty($card['dynamic_parent_flashcard_id']) ? (int)$card['dynamic_parent_flashcard_id'] : null,
-            'id_frequencia_informacional' => !empty($card['id_frequencia_informacional']) ? (int)$card['id_frequencia_informacional'] : null,
             'status_informacional' => sanitizeStatusInformacional($card['status_informacional'] ?? 0),
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
@@ -6378,10 +6397,9 @@ elseif ($action === 'update_card') {
     $info_type = sanitizeInfoType($input['info_type'] ?? 2);
     $dynamic_text_type = sanitizeDynamicTextType($input['dynamic_text_type'] ?? 'none');
     $question_answer = sanitizeQuestionAnswer($input['question_answer'] ?? null, $info_type);
-    $id_frequencia_informacional = validateFrequenciaInformacionalId($pdo, $user_id, $input['id_frequencia_informacional'] ?? null);
     $status_informacional = sanitizeStatusInformacional($input['status_informacional'] ?? 0);
     $character_id = normalizeCharacterId($input['character_id'] ?? 1);
-    $sentence_syntax = sanitizeSentenceSyntaxPayload($input);
+    $sentence_syntax = validateSentenceSyntaxFrequencies($pdo, $user_id, sanitizeSentenceSyntaxPayload($input));
     $dynamic_text_type_id = dynamicTextTypeToInt($dynamic_text_type);
 
     $has_front = !empty($front) || !empty($image_front);
@@ -6427,9 +6445,9 @@ elseif ($action === 'update_card') {
     $front_translations_enc = encryptFlashcardTranslationMap($frontTranslations);
     $back_translations_enc = encryptFlashcardTranslationMap($backTranslations);
 
-    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, front_translations_encrypted = ?, back_translations_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, info_type = ?, question_answer = ?, dynamic_text_type = ?, id_frequencia_informacional = ?, status_informacional = ?, character_id = ? WHERE id = ?");
+    $stmt = $pdo->prepare("UPDATE flashcards SET front_encrypted = ?, back_encrypted = ?, front_translations_encrypted = ?, back_translations_encrypted = ?, image_front_encrypted = ?, image_back_encrypted = ?, info_type = ?, question_answer = ?, dynamic_text_type = ?, status_informacional = ?, character_id = ? WHERE id = ?");
     
-    if ($stmt->execute([$front_enc, $back_enc, $front_translations_enc, $back_translations_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $dynamic_text_type_id, $id_frequencia_informacional, $status_informacional, $character_id, $card_id])) {
+    if ($stmt->execute([$front_enc, $back_enc, $front_translations_enc, $back_translations_enc, $img_front_enc, $img_back_enc, $info_type, $question_answer, $dynamic_text_type_id, $status_informacional, $character_id, $card_id])) {
         syncCardTagLinks($pdo, 'flashcard_tag_links', $card_id, $tag_ids, $user_id);
         syncCardTagLinks($pdo, 'subjects_links', $card_id, $subject_tag_ids, $user_id);
         syncCardTagLinks($pdo, 'objects_links', $card_id, $object_tag_ids, $user_id);
@@ -6583,7 +6601,11 @@ elseif ($action === 'delete_filtered_graph_cards') {
         if (count($allowedFrequenciaIds) !== count($frequenciaInformacionalIds)) {
             die(json_encode(['status' => 'error', 'message' => 'Uma ou mais frequências informacionais não foram encontradas ou estão sem permissão.']));
         }
-        $frequenciaFilterSql = " AND f.id_frequencia_informacional IN ({$placeholders})";
+        $frequenciaFilterSql = " AND EXISTS (
+            SELECT 1 FROM flashcard_frases ff
+            WHERE ff.flashcard_id = f.id
+              AND ff.id_frequencia_informacional IN ({$placeholders})
+        )";
         $frequenciaFilterParams = $frequenciaInformacionalIds;
     }
 
@@ -6701,10 +6723,18 @@ elseif ($action === 'delete_frequencia_informacional') {
     $id = (int)($input['id'] ?? 0);
     if ($id <= 0) die(json_encode(['status' => 'error', 'message' => 'ID inválido.']));
     try {
+        $pdo->beginTransaction();
+        $pdo->prepare("UPDATE flashcard_frases
+            SET id_frequencia_informacional = NULL
+            WHERE id_frequencia_informacional = ?
+              AND EXISTS (SELECT 1 FROM frequencias_informacionais fi WHERE fi.id = ? AND fi.user_id = ?)")
+            ->execute([$id, $id, $user_id]);
         $stmt = $pdo->prepare("DELETE FROM frequencias_informacionais WHERE id = ? AND user_id = ?");
         $stmt->execute([$id, $user_id]);
+        $pdo->commit();
         echo json_encode(['status' => 'success', 'message' => 'Frequência informacional excluída com sucesso.']);
     } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
         error_log('[flashcards][delete_frequencia_informacional] ' . $e->getMessage());
         echo json_encode(['status' => 'error', 'message' => 'Não foi possível excluir a frequência informacional.']);
     }
@@ -6814,7 +6844,11 @@ elseif ($action === 'list_graph_cards_for_user') {
         if (count($allowedFrequenciaIds) !== count($frequenciaInformacionalIds)) {
             die(json_encode(['status' => 'error', 'message' => 'Uma ou mais frequências informacionais não foram encontradas ou estão sem permissão.']));
         }
-        $frequenciaFilterSql = " AND f.id_frequencia_informacional IN ({$placeholders})";
+        $frequenciaFilterSql = " AND EXISTS (
+            SELECT 1 FROM flashcard_frases ff
+            WHERE ff.flashcard_id = f.id
+              AND ff.id_frequencia_informacional IN ({$placeholders})
+        )";
         $frequenciaFilterParams = $frequenciaInformacionalIds;
     }
 
@@ -6852,15 +6886,12 @@ elseif ($action === 'list_graph_cards_for_user') {
             f.question_answer,
             f.dynamic_text_type,
             f.dynamic_parent_flashcard_id,
-            f.id_frequencia_informacional,
-            fi.nome AS frequencia_informacional_nome,
             f.has_audio_front,
             f.has_audio_back,
             d.name_encrypted AS directory_name_encrypted,
             COALESCE(fs.score, 0) AS score
         FROM flashcards f
         INNER JOIN directories d ON d.id = f.directory_id
-        LEFT JOIN frequencias_informacionais fi ON fi.id = f.id_frequencia_informacional AND fi.user_id = ?
         LEFT JOIN flashcard_scores fs ON fs.flashcard_id = f.id AND fs.user_id = ?
         WHERE d.user_id = ?
           AND d.deck_mode = 'grafo'
@@ -6872,7 +6903,7 @@ elseif ($action === 'list_graph_cards_for_user') {
         ORDER BY f.id DESC
         {$paginationSql}
     ");
-    $stmt->execute(array_merge([$user_id, $user_id, $user_id], $dialelosFilterParams, $tagFilterParams, $infoTypeFilterParams, $frequenciaFilterParams));
+    $stmt->execute(array_merge([$user_id, $user_id], $dialelosFilterParams, $tagFilterParams, $infoTypeFilterParams, $frequenciaFilterParams));
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     if ($longTextOnly) {
         $rowsWithLongTextLength = [];
@@ -6942,8 +6973,6 @@ elseif ($action === 'list_graph_cards_for_user') {
             'question_answer' => $card['question_answer'] === null ? null : (int)$card['question_answer'],
             'dynamic_text_type' => dynamicTextTypeFromInt($card['dynamic_text_type'] ?? 0),
             'dynamic_parent_flashcard_id' => !empty($card['dynamic_parent_flashcard_id']) ? (int)$card['dynamic_parent_flashcard_id'] : null,
-            'id_frequencia_informacional' => !empty($card['id_frequencia_informacional']) ? (int)$card['id_frequencia_informacional'] : null,
-            'frequencia_informacional_nome' => $card['frequencia_informacional_nome'] ?? null,
             'has_audio_front' => (int)$card['has_audio_front'],
             'has_audio_back' => (int)$card['has_audio_back'],
             'score' => (int)$card['score'],
