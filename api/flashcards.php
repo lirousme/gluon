@@ -970,13 +970,20 @@ function ensureFlashcardSentenceSyntaxSchema(PDO $pdo): void
                 flashcard_id INT NOT NULL,
                 ordem INT NOT NULL,
                 id_frequencia_informacional INT UNSIGNED NULL,
+                frequencia_last_m DATETIME NULL DEFAULT NULL,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
                 UNIQUE KEY uniq_flashcard_frases_ordem (flashcard_id, ordem),
-                KEY idx_flashcard_frases_frequencia (id_frequencia_informacional)
+                KEY idx_flashcard_frases_frequencia (id_frequencia_informacional),
+                KEY idx_flashcard_frases_maintenance (flashcard_id, frequencia_last_m)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ");
+
+        $frequencyMaintenanceColumn = $pdo->query("SHOW COLUMNS FROM flashcard_frases LIKE 'frequencia_last_m'")->fetch(PDO::FETCH_ASSOC);
+        if (!$frequencyMaintenanceColumn) {
+            $pdo->exec('ALTER TABLE flashcard_frases ADD COLUMN frequencia_last_m DATETIME NULL DEFAULT NULL AFTER id_frequencia_informacional');
+        }
 
         // Migra o modelo antigo (uma frequência por card) antes de remover a coluna
         // redundante. Cards já divididos em frases não são sobrescritos.
@@ -4588,6 +4595,7 @@ elseif ($action === 'list_text_cards') {
     $perPage = 10;
     $tagIds = sanitizeTagIds($input['tag_ids'] ?? []);
     $frequenciaInformacionalId = max(0, (int)($input['frequencia_informacional_id'] ?? 0));
+    $manutencaoFrequenciaInformacional = filter_var($input['manutencao_frequencia_informacional'] ?? false, FILTER_VALIDATE_BOOLEAN);
     $tagFilterSql = '';
     $tagFilterParams = [];
     $frequenciaFilterSql = '';
@@ -4626,6 +4634,12 @@ elseif ($action === 'list_text_cards') {
     $page = min($page, $totalPages);
     $offset = ($page - 1) * $perPage;
 
+    $orderBySql = $manutencaoFrequenciaInformacional
+        ? '(SELECT MIN(ff.frequencia_last_m) FROM flashcard_frases ff WHERE ff.flashcard_id = f.id) IS NOT NULL ASC,
+           (SELECT MIN(ff.frequencia_last_m) FROM flashcard_frases ff WHERE ff.flashcard_id = f.id) ASC,
+           f.id ASC'
+        : 'f.id DESC';
+
     $stmt = $pdo->prepare("
         SELECT f.id, f.front_encrypted, f.back_encrypted,
                f.front_translations_encrypted, f.back_translations_encrypted,
@@ -4633,7 +4647,7 @@ elseif ($action === 'list_text_cards') {
         FROM flashcards f
         INNER JOIN directories d ON d.id = f.directory_id
         WHERE d.user_id = ? {$tagFilterSql} {$frequenciaFilterSql}
-        ORDER BY f.id DESC
+        ORDER BY {$orderBySql}
         LIMIT {$perPage} OFFSET {$offset}
     ");
     $stmt->execute(array_merge([$user_id], $tagFilterParams, $frequenciaFilterParams));

@@ -80,7 +80,7 @@
         </section>
 
         <section class="frequency-filter" aria-labelledby="frequencyFilterLabel">
-            <label id="frequencyFilterLabel" for="frequencyFilterSelect">Frequência informacional</label>
+            <label id="frequencyFilterLabel" for="frequencyFilterSelect">Selecione um filtro</label>
             <select id="frequencyFilterSelect" class="frequency-select">
                 <option value="">Carregando frequências…</option>
             </select>
@@ -115,7 +115,8 @@
         const state = {
             page: Math.max(1, Number(params.get('page')) || 1), totalPages: 1, tags: [],
             selectedTagIds: (params.get('tag_ids') || '').split(',').map(Number).filter(id => Number.isInteger(id) && id > 0),
-            frequenciaInformacionalId: Math.max(0, Number(params.get('frequencia_informacional_id')) || 0)
+            frequenciaInformacionalId: Math.max(0, Number(params.get('frequencia_informacional_id')) || 0),
+            manutencaoFrequenciaInformacional: params.get('filtro_frequencia') === 'manutencao'
         };
         const table = document.getElementById('cardsTable');
         const body = document.getElementById('cardsBody');
@@ -137,6 +138,7 @@
             if (state.page > 1) nextParams.set('page', state.page);
             if (state.selectedTagIds.length) nextParams.set('tag_ids', state.selectedTagIds.join(','));
             if (state.frequenciaInformacionalId) nextParams.set('frequencia_informacional_id', state.frequenciaInformacionalId);
+            if (state.manutencaoFrequenciaInformacional) nextParams.set('filtro_frequencia', 'manutencao');
             history.replaceState(null, '', nextParams.size ? `${location.pathname}?${nextParams}` : location.pathname);
         }
 
@@ -224,7 +226,8 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'list_text_cards', page, tag_ids: state.selectedTagIds,
-                        frequencia_informacional_id: state.frequenciaInformacionalId
+                        frequencia_informacional_id: state.frequenciaInformacionalId,
+                        manutencao_frequencia_informacional: state.manutencaoFrequenciaInformacional
                     })
                 });
                 const result = await response.json();
@@ -259,7 +262,8 @@
         nextButton.addEventListener('click', () => loadPage(state.page + 1));
         tagSearchInput.addEventListener('input', renderTagResults);
         frequencyFilterSelect.addEventListener('change', () => {
-            state.frequenciaInformacionalId = Math.max(0, Number(frequencyFilterSelect.value) || 0);
+            state.manutencaoFrequenciaInformacional = frequencyFilterSelect.value === 'manutencao';
+            state.frequenciaInformacionalId = state.manutencaoFrequenciaInformacional ? 0 : Math.max(0, Number(frequencyFilterSelect.value) || 0);
             loadPage(1);
         });
         document.addEventListener('click', event => {
@@ -285,16 +289,21 @@
                 const result = await response.json();
                 if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível carregar as frequências.');
                 const frequencies = Array.isArray(result.data) ? result.data : [];
-                const defaultOption = document.createElement('option');
-                defaultOption.value = '';
-                defaultOption.textContent = 'Todas as frequências informacionais';
-                frequencyFilterSelect.replaceChildren(defaultOption, ...frequencies.map(frequency => {
+                const maintenanceOption = document.createElement('option');
+                maintenanceOption.value = 'manutencao';
+                maintenanceOption.textContent = 'Manutenção da Frequência Informacional';
+                const allOption = document.createElement('option');
+                allOption.value = '';
+                allOption.textContent = 'Todas as Frequências Informacionais';
+                frequencyFilterSelect.replaceChildren(maintenanceOption, allOption, ...frequencies.map(frequency => {
                     const option = document.createElement('option');
                     option.value = String(frequency.id);
                     option.textContent = String(frequency.nome || 'Sem nome');
                     return option;
                 }));
-                frequencyFilterSelect.value = state.frequenciaInformacionalId ? String(state.frequenciaInformacionalId) : '';
+                frequencyFilterSelect.value = state.manutencaoFrequenciaInformacional
+                    ? 'manutencao'
+                    : (state.frequenciaInformacionalId ? String(state.frequenciaInformacionalId) : '');
             } catch (error) {
                 frequencyFilterSelect.replaceChildren();
                 const option = document.createElement('option');
