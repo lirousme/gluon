@@ -4565,9 +4565,23 @@ elseif ($action === 'get_audio') {
 elseif ($action === 'list_text_cards') {
     $page = max(1, (int)($input['page'] ?? 1));
     $perPage = 10;
+    $tagIds = sanitizeTagIds($input['tag_ids'] ?? []);
+    $tagFilterSql = '';
+    $tagFilterParams = [];
+    if ($tagIds) {
+        $placeholders = implode(',', array_fill(0, count($tagIds), '?'));
+        $tagFilterSql = " AND f.id IN (
+            SELECT sl.flashcard_id
+            FROM subjects_links sl
+            WHERE sl.tag_id IN ({$placeholders})
+            GROUP BY sl.flashcard_id
+            HAVING COUNT(DISTINCT sl.tag_id) = ?
+        )";
+        $tagFilterParams = array_merge($tagIds, [count($tagIds)]);
+    }
 
-    $stmtTotal = $pdo->prepare('SELECT COUNT(*) FROM flashcards f INNER JOIN directories d ON d.id = f.directory_id WHERE d.user_id = ?');
-    $stmtTotal->execute([$user_id]);
+    $stmtTotal = $pdo->prepare('SELECT COUNT(*) FROM flashcards f INNER JOIN directories d ON d.id = f.directory_id WHERE d.user_id = ?' . $tagFilterSql);
+    $stmtTotal->execute(array_merge([$user_id], $tagFilterParams));
     $totalCards = (int)$stmtTotal->fetchColumn();
     $totalPages = max(1, (int)ceil($totalCards / $perPage));
     $page = min($page, $totalPages);
@@ -4579,11 +4593,11 @@ elseif ($action === 'list_text_cards') {
                d.deck_front_language, d.deck_back_language
         FROM flashcards f
         INNER JOIN directories d ON d.id = f.directory_id
-        WHERE d.user_id = ?
+        WHERE d.user_id = ? {$tagFilterSql}
         ORDER BY f.id DESC
         LIMIT {$perPage} OFFSET {$offset}
     ");
-    $stmt->execute([$user_id]);
+    $stmt->execute(array_merge([$user_id], $tagFilterParams));
 
     $languageKeys = ['pt_br', 'en_us', 'en_gb', 'es', 'fr', 'zh'];
     $languageAliases = [
