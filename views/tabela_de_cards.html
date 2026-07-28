@@ -8,7 +8,7 @@
         :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
         * { box-sizing: border-box; }
         body { margin: 0; min-height: 100vh; background: #090d18; color: #e5e7eb; }
-        button, a { font: inherit; }
+        button, a, select { font: inherit; }
         .page { width: min(100% - 32px, 1600px); margin: 0 auto; padding: 32px 0 48px; }
         .topbar { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
         .eyebrow { margin: 0 0 6px; color: #818cf8; font-size: .75rem; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
@@ -52,6 +52,18 @@
         .controls button { padding: 9px 14px; border: 1px solid #334155; border-radius: 9px; background: #172033; color: #e2e8f0; cursor: pointer; }
         .controls button:hover:not(:disabled) { border-color: #818cf8; background: #25304a; }
         .controls button:disabled { cursor: not-allowed; opacity: .38; }
+        .maintenance-table { min-width: 780px; }
+        .maintenance-table th { width: auto; }
+        .maintenance-table th:nth-child(1) { width: 45%; }
+        .maintenance-table th:nth-child(2) { width: 12%; }
+        .maintenance-table th:nth-child(3) { width: 31%; }
+        .maintenance-table th:nth-child(4) { width: 12%; }
+        .sentence-frequencies { display: grid; gap: 8px; }
+        .sentence-frequency { width: 100%; min-width: 190px; padding: 9px 10px; border: 1px solid #334155; border-radius: 8px; background: #090f1e; color: #f8fafc; }
+        .sentence-frequency:focus { border-color: #34d399; outline: none; box-shadow: 0 0 0 3px rgb(16 185 129 / 18%); }
+        .sentence-frequency:disabled { cursor: wait; opacity: .6; }
+        .edit-card { display: inline-flex; padding: 9px 12px; border: 1px solid #6366f1; border-radius: 8px; background: #312e81; color: #e0e7ff; text-decoration: none; }
+        .edit-card:hover { background: #4338ca; }
         @media (max-width: 640px) {
             .page { width: min(100% - 20px, 1600px); padding-top: 20px; }
             .topbar { align-items: flex-start; flex-direction: column-reverse; }
@@ -115,7 +127,7 @@
         const state = {
             page: Math.max(1, Number(params.get('page')) || 1), totalPages: 1, tags: [],
             selectedTagIds: (params.get('tag_ids') || '').split(',').map(Number).filter(id => Number.isInteger(id) && id > 0),
-            frequenciaInformacionalId: Math.max(0, Number(params.get('frequencia_informacional_id')) || 0),
+            frequenciaInformacionalId: Math.max(0, Number(params.get('frequencia_informacional_id')) || 0), frequencies: [],
             manutencaoFrequenciaInformacional: params.get('filtro_frequencia') === 'manutencao'
         };
         const table = document.getElementById('cardsTable');
@@ -215,6 +227,78 @@
             return cell;
         }
 
+        function renderMaintenanceRow(card) {
+            const row = document.createElement('tr');
+            row.dataset.cardId = card.id;
+            const sentences = Array.isArray(card.sentences) ? card.sentences : [];
+            if (!sentences.length) {
+                const messageCell = document.createElement('td');
+                messageCell.colSpan = 3;
+                messageCell.className = 'empty';
+                messageCell.textContent = 'Este card ainda não possui frases cadastradas.';
+                row.append(messageCell);
+            } else {
+                row.append(renderCell(card.texts.pt_br));
+                const orderCell = document.createElement('td');
+                orderCell.textContent = sentences.map(sentence => sentence.ordem).join(', ');
+                row.append(orderCell);
+
+                const frequencyCell = document.createElement('td');
+                const frequencyList = document.createElement('div');
+                frequencyList.className = 'sentence-frequencies';
+                sentences.forEach(sentence => {
+                    const select = document.createElement('select');
+                    select.className = 'sentence-frequency';
+                    select.setAttribute('aria-label', `Frequência informacional da frase ${sentence.ordem}`);
+                    const emptyOption = document.createElement('option');
+                    emptyOption.value = '';
+                    emptyOption.textContent = 'Sem frequência informacional';
+                    select.append(emptyOption, ...state.frequencies.map(frequency => {
+                        const option = document.createElement('option');
+                        option.value = String(frequency.id);
+                        option.textContent = String(frequency.nome || 'Sem nome');
+                        return option;
+                    }));
+                    select.value = sentence.id_frequencia_informacional ? String(sentence.id_frequencia_informacional) : '';
+                    select.dataset.previousValue = select.value;
+                    select.addEventListener('change', () => updateSentenceFrequency(card.id, sentence.ordem, select));
+                    frequencyList.append(select);
+                });
+                frequencyCell.append(frequencyList);
+                row.append(frequencyCell);
+            }
+            const editCell = document.createElement('td');
+            const editLink = document.createElement('a');
+            editLink.className = 'edit-card';
+            editLink.textContent = 'Editar card';
+            editLink.href = `/ficha_do_card?id=${encodeURIComponent(card.directory_id)}&edit_card_id=${encodeURIComponent(card.id)}`;
+            editCell.append(editLink);
+            row.append(editCell);
+            return row;
+        }
+
+        async function updateSentenceFrequency(cardId, ordem, select) {
+            const previousValue = select.dataset.previousValue || '';
+            select.disabled = true;
+            try {
+                const response = await fetch('/api/flashcards', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'update_flashcard_sentence_frequency', flashcard_id: cardId, ordem,
+                        id_frequencia_informacional: Number(select.value) || null
+                    })
+                });
+                const result = await response.json();
+                if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível atualizar a frequência.');
+                select.dataset.previousValue = select.value;
+            } catch (error) {
+                select.value = previousValue;
+                window.alert(error.message);
+            } finally {
+                select.disabled = false;
+            }
+        }
+
         async function loadPage(page) {
             status.hidden = false;
             status.className = 'message';
@@ -236,12 +320,17 @@
                 state.page = meta.page;
                 state.totalPages = meta.total_pages;
                 updateUrl();
-                body.replaceChildren(...result.data.map(card => {
-                    const row = document.createElement('tr');
-                    row.dataset.cardId = card.id;
-                    row.replaceChildren(...languages.map(([key]) => renderCell(card.texts[key])));
-                    return row;
+                const headers = state.manutencaoFrequenciaInformacional
+                    ? ['Português (Brasil)', 'Ordem', 'Frequência informacional', 'Editar']
+                    : languages.map(([, label]) => label);
+                document.getElementById('languageHeaders').replaceChildren(...headers.map(label => {
+                    const header = document.createElement('th'); header.scope = 'col'; header.textContent = label; return header;
                 }));
+                table.classList.toggle('maintenance-table', state.manutencaoFrequenciaInformacional);
+                body.replaceChildren(...result.data.map(card => state.manutencaoFrequenciaInformacional
+                    ? renderMaintenanceRow(card)
+                    : (() => { const row = document.createElement('tr'); row.dataset.cardId = card.id; row.replaceChildren(...languages.map(([key]) => renderCell(card.texts[key]))); return row; })()
+                ));
                 if (!result.data.length) {
                     status.textContent = 'Nenhum card encontrado.';
                     return;
@@ -289,6 +378,7 @@
                 const result = await response.json();
                 if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível carregar as frequências.');
                 const frequencies = Array.isArray(result.data) ? result.data : [];
+                state.frequencies = frequencies;
                 const maintenanceOption = document.createElement('option');
                 maintenanceOption.value = 'manutencao';
                 maintenanceOption.textContent = 'Manutenção da Frequência Informacional';
@@ -315,8 +405,7 @@
 
         renderSelectedTags();
         loadTags();
-        loadFrequenciasInformacionais();
-        loadPage(state.page);
+        loadFrequenciasInformacionais().finally(() => loadPage(state.page));
     </script>
 </body>
 </html>

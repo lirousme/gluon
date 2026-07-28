@@ -4641,7 +4641,7 @@ elseif ($action === 'list_text_cards') {
         : 'f.id DESC';
 
     $stmt = $pdo->prepare("
-        SELECT f.id, f.front_encrypted, f.back_encrypted,
+        SELECT f.id, f.directory_id, f.front_encrypted, f.back_encrypted,
                f.front_translations_encrypted, f.back_translations_encrypted,
                d.deck_front_language, d.deck_back_language
         FROM flashcards f
@@ -4683,7 +4683,24 @@ elseif ($action === 'list_text_cards') {
                 'back' => (string)($backTranslations[$languageKey] ?? ($languageKey === 'en_gb' ? ($backTranslations['en'] ?? '') : '')),
             ];
         }
-        $cards[] = ['id' => (int)$card['id'], 'texts' => $texts];
+        $sentences = [];
+        if ($manutencaoFrequenciaInformacional) {
+            $sentenceStmt = $pdo->prepare('SELECT ordem, id_frequencia_informacional, frequencia_last_m FROM flashcard_frases WHERE flashcard_id = ? ORDER BY ordem ASC');
+            $sentenceStmt->execute([(int)$card['id']]);
+            $sentences = array_map(static function (array $sentence): array {
+                return [
+                    'ordem' => (int)$sentence['ordem'],
+                    'id_frequencia_informacional' => $sentence['id_frequencia_informacional'] !== null ? (int)$sentence['id_frequencia_informacional'] : null,
+                    'frequencia_last_m' => $sentence['frequencia_last_m'],
+                ];
+            }, $sentenceStmt->fetchAll(PDO::FETCH_ASSOC));
+        }
+        $cards[] = [
+            'id' => (int)$card['id'],
+            'directory_id' => (int)$card['directory_id'],
+            'texts' => $texts,
+            'sentences' => $sentences,
+        ];
     }
 
     echo json_encode([
@@ -4696,6 +4713,44 @@ elseif ($action === 'list_text_cards') {
             'total_pages' => $totalPages,
         ],
     ]);
+}
+
+// ==== Atualização rápida da frequência de uma frase na tabela de manutenção ====
+elseif ($action === 'update_flashcard_sentence_frequency') {
+    $cardId = max(0, (int)($input['flashcard_id'] ?? 0));
+    $ordem = max(0, (int)($input['ordem'] ?? 0));
+    $frequencyId = max(0, (int)($input['id_frequencia_informacional'] ?? 0));
+
+    if ($cardId === 0 || $ordem === 0) {
+        http_response_code(422);
+        die(json_encode(['status' => 'error', 'message' => 'Card ou ordem da frase inválidos.']));
+    }
+
+    if ($frequencyId > 0) {
+        $frequencyStmt = $pdo->prepare('SELECT id FROM frequencias_informacionais WHERE id = ? AND user_id = ? LIMIT 1');
+        $frequencyStmt->execute([$frequencyId, $user_id]);
+        if (!$frequencyStmt->fetchColumn()) {
+            http_response_code(404);
+            die(json_encode(['status' => 'error', 'message' => 'Frequência informacional não encontrada ou sem permissão.']));
+        }
+    }
+
+    $updateStmt = $pdo->prepare("UPDATE flashcard_frases ff
+        INNER JOIN flashcards f ON f.id = ff.flashcard_id
+        INNER JOIN directories d ON d.id = f.directory_id
+        SET ff.id_frequencia_informacional = ?, ff.frequencia_last_m = NOW()
+        WHERE ff.flashcard_id = ? AND ff.ordem = ? AND d.user_id = ?");
+    $updateStmt->execute([$frequencyId ?: null, $cardId, $ordem, $user_id]);
+    if ($updateStmt->rowCount() === 0) {
+        $sentenceStmt = $pdo->prepare('SELECT ff.id_frequencia_informacional FROM flashcard_frases ff INNER JOIN flashcards f ON f.id = ff.flashcard_id INNER JOIN directories d ON d.id = f.directory_id WHERE ff.flashcard_id = ? AND ff.ordem = ? AND d.user_id = ? LIMIT 1');
+        $sentenceStmt->execute([$cardId, $ordem, $user_id]);
+        if ($sentenceStmt->fetchColumn() === false) {
+            http_response_code(404);
+            die(json_encode(['status' => 'error', 'message' => 'Frase não encontrada ou sem permissão.']));
+        }
+    }
+
+    echo json_encode(['status' => 'success', 'message' => 'Frequência informacional atualizada.']);
 }
 
 // ==== Exportar todos os cards para Excel/CSV ====
