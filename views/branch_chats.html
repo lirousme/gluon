@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <script src="/assets/zoom-lock.js" defer></script>
+    <title>Branch Chats</title>
+    <style>
+        :root { color-scheme: dark; --green: #00a884; --panel: #202c33; --bg: #111b21; --line: #2a3942; --muted: #8696a0; }
+        * { box-sizing: border-box; }
+        body { margin: 0; height: 100dvh; overflow: hidden; background: #0c1317; color: #e9edef; font: 15px Arial, Helvetica, sans-serif; }
+        button, textarea, input { font: inherit; }
+        button { color: inherit; }
+        .app { display: grid; grid-template-columns: minmax(290px, 31%) 1fr; height: 100%; max-width: 1600px; margin: auto; background: var(--bg); box-shadow: 0 0 30px #0008; }
+        .sidebar { min-width: 0; background: var(--bg); border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+        .sidebar-header, .chat-header { height: 64px; flex: none; display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--panel); }
+        .brand { display: flex; align-items: center; gap: 11px; min-width: 0; flex: 1; }
+        .logo, .avatar { display: grid; place-items: center; flex: none; border-radius: 50%; background: linear-gradient(145deg, #00a884, #087d68); font-weight: 700; }
+        .logo { width: 42px; height: 42px; font-size: 21px; }
+        .avatar { width: 40px; height: 40px; }
+        h1, h2, p { margin: 0; }
+        h1 { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        h2 { font-size: 16px; font-weight: 500; }
+        .subtitle { margin-top: 3px; color: var(--muted); font-size: 12px; }
+        .icon-button { width: 40px; height: 40px; border: 0; border-radius: 50%; background: transparent; display: grid; place-items: center; cursor: pointer; }
+        .icon-button:hover, .icon-button:focus-visible { background: #ffffff12; outline: none; }
+        svg { width: 22px; height: 22px; fill: currentColor; }
+        .search-wrap { padding: 8px 12px; border-bottom: 1px solid var(--line); }
+        .search { width: 100%; height: 36px; border: 0; outline: 0; border-radius: 8px; background: var(--panel); color: #e9edef; padding: 0 14px; }
+        .search::placeholder { color: var(--muted); }
+        .chat-list { overflow-y: auto; flex: 1; }
+        .chat-item { width: 100%; min-height: 72px; display: flex; align-items: center; gap: 13px; padding: 10px 14px; border: 0; border-bottom: 1px solid #202c33; background: transparent; text-align: left; cursor: pointer; }
+        .chat-item:hover, .chat-item.active { background: var(--panel); }
+        .chat-copy { min-width: 0; flex: 1; }
+        .chat-line { display: flex; justify-content: space-between; gap: 8px; }
+        .chat-title { color: #e9edef; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chat-time { color: var(--muted); font-size: 11px; flex: none; }
+        .preview { margin-top: 7px; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .empty-list { color: var(--muted); text-align: center; padding: 45px 25px; line-height: 1.5; }
+        .main { min-width: 0; display: flex; flex-direction: column; position: relative; background-color: #0b141a; background-image: radial-gradient(#ffffff09 1px, transparent 1px); background-size: 22px 22px; }
+        .back { display: none; }
+        .messages { flex: 1; overflow-y: auto; padding: 26px clamp(18px, 7vw, 100px); scroll-behavior: smooth; }
+        .message { max-width: min(68%, 650px); margin: 0 0 6px auto; padding: 7px 8px 5px; border-radius: 8px 0 8px 8px; background: #005c4b; box-shadow: 0 1px 1px #0004; overflow-wrap: anywhere; }
+        .message-image { display: block; max-width: 100%; max-height: 420px; border-radius: 6px; object-fit: cover; margin-bottom: 5px; }
+        .message-text { white-space: pre-wrap; line-height: 1.4; }
+        .message-time { float: right; margin: 5px 0 0 12px; color: #a7c8c1; font-size: 10px; }
+        .welcome { margin: auto; max-width: 480px; padding: 30px; color: var(--muted); text-align: center; line-height: 1.6; }
+        .welcome svg { width: 70px; height: 70px; color: #40525c; }
+        .welcome h2 { color: #d1d7db; font-size: 26px; margin: 12px 0; }
+        .composer { min-height: 66px; flex: none; display: flex; align-items: flex-end; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); background: var(--panel); position: relative; }
+        .composer.hidden { display: none; }
+        .message-box { min-height: 42px; max-height: 120px; flex: 1; resize: none; border: 0; outline: 0; border-radius: 9px; background: #2a3942; color: #e9edef; padding: 11px 13px; line-height: 20px; }
+        .message-box::placeholder { color: #8696a0; }
+        .send { background: var(--green); }
+        .attachment-menu { position: absolute; left: 12px; bottom: calc(100% + 8px); width: 205px; padding: 8px; border-radius: 10px; background: #233138; box-shadow: 0 8px 28px #0009; transform-origin: bottom left; }
+        .attachment-menu[hidden] { display: none; }
+        .attachment-menu button { width: 100%; display: flex; align-items: center; gap: 12px; padding: 11px; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
+        .attachment-menu button:hover { background: #ffffff12; }
+        .attachment-menu svg { color: #bf59cf; }
+        .image-chip { position: absolute; bottom: calc(100% + 8px); left: 64px; max-width: 280px; display: flex; align-items: center; gap: 8px; padding: 8px 11px; border-radius: 8px; background: #2a3942; box-shadow: 0 5px 20px #0007; }
+        .image-chip[hidden] { display: none; }
+        .image-chip span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+        .image-chip button { border: 0; background: transparent; color: #ef6b73; cursor: pointer; }
+        .toast { position: fixed; z-index: 20; left: 50%; bottom: 90px; transform: translateX(-50%); padding: 10px 16px; border-radius: 8px; background: #e9edef; color: #111b21; box-shadow: 0 4px 18px #0008; }
+        .toast[hidden] { display: none; }
+        @media (max-width: 720px) {
+            .app { display: block; }
+            .sidebar, .main { width: 100%; height: 100%; }
+            .app.chat-open .sidebar { display: none; }
+            .app:not(.chat-open) .main { display: none; }
+            .back { display: grid; }
+            .messages { padding: 18px 12px; }
+            .message { max-width: 86%; }
+        }
+    </style>
+</head>
+<body>
+<div class="app" id="app">
+    <aside class="sidebar">
+        <header class="sidebar-header">
+            <div class="brand"><div class="logo">B</div><div><h1>Branch Chats</h1><p class="subtitle">Suas conversas</p></div></div>
+            <button class="icon-button" id="newChat" title="Novo chat" aria-label="Criar novo chat">
+                <svg viewBox="0 0 24 24"><path d="M19 3H5a2 2 0 0 0-2 2v14l4-4h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2m-6 9h-2V9H8V7h3V4h2v3h3v2h-3z"/></svg>
+            </button>
+        </header>
+        <div class="search-wrap"><input class="search" id="search" type="search" placeholder="Pesquisar ou iniciar nova conversa" aria-label="Pesquisar chats"></div>
+        <div class="chat-list" id="chatList"></div>
+    </aside>
+    <main class="main">
+        <header class="chat-header" id="chatHeader" hidden>
+            <button class="icon-button back" id="back" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="m20 11-12.2.03 5.6-5.6L12 4l-8 8 8 8 1.4-1.43-5.6-5.6L20 13z"/></svg></button>
+            <div class="avatar">B</div><div><h2 id="activeTitle"></h2><p class="subtitle">conversa privada</p></div>
+        </header>
+        <section class="messages" id="messages"><div class="welcome"><svg viewBox="0 0 24 24"><path d="M16.75 13.96c-.25-.13-1.47-.72-1.7-.81-.23-.08-.39-.13-.56.13-.16.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-2-1.24-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.13-.15.17-.25.25-.42.08-.16.04-.31-.02-.43-.06-.13-.56-1.35-.77-1.84-.2-.49-.41-.42-.56-.43h-.48c-.17 0-.44.06-.67.31-.23.25-.87.85-.87 2.07s.89 2.4 1.01 2.57c.13.16 1.75 2.67 4.24 3.75.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.08.15-1.18-.07-.11-.23-.17-.48-.29M12.04 21.5h-.01a9.45 9.45 0 0 1-4.82-1.32l-.35-.2-3.58.94.96-3.49-.23-.36A9.44 9.44 0 0 1 2.56 12c0-5.2 4.24-9.44 9.46-9.44 2.53 0 4.9.98 6.68 2.77A9.38 9.38 0 0 1 21.46 12c0 5.2-4.24 9.45-9.42 9.45"/></svg><h2>Branch Chats</h2><p>Selecione uma conversa ao lado ou crie um novo chat para começar.</p></div></section>
+        <form class="composer hidden" id="composer">
+            <button class="icon-button" id="more" type="button" aria-label="Mais opções" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4m0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4m0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg></button>
+            <div class="attachment-menu" id="attachmentMenu" hidden><button type="button" id="addImage"><svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2M8.5 13.5l2.5 3.01L14.5 12l4.5 6H5z"/></svg>Adicionar imagem</button></div>
+            <div class="image-chip" id="imageChip" hidden><span id="imageName"></span><button type="button" id="removeImage" aria-label="Remover imagem">✕</button></div>
+            <input id="imageInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" hidden>
+            <textarea class="message-box" id="messageBox" rows="1" maxlength="10000" placeholder="Mensagem" aria-label="Mensagem"></textarea>
+            <button class="icon-button send" id="send" type="submit" aria-label="Enviar mensagem"><svg viewBox="0 0 24 24"><path d="m3.4 20.4 17.45-7.48c.81-.35.81-1.49 0-1.84L3.4 3.6c-.66-.29-1.39.2-1.39.91L2 9.12c0 .5.37.92.87.98L17 12 2.87 13.88c-.5.07-.87.49-.87.99l.01 4.61c0 .72.73 1.21 1.39.92"/></svg></button>
+        </form>
+    </main>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+<script>
+    const state = { chats: [], activeId: null };
+    const $ = id => document.getElementById(id);
+    const api = '/api/branch_chats';
+    const formatTime = value => value ? new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value.replace(' ', 'T'))) : '';
+    function toast(message) { $('toast').textContent = message; $('toast').hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => $('toast').hidden = true, 3000); }
+    async function request(url, options) { const response = await fetch(url, options); const result = await response.json(); if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível concluir.'); return result.data; }
+    function renderChats() {
+        const query = $('search').value.trim().toLowerCase();
+        const rows = state.chats.filter(chat => chat.titulo.toLowerCase().includes(query));
+        $('chatList').replaceChildren();
+        if (!rows.length) { const empty = document.createElement('div'); empty.className = 'empty-list'; empty.textContent = query ? 'Nenhuma conversa encontrada.' : 'Nenhum chat ainda. Crie sua primeira conversa.'; $('chatList').append(empty); return; }
+        rows.forEach(chat => {
+            const button = document.createElement('button'); button.className = 'chat-item' + (Number(chat.id) === state.activeId ? ' active' : ''); button.type = 'button';
+            const avatar = document.createElement('div'); avatar.className = 'avatar'; avatar.textContent = chat.titulo.charAt(0).toUpperCase();
+            const copy = document.createElement('div'); copy.className = 'chat-copy';
+            const line = document.createElement('div'); line.className = 'chat-line';
+            const title = document.createElement('span'); title.className = 'chat-title'; title.textContent = chat.titulo;
+            const time = document.createElement('span'); time.className = 'chat-time'; time.textContent = formatTime(chat.updated_at);
+            const preview = document.createElement('div'); preview.className = 'preview'; preview.textContent = chat.ultima_mensagem || (Number(chat.total_mensagens) ? '📷 Imagem' : 'Conversa vazia');
+            line.append(title, time); copy.append(line, preview); button.append(avatar, copy); button.addEventListener('click', () => openChat(Number(chat.id))); $('chatList').append(button);
+        });
+    }
+    async function loadChats() { try { state.chats = await request(api); renderChats(); } catch (error) { toast(error.message); } }
+    function renderMessages(messages) {
+        $('messages').replaceChildren();
+        if (!messages.length) { const empty = document.createElement('div'); empty.className = 'welcome'; empty.innerHTML = '<h2>Nenhuma mensagem</h2><p>Envie uma mensagem para começar esta conversa.</p>'; $('messages').append(empty); return; }
+        messages.forEach(item => {
+            const bubble = document.createElement('article'); bubble.className = 'message';
+            if (item.imagem_path) { const image = document.createElement('img'); image.className = 'message-image'; image.src = item.imagem_path; image.alt = 'Imagem enviada'; image.loading = 'lazy'; bubble.append(image); }
+            if (item.texto) { const text = document.createElement('span'); text.className = 'message-text'; text.textContent = item.texto; bubble.append(text); }
+            const time = document.createElement('span'); time.className = 'message-time'; time.textContent = formatTime(item.created_at) + ' ✓✓'; bubble.append(time); $('messages').append(bubble);
+        });
+        requestAnimationFrame(() => $('messages').scrollTop = $('messages').scrollHeight);
+    }
+    async function openChat(id) {
+        try { const data = await request(api + '?chat_id=' + id); state.activeId = id; $('activeTitle').textContent = data.chat.titulo; $('chatHeader').hidden = false; $('composer').classList.remove('hidden'); $('app').classList.add('chat-open'); renderMessages(data.mensagens); renderChats(); $('messageBox').focus(); } catch (error) { toast(error.message); }
+    }
+    $('newChat').addEventListener('click', async () => { const title = prompt('Nome do novo chat:', 'Novo chat'); if (title === null) return; try { const chat = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_chat', titulo: title }) }); await loadChats(); await openChat(chat.id); } catch (error) { toast(error.message); } });
+    $('search').addEventListener('input', renderChats);
+    $('back').addEventListener('click', () => $('app').classList.remove('chat-open'));
+    $('more').addEventListener('click', event => { event.stopPropagation(); const opening = $('attachmentMenu').hidden; $('attachmentMenu').hidden = !opening; $('more').setAttribute('aria-expanded', String(opening)); });
+    document.addEventListener('click', () => { $('attachmentMenu').hidden = true; $('more').setAttribute('aria-expanded', 'false'); });
+    $('attachmentMenu').addEventListener('click', event => event.stopPropagation());
+    $('addImage').addEventListener('click', () => { $('imageInput').click(); $('attachmentMenu').hidden = true; });
+    $('imageInput').addEventListener('change', () => { const file = $('imageInput').files[0]; $('imageChip').hidden = !file; $('imageName').textContent = file ? file.name : ''; });
+    $('removeImage').addEventListener('click', () => { $('imageInput').value = ''; $('imageChip').hidden = true; });
+    $('messageBox').addEventListener('input', event => { event.target.style.height = '42px'; event.target.style.height = Math.min(event.target.scrollHeight, 120) + 'px'; });
+    $('messageBox').addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); $('composer').requestSubmit(); } });
+    $('composer').addEventListener('submit', async event => {
+        event.preventDefault(); const text = $('messageBox').value.trim(); const image = $('imageInput').files[0]; if (!text && !image) return;
+        const data = new FormData(); data.append('action', 'send_message'); data.append('chat_id', state.activeId); data.append('texto', text); if (image) data.append('imagem', image);
+        $('send').disabled = true;
+        try { await request(api, { method: 'POST', body: data }); $('messageBox').value = ''; $('messageBox').style.height = '42px'; $('imageInput').value = ''; $('imageChip').hidden = true; await Promise.all([openChat(state.activeId), loadChats()]); } catch (error) { toast(error.message); } finally { $('send').disabled = false; }
+    });
+    loadChats();
+</script>
+</body>
+</html>
