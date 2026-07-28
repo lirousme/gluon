@@ -83,6 +83,52 @@ try {
         branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId, 'titulo' => $stmt->fetchColumn()]], 201);
     }
 
+    if ($action === 'branch_message') {
+        $sourceChatId = (int)($input['chat_id'] ?? 0);
+        $messageId = (int)($input['message_id'] ?? 0);
+        $branchMode = (string)($input['branch_mode'] ?? '');
+        branchChatsFind($pdo, $sourceChatId, $userId);
+
+        if (!in_array($branchMode, ['single', 'through'], true) || $messageId < 1) {
+            branchChatsRespond(['status' => 'error', 'message' => 'Opção de branch inválida.'], 422);
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT cm.position
+             FROM chat_mensagens cm
+             INNER JOIN mensagens m ON m.id = cm.mensagem_id
+             WHERE cm.chat_id = :chat_id AND cm.mensagem_id = :message_id AND m.user_id = :user_id
+             LIMIT 1'
+        );
+        $stmt->execute([':chat_id' => $sourceChatId, ':message_id' => $messageId, ':user_id' => $userId]);
+        $selectedPosition = $stmt->fetchColumn();
+        if ($selectedPosition === false) {
+            branchChatsRespond(['status' => 'error', 'message' => 'Mensagem não encontrada neste chat.'], 404);
+        }
+
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare("INSERT INTO chats (user_id, parent_chat_id, titulo) VALUES (:user_id, :parent_id, DATE_FORMAT(CURRENT_TIMESTAMP, '%d/%m/%Y %H:%i'))");
+        $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId]);
+        $targetChatId = (int)$pdo->lastInsertId();
+
+        if ($branchMode === 'single') {
+            $stmt = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position) VALUES (:chat_id, :message_id, 1)');
+            $stmt->execute([':chat_id' => $targetChatId, ':message_id' => $messageId]);
+        } else {
+            $stmt = $pdo->prepare(
+                'INSERT INTO chat_mensagens (chat_id, mensagem_id, position)
+                 SELECT :target_id, mensagem_id, position
+                 FROM chat_mensagens
+                 WHERE chat_id = :source_id AND position <= :selected_position
+                 ORDER BY position'
+            );
+            $stmt->execute([':target_id' => $targetChatId, ':source_id' => $sourceChatId, ':selected_position' => $selectedPosition]);
+        }
+
+        $pdo->commit();
+        branchChatsRespond(['status' => 'success', 'data' => ['chat_id' => $targetChatId, 'branch_mode' => $branchMode]], 201);
+    }
+
     if ($action !== 'send_message') {
         branchChatsRespond(['status' => 'error', 'message' => 'Ação inválida.'], 422);
     }
