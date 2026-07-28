@@ -70,16 +70,13 @@ try {
     $action = trim((string)($input['action'] ?? ''));
 
     if ($action === 'create_chat') {
-        $title = trim((string)($input['titulo'] ?? ''));
-        if ($title === '') {
-            $title = 'Novo chat';
-        }
-        if (mb_strlen($title) > 120) {
-            branchChatsRespond(['status' => 'error', 'message' => 'O título deve ter no máximo 120 caracteres.'], 422);
-        }
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, titulo) VALUES (:user_id, :titulo)');
-        $stmt->execute([':user_id' => $userId, ':titulo' => $title]);
-        branchChatsRespond(['status' => 'success', 'data' => ['id' => (int)$pdo->lastInsertId(), 'titulo' => $title]], 201);
+        $stmt = $pdo->prepare("INSERT INTO chats (user_id, titulo) VALUES (:user_id, DATE_FORMAT(CURRENT_TIMESTAMP, '%d/%m/%Y %H:%i'))");
+        $stmt->execute([':user_id' => $userId]);
+        $chatId = (int)$pdo->lastInsertId();
+        $stmt = $pdo->prepare('SELECT titulo FROM chats WHERE id = :id');
+        $stmt->execute([':id' => $chatId]);
+        $title = $stmt->fetchColumn();
+        branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId, 'titulo' => $title]], 201);
     }
 
     if ($action !== 'send_message') {

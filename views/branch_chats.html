@@ -141,7 +141,7 @@
     async function openChat(id) {
         try { const data = await request(api + '?chat_id=' + id); state.activeId = id; $('activeTitle').textContent = data.chat.titulo; $('chatHeader').hidden = false; $('composer').classList.remove('hidden'); $('app').classList.add('chat-open'); renderMessages(data.mensagens); renderChats(); $('messageBox').focus(); } catch (error) { toast(error.message); }
     }
-    $('newChat').addEventListener('click', async () => { const title = prompt('Nome do novo chat:', 'Novo chat'); if (title === null) return; try { const chat = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_chat', titulo: title }) }); await loadChats(); await openChat(chat.id); } catch (error) { toast(error.message); } });
+    $('newChat').addEventListener('click', async () => { try { const chat = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_chat' }) }); await loadChats(); await openChat(chat.id); } catch (error) { toast(error.message); } });
     $('search').addEventListener('input', renderChats);
     $('back').addEventListener('click', () => $('app').classList.remove('chat-open'));
     $('more').addEventListener('click', event => { event.stopPropagation(); const opening = $('attachmentMenu').hidden; $('attachmentMenu').hidden = !opening; $('more').setAttribute('aria-expanded', String(opening)); });
