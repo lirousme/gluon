@@ -35,7 +35,7 @@
         .tag-chip:hover { background: #4338ca; }
         .table-scroll { overflow-x: auto; }
         table { width: 100%; min-width: 1120px; border-collapse: collapse; table-layout: fixed; }
-        th { width: calc(100% / 6); padding: 15px 18px; border-bottom: 1px solid #334155; background: #111c30; color: #c7d2fe; font-size: .75rem; letter-spacing: .08em; text-align: left; text-transform: uppercase; }
+        th { width: calc(100% / 7); padding: 15px 18px; border-bottom: 1px solid #334155; background: #111c30; color: #c7d2fe; font-size: .75rem; letter-spacing: .08em; text-align: left; text-transform: uppercase; }
         td { height: 92px; padding: 16px 18px; border-right: 1px solid #202b3f; border-bottom: 1px solid #202b3f; vertical-align: top; }
         th:last-child, td:last-child { border-right: 0; }
         tbody tr:last-child td { border-bottom: 0; }
@@ -52,12 +52,13 @@
         .controls button { padding: 9px 14px; border: 1px solid #334155; border-radius: 9px; background: #172033; color: #e2e8f0; cursor: pointer; }
         .controls button:hover:not(:disabled) { border-color: #818cf8; background: #25304a; }
         .controls button:disabled { cursor: not-allowed; opacity: .38; }
-        .maintenance-table { min-width: 780px; }
+        .maintenance-table { min-width: 980px; }
         .maintenance-table th { width: auto; }
-        .maintenance-table th:nth-child(1) { width: 45%; }
-        .maintenance-table th:nth-child(2) { width: 12%; }
-        .maintenance-table th:nth-child(3) { width: 31%; }
-        .maintenance-table th:nth-child(4) { width: 12%; }
+        .maintenance-table th:nth-child(1) { width: 20%; }
+        .maintenance-table th:nth-child(2) { width: 33%; }
+        .maintenance-table th:nth-child(3) { width: 9%; }
+        .maintenance-table th:nth-child(4) { width: 27%; }
+        .maintenance-table th:nth-child(5) { width: 11%; }
         .sentence-frequencies { display: grid; gap: 8px; }
         .sentence-frequency { width: 100%; min-width: 190px; padding: 9px 10px; border: 1px solid #334155; border-radius: 8px; background: #090f1e; color: #f8fafc; }
         .sentence-frequency:focus { border-color: #34d399; outline: none; box-shadow: 0 0 0 3px rgb(16 185 129 / 18%); }
@@ -231,6 +232,19 @@
             const row = document.createElement('tr');
             row.dataset.cardId = card.id;
             const sentences = Array.isArray(card.sentences) ? card.sentences : [];
+
+            const subjectCell = document.createElement('td');
+            const subjectTags = Array.isArray(card.subject_tags) ? card.subject_tags : [];
+            const subjectLabels = subjectTags.map(tag => {
+                const translations = tag.name_translations || {};
+                const portuguese = String(translations.pt_br || tag.name_pt_br || tag.name || '').trim();
+                const english = String(translations.en_us || translations.en || tag.name || '').trim();
+                return portuguese && english && portuguese !== english ? `${portuguese} / ${english}` : (portuguese || english);
+            }).filter(Boolean);
+            subjectCell.textContent = subjectLabels.join(', ');
+            if (!subjectLabels.length) subjectCell.append(Object.assign(document.createElement('span'), { className: 'empty', textContent: '—' }));
+            row.append(subjectCell);
+
             if (!sentences.length) {
                 const messageCell = document.createElement('td');
                 messageCell.colSpan = 3;
@@ -267,14 +281,18 @@
                 frequencyCell.append(frequencyList);
                 row.append(frequencyCell);
             }
+            row.append(renderEditCell(card));
+            return row;
+        }
+
+        function renderEditCell(card) {
             const editCell = document.createElement('td');
             const editLink = document.createElement('a');
             editLink.className = 'edit-card';
             editLink.textContent = 'Editar card';
             editLink.href = `/ficha_do_card?id=${encodeURIComponent(card.directory_id)}&edit_card_id=${encodeURIComponent(card.id)}`;
             editCell.append(editLink);
-            row.append(editCell);
-            return row;
+            return editCell;
         }
 
         async function updateSentenceFrequency(cardId, ordem, select) {
@@ -321,15 +339,20 @@
                 state.totalPages = meta.total_pages;
                 updateUrl();
                 const headers = state.manutencaoFrequenciaInformacional
-                    ? ['Português (Brasil)', 'Ordem', 'Frequência informacional', 'Editar']
-                    : languages.map(([, label]) => label);
+                    ? ['Tags sujeito', 'Português (Brasil)', 'Ordem', 'Frequência informacional', 'Editar']
+                    : [...languages.map(([, label]) => label), 'Editar'];
                 document.getElementById('languageHeaders').replaceChildren(...headers.map(label => {
                     const header = document.createElement('th'); header.scope = 'col'; header.textContent = label; return header;
                 }));
                 table.classList.toggle('maintenance-table', state.manutencaoFrequenciaInformacional);
                 body.replaceChildren(...result.data.map(card => state.manutencaoFrequenciaInformacional
                     ? renderMaintenanceRow(card)
-                    : (() => { const row = document.createElement('tr'); row.dataset.cardId = card.id; row.replaceChildren(...languages.map(([key]) => renderCell(card.texts[key]))); return row; })()
+                    : (() => {
+                        const row = document.createElement('tr');
+                        row.dataset.cardId = card.id;
+                        row.replaceChildren(...languages.map(([key]) => renderCell(card.texts[key])), renderEditCell(card));
+                        return row;
+                    })()
                 ));
                 if (!result.data.length) {
                     status.textContent = 'Nenhum card encontrado.';

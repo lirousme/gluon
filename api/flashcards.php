@@ -4662,8 +4662,12 @@ elseif ($action === 'list_text_cards') {
         'cmn-CN' => 'zh',
     ];
     $cards = [];
+    $cardRows = $stmt->fetchAll();
+    $subjectTagsByCard = $manutencaoFrequenciaInformacional
+        ? fetchLinkedTagsByCard($pdo, 'subjects_links', array_map(static fn(array $card): int => (int)$card['id'], $cardRows), $user_id)
+        : [];
 
-    foreach ($stmt->fetchAll() as $card) {
+    foreach ($cardRows as $card) {
         $frontTranslations = encryptedFlashcardTranslationMap($card['front_translations_encrypted'] ?? null);
         $backTranslations = encryptedFlashcardTranslationMap($card['back_translations_encrypted'] ?? null);
         $frontLanguage = $languageAliases[normalizeDeckLanguage($card['deck_front_language'] ?? 'pt-BR', 'pt-BR')] ?? 'pt_br';
@@ -4700,6 +4704,7 @@ elseif ($action === 'list_text_cards') {
             'directory_id' => (int)$card['directory_id'],
             'texts' => $texts,
             'sentences' => $sentences,
+            'subject_tags' => $subjectTagsByCard[(int)$card['id']] ?? [],
         ];
     }
 
