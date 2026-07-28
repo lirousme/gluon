@@ -47,7 +47,16 @@
         .message { max-width: min(68%, 650px); margin: 0 0 6px auto; padding: 7px 8px 5px; border-radius: 8px 0 8px 8px; background: #005c4b; box-shadow: 0 1px 1px #0004; overflow-wrap: anywhere; }
         .message-image { display: block; max-width: 100%; max-height: 420px; border-radius: 6px; object-fit: cover; margin-bottom: 5px; }
         .message-text { white-space: pre-wrap; line-height: 1.4; }
-        .message-time { float: right; margin: 5px 0 0 12px; color: #a7c8c1; font-size: 10px; }
+        .message-footer { float: right; display: inline-flex; align-items: center; gap: 3px; margin: 4px -3px 0 12px; color: #a7c8c1; }
+        .message-time { font-size: 10px; }
+        .message-actions { position: relative; display: inline-flex; }
+        .message-more { width: 23px; height: 23px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #a7c8c1; display: grid; place-items: center; cursor: pointer; }
+        .message-more:hover, .message-more:focus-visible { background: #ffffff18; outline: none; }
+        .message-more svg { width: 16px; height: 16px; }
+        .message-menu { position: absolute; z-index: 5; right: 0; bottom: calc(100% + 5px); width: 205px; padding: 7px; border-radius: 9px; background: #233138; box-shadow: 0 8px 28px #000a; }
+        .message-menu[hidden] { display: none; }
+        .message-menu button { width: 100%; padding: 10px 11px; border: 0; border-radius: 6px; background: transparent; color: #e9edef; text-align: left; cursor: pointer; }
+        .message-menu button:hover, .message-menu button:focus-visible { background: #ffffff12; outline: none; }
         .welcome { margin: auto; max-width: 480px; padding: 30px; color: var(--muted); text-align: center; line-height: 1.6; }
         .welcome svg { width: 70px; height: 70px; color: #40525c; }
         .welcome h2 { color: #d1d7db; font-size: 26px; margin: 12px 0; }
@@ -144,9 +153,30 @@
             const bubble = document.createElement('article'); bubble.className = 'message';
             if (item.imagem_path) { const image = document.createElement('img'); image.className = 'message-image'; image.src = item.imagem_path; image.alt = 'Imagem enviada'; image.loading = 'lazy'; bubble.append(image); }
             if (item.texto) { const text = document.createElement('span'); text.className = 'message-text'; text.textContent = item.texto; bubble.append(text); }
-            const time = document.createElement('span'); time.className = 'message-time'; time.textContent = formatTime(item.created_at) + ' ✓✓'; bubble.append(time); $('messages').append(bubble);
+            const footer = document.createElement('span'); footer.className = 'message-footer';
+            const time = document.createElement('span'); time.className = 'message-time'; time.textContent = formatTime(item.created_at);
+            const actions = document.createElement('span'); actions.className = 'message-actions';
+            const more = document.createElement('button'); more.className = 'message-more'; more.type = 'button'; more.title = 'Opções da mensagem'; more.setAttribute('aria-label', 'Opções da mensagem'); more.setAttribute('aria-expanded', 'false'); more.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4m0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4m0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg>';
+            const menu = document.createElement('span'); menu.className = 'message-menu'; menu.hidden = true;
+            const single = document.createElement('button'); single.type = 'button'; single.textContent = 'Branchar mensagem';
+            const through = document.createElement('button'); through.type = 'button'; through.textContent = 'Branchar a partir daqui';
+            more.addEventListener('click', event => { event.stopPropagation(); closeMessageMenus(menu); menu.hidden = !menu.hidden; more.setAttribute('aria-expanded', String(!menu.hidden)); });
+            menu.addEventListener('click', event => event.stopPropagation());
+            single.addEventListener('click', () => branchFromMessage(item.id, 'single'));
+            through.addEventListener('click', () => branchFromMessage(item.id, 'through'));
+            menu.append(single, through); actions.append(more, menu); footer.append(time, actions); bubble.append(footer); $('messages').append(bubble);
         });
         requestAnimationFrame(() => $('messages').scrollTop = $('messages').scrollHeight);
+    }
+    function closeMessageMenus(except) {
+        document.querySelectorAll('.message-menu').forEach(menu => { if (menu !== except) { menu.hidden = true; menu.previousElementSibling?.setAttribute('aria-expanded', 'false'); } });
+    }
+    async function branchFromMessage(messageId, branchMode) {
+        try {
+            const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'branch_message', chat_id: state.activeId, message_id: messageId, branch_mode: branchMode }) });
+            closeMessageMenus(); await loadChats(); await openChat(Number(result.chat_id));
+            toast(branchMode === 'single' ? 'Branch criado somente com esta mensagem.' : 'Branch criado até esta mensagem.');
+        } catch (error) { toast(error.message); }
     }
     async function openChat(id) {
         try {
@@ -163,7 +193,7 @@
     $('back').addEventListener('click', () => $('app').classList.remove('chat-open'));
     $('branchCount').addEventListener('click', () => { const total = Number(state.activeChat?.total_branches || 0); toast(total ? `${total} ${total === 1 ? 'chat foi criado' : 'chats foram criados'} a partir desta conversa.` : 'Nenhum chat foi criado a partir desta conversa.'); });
     $('more').addEventListener('click', event => { event.stopPropagation(); const opening = $('attachmentMenu').hidden; $('attachmentMenu').hidden = !opening; $('more').setAttribute('aria-expanded', String(opening)); });
-    document.addEventListener('click', () => { $('attachmentMenu').hidden = true; $('more').setAttribute('aria-expanded', 'false'); });
+    document.addEventListener('click', () => { $('attachmentMenu').hidden = true; $('more').setAttribute('aria-expanded', 'false'); closeMessageMenus(); });
     $('attachmentMenu').addEventListener('click', event => event.stopPropagation());
     $('addImage').addEventListener('click', () => { $('imageInput').click(); $('attachmentMenu').hidden = true; });
     $('imageInput').addEventListener('change', () => { const file = $('imageInput').files[0]; $('imageChip').hidden = !file; $('imageName').textContent = file ? file.name : ''; });
