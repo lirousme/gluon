@@ -152,7 +152,7 @@
         if (!messages.length) { const empty = document.createElement('div'); empty.className = 'welcome'; empty.innerHTML = '<h2>Nenhuma mensagem</h2><p>Envie uma mensagem para começar esta conversa.</p>'; $('messages').append(empty); return; }
         messages.forEach(item => {
             const bubble = document.createElement('article'); bubble.className = 'message';
-            if (item.imagem_path) { const image = document.createElement('img'); image.className = 'message-image'; image.src = item.imagem_path; image.alt = 'Imagem enviada'; image.loading = 'lazy'; bubble.append(image); }
+            if (item.imagem_base64) { const image = document.createElement('img'); image.className = 'message-image'; image.src = item.imagem_base64; image.alt = 'Imagem enviada'; image.loading = 'lazy'; bubble.append(image); }
             if (item.texto) { const text = document.createElement('span'); text.className = 'message-text'; text.textContent = item.texto; bubble.append(text); }
             const footer = document.createElement('span'); footer.className = 'message-footer';
             const time = document.createElement('span'); time.className = 'message-time'; time.textContent = formatTime(item.created_at);
