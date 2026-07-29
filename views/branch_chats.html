@@ -72,9 +72,6 @@
         .composer.hidden { display: none; }
         .message-box { min-height: 42px; max-height: 120px; flex: 1; resize: none; border: 0; outline: 0; border-radius: 9px; background: #2a3942; color: #e9edef; padding: 11px 13px; line-height: 20px; }
         .message-box::placeholder { color: #8696a0; }
-        .branch-option { width: 34px; height: 42px; flex: none; display: grid; place-items: center; cursor: pointer; }
-        .branch-option[hidden] { display: none; }
-        .branch-option input { width: 19px; height: 19px; margin: 0; accent-color: var(--green); cursor: pointer; }
         .send { background: var(--green); }
         .attachment-menu { position: absolute; left: 12px; bottom: calc(100% + 8px); width: 205px; padding: 8px; border-radius: 10px; background: #233138; box-shadow: 0 8px 28px #0009; transform-origin: bottom left; }
         .attachment-menu[hidden] { display: none; }
@@ -138,7 +135,6 @@
             <div class="attachment-menu" id="attachmentMenu" hidden><button type="button" id="addImage"><svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2M8.5 13.5l2.5 3.01L14.5 12l4.5 6H5z"/></svg>Adicionar imagem</button></div>
             <div class="image-chip" id="imageChip" hidden><span id="imageName"></span><button type="button" id="removeImage" aria-label="Remover imagem">✕</button></div>
             <input id="imageInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" hidden>
-            <label class="branch-option" id="branchOption" title="Criar um branch com esta mensagem"><input id="createBranch" type="checkbox" aria-label="Criar um branch com esta mensagem"></label>
             <textarea class="message-box" id="messageBox" rows="1" maxlength="10000" placeholder="Mensagem" aria-label="Mensagem"></textarea>
             <button class="icon-button send" id="send" type="submit" aria-label="Enviar mensagem"><svg viewBox="0 0 24 24"><path d="m3.4 20.4 17.45-7.48c.81-.35.81-1.49 0-1.84L3.4 3.6c-.66-.29-1.39.2-1.39.91L2 9.12c0 .5.37.92.87.98L17 12 2.87 13.88c-.5.07-.87.49-.87.99l.01 4.61c0 .72.73 1.21 1.39.92"/></svg></button>
         </form>
@@ -222,7 +218,6 @@
             const data = await request(api + '?chat_id=' + id); state.activeId = id; state.activeChat = data.chat;
             $('activeTitle').textContent = data.chat.titulo;
             updateReadStatus(data.chat);
-            updateComposerMode(data.chat);
             $('branchCountValue').textContent = data.chat.total_branches;
             $('branchCount').setAttribute('aria-label', `${data.chat.total_branches} ${Number(data.chat.total_branches) === 1 ? 'branch criado' : 'branches criados'}`);
             $('chatHeader').hidden = false; $('composer').classList.remove('hidden'); $('app').classList.add('chat-open'); renderMessages(data.mensagens); renderChats(); $('messageBox').focus();
@@ -238,11 +233,6 @@
             ? `${kind} · ${reads} ${reads === 1 ? 'leitura' : 'leituras'} · disponível`
             : `${reads} ${reads === 1 ? 'leitura' : 'leituras'} · próxima em ${formatDateTime(chat.next_view_at)}`;
     }
-    function updateComposerMode(chat) {
-        const answerInNewChat = Number(chat?.chat_type) === 1;
-        $('branchOption').hidden = answerInNewChat;
-        if (answerInNewChat) $('createBranch').checked = false;
-    }
     $('newChat').addEventListener('click', async () => { try { const chat = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_chat', timezone_offset_minutes: timezoneOffset() }) }); await loadChats(); await openChat(chat.id); } catch (error) { toast(error.message); } });
     $('search').addEventListener('input', renderChats);
     $('back').addEventListener('click', () => $('app').classList.remove('chat-open'));
@@ -257,7 +247,7 @@
     });
     $('editChat').addEventListener('click', () => { $('chatTitleInput').value = state.activeChat?.titulo || ''; $('chatTypeInput').value = String(state.activeChat?.chat_type || 0); $('chatDialog').showModal(); $('chatTitleInput').select(); });
     document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => $(button.dataset.close).close()));
-    $('chatForm').addEventListener('submit', async event => { event.preventDefault(); try { const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'update_chat', chat_id: state.activeId, titulo: $('chatTitleInput').value, chat_type: Number($('chatTypeInput').value) }) }); state.activeChat.titulo = result.titulo; state.activeChat.chat_type = result.chat_type; $('activeTitle').textContent = result.titulo; updateComposerMode(state.activeChat); $('chatDialog').close(); await loadChats(); toast('Chat atualizado.'); } catch (error) { toast(error.message); } });
+    $('chatForm').addEventListener('submit', async event => { event.preventDefault(); try { const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'update_chat', chat_id: state.activeId, titulo: $('chatTitleInput').value, chat_type: Number($('chatTypeInput').value) }) }); state.activeChat.titulo = result.titulo; state.activeChat.chat_type = result.chat_type; $('activeTitle').textContent = result.titulo; $('chatDialog').close(); await loadChats(); toast('Chat atualizado.'); } catch (error) { toast(error.message); } });
     $('deleteChat').addEventListener('click', async () => { if (!confirm('Excluir este chat permanentemente?')) return; try { await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'delete_chat', chat_id: state.activeId }) }); $('chatDialog').close(); state.activeId = null; state.activeChat = null; $('chatHeader').hidden = true; $('composer').classList.add('hidden'); $('app').classList.remove('chat-open'); await loadChats(); toast('Chat excluído.'); } catch (error) { toast(error.message); } });
     function openMessageEditor(item) { closeMessageMenus(); state.editingMessage = item; $('editMessageText').value = item.texto || ''; $('currentImageRow').hidden = !item.imagem_base64; $('currentImage').src = item.imagem_base64 || ''; $('removeCurrentImage').checked = false; $('editMessageImage').value = ''; $('messageDialog').showModal(); }
     $('messageForm').addEventListener('submit', async event => { event.preventDefault(); const data = new FormData(); data.append('action', 'update_message'); data.append('chat_id', state.activeId); data.append('message_id', state.editingMessage.id); data.append('texto', $('editMessageText').value); data.append('remove_image', $('removeCurrentImage').checked ? '1' : '0'); const image = $('editMessageImage').files[0]; if (image) data.append('imagem', image); try { await request(api, { method: 'POST', body: data }); $('messageDialog').close(); await openChat(state.activeId); await loadChats(); toast('Mensagem atualizada.'); } catch (error) { toast(error.message); } });
@@ -272,11 +262,11 @@
     $('messageBox').addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); $('composer').requestSubmit(); } });
     $('composer').addEventListener('submit', async event => {
         event.preventDefault(); const text = $('messageBox').value.trim(); const image = $('imageInput').files[0]; if (!text && !image) return;
-        const data = new FormData(); data.append('action', 'send_message'); data.append('chat_id', state.activeId); data.append('texto', text); data.append('create_branch', $('createBranch').checked ? '1' : '0'); data.append('timezone_offset_minutes', timezoneOffset()); if (image) data.append('imagem', image);
+        const data = new FormData(); data.append('action', 'send_message'); data.append('chat_id', state.activeId); data.append('texto', text); data.append('create_branch', '0'); data.append('timezone_offset_minutes', timezoneOffset()); if (image) data.append('imagem', image);
         $('send').disabled = true;
         try {
             const result = await request(api, { method: 'POST', body: data });
-            $('messageBox').value = ''; $('messageBox').style.height = '42px'; $('imageInput').value = ''; $('imageChip').hidden = true; $('createBranch').checked = false;
+            $('messageBox').value = ''; $('messageBox').style.height = '42px'; $('imageInput').value = ''; $('imageChip').hidden = true;
             await loadChats(); await openChat(Number(result.chat_id));
             if (result.answered_in_new_chat) toast('Resposta criada em um novo chat.');
             else if (result.branched) toast('Branch criado com a nova mensagem.');
