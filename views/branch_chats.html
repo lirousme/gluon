@@ -58,6 +58,7 @@
         .message-more:hover, .message-more:focus-visible { background: #ffffff18; outline: none; }
         .message-more svg { width: 16px; height: 16px; }
         .message-menu { position: absolute; z-index: 5; right: 0; bottom: calc(100% + 5px); width: 205px; padding: 7px; border-radius: 9px; background: #233138; box-shadow: 0 8px 28px #000a; }
+        .message-menu.opens-downward { top: calc(100% + 5px); bottom: auto; }
         .message-menu[hidden] { display: none; }
         .message-menu button { width: 100%; padding: 10px 11px; border: 0; border-radius: 6px; background: transparent; color: #e9edef; text-align: left; cursor: pointer; }
         .message-menu button:hover, .message-menu button:focus-visible { background: #ffffff12; outline: none; }
@@ -183,7 +184,15 @@
             const single = document.createElement('button'); single.type = 'button'; single.textContent = 'Branchar mensagem';
             const through = document.createElement('button'); through.type = 'button'; through.textContent = 'Branchar a partir daqui';
             const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Editar';
-            more.addEventListener('click', event => { event.stopPropagation(); closeMessageMenus(menu); menu.hidden = !menu.hidden; more.setAttribute('aria-expanded', String(!menu.hidden)); });
+            more.addEventListener('click', event => {
+                event.stopPropagation();
+                const opening = menu.hidden;
+                closeMessageMenus(menu);
+                menu.hidden = !opening;
+                menu.classList.remove('opens-downward');
+                if (opening && menu.getBoundingClientRect().top < $('messages').getBoundingClientRect().top) menu.classList.add('opens-downward');
+                more.setAttribute('aria-expanded', String(opening));
+            });
             menu.addEventListener('click', event => event.stopPropagation());
             single.addEventListener('click', () => branchFromMessage(item.id, 'single'));
             through.addEventListener('click', () => branchFromMessage(item.id, 'through'));
