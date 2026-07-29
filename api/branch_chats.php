@@ -50,13 +50,65 @@ function branchChatsDecryptMessageText(?string $encryptedText): ?string
     return $decrypted !== false ? $decrypted : $encryptedText;
 }
 
+/**
+ * Retorna a imagem como data URI, mantendo no banco somente o conteúdo base64
+ * criptografado. O fallback converte imagens da implementação antiga na leitura.
+ */
+function branchChatsDecryptMessageImage(PDO $pdo, array $message): ?string
+{
+    $storedImage = $message['imagem_encrypted'] ?? null;
+    if ($storedImage === null || $storedImage === '') {
+        return null;
+    }
+
+    $decrypted = Security::decryptData($storedImage);
+    if ($decrypted !== false) {
+        return $decrypted;
+    }
+
+    $dataUri = null;
+    $legacyFile = null;
+    if (str_starts_with($storedImage, 'data:image/')) {
+        $dataUri = $storedImage;
+    } elseif (str_starts_with($storedImage, '/uploads/branch_chats/')) {
+        $legacyFile = BASE_PATH . $storedImage;
+        if (is_file($legacyFile)) {
+            $mime = (new finfo(FILEINFO_MIME_TYPE))->file($legacyFile);
+            if (is_string($mime) && str_starts_with($mime, 'image/')) {
+                $contents = file_get_contents($legacyFile);
+                if ($contents !== false) {
+                    $dataUri = 'data:' . $mime . ';base64,' . base64_encode($contents);
+                }
+            }
+        }
+    }
+
+    if ($dataUri !== null) {
+        $update = $pdo->prepare(
+            'UPDATE mensagens SET imagem_encrypted = :encrypted WHERE id = :id AND imagem_encrypted = :legacy'
+        );
+        $update->execute([
+            ':encrypted' => Security::encryptData($dataUri),
+            ':id' => $message['id'],
+            ':legacy' => $storedImage,
+        ]);
+        if ($update->rowCount() === 1 && $legacyFile !== null) {
+            @unlink($legacyFile);
+        }
+    }
+
+    return $dataUri;
+}
+
 function branchChatsDecryptMessages(PDO $pdo, array $messages): array
 {
     $update = null;
     foreach ($messages as &$message) {
         $storedText = $message['texto_encrypted'] ?? null;
         $message['texto'] = branchChatsDecryptMessageText($storedText);
+        $message['imagem_base64'] = branchChatsDecryptMessageImage($pdo, $message);
         unset($message['texto_encrypted']);
+        unset($message['imagem_encrypted']);
 
         // Migração gradual dos registros antigos, sem manter texto puro no banco.
         if ($storedText !== null && Security::decryptData($storedText) === false) {
@@ -81,7 +133,7 @@ try {
         if ($chatId > 0) {
             $chat = branchChatsFind($pdo, $chatId, $userId);
             $stmt = $pdo->prepare(
-                'SELECT m.id, m.texto_encrypted, m.imagem_path, m.created_at
+                'SELECT m.id, m.texto_encrypted, m.imagem_encrypted, m.created_at
                  FROM chat_mensagens cm
                  INNER JOIN mensagens m ON m.id = cm.mensagem_id
                  WHERE cm.chat_id = :chat_id AND m.user_id = :user_id
@@ -187,30 +239,25 @@ try {
         branchChatsRespond(['status' => 'error', 'message' => 'A mensagem deve ter no máximo 10.000 caracteres.'], 422);
     }
 
-    $imagePath = null;
+    $encryptedImage = null;
     $image = $_FILES['imagem'] ?? null;
     if ($image && ($image['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
         if ($image['error'] !== UPLOAD_ERR_OK || $image['size'] > 8 * 1024 * 1024) {
             branchChatsRespond(['status' => 'error', 'message' => 'Não foi possível enviar a imagem (limite de 8 MB).'], 422);
         }
         $mime = (new finfo(FILEINFO_MIME_TYPE))->file($image['tmp_name']);
-        $extensions = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif', 'image/webp' => 'webp'];
-        if (!isset($extensions[$mime])) {
+        $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!in_array($mime, $allowedMimes, true)) {
             branchChatsRespond(['status' => 'error', 'message' => 'Formato inválido. Use JPG, PNG, GIF ou WebP.'], 422);
         }
-        $relativeDirectory = 'uploads/branch_chats/' . $userId;
-        $directory = BASE_PATH . '/' . $relativeDirectory;
-        if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) {
-            throw new RuntimeException('Não foi possível preparar o diretório de imagens.');
+        $imageContents = file_get_contents($image['tmp_name']);
+        if ($imageContents === false) {
+            throw new RuntimeException('Não foi possível ler a imagem.');
         }
-        $filename = bin2hex(random_bytes(16)) . '.' . $extensions[$mime];
-        if (!move_uploaded_file($image['tmp_name'], $directory . '/' . $filename)) {
-            throw new RuntimeException('Não foi possível salvar a imagem.');
-        }
-        $imagePath = '/' . $relativeDirectory . '/' . $filename;
+        $encryptedImage = Security::encryptData('data:' . $mime . ';base64,' . base64_encode($imageContents));
     }
 
-    if ($text === '' && $imagePath === null) {
+    if ($text === '' && $encryptedImage === null) {
         branchChatsRespond(['status' => 'error', 'message' => 'Escreva uma mensagem ou adicione uma imagem.'], 422);
     }
 
@@ -225,16 +272,17 @@ try {
     }
 
     $encryptedText = $text !== '' ? Security::encryptData($text) : null;
-    $stmt = $pdo->prepare('INSERT INTO mensagens (user_id, texto_encrypted, imagem_path) VALUES (:user_id, :texto_encrypted, :imagem_path)');
-    $stmt->execute([':user_id' => $userId, ':texto_encrypted' => $encryptedText, ':imagem_path' => $imagePath]);
+    $stmt = $pdo->prepare('INSERT INTO mensagens (user_id, texto_encrypted, imagem_encrypted) VALUES (:user_id, :texto_encrypted, :imagem_encrypted)');
+    $stmt->execute([':user_id' => $userId, ':texto_encrypted' => $encryptedText, ':imagem_encrypted' => $encryptedImage]);
     $messageId = (int)$pdo->lastInsertId();
     $stmt = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position) SELECT :chat_id, :message_id, COALESCE(MAX(position), 0) + 1 FROM chat_mensagens WHERE chat_id = :position_chat_id');
     $stmt->execute([':chat_id' => $targetChatId, ':message_id' => $messageId, ':position_chat_id' => $targetChatId]);
     $pdo->prepare('UPDATE chats SET updated_at = CURRENT_TIMESTAMP WHERE id = :id')->execute([':id' => $targetChatId]);
-    $stmt = $pdo->prepare('SELECT id, imagem_path, created_at FROM mensagens WHERE id = :id');
+    $stmt = $pdo->prepare('SELECT id, created_at FROM mensagens WHERE id = :id');
     $stmt->execute([':id' => $messageId]);
     $message = $stmt->fetch();
     $message['texto'] = $text !== '' ? $text : null;
+    $message['imagem_base64'] = $encryptedImage !== null ? Security::decryptData($encryptedImage) : null;
     $pdo->commit();
     branchChatsRespond(['status' => 'success', 'data' => ['message' => $message, 'chat_id' => $targetChatId, 'branched' => $createBranch]], 201);
 } catch (Throwable $e) {
