@@ -24,7 +24,7 @@ function branchChatsRespond(array $payload, int $status = 200): void
 function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
 {
     $stmt = $pdo->prepare(
-        'SELECT c.id, c.parent_chat_id, c.titulo, c.created_at, c.updated_at,
+        'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.created_at, c.updated_at,
                 COALESCE(cv.view_count, 0) AS view_count, cv.last_viewed_at,
                 CASE WHEN cv.last_viewed_at IS NULL THEN NULL
                      ELSE DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY) END AS next_view_at,
@@ -168,7 +168,7 @@ try {
         if ($chatId > 0) {
             $chat = branchChatsFind($pdo, $chatId, $userId);
             $stmt = $pdo->prepare(
-                'SELECT m.id, m.texto_encrypted, m.imagem_encrypted, m.created_at
+                'SELECT m.id, m.texto_encrypted, m.imagem_encrypted, m.created_at, cm.is_response
                  FROM chat_mensagens cm
                  INNER JOIN mensagens m ON m.id = cm.mensagem_id
                  WHERE cm.chat_id = :chat_id AND m.user_id = :user_id
@@ -180,7 +180,7 @@ try {
         }
 
         $stmt = $pdo->prepare(
-            'SELECT c.id, c.parent_chat_id, c.titulo, c.created_at, c.updated_at,
+            'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.created_at, c.updated_at,
                     COALESCE(cv.view_count, 0) AS view_count,
                     (SELECT m.texto_encrypted FROM chat_mensagens cm INNER JOIN mensagens m ON m.id = cm.mensagem_id WHERE cm.chat_id = c.id ORDER BY cm.position DESC LIMIT 1) AS ultima_mensagem_encrypted,
                     (SELECT COUNT(*) FROM chat_mensagens cm WHERE cm.chat_id = c.id) AS total_mensagens,
@@ -227,8 +227,12 @@ try {
         if ($title === '' || mb_strlen($title) > 120) {
             branchChatsRespond(['status' => 'error', 'message' => 'Informe um nome de até 120 caracteres.'], 422);
         }
-        $pdo->prepare('UPDATE chats SET titulo = :titulo WHERE id = :id AND user_id = :user_id')->execute([':titulo' => $title, ':id' => $chatId, ':user_id' => $userId]);
-        branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId, 'titulo' => $title]]);
+        $chatType = (int)($input['chat_type'] ?? 0);
+        if (!in_array($chatType, [0, 1], true)) {
+            branchChatsRespond(['status' => 'error', 'message' => 'Tipo de chat inválido.'], 422);
+        }
+        $pdo->prepare('UPDATE chats SET titulo = :titulo, chat_type = :chat_type WHERE id = :id AND user_id = :user_id')->execute([':titulo' => $title, ':chat_type' => $chatType, ':id' => $chatId, ':user_id' => $userId]);
+        branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId, 'titulo' => $title, 'chat_type' => $chatType]]);
     }
 
     if ($action === 'delete_chat') {
@@ -365,8 +369,9 @@ try {
     }
 
     $sourceChatId = (int)($input['chat_id'] ?? 0);
-    branchChatsFind($pdo, $sourceChatId, $userId);
-    $createBranch = filter_var($input['create_branch'] ?? false, FILTER_VALIDATE_BOOLEAN);
+    $sourceChat = branchChatsFind($pdo, $sourceChatId, $userId);
+    $answerInNewChat = (int)$sourceChat['chat_type'] === 1;
+    $createBranch = $answerInNewChat || filter_var($input['create_branch'] ?? false, FILTER_VALIDATE_BOOLEAN);
     $text = trim((string)($input['texto'] ?? ''));
     if (mb_strlen($text) > 10000) {
         branchChatsRespond(['status' => 'error', 'message' => 'A mensagem deve ter no máximo 10.000 caracteres.'], 422);
@@ -396,8 +401,8 @@ try {
     $stmt = $pdo->prepare('INSERT INTO mensagens (user_id, texto_encrypted, imagem_encrypted) VALUES (:user_id, :texto_encrypted, :imagem_encrypted)');
     $stmt->execute([':user_id' => $userId, ':texto_encrypted' => $encryptedText, ':imagem_encrypted' => $encryptedImage]);
     $messageId = (int)$pdo->lastInsertId();
-    $stmt = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position) SELECT :chat_id, :message_id, COALESCE(MAX(position), 0) + 1 FROM chat_mensagens WHERE chat_id = :position_chat_id');
-    $stmt->execute([':chat_id' => $targetChatId, ':message_id' => $messageId, ':position_chat_id' => $targetChatId]);
+    $stmt = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position, is_response) SELECT :chat_id, :message_id, COALESCE(MAX(position), 0) + 1, :is_response FROM chat_mensagens WHERE chat_id = :position_chat_id');
+    $stmt->execute([':chat_id' => $targetChatId, ':message_id' => $messageId, ':is_response' => $answerInNewChat ? 1 : 0, ':position_chat_id' => $targetChatId]);
     $pdo->prepare('UPDATE chats SET updated_at = CURRENT_TIMESTAMP WHERE id = :id')->execute([':id' => $targetChatId]);
     $stmt = $pdo->prepare('SELECT id, created_at FROM mensagens WHERE id = :id');
     $stmt->execute([':id' => $messageId]);
@@ -405,7 +410,7 @@ try {
     $message['texto'] = $text !== '' ? $text : null;
     $message['imagem_base64'] = $encryptedImage !== null ? Security::decryptData($encryptedImage) : null;
     $pdo->commit();
-    branchChatsRespond(['status' => 'success', 'data' => ['message' => $message, 'chat_id' => $targetChatId, 'branched' => $createBranch]], 201);
+    branchChatsRespond(['status' => 'success', 'data' => ['message' => $message, 'chat_id' => $targetChatId, 'branched' => $createBranch, 'answered_in_new_chat' => $answerInNewChat]], 201);
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
