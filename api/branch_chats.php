@@ -25,10 +25,17 @@ function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
 {
     $stmt = $pdo->prepare(
         'SELECT c.id, c.parent_chat_id, c.titulo, c.created_at, c.updated_at,
+                COALESCE(cv.view_count, 0) AS view_count, cv.last_viewed_at,
+                CASE WHEN cv.last_viewed_at IS NULL THEN NULL
+                     ELSE DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY) END AS next_view_at,
+                CASE WHEN cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY)
+                     THEN 1 ELSE 0 END AS can_mark_viewed,
                 (SELECT COUNT(*) FROM chats child WHERE child.parent_chat_id = c.id AND child.user_id = c.user_id) AS total_branches
-         FROM chats c WHERE c.id = :id AND c.user_id = :user_id LIMIT 1'
+         FROM chats c
+         LEFT JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
+         WHERE c.id = :id AND c.user_id = :user_id LIMIT 1'
     );
-    $stmt->execute([':id' => $chatId, ':user_id' => $userId]);
+    $stmt->execute([':id' => $chatId, ':user_id' => $userId, ':view_user_id' => $userId]);
     $chat = $stmt->fetch();
     if (!$chat) {
         branchChatsRespond(['status' => 'error', 'message' => 'Chat não encontrado.'], 404);
@@ -146,13 +153,17 @@ try {
 
         $stmt = $pdo->prepare(
             'SELECT c.id, c.parent_chat_id, c.titulo, c.created_at, c.updated_at,
+                    COALESCE(cv.view_count, 0) AS view_count,
                     (SELECT m.texto_encrypted FROM chat_mensagens cm INNER JOIN mensagens m ON m.id = cm.mensagem_id WHERE cm.chat_id = c.id ORDER BY cm.position DESC LIMIT 1) AS ultima_mensagem_encrypted,
                     (SELECT COUNT(*) FROM chat_mensagens cm WHERE cm.chat_id = c.id) AS total_mensagens,
                     (SELECT COUNT(*) FROM chats child WHERE child.parent_chat_id = c.id AND child.user_id = c.user_id) AS total_branches
-             FROM chats c WHERE c.user_id = :user_id
+             FROM chats c
+             LEFT JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
+             WHERE c.user_id = :user_id
+               AND (cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY))
              ORDER BY c.updated_at DESC, c.id DESC'
         );
-        $stmt->execute([':user_id' => $userId]);
+        $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId]);
         $chats = $stmt->fetchAll();
         foreach ($chats as &$chat) {
             $chat['ultima_mensagem'] = branchChatsDecryptMessageText($chat['ultima_mensagem_encrypted'] ?? null);
@@ -179,6 +190,45 @@ try {
         $stmt = $pdo->prepare('SELECT titulo FROM chats WHERE id = :id');
         $stmt->execute([':id' => $chatId]);
         branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId, 'titulo' => $stmt->fetchColumn()]], 201);
+    }
+
+    if ($action === 'mark_viewed') {
+        $chatId = (int)($input['chat_id'] ?? 0);
+        branchChatsFind($pdo, $chatId, $userId);
+
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare(
+            'INSERT IGNORE INTO chat_views (chat_id, user_id, view_count, last_viewed_at)
+             VALUES (:chat_id, :user_id, 0, NULL)'
+        );
+        $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
+        $stmt = $pdo->prepare(
+            'SELECT view_count, last_viewed_at,
+                    CASE WHEN last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= DATE_ADD(last_viewed_at, INTERVAL view_count DAY)
+                         THEN 1 ELSE 0 END AS can_mark_viewed
+             FROM chat_views WHERE chat_id = :chat_id AND user_id = :user_id FOR UPDATE'
+        );
+        $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
+        $view = $stmt->fetch();
+        if (!(bool)$view['can_mark_viewed']) {
+            $pdo->rollBack();
+            branchChatsRespond(['status' => 'error', 'message' => 'A próxima leitura ainda não está disponível.'], 409);
+        }
+
+        $stmt = $pdo->prepare(
+            'UPDATE chat_views
+             SET view_count = view_count + 1, last_viewed_at = CURRENT_TIMESTAMP
+             WHERE chat_id = :chat_id AND user_id = :user_id'
+        );
+        $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
+        $pdo->commit();
+        $chat = branchChatsFind($pdo, $chatId, $userId);
+        branchChatsRespond(['status' => 'success', 'data' => [
+            'view_count' => (int)$chat['view_count'],
+            'last_viewed_at' => $chat['last_viewed_at'],
+            'next_view_at' => $chat['next_view_at'],
+            'can_mark_viewed' => (bool)$chat['can_mark_viewed'],
+        ]]);
     }
 
     if ($action === 'branch_message') {

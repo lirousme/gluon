@@ -44,6 +44,9 @@
         .branch-count { width: auto; min-width: 40px; padding: 0 10px; border-radius: 20px; gap: 5px; }
         .branch-count svg { width: 19px; height: 19px; }
         .branch-count span { color: #d1d7db; font-size: 13px; font-weight: 700; }
+        .read-button { width: auto; min-width: 62px; padding: 0 12px; border-radius: 20px; background: var(--green); font-size: 13px; font-weight: 700; }
+        .read-button:hover, .read-button:focus-visible { background: #06bd98; }
+        .read-button:disabled { background: #35444b; color: var(--muted); cursor: not-allowed; }
         .messages { min-height: 0; flex: 1 1 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 26px clamp(18px, 7vw, 100px); scroll-behavior: smooth; }
         .message { max-width: min(68%, 650px); margin: 0 0 6px auto; padding: 7px 8px 5px; border-radius: 8px 0 8px 8px; background: #005c4b; box-shadow: 0 1px 1px #0004; overflow-wrap: anywhere; }
         .message-image { display: block; max-width: 100%; max-height: 420px; border-radius: 6px; object-fit: cover; margin-bottom: 5px; }
@@ -106,6 +109,7 @@
         <header class="chat-header" id="chatHeader" hidden>
             <button class="icon-button back" id="back" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="m20 11-12.2.03 5.6-5.6L12 4l-8 8 8 8 1.4-1.43-5.6-5.6L20 13z"/></svg></button>
             <div class="avatar">B</div><div class="chat-heading"><h2 id="activeTitle"></h2><p class="subtitle" id="chatSubtitle">conversa privada</p></div>
+            <button class="icon-button read-button" id="markViewed" type="button">Lido</button>
             <button class="icon-button branch-count" id="branchCount" type="button" title="Branches criados a partir deste chat" aria-label="Nenhum branch criado">
                 <svg viewBox="0 0 24 24"><path d="M6 3a3 3 0 1 0 2 5.24v1.26A3.5 3.5 0 0 0 11.5 13H16v2.76A3 3 0 1 0 18 15V8.24a3 3 0 1 0-2 0V11h-4.5A1.5 1.5 0 0 1 10 9.5V8.24A3 3 0 0 0 6 3m0 2a1 1 0 1 1 0 2 1 1 0 0 1 0-2m12 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2m0 12a1 1 0 1 1 0 2 1 1 0 0 1 0-2"/></svg><span id="branchCountValue">0</span>
             </button>
@@ -127,7 +131,9 @@
     const state = { chats: [], activeId: null, activeChat: null };
     const $ = id => document.getElementById(id);
     const api = '/api/branch_chats';
-    const formatTime = value => value ? new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value.replace(' ', 'T'))) : '';
+    const utcDate = value => new Date(/[zZ]|[+-]\d\d:\d\d$/.test(value) ? value : value.replace(' ', 'T') + 'Z');
+    const formatTime = value => value ? new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(utcDate(value)) : '';
+    const formatDateTime = value => value ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(utcDate(value)) : '';
     function toast(message) { $('toast').textContent = message; $('toast').hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => $('toast').hidden = true, 3000); }
     async function request(url, options) { const response = await fetch(url, options); const result = await response.json(); if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível concluir.'); return result.data; }
     function renderChats() {
@@ -183,16 +189,34 @@
         try {
             const data = await request(api + '?chat_id=' + id); state.activeId = id; state.activeChat = data.chat;
             $('activeTitle').textContent = data.chat.titulo;
-            $('chatSubtitle').textContent = data.chat.parent_chat_id ? 'branch de outra conversa' : 'conversa privada';
+            updateReadStatus(data.chat);
             $('branchCountValue').textContent = data.chat.total_branches;
             $('branchCount').setAttribute('aria-label', `${data.chat.total_branches} ${Number(data.chat.total_branches) === 1 ? 'branch criado' : 'branches criados'}`);
             $('chatHeader').hidden = false; $('composer').classList.remove('hidden'); $('app').classList.add('chat-open'); renderMessages(data.mensagens); renderChats(); $('messageBox').focus();
         } catch (error) { toast(error.message); }
     }
+    function updateReadStatus(chat) {
+        const available = Boolean(Number(chat.can_mark_viewed));
+        $('markViewed').disabled = !available;
+        $('markViewed').title = available ? 'Registrar esta leitura' : `Próxima leitura em ${formatDateTime(chat.next_view_at)}`;
+        const kind = chat.parent_chat_id ? 'branch de outra conversa' : 'conversa privada';
+        const reads = Number(chat.view_count || 0);
+        $('chatSubtitle').textContent = available
+            ? `${kind} · ${reads} ${reads === 1 ? 'leitura' : 'leituras'} · disponível`
+            : `${reads} ${reads === 1 ? 'leitura' : 'leituras'} · próxima em ${formatDateTime(chat.next_view_at)}`;
+    }
     $('newChat').addEventListener('click', async () => { try { const chat = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_chat' }) }); await loadChats(); await openChat(chat.id); } catch (error) { toast(error.message); } });
     $('search').addEventListener('input', renderChats);
     $('back').addEventListener('click', () => $('app').classList.remove('chat-open'));
     $('branchCount').addEventListener('click', () => { const total = Number(state.activeChat?.total_branches || 0); toast(total ? `${total} ${total === 1 ? 'chat foi criado' : 'chats foram criados'} a partir desta conversa.` : 'Nenhum chat foi criado a partir desta conversa.'); });
+    $('markViewed').addEventListener('click', async () => {
+        $('markViewed').disabled = true;
+        try {
+            const view = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'mark_viewed', chat_id: state.activeId }) });
+            Object.assign(state.activeChat, view); updateReadStatus(state.activeChat); await loadChats();
+            toast(`Leitura ${view.view_count} registrada.`);
+        } catch (error) { updateReadStatus(state.activeChat); toast(error.message); }
+    });
     $('more').addEventListener('click', event => { event.stopPropagation(); const opening = $('attachmentMenu').hidden; $('attachmentMenu').hidden = !opening; $('more').setAttribute('aria-expanded', String(opening)); });
     document.addEventListener('click', () => { $('attachmentMenu').hidden = true; $('more').setAttribute('aria-expanded', 'false'); closeMessageMenus(); });
     $('attachmentMenu').addEventListener('click', event => event.stopPropagation());
