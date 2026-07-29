@@ -43,6 +43,34 @@ function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
     return $chat;
 }
 
+function branchChatsTimezoneOffset(array $input): int
+{
+    return max(-840, min(840, (int)($input['timezone_offset_minutes'] ?? 0)));
+}
+
+function branchChatsDefaultTitle(int $timezoneOffsetMinutes): string
+{
+    return (new DateTimeImmutable('now', new DateTimeZone('UTC')))
+        ->modify(($timezoneOffsetMinutes >= 0 ? '+' : '') . $timezoneOffsetMinutes . ' minutes')
+        ->format('d/m/Y H:i');
+}
+
+function branchChatsStoreImage(array $image): string
+{
+    if (($image['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || ($image['size'] ?? 0) > 8 * 1024 * 1024) {
+        branchChatsRespond(['status' => 'error', 'message' => 'Não foi possível enviar a imagem (limite de 8 MB).'], 422);
+    }
+    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($image['tmp_name']);
+    if (!in_array($mime, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
+        branchChatsRespond(['status' => 'error', 'message' => 'Formato inválido. Use JPG, PNG, GIF ou WebP.'], 422);
+    }
+    $contents = file_get_contents($image['tmp_name']);
+    if ($contents === false) {
+        throw new RuntimeException('Não foi possível ler a imagem.');
+    }
+    return Security::encryptData('data:' . $mime . ';base64,' . base64_encode($contents));
+}
+
 /**
  * Descriptografa o texto de uma mensagem. O fallback temporário para texto puro
  * permite que registros criados antes da migração sejam lidos e recriptografados.
@@ -184,12 +212,67 @@ try {
     $action = trim((string)($input['action'] ?? ''));
 
     if ($action === 'create_chat') {
-        $stmt = $pdo->prepare("INSERT INTO chats (user_id, titulo) VALUES (:user_id, DATE_FORMAT(CURRENT_TIMESTAMP, '%d/%m/%Y %H:%i'))");
-        $stmt->execute([':user_id' => $userId]);
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, titulo) VALUES (:user_id, :titulo)');
+        $stmt->execute([':user_id' => $userId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
         $chatId = (int)$pdo->lastInsertId();
         $stmt = $pdo->prepare('SELECT titulo FROM chats WHERE id = :id');
         $stmt->execute([':id' => $chatId]);
         branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId, 'titulo' => $stmt->fetchColumn()]], 201);
+    }
+
+    if ($action === 'update_chat') {
+        $chatId = (int)($input['chat_id'] ?? 0);
+        branchChatsFind($pdo, $chatId, $userId);
+        $title = trim((string)($input['titulo'] ?? ''));
+        if ($title === '' || mb_strlen($title) > 120) {
+            branchChatsRespond(['status' => 'error', 'message' => 'Informe um nome de até 120 caracteres.'], 422);
+        }
+        $pdo->prepare('UPDATE chats SET titulo = :titulo WHERE id = :id AND user_id = :user_id')->execute([':titulo' => $title, ':id' => $chatId, ':user_id' => $userId]);
+        branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId, 'titulo' => $title]]);
+    }
+
+    if ($action === 'delete_chat') {
+        $chatId = (int)($input['chat_id'] ?? 0);
+        branchChatsFind($pdo, $chatId, $userId);
+        $pdo->prepare('DELETE FROM chats WHERE id = :id AND user_id = :user_id')->execute([':id' => $chatId, ':user_id' => $userId]);
+        branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId]]);
+    }
+
+    if ($action === 'update_message') {
+        $chatId = (int)($input['chat_id'] ?? 0);
+        $messageId = (int)($input['message_id'] ?? 0);
+        branchChatsFind($pdo, $chatId, $userId);
+        $stmt = $pdo->prepare('SELECT m.imagem_encrypted FROM mensagens m INNER JOIN chat_mensagens cm ON cm.mensagem_id = m.id WHERE m.id = :message_id AND cm.chat_id = :chat_id AND m.user_id = :user_id LIMIT 1');
+        $stmt->execute([':message_id' => $messageId, ':chat_id' => $chatId, ':user_id' => $userId]);
+        $currentImage = $stmt->fetchColumn();
+        if ($currentImage === false) {
+            branchChatsRespond(['status' => 'error', 'message' => 'Mensagem não encontrada.'], 404);
+        }
+        $text = trim((string)($input['texto'] ?? ''));
+        if (mb_strlen($text) > 10000) {
+            branchChatsRespond(['status' => 'error', 'message' => 'A mensagem deve ter no máximo 10.000 caracteres.'], 422);
+        }
+        $encryptedImage = filter_var($input['remove_image'] ?? false, FILTER_VALIDATE_BOOLEAN) ? null : $currentImage;
+        if (isset($_FILES['imagem']) && ($_FILES['imagem']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            $encryptedImage = branchChatsStoreImage($_FILES['imagem']);
+        }
+        if ($text === '' && ($encryptedImage === null || $encryptedImage === '')) {
+            branchChatsRespond(['status' => 'error', 'message' => 'A mensagem precisa ter texto ou imagem.'], 422);
+        }
+        $pdo->prepare('UPDATE mensagens SET texto_encrypted = :texto, imagem_encrypted = :imagem WHERE id = :id AND user_id = :user_id')->execute([
+            ':texto' => $text === '' ? null : Security::encryptData($text), ':imagem' => $encryptedImage, ':id' => $messageId, ':user_id' => $userId,
+        ]);
+        branchChatsRespond(['status' => 'success', 'data' => ['id' => $messageId]]);
+    }
+
+    if ($action === 'delete_message') {
+        $chatId = (int)($input['chat_id'] ?? 0);
+        $messageId = (int)($input['message_id'] ?? 0);
+        branchChatsFind($pdo, $chatId, $userId);
+        $stmt = $pdo->prepare('DELETE m FROM mensagens m INNER JOIN chat_mensagens cm ON cm.mensagem_id = m.id WHERE m.id = :message_id AND cm.chat_id = :chat_id AND m.user_id = :user_id');
+        $stmt->execute([':message_id' => $messageId, ':chat_id' => $chatId, ':user_id' => $userId]);
+        if ($stmt->rowCount() === 0) branchChatsRespond(['status' => 'error', 'message' => 'Mensagem não encontrada.'], 404);
+        branchChatsRespond(['status' => 'success', 'data' => ['id' => $messageId]]);
     }
 
     if ($action === 'mark_viewed') {
@@ -255,8 +338,8 @@ try {
         }
 
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare("INSERT INTO chats (user_id, parent_chat_id, titulo) VALUES (:user_id, :parent_id, DATE_FORMAT(CURRENT_TIMESTAMP, '%d/%m/%Y %H:%i'))");
-        $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId]);
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo) VALUES (:user_id, :parent_id, :titulo)');
+        $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
         $targetChatId = (int)$pdo->lastInsertId();
 
         if ($branchMode === 'single') {
@@ -292,19 +375,7 @@ try {
     $encryptedImage = null;
     $image = $_FILES['imagem'] ?? null;
     if ($image && ($image['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
-        if ($image['error'] !== UPLOAD_ERR_OK || $image['size'] > 8 * 1024 * 1024) {
-            branchChatsRespond(['status' => 'error', 'message' => 'Não foi possível enviar a imagem (limite de 8 MB).'], 422);
-        }
-        $mime = (new finfo(FILEINFO_MIME_TYPE))->file($image['tmp_name']);
-        $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        if (!in_array($mime, $allowedMimes, true)) {
-            branchChatsRespond(['status' => 'error', 'message' => 'Formato inválido. Use JPG, PNG, GIF ou WebP.'], 422);
-        }
-        $imageContents = file_get_contents($image['tmp_name']);
-        if ($imageContents === false) {
-            throw new RuntimeException('Não foi possível ler a imagem.');
-        }
-        $encryptedImage = Security::encryptData('data:' . $mime . ';base64,' . base64_encode($imageContents));
+        $encryptedImage = branchChatsStoreImage($image);
     }
 
     if ($text === '' && $encryptedImage === null) {
@@ -314,8 +385,8 @@ try {
     $pdo->beginTransaction();
     $targetChatId = $sourceChatId;
     if ($createBranch) {
-        $stmt = $pdo->prepare("INSERT INTO chats (user_id, parent_chat_id, titulo) VALUES (:user_id, :parent_id, DATE_FORMAT(CURRENT_TIMESTAMP, '%d/%m/%Y %H:%i'))");
-        $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId]);
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo) VALUES (:user_id, :parent_id, :titulo)');
+        $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
         $targetChatId = (int)$pdo->lastInsertId();
         $stmt = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position) SELECT :target_id, mensagem_id, position FROM chat_mensagens WHERE chat_id = :source_id');
         $stmt->execute([':target_id' => $targetChatId, ':source_id' => $sourceChatId]);

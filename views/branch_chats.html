@@ -82,6 +82,18 @@
         .image-chip button { border: 0; background: transparent; color: #ef6b73; cursor: pointer; }
         .toast { position: fixed; z-index: 20; left: 50%; bottom: 90px; transform: translateX(-50%); padding: 10px 16px; border-radius: 8px; background: #e9edef; color: #111b21; box-shadow: 0 4px 18px #0008; }
         .toast[hidden] { display: none; }
+        dialog { width: min(92vw, 470px); border: 1px solid var(--line); border-radius: 12px; padding: 0; background: var(--panel); color: #e9edef; box-shadow: 0 18px 60px #000b; }
+        dialog::backdrop { background: #000a; }
+        .modal-form { padding: 22px; display: grid; gap: 15px; }
+        .modal-form h2 { font-size: 20px; font-weight: 600; }
+        .modal-form input[type="text"], .modal-form textarea { width: 100%; border: 1px solid #3b4a52; border-radius: 8px; outline: none; background: var(--bg); color: inherit; padding: 11px 12px; }
+        .modal-form textarea { min-height: 110px; resize: vertical; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 9px; }
+        .modal-actions button { border: 0; border-radius: 8px; padding: 10px 14px; background: #35444b; cursor: pointer; }
+        .modal-actions .primary { background: var(--green); font-weight: 700; }
+        .modal-actions .danger { margin-right: auto; background: #9d2833; }
+        .edit-image-row { display: flex; align-items: center; gap: 12px; color: var(--muted); }
+        .edit-image-row img { width: 72px; height: 72px; border-radius: 7px; object-fit: cover; }
         @media (max-width: 720px) {
             .app { display: block; }
             .sidebar, .main { width: 100%; height: 100%; }
@@ -108,7 +120,7 @@
     <main class="main">
         <header class="chat-header" id="chatHeader" hidden>
             <button class="icon-button back" id="back" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="m20 11-12.2.03 5.6-5.6L12 4l-8 8 8 8 1.4-1.43-5.6-5.6L20 13z"/></svg></button>
-            <div class="avatar">B</div><div class="chat-heading"><h2 id="activeTitle"></h2><p class="subtitle" id="chatSubtitle">conversa privada</p></div>
+            <button class="icon-button avatar" id="editChat" type="button" title="Editar chat" aria-label="Editar nome ou excluir chat">B</button><div class="chat-heading"><h2 id="activeTitle"></h2><p class="subtitle" id="chatSubtitle">conversa privada</p></div>
             <button class="icon-button read-button" id="markViewed" type="button">Lido</button>
             <button class="icon-button branch-count" id="branchCount" type="button" title="Branches criados a partir deste chat" aria-label="Nenhum branch criado">
                 <svg viewBox="0 0 24 24"><path d="M6 3a3 3 0 1 0 2 5.24v1.26A3.5 3.5 0 0 0 11.5 13H16v2.76A3 3 0 1 0 18 15V8.24a3 3 0 1 0-2 0V11h-4.5A1.5 1.5 0 0 1 10 9.5V8.24A3 3 0 0 0 6 3m0 2a1 1 0 1 1 0 2 1 1 0 0 1 0-2m12 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2m0 12a1 1 0 1 1 0 2 1 1 0 0 1 0-2"/></svg><span id="branchCountValue">0</span>
@@ -127,10 +139,13 @@
     </main>
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
+<dialog id="chatDialog"><form class="modal-form" id="chatForm"><h2>Editar chat</h2><input id="chatTitleInput" type="text" maxlength="120" required aria-label="Nome do chat"><div class="modal-actions"><button class="danger" id="deleteChat" type="button">Excluir chat</button><button type="button" data-close="chatDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
+<dialog id="messageDialog"><form class="modal-form" id="messageForm"><h2>Editar mensagem</h2><textarea id="editMessageText" maxlength="10000" placeholder="Mensagem" aria-label="Texto da mensagem"></textarea><div class="edit-image-row" id="currentImageRow" hidden><img id="currentImage" alt="Imagem atual"><label><input id="removeCurrentImage" type="checkbox"> Remover imagem atual</label></div><label>Trocar/adicionar imagem <input id="editMessageImage" type="file" accept="image/jpeg,image/png,image/gif,image/webp"></label><div class="modal-actions"><button class="danger" id="deleteMessage" type="button">Excluir mensagem</button><button type="button" data-close="messageDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
 <script>
-    const state = { chats: [], activeId: null, activeChat: null };
+    const state = { chats: [], activeId: null, activeChat: null, editingMessage: null };
     const $ = id => document.getElementById(id);
     const api = '/api/branch_chats';
+    const timezoneOffset = () => -new Date().getTimezoneOffset();
     const utcDate = value => new Date(/[zZ]|[+-]\d\d:\d\d$/.test(value) ? value : value.replace(' ', 'T') + 'Z');
     const formatTime = value => value ? new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(utcDate(value)) : '';
     const formatDateTime = value => value ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(utcDate(value)) : '';
@@ -167,11 +182,13 @@
             const menu = document.createElement('span'); menu.className = 'message-menu'; menu.hidden = true;
             const single = document.createElement('button'); single.type = 'button'; single.textContent = 'Branchar mensagem';
             const through = document.createElement('button'); through.type = 'button'; through.textContent = 'Branchar a partir daqui';
+            const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Editar';
             more.addEventListener('click', event => { event.stopPropagation(); closeMessageMenus(menu); menu.hidden = !menu.hidden; more.setAttribute('aria-expanded', String(!menu.hidden)); });
             menu.addEventListener('click', event => event.stopPropagation());
             single.addEventListener('click', () => branchFromMessage(item.id, 'single'));
             through.addEventListener('click', () => branchFromMessage(item.id, 'through'));
-            menu.append(single, through); actions.append(more, menu); footer.append(time, actions); bubble.append(footer); $('messages').append(bubble);
+            edit.addEventListener('click', () => openMessageEditor(item));
+            menu.append(edit, single, through); actions.append(more, menu); footer.append(time, actions); bubble.append(footer); $('messages').append(bubble);
         });
         requestAnimationFrame(() => $('messages').scrollTop = $('messages').scrollHeight);
     }
@@ -180,7 +197,7 @@
     }
     async function branchFromMessage(messageId, branchMode) {
         try {
-            const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'branch_message', chat_id: state.activeId, message_id: messageId, branch_mode: branchMode }) });
+            const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'branch_message', chat_id: state.activeId, message_id: messageId, branch_mode: branchMode, timezone_offset_minutes: timezoneOffset() }) });
             closeMessageMenus(); await loadChats(); await openChat(Number(result.chat_id));
             toast(branchMode === 'single' ? 'Branch criado somente com esta mensagem.' : 'Branch criado até esta mensagem.');
         } catch (error) { toast(error.message); }
@@ -205,7 +222,7 @@
             ? `${kind} · ${reads} ${reads === 1 ? 'leitura' : 'leituras'} · disponível`
             : `${reads} ${reads === 1 ? 'leitura' : 'leituras'} · próxima em ${formatDateTime(chat.next_view_at)}`;
     }
-    $('newChat').addEventListener('click', async () => { try { const chat = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_chat' }) }); await loadChats(); await openChat(chat.id); } catch (error) { toast(error.message); } });
+    $('newChat').addEventListener('click', async () => { try { const chat = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_chat', timezone_offset_minutes: timezoneOffset() }) }); await loadChats(); await openChat(chat.id); } catch (error) { toast(error.message); } });
     $('search').addEventListener('input', renderChats);
     $('back').addEventListener('click', () => $('app').classList.remove('chat-open'));
     $('branchCount').addEventListener('click', () => { const total = Number(state.activeChat?.total_branches || 0); toast(total ? `${total} ${total === 1 ? 'chat foi criado' : 'chats foram criados'} a partir desta conversa.` : 'Nenhum chat foi criado a partir desta conversa.'); });
@@ -217,6 +234,13 @@
             toast(`Leitura ${view.view_count} registrada.`);
         } catch (error) { updateReadStatus(state.activeChat); toast(error.message); }
     });
+    $('editChat').addEventListener('click', () => { $('chatTitleInput').value = state.activeChat?.titulo || ''; $('chatDialog').showModal(); $('chatTitleInput').select(); });
+    document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => $(button.dataset.close).close()));
+    $('chatForm').addEventListener('submit', async event => { event.preventDefault(); try { const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'update_chat', chat_id: state.activeId, titulo: $('chatTitleInput').value }) }); state.activeChat.titulo = result.titulo; $('activeTitle').textContent = result.titulo; $('chatDialog').close(); await loadChats(); toast('Chat atualizado.'); } catch (error) { toast(error.message); } });
+    $('deleteChat').addEventListener('click', async () => { if (!confirm('Excluir este chat permanentemente?')) return; try { await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'delete_chat', chat_id: state.activeId }) }); $('chatDialog').close(); state.activeId = null; state.activeChat = null; $('chatHeader').hidden = true; $('composer').classList.add('hidden'); $('app').classList.remove('chat-open'); await loadChats(); toast('Chat excluído.'); } catch (error) { toast(error.message); } });
+    function openMessageEditor(item) { closeMessageMenus(); state.editingMessage = item; $('editMessageText').value = item.texto || ''; $('currentImageRow').hidden = !item.imagem_base64; $('currentImage').src = item.imagem_base64 || ''; $('removeCurrentImage').checked = false; $('editMessageImage').value = ''; $('messageDialog').showModal(); }
+    $('messageForm').addEventListener('submit', async event => { event.preventDefault(); const data = new FormData(); data.append('action', 'update_message'); data.append('chat_id', state.activeId); data.append('message_id', state.editingMessage.id); data.append('texto', $('editMessageText').value); data.append('remove_image', $('removeCurrentImage').checked ? '1' : '0'); const image = $('editMessageImage').files[0]; if (image) data.append('imagem', image); try { await request(api, { method: 'POST', body: data }); $('messageDialog').close(); await openChat(state.activeId); await loadChats(); toast('Mensagem atualizada.'); } catch (error) { toast(error.message); } });
+    $('deleteMessage').addEventListener('click', async () => { if (!confirm('Excluir esta mensagem permanentemente?')) return; try { await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'delete_message', chat_id: state.activeId, message_id: state.editingMessage.id }) }); $('messageDialog').close(); await openChat(state.activeId); await loadChats(); toast('Mensagem excluída.'); } catch (error) { toast(error.message); } });
     $('more').addEventListener('click', event => { event.stopPropagation(); const opening = $('attachmentMenu').hidden; $('attachmentMenu').hidden = !opening; $('more').setAttribute('aria-expanded', String(opening)); });
     document.addEventListener('click', () => { $('attachmentMenu').hidden = true; $('more').setAttribute('aria-expanded', 'false'); closeMessageMenus(); });
     $('attachmentMenu').addEventListener('click', event => event.stopPropagation());
@@ -227,7 +251,7 @@
     $('messageBox').addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); $('composer').requestSubmit(); } });
     $('composer').addEventListener('submit', async event => {
         event.preventDefault(); const text = $('messageBox').value.trim(); const image = $('imageInput').files[0]; if (!text && !image) return;
-        const data = new FormData(); data.append('action', 'send_message'); data.append('chat_id', state.activeId); data.append('texto', text); data.append('create_branch', $('createBranch').checked ? '1' : '0'); if (image) data.append('imagem', image);
+        const data = new FormData(); data.append('action', 'send_message'); data.append('chat_id', state.activeId); data.append('texto', text); data.append('create_branch', $('createBranch').checked ? '1' : '0'); data.append('timezone_offset_minutes', timezoneOffset()); if (image) data.append('imagem', image);
         $('send').disabled = true;
         try {
             const result = await request(api, { method: 'POST', body: data });
