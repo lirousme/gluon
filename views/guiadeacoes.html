@@ -8,11 +8,11 @@
     <style>
         :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
         * { box-sizing: border-box; }
-        body { margin: 0; min-height: 100vh; background: #08111f; color: #e5edf8; }
-        header { padding: 22px clamp(20px, 5vw, 64px); border-bottom: 1px solid #243247; display: flex; align-items: center; gap: 18px; }
+        body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 50% -20%, #17345c 0, #08111f 38%); color: #e5edf8; }
+        header { padding: 22px clamp(16px, 2.5vw, 40px); border-bottom: 1px solid #243247; display: flex; align-items: center; gap: 18px; }
         header a { color: #9fb0c9; text-decoration: none; font-size: 24px; }
         h1 { margin: 0; font-size: 22px; }
-        main { padding: 36px clamp(20px, 5vw, 64px); max-width: 1500px; margin: auto; }
+        main { width: 100%; padding: 30px clamp(12px, 2vw, 32px) 44px; }
         .upload { border: 1px solid #293950; background: linear-gradient(135deg, #111f32, #0d1929); padding: 28px; border-radius: 18px; box-shadow: 0 18px 40px #0005; }
         .upload h2 { margin: 0 0 8px; font-size: 20px; }
         .upload p { margin: 0 0 22px; color: #99a9bf; }
@@ -22,16 +22,28 @@
         button:disabled { opacity: .55; cursor: wait; }
         #status { min-height: 24px; margin: 15px 0 0; font-weight: 600; }
         #status.ok { color: #53d89b; } #status.error { color: #ff7d8b; }
-        .listing { margin-top: 28px; border: 1px solid #293950; border-radius: 16px; overflow: hidden; background: #0d1929; }
-        .listing-title { display: flex; justify-content: space-between; padding: 18px 22px; align-items: center; }
+        .listing { margin-top: 24px; border: 1px solid #293950; border-radius: 16px; overflow: hidden; background: #0d1929; box-shadow: 0 18px 40px #0004; }
+        .listing-title { display: flex; justify-content: space-between; gap: 16px; padding: 18px 22px; align-items: center; }
         .listing-title h2 { margin: 0; font-size: 18px; }
         .count { color: #99a9bf; }
-        .scroll { overflow: auto; max-height: 58vh; }
-        table { border-collapse: collapse; width: 100%; min-width: 900px; }
-        th, td { padding: 12px 16px; text-align: left; border-top: 1px solid #223149; white-space: nowrap; }
-        th { position: sticky; top: 0; background: #142238; color: #9fb0c9; font-size: 12px; text-transform: uppercase; }
+        .scroll { overflow: auto; max-height: 68vh; scrollbar-color: #425572 #0b1626; }
+        table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
+        th, td { padding: 11px 14px; text-align: right; border-top: 1px solid #223149; border-right: 1px solid #1b2a40; white-space: nowrap; }
+        th { position: sticky; top: 0; z-index: 2; background: #142238; color: #aebdd2; font-size: 11px; letter-spacing: .025em; text-transform: uppercase; }
         td { font-size: 14px; } td:first-child { color: #72a7ff; font-weight: 800; }
+        th:first-child, td:first-child { position: sticky; left: 0; z-index: 1; text-align: left; background: #101e31; }
+        th:first-child { z-index: 3; background: #142238; }
+        th:nth-child(2), td:nth-child(2) { text-align: left; }
+        tbody tr:hover td { background: #14263d; }
+        tbody tr:hover td:first-child { background: #172b45; }
         .empty { padding: 45px; text-align: center; color: #8495ad; }
+        @media (max-width: 640px) {
+            header { padding-block: 16px; }
+            main { padding-top: 18px; }
+            .upload { padding: 20px; }
+            button { width: 100%; }
+            .listing-title { align-items: flex-start; flex-direction: column; }
+        }
     </style>
 </head>
 <body>
@@ -39,7 +51,7 @@
 <main>
     <section class="upload">
         <h2>Importar cotações e indicadores</h2>
-        <p>Envie a planilha .xlsx (até 10 MB). Empresas já cadastradas serão atualizadas pela sigla; as demais serão inseridas.</p>
+        <p>Envie a planilha .xlsx (até 10 MB). Empresas já cadastradas serão atualizadas pela sigla sem alterar o setor; as demais serão inseridas.</p>
         <form id="upload-form">
             <input id="planilha" name="planilha" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
             <button id="submit" type="submit">Importar planilha</button>
@@ -48,22 +60,25 @@
     </section>
     <section class="listing">
         <div class="listing-title"><h2>Empresas cadastradas</h2><span id="count" class="count"></span></div>
-        <div class="scroll"><table><thead><tr><th>Sigla</th><th>Setor</th><th>Cotação</th><th>Preço projetivo</th><th>Preço consenso</th><th>Valor de mercado</th><th>DY 12m</th><th>P/L</th><th>ROE</th><th>Fechamento</th></tr></thead><tbody id="rows"></tbody></table><div id="empty" class="empty">Carregando…</div></div>
+        <div class="scroll"><table><thead><tr id="headings"></tr></thead><tbody id="rows"></tbody></table><div id="empty" class="empty">Carregando…</div></div>
     </section>
 </main>
 <script>
 const form = document.querySelector('#upload-form');
 const statusBox = document.querySelector('#status');
 const button = document.querySelector('#submit');
-const fields = ['sigla', 'setor', 'cotacao', 'pt_projetivo', 'preco_consenso', 'val_mercado', 'dy_12m', 'p_l', 'roe', 'cotacao_fechamento'];
+const fields = ['sigla', 'setor', 'cotacao', 'pt_projetivo', 'pt_medio', 'preco_consenso', 'part_ibov', 'val_mercado', 'vol_med_3m', 'retorno_ano', 'retorno_12m_prov', 'retorno_12m_sem_prov', 'retorno_36m_prov', 'retorno_36m_sem_prov', 'retorno_60m_prov', 'retorno_60m_sem_prov', 'dpa_medio', 'dy_medio', 'dy_12m', 'prov_p_acao_12m', 'dt_ultimo_prov', 'projecao_div', 'dy_projetivo', 'dif_mercado_pt_projetivo', 'pm_pt_projetivo', 'payout_medio', 'projecao_lucro', 'qtde_acoes', 'projecao_lpa', 'vpa', 'p_vpa', 'p_l', 'ev', 'ev_ebitda', 'ebitda', 'div_bruta', 'div_liquida', 'caixa', 'div_liquida_ebitda', 'lucro_liquido', 'lpa', 'margem_ebitda', 'margem_liquida', 'roe', 'roic', 'ev_ebit', 'market_value_at', 'psr', 'market_value_acpc', 'market_value_ac_pc_pnc', 'fcfpa', 'fcfy', 'div_liqui_pl', 'div_liqui_ebitda', 'lc', 'margem_bruta_pct', 'roa', 'cagr_receita', 'cagr_lucro', 'cagr_div', 'cotacao_fechamento'];
+const labels = { sigla: 'Sigla', setor: 'Setor', cotacao: 'Cotação', pt_projetivo: 'Preço projetivo', pt_medio: 'Preço médio', preco_consenso: 'Preço consenso', part_ibov: 'Part. Ibov', val_mercado: 'Valor de mercado', vol_med_3m: 'Vol. méd. 3m', dt_ultimo_prov: 'Data último prov.', qtde_acoes: 'Qtd. ações', cotacao_fechamento: 'Cotação fechamento' };
 const format = value => value === null || value === '' ? '—' : new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 4 }).format(Number(value));
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+const textFields = new Set(['sigla', 'setor', 'dt_ultimo_prov']);
+document.querySelector('#headings').innerHTML = fields.map(field => `<th scope="col" title="${escapeHtml(field)}">${escapeHtml(labels[field] || field.replaceAll('_', ' '))}</th>`).join('');
 async function loadRows() {
     const response = await fetch('/api/guiadeacoes');
     const result = await response.json();
     if (!response.ok) throw new Error(result.message || 'Não foi possível carregar os registros.');
     const tbody = document.querySelector('#rows');
-    tbody.innerHTML = result.data.map(row => `<tr>${fields.map((field, index) => `<td>${escapeHtml(index < 2 ? (row[field] || '—') : format(row[field]))}</td>`).join('')}</tr>`).join('');
+    tbody.innerHTML = result.data.map(row => `<tr>${fields.map(field => `<td>${escapeHtml(textFields.has(field) ? (row[field] || '—') : format(row[field]))}</td>`).join('')}</tr>`).join('');
     document.querySelector('#empty').style.display = result.data.length ? 'none' : 'block';
     document.querySelector('#empty').textContent = 'Nenhuma empresa cadastrada.';
     document.querySelector('#count').textContent = `${result.data.length} registro(s)`;
