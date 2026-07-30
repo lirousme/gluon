@@ -102,7 +102,10 @@ foreach ($columns as $column) {
 }
 
 $placeholders = implode(', ', array_fill(0, count($columns), '?'));
-$updates = implode(', ', array_map(static fn($column) => "{$column} = VALUES({$column})", array_slice($columns, 1)));
+// O setor pertence ao cadastro da empresa: uma importacao pode defini-lo na
+// inclusao, mas nunca deve sobrescreve-lo ao atualizar indicadores existentes.
+$updateColumns = array_values(array_diff($columns, ['sigla', 'setor']));
+$updates = implode(', ', array_map(static fn($column) => "{$column} = VALUES({$column})", $updateColumns));
 $sql = 'INSERT INTO guia_de_acoes (' . implode(', ', $columns) . ") VALUES ({$placeholders}) ON DUPLICATE KEY UPDATE {$updates}";
 $statement = $pdo->prepare($sql);
 $inserted = 0;
