@@ -1,0 +1,154 @@
+<?php
+require_once BASE_PATH . '/config/database.php';
+
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(401);
+    echo json_encode(['status' => 'error', 'message' => 'Não autorizado. Faça login.']);
+    exit;
+}
+
+$columns = preg_split('/\s+/', trim('sigla setor cotacao pt_projetivo pt_medio preco_consenso part_ibov val_mercado vol_med_3m retorno_ano retorno_12m_prov retorno_12m_sem_prov retorno_36m_prov retorno_36m_sem_prov retorno_60m_prov retorno_60m_sem_prov dpa_medio dy_medio dy_12m prov_p_acao_12m dt_ultimo_prov projecao_div dy_projetivo dif_mercado_pt_projetivo pm_pt_projetivo payout_medio projecao_lucro qtde_acoes projecao_lpa vpa p_vpa p_l ev ev_ebitda ebitda div_bruta div_liquida caixa div_liquida_ebitda lucro_liquido lpa margem_ebitda margem_liquida roe roic ev_ebit market_value_at psr market_value_acpc market_value_ac_pc_pnc fcfpa fcfy div_liqui_pl div_liqui_ebitda lc margem_bruta_pct roa cagr_receita cagr_lucro cagr_div cotacao_fechamento'));
+$pdo = Database::getConnection();
+
+function failUpload(int $code, string $message): void {
+    http_response_code($code);
+    echo json_encode(['status' => 'error', 'message' => $message], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+function columnIndex(string $reference): int {
+    preg_match('/^[A-Z]+/i', $reference, $matches);
+    $index = 0;
+    foreach (str_split(strtoupper($matches[0] ?? 'A')) as $letter) {
+        $index = ($index * 26) + ord($letter) - 64;
+    }
+    return $index - 1;
+}
+
+function readXlsx(string $path): array {
+    if (!class_exists('ZipArchive')) {
+        failUpload(500, 'A extensão PHP ZipArchive é necessária para ler arquivos .xlsx.');
+    }
+    $zip = new ZipArchive();
+    if ($zip->open($path) !== true) {
+        failUpload(422, 'Não foi possível abrir a planilha .xlsx.');
+    }
+    $shared = [];
+    $sharedXml = $zip->getFromName('xl/sharedStrings.xml');
+    if ($sharedXml !== false) {
+        $xml = simplexml_load_string($sharedXml);
+        foreach ($xml->si ?? [] as $item) {
+            $texts = $item->xpath('.//*[local-name()="t"]');
+            $shared[] = implode('', array_map('strval', $texts ?: []));
+        }
+    }
+    $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+    $zip->close();
+    if ($sheetXml === false) {
+        failUpload(422, 'A primeira aba da planilha não foi encontrada.');
+    }
+    $xml = simplexml_load_string($sheetXml);
+    $rows = [];
+    foreach ($xml->xpath('//*[local-name()="sheetData"]/*[local-name()="row"]') ?: [] as $row) {
+        $values = [];
+        foreach ($row->xpath('./*[local-name()="c"]') ?: [] as $cell) {
+            $attributes = $cell->attributes();
+            $index = columnIndex((string)$attributes['r']);
+            $type = (string)$attributes['t'];
+            $raw = (string)($cell->v ?? '');
+            if ($type === 's') {
+                $raw = $shared[(int)$raw] ?? '';
+            } elseif ($type === 'inlineStr') {
+                $texts = $cell->xpath('.//*[local-name()="t"]');
+                $raw = implode('', array_map('strval', $texts ?: []));
+            }
+            $values[$index] = trim($raw);
+        }
+        if ($values !== []) {
+            $rows[] = $values;
+        }
+    }
+    return $rows;
+}
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
+    $rows = $pdo->query('SELECT * FROM guia_de_acoes ORDER BY sigla LIMIT 500')->fetchAll();
+    echo json_encode(['status' => 'success', 'data' => $rows], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
+    exit;
+}
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    failUpload(405, 'Método não suportado.');
+}
+if (!isset($_FILES['planilha']) || ($_FILES['planilha']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+    failUpload(422, 'Selecione uma planilha .xlsx válida.');
+}
+if (($_FILES['planilha']['size'] ?? 0) > 10 * 1024 * 1024 || strtolower(pathinfo($_FILES['planilha']['name'] ?? '', PATHINFO_EXTENSION)) !== 'xlsx') {
+    failUpload(422, 'O arquivo deve ser .xlsx e ter no máximo 10 MB.');
+}
+
+$rows = readXlsx($_FILES['planilha']['tmp_name']);
+if ($rows === []) {
+    failUpload(422, 'A planilha está vazia.');
+}
+$header = array_map(static fn($value) => strtolower(trim((string)$value)), $rows[0]);
+$positions = [];
+foreach ($columns as $column) {
+    $position = array_search($column, $header, true);
+    if ($position === false) {
+        failUpload(422, "Coluna obrigatória ausente: {$column}.");
+    }
+    $positions[$column] = $position;
+}
+
+$placeholders = implode(', ', array_fill(0, count($columns), '?'));
+$updates = implode(', ', array_map(static fn($column) => "{$column} = VALUES({$column})", array_slice($columns, 1)));
+$sql = 'INSERT INTO guia_de_acoes (' . implode(', ', $columns) . ") VALUES ({$placeholders}) ON DUPLICATE KEY UPDATE {$updates}";
+$statement = $pdo->prepare($sql);
+$inserted = 0;
+$updated = 0;
+$ignored = 0;
+$pdo->beginTransaction();
+try {
+    foreach (array_slice($rows, 1) as $row) {
+        $ticker = strtoupper(trim((string)($row[$positions['sigla']] ?? '')));
+        if ($ticker === '' || !preg_match('/^[A-Z0-9.\-]{2,20}$/', $ticker)) {
+            $ignored++;
+            continue;
+        }
+        $exists = $pdo->prepare('SELECT 1 FROM guia_de_acoes WHERE sigla = ?');
+        $exists->execute([$ticker]);
+        $values = [];
+        foreach ($columns as $column) {
+            $value = trim((string)($row[$positions[$column]] ?? ''));
+            if ($column === 'sigla') {
+                $value = $ticker;
+            } elseif ($column === 'setor') {
+                $value = $value === '' ? null : $value;
+            } elseif ($column === 'dt_ultimo_prov') {
+                if ($value === '') {
+                    $value = null;
+                } elseif (is_numeric($value)) {
+                    $value = gmdate('Y-m-d', (int)(($value - 25569) * 86400));
+                } else {
+                    $date = DateTime::createFromFormat('d/m/Y', $value);
+                    $value = $date ? $date->format('Y-m-d') : null;
+                }
+            } else {
+                $value = $value === '' ? null : str_replace(',', '.', $value);
+                if ($value !== null && !is_numeric($value)) {
+                    $value = null;
+                }
+            }
+            $values[] = $value;
+        }
+        $statement->execute($values);
+        $exists->fetchColumn() ? $updated++ : $inserted++;
+    }
+    $pdo->commit();
+} catch (Throwable $error) {
+    $pdo->rollBack();
+    failUpload(500, 'Falha ao importar a planilha. Nenhum registro foi alterado.');
+}
+
+echo json_encode(['status' => 'success', 'message' => 'Importação concluída.', 'inserted' => $inserted, 'updated' => $updated, 'ignored' => $ignored], JSON_UNESCAPED_UNICODE);

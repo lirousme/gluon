@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="/assets/zoom-lock.js" defer></script>
+    <title>Guia de ações</title>
+    <style>
+        :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; background: #08111f; color: #e5edf8; }
+        header { padding: 22px clamp(20px, 5vw, 64px); border-bottom: 1px solid #243247; display: flex; align-items: center; gap: 18px; }
+        header a { color: #9fb0c9; text-decoration: none; font-size: 24px; }
+        h1 { margin: 0; font-size: 22px; }
+        main { padding: 36px clamp(20px, 5vw, 64px); max-width: 1500px; margin: auto; }
+        .upload { border: 1px solid #293950; background: linear-gradient(135deg, #111f32, #0d1929); padding: 28px; border-radius: 18px; box-shadow: 0 18px 40px #0005; }
+        .upload h2 { margin: 0 0 8px; font-size: 20px; }
+        .upload p { margin: 0 0 22px; color: #99a9bf; }
+        form { display: flex; flex-wrap: wrap; gap: 12px; }
+        input[type=file] { flex: 1; min-width: 260px; padding: 12px; border: 1px dashed #425572; border-radius: 10px; background: #0b1626; }
+        button { border: 0; border-radius: 10px; padding: 0 22px; min-height: 46px; font-weight: 700; color: white; background: #2878ff; cursor: pointer; }
+        button:disabled { opacity: .55; cursor: wait; }
+        #status { min-height: 24px; margin: 15px 0 0; font-weight: 600; }
+        #status.ok { color: #53d89b; } #status.error { color: #ff7d8b; }
+        .listing { margin-top: 28px; border: 1px solid #293950; border-radius: 16px; overflow: hidden; background: #0d1929; }
+        .listing-title { display: flex; justify-content: space-between; padding: 18px 22px; align-items: center; }
+        .listing-title h2 { margin: 0; font-size: 18px; }
+        .count { color: #99a9bf; }
+        .scroll { overflow: auto; max-height: 58vh; }
+        table { border-collapse: collapse; width: 100%; min-width: 900px; }
+        th, td { padding: 12px 16px; text-align: left; border-top: 1px solid #223149; white-space: nowrap; }
+        th { position: sticky; top: 0; background: #142238; color: #9fb0c9; font-size: 12px; text-transform: uppercase; }
+        td { font-size: 14px; } td:first-child { color: #72a7ff; font-weight: 800; }
+        .empty { padding: 45px; text-align: center; color: #8495ad; }
+    </style>
+</head>
+<body>
+<header><a href="/dashboard" aria-label="Voltar">←</a><h1>Guia de ações</h1></header>
+<main>
+    <section class="upload">
+        <h2>Importar cotações e indicadores</h2>
+        <p>Envie a planilha .xlsx (até 10 MB). Empresas já cadastradas serão atualizadas pela sigla; as demais serão inseridas.</p>
+        <form id="upload-form">
+            <input id="planilha" name="planilha" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+            <button id="submit" type="submit">Importar planilha</button>
+        </form>
+        <div id="status" role="status" aria-live="polite"></div>
+    </section>
+    <section class="listing">
+        <div class="listing-title"><h2>Empresas cadastradas</h2><span id="count" class="count"></span></div>
+        <div class="scroll"><table><thead><tr><th>Sigla</th><th>Setor</th><th>Cotação</th><th>Preço projetivo</th><th>Preço consenso</th><th>Valor de mercado</th><th>DY 12m</th><th>P/L</th><th>ROE</th><th>Fechamento</th></tr></thead><tbody id="rows"></tbody></table><div id="empty" class="empty">Carregando…</div></div>
+    </section>
+</main>
+<script>
+const form = document.querySelector('#upload-form');
+const statusBox = document.querySelector('#status');
+const button = document.querySelector('#submit');
+const fields = ['sigla', 'setor', 'cotacao', 'pt_projetivo', 'preco_consenso', 'val_mercado', 'dy_12m', 'p_l', 'roe', 'cotacao_fechamento'];
+const format = value => value === null || value === '' ? '—' : new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 4 }).format(Number(value));
+const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+async function loadRows() {
+    const response = await fetch('/api/guiadeacoes');
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || 'Não foi possível carregar os registros.');
+    const tbody = document.querySelector('#rows');
+    tbody.innerHTML = result.data.map(row => `<tr>${fields.map((field, index) => `<td>${escapeHtml(index < 2 ? (row[field] || '—') : format(row[field]))}</td>`).join('')}</tr>`).join('');
+    document.querySelector('#empty').style.display = result.data.length ? 'none' : 'block';
+    document.querySelector('#empty').textContent = 'Nenhuma empresa cadastrada.';
+    document.querySelector('#count').textContent = `${result.data.length} registro(s)`;
+}
+form.addEventListener('submit', async event => {
+    event.preventDefault();
+    button.disabled = true;
+    statusBox.className = '';
+    statusBox.textContent = 'Importando…';
+    try {
+        const response = await fetch('/api/guiadeacoes', { method: 'POST', body: new FormData(form) });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || 'Falha na importação.');
+        statusBox.className = 'ok';
+        statusBox.textContent = `${result.message} ${result.inserted} inserido(s), ${result.updated} atualizado(s) e ${result.ignored} ignorado(s).`;
+        form.reset();
+        await loadRows();
+    } catch (error) {
+        statusBox.className = 'error';
+        statusBox.textContent = error.message;
+    } finally { button.disabled = false; }
+});
+loadRows().catch(error => { document.querySelector('#empty').textContent = error.message; });
+</script>
+</body>
+</html>
