@@ -62,6 +62,8 @@
     <nav class="filter-actions" aria-label="Filtros da tabela">
         <button class="filter-button" type="button" data-filter="vpa" aria-pressed="false">VPA</button>
         <button class="filter-button" type="button" data-filter="vpa-div" aria-pressed="false">VPA+DIV</button>
+        <button class="filter-button" type="button" data-filter="vf-div-qa-sad" aria-pressed="false">VF-DIV / QA :(</button>
+        <button class="filter-button" type="button" data-filter="vf-div-qa-happy" aria-pressed="false">VF-DIV / QA :)</button>
     </nav>
     <button id="upload-button" class="upload-button" type="button" title="Importar planilha .xlsx" aria-label="Importar planilha .xlsx">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 3h11l5 5v13H4z"/><path d="M14 3v6h6M8 13h8M8 17h8M11 10v10"/></svg>
@@ -133,6 +135,8 @@ function renderRows() {
         const hasValidAverageTarget = row.pt_medio !== null && row.pt_medio !== '' && Number(row.pt_medio) >= Number(row.cotacao);
         if (activeFilter === 'vpa') return Number(row.vpa) > Number(row.cotacao) && hasValidAverageTarget;
         if (activeFilter === 'vpa-div') return Number(row.vpa) > Number(row.cotacao) && hasValidAverageTarget && (row.div_liquida === null || Number(row.div_liquida) <= 0);
+        if (activeFilter === 'vf-div-qa-sad') return row.vf_div_qa_sad !== null && Number(row.vf_div_qa_sad) > Number(row.cotacao);
+        if (activeFilter === 'vf-div-qa-happy') return row.vf_div_qa_happy !== null && Number(row.vf_div_qa_happy) > Number(row.cotacao);
         return true;
     }).filter(row => !query || row.sigla.toLocaleLowerCase('pt-BR').includes(query) || (companyNames.get(row.sigla) || '').toLocaleLowerCase('pt-BR').includes(query));
     if (sortField) filteredRows.sort((a, b) => {
@@ -173,7 +177,9 @@ document.querySelectorAll('.filter-button').forEach(filterButton => filterButton
     });
     filterDescription.textContent = activeFilter === 'vpa'
         ? 'Filtro ativo: VPA > Cotação e PT médio ≥ Cotação.'
-        : activeFilter === 'vpa-div' ? 'Filtro ativo: VPA > Cotação, PT médio ≥ Cotação e Dívida líquida ≤ 0 ou sem valor.' : '';
+        : activeFilter === 'vpa-div' ? 'Filtro ativo: VPA > Cotação, PT médio ≥ Cotação e Dívida líquida ≤ 0 ou sem valor.'
+        : activeFilter === 'vf-div-qa-sad' ? 'Filtro ativo: VF-DIV / QA :( > Cotação.'
+        : activeFilter === 'vf-div-qa-happy' ? 'Filtro ativo: VF-DIV / QA :) > Cotação.' : '';
     renderRows();
 }));
 clearFiltersButton.addEventListener('click', () => {
