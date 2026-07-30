@@ -18,6 +18,8 @@
         .search-input { width: 100%; min-height: 44px; border: 1px solid #354b69; border-radius: 10px; padding: 0 14px; background: #0a1524; color: #e5edf8; font: inherit; outline: none; }
         .search-input:focus { border-color: #65a0ff; box-shadow: 0 0 0 3px #2878ff2e; }
         button { border: 1px solid transparent; border-radius: 10px; padding: 0 18px; min-height: 42px; font-weight: 700; color: white; background: #2878ff; cursor: pointer; }
+        .clear-filters-button { background: transparent; border-color: #354b69; color: #9fb0c9; }
+        .clear-filters-button:hover { background: #162945; color: #fff; }
         .filter-button { background: #162945; border-color: #354b69; color: #c9d6e8; }
         .filter-button.active { background: #2878ff; border-color: #65a0ff; color: #fff; box-shadow: 0 0 0 2px #2878ff33; }
         .upload-button { width: 44px; padding: 0; display: inline-grid; place-items: center; margin-left: auto; background: #162945; border-color: #354b69; color: #c9d6e8; }
@@ -56,6 +58,7 @@
 <body>
 <header>
     <a href="/dashboard" aria-label="Voltar">←</a>
+    <button id="clear-filters-button" class="clear-filters-button" type="button">Limpar filtros</button>
     <nav class="filter-actions" aria-label="Filtros da tabela">
         <button class="filter-button" type="button" data-filter="vpa" aria-pressed="false">VPA</button>
         <button class="filter-button" type="button" data-filter="vpa-div" aria-pressed="false">VPA+DIV</button>
@@ -85,6 +88,7 @@ const uploadButton = document.querySelector('#upload-button');
 const fileInput = document.querySelector('#planilha');
 const filterDescription = document.querySelector('#filter-description');
 const searchInput = document.querySelector('#company-search');
+const clearFiltersButton = document.querySelector('#clear-filters-button');
 let rows = [];
 let companyNames = new Map();
 let activeFilter = null;
@@ -102,7 +106,8 @@ async function loadRows() {
     if (!response.ok) throw new Error(result.message || 'Não foi possível carregar os registros.');
     companyNames = new Map((companiesResult.empresas || []).map(company => [company.ticker, company.nome]));
     rows = result.data.filter(row => row.vpa !== null && row.vpa !== '' && Number(row.vpa) !== 0
-        && row.pt_medio !== null && row.pt_medio !== '' && Number(row.pt_medio) !== 0);
+        && row.pt_medio !== null && row.pt_medio !== '' && Number(row.pt_medio) !== 0
+        && row.vol_med_3m !== null && row.vol_med_3m !== '' && Number(row.vol_med_3m) !== 0);
     renderRows();
 }
 function renderRows() {
@@ -154,6 +159,18 @@ document.querySelectorAll('.filter-button').forEach(filterButton => filterButton
         : activeFilter === 'vpa-div' ? 'Filtro ativo: VPA > Cotação, PT médio ≥ Cotação e Dívida líquida ≤ 0 ou sem valor.' : '';
     renderRows();
 }));
+clearFiltersButton.addEventListener('click', () => {
+    activeFilter = null;
+    sortField = null;
+    searchInput.value = '';
+    filterDescription.textContent = '';
+    document.querySelectorAll('#headings th').forEach(th => th.setAttribute('aria-sort', 'none'));
+    document.querySelectorAll('.filter-button').forEach(item => {
+        item.classList.remove('active');
+        item.setAttribute('aria-pressed', 'false');
+    });
+    renderRows();
+});
 uploadButton.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', async () => {
     if (!fileInput.files.length) return;
