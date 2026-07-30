@@ -72,7 +72,7 @@ function readXlsx(string $path): array {
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
-    $rows = $pdo->query('SELECT * FROM guia_de_acoes WHERE cotacao IS NOT NULL AND cotacao <> 0 ORDER BY sigla')->fetchAll();
+    $rows = $pdo->query('SELECT * FROM guia_de_acoes WHERE cotacao IS NOT NULL AND cotacao <> 0 AND vpa IS NOT NULL AND vpa <> 0 AND pt_medio IS NOT NULL AND pt_medio <> 0 ORDER BY sigla')->fetchAll();
     echo json_encode(['status' => 'success', 'data' => $rows], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
     exit;
 }
