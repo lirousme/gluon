@@ -105,7 +105,8 @@ async function loadRows() {
     const [result, companiesResult] = await Promise.all([response.json(), companiesResponse.ok ? companiesResponse.json() : Promise.resolve({ empresas: [] })]);
     if (!response.ok) throw new Error(result.message || 'Não foi possível carregar os registros.');
     companyNames = new Map((companiesResult.empresas || []).map(company => [company.ticker, company.nome]));
-    rows = result.data.filter(row => row.vpa !== null && row.vpa !== '' && Number(row.vpa) !== 0
+    rows = result.data.filter(row => row.payout_medio !== null && row.payout_medio !== '' && Number(row.payout_medio) > 0
+        && row.vpa !== null && row.vpa !== '' && Number(row.vpa) !== 0
         && row.pt_medio !== null && row.pt_medio !== '' && Number(row.pt_medio) !== 0
         && row.vol_med_3m !== null && row.vol_med_3m !== '' && Number(row.vol_med_3m) !== 0
         && row.dy_12m !== null && row.dy_12m !== '' && Number(row.dy_12m) !== 0);
