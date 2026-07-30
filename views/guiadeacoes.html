@@ -9,13 +9,16 @@
         :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
         * { box-sizing: border-box; }
         body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 50% -20%, #17345c 0, #08111f 38%); color: #e5edf8; }
-        header { padding: 22px clamp(16px, 2.5vw, 40px); border-bottom: 1px solid #243247; display: flex; align-items: center; gap: 18px; }
+        header { padding: 14px clamp(16px, 2.5vw, 40px); border-bottom: 1px solid #243247; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
         header a { color: #9fb0c9; text-decoration: none; font-size: 24px; }
         h1 { margin: 0; font-size: 22px; }
+        .header-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
         main { width: 100%; padding: 30px clamp(12px, 2vw, 32px) 44px; }
         .navigator { border: 1px solid #293950; background: linear-gradient(135deg, #111f32, #0d1929); padding: 14px 18px; border-radius: 14px; box-shadow: 0 18px 40px #0005; }
-        .navigator-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-        .navigator input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        .search-label { display: block; margin-bottom: 7px; color: #aebdd2; font-size: 12px; font-weight: 700; }
+        .search-input { width: 100%; min-height: 44px; border: 1px solid #354b69; border-radius: 10px; padding: 0 14px; background: #0a1524; color: #e5edf8; font: inherit; outline: none; }
+        .search-input:focus { border-color: #65a0ff; box-shadow: 0 0 0 3px #2878ff2e; }
         button { border: 1px solid transparent; border-radius: 10px; padding: 0 18px; min-height: 42px; font-weight: 700; color: white; background: #2878ff; cursor: pointer; }
         .filter-button { background: #162945; border-color: #354b69; color: #c9d6e8; }
         .filter-button.active { background: #2878ff; border-color: #65a0ff; color: #fff; box-shadow: 0 0 0 2px #2878ff33; }
@@ -33,6 +36,10 @@
         table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
         th, td { padding: 11px 14px; text-align: right; border-top: 1px solid #223149; border-right: 1px solid #1b2a40; white-space: nowrap; }
         th { position: sticky; top: 0; z-index: 2; background: #142238; color: #aebdd2; font-size: 11px; letter-spacing: .025em; text-transform: uppercase; }
+        .sort-button { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 4px; padding: 0; min-height: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; white-space: nowrap; }
+        .sort-button::after { content: '↕'; color: #657892; font-size: 12px; }
+        th[aria-sort="ascending"] .sort-button::after { content: '↑'; color: #72a7ff; }
+        th[aria-sort="descending"] .sort-button::after { content: '↓'; color: #72a7ff; }
         td { font-size: 14px; } td:first-child { color: #72a7ff; font-weight: 800; }
         th:first-child, td:first-child { position: sticky; left: 0; z-index: 1; text-align: left; background: #101e31; }
         th:first-child { z-index: 3; background: #142238; }
@@ -42,29 +49,34 @@
         .empty { padding: 45px; text-align: center; color: #8495ad; }
         @media (max-width: 640px) {
             header { padding-block: 16px; }
+            .header-actions { width: 100%; margin-left: 0; }
+            .header-actions .filter-button { flex: 1; }
             main { padding-top: 18px; }
-            .navigator-actions .filter-button { flex: 1; }
             .listing-title { align-items: flex-start; flex-direction: column; }
         }
     </style>
 </head>
 <body>
-<header><a href="/dashboard" aria-label="Voltar">←</a><h1>Guia de ações</h1></header>
+<header>
+    <a href="/dashboard" aria-label="Voltar">←</a><h1>Guia de ações</h1>
+    <nav class="header-actions" aria-label="Ações e filtros da tabela">
+        <button id="upload-button" class="upload-button" type="button" title="Importar planilha .xlsx" aria-label="Importar planilha .xlsx">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 3h11l5 5v13H4z"/><path d="M14 3v6h6M8 13h8M8 17h8M11 10v10"/></svg>
+        </button>
+        <button class="filter-button" type="button" data-filter="vpa" aria-pressed="false">VPA</button>
+        <button class="filter-button" type="button" data-filter="vpa-div" aria-pressed="false">VPA+DIV</button>
+    </nav>
+    <form id="upload-form">
+        <input id="planilha" name="planilha" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="Selecionar planilha" required>
+    </form>
+</header>
 <main>
-    <nav class="navigator" aria-label="Ações e filtros da tabela">
-        <div class="navigator-actions">
-            <button id="upload-button" class="upload-button" type="button" title="Importar planilha .xlsx" aria-label="Importar planilha .xlsx">
-                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 3h11l5 5v13H4z"/><path d="M14 3v6h6M8 13h8M8 17h8M11 10v10"/></svg>
-            </button>
-            <button class="filter-button" type="button" data-filter="vpa" aria-pressed="false">VPA</button>
-            <button class="filter-button" type="button" data-filter="vpa-div" aria-pressed="false">VPA+DIV</button>
-        </div>
-        <form id="upload-form">
-            <input id="planilha" name="planilha" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="Selecionar planilha" required>
-        </form>
+    <section class="navigator" aria-label="Busca de empresas">
+        <label class="search-label" for="company-search">Buscar por empresa ou ticker</label>
+        <input id="company-search" class="search-input" type="search" placeholder="Digite o nome da empresa ou ticker…" autocomplete="off">
         <p id="filter-description" aria-live="polite"></p>
         <div id="status" role="status" aria-live="polite"></div>
-    </nav>
+    </section>
     <section class="listing">
         <div class="listing-title"><h2>Empresas cadastradas</h2><span id="count" class="count"></span></div>
         <div class="scroll"><table><thead><tr id="headings"></tr></thead><tbody id="rows"></tbody></table><div id="empty" class="empty">Carregando…</div></div>
@@ -76,32 +88,57 @@ const statusBox = document.querySelector('#status');
 const uploadButton = document.querySelector('#upload-button');
 const fileInput = document.querySelector('#planilha');
 const filterDescription = document.querySelector('#filter-description');
+const searchInput = document.querySelector('#company-search');
 let rows = [];
+let companyNames = new Map();
 let activeFilter = null;
-const fields = ['sigla', 'setor', 'cotacao', 'vpa', 'pt_projetivo', 'pt_medio', 'preco_consenso', 'part_ibov', 'val_mercado', 'vol_med_3m', 'retorno_ano', 'retorno_12m_prov', 'retorno_12m_sem_prov', 'retorno_36m_prov', 'retorno_36m_sem_prov', 'retorno_60m_prov', 'retorno_60m_sem_prov', 'dpa_medio', 'dy_medio', 'dy_12m', 'prov_p_acao_12m', 'dt_ultimo_prov', 'projecao_div', 'dy_projetivo', 'dif_mercado_pt_projetivo', 'pm_pt_projetivo', 'payout_medio', 'projecao_lucro', 'qtde_acoes', 'projecao_lpa', 'p_vpa', 'p_l', 'ev', 'ev_ebitda', 'ebitda', 'div_bruta', 'div_liquida', 'caixa', 'div_liquida_ebitda', 'lucro_liquido', 'lpa', 'margem_ebitda', 'margem_liquida', 'roe', 'roic', 'ev_ebit', 'market_value_at', 'psr', 'market_value_acpc', 'market_value_ac_pc_pnc', 'fcfpa', 'fcfy', 'div_liqui_pl', 'div_liqui_ebitda', 'lc', 'margem_bruta_pct', 'roa', 'cagr_receita', 'cagr_lucro', 'cagr_div', 'cotacao_fechamento'];
-const labels = { sigla: 'Sigla', setor: 'Setor', cotacao: 'Cotação', pt_projetivo: 'Preço projetivo', pt_medio: 'Preço médio', preco_consenso: 'Preço consenso', part_ibov: 'Part. Ibov', val_mercado: 'Valor de mercado', vol_med_3m: 'Vol. méd. 3m', dt_ultimo_prov: 'Data último prov.', qtde_acoes: 'Qtd. ações', cotacao_fechamento: 'Cotação fechamento' };
+let sortField = null;
+let sortDirection = 'ascending';
+const fields = ['sigla', 'setor', 'cotacao', 'vpa', 'pt_medio', 'pt_projetivo', 'preco_consenso', 'part_ibov', 'val_mercado', 'vol_med_3m', 'retorno_ano', 'retorno_12m_prov', 'retorno_12m_sem_prov', 'retorno_36m_prov', 'retorno_36m_sem_prov', 'retorno_60m_prov', 'retorno_60m_sem_prov', 'dpa_medio', 'dy_medio', 'dy_12m', 'prov_p_acao_12m', 'dt_ultimo_prov', 'projecao_div', 'dy_projetivo', 'dif_mercado_pt_projetivo', 'pm_pt_projetivo', 'payout_medio', 'projecao_lucro', 'qtde_acoes', 'projecao_lpa', 'p_vpa', 'p_l', 'ev', 'ev_ebitda', 'ebitda', 'div_bruta', 'div_liquida', 'caixa', 'div_liquida_ebitda', 'lucro_liquido', 'lpa', 'margem_ebitda', 'margem_liquida', 'roe', 'roic', 'ev_ebit', 'market_value_at', 'psr', 'market_value_acpc', 'market_value_ac_pc_pnc', 'fcfpa', 'fcfy', 'div_liqui_pl', 'div_liqui_ebitda', 'lc', 'margem_bruta_pct', 'roa', 'cagr_receita', 'cagr_lucro', 'cagr_div', 'cotacao_fechamento'];
+const labels = { sigla: 'Sigla', setor: 'Setor', cotacao: 'Cotação', pt_projetivo: 'PT projetivo', pt_medio: 'PT médio', preco_consenso: 'Preço consenso', part_ibov: 'Part. Ibov', val_mercado: 'Valor de mercado', vol_med_3m: 'Vol. méd. 3m', dt_ultimo_prov: 'Data último prov.', qtde_acoes: 'Qtd. ações', ev: 'Valor de Firma', cotacao_fechamento: 'Cotação fechamento' };
 const format = value => value === null || value === '' ? '—' : new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 4 }).format(Number(value));
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
 const textFields = new Set(['sigla', 'setor', 'dt_ultimo_prov']);
-document.querySelector('#headings').innerHTML = fields.map(field => `<th scope="col" title="${escapeHtml(field)}">${escapeHtml(labels[field] || field.replaceAll('_', ' '))}</th>`).join('');
+document.querySelector('#headings').innerHTML = fields.map(field => `<th scope="col" title="${escapeHtml(field)}" aria-sort="none"><button class="sort-button" type="button" data-field="${escapeHtml(field)}">${escapeHtml(labels[field] || field.replaceAll('_', ' '))}</button></th>`).join('');
 async function loadRows() {
-    const response = await fetch('/api/guiadeacoes');
-    const result = await response.json();
+    const [response, companiesResponse] = await Promise.all([fetch('/api/guiadeacoes'), fetch('/api/empresas')]);
+    const [result, companiesResult] = await Promise.all([response.json(), companiesResponse.ok ? companiesResponse.json() : Promise.resolve({ empresas: [] })]);
     if (!response.ok) throw new Error(result.message || 'Não foi possível carregar os registros.');
+    companyNames = new Map((companiesResult.empresas || []).map(company => [company.ticker, company.nome]));
     rows = result.data;
     renderRows();
 }
 function renderRows() {
+    const query = searchInput.value.trim().toLocaleLowerCase('pt-BR');
     const filteredRows = rows.filter(row => {
         if (activeFilter === 'vpa') return Number(row.vpa) > Number(row.cotacao);
         if (activeFilter === 'vpa-div') return Number(row.vpa) > Number(row.cotacao) && (row.div_liquida === null || Number(row.div_liquida) <= 0);
         return true;
+    }).filter(row => !query || row.sigla.toLocaleLowerCase('pt-BR').includes(query) || (companyNames.get(row.sigla) || '').toLocaleLowerCase('pt-BR').includes(query));
+    if (sortField) filteredRows.sort((a, b) => {
+        const aValue = a[sortField];
+        const bValue = b[sortField];
+        if (aValue === null || aValue === '') return bValue === null || bValue === '' ? 0 : 1;
+        if (bValue === null || bValue === '') return -1;
+        const comparison = textFields.has(sortField)
+            ? String(aValue).localeCompare(String(bValue), 'pt-BR', { numeric: true, sensitivity: 'base' })
+            : Number(aValue) - Number(bValue);
+        return sortDirection === 'ascending' ? comparison : -comparison;
     });
     document.querySelector('#rows').innerHTML = filteredRows.map(row => `<tr>${fields.map(field => `<td>${escapeHtml(textFields.has(field) ? (row[field] || '—') : format(row[field]))}</td>`).join('')}</tr>`).join('');
     document.querySelector('#empty').style.display = filteredRows.length ? 'none' : 'block';
-    document.querySelector('#empty').textContent = activeFilter ? 'Nenhuma empresa atende aos parâmetros do filtro.' : 'Nenhuma empresa cadastrada.';
+    document.querySelector('#empty').textContent = query ? 'Nenhuma empresa encontrada para esta busca.' : activeFilter ? 'Nenhuma empresa atende aos parâmetros do filtro.' : 'Nenhuma empresa cadastrada.';
     document.querySelector('#count').textContent = `${filteredRows.length} registro(s)`;
 }
+searchInput.addEventListener('input', renderRows);
+document.querySelector('#headings').addEventListener('click', event => {
+    const button = event.target.closest('.sort-button');
+    if (!button) return;
+    sortDirection = sortField === button.dataset.field && sortDirection === 'ascending' ? 'descending' : 'ascending';
+    sortField = button.dataset.field;
+    document.querySelectorAll('#headings th').forEach(th => th.setAttribute('aria-sort', th.contains(button) ? sortDirection : 'none'));
+    renderRows();
+});
 document.querySelectorAll('.filter-button').forEach(filterButton => filterButton.addEventListener('click', () => {
     activeFilter = activeFilter === filterButton.dataset.filter ? null : filterButton.dataset.filter;
     document.querySelectorAll('.filter-button').forEach(item => {
