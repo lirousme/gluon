@@ -14,7 +14,7 @@
         h1 { margin: 0; font-size: 22px; }
         .header-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
         main { width: 100%; padding: 30px clamp(12px, 2vw, 32px) 44px; }
-        .navigator { border: 1px solid #293950; background: linear-gradient(135deg, #111f32, #0d1929); padding: 14px 18px; border-radius: 14px; box-shadow: 0 18px 40px #0005; }
+        .navigator { border: 1px solid #293950; background: linear-gradient(135deg, #111f32, #0d1929); padding: 10px 14px; border-radius: 14px; box-shadow: 0 18px 40px #0005; }
         input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
         .search-label { display: block; margin-bottom: 7px; color: #aebdd2; font-size: 12px; font-weight: 700; }
         .search-input { width: 100%; min-height: 44px; border: 1px solid #354b69; border-radius: 10px; padding: 0 14px; background: #0a1524; color: #e5edf8; font: inherit; outline: none; }
@@ -22,17 +22,18 @@
         button { border: 1px solid transparent; border-radius: 10px; padding: 0 18px; min-height: 42px; font-weight: 700; color: white; background: #2878ff; cursor: pointer; }
         .filter-button { background: #162945; border-color: #354b69; color: #c9d6e8; }
         .filter-button.active { background: #2878ff; border-color: #65a0ff; color: #fff; box-shadow: 0 0 0 2px #2878ff33; }
-        .upload-button { width: 44px; padding: 0; display: inline-grid; place-items: center; }
+        .upload-button { width: 44px; padding: 0; display: inline-grid; place-items: center; background: #162945; border-color: #354b69; color: #c9d6e8; }
         .upload-button svg { width: 22px; height: 22px; }
         button:disabled { opacity: .55; cursor: wait; }
-        #filter-description { margin: 10px 0 0; min-height: 18px; color: #9fb0c9; font-size: 12px; }
-        #status { min-height: 18px; margin: 6px 0 0; font-size: 12px; font-weight: 600; }
+        #filter-description { margin: 7px 0 0; color: #9fb0c9; font-size: 12px; }
+        #filter-description:empty, #status:empty { display: none; }
+        #status { margin: 5px 0 0; font-size: 12px; font-weight: 600; }
         #status.ok { color: #53d89b; } #status.error { color: #ff7d8b; }
-        .listing { margin-top: 24px; border: 1px solid #293950; border-radius: 16px; overflow: hidden; background: #0d1929; box-shadow: 0 18px 40px #0004; }
+        .listing { margin-top: 24px; border: 1px solid #293950; border-radius: 16px; overflow: visible; background: #0d1929; box-shadow: 0 18px 40px #0004; }
         .listing-title { display: flex; justify-content: space-between; gap: 16px; padding: 18px 22px; align-items: center; }
         .listing-title h2 { margin: 0; font-size: 18px; }
         .count { color: #99a9bf; }
-        .scroll { overflow: auto; max-height: 68vh; scrollbar-color: #425572 #0b1626; }
+        .scroll { overflow: visible; }
         table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
         th, td { padding: 11px 14px; text-align: right; border-top: 1px solid #223149; border-right: 1px solid #1b2a40; white-space: nowrap; }
         th { position: sticky; top: 0; z-index: 2; background: #142238; color: #aebdd2; font-size: 11px; letter-spacing: .025em; text-transform: uppercase; }
@@ -125,6 +126,9 @@ function renderRows() {
             : Number(aValue) - Number(bValue);
         return sortDirection === 'ascending' ? comparison : -comparison;
     });
+    else if (activeFilter) filteredRows.sort((a, b) =>
+        Math.abs(Number(a.cotacao) - Number(a.vpa)) - Math.abs(Number(b.cotacao) - Number(b.vpa))
+    );
     document.querySelector('#rows').innerHTML = filteredRows.map(row => `<tr>${fields.map(field => `<td>${escapeHtml(textFields.has(field) ? (row[field] || '—') : format(row[field]))}</td>`).join('')}</tr>`).join('');
     document.querySelector('#empty').style.display = filteredRows.length ? 'none' : 'block';
     document.querySelector('#empty').textContent = query ? 'Nenhuma empresa encontrada para esta busca.' : activeFilter ? 'Nenhuma empresa atende aos parâmetros do filtro.' : 'Nenhuma empresa cadastrada.';
@@ -141,6 +145,8 @@ document.querySelector('#headings').addEventListener('click', event => {
 });
 document.querySelectorAll('.filter-button').forEach(filterButton => filterButton.addEventListener('click', () => {
     activeFilter = activeFilter === filterButton.dataset.filter ? null : filterButton.dataset.filter;
+    sortField = null;
+    document.querySelectorAll('#headings th').forEach(th => th.setAttribute('aria-sort', 'none'));
     document.querySelectorAll('.filter-button').forEach(item => {
         const isActive = item.dataset.filter === activeFilter;
         item.classList.toggle('active', isActive);
