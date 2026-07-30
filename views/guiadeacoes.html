@@ -112,8 +112,9 @@ async function loadRows() {
 function renderRows() {
     const query = searchInput.value.trim().toLocaleLowerCase('pt-BR');
     const filteredRows = rows.filter(row => {
-        if (activeFilter === 'vpa') return Number(row.vpa) > Number(row.cotacao);
-        if (activeFilter === 'vpa-div') return Number(row.vpa) > Number(row.cotacao) && (row.div_liquida === null || Number(row.div_liquida) <= 0);
+        const hasValidAverageTarget = row.pt_medio !== null && row.pt_medio !== '' && Number(row.pt_medio) >= Number(row.cotacao);
+        if (activeFilter === 'vpa') return Number(row.vpa) > Number(row.cotacao) && hasValidAverageTarget;
+        if (activeFilter === 'vpa-div') return Number(row.vpa) > Number(row.cotacao) && hasValidAverageTarget && (row.div_liquida === null || Number(row.div_liquida) <= 0);
         return true;
     }).filter(row => !query || row.sigla.toLocaleLowerCase('pt-BR').includes(query) || (companyNames.get(row.sigla) || '').toLocaleLowerCase('pt-BR').includes(query));
     if (sortField) filteredRows.sort((a, b) => {
@@ -153,8 +154,8 @@ document.querySelectorAll('.filter-button').forEach(filterButton => filterButton
         item.setAttribute('aria-pressed', String(isActive));
     });
     filterDescription.textContent = activeFilter === 'vpa'
-        ? 'Filtro ativo: VPA > Cotação.'
-        : activeFilter === 'vpa-div' ? 'Filtro ativo: VPA > Cotação e Dívida líquida ≤ 0 ou sem valor.' : '';
+        ? 'Filtro ativo: VPA > Cotação e PT médio ≥ Cotação.'
+        : activeFilter === 'vpa-div' ? 'Filtro ativo: VPA > Cotação, PT médio ≥ Cotação e Dívida líquida ≤ 0 ou sem valor.' : '';
     renderRows();
 }));
 uploadButton.addEventListener('click', () => fileInput.click());
