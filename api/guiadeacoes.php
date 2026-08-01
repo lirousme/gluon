@@ -77,6 +77,63 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
     exit;
 }
 
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'PATCH') {
+    $input = json_decode(file_get_contents('php://input') ?: '{}', true);
+    if (!is_array($input)) {
+        failUpload(400, 'Dados inválidos para a atualização.');
+    }
+
+    $ticker = strtoupper(trim((string)($input['sigla'] ?? '')));
+    $column = (string)($input['field'] ?? '');
+    if (!preg_match('/^[A-Z0-9.\-]{2,20}$/', $ticker)) {
+        failUpload(422, 'A sigla informada é inválida.');
+    }
+    if (!in_array($column, $columns, true)) {
+        failUpload(422, 'Esta coluna não pode ser editada manualmente.');
+    }
+
+    $value = trim((string)($input['value'] ?? ''));
+    if ($column === 'sigla') {
+        $value = strtoupper($value);
+        if (!preg_match('/^[A-Z0-9.\-]{2,20}$/', $value)) {
+            failUpload(422, 'A nova sigla é inválida.');
+        }
+    } elseif ($column === 'setor') {
+        $value = $value === '' ? null : $value;
+    } elseif ($column === 'dt_ultimo_prov') {
+        if ($value === '') {
+            $value = null;
+        } else {
+            $date = DateTime::createFromFormat('!Y-m-d', $value);
+            if (!$date || $date->format('Y-m-d') !== $value) {
+                failUpload(422, 'Informe a data no formato AAAA-MM-DD.');
+            }
+        }
+    } else {
+        $value = $value === '' ? null : str_replace(',', '.', $value);
+        if ($value !== null && !is_numeric($value)) {
+            failUpload(422, 'Informe um valor numérico válido.');
+        }
+    }
+
+    try {
+        $statement = $pdo->prepare("UPDATE guia_de_acoes SET {$column} = ? WHERE sigla = ?");
+        $statement->execute([$value, $ticker]);
+    } catch (Throwable $error) {
+        failUpload(409, 'Não foi possível atualizar o valor. Verifique se ele já está em uso.');
+    }
+    if ($statement->rowCount() === 0) {
+        $exists = $pdo->prepare('SELECT 1 FROM guia_de_acoes WHERE sigla = ?');
+        $exists->execute([$ticker]);
+        if (!$exists->fetchColumn()) {
+            failUpload(404, 'Empresa não encontrada.');
+        }
+    }
+
+    echo json_encode(['status' => 'success', 'message' => 'Valor atualizado.'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     failUpload(405, 'Método não suportado.');
 }
