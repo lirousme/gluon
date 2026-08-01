@@ -96,8 +96,8 @@ let companyNames = new Map();
 let activeFilter = null;
 let sortField = null;
 let sortDirection = 'ascending';
-const fields = ['sigla', 'setor', 'cotacao', 'vpa', 'pt_medio', 'payout_medio', 'div_liquida', 'dl_pct_vf', 'vf_qa', 'vf_div_qa_sad', 'vf_div_qa_happy', 'part_ibov', 'pt_projetivo', 'preco_consenso', 'val_mercado', 'vol_med_3m', 'retorno_ano', 'retorno_12m_prov', 'retorno_12m_sem_prov', 'retorno_36m_prov', 'retorno_36m_sem_prov', 'retorno_60m_prov', 'retorno_60m_sem_prov', 'dpa_medio', 'dy_medio', 'dy_12m', 'prov_p_acao_12m', 'dt_ultimo_prov', 'projecao_div', 'dy_projetivo', 'dif_mercado_pt_projetivo', 'pm_pt_projetivo', 'projecao_lucro', 'qtde_acoes', 'projecao_lpa', 'p_vpa', 'p_l', 'ev', 'ev_ebitda', 'ebitda', 'div_bruta', 'caixa', 'div_liquida_ebitda', 'lucro_liquido', 'lpa', 'margem_ebitda', 'margem_liquida', 'roe', 'roic', 'ev_ebit', 'market_value_at', 'psr', 'market_value_acpc', 'market_value_ac_pc_pnc', 'fcfpa', 'fcfy', 'div_liqui_pl', 'div_liqui_ebitda', 'lc', 'margem_bruta_pct', 'roa', 'cagr_receita', 'cagr_lucro', 'cagr_div', 'cotacao_fechamento'];
-const labels = { sigla: 'Sigla', setor: 'Setor', cotacao: 'Cotação', pt_projetivo: 'PT projetivo', pt_medio: 'PT médio', payout_medio: 'Payout médio', div_liquida: 'Div Líquida', dl_pct_vf: 'DL % VF', vf_qa: 'VF / QA', vf_div_qa_sad: 'VF-DIV / QA :(', vf_div_qa_happy: 'VF-DIV / QA :)', preco_consenso: 'Preço consenso', part_ibov: 'Part. Ibov', val_mercado: 'Valor de mercado', vol_med_3m: 'Vol. méd. 3m', dt_ultimo_prov: 'Data último prov.', qtde_acoes: 'Qtd. ações', ev: 'Valor de Firma', cotacao_fechamento: 'Cotação fechamento' };
+const fields = ['sigla', 'setor', 'cotacao', 'vpa', 'pt_medio', 'pt_projetivo', 'preco_consenso', 'vf_div_qa_sad', 'cx_qa', 'vl_qa', 'div_pct_cx', 'div_liquida', 'payout_medio', 'dl_pct_vf', 'vf_qa', 'vf_div_qa_happy', 'part_ibov', 'val_mercado', 'vol_med_3m', 'retorno_ano', 'retorno_12m_prov', 'retorno_12m_sem_prov', 'retorno_36m_prov', 'retorno_36m_sem_prov', 'retorno_60m_prov', 'retorno_60m_sem_prov', 'dpa_medio', 'dy_medio', 'dy_12m', 'prov_p_acao_12m', 'dt_ultimo_prov', 'projecao_div', 'dy_projetivo', 'dif_mercado_pt_projetivo', 'pm_pt_projetivo', 'projecao_lucro', 'qtde_acoes', 'projecao_lpa', 'p_vpa', 'p_l', 'ev', 'ev_ebitda', 'ebitda', 'div_bruta', 'caixa', 'div_liquida_ebitda', 'lucro_liquido', 'lpa', 'margem_ebitda', 'margem_liquida', 'roe', 'roic', 'ev_ebit', 'market_value_at', 'psr', 'market_value_acpc', 'market_value_ac_pc_pnc', 'fcfpa', 'fcfy', 'div_liqui_pl', 'div_liqui_ebitda', 'lc', 'margem_bruta_pct', 'roa', 'cagr_receita', 'cagr_lucro', 'cagr_div', 'cotacao_fechamento'];
+const labels = { sigla: 'Sigla', setor: 'Setor', cotacao: 'Cotação', pt_projetivo: 'PT projetivo', pt_medio: 'PT médio', payout_medio: 'Payout médio', div_pct_cx: 'DIV % CX', div_liquida: 'Div Líquida', dl_pct_vf: 'DL % VF', vf_qa: 'VF / QA', vf_div_qa_sad: 'VF-DIV / QA :(', cx_qa: 'CX / QA', vl_qa: 'VL / QA', vf_div_qa_happy: 'VF-DIV / QA :)', preco_consenso: 'PT consenso', part_ibov: 'Part. Ibov', val_mercado: 'Valor de mercado', vol_med_3m: 'Vol. méd. 3m', dt_ultimo_prov: 'Data último prov.', qtde_acoes: 'Qtd. ações', ev: 'Valor de Firma', cotacao_fechamento: 'Cotação fechamento' };
 const format = value => value === null || value === '' ? '—' : new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 4 }).format(Number(value));
 const formatPercent = value => value === null || value === '' ? '—' : `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(Number(value))}%`;
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
@@ -110,6 +110,9 @@ async function loadRows() {
     companyNames = new Map((companiesResult.empresas || []).map(company => [company.ticker, company.nome]));
     rows = result.data.map(row => ({
         ...row,
+        div_pct_cx: row.div_bruta === null || row.div_bruta === '' || row.caixa === null || row.caixa === '' || Number(row.caixa) === 0
+            ? null
+            : (Number(row.div_bruta) / Number(row.caixa)) * 100,
         dl_pct_vf: row.div_liquida === null || row.div_liquida === '' || row.ev === null || row.ev === '' || Number(row.ev) === 0
             ? null
             : (Number(row.div_liquida) / Number(row.ev)) * 100,
@@ -119,6 +122,12 @@ async function loadRows() {
         vf_div_qa_sad: row.ev === null || row.ev === '' || row.qtde_acoes === null || row.qtde_acoes === '' || Number(row.qtde_acoes) === 0
             ? null
             : (Number(row.ev) - Math.max(Number(row.div_liquida) || 0, 0)) / Number(row.qtde_acoes),
+        cx_qa: row.caixa === null || row.caixa === '' || row.qtde_acoes === null || row.qtde_acoes === '' || Number(row.qtde_acoes) === 0
+            ? null
+            : Number(row.caixa) / Number(row.qtde_acoes),
+        vl_qa: row.val_mercado === null || row.val_mercado === '' || row.qtde_acoes === null || row.qtde_acoes === '' || Number(row.qtde_acoes) === 0
+            ? null
+            : Number(row.val_mercado) / Number(row.qtde_acoes),
         vf_div_qa_happy: row.ev === null || row.ev === '' || row.qtde_acoes === null || row.qtde_acoes === '' || Number(row.qtde_acoes) === 0
             ? null
             : (Number(row.ev) - (Number(row.div_liquida) || 0)) / Number(row.qtde_acoes)
@@ -153,7 +162,7 @@ function renderRows() {
     else if (activeFilter) filteredRows.sort((a, b) =>
         Math.abs(Number(a.cotacao) - Number(a.vpa)) - Math.abs(Number(b.cotacao) - Number(b.vpa))
     );
-    document.querySelector('#rows').innerHTML = filteredRows.map(row => `<tr>${fields.map(field => `<td>${escapeHtml(textFields.has(field) ? (row[field] || '—') : field === 'dl_pct_vf' ? formatPercent(row[field]) : format(row[field]))}</td>`).join('')}</tr>`).join('');
+    document.querySelector('#rows').innerHTML = filteredRows.map(row => `<tr>${fields.map(field => `<td>${escapeHtml(textFields.has(field) ? (row[field] || '—') : ['dl_pct_vf', 'div_pct_cx'].includes(field) ? formatPercent(row[field]) : format(row[field]))}</td>`).join('')}</tr>`).join('');
     document.querySelector('#empty').style.display = filteredRows.length ? 'none' : 'block';
     document.querySelector('#empty').textContent = query ? 'Nenhuma empresa encontrada para esta busca.' : activeFilter ? 'Nenhuma empresa atende aos parâmetros do filtro.' : 'Nenhuma empresa cadastrada.';
     document.querySelector('#count').textContent = `${filteredRows.length} registro(s)`;
