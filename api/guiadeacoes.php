@@ -7,7 +7,9 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-$columns = preg_split('/\s+/', trim('sigla setor cotacao pt_projetivo pt_medio preco_consenso part_ibov val_mercado vol_med_3m retorno_ano retorno_12m_prov retorno_12m_sem_prov retorno_36m_prov retorno_36m_sem_prov retorno_60m_prov retorno_60m_sem_prov dpa_medio dy_medio dy_12m prov_p_acao_12m dt_ultimo_prov projecao_div dy_projetivo dif_mercado_pt_projetivo pm_pt_projetivo payout_medio projecao_lucro qtde_acoes projecao_lpa vpa p_vpa p_l ev ev_ebitda ebitda div_bruta div_liquida caixa div_liquida_ebitda lucro_liquido lpa margem_ebitda margem_liquida roe roic ev_ebit market_value_at psr market_value_acpc market_value_ac_pc_pnc fcfpa fcfy div_liqui_pl div_liqui_ebitda lc margem_bruta_pct roa cagr_receita cagr_lucro cagr_div cotacao_fechamento'));
+$spreadsheetColumns = preg_split('/\s+/', trim('sigla setor cotacao pt_projetivo pt_medio preco_consenso part_ibov val_mercado vol_med_3m retorno_ano retorno_12m_prov retorno_12m_sem_prov retorno_36m_prov retorno_36m_sem_prov retorno_60m_prov retorno_60m_sem_prov dpa_medio dy_medio dy_12m prov_p_acao_12m dt_ultimo_prov projecao_div dy_projetivo dif_mercado_pt_projetivo pm_pt_projetivo payout_medio projecao_lucro qtde_acoes projecao_lpa vpa p_vpa p_l ev ev_ebitda ebitda div_bruta div_liquida caixa div_liquida_ebitda lucro_liquido lpa margem_ebitda margem_liquida roe roic ev_ebit market_value_at psr market_value_acpc market_value_ac_pc_pnc fcfpa fcfy div_liqui_pl div_liqui_ebitda lc margem_bruta_pct roa cagr_receita cagr_lucro cagr_div cotacao_fechamento'));
+$manualColumns = ['free_float', 'nome_da_empresa', 'ativos', 'ativos_circ'];
+$columns = array_merge($spreadsheetColumns, $manualColumns);
 $pdo = Database::getConnection();
 
 function failUpload(int $code, string $message): void {
@@ -98,7 +100,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'PATCH') {
         if (!preg_match('/^[A-Z0-9.\-]{2,20}$/', $value)) {
             failUpload(422, 'A nova sigla é inválida.');
         }
-    } elseif ($column === 'setor') {
+    } elseif (in_array($column, ['setor', 'nome_da_empresa'], true)) {
         $value = $value === '' ? null : $value;
     } elseif ($column === 'dt_ultimo_prov') {
         if ($value === '') {
@@ -150,7 +152,7 @@ if ($rows === []) {
 }
 $header = array_map(static fn($value) => strtolower(trim((string)$value)), $rows[0]);
 $positions = [];
-foreach ($columns as $column) {
+foreach ($spreadsheetColumns as $column) {
     $position = array_search($column, $header, true);
     if ($position === false) {
         failUpload(422, "Coluna obrigatória ausente: {$column}.");
@@ -158,12 +160,12 @@ foreach ($columns as $column) {
     $positions[$column] = $position;
 }
 
-$placeholders = implode(', ', array_fill(0, count($columns), '?'));
+$placeholders = implode(', ', array_fill(0, count($spreadsheetColumns), '?'));
 // O setor pertence ao cadastro da empresa: uma importacao pode defini-lo na
 // inclusao, mas nunca deve sobrescreve-lo ao atualizar indicadores existentes.
-$updateColumns = array_values(array_diff($columns, ['sigla', 'setor']));
+$updateColumns = array_values(array_diff($spreadsheetColumns, ['sigla', 'setor']));
 $updates = implode(', ', array_map(static fn($column) => "{$column} = VALUES({$column})", $updateColumns));
-$sql = 'INSERT INTO guia_de_acoes (' . implode(', ', $columns) . ") VALUES ({$placeholders}) ON DUPLICATE KEY UPDATE {$updates}";
+$sql = 'INSERT INTO guia_de_acoes (' . implode(', ', $spreadsheetColumns) . ") VALUES ({$placeholders}) ON DUPLICATE KEY UPDATE {$updates}";
 $statement = $pdo->prepare($sql);
 $inserted = 0;
 $updated = 0;
@@ -179,7 +181,7 @@ try {
         $exists = $pdo->prepare('SELECT 1 FROM guia_de_acoes WHERE sigla = ?');
         $exists->execute([$ticker]);
         $values = [];
-        foreach ($columns as $column) {
+        foreach ($spreadsheetColumns as $column) {
             $value = trim((string)($row[$positions[$column]] ?? ''));
             if ($column === 'sigla') {
                 $value = $ticker;
