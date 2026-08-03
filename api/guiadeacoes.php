@@ -8,7 +8,18 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $spreadsheetColumns = preg_split('/\s+/', trim('sigla setor cotacao pt_projetivo pt_medio preco_consenso part_ibov val_mercado vol_med_3m retorno_ano retorno_12m_prov retorno_12m_sem_prov retorno_36m_prov retorno_36m_sem_prov retorno_60m_prov retorno_60m_sem_prov dpa_medio dy_medio dy_12m prov_p_acao_12m dt_ultimo_prov projecao_div dy_projetivo dif_mercado_pt_projetivo pm_pt_projetivo payout_medio projecao_lucro qtde_acoes projecao_lpa vpa p_vpa p_l ev ev_ebitda ebitda div_bruta div_liquida caixa div_liquida_ebitda lucro_liquido lpa margem_ebitda margem_liquida roe roic ev_ebit market_value_at psr market_value_acpc market_value_ac_pc_pnc fcfpa fcfy div_liqui_pl div_liqui_ebitda lc margem_bruta_pct roa cagr_receita cagr_lucro cagr_div cotacao_fechamento'));
-$manualColumns = ['free_float', 'nome_da_empresa', 'ativos', 'ativos_circ'];
+$manualColumns = [
+    'free_float',
+    'nome_da_empresa',
+    'ativos',
+    'ativos_circ',
+    'freq_div',
+    'datas_resultados',
+    'meses_mdi',
+    'datas_assembleias',
+    'pauta_assembleias',
+    'datas_conselhos',
+];
 $columns = array_merge($spreadsheetColumns, $manualColumns);
 $pdo = Database::getConnection();
 
@@ -100,7 +111,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'PATCH') {
         if (!preg_match('/^[A-Z0-9.\-]{2,20}$/', $value)) {
             failUpload(422, 'A nova sigla é inválida.');
         }
-    } elseif (in_array($column, ['setor', 'nome_da_empresa'], true)) {
+    } elseif (in_array($column, ['setor', 'nome_da_empresa', 'freq_div', 'datas_resultados', 'meses_mdi', 'datas_assembleias', 'pauta_assembleias', 'datas_conselhos'], true)) {
         $value = $value === '' ? null : $value;
     } elseif ($column === 'dt_ultimo_prov') {
         if ($value === '') {
