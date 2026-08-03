@@ -31,6 +31,19 @@ function customColumns(PDO $pdo): array {
     }
 }
 
+function databaseColumns(PDO $pdo): array {
+    $statement = $pdo->query('SHOW COLUMNS FROM guia_de_acoes');
+    return array_column($statement->fetchAll(), 'Field');
+}
+
+function deletedColumns(PDO $pdo): array {
+    try {
+        return $pdo->query('SELECT nome FROM guia_de_acoes_colunas_excluidas')->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Throwable $error) {
+        return [];
+    }
+}
+
 function savedColumnOrder(PDO $pdo, int $userId): array {
     try {
         $statement = $pdo->prepare('SELECT ordem FROM guia_de_acoes_ordem_colunas WHERE user_id = ?');
@@ -110,24 +123,30 @@ function readXlsx(string $path): array {
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
-    $rows = $pdo->query('SELECT * FROM guia_de_acoes WHERE cotacao IS NOT NULL AND cotacao <> 0 AND vpa IS NOT NULL AND vpa <> 0 AND pt_medio IS NOT NULL AND pt_medio <> 0 ORDER BY sigla')->fetchAll();
-    echo json_encode(['status' => 'success', 'data' => $rows, 'custom_columns' => customColumns($pdo), 'column_order' => savedColumnOrder($pdo, (int)$_SESSION['user_id'])], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
+    $databaseColumns = databaseColumns($pdo);
+    $filters = array_values(array_filter(['cotacao', 'vpa', 'pt_medio'], static fn($column) => in_array($column, $databaseColumns, true)));
+    $where = $filters ? ' WHERE ' . implode(' AND ', array_map(static fn($column) => "`{$column}` IS NOT NULL AND `{$column}` <> 0", $filters)) : '';
+    $order = in_array('sigla', $databaseColumns, true) ? ' ORDER BY sigla' : '';
+    $rows = $pdo->query("SELECT * FROM guia_de_acoes{$where}{$order}")->fetchAll();
+    echo json_encode(['status' => 'success', 'data' => $rows, 'custom_columns' => customColumns($pdo), 'deleted_columns' => deletedColumns($pdo), 'database_columns' => $databaseColumns, 'column_order' => savedColumnOrder($pdo, (int)$_SESSION['user_id'])], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
     exit;
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'DELETE') {
     $input = json_decode(file_get_contents('php://input') ?: '{}', true);
     $name = (string)($input['name'] ?? '');
-    $custom = array_column(customColumns($pdo), null, 'nome');
-    if (!isset($custom[$name])) {
-        failUpload(422, 'Somente colunas manuais criadas nesta tela podem ser excluídas. Colunas do sistema e usadas em cálculos são protegidas.');
-    }
+    if (!preg_match('/^[a-z][a-z0-9_]{1,62}$/', $name)) failUpload(422, 'Coluna inválida.');
+    $databaseColumns = databaseColumns($pdo);
+    $calculatedColumns = ['vf_div_qa_sad', 'cx_qa', 'vl_qa', 'div_pct_cx', 'cx_db', 'dl_pct_vf', 'vf_qa', 'vf_div_qa_happy'];
+    if (!in_array($name, $databaseColumns, true) && !in_array($name, $calculatedColumns, true)) failUpload(404, 'Coluna não encontrada.');
     try {
-        $pdo->exec("ALTER TABLE guia_de_acoes DROP COLUMN `{$name}`");
+        if (in_array($name, $databaseColumns, true)) $pdo->exec("ALTER TABLE guia_de_acoes DROP COLUMN `{$name}`");
         $statement = $pdo->prepare('DELETE FROM guia_de_acoes_colunas WHERE nome = ?');
         $statement->execute([$name]);
+        $statement = $pdo->prepare('INSERT IGNORE INTO guia_de_acoes_colunas_excluidas (nome) VALUES (?)');
+        $statement->execute([$name]);
     } catch (Throwable $error) {
-        failUpload(409, 'Não foi possível excluir a coluna. Ela pode estar sendo usada por outro recurso.');
+        failUpload(409, 'Não foi possível excluir a coluna do banco de dados.');
     }
     echo json_encode(['status' => 'success', 'message' => 'Coluna excluída.'], JSON_UNESCAPED_UNICODE);
     exit;
@@ -163,13 +182,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'PATCH') {
         $name = (string)($input['name'] ?? '');
         $label = trim((string)($input['label'] ?? ''));
         if ($label === '' || mb_strlen($label) > 120) failUpload(422, 'Informe um nome de exibição com até 120 caracteres.');
-        $statement = $pdo->prepare('UPDATE guia_de_acoes_colunas SET rotulo = ? WHERE nome = ?');
-        $statement->execute([$label, $name]);
-        if (!$statement->rowCount()) {
-            $statement = $pdo->prepare('SELECT 1 FROM guia_de_acoes_colunas WHERE nome = ?');
-            $statement->execute([$name]);
-            if (!$statement->fetchColumn()) failUpload(422, 'Somente colunas manuais criadas nesta tela podem ser renomeadas.');
-        }
+        $calculatedColumns = ['vf_div_qa_sad', 'cx_qa', 'vl_qa', 'div_pct_cx', 'cx_db', 'dl_pct_vf', 'vf_qa', 'vf_div_qa_happy'];
+        if (!in_array($name, array_merge(databaseColumns($pdo), $calculatedColumns), true) || in_array($name, deletedColumns($pdo), true)) failUpload(422, 'Coluna não encontrada.');
+        $type = in_array($name, ['sigla', 'setor', 'nome_da_empresa', 'dt_ultimo_prov', 'freq_div', 'datas_resultados', 'meses_mdi', 'datas_assembleias', 'pauta_assembleias', 'datas_conselhos'], true) ? 'texto' : 'numero';
+        $statement = $pdo->prepare('INSERT INTO guia_de_acoes_colunas (nome, rotulo, tipo) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE rotulo = VALUES(rotulo)');
+        $statement->execute([$name, $label, $type]);
         echo json_encode(['status' => 'success', 'message' => 'Nome de exibição atualizado.'], JSON_UNESCAPED_UNICODE);
         exit;
     }
@@ -263,7 +280,11 @@ if ($rows === []) {
 }
 $header = array_map(static fn($value) => strtolower(trim((string)$value)), $rows[0]);
 $positions = [];
-foreach ($spreadsheetColumns as $column) {
+$activeSpreadsheetColumns = array_values(array_intersect($spreadsheetColumns, databaseColumns($pdo)));
+if (!in_array('sigla', $activeSpreadsheetColumns, true)) {
+    failUpload(409, 'A coluna sigla não existe mais no banco e a importação não pode identificar os registros.');
+}
+foreach ($activeSpreadsheetColumns as $column) {
     $position = array_search($column, $header, true);
     if ($position === false) {
         failUpload(422, "Coluna obrigatória ausente: {$column}.");
@@ -271,12 +292,12 @@ foreach ($spreadsheetColumns as $column) {
     $positions[$column] = $position;
 }
 
-$placeholders = implode(', ', array_fill(0, count($spreadsheetColumns), '?'));
+$placeholders = implode(', ', array_fill(0, count($activeSpreadsheetColumns), '?'));
 // O setor pertence ao cadastro da empresa: uma importacao pode defini-lo na
 // inclusao, mas nunca deve sobrescreve-lo ao atualizar indicadores existentes.
-$updateColumns = array_values(array_diff($spreadsheetColumns, ['sigla', 'setor']));
+$updateColumns = array_values(array_diff($activeSpreadsheetColumns, ['sigla', 'setor']));
 $updates = implode(', ', array_map(static fn($column) => "{$column} = VALUES({$column})", $updateColumns));
-$sql = 'INSERT INTO guia_de_acoes (' . implode(', ', $spreadsheetColumns) . ") VALUES ({$placeholders}) ON DUPLICATE KEY UPDATE {$updates}";
+$sql = 'INSERT INTO guia_de_acoes (' . implode(', ', $activeSpreadsheetColumns) . ") VALUES ({$placeholders}) ON DUPLICATE KEY UPDATE {$updates}";
 $statement = $pdo->prepare($sql);
 $inserted = 0;
 $updated = 0;
@@ -292,7 +313,7 @@ try {
         $exists = $pdo->prepare('SELECT 1 FROM guia_de_acoes WHERE sigla = ?');
         $exists->execute([$ticker]);
         $values = [];
-        foreach ($spreadsheetColumns as $column) {
+        foreach ($activeSpreadsheetColumns as $column) {
             $value = trim((string)($row[$positions[$column]] ?? ''));
             if ($column === 'sigla') {
                 $value = $ticker;

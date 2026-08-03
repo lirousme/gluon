@@ -123,14 +123,17 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&
 const textFields = new Set(['sigla', 'nome_da_empresa', 'setor', 'dt_ultimo_prov', 'freq_div', 'datas_resultados', 'meses_mdi', 'datas_assembleias', 'pauta_assembleias', 'datas_conselhos']);
 const calculatedFields = new Set(['vf_div_qa_sad', 'cx_qa', 'vl_qa', 'div_pct_cx', 'cx_db', 'dl_pct_vf', 'vf_qa', 'vf_div_qa_happy']);
 let customColumns = new Map();
-function renderHeadings() { document.querySelector('#headings').innerHTML = fields.map(field => `<th scope="col" draggable="true" data-field="${escapeHtml(field)}" title="Arraste para reordenar. ${escapeHtml(field)}${customColumns.has(field) ? ' — clique com o botão direito para gerenciar' : ''}" aria-sort="${sortField === field ? sortDirection : 'none'}"><button class="sort-button" type="button" data-field="${escapeHtml(field)}">${escapeHtml(labels[field] || field.replaceAll('_', ' '))}</button></th>`).join(''); }
+let databaseColumns = new Set();
+function renderHeadings() { document.querySelector('#headings').innerHTML = fields.map(field => `<th scope="col" draggable="true" data-field="${escapeHtml(field)}" title="Arraste para reordenar. ${escapeHtml(field)} — clique com o botão direito para gerenciar" aria-sort="${sortField === field ? sortDirection : 'none'}"><button class="sort-button" type="button" data-field="${escapeHtml(field)}">${escapeHtml(labels[field] || field.replaceAll('_', ' '))}</button></th>`).join(''); }
 renderHeadings();
 async function loadRows() {
     const [response, companiesResponse] = await Promise.all([fetch('/api/guiadeacoes'), fetch('/api/empresas')]);
     const [result, companiesResult] = await Promise.all([response.json(), companiesResponse.ok ? companiesResponse.json() : Promise.resolve({ empresas: [] })]);
     if (!response.ok) throw new Error(result.message || 'Não foi possível carregar os registros.');
     result.custom_columns.forEach(column => { customColumns.set(column.nome, column); labels[column.nome] = column.rotulo; if (column.tipo === 'texto') textFields.add(column.nome); });
-    fields = fields.filter(field => !customColumns.has(field)).concat(result.custom_columns.map(column => column.nome));
+    databaseColumns = new Set(result.database_columns || []);
+    const deletedColumns = new Set(result.deleted_columns || []);
+    fields = fields.filter(field => !deletedColumns.has(field) && (calculatedFields.has(field) || databaseColumns.has(field))).concat(result.custom_columns.map(column => column.nome).filter(field => !fields.includes(field) && !deletedColumns.has(field)));
     const savedOrder = Array.isArray(result.column_order) ? result.column_order : [];
     const availableFields = new Set(fields);
     fields = savedOrder.filter(field => availableFields.has(field)).concat(fields.filter(field => !savedOrder.includes(field)));
@@ -257,7 +260,7 @@ const columnForm = document.querySelector('#column-form');
 let editingColumn = null;
 function openColumnModal(column = null) {
     editingColumn = column;
-    document.querySelector('#column-modal-title').textContent = column ? 'Gerenciar coluna manual' : 'Nova coluna manual';
+    document.querySelector('#column-modal-title').textContent = column ? 'Gerenciar coluna' : 'Nova coluna manual';
     document.querySelector('#column-label').value = column?.rotulo || '';
     document.querySelector('#column-name').value = column?.nome || '';
     document.querySelector('#column-type').value = column?.tipo || 'texto';
@@ -272,8 +275,7 @@ document.querySelector('#headings').addEventListener('contextmenu', event => {
     const field = event.target.closest('th')?.dataset.field;
     if (!field) return;
     event.preventDefault();
-    if (customColumns.has(field)) openColumnModal(customColumns.get(field));
-    else { statusBox.className = 'error'; statusBox.textContent = 'Esta é uma coluna protegida do sistema ou usada em cálculos e não pode ser alterada.'; }
+    openColumnModal(customColumns.get(field) || { nome: field, rotulo: labels[field] || field.replaceAll('_', ' '), tipo: textFields.has(field) ? 'texto' : 'numero' });
 });
 columnForm.addEventListener('submit', async event => {
     event.preventDefault();
