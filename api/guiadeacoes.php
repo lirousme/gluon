@@ -23,6 +23,20 @@ $manualColumns = [
 $columns = array_merge($spreadsheetColumns, $manualColumns);
 $pdo = Database::getConnection();
 
+function customColumns(PDO $pdo): array {
+    try {
+        return $pdo->query('SELECT nome, rotulo, tipo FROM guia_de_acoes_colunas ORDER BY criado_em, nome')->fetchAll();
+    } catch (Throwable $error) {
+        return [];
+    }
+}
+
+function normalizeColumnName(string $value): string {
+    $value = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value) ?: $value;
+    $value = strtolower(trim(preg_replace('/[^a-zA-Z0-9]+/', '_', $value), '_'));
+    return $value;
+}
+
 function failUpload(int $code, string $message): void {
     http_response_code($code);
     echo json_encode(['status' => 'error', 'message' => $message], JSON_UNESCAPED_UNICODE);
@@ -86,7 +100,25 @@ function readXlsx(string $path): array {
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
     $rows = $pdo->query('SELECT * FROM guia_de_acoes WHERE cotacao IS NOT NULL AND cotacao <> 0 AND vpa IS NOT NULL AND vpa <> 0 AND pt_medio IS NOT NULL AND pt_medio <> 0 ORDER BY sigla')->fetchAll();
-    echo json_encode(['status' => 'success', 'data' => $rows], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
+    echo json_encode(['status' => 'success', 'data' => $rows, 'custom_columns' => customColumns($pdo)], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
+    exit;
+}
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'DELETE') {
+    $input = json_decode(file_get_contents('php://input') ?: '{}', true);
+    $name = (string)($input['name'] ?? '');
+    $custom = array_column(customColumns($pdo), null, 'nome');
+    if (!isset($custom[$name])) {
+        failUpload(422, 'Somente colunas manuais criadas nesta tela podem ser excluídas. Colunas do sistema e usadas em cálculos são protegidas.');
+    }
+    try {
+        $pdo->exec("ALTER TABLE guia_de_acoes DROP COLUMN `{$name}`");
+        $statement = $pdo->prepare('DELETE FROM guia_de_acoes_colunas WHERE nome = ?');
+        $statement->execute([$name]);
+    } catch (Throwable $error) {
+        failUpload(409, 'Não foi possível excluir a coluna. Ela pode estar sendo usada por outro recurso.');
+    }
+    echo json_encode(['status' => 'success', 'message' => 'Coluna excluída.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -96,6 +128,23 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'PATCH') {
         failUpload(400, 'Dados inválidos para a atualização.');
     }
 
+    if (($input['action'] ?? '') === 'rename_column') {
+        $name = (string)($input['name'] ?? '');
+        $label = trim((string)($input['label'] ?? ''));
+        if ($label === '' || mb_strlen($label) > 120) failUpload(422, 'Informe um nome de exibição com até 120 caracteres.');
+        $statement = $pdo->prepare('UPDATE guia_de_acoes_colunas SET rotulo = ? WHERE nome = ?');
+        $statement->execute([$label, $name]);
+        if (!$statement->rowCount()) {
+            $statement = $pdo->prepare('SELECT 1 FROM guia_de_acoes_colunas WHERE nome = ?');
+            $statement->execute([$name]);
+            if (!$statement->fetchColumn()) failUpload(422, 'Somente colunas manuais criadas nesta tela podem ser renomeadas.');
+        }
+        echo json_encode(['status' => 'success', 'message' => 'Nome de exibição atualizado.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $custom = customColumns($pdo);
+    $columns = array_merge($columns, array_column($custom, 'nome'));
     $ticker = strtoupper(trim((string)($input['sigla'] ?? '')));
     $column = (string)($input['field'] ?? '');
     if (!preg_match('/^[A-Z0-9.\-]{2,20}$/', $ticker)) {
@@ -111,7 +160,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'PATCH') {
         if (!preg_match('/^[A-Z0-9.\-]{2,20}$/', $value)) {
             failUpload(422, 'A nova sigla é inválida.');
         }
-    } elseif (in_array($column, ['setor', 'nome_da_empresa', 'freq_div', 'datas_resultados', 'meses_mdi', 'datas_assembleias', 'pauta_assembleias', 'datas_conselhos'], true)) {
+    } elseif (in_array($column, array_merge(['setor', 'nome_da_empresa', 'freq_div', 'datas_resultados', 'meses_mdi', 'datas_assembleias', 'pauta_assembleias', 'datas_conselhos'], array_column(array_filter($custom, static fn($item) => $item['tipo'] === 'texto'), 'nome')), true)) {
         $value = $value === '' ? null : $value;
     } elseif ($column === 'dt_ultimo_prov') {
         if ($value === '') {
@@ -149,6 +198,26 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'PATCH') {
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     failUpload(405, 'Método não suportado.');
+}
+if (str_contains($_SERVER['CONTENT_TYPE'] ?? '', 'application/json')) {
+    $input = json_decode(file_get_contents('php://input') ?: '{}', true);
+    $label = trim((string)($input['label'] ?? ''));
+    $name = normalizeColumnName((string)($input['name'] ?? $label));
+    $type = (string)($input['type'] ?? 'texto');
+    if ($label === '' || mb_strlen($label) > 120 || !preg_match('/^[a-z][a-z0-9_]{1,62}$/', $name)) failUpload(422, 'Informe um nome válido (mínimo de 2 caracteres).');
+    if (!in_array($type, ['texto', 'numero'], true)) failUpload(422, 'Tipo de coluna inválido.');
+    if (in_array($name, $columns, true) || in_array($name, array_column(customColumns($pdo), 'nome'), true)) failUpload(409, 'Já existe uma coluna com esse identificador.');
+    try {
+        $sqlType = $type === 'numero' ? 'DECIMAL(24, 8)' : 'TEXT';
+        $pdo->exec("ALTER TABLE guia_de_acoes ADD COLUMN `{$name}` {$sqlType} NULL");
+        $statement = $pdo->prepare('INSERT INTO guia_de_acoes_colunas (nome, rotulo, tipo) VALUES (?, ?, ?)');
+        $statement->execute([$name, $label, $type]);
+    } catch (Throwable $error) {
+        try { $pdo->exec("ALTER TABLE guia_de_acoes DROP COLUMN `{$name}`"); } catch (Throwable $ignored) {}
+        failUpload(409, 'Não foi possível criar a coluna. Verifique se o nome já está em uso.');
+    }
+    echo json_encode(['status' => 'success', 'message' => 'Coluna manual criada.', 'column' => ['nome' => $name, 'rotulo' => $label, 'tipo' => $type]], JSON_UNESCAPED_UNICODE);
+    exit;
 }
 if (!isset($_FILES['planilha']) || ($_FILES['planilha']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
     failUpload(422, 'Selecione uma planilha .xlsx válida.');
