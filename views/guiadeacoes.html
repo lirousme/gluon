@@ -24,6 +24,16 @@
         .filter-button.active { background: #2878ff; border-color: #65a0ff; color: #fff; box-shadow: 0 0 0 2px #2878ff33; }
         .upload-button { width: 44px; padding: 0; display: inline-grid; place-items: center; margin-left: auto; background: #162945; border-color: #354b69; color: #c9d6e8; }
         .upload-button svg { width: 22px; height: 22px; }
+        .column-button { background: #162945; border-color: #354b69; color: #c9d6e8; }
+        dialog { width: min(440px, calc(100vw - 28px)); border: 1px solid #354b69; border-radius: 16px; padding: 0; color: #e5edf8; background: #101e31; box-shadow: 0 24px 80px #000b; }
+        dialog::backdrop { background: #020711b8; }
+        .modal-content { padding: 24px; display: grid; gap: 16px; }
+        .modal-content h2 { margin: 0; font-size: 20px; }
+        .modal-content label { display: grid; gap: 7px; color: #b9c7da; font-size: 13px; }
+        .modal-content input, .modal-content select { width: 100%; min-height: 42px; border: 1px solid #354b69; border-radius: 8px; padding: 8px 11px; background: #08111f; color: #fff; font: inherit; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+        .danger { margin-right: auto; background: #8e2634; }
+        .modal-help { margin: 0; color: #8495ad; font-size: 12px; line-height: 1.5; }
         button:disabled { opacity: .55; cursor: wait; }
         #filter-description { margin: 7px 0 0; color: #9fb0c9; font-size: 12px; }
         #filter-description:empty, #status:empty { display: none; }
@@ -71,6 +81,7 @@
     <button id="upload-button" class="upload-button" type="button" title="Importar planilha .xlsx" aria-label="Importar planilha .xlsx">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 3h11l5 5v13H4z"/><path d="M14 3v6h6M8 13h8M8 17h8M11 10v10"/></svg>
     </button>
+    <button id="add-column-button" class="column-button" type="button">+ Coluna manual</button>
     <form id="upload-form">
         <input id="planilha" name="planilha" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="Selecionar planilha" required>
     </form>
@@ -86,6 +97,7 @@
         <div class="scroll"><table><thead><tr id="headings"></tr></thead><tbody id="rows"></tbody></table><div id="empty" class="empty">Carregando…</div></div>
     </section>
 </main>
+<dialog id="column-modal"><form id="column-form" class="modal-content" method="dialog"><h2 id="column-modal-title">Nova coluna manual</h2><p class="modal-help" id="column-help">A coluna será armazenada no banco e não será alterada por uploads de planilhas.</p><label>Nome exibido<input id="column-label" maxlength="120" required></label><label id="identifier-field">Identificador no banco<input id="column-name" maxlength="63" placeholder="ex.: margem_seguranca"></label><label id="type-field">Tipo<select id="column-type"><option value="texto">Texto</option><option value="numero">Número</option></select></label><div class="modal-actions"><button id="delete-column" class="danger" type="button" hidden>Excluir coluna</button><button value="cancel" class="clear-filters-button" type="button">Cancelar</button><button id="save-column" type="submit">Salvar</button></div></form></dialog>
 <script>
 const form = document.querySelector('#upload-form');
 const statusBox = document.querySelector('#status');
@@ -99,18 +111,23 @@ let companyNames = new Map();
 let activeFilter = null;
 let sortField = null;
 let sortDirection = 'ascending';
-const fields = ['sigla', 'nome_da_empresa', 'setor', 'free_float', 'ativos', 'ativos_circ', 'freq_div', 'datas_resultados', 'meses_mdi', 'datas_assembleias', 'pauta_assembleias', 'datas_conselhos', 'cotacao', 'vpa', 'pt_medio', 'pt_projetivo', 'preco_consenso', 'vf_div_qa_sad', 'cx_qa', 'vl_qa', 'div_pct_cx', 'cx_db', 'div_liquida', 'payout_medio', 'dl_pct_vf', 'vf_qa', 'vf_div_qa_happy', 'part_ibov', 'val_mercado', 'vol_med_3m', 'retorno_ano', 'retorno_12m_prov', 'retorno_12m_sem_prov', 'retorno_36m_prov', 'retorno_36m_sem_prov', 'retorno_60m_prov', 'retorno_60m_sem_prov', 'dpa_medio', 'dy_medio', 'dy_12m', 'prov_p_acao_12m', 'dt_ultimo_prov', 'projecao_div', 'dy_projetivo', 'dif_mercado_pt_projetivo', 'pm_pt_projetivo', 'projecao_lucro', 'qtde_acoes', 'projecao_lpa', 'p_vpa', 'p_l', 'ev', 'ev_ebitda', 'ebitda', 'div_bruta', 'caixa', 'div_liquida_ebitda', 'lucro_liquido', 'lpa', 'margem_ebitda', 'margem_liquida', 'roe', 'roic', 'ev_ebit', 'market_value_at', 'psr', 'market_value_acpc', 'market_value_ac_pc_pnc', 'fcfpa', 'fcfy', 'div_liqui_pl', 'div_liqui_ebitda', 'lc', 'margem_bruta_pct', 'roa', 'cagr_receita', 'cagr_lucro', 'cagr_div', 'cotacao_fechamento'];
+let fields = ['sigla', 'setor', 'cotacao', 'vpa', 'pt_medio', 'pt_projetivo', 'preco_consenso', 'vf_div_qa_sad', 'cx_qa', 'vl_qa', 'div_pct_cx', 'cx_db', 'div_liquida', 'payout_medio', 'dl_pct_vf', 'vf_qa', 'vf_div_qa_happy', 'part_ibov', 'val_mercado', 'vol_med_3m', 'retorno_ano', 'retorno_12m_prov', 'retorno_12m_sem_prov', 'retorno_36m_prov', 'retorno_36m_sem_prov', 'retorno_60m_prov', 'retorno_60m_sem_prov', 'dpa_medio', 'dy_medio', 'dy_12m', 'prov_p_acao_12m', 'dt_ultimo_prov', 'projecao_div', 'dy_projetivo', 'dif_mercado_pt_projetivo', 'pm_pt_projetivo', 'projecao_lucro', 'qtde_acoes', 'projecao_lpa', 'p_vpa', 'p_l', 'ev', 'ev_ebitda', 'ebitda', 'div_bruta', 'caixa', 'div_liquida_ebitda', 'lucro_liquido', 'lpa', 'margem_ebitda', 'margem_liquida', 'roe', 'roic', 'ev_ebit', 'market_value_at', 'psr', 'market_value_acpc', 'market_value_ac_pc_pnc', 'fcfpa', 'fcfy', 'div_liqui_pl', 'div_liqui_ebitda', 'lc', 'margem_bruta_pct', 'roa', 'cagr_receita', 'cagr_lucro', 'cagr_div', 'cotacao_fechamento'];
 const labels = { sigla: 'Sigla', nome_da_empresa: 'Nome da empresa', setor: 'Setor', free_float: 'Free float', ativos: 'Ativos', ativos_circ: 'Ativos circ.', freq_div: 'Freq. div.', datas_resultados: 'Datas resultados', meses_mdi: 'Meses MDI', datas_assembleias: 'Datas assembleias', pauta_assembleias: 'Pauta assembleias', datas_conselhos: 'Datas conselhos', cotacao: 'Cotação', pt_projetivo: 'PT projetivo', pt_medio: 'PT médio', payout_medio: 'Payout médio', div_pct_cx: 'DB % CX', cx_db: 'CX - DB', div_liquida: 'Div Líquida', dl_pct_vf: 'DL % VF', vf_qa: 'VF / QA', vf_div_qa_sad: 'VF-DIV / QA :(', cx_qa: 'CX / QA', vl_qa: 'VM / QA', vf_div_qa_happy: 'VF-DIV / QA :)', preco_consenso: 'PT consenso', part_ibov: 'Part. Ibov', val_mercado: 'Valor de mercado', vol_med_3m: 'Vol. méd. 3m', dt_ultimo_prov: 'Data último prov.', qtde_acoes: 'Qtd. ações', ev: 'Valor de Firma', cotacao_fechamento: 'Cotação fechamento' };
 const format = value => value === null || value === '' ? '—' : new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 4 }).format(Number(value));
 const formatPercent = value => value === null || value === '' ? '—' : `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(Number(value))}%`;
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
 const textFields = new Set(['sigla', 'nome_da_empresa', 'setor', 'dt_ultimo_prov', 'freq_div', 'datas_resultados', 'meses_mdi', 'datas_assembleias', 'pauta_assembleias', 'datas_conselhos']);
 const calculatedFields = new Set(['vf_div_qa_sad', 'cx_qa', 'vl_qa', 'div_pct_cx', 'cx_db', 'dl_pct_vf', 'vf_qa', 'vf_div_qa_happy']);
-document.querySelector('#headings').innerHTML = fields.map(field => `<th scope="col" title="${escapeHtml(field)}" aria-sort="none"><button class="sort-button" type="button" data-field="${escapeHtml(field)}">${escapeHtml(labels[field] || field.replaceAll('_', ' '))}</button></th>`).join('');
+let customColumns = new Map();
+function renderHeadings() { document.querySelector('#headings').innerHTML = fields.map(field => `<th scope="col" data-field="${escapeHtml(field)}" title="${escapeHtml(field)}${customColumns.has(field) ? ' — clique com o botão direito para gerenciar' : ''}" aria-sort="none"><button class="sort-button" type="button" data-field="${escapeHtml(field)}">${escapeHtml(labels[field] || field.replaceAll('_', ' '))}</button></th>`).join(''); }
+renderHeadings();
 async function loadRows() {
     const [response, companiesResponse] = await Promise.all([fetch('/api/guiadeacoes'), fetch('/api/empresas')]);
     const [result, companiesResult] = await Promise.all([response.json(), companiesResponse.ok ? companiesResponse.json() : Promise.resolve({ empresas: [] })]);
     if (!response.ok) throw new Error(result.message || 'Não foi possível carregar os registros.');
+    result.custom_columns.forEach(column => { customColumns.set(column.nome, column); labels[column.nome] = column.rotulo; if (column.tipo === 'texto') textFields.add(column.nome); });
+    fields = fields.filter(field => !customColumns.has(field)).concat(result.custom_columns.map(column => column.nome));
+    renderHeadings();
     companyNames = new Map((companiesResult.empresas || []).map(company => [company.ticker, company.nome]));
     rows = result.data.map(row => ({
         ...row,
@@ -227,6 +244,44 @@ document.querySelector('#rows').addEventListener('dblclick', event => {
         if (keyEvent.key === 'Escape') { keyEvent.preventDefault(); finished = true; renderRows(); }
     });
     input.addEventListener('blur', () => finish(true));
+});
+const columnModal = document.querySelector('#column-modal');
+const columnForm = document.querySelector('#column-form');
+let editingColumn = null;
+function openColumnModal(column = null) {
+    editingColumn = column;
+    document.querySelector('#column-modal-title').textContent = column ? 'Gerenciar coluna manual' : 'Nova coluna manual';
+    document.querySelector('#column-label').value = column?.rotulo || '';
+    document.querySelector('#column-name').value = column?.nome || '';
+    document.querySelector('#column-type').value = column?.tipo || 'texto';
+    document.querySelector('#identifier-field').hidden = Boolean(column);
+    document.querySelector('#type-field').hidden = Boolean(column);
+    document.querySelector('#delete-column').hidden = !column;
+    columnModal.showModal();
+}
+document.querySelector('#add-column-button').addEventListener('click', () => openColumnModal());
+document.querySelector('.modal-actions [value="cancel"]').addEventListener('click', () => columnModal.close());
+document.querySelector('#headings').addEventListener('contextmenu', event => {
+    const field = event.target.closest('th')?.dataset.field;
+    if (!field) return;
+    event.preventDefault();
+    if (customColumns.has(field)) openColumnModal(customColumns.get(field));
+    else { statusBox.className = 'error'; statusBox.textContent = 'Esta é uma coluna protegida do sistema ou usada em cálculos e não pode ser alterada.'; }
+});
+columnForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const payload = editingColumn ? { action: 'rename_column', name: editingColumn.nome, label: document.querySelector('#column-label').value } : { label: document.querySelector('#column-label').value, name: document.querySelector('#column-name').value, type: document.querySelector('#column-type').value };
+    const response = await fetch('/api/guiadeacoes', { method: editingColumn ? 'PATCH' : 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+    const result = await response.json();
+    if (!response.ok) { statusBox.className = 'error'; statusBox.textContent = result.message; return; }
+    columnModal.close(); statusBox.className = 'ok'; statusBox.textContent = result.message; customColumns.clear(); await loadRows();
+});
+document.querySelector('#delete-column').addEventListener('click', async () => {
+    if (!editingColumn || !confirm(`Excluir definitivamente a coluna “${editingColumn.rotulo}” e todos os valores dela?`)) return;
+    const response = await fetch('/api/guiadeacoes', { method: 'DELETE', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: editingColumn.nome}) });
+    const result = await response.json();
+    if (!response.ok) { statusBox.className = 'error'; statusBox.textContent = result.message; return; }
+    columnModal.close(); fields = fields.filter(field => field !== editingColumn.nome); delete labels[editingColumn.nome]; customColumns.clear(); statusBox.className = 'ok'; statusBox.textContent = result.message; await loadRows();
 });
 searchInput.addEventListener('input', renderRows);
 document.querySelector('#headings').addEventListener('click', event => {
