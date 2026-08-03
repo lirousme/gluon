@@ -31,6 +31,17 @@ function customColumns(PDO $pdo): array {
     }
 }
 
+function savedColumnOrder(PDO $pdo, int $userId): array {
+    try {
+        $statement = $pdo->prepare('SELECT ordem FROM guia_de_acoes_ordem_colunas WHERE user_id = ?');
+        $statement->execute([$userId]);
+        $order = json_decode((string)($statement->fetchColumn() ?: '[]'), true);
+        return is_array($order) ? array_values(array_filter($order, 'is_string')) : [];
+    } catch (Throwable $error) {
+        return [];
+    }
+}
+
 function normalizeColumnName(string $value): string {
     $value = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value) ?: $value;
     $value = strtolower(trim(preg_replace('/[^a-zA-Z0-9]+/', '_', $value), '_'));
@@ -100,7 +111,7 @@ function readXlsx(string $path): array {
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
     $rows = $pdo->query('SELECT * FROM guia_de_acoes WHERE cotacao IS NOT NULL AND cotacao <> 0 AND vpa IS NOT NULL AND vpa <> 0 AND pt_medio IS NOT NULL AND pt_medio <> 0 ORDER BY sigla')->fetchAll();
-    echo json_encode(['status' => 'success', 'data' => $rows, 'custom_columns' => customColumns($pdo)], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
+    echo json_encode(['status' => 'success', 'data' => $rows, 'custom_columns' => customColumns($pdo), 'column_order' => savedColumnOrder($pdo, (int)$_SESSION['user_id'])], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
     exit;
 }
 
@@ -126,6 +137,26 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'PATCH') {
     $input = json_decode(file_get_contents('php://input') ?: '{}', true);
     if (!is_array($input)) {
         failUpload(400, 'Dados inválidos para a atualização.');
+    }
+
+    if (($input['action'] ?? '') === 'reorder_columns') {
+        $order = $input['order'] ?? null;
+        if (!is_array($order) || count($order) > 100 || count($order) !== count(array_unique($order))) {
+            failUpload(422, 'A ordem das colunas é inválida.');
+        }
+        $calculatedColumns = ['vf_div_qa_sad', 'cx_qa', 'vl_qa', 'div_pct_cx', 'cx_db', 'dl_pct_vf', 'vf_qa', 'vf_div_qa_happy'];
+        $allowedColumns = array_merge($columns, $calculatedColumns, array_column(customColumns($pdo), 'nome'));
+        if ($order === [] || !in_array('sigla', $order, true) || array_diff($order, $allowedColumns) !== []) {
+            failUpload(422, 'A lista contém uma coluna indisponível.');
+        }
+        try {
+            $statement = $pdo->prepare('INSERT INTO guia_de_acoes_ordem_colunas (user_id, ordem) VALUES (?, ?) ON DUPLICATE KEY UPDATE ordem = VALUES(ordem)');
+            $statement->execute([(int)$_SESSION['user_id'], json_encode(array_values($order), JSON_UNESCAPED_UNICODE)]);
+        } catch (Throwable $error) {
+            failUpload(500, 'Não foi possível salvar a ordem das colunas.');
+        }
+        echo json_encode(['status' => 'success', 'message' => 'Ordem das colunas salva.'], JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
     if (($input['action'] ?? '') === 'rename_column') {
