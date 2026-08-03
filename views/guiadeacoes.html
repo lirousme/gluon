@@ -47,6 +47,10 @@
         table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
         th, td { padding: 11px 14px; text-align: right; border-top: 1px solid #223149; border-right: 1px solid #1b2a40; white-space: nowrap; }
         th { position: sticky; top: 0; z-index: 2; background: #142238; color: #aebdd2; font-size: 11px; letter-spacing: .025em; text-transform: uppercase; }
+        th[draggable="true"] { cursor: grab; user-select: none; }
+        th[draggable="true"]:active { cursor: grabbing; }
+        th.dragging { opacity: .4; }
+        th.drag-target { box-shadow: inset 3px 0 #65a0ff; }
         .sort-button { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 4px; padding: 0; min-height: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; white-space: nowrap; }
         .sort-button::after { content: '↕'; color: #657892; font-size: 12px; }
         th[aria-sort="ascending"] .sort-button::after { content: '↑'; color: #72a7ff; }
@@ -119,7 +123,7 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&
 const textFields = new Set(['sigla', 'nome_da_empresa', 'setor', 'dt_ultimo_prov', 'freq_div', 'datas_resultados', 'meses_mdi', 'datas_assembleias', 'pauta_assembleias', 'datas_conselhos']);
 const calculatedFields = new Set(['vf_div_qa_sad', 'cx_qa', 'vl_qa', 'div_pct_cx', 'cx_db', 'dl_pct_vf', 'vf_qa', 'vf_div_qa_happy']);
 let customColumns = new Map();
-function renderHeadings() { document.querySelector('#headings').innerHTML = fields.map(field => `<th scope="col" data-field="${escapeHtml(field)}" title="${escapeHtml(field)}${customColumns.has(field) ? ' — clique com o botão direito para gerenciar' : ''}" aria-sort="none"><button class="sort-button" type="button" data-field="${escapeHtml(field)}">${escapeHtml(labels[field] || field.replaceAll('_', ' '))}</button></th>`).join(''); }
+function renderHeadings() { document.querySelector('#headings').innerHTML = fields.map(field => `<th scope="col" draggable="true" data-field="${escapeHtml(field)}" title="Arraste para reordenar. ${escapeHtml(field)}${customColumns.has(field) ? ' — clique com o botão direito para gerenciar' : ''}" aria-sort="${sortField === field ? sortDirection : 'none'}"><button class="sort-button" type="button" data-field="${escapeHtml(field)}">${escapeHtml(labels[field] || field.replaceAll('_', ' '))}</button></th>`).join(''); }
 renderHeadings();
 async function loadRows() {
     const [response, companiesResponse] = await Promise.all([fetch('/api/guiadeacoes'), fetch('/api/empresas')]);
@@ -127,6 +131,9 @@ async function loadRows() {
     if (!response.ok) throw new Error(result.message || 'Não foi possível carregar os registros.');
     result.custom_columns.forEach(column => { customColumns.set(column.nome, column); labels[column.nome] = column.rotulo; if (column.tipo === 'texto') textFields.add(column.nome); });
     fields = fields.filter(field => !customColumns.has(field)).concat(result.custom_columns.map(column => column.nome));
+    const savedOrder = Array.isArray(result.column_order) ? result.column_order : [];
+    const availableFields = new Set(fields);
+    fields = savedOrder.filter(field => availableFields.has(field)).concat(fields.filter(field => !savedOrder.includes(field)));
     renderHeadings();
     companyNames = new Map((companiesResult.empresas || []).map(company => [company.ticker, company.nome]));
     rows = result.data.map(row => ({
@@ -285,12 +292,64 @@ document.querySelector('#delete-column').addEventListener('click', async () => {
 });
 searchInput.addEventListener('input', renderRows);
 document.querySelector('#headings').addEventListener('click', event => {
+    if (suppressSortClick) return;
     const button = event.target.closest('.sort-button');
     if (!button) return;
     sortDirection = sortField === button.dataset.field && sortDirection === 'ascending' ? 'descending' : 'ascending';
     sortField = button.dataset.field;
     document.querySelectorAll('#headings th').forEach(th => th.setAttribute('aria-sort', th.contains(button) ? sortDirection : 'none'));
     renderRows();
+});
+let draggedField = null;
+let suppressSortClick = false;
+const headings = document.querySelector('#headings');
+headings.addEventListener('dragstart', event => {
+    const heading = event.target.closest('th');
+    if (!heading) return;
+    draggedField = heading.dataset.field;
+    heading.classList.add('dragging');
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', draggedField);
+});
+headings.addEventListener('dragover', event => {
+    const heading = event.target.closest('th');
+    if (!heading || !draggedField || heading.dataset.field === draggedField) return;
+    event.preventDefault();
+    headings.querySelectorAll('.drag-target').forEach(item => item.classList.remove('drag-target'));
+    heading.classList.add('drag-target');
+});
+headings.addEventListener('drop', async event => {
+    const target = event.target.closest('th');
+    if (!target || !draggedField || target.dataset.field === draggedField) return;
+    event.preventDefault();
+    const previousFields = [...fields];
+    const from = fields.indexOf(draggedField);
+    let to = fields.indexOf(target.dataset.field);
+    if (from < to) to--;
+    fields.splice(to, 0, fields.splice(from, 1)[0]);
+    suppressSortClick = true;
+    renderHeadings();
+    renderRows();
+    statusBox.className = '';
+    statusBox.textContent = 'Salvando ordem das colunas…';
+    try {
+        const response = await fetch('/api/guiadeacoes', { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'reorder_columns', order: fields }) });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || 'Não foi possível salvar a ordem das colunas.');
+        statusBox.className = 'ok';
+        statusBox.textContent = result.message;
+    } catch (error) {
+        fields = previousFields;
+        renderHeadings();
+        renderRows();
+        statusBox.className = 'error';
+        statusBox.textContent = error.message;
+    }
+});
+headings.addEventListener('dragend', () => {
+    draggedField = null;
+    headings.querySelectorAll('.dragging, .drag-target').forEach(item => item.classList.remove('dragging', 'drag-target'));
+    setTimeout(() => { suppressSortClick = false; }, 0);
 });
 document.querySelectorAll('.filter-button').forEach(filterButton => filterButton.addEventListener('click', () => {
     activeFilter = activeFilter === filterButton.dataset.filter ? null : filterButton.dataset.filter;
