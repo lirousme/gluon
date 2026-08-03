@@ -49,6 +49,7 @@
         .read-button:disabled { background: #35444b; color: var(--muted); cursor: not-allowed; }
         .messages { min-height: 0; flex: 1 1 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 26px clamp(18px, 7vw, 100px); scroll-behavior: smooth; }
         .message { max-width: min(68%, 650px); margin: 0 0 6px auto; padding: 7px 8px 5px; border-radius: 8px 0 8px 8px; background: #005c4b; box-shadow: 0 1px 1px #0004; overflow-wrap: anywhere; }
+        .message.recipient { background: #075eaa; }
         .message-image { display: block; max-width: 100%; max-height: 420px; border-radius: 6px; object-fit: cover; margin-bottom: 5px; }
         .message-text { white-space: pre-wrap; line-height: 1.4; }
         .message-footer { float: right; display: inline-flex; align-items: center; gap: 3px; margin: 4px -3px 0 12px; color: #a7c8c1; }
@@ -73,6 +74,10 @@
         .message-box { min-height: 42px; max-height: 120px; flex: 1; resize: none; border: 0; outline: 0; border-radius: 9px; background: #2a3942; color: #e9edef; padding: 11px 13px; line-height: 20px; }
         .message-box::placeholder { color: #8696a0; }
         .send { background: var(--green); }
+        .sender-toggle { background: var(--green); touch-action: none; user-select: none; -webkit-user-select: none; }
+        .sender-toggle.recipient { background: #1476c9; }
+        .sender-toggle:hover, .sender-toggle:focus-visible { background: #06bd98; }
+        .sender-toggle.recipient:hover, .sender-toggle.recipient:focus-visible { background: #2587d7; }
         .attachment-menu { position: absolute; left: 12px; bottom: calc(100% + 8px); width: 205px; padding: 8px; border-radius: 10px; background: #233138; box-shadow: 0 8px 28px #0009; transform-origin: bottom left; }
         .attachment-menu[hidden] { display: none; }
         .attachment-menu button { width: 100%; display: flex; align-items: center; gap: 12px; padding: 11px; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
@@ -131,7 +136,7 @@
         </header>
         <section class="messages" id="messages"><div class="welcome"><svg viewBox="0 0 24 24"><path d="M16.75 13.96c-.25-.13-1.47-.72-1.7-.81-.23-.08-.39-.13-.56.13-.16.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-2-1.24-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.13-.15.17-.25.25-.42.08-.16.04-.31-.02-.43-.06-.13-.56-1.35-.77-1.84-.2-.49-.41-.42-.56-.43h-.48c-.17 0-.44.06-.67.31-.23.25-.87.85-.87 2.07s.89 2.4 1.01 2.57c.13.16 1.75 2.67 4.24 3.75.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.08.15-1.18-.07-.11-.23-.17-.48-.29M12.04 21.5h-.01a9.45 9.45 0 0 1-4.82-1.32l-.35-.2-3.58.94.96-3.49-.23-.36A9.44 9.44 0 0 1 2.56 12c0-5.2 4.24-9.44 9.46-9.44 2.53 0 4.9.98 6.68 2.77A9.38 9.38 0 0 1 21.46 12c0 5.2-4.24 9.45-9.42 9.45"/></svg><h2>Branch Chats</h2><p>Selecione uma conversa ao lado ou crie um novo chat para começar.</p></div></section>
         <form class="composer hidden" id="composer">
-            <button class="icon-button" id="more" type="button" aria-label="Mais opções" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4m0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4m0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg></button>
+            <button class="icon-button sender-toggle" id="more" type="button" aria-label="Remetente. Clique para alternar; segure por 1,5 segundo para adicionar imagem" aria-pressed="false" aria-expanded="false" title="Remetente · segure para adicionar imagem"><svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4m0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4m0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg></button>
             <div class="attachment-menu" id="attachmentMenu" hidden><button type="button" id="addImage"><svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2M8.5 13.5l2.5 3.01L14.5 12l4.5 6H5z"/></svg>Adicionar imagem</button></div>
             <div class="image-chip" id="imageChip" hidden><span id="imageName"></span><button type="button" id="removeImage" aria-label="Remover imagem">✕</button></div>
             <input id="imageInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" hidden>
@@ -144,7 +149,7 @@
 <dialog id="chatDialog"><form class="modal-form" id="chatForm"><h2>Editar chat</h2><input id="chatTitleInput" type="text" maxlength="120" required aria-label="Nome do chat"><label>Tipo do chat<select id="chatTypeInput" aria-label="Tipo do chat"><option value="0">Chat normal</option><option value="1">Answer in a new chat</option></select></label><div class="modal-actions"><button class="danger" id="deleteChat" type="button">Excluir chat</button><button type="button" data-close="chatDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
 <dialog id="messageDialog"><form class="modal-form" id="messageForm"><h2>Editar mensagem</h2><textarea id="editMessageText" maxlength="10000" placeholder="Mensagem" aria-label="Texto da mensagem"></textarea><div class="edit-image-row" id="currentImageRow" hidden><img id="currentImage" alt="Imagem atual"><label><input id="removeCurrentImage" type="checkbox"> Remover imagem atual</label></div><label>Trocar/adicionar imagem <input id="editMessageImage" type="file" accept="image/jpeg,image/png,image/gif,image/webp"></label><div class="modal-actions"><button class="danger" id="deleteMessage" type="button">Excluir mensagem</button><button type="button" data-close="messageDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
 <script>
-    const state = { chats: [], activeId: null, activeChat: null, editingMessage: null };
+    const state = { chats: [], activeId: null, activeChat: null, editingMessage: null, recipientMode: false };
     const $ = id => document.getElementById(id);
     const api = '/api/branch_chats';
     const timezoneOffset = () => -new Date().getTimezoneOffset();
@@ -175,7 +180,9 @@
         if (!messages.length) { const empty = document.createElement('div'); empty.className = 'welcome'; empty.innerHTML = '<h2>Nenhuma mensagem</h2><p>Envie uma mensagem para começar esta conversa.</p>'; $('messages').append(empty); return; }
         messages.forEach(item => {
             if (Number(item.is_response)) { const divider = document.createElement('div'); divider.className = 'response-divider'; divider.setAttribute('role', 'separator'); const label = document.createElement('span'); label.textContent = 'Resposta'; divider.append(label); $('messages').append(divider); }
-            const bubble = document.createElement('article'); bubble.className = 'message';
+            const recipient = Boolean(Number(item.is_recipient));
+            const bubble = document.createElement('article'); bubble.className = 'message' + (recipient ? ' recipient' : '');
+            bubble.setAttribute('aria-label', recipient ? 'Mensagem do destinatário' : 'Mensagem do remetente');
             if (item.imagem_base64) { const image = document.createElement('img'); image.className = 'message-image'; image.src = item.imagem_base64; image.alt = 'Imagem enviada'; image.loading = 'lazy'; bubble.append(image); }
             if (item.texto) { const text = document.createElement('span'); text.className = 'message-text'; text.textContent = item.texto; bubble.append(text); }
             const footer = document.createElement('span'); footer.className = 'message-footer';
@@ -216,6 +223,7 @@
     async function openChat(id) {
         try {
             const data = await request(api + '?chat_id=' + id); state.activeId = id; state.activeChat = data.chat;
+            setRecipientMode(false);
             $('activeTitle').textContent = data.chat.titulo;
             updateReadStatus(data.chat);
             $('branchCountValue').textContent = data.chat.total_branches;
@@ -232,6 +240,15 @@
         $('chatSubtitle').textContent = available
             ? `${kind} · ${reads} ${reads === 1 ? 'leitura' : 'leituras'} · disponível`
             : `${reads} ${reads === 1 ? 'leitura' : 'leituras'} · próxima em ${formatDateTime(chat.next_view_at)}`;
+    }
+    function setRecipientMode(recipient) {
+        state.recipientMode = recipient;
+        $('attachmentMenu').hidden = true;
+        $('more').classList.toggle('recipient', recipient);
+        $('more').setAttribute('aria-expanded', 'false');
+        $('more').setAttribute('aria-pressed', String(recipient));
+        $('more').setAttribute('aria-label', `${recipient ? 'Destinatário' : 'Remetente'}. Clique para alternar; segure por 1,5 segundo para adicionar imagem`);
+        $('more').title = `${recipient ? 'Destinatário' : 'Remetente'} · segure para adicionar imagem`;
     }
     $('newChat').addEventListener('click', async () => { try { const chat = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_chat', timezone_offset_minutes: timezoneOffset() }) }); await loadChats(); await openChat(chat.id); } catch (error) { toast(error.message); } });
     $('search').addEventListener('input', renderChats);
@@ -252,17 +269,37 @@
     function openMessageEditor(item) { closeMessageMenus(); state.editingMessage = item; $('editMessageText').value = item.texto || ''; $('currentImageRow').hidden = !item.imagem_base64; $('currentImage').src = item.imagem_base64 || ''; $('removeCurrentImage').checked = false; $('editMessageImage').value = ''; $('messageDialog').showModal(); }
     $('messageForm').addEventListener('submit', async event => { event.preventDefault(); const data = new FormData(); data.append('action', 'update_message'); data.append('chat_id', state.activeId); data.append('message_id', state.editingMessage.id); data.append('texto', $('editMessageText').value); data.append('remove_image', $('removeCurrentImage').checked ? '1' : '0'); const image = $('editMessageImage').files[0]; if (image) data.append('imagem', image); try { await request(api, { method: 'POST', body: data }); $('messageDialog').close(); await openChat(state.activeId); await loadChats(); toast('Mensagem atualizada.'); } catch (error) { toast(error.message); } });
     $('deleteMessage').addEventListener('click', async () => { if (!confirm('Excluir esta mensagem permanentemente?')) return; try { await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'delete_message', chat_id: state.activeId, message_id: state.editingMessage.id }) }); $('messageDialog').close(); await openChat(state.activeId); await loadChats(); toast('Mensagem excluída.'); } catch (error) { toast(error.message); } });
-    $('more').addEventListener('click', event => { event.stopPropagation(); const opening = $('attachmentMenu').hidden; $('attachmentMenu').hidden = !opening; $('more').setAttribute('aria-expanded', String(opening)); });
+    let attachmentHoldTimer = null;
+    let attachmentOpenedByHold = false;
+    $('more').addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        attachmentOpenedByHold = false;
+        clearTimeout(attachmentHoldTimer);
+        attachmentHoldTimer = setTimeout(() => {
+            attachmentOpenedByHold = true;
+            $('attachmentMenu').hidden = false;
+            $('more').setAttribute('aria-expanded', 'true');
+        }, 1500);
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => $('more').addEventListener(type, () => clearTimeout(attachmentHoldTimer)));
+    $('more').addEventListener('contextmenu', event => event.preventDefault());
+    $('more').addEventListener('click', event => {
+        event.stopPropagation();
+        if (attachmentOpenedByHold) { attachmentOpenedByHold = false; return; }
+        setRecipientMode(!state.recipientMode);
+        $('attachmentMenu').hidden = true;
+        $('more').setAttribute('aria-expanded', 'false');
+    });
     document.addEventListener('click', () => { $('attachmentMenu').hidden = true; $('more').setAttribute('aria-expanded', 'false'); closeMessageMenus(); });
     $('attachmentMenu').addEventListener('click', event => event.stopPropagation());
-    $('addImage').addEventListener('click', () => { $('imageInput').click(); $('attachmentMenu').hidden = true; });
+    $('addImage').addEventListener('click', () => { $('imageInput').click(); $('attachmentMenu').hidden = true; $('more').setAttribute('aria-expanded', 'false'); });
     $('imageInput').addEventListener('change', () => { const file = $('imageInput').files[0]; $('imageChip').hidden = !file; $('imageName').textContent = file ? file.name : ''; });
     $('removeImage').addEventListener('click', () => { $('imageInput').value = ''; $('imageChip').hidden = true; });
     $('messageBox').addEventListener('input', event => { event.target.style.height = '42px'; event.target.style.height = Math.min(event.target.scrollHeight, 120) + 'px'; });
     $('messageBox').addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); $('composer').requestSubmit(); } });
     $('composer').addEventListener('submit', async event => {
         event.preventDefault(); const text = $('messageBox').value.trim(); const image = $('imageInput').files[0]; if (!text && !image) return;
-        const data = new FormData(); data.append('action', 'send_message'); data.append('chat_id', state.activeId); data.append('texto', text); data.append('create_branch', '0'); data.append('timezone_offset_minutes', timezoneOffset()); if (image) data.append('imagem', image);
+        const data = new FormData(); data.append('action', 'send_message'); data.append('chat_id', state.activeId); data.append('texto', text); data.append('is_recipient', state.recipientMode ? '1' : '0'); data.append('create_branch', '0'); data.append('timezone_offset_minutes', timezoneOffset()); if (image) data.append('imagem', image);
         $('send').disabled = true;
         try {
             const result = await request(api, { method: 'POST', body: data });

@@ -168,7 +168,7 @@ try {
         if ($chatId > 0) {
             $chat = branchChatsFind($pdo, $chatId, $userId);
             $stmt = $pdo->prepare(
-                'SELECT m.id, m.texto_encrypted, m.imagem_encrypted, m.created_at, cm.is_response
+                'SELECT m.id, m.texto_encrypted, m.imagem_encrypted, m.is_recipient, m.created_at, cm.is_response
                  FROM chat_mensagens cm
                  INNER JOIN mensagens m ON m.id = cm.mensagem_id
                  WHERE cm.chat_id = :chat_id AND m.user_id = :user_id
@@ -373,6 +373,7 @@ try {
     $answerInNewChat = (int)$sourceChat['chat_type'] === 1;
     $createBranch = $answerInNewChat || filter_var($input['create_branch'] ?? false, FILTER_VALIDATE_BOOLEAN);
     $text = trim((string)($input['texto'] ?? ''));
+    $isRecipient = filter_var($input['is_recipient'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
     if (mb_strlen($text) > 10000) {
         branchChatsRespond(['status' => 'error', 'message' => 'A mensagem deve ter no máximo 10.000 caracteres.'], 422);
     }
@@ -398,8 +399,8 @@ try {
     }
 
     $encryptedText = $text !== '' ? Security::encryptData($text) : null;
-    $stmt = $pdo->prepare('INSERT INTO mensagens (user_id, texto_encrypted, imagem_encrypted) VALUES (:user_id, :texto_encrypted, :imagem_encrypted)');
-    $stmt->execute([':user_id' => $userId, ':texto_encrypted' => $encryptedText, ':imagem_encrypted' => $encryptedImage]);
+    $stmt = $pdo->prepare('INSERT INTO mensagens (user_id, texto_encrypted, imagem_encrypted, is_recipient) VALUES (:user_id, :texto_encrypted, :imagem_encrypted, :is_recipient)');
+    $stmt->execute([':user_id' => $userId, ':texto_encrypted' => $encryptedText, ':imagem_encrypted' => $encryptedImage, ':is_recipient' => $isRecipient]);
     $messageId = (int)$pdo->lastInsertId();
     $stmt = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position, is_response) SELECT :chat_id, :message_id, COALESCE(MAX(position), 0) + 1, :is_response FROM chat_mensagens WHERE chat_id = :position_chat_id');
     $stmt->execute([':chat_id' => $targetChatId, ':message_id' => $messageId, ':is_response' => $answerInNewChat ? 1 : 0, ':position_chat_id' => $targetChatId]);
@@ -409,6 +410,7 @@ try {
     $message = $stmt->fetch();
     $message['texto'] = $text !== '' ? $text : null;
     $message['imagem_base64'] = $encryptedImage !== null ? Security::decryptData($encryptedImage) : null;
+    $message['is_recipient'] = $isRecipient;
     $pdo->commit();
     branchChatsRespond(['status' => 'success', 'data' => ['message' => $message, 'chat_id' => $targetChatId, 'branched' => $createBranch, 'answered_in_new_chat' => $answerInNewChat]], 201);
 } catch (Throwable $e) {
