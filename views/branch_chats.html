@@ -15,6 +15,11 @@
         .sidebar { min-width: 0; min-height: 0; overflow: hidden; background: var(--bg); border-right: 1px solid var(--line); display: flex; flex-direction: column; }
         .sidebar-header, .chat-header { height: 64px; flex: 0 0 64px; display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--panel); }
         .chat-header { position: relative; z-index: 2; }
+        .chat-header.selection-active > :not(.create-selected-chat) { display: none; }
+        .create-selected-chat { width: 100%; height: 42px; border: 0; border-radius: 9px; background: var(--green); color: #fff; font-weight: 700; cursor: pointer; }
+        .create-selected-chat:hover, .create-selected-chat:focus-visible { background: #06bd98; outline: none; }
+        .create-selected-chat:disabled { background: #35444b; color: var(--muted); cursor: not-allowed; }
+        .create-selected-chat[hidden] { display: none; }
         .brand { display: flex; align-items: center; gap: 11px; min-width: 0; flex: 1; }
         .logo, .avatar { display: grid; place-items: center; flex: none; border-radius: 50%; background: linear-gradient(145deg, #00a884, #087d68); font-weight: 700; }
         .logo { width: 42px; height: 42px; font-size: 21px; }
@@ -63,6 +68,14 @@
         .message-menu[hidden] { display: none; }
         .message-menu button { width: 100%; padding: 10px 11px; border: 0; border-radius: 6px; background: transparent; color: #e9edef; text-align: left; cursor: pointer; }
         .message-menu button:hover, .message-menu button:focus-visible { background: #ffffff12; outline: none; }
+        .message-row { display: flex; align-items: center; gap: 14px; }
+        .message-row .message { flex: 0 1 auto; }
+        .message-row.sent { justify-content: flex-end; }
+        .message-row.received { justify-content: flex-start; }
+        .message-selector { width: 22px; height: 22px; flex: 0 0 22px; margin: 0; accent-color: var(--green); cursor: pointer; }
+        .message-row.selected .message { box-shadow: 0 0 0 2px #00a884, 0 1px 1px #0004; }
+        .messages.selection-active .message-row { cursor: pointer; }
+        .messages.selection-active .message-actions { display: none; }
         .response-divider { display: flex; align-items: center; gap: 12px; margin: 18px 0; color: #d1d7db; font-size: 12px; font-weight: 600; }
         .response-divider::before, .response-divider::after { content: ''; height: 1px; flex: 1; background: #ffffff24; }
         .response-divider span { padding: 6px 12px; border-radius: 7px; background: #182229; box-shadow: 0 1px 1px #0005; }
@@ -133,6 +146,7 @@
             <button class="icon-button branch-count" id="branchCount" type="button" title="Branches criados a partir deste chat" aria-label="Nenhum branch criado">
                 <svg viewBox="0 0 24 24"><path d="M6 3a3 3 0 1 0 2 5.24v1.26A3.5 3.5 0 0 0 11.5 13H16v2.76A3 3 0 1 0 18 15V8.24a3 3 0 1 0-2 0V11h-4.5A1.5 1.5 0 0 1 10 9.5V8.24A3 3 0 0 0 6 3m0 2a1 1 0 1 1 0 2 1 1 0 0 1 0-2m12 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2m0 12a1 1 0 1 1 0 2 1 1 0 0 1 0-2"/></svg><span id="branchCountValue">0</span>
             </button>
+            <button class="create-selected-chat" id="createSelectedChat" type="button" hidden>Criar novo chat</button>
         </header>
         <section class="messages" id="messages"><div class="welcome"><svg viewBox="0 0 24 24"><path d="M16.75 13.96c-.25-.13-1.47-.72-1.7-.81-.23-.08-.39-.13-.56.13-.16.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-2-1.24-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.13-.15.17-.25.25-.42.08-.16.04-.31-.02-.43-.06-.13-.56-1.35-.77-1.84-.2-.49-.41-.42-.56-.43h-.48c-.17 0-.44.06-.67.31-.23.25-.87.85-.87 2.07s.89 2.4 1.01 2.57c.13.16 1.75 2.67 4.24 3.75.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.08.15-1.18-.07-.11-.23-.17-.48-.29M12.04 21.5h-.01a9.45 9.45 0 0 1-4.82-1.32l-.35-.2-3.58.94.96-3.49-.23-.36A9.44 9.44 0 0 1 2.56 12c0-5.2 4.24-9.44 9.46-9.44 2.53 0 4.9.98 6.68 2.77A9.38 9.38 0 0 1 21.46 12c0 5.2-4.24 9.45-9.42 9.45"/></svg><h2>Branch Chats</h2><p>Selecione uma conversa ao lado ou crie um novo chat para começar.</p></div></section>
         <form class="composer hidden" id="composer">
@@ -149,7 +163,7 @@
 <dialog id="chatDialog"><form class="modal-form" id="chatForm"><h2>Editar chat</h2><input id="chatTitleInput" type="text" maxlength="120" required aria-label="Nome do chat"><label>Tipo do chat<select id="chatTypeInput" aria-label="Tipo do chat"><option value="0">Chat normal</option><option value="1">Answer in a new chat</option></select></label><div class="modal-actions"><button class="danger" id="deleteChat" type="button">Excluir chat</button><button type="button" data-close="chatDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
 <dialog id="messageDialog"><form class="modal-form" id="messageForm"><h2>Editar mensagem</h2><textarea id="editMessageText" maxlength="10000" placeholder="Mensagem" aria-label="Texto da mensagem"></textarea><div class="edit-image-row" id="currentImageRow" hidden><img id="currentImage" alt="Imagem atual"><label><input id="removeCurrentImage" type="checkbox"> Remover imagem atual</label></div><label>Trocar/adicionar imagem <input id="editMessageImage" type="file" accept="image/jpeg,image/png,image/gif,image/webp"></label><div class="modal-actions"><button class="danger" id="deleteMessage" type="button">Excluir mensagem</button><button type="button" data-close="messageDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
 <script>
-    const state = { chats: [], activeId: null, activeChat: null, editingMessage: null, recipientMode: false };
+    const state = { chats: [], activeId: null, activeChat: null, editingMessage: null, recipientMode: false, selectionMode: false, selectedMessages: new Set() };
     const $ = id => document.getElementById(id);
     const api = '/api/branch_chats';
     const timezoneOffset = () => -new Date().getTimezoneOffset();
@@ -181,6 +195,8 @@
         messages.forEach(item => {
             if (Number(item.is_response)) { const divider = document.createElement('div'); divider.className = 'response-divider'; divider.setAttribute('role', 'separator'); const label = document.createElement('span'); label.textContent = 'Resposta'; divider.append(label); $('messages').append(divider); }
             const recipient = Boolean(Number(item.is_recipient));
+            const row = document.createElement('div'); row.className = 'message-row ' + (recipient ? 'received' : 'sent');
+            const selector = document.createElement('input'); selector.type = 'checkbox'; selector.className = 'message-selector'; selector.hidden = !state.selectionMode; selector.checked = state.selectedMessages.has(Number(item.id)); selector.setAttribute('aria-label', 'Selecionar mensagem');
             const bubble = document.createElement('article'); bubble.className = 'message' + (recipient ? ' recipient' : '');
             bubble.setAttribute('aria-label', recipient ? 'Mensagem do destinatário' : 'Mensagem do remetente');
             if (item.imagem_base64) { const image = document.createElement('img'); image.className = 'message-image'; image.src = item.imagem_base64; image.alt = 'Imagem enviada'; image.loading = 'lazy'; bubble.append(image); }
@@ -192,6 +208,7 @@
             const menu = document.createElement('span'); menu.className = 'message-menu'; menu.hidden = true;
             const single = document.createElement('button'); single.type = 'button'; single.textContent = 'Branchar mensagem';
             const through = document.createElement('button'); through.type = 'button'; through.textContent = 'Branchar a partir daqui';
+            const select = document.createElement('button'); select.type = 'button'; select.textContent = 'Selecionar';
             const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Editar';
             more.addEventListener('click', event => {
                 event.stopPropagation();
@@ -205,11 +222,32 @@
             menu.addEventListener('click', event => event.stopPropagation());
             single.addEventListener('click', () => branchFromMessage(item.id, 'single'));
             through.addEventListener('click', () => branchFromMessage(item.id, 'through'));
+            select.addEventListener('click', () => enterSelectionMode(item.id));
             edit.addEventListener('click', () => openMessageEditor(item));
-            menu.append(edit, single, through); actions.append(more, menu); footer.append(time, actions); bubble.append(footer); $('messages').append(bubble);
+            selector.addEventListener('change', () => toggleMessageSelection(item.id, selector.checked));
+            row.addEventListener('click', event => { if (state.selectionMode && event.target !== selector) { selector.checked = !selector.checked; toggleMessageSelection(item.id, selector.checked); } });
+            menu.append(select, edit, single, through); actions.append(more, menu); footer.append(time, actions); bubble.append(footer);
+            row.classList.toggle('selected', selector.checked);
+            if (recipient) row.append(selector, bubble); else row.append(bubble, selector);
+            $('messages').append(row);
         });
         requestAnimationFrame(() => $('messages').scrollTop = $('messages').scrollHeight);
     }
+    function updateSelectionHeader() {
+        $('chatHeader').classList.toggle('selection-active', state.selectionMode);
+        $('messages').classList.toggle('selection-active', state.selectionMode);
+        $('createSelectedChat').hidden = !state.selectionMode;
+        $('createSelectedChat').disabled = state.selectedMessages.size === 0;
+        $('createSelectedChat').textContent = `Criar novo chat (${state.selectedMessages.size})`;
+    }
+    function enterSelectionMode(messageId) {
+        closeMessageMenus(); state.selectionMode = true; state.selectedMessages = new Set([Number(messageId)]); renderMessages(state.currentMessages || []); updateSelectionHeader();
+    }
+    function toggleMessageSelection(messageId, selected) {
+        const id = Number(messageId); selected ? state.selectedMessages.add(id) : state.selectedMessages.delete(id);
+        document.querySelectorAll('.message-selector').forEach(input => input.closest('.message-row').classList.toggle('selected', input.checked)); updateSelectionHeader();
+    }
+    function leaveSelectionMode() { state.selectionMode = false; state.selectedMessages.clear(); updateSelectionHeader(); }
     function closeMessageMenus(except) {
         document.querySelectorAll('.message-menu').forEach(menu => { if (menu !== except) { menu.hidden = true; menu.previousElementSibling?.setAttribute('aria-expanded', 'false'); } });
     }
@@ -223,6 +261,7 @@
     async function openChat(id, preserveRecipientMode = false) {
         try {
             const data = await request(api + '?chat_id=' + id); state.activeId = id; state.activeChat = data.chat;
+            leaveSelectionMode(); state.currentMessages = data.mensagens;
             if (!preserveRecipientMode) setRecipientMode(false);
             $('activeTitle').textContent = data.chat.titulo;
             updateReadStatus(data.chat);
@@ -254,6 +293,14 @@
         $('more').title = `${recipient ? 'Destinatário' : 'Remetente'} · segure para adicionar imagem`;
     }
     $('newChat').addEventListener('click', async () => { try { const chat = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_chat', timezone_offset_minutes: timezoneOffset() }) }); await loadChats(); await openChat(chat.id); } catch (error) { toast(error.message); } });
+    $('createSelectedChat').addEventListener('click', async () => {
+        if (!state.selectedMessages.size) return;
+        $('createSelectedChat').disabled = true;
+        try {
+            const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'branch_selected_messages', chat_id: state.activeId, message_ids: [...state.selectedMessages], timezone_offset_minutes: timezoneOffset() }) });
+            await loadChats(); await openChat(Number(result.chat_id)); toast('Novo chat criado com as mensagens selecionadas.');
+        } catch (error) { $('createSelectedChat').disabled = false; toast(error.message); }
+    });
     $('search').addEventListener('input', renderChats);
     $('back').addEventListener('click', () => $('app').classList.remove('chat-open'));
     $('branchCount').addEventListener('click', () => { const total = Number(state.activeChat?.total_branches || 0); toast(total ? `${total} ${total === 1 ? 'chat foi criado' : 'chats foram criados'} a partir desta conversa.` : 'Nenhum chat foi criado a partir desta conversa.'); });
