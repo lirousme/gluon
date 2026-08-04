@@ -416,6 +416,53 @@ try {
         branchChatsRespond(['status' => 'success', 'data' => ['chat_id' => $targetChatId, 'branch_mode' => $branchMode]], 201);
     }
 
+    if ($action === 'branch_selected_messages') {
+        $sourceChatId = (int)($input['chat_id'] ?? 0);
+        $messageIds = array_values(array_unique(array_filter(
+            array_map('intval', is_array($input['message_ids'] ?? null) ? $input['message_ids'] : []),
+            static fn (int $id): bool => $id > 0
+        )));
+        branchChatsFind($pdo, $sourceChatId, $userId);
+        if ($messageIds === []) {
+            branchChatsRespond(['status' => 'error', 'message' => 'Selecione pelo menos uma mensagem.'], 422);
+        }
+
+        $placeholders = implode(',', array_fill(0, count($messageIds), '?'));
+        $stmt = $pdo->prepare(
+            "SELECT cm.mensagem_id
+             FROM chat_mensagens cm
+             INNER JOIN mensagens m ON m.id = cm.mensagem_id
+             WHERE cm.chat_id = ? AND m.user_id = ? AND cm.mensagem_id IN ($placeholders)
+             ORDER BY cm.position"
+        );
+        $stmt->execute(array_merge([$sourceChatId, $userId], $messageIds));
+        $validMessageIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+        if (count($validMessageIds) !== count($messageIds)) {
+            branchChatsRespond(['status' => 'error', 'message' => 'Uma ou mais mensagens não pertencem a este chat.'], 422);
+        }
+
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo) VALUES (:user_id, :parent_id, :titulo)');
+        $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
+        $targetChatId = (int)$pdo->lastInsertId();
+        $insert = $pdo->prepare(
+            'INSERT INTO chat_mensagens (chat_id, mensagem_id, position, is_response)
+             SELECT :target_id, mensagem_id, :position, is_response
+             FROM chat_mensagens
+             WHERE chat_id = :source_id AND mensagem_id = :message_id'
+        );
+        foreach ($validMessageIds as $position => $validMessageId) {
+            $insert->execute([
+                ':target_id' => $targetChatId,
+                ':position' => $position + 1,
+                ':source_id' => $sourceChatId,
+                ':message_id' => $validMessageId,
+            ]);
+        }
+        $pdo->commit();
+        branchChatsRespond(['status' => 'success', 'data' => ['chat_id' => $targetChatId]], 201);
+    }
+
     if ($action !== 'send_message') {
         branchChatsRespond(['status' => 'error', 'message' => 'Ação inválida.'], 422);
     }
