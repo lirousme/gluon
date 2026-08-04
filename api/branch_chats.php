@@ -21,6 +21,35 @@ function branchChatsRespond(array $payload, int $status = 200): void
     exit;
 }
 
+function branchChatsCanReviewEarly(PDO $pdo, int $chatId, int $userId): bool
+{
+    $stmt = $pdo->prepare(
+        'SELECT c.id
+         FROM chats c
+         INNER JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
+         WHERE c.user_id = :user_id
+           AND cv.last_viewed_at IS NOT NULL
+           AND CURRENT_TIMESTAMP < DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY)
+           AND NOT EXISTS (
+               SELECT 1
+               FROM chats due_chat
+               LEFT JOIN chat_views due_view ON due_view.chat_id = due_chat.id AND due_view.user_id = :due_view_user_id
+               WHERE due_chat.user_id = :due_user_id
+                 AND (due_view.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= DATE_ADD(due_view.last_viewed_at, INTERVAL due_view.view_count DAY))
+           )
+         ORDER BY DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY) ASC, c.id ASC
+         LIMIT 1'
+    );
+    $stmt->execute([
+        ':view_user_id' => $userId,
+        ':user_id' => $userId,
+        ':due_view_user_id' => $userId,
+        ':due_user_id' => $userId,
+    ]);
+
+    return (int)$stmt->fetchColumn() === $chatId;
+}
+
 function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
 {
     $stmt = $pdo->prepare(
@@ -39,6 +68,11 @@ function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
     $chat = $stmt->fetch();
     if (!$chat) {
         branchChatsRespond(['status' => 'error', 'message' => 'Chat não encontrado.'], 404);
+    }
+    $chat['early_review'] = false;
+    if (!(bool)$chat['can_mark_viewed'] && branchChatsCanReviewEarly($pdo, $chatId, $userId)) {
+        $chat['can_mark_viewed'] = 1;
+        $chat['early_review'] = true;
     }
     return $chat;
 }
@@ -315,7 +349,7 @@ try {
         );
         $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
         $view = $stmt->fetch();
-        if (!(bool)$view['can_mark_viewed']) {
+        if (!(bool)$view['can_mark_viewed'] && !branchChatsCanReviewEarly($pdo, $chatId, $userId)) {
             $pdo->rollBack();
             branchChatsRespond(['status' => 'error', 'message' => 'A próxima leitura ainda não está disponível.'], 409);
         }
