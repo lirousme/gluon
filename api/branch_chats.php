@@ -54,6 +54,7 @@ function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
 {
     $stmt = $pdo->prepare(
         'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.created_at, c.updated_at,
+                cr.reference_encrypted,
                 COALESCE(cv.view_count, 0) AS view_count, cv.last_viewed_at,
                 CASE WHEN cv.last_viewed_at IS NULL THEN NULL
                      ELSE DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY) END AS next_view_at,
@@ -62,6 +63,7 @@ function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
                 (SELECT COUNT(*) FROM chats child WHERE child.parent_chat_id = c.id AND child.user_id = c.user_id) AS total_branches
          FROM chats c
          LEFT JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
+         LEFT JOIN chat_references cr ON cr.chat_id = c.id
          WHERE c.id = :id AND c.user_id = :user_id LIMIT 1'
     );
     $stmt->execute([':id' => $chatId, ':user_id' => $userId, ':view_user_id' => $userId]);
@@ -69,6 +71,8 @@ function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
     if (!$chat) {
         branchChatsRespond(['status' => 'error', 'message' => 'Chat não encontrado.'], 404);
     }
+    $chat['reference'] = branchChatsDecryptMessageText($chat['reference_encrypted'] ?? null);
+    unset($chat['reference_encrypted']);
     $chat['early_review'] = false;
     if (!(bool)$chat['can_mark_viewed'] && branchChatsCanReviewEarly($pdo, $chatId, $userId)) {
         $chat['can_mark_viewed'] = 1;
@@ -274,17 +278,33 @@ try {
 
     if ($action === 'update_chat') {
         $chatId = (int)($input['chat_id'] ?? 0);
-        branchChatsFind($pdo, $chatId, $userId);
+        $currentChat = branchChatsFind($pdo, $chatId, $userId);
         $title = trim((string)($input['titulo'] ?? ''));
         if ($title === '' || mb_strlen($title) > 120) {
             branchChatsRespond(['status' => 'error', 'message' => 'Informe um nome de até 120 caracteres.'], 422);
         }
         $chatType = (int)($input['chat_type'] ?? 0);
-        if (!in_array($chatType, [0, 1], true)) {
+        if ((int)$currentChat['chat_type'] === 3) {
+            $chatType = 3;
+        } elseif (!in_array($chatType, [0, 1, 2], true)) {
             branchChatsRespond(['status' => 'error', 'message' => 'Tipo de chat inválido.'], 422);
         }
+        $reference = trim((string)($input['reference'] ?? ''));
+        if ($chatType === 2 && ($reference === '' || mb_strlen($reference) > 10000)) {
+            branchChatsRespond(['status' => 'error', 'message' => 'Informe uma referência de até 10.000 caracteres.'], 422);
+        }
+        $pdo->beginTransaction();
         $pdo->prepare('UPDATE chats SET titulo = :titulo, chat_type = :chat_type WHERE id = :id AND user_id = :user_id')->execute([':titulo' => $title, ':chat_type' => $chatType, ':id' => $chatId, ':user_id' => $userId]);
-        branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId, 'titulo' => $title, 'chat_type' => $chatType]]);
+        if ($chatType === 2) {
+            $pdo->prepare('INSERT INTO chat_references (chat_id, reference_encrypted) VALUES (:chat_id, :reference) ON DUPLICATE KEY UPDATE reference_encrypted = VALUES(reference_encrypted)')->execute([
+                ':chat_id' => $chatId,
+                ':reference' => Security::encryptData($reference),
+            ]);
+        } elseif ($chatType !== 3) {
+            $pdo->prepare('DELETE FROM chat_references WHERE chat_id = :chat_id')->execute([':chat_id' => $chatId]);
+        }
+        $pdo->commit();
+        branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId, 'titulo' => $title, 'chat_type' => $chatType, 'reference' => $chatType === 2 ? $reference : ($currentChat['reference'] ?? null)]]);
     }
 
     if ($action === 'delete_chat') {
@@ -469,7 +489,9 @@ try {
 
     $sourceChatId = (int)($input['chat_id'] ?? 0);
     $sourceChat = branchChatsFind($pdo, $sourceChatId, $userId);
-    $answerInNewChat = (int)$sourceChat['chat_type'] === 1;
+    $sourceChatType = (int)$sourceChat['chat_type'];
+    $answerInNewChat = in_array($sourceChatType, [1, 2], true);
+    $referenceChat = $sourceChatType === 2;
     $createBranch = $answerInNewChat || filter_var($input['create_branch'] ?? false, FILTER_VALIDATE_BOOLEAN);
     $text = trim((string)($input['texto'] ?? ''));
     $isRecipient = filter_var($input['is_recipient'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
@@ -490,11 +512,16 @@ try {
     $pdo->beginTransaction();
     $targetChatId = $sourceChatId;
     if ($createBranch) {
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo) VALUES (:user_id, :parent_id, :titulo)');
-        $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, chat_type) VALUES (:user_id, :parent_id, :titulo, :chat_type)');
+        $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input)), ':chat_type' => $referenceChat ? 3 : 0]);
         $targetChatId = (int)$pdo->lastInsertId();
-        $stmt = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position) SELECT :target_id, mensagem_id, position FROM chat_mensagens WHERE chat_id = :source_id');
-        $stmt->execute([':target_id' => $targetChatId, ':source_id' => $sourceChatId]);
+        if ($referenceChat) {
+            $stmt = $pdo->prepare('INSERT INTO chat_references (chat_id, reference_encrypted) SELECT :target_id, reference_encrypted FROM chat_references WHERE chat_id = :source_id');
+            $stmt->execute([':target_id' => $targetChatId, ':source_id' => $sourceChatId]);
+        } else {
+            $stmt = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position) SELECT :target_id, mensagem_id, position FROM chat_mensagens WHERE chat_id = :source_id');
+            $stmt->execute([':target_id' => $targetChatId, ':source_id' => $sourceChatId]);
+        }
     }
 
     $encryptedText = $text !== '' ? Security::encryptData($text) : null;
@@ -502,7 +529,7 @@ try {
     $stmt->execute([':user_id' => $userId, ':texto_encrypted' => $encryptedText, ':imagem_encrypted' => $encryptedImage, ':is_recipient' => $isRecipient]);
     $messageId = (int)$pdo->lastInsertId();
     $stmt = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position, is_response) SELECT :chat_id, :message_id, COALESCE(MAX(position), 0) + 1, :is_response FROM chat_mensagens WHERE chat_id = :position_chat_id');
-    $stmt->execute([':chat_id' => $targetChatId, ':message_id' => $messageId, ':is_response' => $answerInNewChat ? 1 : 0, ':position_chat_id' => $targetChatId]);
+    $stmt->execute([':chat_id' => $targetChatId, ':message_id' => $messageId, ':is_response' => $answerInNewChat && !$referenceChat ? 1 : 0, ':position_chat_id' => $targetChatId]);
     $pdo->prepare('UPDATE chats SET updated_at = CURRENT_TIMESTAMP WHERE id = :id')->execute([':id' => $targetChatId]);
     $stmt = $pdo->prepare('SELECT id, created_at FROM mensagens WHERE id = :id');
     $stmt->execute([':id' => $messageId]);
