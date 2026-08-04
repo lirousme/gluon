@@ -193,6 +193,24 @@ try {
         );
         $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId]);
         $chats = $stmt->fetchAll();
+        if (!$chats) {
+            $stmt = $pdo->prepare(
+                'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.created_at, c.updated_at,
+                        COALESCE(cv.view_count, 0) AS view_count,
+                        (SELECT m.texto_encrypted FROM chat_mensagens cm INNER JOIN mensagens m ON m.id = cm.mensagem_id WHERE cm.chat_id = c.id ORDER BY cm.position DESC LIMIT 1) AS ultima_mensagem_encrypted,
+                        (SELECT COUNT(*) FROM chat_mensagens cm WHERE cm.chat_id = c.id) AS total_mensagens,
+                        (SELECT COUNT(*) FROM chats child WHERE child.parent_chat_id = c.id AND child.user_id = c.user_id) AS total_branches
+                 FROM chats c
+                 INNER JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
+                 WHERE c.user_id = :user_id
+                   AND cv.last_viewed_at IS NOT NULL
+                   AND CURRENT_TIMESTAMP < DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY)
+                 ORDER BY DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY) ASC, c.id ASC
+                 LIMIT 1'
+            );
+            $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId]);
+            $chats = $stmt->fetchAll();
+        }
         foreach ($chats as &$chat) {
             $chat['ultima_mensagem'] = branchChatsDecryptMessageText($chat['ultima_mensagem_encrypted'] ?? null);
             unset($chat['ultima_mensagem_encrypted']);
