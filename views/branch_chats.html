@@ -237,7 +237,10 @@
         $('markViewed').title = available ? 'Registrar esta leitura' : `Próxima leitura em ${formatDateTime(chat.next_view_at)}`;
         const kind = chat.parent_chat_id ? 'branch de outra conversa' : 'conversa privada';
         const reads = Number(chat.view_count || 0);
-        $('chatSubtitle').textContent = available
+        const earlyReview = available && Boolean(Number(chat.early_review)) && chat.next_view_at;
+        $('chatSubtitle').textContent = earlyReview
+            ? `${kind} · ${reads} ${reads === 1 ? 'leitura' : 'leituras'} · disponível · próxima em ${formatDateTime(chat.next_view_at)}`
+            : available
             ? `${kind} · ${reads} ${reads === 1 ? 'leitura' : 'leituras'} · disponível`
             : `${reads} ${reads === 1 ? 'leitura' : 'leituras'} · próxima em ${formatDateTime(chat.next_view_at)}`;
     }
