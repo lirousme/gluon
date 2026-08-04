@@ -78,7 +78,7 @@
         .messages.selection-active .message-actions { display: none; }
         .response-divider { display: flex; align-items: center; gap: 12px; margin: 18px 0; color: #d1d7db; font-size: 12px; font-weight: 600; }
         .response-divider::before, .response-divider::after { content: ''; height: 1px; flex: 1; background: #ffffff24; }
-        .response-divider span { padding: 6px 12px; border-radius: 7px; background: #182229; box-shadow: 0 1px 1px #0005; }
+        .response-divider span { padding: 6px 12px; border-radius: 7px; background: #182229; box-shadow: 0 1px 1px #0005; white-space: pre-wrap; }
         .welcome { margin: auto; max-width: 480px; padding: 30px; color: var(--muted); text-align: center; line-height: 1.6; }
         .welcome svg { width: 70px; height: 70px; color: #40525c; }
         .welcome h2 { color: #d1d7db; font-size: 26px; margin: 12px 0; }
@@ -108,6 +108,7 @@
         .modal-form h2 { font-size: 20px; font-weight: 600; }
         .modal-form input[type="text"], .modal-form textarea, .modal-form select { width: 100%; border: 1px solid #3b4a52; border-radius: 8px; outline: none; background: var(--bg); color: inherit; padding: 11px 12px; }
         .modal-form label { display: grid; gap: 7px; color: var(--muted); }
+        .modal-form label[hidden] { display: none; }
         .modal-form textarea { min-height: 110px; resize: vertical; }
         .modal-actions { display: flex; justify-content: flex-end; gap: 9px; }
         .modal-actions button { border: 0; border-radius: 8px; padding: 10px 14px; background: #35444b; cursor: pointer; }
@@ -160,7 +161,7 @@
     </main>
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
-<dialog id="chatDialog"><form class="modal-form" id="chatForm"><h2>Editar chat</h2><input id="chatTitleInput" type="text" maxlength="120" required aria-label="Nome do chat"><label>Tipo do chat<select id="chatTypeInput" aria-label="Tipo do chat"><option value="0">Chat normal</option><option value="1">Answer in a new chat</option></select></label><div class="modal-actions"><button class="danger" id="deleteChat" type="button">Excluir chat</button><button type="button" data-close="chatDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
+<dialog id="chatDialog"><form class="modal-form" id="chatForm"><h2>Editar chat</h2><input id="chatTitleInput" type="text" maxlength="120" required aria-label="Nome do chat"><label id="chatTypeLabel">Tipo do chat<select id="chatTypeInput" aria-label="Tipo do chat"><option value="0">Chat normal</option><option value="1">Answer in a new chat</option><option value="2">Referência</option></select></label><label id="chatReferenceLabel" hidden>Texto da referência<textarea id="chatReferenceInput" maxlength="10000" placeholder="Digite a referência"></textarea></label><div class="modal-actions"><button class="danger" id="deleteChat" type="button">Excluir chat</button><button type="button" data-close="chatDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
 <dialog id="messageDialog"><form class="modal-form" id="messageForm"><h2>Editar mensagem</h2><textarea id="editMessageText" maxlength="10000" placeholder="Mensagem" aria-label="Texto da mensagem"></textarea><div class="edit-image-row" id="currentImageRow" hidden><img id="currentImage" alt="Imagem atual"><label><input id="removeCurrentImage" type="checkbox"> Remover imagem atual</label></div><label>Trocar/adicionar imagem <input id="editMessageImage" type="file" accept="image/jpeg,image/png,image/gif,image/webp"></label><div class="modal-actions"><button class="danger" id="deleteMessage" type="button">Excluir mensagem</button><button type="button" data-close="messageDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
 <script>
     const state = { chats: [], activeId: null, activeChat: null, editingMessage: null, recipientMode: false, selectionMode: false, selectedMessages: new Set() };
@@ -191,6 +192,7 @@
     async function loadChats() { try { state.chats = await request(api); renderChats(); } catch (error) { toast(error.message); } }
     function renderMessages(messages) {
         $('messages').replaceChildren();
+        if ([2, 3].includes(Number(state.activeChat?.chat_type)) && state.activeChat?.reference) { const divider = document.createElement('div'); divider.className = 'response-divider'; divider.setAttribute('role', 'separator'); const label = document.createElement('span'); label.textContent = state.activeChat.reference; divider.append(label); $('messages').append(divider); }
         if (!messages.length) { const empty = document.createElement('div'); empty.className = 'welcome'; empty.innerHTML = '<h2>Nenhuma mensagem</h2><p>Envie uma mensagem para começar esta conversa.</p>'; $('messages').append(empty); return; }
         messages.forEach(item => {
             if (Number(item.is_response)) { const divider = document.createElement('div'); divider.className = 'response-divider'; divider.setAttribute('role', 'separator'); const label = document.createElement('span'); label.textContent = 'Resposta'; divider.append(label); $('messages').append(divider); }
@@ -312,9 +314,11 @@
             toast(`Leitura ${view.view_count} registrada.`);
         } catch (error) { updateReadStatus(state.activeChat); toast(error.message); }
     });
-    $('editChat').addEventListener('click', () => { $('chatTitleInput').value = state.activeChat?.titulo || ''; $('chatTypeInput').value = String(state.activeChat?.chat_type || 0); $('chatDialog').showModal(); $('chatTitleInput').select(); });
+    function updateReferenceField() { $('chatReferenceLabel').hidden = $('chatTypeInput').value !== '2'; }
+    $('chatTypeInput').addEventListener('change', updateReferenceField);
+    $('editChat').addEventListener('click', () => { const chatType = Number(state.activeChat?.chat_type || 0); $('chatTitleInput').value = state.activeChat?.titulo || ''; $('chatTypeLabel').hidden = chatType === 3; $('chatTypeInput').value = chatType === 3 ? '0' : String(chatType); $('chatReferenceInput').value = state.activeChat?.reference || ''; updateReferenceField(); $('chatDialog').showModal(); $('chatTitleInput').select(); });
     document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => $(button.dataset.close).close()));
-    $('chatForm').addEventListener('submit', async event => { event.preventDefault(); try { const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'update_chat', chat_id: state.activeId, titulo: $('chatTitleInput').value, chat_type: Number($('chatTypeInput').value) }) }); state.activeChat.titulo = result.titulo; state.activeChat.chat_type = result.chat_type; $('activeTitle').textContent = result.titulo; $('chatDialog').close(); await loadChats(); toast('Chat atualizado.'); } catch (error) { toast(error.message); } });
+    $('chatForm').addEventListener('submit', async event => { event.preventDefault(); try { const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'update_chat', chat_id: state.activeId, titulo: $('chatTitleInput').value, chat_type: Number($('chatTypeInput').value), reference: $('chatReferenceInput').value }) }); state.activeChat.titulo = result.titulo; state.activeChat.chat_type = result.chat_type; state.activeChat.reference = result.reference; $('activeTitle').textContent = result.titulo; renderMessages(state.currentMessages || []); $('chatDialog').close(); await loadChats(); toast('Chat atualizado.'); } catch (error) { toast(error.message); } });
     $('deleteChat').addEventListener('click', async () => { if (!confirm('Excluir este chat permanentemente?')) return; try { await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'delete_chat', chat_id: state.activeId }) }); $('chatDialog').close(); state.activeId = null; state.activeChat = null; $('chatHeader').hidden = true; $('composer').classList.add('hidden'); $('app').classList.remove('chat-open'); await loadChats(); toast('Chat excluído.'); } catch (error) { toast(error.message); } });
     function openMessageEditor(item) { closeMessageMenus(); state.editingMessage = item; $('editMessageText').value = item.texto || ''; $('currentImageRow').hidden = !item.imagem_base64; $('currentImage').src = item.imagem_base64 || ''; $('removeCurrentImage').checked = false; $('editMessageImage').value = ''; $('messageDialog').showModal(); }
     $('messageForm').addEventListener('submit', async event => { event.preventDefault(); const data = new FormData(); data.append('action', 'update_message'); data.append('chat_id', state.activeId); data.append('message_id', state.editingMessage.id); data.append('texto', $('editMessageText').value); data.append('remove_image', $('removeCurrentImage').checked ? '1' : '0'); const image = $('editMessageImage').files[0]; if (image) data.append('imagem', image); try { await request(api, { method: 'POST', body: data }); $('messageDialog').close(); await openChat(state.activeId); await loadChats(); toast('Mensagem atualizada.'); } catch (error) { toast(error.message); } });
