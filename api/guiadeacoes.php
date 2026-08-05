@@ -124,10 +124,8 @@ function readXlsx(string $path): array {
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
     $databaseColumns = databaseColumns($pdo);
-    $filters = array_values(array_filter(['cotacao', 'vpa', 'pt_medio'], static fn($column) => in_array($column, $databaseColumns, true)));
-    $where = $filters ? ' WHERE ' . implode(' AND ', array_map(static fn($column) => "`{$column}` IS NOT NULL AND `{$column}` <> 0", $filters)) : '';
     $order = in_array('sigla', $databaseColumns, true) ? ' ORDER BY sigla' : '';
-    $rows = $pdo->query("SELECT * FROM guia_de_acoes{$where}{$order}")->fetchAll();
+    $rows = $pdo->query("SELECT * FROM guia_de_acoes{$order}")->fetchAll();
     echo json_encode(['status' => 'success', 'data' => $rows, 'custom_columns' => customColumns($pdo), 'deleted_columns' => deletedColumns($pdo), 'database_columns' => $databaseColumns, 'column_order' => savedColumnOrder($pdo, (int)$_SESSION['user_id'])], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
     exit;
 }
