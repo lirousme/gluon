@@ -165,11 +165,7 @@ async function loadRows() {
         vf_div_qa_happy: row.ev === null || row.ev === '' || row.qtde_acoes === null || row.qtde_acoes === '' || Number(row.qtde_acoes) === 0
             ? null
             : (Number(row.ev) - (Number(row.div_liquida) || 0)) / Number(row.qtde_acoes)
-    })).filter(row => row.payout_medio !== null && row.payout_medio !== '' && Number(row.payout_medio) > 0
-        && row.vpa !== null && row.vpa !== '' && Number(row.vpa) !== 0
-        && row.pt_medio !== null && row.pt_medio !== '' && Number(row.pt_medio) !== 0
-        && row.vol_med_3m !== null && row.vol_med_3m !== '' && Number(row.vol_med_3m) !== 0
-        && row.dy_12m !== null && row.dy_12m !== '' && Number(row.dy_12m) !== 0);
+    }));
     renderRows();
 }
 function renderRows() {
@@ -177,7 +173,7 @@ function renderRows() {
     const filteredRows = rows.filter(row => {
         const hasValidAverageTarget = row.pt_medio !== null && row.pt_medio !== '' && Number(row.pt_medio) >= Number(row.cotacao);
         const hasQuoteBelowAverageTarget = row.pt_medio !== null && row.pt_medio !== '' && Number(row.cotacao) < Number(row.pt_medio);
-        if (activeFilter === 'vpa') return Number(row.vpa) > Number(row.cotacao) && hasValidAverageTarget;
+        if (activeFilter === 'vpa') return Number(row.vpa) > Number(row.cotacao);
         if (activeFilter === 'vpa-div') return Number(row.vpa) > Number(row.cotacao) && hasValidAverageTarget && (row.div_liquida === null || Number(row.div_liquida) <= 0);
         if (activeFilter === 'vf-div-qa-sad') return row.vf_div_qa_sad !== null && hasQuoteBelowAverageTarget && Number(row.vf_div_qa_sad) > Number(row.cotacao) && Number(row.vf_div_qa_sad) > Number(row.pt_medio);
         if (activeFilter === 'vf-div-qa-happy') return row.vf_div_qa_happy !== null && hasQuoteBelowAverageTarget && Number(row.vf_div_qa_happy) > Number(row.cotacao) && Number(row.vf_div_qa_happy) > Number(row.pt_medio);
@@ -363,7 +359,7 @@ document.querySelectorAll('.filter-button').forEach(filterButton => filterButton
         item.setAttribute('aria-pressed', String(isActive));
     });
     filterDescription.textContent = activeFilter === 'vpa'
-        ? 'Filtro ativo: VPA > Cotação e PT médio ≥ Cotação.'
+        ? 'Filtro ativo: VPA > Cotação.'
         : activeFilter === 'vpa-div' ? 'Filtro ativo: VPA > Cotação, PT médio ≥ Cotação e Dívida líquida ≤ 0 ou sem valor.'
         : activeFilter === 'vf-div-qa-sad' ? 'Filtro ativo: VF-DIV / QA :( > PT médio > Cotação.'
         : activeFilter === 'vf-div-qa-happy' ? 'Filtro ativo: VF-DIV / QA :) > PT médio > Cotação.' : '';
