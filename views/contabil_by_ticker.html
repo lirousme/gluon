@@ -38,6 +38,11 @@
         th:first-child { z-index: 3; background: #142238; }
         tbody tr:hover td { background: #14263d; }
         tbody tr:hover td:first-child { background: #172b45; }
+        tr.is-hidden { display: none; }
+        .group-toggle { width: 24px; height: 24px; min-height: 24px; margin-right: 8px; padding: 0; border-radius: 7px; border-color: #3c536f; background: #172b45; color: #d7e4f5; font-size: 12px; line-height: 1; vertical-align: middle; }
+        .group-toggle:hover { background: #214263; }
+        .group-spacer { display: inline-block; width: 24px; margin-right: 8px; }
+        .outline-cell { display: inline-flex; align-items: center; }
         .empty { padding: 45px; text-align: center; color: #8495ad; }
         @media (max-width: 640px) {
             header { padding-block: 16px; }
@@ -79,8 +84,62 @@ const count = document.querySelector('#count');
 const sheetTitle = document.querySelector('#sheet-title');
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
 
-function renderSheet(sheetName, matrix) {
-    const nonEmptyRows = matrix.filter(row => row.some(cell => String(cell ?? '').trim() !== ''));
+function getRowLevel(rowMeta) {
+    const level = Number(rowMeta?.level ?? rowMeta?.Level ?? rowMeta?.outlineLevel ?? 0);
+    return Number.isFinite(level) && level > 0 ? Math.floor(level) : 0;
+}
+
+function rowHasChild(displayRows, index) {
+    return index + 1 < displayRows.length && displayRows[index + 1].level > displayRows[index].level;
+}
+
+function applyInitialHiddenRows() {
+    rowsBody.querySelectorAll('tr[data-hidden="1"]').forEach(row => row.classList.add('is-hidden'));
+}
+
+function setDescendantsVisibility(parentRow, collapse) {
+    const parentLevel = Number(parentRow.dataset.level || 0);
+    let sibling = parentRow.nextElementSibling;
+    while (sibling && Number(sibling.dataset.level || 0) > parentLevel) {
+        if (collapse) {
+            sibling.classList.add('is-hidden');
+        } else {
+            const nearestCollapsedParent = findCollapsedAncestorBetween(parentRow, sibling);
+            if (!nearestCollapsedParent) {
+                sibling.classList.remove('is-hidden');
+            }
+        }
+        sibling = sibling.nextElementSibling;
+    }
+}
+
+function findCollapsedAncestorBetween(parentRow, childRow) {
+    const childLevel = Number(childRow.dataset.level || 0);
+    let row = childRow.previousElementSibling;
+    while (row && row !== parentRow) {
+        const rowLevel = Number(row.dataset.level || 0);
+        if (rowLevel < childLevel && row.querySelector('.group-toggle[aria-expanded="false"]')) return row;
+        row = row.previousElementSibling;
+    }
+    return null;
+}
+
+function bindGroupToggles() {
+    rowsBody.querySelectorAll('.group-toggle').forEach(button => {
+        button.addEventListener('click', () => {
+            const parentRow = button.closest('tr');
+            const expanded = button.getAttribute('aria-expanded') === 'true';
+            button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            button.textContent = expanded ? '▸' : '▾';
+            setDescendantsVisibility(parentRow, expanded);
+        });
+    });
+}
+
+function renderSheet(sheetName, matrix, rowMeta = []) {
+    const nonEmptyRows = matrix
+        .map((row, index) => ({ row, index, level: getRowLevel(rowMeta[index]), hidden: Boolean(rowMeta[index]?.hidden) }))
+        .filter(({ row }) => row.some(cell => String(cell ?? '').trim() !== ''));
     if (!nonEmptyRows.length) {
         headings.innerHTML = '';
         rowsBody.innerHTML = '';
@@ -90,13 +149,27 @@ function renderSheet(sheetName, matrix) {
         return;
     }
 
-    const header = nonEmptyRows[0].map((cell, index) => String(cell || `Coluna ${index + 1}`));
+    const header = nonEmptyRows[0].row.map((cell, index) => String(cell || `Coluna ${index + 1}`));
     const dataRows = nonEmptyRows.slice(1);
     headings.innerHTML = header.map(label => `<th scope="col">${escapeHtml(label)}</th>`).join('');
-    rowsBody.innerHTML = dataRows.map(row => `<tr>${header.map((_, index) => `<td>${escapeHtml(row[index] ?? '—')}</td>`).join('')}</tr>`).join('');
+    rowsBody.innerHTML = dataRows.map((entry, rowIndex) => {
+        const cells = header.map((_, cellIndex) => {
+            const value = escapeHtml(entry.row[cellIndex] ?? '—');
+            if (cellIndex !== 0) return `<td>${value}</td>`;
+            const indent = Math.max(0, entry.level) * 22;
+            const control = rowHasChild(dataRows, rowIndex)
+                ? `<button class="group-toggle" type="button" aria-label="Alternar agrupamento da linha" aria-expanded="true">▾</button>`
+                : '<span class="group-spacer" aria-hidden="true"></span>';
+            return `<td><span class="outline-cell" style="padding-left:${indent}px">${control}<span>${value}</span></span></td>`;
+        }).join('');
+        return `<tr data-level="${entry.level}" data-hidden="${entry.hidden ? '1' : '0'}">${cells}</tr>`;
+    }).join('');
+    applyInitialHiddenRows();
+    bindGroupToggles();
     empty.style.display = dataRows.length ? 'none' : 'block';
     empty.textContent = dataRows.length ? '' : 'A planilha possui apenas cabeçalho.';
-    count.textContent = `${dataRows.length} registro(s)`;
+    const groupedRows = dataRows.filter(entry => entry.level > 0).length;
+    count.textContent = `${dataRows.length} registro(s)${groupedRows ? ` · ${groupedRows} em agrupamento(s)` : ''}`;
     sheetTitle.textContent = `Planilha carregada: ${sheetName}`;
 }
 
@@ -125,11 +198,12 @@ fileInput.addEventListener('change', async () => {
     try {
         const XLSX = await waitForXlsx();
         const file = fileInput.files[0];
-        const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+        const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true, cellStyles: true });
         const firstSheetName = workbook.SheetNames[0];
         if (!firstSheetName) throw new Error('A planilha não possui abas para exibir.');
-        const matrix = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName], { header: 1, defval: '', raw: false });
-        renderSheet(firstSheetName, matrix);
+        const worksheet = workbook.Sheets[firstSheetName];
+        const matrix = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false });
+        renderSheet(firstSheetName, matrix, worksheet['!rows'] || []);
         statusBox.className = 'ok';
         statusBox.textContent = `Planilha “${file.name}” montada na tela com sucesso.`;
         form.reset();
