@@ -55,6 +55,7 @@
         .messages { min-height: 0; flex: 1 1 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 26px clamp(18px, 7vw, 100px); scroll-behavior: smooth; }
         .message { max-width: min(68%, 650px); margin: 0 0 6px auto; padding: 7px 8px 5px; border-radius: 8px 0 8px 8px; background: #005c4b; box-shadow: 0 1px 1px #0004; overflow-wrap: anywhere; }
         .message.recipient { margin-right: auto; margin-left: 0; border-radius: 0 8px 8px 8px; background: #075eaa; }
+        .message.read-marker, .message.recipient.read-marker { background: #d94f8f; color: #fff; }
         .message-image { display: block; max-width: 100%; max-height: 420px; border-radius: 6px; object-fit: cover; margin-bottom: 5px; }
         .message-text { white-space: pre-wrap; line-height: 1.4; }
         .message-footer { float: right; display: inline-flex; align-items: center; gap: 3px; margin: 4px -3px 0 12px; color: #a7c8c1; }
@@ -199,7 +200,8 @@
             const recipient = Boolean(Number(item.is_recipient));
             const row = document.createElement('div'); row.className = 'message-row ' + (recipient ? 'received' : 'sent');
             const selector = document.createElement('input'); selector.type = 'checkbox'; selector.className = 'message-selector'; selector.hidden = !state.selectionMode; selector.checked = state.selectedMessages.has(Number(item.id)); selector.setAttribute('aria-label', 'Selecionar mensagem');
-            const bubble = document.createElement('article'); bubble.className = 'message' + (recipient ? ' recipient' : '');
+            const bubble = document.createElement('article'); bubble.className = 'message' + (recipient ? ' recipient' : '') + (Number(item.id) === Number(state.activeChat?.read_marker_message_id || 0) ? ' read-marker' : '');
+            bubble.dataset.messageId = String(item.id);
             bubble.setAttribute('aria-label', recipient ? 'Mensagem do destinatário' : 'Mensagem do remetente');
             if (item.imagem_base64) { const image = document.createElement('img'); image.className = 'message-image'; image.src = item.imagem_base64; image.alt = 'Imagem enviada'; image.loading = 'lazy'; bubble.append(image); }
             if (item.texto) { const text = document.createElement('span'); text.className = 'message-text'; text.textContent = item.texto; bubble.append(text); }
@@ -227,7 +229,11 @@
             select.addEventListener('click', () => enterSelectionMode(item.id));
             edit.addEventListener('click', () => openMessageEditor(item));
             selector.addEventListener('change', () => toggleMessageSelection(item.id, selector.checked));
-            row.addEventListener('click', event => { if (state.selectionMode && event.target !== selector) { selector.checked = !selector.checked; toggleMessageSelection(item.id, selector.checked); } });
+            row.addEventListener('click', event => {
+                if (event.target.closest('.message-actions') || event.target === selector) return;
+                if (state.selectionMode) { selector.checked = !selector.checked; toggleMessageSelection(item.id, selector.checked); return; }
+                setReadMarker(item.id);
+            });
             menu.append(select, edit, single, through); actions.append(more, menu); footer.append(time, actions); bubble.append(footer);
             row.classList.toggle('selected', selector.checked);
             if (recipient) row.append(selector, bubble); else row.append(bubble, selector);
@@ -285,6 +291,25 @@
             ? `${kind} · ${reads} ${reads === 1 ? 'leitura' : 'leituras'} · disponível`
             : `${reads} ${reads === 1 ? 'leitura' : 'leituras'} · próxima em ${formatDateTime(chat.next_view_at)}`;
     }
+    function updateMessageMarkerClasses() {
+        document.querySelectorAll('.message[data-message-id]').forEach(bubble => {
+            bubble.classList.toggle('read-marker', Number(bubble.dataset.messageId) === Number(state.activeChat?.read_marker_message_id || 0));
+        });
+    }
+    async function setReadMarker(messageId) {
+        const previousMarker = state.activeChat?.read_marker_message_id ?? null;
+        state.activeChat.read_marker_message_id = Number(messageId);
+        updateMessageMarkerClasses();
+        try {
+            const marker = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'set_read_marker', chat_id: state.activeId, message_id: messageId }) });
+            state.activeChat.read_marker_message_id = Number(marker.read_marker_message_id);
+            updateMessageMarkerClasses();
+        } catch (error) {
+            state.activeChat.read_marker_message_id = previousMarker;
+            updateMessageMarkerClasses();
+            toast(error.message);
+        }
+    }
     function setRecipientMode(recipient) {
         state.recipientMode = recipient;
         $('attachmentMenu').hidden = true;
@@ -310,7 +335,7 @@
         $('markViewed').disabled = true;
         try {
             const view = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'mark_viewed', chat_id: state.activeId }) });
-            Object.assign(state.activeChat, view); updateReadStatus(state.activeChat); await loadChats();
+            Object.assign(state.activeChat, view, { read_marker_message_id: null }); updateReadStatus(state.activeChat); updateMessageMarkerClasses(); await loadChats();
             toast(`Leitura ${view.view_count} registrada.`);
         } catch (error) { updateReadStatus(state.activeChat); toast(error.message); }
     });

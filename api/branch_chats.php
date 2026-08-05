@@ -53,7 +53,7 @@ function branchChatsCanReviewEarly(PDO $pdo, int $chatId, int $userId): bool
 function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
 {
     $stmt = $pdo->prepare(
-        'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.created_at, c.updated_at,
+        'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.read_marker_message_id, c.created_at, c.updated_at,
                 cr.reference_encrypted,
                 COALESCE(cv.view_count, 0) AS view_count, cv.last_viewed_at,
                 CASE WHEN cv.last_viewed_at IS NULL THEN NULL
@@ -380,6 +380,7 @@ try {
              WHERE chat_id = :chat_id AND user_id = :user_id'
         );
         $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
+        $pdo->prepare('UPDATE chats SET read_marker_message_id = NULL WHERE id = :id AND user_id = :user_id')->execute([':id' => $chatId, ':user_id' => $userId]);
         $pdo->commit();
         $chat = branchChatsFind($pdo, $chatId, $userId);
         branchChatsRespond(['status' => 'success', 'data' => [
@@ -388,6 +389,35 @@ try {
             'next_view_at' => $chat['next_view_at'],
             'can_mark_viewed' => (bool)$chat['can_mark_viewed'],
         ]]);
+    }
+
+    if ($action === 'set_read_marker') {
+        $chatId = (int)($input['chat_id'] ?? 0);
+        $messageId = (int)($input['message_id'] ?? 0);
+        branchChatsFind($pdo, $chatId, $userId);
+
+        if ($messageId < 1) {
+            branchChatsRespond(['status' => 'error', 'message' => 'Mensagem inválida.'], 422);
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT 1
+             FROM chat_mensagens cm
+             INNER JOIN mensagens m ON m.id = cm.mensagem_id
+             WHERE cm.chat_id = :chat_id AND cm.mensagem_id = :message_id AND m.user_id = :user_id
+             LIMIT 1'
+        );
+        $stmt->execute([':chat_id' => $chatId, ':message_id' => $messageId, ':user_id' => $userId]);
+        if (!$stmt->fetchColumn()) {
+            branchChatsRespond(['status' => 'error', 'message' => 'Mensagem não encontrada neste chat.'], 404);
+        }
+
+        $pdo->prepare('UPDATE chats SET read_marker_message_id = :message_id WHERE id = :id AND user_id = :user_id')->execute([
+            ':message_id' => $messageId,
+            ':id' => $chatId,
+            ':user_id' => $userId,
+        ]);
+        branchChatsRespond(['status' => 'success', 'data' => ['read_marker_message_id' => $messageId]]);
     }
 
     if ($action === 'branch_message') {
