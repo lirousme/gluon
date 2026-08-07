@@ -53,7 +53,7 @@ function branchChatsCanReviewEarly(PDO $pdo, int $chatId, int $userId): bool
 function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
 {
     $stmt = $pdo->prepare(
-        'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.read_marker_message_id, c.created_at, c.updated_at,
+        'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.`max`, c.read_marker_message_id, c.created_at, c.updated_at,
                 cr.reference_encrypted,
                 COALESCE(cv.view_count, 0) AS view_count, cv.last_viewed_at,
                 CASE WHEN cv.last_viewed_at IS NULL THEN NULL
@@ -293,8 +293,13 @@ try {
         if ($chatType === 2 && ($reference === '' || mb_strlen($reference) > 10000)) {
             branchChatsRespond(['status' => 'error', 'message' => 'Informe uma referência de até 10.000 caracteres.'], 422);
         }
+        $maxInput = array_key_exists('max', $input) ? $input['max'] : $currentChat['max'];
+        $max = $maxInput === null || $maxInput === '' ? null : filter_var($maxInput, FILTER_VALIDATE_INT);
+        if ($max !== null && ($max === false || $max < 1)) {
+            branchChatsRespond(['status' => 'error', 'message' => 'O máximo de leituras deve ser um inteiro maior que zero ou ficar vazio.'], 422);
+        }
         $pdo->beginTransaction();
-        $pdo->prepare('UPDATE chats SET titulo = :titulo, chat_type = :chat_type WHERE id = :id AND user_id = :user_id')->execute([':titulo' => $title, ':chat_type' => $chatType, ':id' => $chatId, ':user_id' => $userId]);
+        $pdo->prepare('UPDATE chats SET titulo = :titulo, chat_type = :chat_type, `max` = :max WHERE id = :id AND user_id = :user_id')->execute([':titulo' => $title, ':chat_type' => $chatType, ':max' => $max, ':id' => $chatId, ':user_id' => $userId]);
         if ($chatType === 2) {
             $pdo->prepare('INSERT INTO chat_references (chat_id, reference_encrypted) VALUES (:chat_id, :reference) ON DUPLICATE KEY UPDATE reference_encrypted = VALUES(reference_encrypted)')->execute([
                 ':chat_id' => $chatId,
@@ -304,7 +309,7 @@ try {
             $pdo->prepare('DELETE FROM chat_references WHERE chat_id = :chat_id')->execute([':chat_id' => $chatId]);
         }
         $pdo->commit();
-        branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId, 'titulo' => $title, 'chat_type' => $chatType, 'reference' => $chatType === 2 ? $reference : ($currentChat['reference'] ?? null)]]);
+        branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId, 'titulo' => $title, 'chat_type' => $chatType, 'max' => $max, 'reference' => $chatType === 2 ? $reference : ($currentChat['reference'] ?? null)]]);
     }
 
     if ($action === 'delete_chat') {
@@ -362,10 +367,12 @@ try {
         );
         $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
         $stmt = $pdo->prepare(
-            'SELECT view_count, last_viewed_at,
+            'SELECT cv.view_count, cv.last_viewed_at, c.`max`,
                     CASE WHEN last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= DATE_ADD(last_viewed_at, INTERVAL view_count DAY)
                          THEN 1 ELSE 0 END AS can_mark_viewed
-             FROM chat_views WHERE chat_id = :chat_id AND user_id = :user_id FOR UPDATE'
+             FROM chat_views cv
+             INNER JOIN chats c ON c.id = cv.chat_id AND c.user_id = cv.user_id
+             WHERE cv.chat_id = :chat_id AND cv.user_id = :user_id FOR UPDATE'
         );
         $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
         $view = $stmt->fetch();
@@ -381,6 +388,15 @@ try {
         );
         $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
         $pdo->prepare('UPDATE chats SET read_marker_message_id = NULL WHERE id = :id AND user_id = :user_id')->execute([':id' => $chatId, ':user_id' => $userId]);
+        $viewCount = (int)$view['view_count'] + 1;
+        if ($view['max'] !== null && $viewCount >= (int)$view['max']) {
+            $pdo->prepare('DELETE FROM chats WHERE id = :id AND user_id = :user_id')->execute([':id' => $chatId, ':user_id' => $userId]);
+            $pdo->commit();
+            branchChatsRespond(['status' => 'success', 'data' => [
+                'deleted' => true,
+                'view_count' => $viewCount,
+            ]]);
+        }
         $pdo->commit();
         $chat = branchChatsFind($pdo, $chatId, $userId);
         branchChatsRespond(['status' => 'success', 'data' => [
