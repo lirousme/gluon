@@ -53,12 +53,35 @@ const planoApp = {
     },
 
     async api(action, payload = {}) {
-        const res = await fetch('/api/plano', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ action, directory_id: this.dirId, ...payload })
-        });
-        if (res.status === 401) window.location.href = '/';
-        return await res.json();
+        let res;
+        try {
+            res = await fetch('/api/plano', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ action, directory_id: this.dirId, ...payload })
+            });
+        } catch (error) {
+            throw new Error(`Falha de conexão com o servidor: ${error.message || 'verifique sua internet.'}`);
+        }
+
+        if (res.status === 401) {
+            window.location.href = '/';
+            throw new Error('Sua sessão expirou. Faça login novamente.');
+        }
+
+        const responseText = await res.text();
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (error) {
+            console.error('[Plano API] Resposta inválida:', { action, status: res.status, responseText });
+            throw new Error(`O servidor retornou uma resposta inválida (HTTP ${res.status}).`);
+        }
+
+        if (!res.ok && !data.message) {
+            throw new Error(`A operação falhou no servidor (HTTP ${res.status}).`);
+        }
+
+        return data;
     },
 
     updateHeader() {
@@ -227,9 +250,17 @@ const planoApp = {
         if (!isRecurring) {
             rule.type = '';
         }
-        const res = await this.api('set_phase_recurrence', { phase, rule });
-        this.toast(res.message || (res.status === 'success' ? 'Repetição salva' : 'Erro'), res.status === 'success');
-        if (res.status === 'success') await this.load();
+        try {
+            const res = await this.api('set_phase_recurrence', { phase, rule });
+            if (res.status !== 'success') {
+                throw new Error(res.message || 'O servidor não informou o motivo da falha.');
+            }
+            this.toast(res.message || 'Repetição salva', true);
+            await this.load();
+        } catch (error) {
+            console.error('[Plano] Falha ao salvar repetição:', error);
+            this.toast(`Não foi possível salvar a repetição: ${error.message}`, false);
+        }
     },
 
     async completePhase(phase) {
