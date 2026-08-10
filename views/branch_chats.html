@@ -45,6 +45,7 @@
         .empty-list { color: var(--muted); text-align: center; padding: 45px 25px; line-height: 1.5; }
         .main { min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; position: relative; background-color: #0b141a; background-image: radial-gradient(#ffffff09 1px, transparent 1px); background-size: 22px 22px; }
         .main.chat-type-1 { background-color: #24132f; }
+        .main.chat-type-2, .main.chat-type-3 { background-color: #0b3d2e; }
         .back { display: none; }
         .chat-heading { min-width: 0; flex: 1; }
         .branch-count { width: auto; min-width: 40px; padding: 0 10px; border-radius: 20px; gap: 5px; }
@@ -192,6 +193,11 @@
         });
     }
     async function loadChats() { try { state.chats = await request(api); renderChats(); } catch (error) { toast(error.message); } }
+    function setMainChatType(chatType) {
+        const main = document.querySelector('.main');
+        ['chat-type-1', 'chat-type-2', 'chat-type-3'].forEach(className => main.classList.remove(className));
+        if ([1, 2, 3].includes(Number(chatType))) main.classList.add(`chat-type-${Number(chatType)}`);
+    }
     function renderMessages(messages) {
         $('messages').replaceChildren();
         if ([2, 3].includes(Number(state.activeChat?.chat_type)) && state.activeChat?.reference) { const divider = document.createElement('div'); divider.className = 'response-divider'; divider.setAttribute('role', 'separator'); const label = document.createElement('span'); label.textContent = state.activeChat.reference; divider.append(label); $('messages').append(divider); }
@@ -270,7 +276,7 @@
     async function openChat(id, preserveRecipientMode = false) {
         try {
             const data = await request(api + '?chat_id=' + id); state.activeId = id; state.activeChat = data.chat;
-            document.querySelector('.main').classList.toggle('chat-type-1', Number(data.chat.chat_type) === 1);
+            setMainChatType(data.chat.chat_type);
             leaveSelectionMode(); state.currentMessages = data.mensagens;
             if (!preserveRecipientMode) setRecipientMode(false);
             $('activeTitle').textContent = data.chat.titulo;
@@ -346,8 +352,8 @@
     $('chatTypeInput').addEventListener('change', updateReferenceField);
     $('editChat').addEventListener('click', () => { const chatType = Number(state.activeChat?.chat_type || 0); $('chatTitleInput').value = state.activeChat?.titulo || ''; $('chatMaxInput').value = state.activeChat?.max ?? ''; $('chatTypeLabel').hidden = chatType === 3; $('chatTypeInput').value = chatType === 3 ? '0' : String(chatType); $('chatReferenceInput').value = state.activeChat?.reference || ''; updateReferenceField(); $('chatDialog').showModal(); $('chatTitleInput').select(); });
     document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => $(button.dataset.close).close()));
-    $('chatForm').addEventListener('submit', async event => { event.preventDefault(); try { const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'update_chat', chat_id: state.activeId, titulo: $('chatTitleInput').value, max: $('chatMaxInput').value, chat_type: Number($('chatTypeInput').value), reference: $('chatReferenceInput').value }) }); state.activeChat.titulo = result.titulo; state.activeChat.chat_type = result.chat_type; state.activeChat.max = result.max; state.activeChat.reference = result.reference; document.querySelector('.main').classList.toggle('chat-type-1', Number(result.chat_type) === 1); $('activeTitle').textContent = result.titulo; renderMessages(state.currentMessages || []); $('chatDialog').close(); await loadChats(); toast('Chat atualizado.'); } catch (error) { toast(error.message); } });
-    function clearActiveChat() { state.activeId = null; state.activeChat = null; document.querySelector('.main').classList.remove('chat-type-1'); $('chatHeader').hidden = true; $('composer').classList.add('hidden'); $('app').classList.remove('chat-open'); }
+    $('chatForm').addEventListener('submit', async event => { event.preventDefault(); try { const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'update_chat', chat_id: state.activeId, titulo: $('chatTitleInput').value, max: $('chatMaxInput').value, chat_type: Number($('chatTypeInput').value), reference: $('chatReferenceInput').value }) }); state.activeChat.titulo = result.titulo; state.activeChat.chat_type = result.chat_type; state.activeChat.max = result.max; state.activeChat.reference = result.reference; setMainChatType(result.chat_type); $('activeTitle').textContent = result.titulo; renderMessages(state.currentMessages || []); $('chatDialog').close(); await loadChats(); toast('Chat atualizado.'); } catch (error) { toast(error.message); } });
+    function clearActiveChat() { state.activeId = null; state.activeChat = null; setMainChatType(null); $('chatHeader').hidden = true; $('composer').classList.add('hidden'); $('app').classList.remove('chat-open'); }
     $('deleteChat').addEventListener('click', async () => { if (!confirm('Excluir este chat e todos os branches dele permanentemente?')) return; try { await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'delete_chat', chat_id: state.activeId }) }); $('chatDialog').close(); clearActiveChat(); await loadChats(); toast('Chat e seus branches excluídos.'); } catch (error) { toast(error.message); } });
     function openMessageEditor(item) { closeMessageMenus(); state.editingMessage = item; $('editMessageText').value = item.texto || ''; $('currentImageRow').hidden = !item.imagem_base64; $('currentImage').src = item.imagem_base64 || ''; $('removeCurrentImage').checked = false; $('editMessageImage').value = ''; $('messageDialog').showModal(); }
     $('messageForm').addEventListener('submit', async event => { event.preventDefault(); const data = new FormData(); data.append('action', 'update_message'); data.append('chat_id', state.activeId); data.append('message_id', state.editingMessage.id); data.append('texto', $('editMessageText').value); data.append('remove_image', $('removeCurrentImage').checked ? '1' : '0'); const image = $('editMessageImage').files[0]; if (image) data.append('imagem', image); try { await request(api, { method: 'POST', body: data }); $('messageDialog').close(); await openChat(state.activeId); await loadChats(); toast('Mensagem atualizada.'); } catch (error) { toast(error.message); } });
