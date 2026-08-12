@@ -30,6 +30,7 @@
         .subtitle { margin-top: 3px; color: var(--muted); font-size: 12px; }
         .icon-button { width: 40px; height: 40px; border: 0; border-radius: 50%; background: transparent; display: grid; place-items: center; cursor: pointer; }
         .icon-button:hover, .icon-button:focus-visible { background: #ffffff12; outline: none; }
+        .read-cycle-count { min-width: 34px; height: 34px; padding: 0 10px; border: 1px solid #ffffff1f; border-radius: 17px; display: inline-flex; align-items: center; justify-content: center; background: #111b21; color: #d1d7db; font-size: 13px; font-weight: 700; }
         svg { width: 22px; height: 22px; fill: currentColor; }
         .search-wrap { padding: 8px 12px; border-bottom: 1px solid var(--line); }
         .search { width: 100%; height: 36px; border: 0; outline: 0; border-radius: 8px; background: var(--panel); color: #e9edef; padding: 0 14px; }
@@ -135,6 +136,7 @@
     <aside class="sidebar">
         <header class="sidebar-header">
             <div class="brand"><div class="logo">B</div><div><h1>Branch Chats</h1><p class="subtitle">Suas conversas</p></div></div>
+            <span class="read-cycle-count" id="readCycleCount" title="Leituras neste ciclo" aria-label="0 de 8 leituras neste ciclo">0/8</span>
             <button class="icon-button" id="newChat" title="Novo chat" aria-label="Criar novo chat">
                 <svg viewBox="0 0 24 24"><path d="M19 3H5a2 2 0 0 0-2 2v14l4-4h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2m-6 9h-2V9H8V7h3V4h2v3h3v2h-3z"/></svg>
             </button>
@@ -170,11 +172,16 @@
     const state = { chats: [], activeId: null, activeChat: null, editingMessage: null, recipientMode: false, selectionMode: false, selectedMessages: new Set() };
     const $ = id => document.getElementById(id);
     const api = '/api/branch_chats';
+    const readCycleLimit = 8;
+    const readCycleStorageKey = 'branchChatsReadCycleCount';
     const timezoneOffset = () => -new Date().getTimezoneOffset();
     const utcDate = value => new Date(/[zZ]|[+-]\d\d:\d\d$/.test(value) ? value : value.replace(' ', 'T') + 'Z');
     const formatTime = value => value ? new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(utcDate(value)) : '';
     const formatDateTime = value => value ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(utcDate(value)) : '';
     function toast(message) { $('toast').textContent = message; $('toast').hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => $('toast').hidden = true, 3000); }
+    function getReadCycleCount() { const count = Number(localStorage.getItem(readCycleStorageKey) || 0); return Number.isFinite(count) ? count % readCycleLimit : 0; }
+    function updateReadCycleCount(count = getReadCycleCount()) { $('readCycleCount').textContent = `${count}/${readCycleLimit}`; $('readCycleCount').setAttribute('aria-label', `${count} de ${readCycleLimit} leituras neste ciclo`); }
+    function incrementReadCycleCount() { const count = (getReadCycleCount() + 1) % readCycleLimit; localStorage.setItem(readCycleStorageKey, String(count)); updateReadCycleCount(count); return count; }
     async function request(url, options) { const response = await fetch(url, options); const result = await response.json(); if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível concluir.'); return result.data; }
     function renderChats() {
         const query = $('search').value.trim().toLowerCase();
@@ -343,6 +350,7 @@
         $('markViewed').disabled = true;
         try {
             const view = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'mark_viewed', chat_id: state.activeId }) });
+            incrementReadCycleCount();
             if (view.deleted) { clearActiveChat(); await loadChats(); toast(`Leitura ${view.view_count} registrada. O chat atingiu o limite e foi excluído.`); return; }
             Object.assign(state.activeChat, view, { read_marker_message_id: null }); updateReadStatus(state.activeChat); updateMessageMarkerClasses(); await loadChats();
             toast(`Leitura ${view.view_count} registrada.`);
@@ -398,6 +406,7 @@
             else if (result.branched) toast('Branch criado com a nova mensagem.');
         } catch (error) { toast(error.message); } finally { $('send').disabled = false; }
     });
+    updateReadCycleCount();
     loadChats();
 </script>
 </body>
