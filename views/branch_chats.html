@@ -172,7 +172,7 @@
     const state = { chats: [], activeId: null, activeChat: null, editingMessage: null, recipientMode: false, selectionMode: false, selectedMessages: new Set() };
     const $ = id => document.getElementById(id);
     const api = '/api/branch_chats';
-    const readCycleLimit = 8;
+    const readCycleLimit = 16;
     const readCycleStorageKey = 'branchChatsReadCycleCount';
     const timezoneOffset = () => -new Date().getTimezoneOffset();
     const utcDate = value => new Date(/[zZ]|[+-]\d\d:\d\d$/.test(value) ? value : value.replace(' ', 'T') + 'Z');
