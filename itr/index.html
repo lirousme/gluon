@@ -460,6 +460,8 @@
 
         function populateEmpresaDropdown() {
             const selectEmpresa = document.getElementById('selectEmpresa');
+            if (!selectEmpresa) return;
+
             selectEmpresa.innerHTML = '<option value="">-- Selecione uma Empresa --</option>';
 
             Object.keys(catalogData).sort().forEach(cvmCode => {
@@ -469,6 +471,25 @@
                 opt.textContent = `[${cvmCode}] ${emp.name}`;
                 selectEmpresa.appendChild(opt);
             });
+        }
+
+        // Helper to extract a numeric sort key for quarterly files (e.g. 1T25 -> 20251, 2T25 -> 20252, 1T26 -> 20261)
+        function getFileSortKey(fileObj) {
+            if (!fileObj) return 0;
+            const str = `${fileObj.label || ''} ${fileObj.name || ''}`;
+            const qMatch = str.match(/([1-4])T(\d{2})/i);
+            if (qMatch) {
+                const q = parseInt(qMatch[1], 10);
+                const yr = parseInt(qMatch[2], 10);
+                const fullYr = yr < 50 ? 2000 + yr : 1900 + yr;
+                return fullYr * 10 + q;
+            }
+            const dateMatch = str.match(/(\d{2})[-_.](\d{2})[-_.](\d{4})/);
+            if (dateMatch) {
+                const qInfo = parseQuarterAndYear(`${dateMatch[1]}/${dateMatch[2]}/${dateMatch[3]}`);
+                if (qInfo) return qInfo.year * 10 + qInfo.quarter;
+            }
+            return 0;
         }
 
         function handleEmpresaChange() {
@@ -489,7 +510,9 @@
             selectItr.innerHTML = '<option value="">-- Selecione o Trimestre / ITR --</option>';
 
             if (emp.files && emp.files.length > 0) {
-                emp.files.forEach(file => {
+                // Ordenação cronológica decrescente: mais recente primeiro (ex: 1T26, 4T25, 3T25, 2T25, 1T25)
+                const sortedFiles = [...emp.files].sort((a, b) => getFileSortKey(b) - getFileSortKey(a));
+                sortedFiles.forEach(file => {
                     const opt = document.createElement('option');
                     opt.value = `empresas/${cvmCode}/${file.name}`;
                     opt.textContent = file.label || file.name;
@@ -537,10 +560,29 @@
                 return;
             }
 
-            // Extract Company Info
-            const empName = getNodeText(xmlDoc, ['NomeEmpresa', 'RazaoSocial', 'NomeCompanhia', 'DENOM_CIA']) || "Empresa CVM";
-            const cnpj = getNodeText(xmlDoc, ['CNPJEmpresa', 'CNPJ', 'CNPJ_CIA', 'CodigoCVM']) || currentCvmCode || "-";
-            const dtRef = getNodeText(xmlDoc, ['DtFimTrimestreAtual', 'DataReferencia', 'DataFimTrimestre', 'DT_REFER']) || "";
+            // Extract Company Info with Auto Detection
+            let empName = getNodeText(xmlDoc, ['NomeEmpresa', 'RazaoSocial', 'NomeCompanhia', 'DENOM_CIA']) || "Empresa CVM";
+            let rawCvm = getNodeText(xmlDoc, ['CodigoCVM', 'CdCVM', 'CNPJEmpresa', 'CNPJ', 'CNPJ_CIA']);
+            
+            let detectedCvm = rawCvm ? rawCvm.replace(/\D/g, '') : "";
+            if (detectedCvm && detectedCvm.length <= 6) {
+                detectedCvm = detectedCvm.padStart(6, '0');
+            }
+
+            if (detectedCvm) {
+                currentCvmCode = detectedCvm;
+                if (!catalogData[detectedCvm] && empName !== "Empresa CVM") {
+                    catalogData[detectedCvm] = { name: empName, files: [] };
+                    populateEmpresaDropdown();
+                }
+                const selectEmpresa = document.getElementById('selectEmpresa');
+                if (selectEmpresa && selectEmpresa.querySelector(`option[value="${detectedCvm}"]`)) {
+                    selectEmpresa.value = detectedCvm;
+                }
+            }
+
+            const cnpj = detectedCvm || currentCvmCode || "-";
+            const dtRef = getNodeText(xmlDoc, ['DtFimTrimestreAtual', 'DataReferencia', 'DataFimTrimestre', 'DT_REFER', 'DtFimExercicioSocial', 'DataEncerramentoExercicio', 'DT_FIM_EXERC']) || "";
 
             document.getElementById('badgeEmpresa').textContent = empName;
             document.getElementById('badgeCnpj').textContent = cnpj;
@@ -595,7 +637,7 @@
             return "";
         }
 
-        // Helper: Parse XML Value string into float number
+        // Helper: Parse XML Value string into float number (Multiplica por 1.000 conforme padrão CVM em R$ mil)
         function parseXmlValue(str) {
             if (!str) return 0;
             str = str.toString().trim();
@@ -605,32 +647,62 @@
             if (str.startsWith('(') && str.endsWith(')')) {
                 isNegative = true;
                 str = str.substring(1, str.length - 1).trim();
+            } else if (str.startsWith('-')) {
+                isNegative = true;
+                str = str.substring(1).trim();
             }
 
+            // Tratamento de pontuação numérica (milhares em PT-BR e decimais)
             if (str.includes(',') && str.includes('.')) {
                 str = str.replace(/\./g, '').replace(',', '.');
             } else if (str.includes(',')) {
                 str = str.replace(',', '.');
+            } else if ((str.match(/\./g) || []).length > 1) {
+                // Caso contenha múltiplos pontos como separadores de milhar PT-BR (ex: 3.660.787)
+                str = str.replace(/\./g, '');
             }
 
             let val = parseFloat(str);
             if (isNaN(val)) return 0;
+
+            // Regra CVM: Os demonstrativos ITR/DFP reportam os valores em milhares de Reais (R$ mil)
+            val = val * 1000;
+
             return isNegative ? -Math.abs(val) : val;
         }
 
-        // Helper: Extract Accounts from DOM Document
+        // Helper: Extract Accounts from DOM Document (Suporta ITR e DFP/4T)
         function extractAccountsFromXmlDoc(xmlDoc) {
             const accounts = [];
-            let contaNodes = Array.from(xmlDoc.getElementsByTagName("Conta"));
+            
+            // Prioriza demonstrações consolidadas do DFP / ITR (<DfConsolidadas> ou <DadosDFP>)
+            let searchScope = xmlDoc;
+            const dfConsolidadas = xmlDoc.getElementsByTagName("DfConsolidadas");
+            if (dfConsolidadas && dfConsolidadas.length > 0) {
+                searchScope = dfConsolidadas[0];
+            } else {
+                const dfIndividual = xmlDoc.getElementsByTagName("DfIndividual");
+                if (dfIndividual && dfIndividual.length > 0) {
+                    searchScope = dfIndividual[0];
+                }
+            }
+
+            let contaNodes = Array.from(searchScope.getElementsByTagName("Conta"));
             if (contaNodes.length === 0) {
-                contaNodes = Array.from(xmlDoc.querySelectorAll("ContaInformada, EstruturaConta, ContaDemonstracao"));
+                contaNodes = Array.from(searchScope.querySelectorAll("ContaInformada, EstruturaConta, ContaDemonstracao"));
             }
 
             contaNodes.forEach(node => {
                 const rawCode = getNodeText(node, ['CodigoConta', 'CdConta', 'CodConta', 'CD_CONTA', 'Codigo']);
                 const desc = getNodeText(node, ['DescricaoConta', 'DsConta', 'Descricao', 'DS_CONTA']);
-                const rawValQuarter = getNodeText(node, ['TrimestreAtual', 'ValorTrimestreAtual', 'ValorConta', 'Valor', 'VL_CONTA']);
-                const rawValExercicioAnt = getNodeText(node, ['ExercicioAnterior', 'ValorExercicioAnterior', 'TrimestreAnterior', 'VL_CONTA_PAST']);
+                
+                // Em arquivos DFP (4º Trimestre / Anual), os valores ficam na tag <UltimoExercicio>. Nos ITRs em <TrimestreAtual>.
+                let rawValQuarter = getNodeText(node, ['TrimestreAtual']);
+                if (!rawValQuarter) {
+                    rawValQuarter = getNodeText(node, ['UltimoExercicio', 'ValorTrimestreAtual', 'ValorConta', 'Valor', 'VL_CONTA']);
+                }
+
+                const rawValExercicioAnt = getNodeText(node, ['ExercicioAnterior', 'ValorExercicioAnterior', 'TrimestreAnterior', 'VL_CONTA_PAST', 'ExercicioPenultimo']);
 
                 const code = rawCode ? rawCode.trim() : "";
                 const valQuarter = parseXmlValue(rawValQuarter);
@@ -642,8 +714,16 @@
                 let parentNode = node.parentNode;
                 while (parentNode && parentNode.nodeName) {
                     const tag = parentNode.nodeName.toUpperCase();
-                    if (["BPA", "BPP", "DRE"].includes(tag)) {
-                        stmtType = tag;
+                    if (tag.includes("BPA") || tag.includes("BALANCOPATRIMONIALATIVO") || tag.includes("ATIVO")) {
+                        stmtType = "BPA";
+                        break;
+                    }
+                    if (tag.includes("BPP") || tag.includes("BALANCOPATRIMONIALPASSIVO") || tag.includes("PASSIVO")) {
+                        stmtType = "BPP";
+                        break;
+                    }
+                    if (tag.includes("DRE") || tag.includes("DEMONSTRACAODORESULTADO") || tag.includes("RESULTADO")) {
+                        stmtType = "DRE";
                         break;
                     }
                     parentNode = parentNode.parentNode;
@@ -1090,9 +1170,38 @@
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(xmlText, "text/xml");
 
-                const dtRef = getNodeText(xmlDoc, ['DtFimTrimestreAtual', 'DataReferencia', 'DataFimTrimestre', 'DT_REFER']);
-                const cvmCode = document.getElementById('uploadSelectEmpresa').value || "000000";
+                // Auto-detect CVM Code and Company Name
+                let empName = getNodeText(xmlDoc, ['NomeEmpresa', 'RazaoSocial', 'NomeCompanhia', 'DENOM_CIA']);
+                let rawCvm = getNodeText(xmlDoc, ['CodigoCVM', 'CdCVM', 'CNPJEmpresa', 'CNPJ', 'CNPJ_CIA']);
                 
+                let detectedCvm = rawCvm ? rawCvm.replace(/\D/g, '') : "";
+                if (detectedCvm && detectedCvm.length <= 6) {
+                    detectedCvm = detectedCvm.padStart(6, '0');
+                }
+
+                const selectEmp = document.getElementById('uploadSelectEmpresa');
+
+                if (detectedCvm) {
+                    // Auto-register company in catalog if missing
+                    if (!catalogData[detectedCvm] && empName) {
+                        catalogData[detectedCvm] = { name: empName, files: [] };
+                        populateEmpresaDropdown();
+                        
+                        if (!selectEmp.querySelector(`option[value="${detectedCvm}"]`)) {
+                            const opt = document.createElement('option');
+                            opt.value = detectedCvm;
+                            opt.textContent = `[${detectedCvm}] ${empName}`;
+                            selectEmp.appendChild(opt);
+                        }
+                    }
+                    
+                    if (catalogData[detectedCvm] || selectEmp.querySelector(`option[value="${detectedCvm}"]`)) {
+                        selectEmp.value = detectedCvm;
+                    }
+                }
+
+                const cvmCode = selectEmp.value || detectedCvm || "000000";
+                const dtRef = getNodeText(xmlDoc, ['DtFimTrimestreAtual', 'DataReferencia', 'DataFimTrimestre', 'DT_REFER']);
                 const qInfo = parseQuarterAndYear(dtRef);
                 const quarterLabel = qInfo ? qInfo.key : "Trimestre";
                 const suggestedFilename = `${cvmCode}ITR_${quarterLabel}.xml`;
@@ -1100,6 +1209,11 @@
                 document.getElementById('prevFilename').textContent = suggestedFilename;
                 document.getElementById('prevLabel').textContent = `${quarterLabel} - ${dtRef || 'Sem data'}`;
                 document.getElementById('uploadPreviewBox').classList.remove('hidden');
+
+                if (detectedCvm && (catalogData[detectedCvm] || empName)) {
+                    const companyTitle = catalogData[detectedCvm]?.name || empName;
+                    showToast(`Empresa "${companyTitle}" identificada automaticamente no XML!`, 'success');
+                }
             };
             reader.readAsText(file);
         }
