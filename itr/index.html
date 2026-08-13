@@ -192,7 +192,7 @@
                         <input type="text" id="searchInput" oninput="handleSearch()" placeholder="Buscar conta ou código..." class="w-full bg-slate-950 border border-slate-700 text-slate-100 placeholder-slate-500 text-xs rounded-lg pl-8 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
                     </div>
 
-                    <!-- Hide Zeroes Toggle (DEFAULT CHECKED) -->
+                    <!-- Hide Zeroes Toggle -->
                     <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300 font-medium select-none bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 hover:border-slate-700">
                         <input type="checkbox" id="toggleHideZeroes" checked onchange="renderTable()" class="rounded border-slate-700 bg-slate-900 text-brand-500 focus:ring-brand-500 h-4 w-4">
                         <span>Ocultar Zeradas</span>
@@ -216,7 +216,7 @@
         <!-- Table Card -->
         <div class="bg-slate-900 rounded-xl shadow-xl border border-slate-800 overflow-hidden">
             <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse min-w-[800px]" id="financialTable">
+                <table class="w-full text-left border-collapse min-w-[850px]" id="financialTable">
                     <thead>
                         <tr class="bg-slate-950 border-b border-slate-800 text-xs uppercase tracking-wider text-slate-400 font-semibold">
                             <th scope="col" class="py-3.5 px-4 w-36">Código Conta</th>
@@ -224,10 +224,11 @@
                             <th scope="col" id="thQuarterHeader" class="py-3.5 px-4 text-right w-44 bg-brand-950/40 text-brand-300 font-bold border-l border-brand-900/30">
                                 Trimestre Atual
                             </th>
-                            <th scope="col" id="thPrevQuarterHeader" class="py-3.5 px-4 text-center w-36 bg-slate-950 text-slate-300 font-semibold border-l border-slate-800" title="Valor em reais e variação percentual em relação ao Trimestre Anterior">
+                            <!-- Adjusted align-right for values compatibility -->
+                            <th scope="col" id="thPrevQuarterHeader" class="py-3.5 px-4 text-right w-44 bg-slate-950 text-slate-300 font-semibold border-l border-slate-800" title="Valor em reais e variação percentual em relação ao Trimestre Anterior">
                                 Valor e Var. % (Trim. Ant.)
                             </th>
-                            <th scope="col" id="thSameQPrevYrHeader" class="py-3.5 px-4 text-center w-36 bg-slate-950 text-slate-300 font-semibold border-l border-slate-800" title="Valor em reais e variação percentual em relação ao Mesmo Trimestre do Ano Anterior">
+                            <th scope="col" id="thSameQPrevYrHeader" class="py-3.5 px-4 text-right w-44 bg-slate-950 text-slate-300 font-semibold border-l border-slate-800" title="Valor em reais e variação percentual em relação ao Mesmo Trimestre do Ano Anterior">
                                 Valor e Var. % (Mesmo Trim. Ant.)
                             </th>
                         </tr>
@@ -251,8 +252,8 @@
                 <div class="flex items-center gap-4 text-slate-400">
                     <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Sintética Principal</span>
                     <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block"></span> Analítica</span>
-                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-arrow-up text-emerald-400 text-[10px]"></i> Alta</span>
-                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-arrow-down text-rose-400 text-[10px]"></i> Queda</span>
+                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-arrow-up text-emerald-400 text-[10px]"></i> Sobe/Positivo</span>
+                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-arrow-down text-rose-400 text-[10px]"></i> Desce/Negativo</span>
                 </div>
             </div>
         </div>
@@ -473,7 +474,7 @@
             });
         }
 
-        // Helper to extract a numeric sort key for quarterly files (e.g. 1T25 -> 20251, 2T25 -> 20252, 1T26 -> 20261)
+        // Helper to extract a numeric sort key for quarterly files
         function getFileSortKey(fileObj) {
             if (!fileObj) return 0;
             const str = `${fileObj.label || ''} ${fileObj.name || ''}`;
@@ -510,7 +511,6 @@
             selectItr.innerHTML = '<option value="">-- Selecione o Trimestre / ITR --</option>';
 
             if (emp.files && emp.files.length > 0) {
-                // Ordenação cronológica decrescente: mais recente primeiro (ex: 1T26, 4T25, 3T25, 2T25, 1T25)
                 const sortedFiles = [...emp.files].sort((a, b) => getFileSortKey(b) - getFileSortKey(a));
                 sortedFiles.forEach(file => {
                     const opt = document.createElement('option');
@@ -547,7 +547,7 @@
             }
         }
 
-        // XML Processing Engine (Supports Comparative Quarters)
+        // XML Processing Engine
         async function processXmlContent(xmlText) {
             rawXmlContent = xmlText;
             document.getElementById('xmlSourceTextarea').value = xmlText;
@@ -560,7 +560,6 @@
                 return;
             }
 
-            // Extract Company Info with Auto Detection
             let empName = getNodeText(xmlDoc, ['NomeEmpresa', 'RazaoSocial', 'NomeCompanhia', 'DENOM_CIA']) || "Empresa CVM";
             let rawCvm = getNodeText(xmlDoc, ['CodigoCVM', 'CdCVM', 'CNPJEmpresa', 'CNPJ', 'CNPJ_CIA']);
             
@@ -588,18 +587,15 @@
             document.getElementById('badgeCnpj').textContent = cnpj;
             document.getElementById('badgeDataRef').textContent = dtRef || "-";
 
-            // Infer CVM Code if not set
             if (!currentCvmCode && cnpj.length === 6) {
                 currentCvmCode = cnpj;
             }
 
-            // Calculate Dynamic Quarter Info
             const qInfo = parseQuarterAndYear(dtRef);
             currentQuarterTitle = qInfo ? qInfo.key : "Trimestre Atual";
             document.getElementById('badgeQuarterTitle').textContent = currentQuarterTitle;
             document.getElementById('thQuarterHeader').textContent = `${currentQuarterTitle} (Valor)`;
 
-            // Calculate Target Comparative Keys (e.g. 2T25 -> Prev: 1T25, Same Prev Yr: 2T24)
             if (qInfo) {
                 prevQTitle = getPrevQuarterKey(qInfo.quarter, qInfo.year);
                 sameQPrevYrTitle = getSameQuarterPrevYearKey(qInfo.quarter, qInfo.year);
@@ -611,13 +607,10 @@
             document.getElementById('thPrevQuarterHeader').textContent = `Valor e Var. % (${prevQTitle})`;
             document.getElementById('thSameQPrevYrHeader').textContent = `Valor e Var. % (${sameQPrevYrTitle})`;
 
-            // Extract Current XML Account Records
             parsedData = extractAccountsFromXmlDoc(xmlDoc);
 
-            // Fetch Comparative XMLs from server catalog asynchronously if company code is known
             await fetchComparativeXmls(prevQTitle, sameQPrevYrTitle);
 
-            // Render updated table
             const activeTabCount = parsedData.filter(d => activeTab === 'ALL' || d.stmtType === activeTab).length;
             if (activeTabCount === 0 && parsedData.length > 0) {
                 switchTab('ALL');
@@ -637,7 +630,7 @@
             return "";
         }
 
-        // Helper: Parse XML Value string into float number (Multiplica por 1.000 conforme padrão CVM em R$ mil)
+        // Helper: Parse XML Value string into float number (*1000)
         function parseXmlValue(str) {
             if (!str) return 0;
             str = str.toString().trim();
@@ -652,30 +645,24 @@
                 str = str.substring(1).trim();
             }
 
-            // Tratamento de pontuação numérica (milhares em PT-BR e decimais)
             if (str.includes(',') && str.includes('.')) {
                 str = str.replace(/\./g, '').replace(',', '.');
             } else if (str.includes(',')) {
                 str = str.replace(',', '.');
             } else if ((str.match(/\./g) || []).length > 1) {
-                // Caso contenha múltiplos pontos como separadores de milhar PT-BR (ex: 3.660.787)
                 str = str.replace(/\./g, '');
             }
 
             let val = parseFloat(str);
             if (isNaN(val)) return 0;
 
-            // Regra CVM: Os demonstrativos ITR/DFP reportam os valores em milhares de Reais (R$ mil)
             val = val * 1000;
-
             return isNegative ? -Math.abs(val) : val;
         }
 
-        // Helper: Extract Accounts from DOM Document (Suporta ITR e DFP/4T)
         function extractAccountsFromXmlDoc(xmlDoc) {
             const accounts = [];
             
-            // Prioriza demonstrações consolidadas do DFP / ITR (<DfConsolidadas> ou <DadosDFP>)
             let searchScope = xmlDoc;
             const dfConsolidadas = xmlDoc.getElementsByTagName("DfConsolidadas");
             if (dfConsolidadas && dfConsolidadas.length > 0) {
@@ -696,7 +683,6 @@
                 const rawCode = getNodeText(node, ['CodigoConta', 'CdConta', 'CodConta', 'CD_CONTA', 'Codigo']);
                 const desc = getNodeText(node, ['DescricaoConta', 'DsConta', 'Descricao', 'DS_CONTA']);
                 
-                // Em arquivos DFP (4º Trimestre / Anual), os valores ficam na tag <UltimoExercicio>. Nos ITRs em <TrimestreAtual>.
                 let rawValQuarter = getNodeText(node, ['TrimestreAtual']);
                 if (!rawValQuarter) {
                     rawValQuarter = getNodeText(node, ['UltimoExercicio', 'ValorTrimestreAtual', 'ValorConta', 'Valor', 'VL_CONTA']);
@@ -747,7 +733,6 @@
             return accounts;
         }
 
-        // Helper: Lookup account value strictly by CodigoConta ID and Statement Type
         function getAccountValueFromMap(map, code, stmtType, fallbackVal = undefined) {
             const cleanCode = (code || "").trim();
             const cleanStmt = (stmtType || "").trim().toUpperCase();
@@ -761,7 +746,6 @@
             return fallbackVal;
         }
 
-        // Fetch & Parse Historical XMLs for Percentage Comparison
         async function fetchComparativeXmls(targetPrevKey, targetSameYrKey) {
             prevQAccountMap = {};
             sameQPrevYrAccountMap = {};
@@ -824,7 +808,6 @@
             await Promise.allSettled(fetchPromises);
         }
 
-        // Quarter Parsing Math Utilities
         function parseQuarterAndYear(dateStr) {
             if (!dateStr) return null;
 
@@ -894,7 +877,6 @@
             return "";
         }
 
-        // Render Table Rows with Percentage Variations
         function renderTable() {
             const tableBody = document.getElementById('tableBody');
             const hideZeroes = document.getElementById('toggleHideZeroes').checked;
@@ -948,11 +930,13 @@
                 const valColorClass = item.valQuarter < 0 ? 'text-rose-400 font-semibold' : 
                                      item.valQuarter > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-500';
 
-                // Percentage Variations Calculation using strict CodigoConta ID lookup
+                // Fetching comparative values
                 const prevVal = getAccountValueFromMap(prevQAccountMap, item.code, item.stmtType);
                 const sameYrVal = getAccountValueFromMap(sameQPrevYrAccountMap, item.code, item.stmtType, item.valExercicioAnt);
 
-                const invertVariationColor = item.stmtType === 'BPP';
+                // Passivos invertem a lógica de cor (Sobe dívida = Ruim, Cai = Bom)
+                const invertVariationColor = item.stmtType === 'BPP'; 
+                
                 const pctPrevHtml = renderComparativeValue(item.valQuarter, prevVal, invertVariationColor);
                 const pctSameYrHtml = renderComparativeValue(item.valQuarter, sameYrVal, invertVariationColor);
 
@@ -960,8 +944,9 @@
                     <td class="py-2.5 px-4 font-mono text-xs text-slate-300 font-medium whitespace-nowrap">${item.code}</td>
                     <td class="py-2.5 px-4 font-sans text-xs" style="padding-left: ${16 + indentPx}px">${item.desc}</td>
                     <td class="py-2.5 px-4 text-right font-mono text-xs ${valColorClass} bg-brand-950/20 border-l border-brand-900/20">${formattedVal}</td>
-                    <td class="py-2.5 px-4 text-center font-mono text-xs border-l border-slate-800">${pctPrevHtml}</td>
-                    <td class="py-2.5 px-4 text-center font-mono text-xs border-l border-slate-800">${pctSameYrHtml}</td>
+                    <!-- Alinhado à direita para ficar igual e visualmente nítido os valores com as colunas -->
+                    <td class="py-2.5 px-4 text-right font-mono text-xs border-l border-slate-800">${pctPrevHtml}</td>
+                    <td class="py-2.5 px-4 text-right font-mono text-xs border-l border-slate-800">${pctSameYrHtml}</td>
                 `;
 
                 fragment.appendChild(tr);
@@ -970,31 +955,31 @@
             tableBody.appendChild(fragment);
         }
 
-        // Helper: Render comparative value and percentage badge.
-        // Assets keep positive growth green; liabilities invert colors because decreasing debt is better.
+        // Render comparative block with explicitly bright, right-aligned monetary value + variation badge
         function renderComparativeValue(currVal, oldVal, invertVariationColor = false) {
-            if (oldVal === undefined || oldVal === null || isNaN(oldVal)) {
-                return `<span class="text-slate-600 text-[11px]">-</span>`;
+            // Verificação estrita caso o dado realmente não exista
+            if (typeof oldVal !== 'number' || isNaN(oldVal)) {
+                return `<div class="flex flex-col items-end gap-1.5"><span class="text-slate-600 text-xs">-</span></div>`;
             }
 
             const formattedOldVal = formatCurrency(oldVal);
             const pctBadge = renderPercentageBadge(currVal, oldVal, invertVariationColor);
 
             return `
-                <div class="flex flex-col items-end gap-1">
-                    <span class="text-slate-300 text-[11px] leading-none">${formattedOldVal}</span>
+                <div class="flex flex-col items-end gap-1.5">
+                    <span class="text-slate-200 text-xs font-medium tracking-tight" title="Valor Anterior em R$">${formattedOldVal}</span>
                     ${pctBadge}
                 </div>
             `;
         }
 
         function renderPercentageBadge(currVal, oldVal, invertVariationColor = false) {
-            if (oldVal === undefined || oldVal === null || isNaN(oldVal)) {
-                return `<span class="text-slate-600 text-[11px]">-</span>`;
+            if (typeof oldVal !== 'number' || isNaN(oldVal)) {
+                return `<span class="text-slate-600 text-xs">-</span>`;
             }
 
             if (oldVal === 0) {
-                if (currVal === 0) return `<span class="text-slate-500 text-[11px]">0,0%</span>`;
+                if (currVal === 0) return `<span class="text-slate-500 text-xs font-semibold">0,0%</span>`;
                 const varPct = currVal > 0 ? 100 : -100;
                 return renderVariationBadge(varPct, invertVariationColor);
             }
@@ -1002,7 +987,7 @@
             const varPct = ((currVal - oldVal) / Math.abs(oldVal)) * 100;
 
             if (Math.abs(varPct) < 0.05) {
-                return `<span class="text-slate-400 text-[11px]">0,0%</span>`;
+                return `<span class="text-slate-400 text-xs font-semibold">0,0%</span>`;
             }
 
             return renderVariationBadge(varPct, invertVariationColor);
@@ -1010,15 +995,22 @@
 
         function renderVariationBadge(varPct, invertVariationColor = false) {
             const isIncrease = varPct > 0;
+            
+            // Lógica Central de Cores
+            // Se for Passivo (invertVariationColor == true):
+            // Sobe -> Ruim (Favorable = false) / Desce -> Bom (Favorable = true)
+            // Se for Ativo: Sobe = Bom, Desce = Ruim.
             const isFavorable = invertVariationColor ? !isIncrease : isIncrease;
+            
             const formattedPct = Math.abs(varPct).toFixed(1).replace('.', ',');
             const sign = isIncrease ? '+' : '-';
             const icon = isIncrease ? 'fa-arrow-up' : 'fa-arrow-down';
+            
             const colorClasses = isFavorable
                 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/50'
                 : 'bg-rose-950/80 text-rose-400 border-rose-800/50';
 
-            return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ${colorClasses} border"><i class="fa-solid ${icon} text-[9px]"></i> ${sign}${formattedPct}%</span>`;
+            return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ${colorClasses} border shadow-sm"><i class="fa-solid ${icon} text-[9px]"></i> ${sign}${formattedPct}%</span>`;
         }
 
         function formatCurrency(val) {
@@ -1125,7 +1117,6 @@
             showToast("Exportação CSV concluída com sucesso!", "success");
         }
 
-        // Modal Handlers
         function openNewCompanyModal() {
             document.getElementById('newCompanyModal').classList.remove('hidden');
         }
@@ -1156,7 +1147,6 @@
                     showToast(data.message || "Erro ao cadastrar empresa.", "error");
                 }
             } catch (err) {
-                // Local Fallback
                 catalogData[cvmCode] = { name: name, files: [] };
                 populateEmpresaDropdown();
                 document.getElementById('selectEmpresa').value = cvmCode;
@@ -1194,7 +1184,6 @@
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(xmlText, "text/xml");
 
-                // Auto-detect CVM Code and Company Name
                 let empName = getNodeText(xmlDoc, ['NomeEmpresa', 'RazaoSocial', 'NomeCompanhia', 'DENOM_CIA']);
                 let rawCvm = getNodeText(xmlDoc, ['CodigoCVM', 'CdCVM', 'CNPJEmpresa', 'CNPJ', 'CNPJ_CIA']);
                 
@@ -1206,7 +1195,6 @@
                 const selectEmp = document.getElementById('uploadSelectEmpresa');
 
                 if (detectedCvm) {
-                    // Auto-register company in catalog if missing
                     if (!catalogData[detectedCvm] && empName) {
                         catalogData[detectedCvm] = { name: empName, files: [] };
                         populateEmpresaDropdown();
@@ -1259,7 +1247,6 @@
                 const filename = document.getElementById('prevFilename').textContent || file.name;
                 const label = document.getElementById('prevLabel').textContent || filename;
 
-                // UI Progress Setup
                 const progressBox = document.getElementById('uploadProgressBarBox');
                 const progressBar = document.getElementById('uploadProgressBar');
                 const progressPercent = document.getElementById('uploadProgressPercent');
@@ -1327,7 +1314,6 @@
             reader.readAsText(file);
         }
 
-        // XML Source Modal Handlers
         function openXmlModal() {
             document.getElementById('xmlModal').classList.remove('hidden');
         }
