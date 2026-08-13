@@ -224,11 +224,11 @@
                             <th scope="col" id="thQuarterHeader" class="py-3.5 px-4 text-right w-44 bg-brand-950/40 text-brand-300 font-bold border-l border-brand-900/30">
                                 Trimestre Atual
                             </th>
-                            <th scope="col" id="thPrevQuarterHeader" class="py-3.5 px-4 text-center w-36 bg-slate-950 text-slate-300 font-semibold border-l border-slate-800" title="Variação Percentual em relação ao Trimestre Anterior">
-                                Var. % (Trim. Ant.)
+                            <th scope="col" id="thPrevQuarterHeader" class="py-3.5 px-4 text-center w-36 bg-slate-950 text-slate-300 font-semibold border-l border-slate-800" title="Valor em reais e variação percentual em relação ao Trimestre Anterior">
+                                Valor e Var. % (Trim. Ant.)
                             </th>
-                            <th scope="col" id="thSameQPrevYrHeader" class="py-3.5 px-4 text-center w-36 bg-slate-950 text-slate-300 font-semibold border-l border-slate-800" title="Variação Percentual em relação ao Mesmo Trimestre do Ano Anterior">
-                                Var. % (Mesmo Trim. Ant.)
+                            <th scope="col" id="thSameQPrevYrHeader" class="py-3.5 px-4 text-center w-36 bg-slate-950 text-slate-300 font-semibold border-l border-slate-800" title="Valor em reais e variação percentual em relação ao Mesmo Trimestre do Ano Anterior">
+                                Valor e Var. % (Mesmo Trim. Ant.)
                             </th>
                         </tr>
                     </thead>
@@ -608,8 +608,8 @@
                 sameQPrevYrTitle = "Mesmo Trim. Ant.";
             }
 
-            document.getElementById('thPrevQuarterHeader').textContent = `Var. % (${prevQTitle})`;
-            document.getElementById('thSameQPrevYrHeader').textContent = `Var. % (${sameQPrevYrTitle})`;
+            document.getElementById('thPrevQuarterHeader').textContent = `Valor e Var. % (${prevQTitle})`;
+            document.getElementById('thSameQPrevYrHeader').textContent = `Valor e Var. % (${sameQPrevYrTitle})`;
 
             // Extract Current XML Account Records
             parsedData = extractAccountsFromXmlDoc(xmlDoc);
@@ -952,8 +952,9 @@
                 const prevVal = getAccountValueFromMap(prevQAccountMap, item.code, item.stmtType);
                 const sameYrVal = getAccountValueFromMap(sameQPrevYrAccountMap, item.code, item.stmtType, item.valExercicioAnt);
 
-                const pctPrevHtml = renderPercentageBadge(item.valQuarter, prevVal);
-                const pctSameYrHtml = renderPercentageBadge(item.valQuarter, sameYrVal);
+                const invertVariationColor = item.stmtType === 'BPP';
+                const pctPrevHtml = renderComparativeValue(item.valQuarter, prevVal, invertVariationColor);
+                const pctSameYrHtml = renderComparativeValue(item.valQuarter, sameYrVal, invertVariationColor);
 
                 tr.innerHTML = `
                     <td class="py-2.5 px-4 font-mono text-xs text-slate-300 font-medium whitespace-nowrap">${item.code}</td>
@@ -969,17 +970,33 @@
             tableBody.appendChild(fragment);
         }
 
-        // Helper: Render Percentage Badge (Green for positive growth, Red for negative)
-        function renderPercentageBadge(currVal, oldVal) {
+        // Helper: Render comparative value and percentage badge.
+        // Assets keep positive growth green; liabilities invert colors because decreasing debt is better.
+        function renderComparativeValue(currVal, oldVal, invertVariationColor = false) {
+            if (oldVal === undefined || oldVal === null || isNaN(oldVal)) {
+                return `<span class="text-slate-600 text-[11px]">-</span>`;
+            }
+
+            const formattedOldVal = formatCurrency(oldVal);
+            const pctBadge = renderPercentageBadge(currVal, oldVal, invertVariationColor);
+
+            return `
+                <div class="flex flex-col items-end gap-1">
+                    <span class="text-slate-300 text-[11px] leading-none">${formattedOldVal}</span>
+                    ${pctBadge}
+                </div>
+            `;
+        }
+
+        function renderPercentageBadge(currVal, oldVal, invertVariationColor = false) {
             if (oldVal === undefined || oldVal === null || isNaN(oldVal)) {
                 return `<span class="text-slate-600 text-[11px]">-</span>`;
             }
 
             if (oldVal === 0) {
                 if (currVal === 0) return `<span class="text-slate-500 text-[11px]">0,0%</span>`;
-                return currVal > 0 ? 
-                    `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/50"><i class="fa-solid fa-arrow-up text-[9px]"></i> +100%</span>` :
-                    `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-950/80 text-rose-400 border border-rose-800/50"><i class="fa-solid fa-arrow-down text-[9px]"></i> -100%</span>`;
+                const varPct = currVal > 0 ? 100 : -100;
+                return renderVariationBadge(varPct, invertVariationColor);
             }
 
             const varPct = ((currVal - oldVal) / Math.abs(oldVal)) * 100;
@@ -988,13 +1005,20 @@
                 return `<span class="text-slate-400 text-[11px]">0,0%</span>`;
             }
 
-            const formattedPct = Math.abs(varPct).toFixed(1).replace('.', ',');
+            return renderVariationBadge(varPct, invertVariationColor);
+        }
 
-            if (varPct > 0) {
-                return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/50"><i class="fa-solid fa-arrow-up text-[9px]"></i> +${formattedPct}%</span>`;
-            } else {
-                return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-950/80 text-rose-400 border border-rose-800/50"><i class="fa-solid fa-arrow-down text-[9px]"></i> -${formattedPct}%</span>`;
-            }
+        function renderVariationBadge(varPct, invertVariationColor = false) {
+            const isIncrease = varPct > 0;
+            const isFavorable = invertVariationColor ? !isIncrease : isIncrease;
+            const formattedPct = Math.abs(varPct).toFixed(1).replace('.', ',');
+            const sign = isIncrease ? '+' : '-';
+            const icon = isIncrease ? 'fa-arrow-up' : 'fa-arrow-down';
+            const colorClasses = isFavorable
+                ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/50'
+                : 'bg-rose-950/80 text-rose-400 border-rose-800/50';
+
+            return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ${colorClasses} border"><i class="fa-solid ${icon} text-[9px]"></i> ${sign}${formattedPct}%</span>`;
         }
 
         function formatCurrency(val) {
