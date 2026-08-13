@@ -173,6 +173,54 @@ function branchChatsDecryptMessageImage(PDO $pdo, array $message): ?string
     return $dataUri;
 }
 
+
+function branchChatsDeleteChat(PDO $pdo, int $chatId, int $userId): void
+{
+    $stmt = $pdo->prepare(
+        'WITH RECURSIVE chat_tree AS (
+             SELECT id
+             FROM chats
+             WHERE id = :chat_id AND user_id = :user_id
+             UNION ALL
+             SELECT child.id
+             FROM chats child
+             INNER JOIN chat_tree parent ON parent.id = child.parent_chat_id
+             WHERE child.user_id = :child_user_id
+         )
+         SELECT id FROM chat_tree'
+    );
+    $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId, ':child_user_id' => $userId]);
+    $chatIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    if ($chatIds === []) {
+        return;
+    }
+
+    $chatPlaceholders = implode(',', array_fill(0, count($chatIds), '?'));
+    $stmt = $pdo->prepare(
+        "SELECT DISTINCT cm.mensagem_id
+         FROM chat_mensagens cm
+         INNER JOIN mensagens m ON m.id = cm.mensagem_id
+         WHERE cm.chat_id IN ($chatPlaceholders) AND m.user_id = ?"
+    );
+    $stmt->execute(array_merge($chatIds, [$userId]));
+    $messageIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+
+    $pdo->prepare('DELETE FROM chats WHERE id = :id AND user_id = :user_id')->execute([':id' => $chatId, ':user_id' => $userId]);
+
+    if ($messageIds === []) {
+        return;
+    }
+
+    $messagePlaceholders = implode(',', array_fill(0, count($messageIds), '?'));
+    $stmt = $pdo->prepare(
+        "DELETE m
+         FROM mensagens m
+         LEFT JOIN chat_mensagens cm ON cm.mensagem_id = m.id
+         WHERE m.user_id = ? AND m.id IN ($messagePlaceholders) AND cm.mensagem_id IS NULL"
+    );
+    $stmt->execute(array_merge([$userId], $messageIds));
+}
+
 function branchChatsDecryptMessages(PDO $pdo, array $messages): array
 {
     $update = null;
@@ -315,7 +363,9 @@ try {
     if ($action === 'delete_chat') {
         $chatId = (int)($input['chat_id'] ?? 0);
         branchChatsFind($pdo, $chatId, $userId);
-        $pdo->prepare('DELETE FROM chats WHERE id = :id AND user_id = :user_id')->execute([':id' => $chatId, ':user_id' => $userId]);
+        $pdo->beginTransaction();
+        branchChatsDeleteChat($pdo, $chatId, $userId);
+        $pdo->commit();
         branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId]]);
     }
 
@@ -390,7 +440,7 @@ try {
         $pdo->prepare('UPDATE chats SET read_marker_message_id = NULL WHERE id = :id AND user_id = :user_id')->execute([':id' => $chatId, ':user_id' => $userId]);
         $viewCount = (int)$view['view_count'] + 1;
         if ($view['max'] !== null && $viewCount >= (int)$view['max']) {
-            $pdo->prepare('DELETE FROM chats WHERE id = :id AND user_id = :user_id')->execute([':id' => $chatId, ':user_id' => $userId]);
+            branchChatsDeleteChat($pdo, $chatId, $userId);
             $pdo->commit();
             branchChatsRespond(['status' => 'success', 'data' => [
                 'deleted' => true,
