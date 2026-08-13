@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisador de Balanço Trimestral (ITR / CVM)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            800: '#166534',
+                            900: '#14532d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        .level-1 { font-weight: 700; background-color: rgba(30, 41, 59, 0.7); color: #34d399; }
+        .level-2 { font-weight: 600; color: #f1f5f9; }
+        .level-3 { font-weight: 500; color: #cbd5e1; }
+        .level-4 { font-weight: 400; color: #94a3b8; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased min-h-screen flex flex-col relative" id="dropZone">
+
+    <!-- Drag & Drop Overlay -->
+    <div id="dragOverlay" class="fixed inset-0 bg-brand-950/90 backdrop-blur-md z-50 hidden flex flex-col items-center justify-center border-4 border-dashed border-brand-500 pointer-events-none transition-all">
+        <i class="fa-solid fa-cloud-arrow-up text-6xl text-brand-400 mb-4 animate-bounce"></i>
+        <h2 class="text-2xl font-bold text-white mb-1">Solte o arquivo XML aqui</h2>
+        <p class="text-brand-300 text-sm">O sistema irá analisar e montar o balanço automaticamente</p>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+    <!-- Top Header -->
+    <header class="bg-slate-900/90 backdrop-blur border-b border-slate-800 text-white shadow-lg sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2.5 bg-brand-600/20 border border-brand-500/30 rounded-xl text-brand-400 shadow-inner">
+                        <i class="fa-solid fa-chart-pie text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold tracking-tight text-slate-100">Análise de Balanço Financeiro (ITR)</h1>
+                        <p class="text-xs text-slate-400">Demonstrações Financeiras CVM / B3</p>
+                    </div>
+                </div>
+                
+                <!-- Quick Info Badges -->
+                <div class="flex flex-wrap items-center gap-2 text-xs">
+                    <div class="bg-slate-800/80 border border-slate-700/60 rounded-lg px-3 py-1.5 flex items-center gap-2">
+                        <i class="fa-solid fa-building text-brand-400"></i>
+                        <span class="text-slate-400">Empresa:</span>
+                        <span id="badgeEmpresa" class="font-semibold text-slate-100">Aguardando Seleção</span>
+                    </div>
+                    <div class="bg-slate-800/80 border border-slate-700/60 rounded-lg px-3 py-1.5 flex items-center gap-2">
+                        <i class="fa-solid fa-id-card text-brand-400"></i>
+                        <span class="text-slate-400">CNPJ:</span>
+                        <span id="badgeCnpj" class="font-medium text-slate-300">-</span>
+                    </div>
+                    <div class="bg-slate-800/80 border border-slate-700/60 rounded-lg px-3 py-1.5 flex items-center gap-2">
+                        <i class="fa-solid fa-calendar-day text-brand-400"></i>
+                        <span class="text-slate-400">Ref:</span>
+                        <span id="badgeDataRef" class="font-medium text-slate-300">-</span>
+                    </div>
+                    <div class="bg-brand-950/80 border border-brand-500/40 text-brand-200 rounded-lg px-3 py-1.5 flex items-center gap-2">
+                        <i class="fa-solid fa-clock text-brand-400"></i>
+                        <span class="text-brand-300">Trimestre:</span>
+                        <span id="badgeQuarterTitle" class="font-bold text-brand-400 text-sm">-</span>
+                    </div>
+
+                    <!-- Direct File Upload Button -->
+                    <button type="button" onclick="document.getElementById('directFileInput').click()" class="bg-brand-600 hover:bg-brand-500 text-white font-semibold rounded-lg px-3.5 py-1.5 flex items-center gap-2 shadow-lg shadow-brand-900/30 transition cursor-pointer">
+                        <i class="fa-solid fa-folder-open text-sm"></i>
+                        <span>Carregar XML</span>
+                    </button>
+                    <input type="file" id="directFileInput" accept=".xml" onchange="handleFileUpload(event)" class="hidden">
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- Controls & Filters Toolbar -->
+        <div class="bg-slate-900 rounded-xl shadow-md border border-slate-800 p-4 mb-6 transition-all">
+            <!-- Server File Selector Box -->
+            <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 mb-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                <div class="flex items-center gap-2 text-xs text-brand-400 font-semibold">
+                    <i class="fa-solid fa-server text-sm"></i>
+                    <span>Servidor CVM:</span>
+                </div>
+                
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-grow max-w-3xl">
+                    <!-- Dropdown Company -->
+                    <div class="flex-grow">
+                        <label for="selectEmpresa" class="sr-only">Empresa</label>
+                        <select id="selectEmpresa" onchange="handleEmpresaChange()" class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium cursor-pointer">
+                            <option value="">-- Selecione uma Empresa --</option>
+                        </select>
+                    </div>
+
+                    <!-- Dropdown Quarter/ITR -->
+                    <div class="flex-grow">
+                        <label for="selectItr" class="sr-only">Trimestre / ITR</label>
+                        <select id="selectItr" onchange="handleItrChange()" disabled class="w-full bg-slate-900 border border-slate-700 text-slate-400 text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium disabled:opacity-50 cursor-pointer">
+                            <option value="">-- Selecione a Empresa Primeiro --</option>
+                        </select>
+                    </div>
+
+                    <!-- Server Action Buttons -->
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="openNewCompanyModal()" class="px-3 py-2 text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg flex items-center gap-1.5 transition whitespace-nowrap cursor-pointer shadow-sm" title="Cadastrar Nova Empresa">
+                            <i class="fa-solid fa-plus text-brand-400"></i>
+                            <span>Nova Empresa</span>
+                        </button>
+                        <button type="button" onclick="openServerUploadModal()" class="px-3 py-2 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-500 rounded-lg flex items-center gap-1.5 shadow-md shadow-brand-950 transition whitespace-nowrap cursor-pointer" title="Salvar Novo XML no Servidor">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            <span>Upar p/ Servidor</span>
+                        </button>
+                    </div>
+
+                    <div id="loadingStatus" class="hidden flex items-center gap-2 text-xs text-brand-400 font-medium animate-pulse">
+                        <i class="fa-solid fa-circle-notch fa-spin"></i>
+                        <span>Carregando XML...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statement Tabs & Filters -->
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                
+                <!-- Statement Tabs -->
+                <div class="flex flex-wrap items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800" id="statementTabs">
+                    <button onclick="switchTab('ALL')" id="tab-ALL" class="tab-btn px-3 py-1.5 rounded-md text-xs font-medium transition text-slate-400 hover:text-slate-200">
+                        Todas
+                    </button>
+                    <button onclick="switchTab('BPA')" id="tab-BPA" class="tab-btn active-tab px-3 py-1.5 rounded-md text-xs font-medium transition bg-brand-600 text-white shadow-sm">
+                        Ativo (BPA)
+                    </button>
+                    <button onclick="switchTab('BPP')" id="tab-BPP" class="tab-btn px-3 py-1.5 rounded-md text-xs font-medium transition text-slate-400 hover:text-slate-200">
+                        Passivo (BPP)
+                    </button>
+                    <button onclick="switchTab('DRE')" id="tab-DRE" class="tab-btn px-3 py-1.5 rounded-md text-xs font-medium transition text-slate-400 hover:text-slate-200">
+                        DRE
+                    </button>
+                </div>
+
+                <!-- Search and Tools -->
+                <div class="flex flex-wrap items-center gap-3">
+                    <!-- Search Input -->
+                    <div class="relative min-w-[220px]">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                        <input type="text" id="searchInput" oninput="handleSearch()" placeholder="Buscar conta ou código..." class="w-full bg-slate-950 border border-slate-700 text-slate-100 placeholder-slate-500 text-xs rounded-lg pl-8 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+
+                    <!-- Hide Zeroes Toggle (DEFAULT CHECKED) -->
+                    <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300 font-medium select-none bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 hover:border-slate-700">
+                        <input type="checkbox" id="toggleHideZeroes" checked onchange="renderTable()" class="rounded border-slate-700 bg-slate-900 text-brand-500 focus:ring-brand-500 h-4 w-4">
+                        <span>Ocultar Zeradas</span>
+                    </label>
+
+                    <!-- Export CSV -->
+                    <button onclick="exportCSV()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium px-3 py-2 rounded-lg transition flex items-center gap-1.5 cursor-pointer">
+                        <i class="fa-solid fa-file-csv text-brand-400"></i>
+                        <span>CSV</span>
+                    </button>
+
+                    <!-- Inspect XML Source -->
+                    <button onclick="openXmlModal()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium px-3 py-2 rounded-lg transition flex items-center gap-1.5 cursor-pointer">
+                        <i class="fa-solid fa-code text-brand-400"></i>
+                        <span>Ver XML</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Table Card -->
+        <div class="bg-slate-900 rounded-xl shadow-xl border border-slate-800 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-[800px]" id="financialTable">
+                    <thead>
+                        <tr class="bg-slate-950 border-b border-slate-800 text-xs uppercase tracking-wider text-slate-400 font-semibold">
+                            <th scope="col" class="py-3.5 px-4 w-36">Código Conta</th>
+                            <th scope="col" class="py-3.5 px-4">Descrição da Conta</th>
+                            <th scope="col" id="thQuarterHeader" class="py-3.5 px-4 text-right w-44 bg-brand-950/40 text-brand-300 font-bold border-l border-brand-900/30">
+                                Trimestre Atual
+                            </th>
+                            <th scope="col" id="thPrevQuarterHeader" class="py-3.5 px-4 text-center w-36 bg-slate-950 text-slate-300 font-semibold border-l border-slate-800" title="Variação Percentual em relação ao Trimestre Anterior">
+                                Var. % (Trim. Ant.)
+                            </th>
+                            <th scope="col" id="thSameQPrevYrHeader" class="py-3.5 px-4 text-center w-36 bg-slate-950 text-slate-300 font-semibold border-l border-slate-800" title="Variação Percentual em relação ao Mesmo Trimestre do Ano Anterior">
+                                Var. % (Mesmo Trim. Ant.)
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-800/60 text-sm font-mono">
+                        <tr>
+                            <td colspan="5" class="py-12 text-center text-slate-500 text-sm font-sans">
+                                <i class="fa-solid fa-folder-open text-3xl mb-3 block text-slate-600"></i>
+                                Nenhuma conta carregada.<br>
+                                <span class="text-xs text-slate-500">Selecione uma empresa acima ou carregue um arquivo XML.</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <!-- Footer summary -->
+            <div class="bg-slate-950/90 px-4 py-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-2">
+                <div>
+                    Mostrando <span id="recordCount" class="font-semibold text-slate-200">0</span> contas financeiras
+                </div>
+                <div class="flex items-center gap-4 text-slate-400">
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Sintética Principal</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block"></span> Analítica</span>
+                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-arrow-up text-emerald-400 text-[10px]"></i> Alta</span>
+                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-arrow-down text-rose-400 text-[10px]"></i> Queda</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal: Cadastro de Nova Empresa -->
+    <div id="newCompanyModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm hidden p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full shadow-2xl overflow-hidden p-6">
+            <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+                <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-building-circle-check text-brand-400"></i>
+                    Cadastrar Nova Empresa
+                </h3>
+                <button type="button" onclick="closeNewCompanyModal()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <form onsubmit="handleNewCompanySubmit(event)" class="space-y-4">
+                <div>
+                    <label for="newCvmCode" class="block text-xs font-semibold text-slate-300 mb-1">Código CVM (6 dígitos):</label>
+                    <input type="text" id="newCvmCode" placeholder="Ex: 002453" required maxlength="6" class="w-full bg-slate-950 border border-slate-700 text-slate-100 text-xs rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono">
+                </div>
+
+                <div>
+                    <label for="newCompanyName" class="block text-xs font-semibold text-slate-300 mb-1">Nome Razão Social da Empresa:</label>
+                    <input type="text" id="newCompanyName" placeholder="Ex: CEMIG - Cia Energética de Minas Gerais" required class="w-full bg-slate-950 border border-slate-700 text-slate-100 text-xs rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+
+                <div class="pt-2 flex items-center justify-end gap-2">
+                    <button type="button" onclick="closeNewCompanyModal()" class="px-4 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg transition">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 text-xs font-bold text-white bg-brand-600 hover:bg-brand-500 rounded-lg shadow-md transition">Salvar Empresa</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Salvar XML no Servidor -->
+    <div id="serverUploadModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm hidden p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden p-6">
+            <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+                <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-cloud-arrow-up text-brand-400"></i>
+                    Salvar XML no Servidor
+                </h3>
+                <button type="button" onclick="closeServerUploadModal()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <form onsubmit="handleServerUploadSubmit(event)" class="space-y-4">
+                <div>
+                    <label for="uploadSelectEmpresa" class="block text-xs font-semibold text-slate-300 mb-1">Selecione a Empresa do Arquivo:</label>
+                    <select id="uploadSelectEmpresa" required class="w-full bg-slate-950 border border-slate-700 text-slate-100 text-xs rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                        <option value="">-- Selecione a Empresa --</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="uploadXmlFile" class="block text-xs font-semibold text-slate-300 mb-1">Selecione o Arquivo XML (.xml):</label>
+                    <input type="file" id="uploadXmlFile" accept=".xml" required onchange="previewUploadXml(event)" class="w-full bg-slate-950 border border-slate-700 text-slate-300 text-xs rounded-lg px-3 py-2 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-brand-600 file:text-white hover:file:bg-brand-500">
+                </div>
+
+                <!-- Preview Identificado -->
+                <div id="uploadPreviewBox" class="hidden bg-slate-950/90 border border-slate-800 rounded-xl p-3 space-y-1 text-xs">
+                    <div class="text-slate-400 font-semibold mb-1">Dados Detectados do XML:</div>
+                    <div class="flex justify-between text-slate-300"><span class="text-slate-500">Nome sugerido:</span> <span id="prevFilename" class="font-mono text-brand-300"></span></div>
+                    <div class="flex justify-between text-slate-300"><span class="text-slate-500">Trimestre/Rótulo:</span> <span id="prevLabel" class="font-semibold text-slate-200"></span></div>
+                </div>
+
+                <!-- Upload Progress Bar Container -->
+                <div id="uploadProgressBarBox" class="hidden space-y-2 pt-1">
+                    <div class="flex justify-between items-center text-xs">
+                        <span id="uploadProgressStatus" class="text-brand-400 font-medium">Enviando arquivo XML...</span>
+                        <span id="uploadProgressPercent" class="text-slate-300 font-mono font-bold">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
+                        <div id="uploadProgressBar" class="bg-brand-500 h-2.5 rounded-full transition-all duration-200" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div class="pt-2 flex items-center justify-end gap-2">
+                    <button type="button" id="btnCancelServerUpload" onclick="closeServerUploadModal()" class="px-4 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg transition">Cancelar</button>
+                    <button type="submit" id="btnSubmitServerUpload" class="px-4 py-2 text-xs font-bold text-white bg-brand-600 hover:bg-brand-500 rounded-lg shadow-md transition flex items-center gap-2">
+                        <i class="fa-solid fa-upload"></i>
+                        <span>Enviar p/ Servidor</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: XML Código Fonte -->
+    <div id="xmlModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm hidden p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div class="flex items-center justify-between p-4 border-b border-slate-800">
+                <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-code text-brand-400"></i>
+                    Código XML da Demonstração
+                </h3>
+                <button type="button" onclick="closeXmlModal()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="p-4 flex-grow overflow-auto bg-slate-950">
+                <textarea id="xmlSourceTextarea" class="w-full h-96 bg-transparent font-mono text-xs text-slate-300 border-0 focus:outline-none resize-none" placeholder="Cole seu XML aqui..."></textarea>
+            </div>
+            <div class="p-4 border-t border-slate-800 bg-slate-900 flex items-center justify-between">
+                <button type="button" onclick="copyXmlSource()" class="px-3 py-1.5 text-xs font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-lg transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-copy"></i>
+                    <span>Copiar XML</span>
+                </button>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="closeXmlModal()" class="px-4 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg transition">Fechar</button>
+                    <button type="button" onclick="applyXmlTextarea()" class="px-4 py-2 text-xs font-bold text-white bg-brand-600 hover:bg-brand-500 rounded-lg shadow-md transition">Processar este XML</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // State Management
+        let rawXmlContent = "";
+        let parsedData = [];
+        let activeTab = "BPA";
+        let searchQuery = "";
+        let currentQuarterTitle = "Trimestre Atual";
+        let currentCvmCode = "";
+
+        // Comparative Quarters Data Maps: { [codigoConta]: valor }
+        let prevQAccountMap = {};
+        let sameQPrevYrAccountMap = {};
+        let prevQTitle = "Trim. Ant.";
+        let sameQPrevYrTitle = "Mesmo Trim. Ant.";
+
+        // Local Company & Files Catalog (Fallbacks if no manifest.json exists)
+        let catalogData = {
+            "002453": {
+                name: "CEMIG - Cia Energética de Minas Gerais",
+                files: [
+                    { name: "002453ITR31-03-2026v1.xml", label: "1T26 - 31/03/2026 (v1)" },
+                    { name: "002453ITR04-12-2025v3.xml", label: "4T25 - 04/12/2025 (v3)" },
+                    { name: "002453ITR30-06-2025v1.xml", label: "2T25 - 30/06/2025 (v1)" }
+                ]
+            },
+            "023795": {
+                name: "Caixa Seguridade Participações S.A.",
+                files: [
+                    { name: "023795ITR31-03-2026v1.xml", label: "1T26 - 31/03/2026 (v1)" },
+                    { name: "023795ITR30-06-2025v1.xml", label: "2T25 - 30/06/2025 (v1)" }
+                ]
+            }
+        };
+
+        // Initialize application on load
+        window.addEventListener('DOMContentLoaded', () => {
+            initServerCatalog();
+            setupDragAndDrop();
+        });
+
+        // Toast Notification System
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            const bgClass = type === 'success' ? 'bg-emerald-950 border-emerald-500/50 text-emerald-200' :
+                           type === 'error' ? 'bg-rose-950 border-rose-500/50 text-rose-200' :
+                           'bg-slate-900 border-slate-700 text-slate-200';
+            const icon = type === 'success' ? 'fa-circle-check text-emerald-400' :
+                         type === 'error' ? 'fa-triangle-exclamation text-rose-400' :
+                         'fa-circle-info text-brand-400';
+
+            toast.className = `p-3.5 rounded-xl border shadow-xl flex items-center gap-3 text-xs pointer-events-auto transition-all transform translate-y-2 opacity-0 ${bgClass}`;
+            toast.innerHTML = `<i class="fa-solid ${icon} text-base"></i><span>${message}</span>`;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // Initialize Catalog from PHP/JSON or fallback
+        async function initServerCatalog() {
+            try {
+                const response = await fetch('api.php?action=get_companies');
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success && result.data && Object.keys(result.data).length > 0) {
+                        catalogData = result.data;
+                    }
+                }
+            } catch (err) {
+                console.warn('Backend API não detectado. Usando catálogo local.', err);
+            }
+            populateEmpresaDropdown();
+        }
+
+        function populateEmpresaDropdown() {
+            const selectEmpresa = document.getElementById('selectEmpresa');
+            selectEmpresa.innerHTML = '<option value="">-- Selecione uma Empresa --</option>';
+
+            Object.keys(catalogData).sort().forEach(cvmCode => {
+                const emp = catalogData[cvmCode];
+                const opt = document.createElement('option');
+                opt.value = cvmCode;
+                opt.textContent = `[${cvmCode}] ${emp.name}`;
+                selectEmpresa.appendChild(opt);
+            });
+        }
+
+        function handleEmpresaChange() {
+            const cvmCode = document.getElementById('selectEmpresa').value;
+            const selectItr = document.getElementById('selectItr');
+
+            currentCvmCode = cvmCode;
+            selectItr.innerHTML = '';
+            
+            if (!cvmCode || !catalogData[cvmCode]) {
+                selectItr.disabled = true;
+                selectItr.innerHTML = '<option value="">-- Selecione a Empresa Primeiro --</option>';
+                return;
+            }
+
+            const emp = catalogData[cvmCode];
+            selectItr.disabled = false;
+            selectItr.innerHTML = '<option value="">-- Selecione o Trimestre / ITR --</option>';
+
+            if (emp.files && emp.files.length > 0) {
+                emp.files.forEach(file => {
+                    const opt = document.createElement('option');
+                    opt.value = `empresas/${cvmCode}/${file.name}`;
+                    opt.textContent = file.label || file.name;
+                    selectItr.appendChild(opt);
+                });
+            } else {
+                selectItr.innerHTML = '<option value="">Nenhum ITR cadastrado para esta empresa</option>';
+            }
+
+            document.getElementById('badgeEmpresa').textContent = emp.name;
+            document.getElementById('badgeCnpj').textContent = cvmCode;
+        }
+
+        async function handleItrChange() {
+            const filePath = document.getElementById('selectItr').value;
+            if (!filePath) return;
+
+            const loadingStatus = document.getElementById('loadingStatus');
+            loadingStatus.classList.remove('hidden');
+
+            try {
+                const response = await fetch(filePath);
+                if (!response.ok) throw new Error(`Não foi possível baixar o arquivo (${response.status})`);
+                
+                const xmlText = await response.text();
+                await processXmlContent(xmlText);
+                showToast("ITR do servidor e dados comparativos carregados!", "success");
+            } catch (err) {
+                showToast(`Erro ao abrir o XML do servidor: ${err.message}`, "error");
+            } finally {
+                loadingStatus.classList.add('hidden');
+            }
+        }
+
+        // XML Processing Engine (Supports Comparative Quarters)
+        async function processXmlContent(xmlText) {
+            rawXmlContent = xmlText;
+            document.getElementById('xmlSourceTextarea').value = xmlText;
+
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+
+            if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
+                showToast("Erro ao ler o arquivo XML: Formato inválido.", "error");
+                return;
+            }
+
+            // Extract Company Info
+            const empName = getNodeText(xmlDoc, ['NomeEmpresa', 'RazaoSocial', 'NomeCompanhia', 'DENOM_CIA']) || "Empresa CVM";
+            const cnpj = getNodeText(xmlDoc, ['CNPJEmpresa', 'CNPJ', 'CNPJ_CIA', 'CodigoCVM']) || currentCvmCode || "-";
+            const dtRef = getNodeText(xmlDoc, ['DtFimTrimestreAtual', 'DataReferencia', 'DataFimTrimestre', 'DT_REFER']) || "";
+
+            document.getElementById('badgeEmpresa').textContent = empName;
+            document.getElementById('badgeCnpj').textContent = cnpj;
+            document.getElementById('badgeDataRef').textContent = dtRef || "-";
+
+            // Infer CVM Code if not set
+            if (!currentCvmCode && cnpj.length === 6) {
+                currentCvmCode = cnpj;
+            }
+
+            // Calculate Dynamic Quarter Info
+            const qInfo = parseQuarterAndYear(dtRef);
+            currentQuarterTitle = qInfo ? qInfo.key : "Trimestre Atual";
+            document.getElementById('badgeQuarterTitle').textContent = currentQuarterTitle;
+            document.getElementById('thQuarterHeader').textContent = `${currentQuarterTitle} (Valor)`;
+
+            // Calculate Target Comparative Keys (e.g. 2T25 -> Prev: 1T25, Same Prev Yr: 2T24)
+            if (qInfo) {
+                prevQTitle = getPrevQuarterKey(qInfo.quarter, qInfo.year);
+                sameQPrevYrTitle = getSameQuarterPrevYearKey(qInfo.quarter, qInfo.year);
+            } else {
+                prevQTitle = "Trim. Ant.";
+                sameQPrevYrTitle = "Mesmo Trim. Ant.";
+            }
+
+            document.getElementById('thPrevQuarterHeader').textContent = `Var. % (${prevQTitle})`;
+            document.getElementById('thSameQPrevYrHeader').textContent = `Var. % (${sameQPrevYrTitle})`;
+
+            // Extract Current XML Account Records
+            parsedData = extractAccountsFromXmlDoc(xmlDoc);
+
+            // Fetch Comparative XMLs from server catalog asynchronously if company code is known
+            await fetchComparativeXmls(prevQTitle, sameQPrevYrTitle);
+
+            // Render updated table
+            const activeTabCount = parsedData.filter(d => activeTab === 'ALL' || d.stmtType === activeTab).length;
+            if (activeTabCount === 0 && parsedData.length > 0) {
+                switchTab('ALL');
+            } else {
+                renderTable();
+            }
+        }
+
+        // Helper: Get text from inner node tag
+        function getNodeText(parent, tagNames) {
+            for (const tagName of tagNames) {
+                const els = parent.getElementsByTagName(tagName);
+                if (els && els.length > 0 && els[0].textContent) {
+                    return els[0].textContent.trim();
+                }
+            }
+            return "";
+        }
+
+        // Helper: Parse XML Value string into float number
+        function parseXmlValue(str) {
+            if (!str) return 0;
+            str = str.toString().trim();
+            if (!str) return 0;
+
+            let isNegative = false;
+            if (str.startsWith('(') && str.endsWith(')')) {
+                isNegative = true;
+                str = str.substring(1, str.length - 1).trim();
+            }
+
+            if (str.includes(',') && str.includes('.')) {
+                str = str.replace(/\./g, '').replace(',', '.');
+            } else if (str.includes(',')) {
+                str = str.replace(',', '.');
+            }
+
+            let val = parseFloat(str);
+            if (isNaN(val)) return 0;
+            return isNegative ? -Math.abs(val) : val;
+        }
+
+        // Helper: Extract Accounts from DOM Document
+        function extractAccountsFromXmlDoc(xmlDoc) {
+            const accounts = [];
+            let contaNodes = Array.from(xmlDoc.getElementsByTagName("Conta"));
+            if (contaNodes.length === 0) {
+                contaNodes = Array.from(xmlDoc.querySelectorAll("ContaInformada, EstruturaConta, ContaDemonstracao"));
+            }
+
+            contaNodes.forEach(node => {
+                const rawCode = getNodeText(node, ['CodigoConta', 'CdConta', 'CodConta', 'CD_CONTA', 'Codigo']);
+                const desc = getNodeText(node, ['DescricaoConta', 'DsConta', 'Descricao', 'DS_CONTA']);
+                const rawValQuarter = getNodeText(node, ['TrimestreAtual', 'ValorTrimestreAtual', 'ValorConta', 'Valor', 'VL_CONTA']);
+                const rawValExercicioAnt = getNodeText(node, ['ExercicioAnterior', 'ValorExercicioAnterior', 'TrimestreAnterior', 'VL_CONTA_PAST']);
+
+                const code = rawCode ? rawCode.trim() : "";
+                const valQuarter = parseXmlValue(rawValQuarter);
+                const valExercicioAnt = parseXmlValue(rawValExercicioAnt);
+
+                if (!code && !desc) return;
+
+                let stmtType = "ALL";
+                let parentNode = node.parentNode;
+                while (parentNode && parentNode.nodeName) {
+                    const tag = parentNode.nodeName.toUpperCase();
+                    if (["BPA", "BPP", "DRE"].includes(tag)) {
+                        stmtType = tag;
+                        break;
+                    }
+                    parentNode = parentNode.parentNode;
+                }
+
+                if (stmtType === "ALL" && code) {
+                    if (code.startsWith("1")) stmtType = "BPA";
+                    else if (code.startsWith("2")) stmtType = "BPP";
+                    else if (code.startsWith("3")) stmtType = "DRE";
+                }
+
+                accounts.push({
+                    code: code || "-",
+                    desc: desc || "Sem Descrição",
+                    valQuarter: valQuarter,
+                    valExercicioAnt: valExercicioAnt,
+                    stmtType: stmtType
+                });
+            });
+
+            return accounts;
+        }
+
+        // Helper: Lookup account value strictly by CodigoConta ID and Statement Type
+        function getAccountValueFromMap(map, code, stmtType, fallbackVal = undefined) {
+            const cleanCode = (code || "").trim();
+            const cleanStmt = (stmtType || "").trim().toUpperCase();
+
+            if (cleanStmt && map[`${cleanStmt}::${cleanCode}`] !== undefined) {
+                return map[`${cleanStmt}::${cleanCode}`];
+            }
+            if (map[cleanCode] !== undefined) {
+                return map[cleanCode];
+            }
+            return fallbackVal;
+        }
+
+        // Fetch & Parse Historical XMLs for Percentage Comparison
+        async function fetchComparativeXmls(targetPrevKey, targetSameYrKey) {
+            prevQAccountMap = {};
+            sameQPrevYrAccountMap = {};
+
+            if (!currentCvmCode || !catalogData[currentCvmCode] || !catalogData[currentCvmCode].files) {
+                return;
+            }
+
+            const files = catalogData[currentCvmCode].files;
+            
+            let prevFile = null;
+            let sameYrFile = null;
+
+            files.forEach(f => {
+                const fKey = extractQuarterKeyFromFile(f);
+                if (fKey === targetPrevKey) prevFile = f;
+                if (fKey === targetSameYrKey) sameYrFile = f;
+            });
+
+            const fetchPromises = [];
+
+            if (prevFile) {
+                fetchPromises.push(
+                    fetch(`empresas/${currentCvmCode}/${prevFile.name}`)
+                        .then(r => r.text())
+                        .then(xmlStr => {
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(xmlStr, "text/xml");
+                            const accs = extractAccountsFromXmlDoc(doc);
+                            accs.forEach(a => {
+                                if (a.code) {
+                                    prevQAccountMap[`${a.stmtType}::${a.code}`] = a.valQuarter;
+                                    prevQAccountMap[a.code] = a.valQuarter;
+                                }
+                            });
+                        })
+                        .catch(err => console.warn("Erro ao buscar XML comparativo anterior:", err))
+                );
+            }
+
+            if (sameYrFile) {
+                fetchPromises.push(
+                    fetch(`empresas/${currentCvmCode}/${sameYrFile.name}`)
+                        .then(r => r.text())
+                        .then(xmlStr => {
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(xmlStr, "text/xml");
+                            const accs = extractAccountsFromXmlDoc(doc);
+                            accs.forEach(a => {
+                                if (a.code) {
+                                    sameQPrevYrAccountMap[`${a.stmtType}::${a.code}`] = a.valQuarter;
+                                    sameQPrevYrAccountMap[a.code] = a.valQuarter;
+                                }
+                            });
+                        })
+                        .catch(err => console.warn("Erro ao buscar XML comparativo ano anterior:", err))
+                );
+            }
+
+            await Promise.allSettled(fetchPromises);
+        }
+
+        // Quarter Parsing Math Utilities
+        function parseQuarterAndYear(dateStr) {
+            if (!dateStr) return null;
+
+            let day, month, year;
+            if (dateStr.includes('/')) {
+                const parts = dateStr.split('/');
+                if (parts.length === 3) {
+                    day = parseInt(parts[0], 10);
+                    month = parseInt(parts[1], 10);
+                    year = parseInt(parts[2], 10);
+                }
+            } else if (dateStr.includes('-')) {
+                const parts = dateStr.split('-');
+                if (parts.length === 3) {
+                    if (parts[0].length === 4) {
+                        year = parseInt(parts[0], 10);
+                        month = parseInt(parts[1], 10);
+                        day = parseInt(parts[2], 10);
+                    } else {
+                        day = parseInt(parts[0], 10);
+                        month = parseInt(parts[1], 10);
+                        year = parseInt(parts[2], 10);
+                    }
+                }
+            }
+
+            if (!month || !year || isNaN(month) || isNaN(year)) return null;
+
+            let q = 1;
+            if (month >= 1 && month <= 3) q = 1;
+            else if (month >= 4 && month <= 6) q = 2;
+            else if (month >= 7 && month <= 9) q = 3;
+            else if (month >= 10 && month <= 12) q = 4;
+
+            const shortYear = year.toString().slice(-2);
+            return { quarter: q, year: year, shortYear: shortYear, key: `${q}T${shortYear}` };
+        }
+
+        function getPrevQuarterKey(q, year) {
+            let prevQ = q - 1;
+            let prevYr = year;
+            if (prevQ < 1) {
+                prevQ = 4;
+                prevYr = year - 1;
+            }
+            return `${prevQ}T${prevYr.toString().slice(-2)}`;
+        }
+
+        function getSameQuarterPrevYearKey(q, year) {
+            let prevYr = year - 1;
+            return `${q}T${prevYr.toString().slice(-2)}`;
+        }
+
+        function extractQuarterKeyFromFile(fileObj) {
+            if (!fileObj) return "";
+            if (fileObj.label) {
+                const match = fileObj.label.match(/([1-4]T\d{2})/i);
+                if (match) return match[1].toUpperCase();
+            }
+            if (fileObj.name) {
+                const match = fileObj.name.match(/(\d{2})[-_.](\d{2})[-_.](\d{4})/);
+                if (match) {
+                    const qInfo = parseQuarterAndYear(`${match[1]}/${match[2]}/${match[3]}`);
+                    if (qInfo) return qInfo.key;
+                }
+            }
+            return "";
+        }
+
+        // Render Table Rows with Percentage Variations
+        function renderTable() {
+            const tableBody = document.getElementById('tableBody');
+            const hideZeroes = document.getElementById('toggleHideZeroes').checked;
+
+            tableBody.innerHTML = '';
+
+            let filtered = parsedData.filter(item => {
+                if (activeTab !== 'ALL' && item.stmtType !== activeTab) return false;
+                
+                if (hideZeroes && Math.abs(item.valQuarter) < 0.001) return false;
+
+                if (searchQuery) {
+                    const q = searchQuery.toLowerCase();
+                    return item.code.toLowerCase().includes(q) || item.desc.toLowerCase().includes(q);
+                }
+                return true;
+            });
+
+            document.getElementById('recordCount').textContent = filtered.length;
+
+            if (filtered.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="py-12 text-center text-slate-500 text-sm font-sans">
+                            <i class="fa-solid fa-filter-circle-xmark text-3xl mb-3 block text-slate-600"></i>
+                            Nenhuma conta encontrada para o filtro selecionado.<br>
+                            <span class="text-xs text-slate-500">Tente trocar de aba ou desmarcar 'Ocultar Zeradas'.</span>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+
+            filtered.forEach(item => {
+                const tr = document.createElement('tr');
+                
+                // Account Level Hierarchy
+                const dots = (item.code.match(/\./g) || []).length;
+                let levelClass = "level-4";
+                let indentPx = dots * 16;
+                if (dots === 0) levelClass = "level-1";
+                else if (dots === 1) levelClass = "level-2";
+                else if (dots === 2) levelClass = "level-3";
+
+                tr.className = `border-b border-slate-800/60 hover:bg-slate-800/40 transition-colors ${levelClass}`;
+
+                // Current Quarter Value Formatting
+                const formattedVal = formatCurrency(item.valQuarter);
+                const valColorClass = item.valQuarter < 0 ? 'text-rose-400 font-semibold' : 
+                                     item.valQuarter > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-500';
+
+                // Percentage Variations Calculation using strict CodigoConta ID lookup
+                const prevVal = getAccountValueFromMap(prevQAccountMap, item.code, item.stmtType);
+                const sameYrVal = getAccountValueFromMap(sameQPrevYrAccountMap, item.code, item.stmtType, item.valExercicioAnt);
+
+                const pctPrevHtml = renderPercentageBadge(item.valQuarter, prevVal);
+                const pctSameYrHtml = renderPercentageBadge(item.valQuarter, sameYrVal);
+
+                tr.innerHTML = `
+                    <td class="py-2.5 px-4 font-mono text-xs text-slate-300 font-medium whitespace-nowrap">${item.code}</td>
+                    <td class="py-2.5 px-4 font-sans text-xs" style="padding-left: ${16 + indentPx}px">${item.desc}</td>
+                    <td class="py-2.5 px-4 text-right font-mono text-xs ${valColorClass} bg-brand-950/20 border-l border-brand-900/20">${formattedVal}</td>
+                    <td class="py-2.5 px-4 text-center font-mono text-xs border-l border-slate-800">${pctPrevHtml}</td>
+                    <td class="py-2.5 px-4 text-center font-mono text-xs border-l border-slate-800">${pctSameYrHtml}</td>
+                `;
+
+                fragment.appendChild(tr);
+            });
+
+            tableBody.appendChild(fragment);
+        }
+
+        // Helper: Render Percentage Badge (Green for positive growth, Red for negative)
+        function renderPercentageBadge(currVal, oldVal) {
+            if (oldVal === undefined || oldVal === null || isNaN(oldVal)) {
+                return `<span class="text-slate-600 text-[11px]">-</span>`;
+            }
+
+            if (oldVal === 0) {
+                if (currVal === 0) return `<span class="text-slate-500 text-[11px]">0,0%</span>`;
+                return currVal > 0 ? 
+                    `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/50"><i class="fa-solid fa-arrow-up text-[9px]"></i> +100%</span>` :
+                    `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-950/80 text-rose-400 border border-rose-800/50"><i class="fa-solid fa-arrow-down text-[9px]"></i> -100%</span>`;
+            }
+
+            const varPct = ((currVal - oldVal) / Math.abs(oldVal)) * 100;
+
+            if (Math.abs(varPct) < 0.05) {
+                return `<span class="text-slate-400 text-[11px]">0,0%</span>`;
+            }
+
+            const formattedPct = Math.abs(varPct).toFixed(1).replace('.', ',');
+
+            if (varPct > 0) {
+                return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/50"><i class="fa-solid fa-arrow-up text-[9px]"></i> +${formattedPct}%</span>`;
+            } else {
+                return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-950/80 text-rose-400 border border-rose-800/50"><i class="fa-solid fa-arrow-down text-[9px]"></i> -${formattedPct}%</span>`;
+            }
+        }
+
+        function formatCurrency(val) {
+            if (val === 0 || Math.abs(val) < 0.001) return "0,00";
+            return new Intl.NumberFormat('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(val);
+        }
+
+        // Tab and Filter Handlers
+        function switchTab(tabKey) {
+            activeTab = tabKey;
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.className = "tab-btn px-3 py-1.5 rounded-md text-xs font-medium transition text-slate-400 hover:text-slate-200";
+            });
+            const activeBtn = document.getElementById(`tab-${tabKey}`);
+            if (activeBtn) {
+                activeBtn.className = "tab-btn active-tab px-3 py-1.5 rounded-md text-xs font-medium transition bg-brand-600 text-white shadow-sm";
+            }
+            renderTable();
+        }
+
+        function handleSearch() {
+            searchQuery = document.getElementById('searchInput').value.trim();
+            renderTable();
+        }
+
+        // Direct File Upload & Drag-and-Drop
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                await processXmlContent(e.target.result);
+                showToast(`Arquivo "${file.name}" carregado!`, "success");
+            };
+            reader.readAsText(file);
+        }
+
+        function setupDragAndDrop() {
+            const dropZone = document.getElementById('dropZone');
+            const overlay = document.getElementById('dragOverlay');
+
+            window.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                overlay.classList.remove('hidden');
+            });
+
+            overlay.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                overlay.classList.add('hidden');
+            });
+
+            window.addEventListener('drop', (e) => {
+                e.preventDefault();
+                overlay.classList.add('hidden');
+                
+                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    const file = e.dataTransfer.files[0];
+                    if (file.name.endsWith('.xml')) {
+                        const reader = new FileReader();
+                        reader.onload = async (evt) => {
+                            await processXmlContent(evt.target.result);
+                            showToast(`Arquivo "${file.name}" importado!`, "success");
+                        };
+                        reader.readAsText(file);
+                    } else {
+                        showToast("Por favor, solte apenas arquivos com extensão .XML", "error");
+                    }
+                }
+            });
+        }
+
+        // Export CSV
+        function exportCSV() {
+            if (parsedData.length === 0) {
+                showToast("Não há dados para exportar no momento.", "error");
+                return;
+            }
+
+            let csvContent = `Código Conta;Descrição da Conta;${currentQuarterTitle};Var % ${prevQTitle};Var % ${sameQPrevYrTitle}\n`;
+            parsedData.forEach(item => {
+                const descClean = item.desc.replace(/;/g, ',');
+                const valClean = item.valQuarter.toString().replace('.', ',');
+                
+                const prevVal = getAccountValueFromMap(prevQAccountMap, item.code, item.stmtType);
+                const sameYrVal = getAccountValueFromMap(sameQPrevYrAccountMap, item.code, item.stmtType, item.valExercicioAnt);
+                
+                const pctPrev = (prevVal !== undefined && prevVal !== 0) ? (((item.valQuarter - prevVal) / Math.abs(prevVal)) * 100).toFixed(2).replace('.', ',') + '%' : '-';
+                const pctSameYr = (sameYrVal !== undefined && sameYrVal !== 0) ? (((item.valQuarter - sameYrVal) / Math.abs(sameYrVal)) * 100).toFixed(2).replace('.', ',') + '%' : '-';
+
+                csvContent += `"${item.code}";"${descClean}";"${valClean}";"${pctPrev}";"${pctSameYr}"\n`;
+            });
+
+            const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Balanco_${currentQuarterTitle}_Export.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast("Exportação CSV concluída com sucesso!", "success");
+        }
+
+        // Modal Handlers
+        function openNewCompanyModal() {
+            document.getElementById('newCompanyModal').classList.remove('hidden');
+        }
+        function closeNewCompanyModal() {
+            document.getElementById('newCompanyModal').classList.add('hidden');
+        }
+
+        async function handleNewCompanySubmit(e) {
+            e.preventDefault();
+            const cvmCode = document.getElementById('newCvmCode').value.padStart(6, '0');
+            const name = document.getElementById('newCompanyName').value.trim();
+
+            try {
+                const res = await fetch('api.php?action=add_company', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cvm_code: cvmCode, name: name })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    catalogData = data.data;
+                    populateEmpresaDropdown();
+                    document.getElementById('selectEmpresa').value = cvmCode;
+                    handleEmpresaChange();
+                    closeNewCompanyModal();
+                    showToast(`Empresa "${name}" cadastrada!`, "success");
+                } else {
+                    showToast(data.message || "Erro ao cadastrar empresa.", "error");
+                }
+            } catch (err) {
+                // Local Fallback
+                catalogData[cvmCode] = { name: name, files: [] };
+                populateEmpresaDropdown();
+                document.getElementById('selectEmpresa').value = cvmCode;
+                handleEmpresaChange();
+                closeNewCompanyModal();
+                showToast(`Empresa "${name}" cadastrada localmente!`, "success");
+            }
+        }
+
+        function openServerUploadModal() {
+            const select = document.getElementById('uploadSelectEmpresa');
+            select.innerHTML = '<option value="">-- Selecione a Empresa --</option>';
+            Object.keys(catalogData).sort().forEach(cvmCode => {
+                const opt = document.createElement('option');
+                opt.value = cvmCode;
+                opt.textContent = `[${cvmCode}] ${catalogData[cvmCode].name}`;
+                select.appendChild(opt);
+            });
+            document.getElementById('serverUploadModal').classList.remove('hidden');
+        }
+
+        function closeServerUploadModal() {
+            document.getElementById('serverUploadModal').classList.add('hidden');
+            document.getElementById('uploadPreviewBox').classList.add('hidden');
+            document.getElementById('uploadProgressBarBox').classList.add('hidden');
+        }
+
+        function previewUploadXml(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const xmlText = evt.target.result;
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+
+                const dtRef = getNodeText(xmlDoc, ['DtFimTrimestreAtual', 'DataReferencia', 'DataFimTrimestre', 'DT_REFER']);
+                const cvmCode = document.getElementById('uploadSelectEmpresa').value || "000000";
+                
+                const qInfo = parseQuarterAndYear(dtRef);
+                const quarterLabel = qInfo ? qInfo.key : "Trimestre";
+                const suggestedFilename = `${cvmCode}ITR_${quarterLabel}.xml`;
+
+                document.getElementById('prevFilename').textContent = suggestedFilename;
+                document.getElementById('prevLabel').textContent = `${quarterLabel} - ${dtRef || 'Sem data'}`;
+                document.getElementById('uploadPreviewBox').classList.remove('hidden');
+            };
+            reader.readAsText(file);
+        }
+
+        function handleServerUploadSubmit(e) {
+            e.preventDefault();
+            const cvmCode = document.getElementById('uploadSelectEmpresa').value;
+            const fileInput = document.getElementById('uploadXmlFile');
+            const file = fileInput.files[0];
+
+            if (!cvmCode || !file) {
+                showToast("Selecione a empresa e o arquivo XML.", "error");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const xmlContent = evt.target.result;
+                const filename = document.getElementById('prevFilename').textContent || file.name;
+                const label = document.getElementById('prevLabel').textContent || filename;
+
+                // UI Progress Setup
+                const progressBox = document.getElementById('uploadProgressBarBox');
+                const progressBar = document.getElementById('uploadProgressBar');
+                const progressPercent = document.getElementById('uploadProgressPercent');
+                const btnSubmit = document.getElementById('btnSubmitServerUpload');
+
+                progressBox.classList.remove('hidden');
+                btnSubmit.disabled = true;
+                btnSubmit.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i><span>Enviando...</span>`;
+
+                const formData = new FormData();
+                formData.append('action', 'upload_xml');
+                formData.append('cvm_code', cvmCode);
+                formData.append('filename', filename);
+                formData.append('label', label);
+                formData.append('company_name', catalogData[cvmCode]?.name || "");
+                formData.append('xml_content', xmlContent);
+
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', 'api.php', true);
+
+                xhr.upload.onprogress = function(event) {
+                    if (event.lengthComputable) {
+                        const percent = Math.round((event.loaded / event.total) * 100);
+                        progressBar.style.width = percent + '%';
+                        progressPercent.textContent = percent + '%';
+                    }
+                };
+
+                xhr.onload = async function() {
+                    btnSubmit.disabled = false;
+                    btnSubmit.innerHTML = `<i class="fa-solid fa-upload"></i><span>Enviar p/ Servidor</span>`;
+
+                    if (xhr.status === 200) {
+                        try {
+                            const res = JSON.parse(xhr.responseText);
+                            if (res.success) {
+                                catalogData = res.data;
+                                populateEmpresaDropdown();
+                                document.getElementById('selectEmpresa').value = cvmCode;
+                                handleEmpresaChange();
+                                closeServerUploadModal();
+                                await processXmlContent(xmlContent);
+                                showToast("XML salvo e processado com sucesso!", "success");
+                            } else {
+                                showToast(res.message || "Erro no envio.", "error");
+                            }
+                        } catch (err) {
+                            await processXmlContent(xmlContent);
+                            closeServerUploadModal();
+                            showToast("XML processado localmente!", "success");
+                        }
+                    }
+                };
+
+                xhr.onerror = async function() {
+                    btnSubmit.disabled = false;
+                    btnSubmit.innerHTML = `<i class="fa-solid fa-upload"></i><span>Enviar p/ Servidor</span>`;
+                    await processXmlContent(xmlContent);
+                    closeServerUploadModal();
+                    showToast("XML processado localmente na tela!", "success");
+                };
+
+                xhr.send(formData);
+            };
+            reader.readAsText(file);
+        }
+
+        // XML Source Modal Handlers
+        function openXmlModal() {
+            document.getElementById('xmlModal').classList.remove('hidden');
+        }
+        function closeXmlModal() {
+            document.getElementById('xmlModal').classList.add('hidden');
+        }
+        async function applyXmlTextarea() {
+            const txt = document.getElementById('xmlSourceTextarea').value;
+            if (txt) {
+                await processXmlContent(txt);
+                closeXmlModal();
+                showToast("XML reprocessado com sucesso!", "success");
+            }
+        }
+        function copyXmlSource() {
+            const textarea = document.getElementById('xmlSourceTextarea');
+            textarea.select();
+            document.execCommand('copy');
+            showToast("Código XML copiado para a área de transferência!", "success");
+        }
+    </script>
+</body>
+</html>
