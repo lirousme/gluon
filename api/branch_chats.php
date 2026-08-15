@@ -54,7 +54,7 @@ function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
 {
     $stmt = $pdo->prepare(
         'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.`max`, c.read_marker_message_id, c.created_at, c.updated_at,
-                cr.reference_encrypted,
+                COALESCE(cr.reference_encrypted, parent_cr.reference_encrypted) AS reference_encrypted,
                 COALESCE(cv.view_count, 0) AS view_count, cv.last_viewed_at,
                 CASE WHEN cv.last_viewed_at IS NULL THEN NULL
                      ELSE DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY) END AS next_view_at,
@@ -64,6 +64,8 @@ function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
          FROM chats c
          LEFT JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
          LEFT JOIN chat_references cr ON cr.chat_id = c.id
+         LEFT JOIN chats parent_chat ON parent_chat.id = c.parent_chat_id AND parent_chat.user_id = c.user_id
+         LEFT JOIN chat_references parent_cr ON parent_cr.chat_id = parent_chat.id
          WHERE c.id = :id AND c.user_id = :user_id LIMIT 1'
     );
     $stmt->execute([':id' => $chatId, ':user_id' => $userId, ':view_user_id' => $userId]);
@@ -204,38 +206,6 @@ function branchChatsDeleteChat(PDO $pdo, int $chatId, int $userId): void
 {
     $chat = branchChatsFind($pdo, $chatId, $userId);
     $stmt = $pdo->prepare(
-        'SELECT id
-         FROM chats
-         WHERE parent_chat_id = :chat_id AND user_id = :user_id AND chat_type = 3
-         ORDER BY id ASC'
-    );
-    $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
-    $referenceChildIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
-
-    if ($referenceChildIds !== []) {
-        $promotedChatId = $referenceChildIds[0];
-
-        $pdo->prepare('DELETE FROM chat_references WHERE chat_id = :chat_id')->execute([':chat_id' => $promotedChatId]);
-        $pdo->prepare('UPDATE chat_references SET chat_id = :new_chat_id WHERE chat_id = :old_chat_id')->execute([
-            ':new_chat_id' => $promotedChatId,
-            ':old_chat_id' => $chatId,
-        ]);
-        $pdo->prepare('UPDATE chats SET parent_chat_id = :new_parent_id WHERE id = :promoted_chat_id AND user_id = :user_id')->execute([
-            ':new_parent_id' => $chat['parent_chat_id'],
-            ':promoted_chat_id' => $promotedChatId,
-            ':user_id' => $userId,
-        ]);
-        $pdo->prepare('UPDATE chats SET parent_chat_id = :promoted_chat_id WHERE parent_chat_id = :deleted_chat_id AND id <> :promoted_chat_id AND user_id = :user_id')->execute([
-            ':promoted_chat_id' => $promotedChatId,
-            ':deleted_chat_id' => $chatId,
-            ':user_id' => $userId,
-        ]);
-
-        branchChatsDeleteSingleChat($pdo, $chatId, $userId);
-        return;
-    }
-
-    $stmt = $pdo->prepare(
         'WITH RECURSIVE chat_tree AS (
              SELECT id
              FROM chats
@@ -252,6 +222,43 @@ function branchChatsDeleteChat(PDO $pdo, int $chatId, int $userId): void
     $chatIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
     if ($chatIds === []) {
         return;
+    }
+
+    $descendantIds = array_values(array_filter($chatIds, static fn (int $id): bool => $id !== $chatId));
+    if ($descendantIds !== []) {
+        $descendantPlaceholders = implode(',', array_fill(0, count($descendantIds), '?'));
+        $stmt = $pdo->prepare(
+            "SELECT id
+             FROM chats
+             WHERE user_id = ? AND chat_type = 3 AND id IN ($descendantPlaceholders)
+             ORDER BY id ASC"
+        );
+        $stmt->execute(array_merge([$userId], $descendantIds));
+        $referenceChildIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+
+        if ($referenceChildIds !== []) {
+            $promotedChatId = $referenceChildIds[0];
+            $reparentIds = array_values(array_filter($descendantIds, static fn (int $id): bool => $id !== $promotedChatId));
+
+            $pdo->prepare('DELETE FROM chat_references WHERE chat_id = :chat_id')->execute([':chat_id' => $promotedChatId]);
+            $pdo->prepare('UPDATE chat_references SET chat_id = :new_chat_id WHERE chat_id = :old_chat_id')->execute([
+                ':new_chat_id' => $promotedChatId,
+                ':old_chat_id' => $chatId,
+            ]);
+            $pdo->prepare('UPDATE chats SET parent_chat_id = :new_parent_id WHERE id = :promoted_chat_id AND user_id = :user_id')->execute([
+                ':new_parent_id' => $chat['parent_chat_id'],
+                ':promoted_chat_id' => $promotedChatId,
+                ':user_id' => $userId,
+            ]);
+            if ($reparentIds !== []) {
+                $reparentPlaceholders = implode(',', array_fill(0, count($reparentIds), '?'));
+                $stmt = $pdo->prepare("UPDATE chats SET parent_chat_id = ? WHERE user_id = ? AND id IN ($reparentPlaceholders)");
+                $stmt->execute(array_merge([$promotedChatId, $userId], $reparentIds));
+            }
+
+            branchChatsDeleteSingleChat($pdo, $chatId, $userId);
+            return;
+        }
     }
 
     $chatPlaceholders = implode(',', array_fill(0, count($chatIds), '?'));
@@ -667,13 +674,11 @@ try {
     $pdo->beginTransaction();
     $targetChatId = $sourceChatId;
     if ($createBranch) {
+        $parentChatId = $sourceChatType === 3 && !empty($sourceChat['parent_chat_id']) ? (int)$sourceChat['parent_chat_id'] : $sourceChatId;
         $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, chat_type) VALUES (:user_id, :parent_id, :titulo, :chat_type)');
-        $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input)), ':chat_type' => $referenceChat ? 3 : 0]);
+        $stmt->execute([':user_id' => $userId, ':parent_id' => $parentChatId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input)), ':chat_type' => $referenceChat ? 3 : 0]);
         $targetChatId = (int)$pdo->lastInsertId();
-        if ($referenceChat) {
-            $stmt = $pdo->prepare('INSERT INTO chat_references (chat_id, reference_encrypted) SELECT :target_id, reference_encrypted FROM chat_references WHERE chat_id = :source_id');
-            $stmt->execute([':target_id' => $targetChatId, ':source_id' => $sourceChatId]);
-        } else {
+        if (!$referenceChat) {
             $stmt = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position) SELECT :target_id, mensagem_id, position FROM chat_mensagens WHERE chat_id = :source_id');
             $stmt->execute([':target_id' => $targetChatId, ':source_id' => $sourceChatId]);
         }
