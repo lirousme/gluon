@@ -173,9 +173,68 @@ function branchChatsDecryptMessageImage(PDO $pdo, array $message): ?string
     return $dataUri;
 }
 
+function branchChatsDeleteSingleChat(PDO $pdo, int $chatId, int $userId): void
+{
+    $stmt = $pdo->prepare(
+        'SELECT DISTINCT cm.mensagem_id
+         FROM chat_mensagens cm
+         INNER JOIN mensagens m ON m.id = cm.mensagem_id
+         WHERE cm.chat_id = :chat_id AND m.user_id = :user_id'
+    );
+    $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
+    $messageIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+
+    $pdo->prepare('DELETE FROM chats WHERE id = :id AND user_id = :user_id')->execute([':id' => $chatId, ':user_id' => $userId]);
+
+    if ($messageIds === []) {
+        return;
+    }
+
+    $messagePlaceholders = implode(',', array_fill(0, count($messageIds), '?'));
+    $stmt = $pdo->prepare(
+        "DELETE m
+         FROM mensagens m
+         LEFT JOIN chat_mensagens cm ON cm.mensagem_id = m.id
+         WHERE m.user_id = ? AND m.id IN ($messagePlaceholders) AND cm.mensagem_id IS NULL"
+    );
+    $stmt->execute(array_merge([$userId], $messageIds));
+}
 
 function branchChatsDeleteChat(PDO $pdo, int $chatId, int $userId): void
 {
+    $chat = branchChatsFind($pdo, $chatId, $userId);
+    $stmt = $pdo->prepare(
+        'SELECT id
+         FROM chats
+         WHERE parent_chat_id = :chat_id AND user_id = :user_id AND chat_type = 3
+         ORDER BY id ASC'
+    );
+    $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
+    $referenceChildIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+
+    if ($referenceChildIds !== []) {
+        $promotedChatId = $referenceChildIds[0];
+
+        $pdo->prepare('DELETE FROM chat_references WHERE chat_id = :chat_id')->execute([':chat_id' => $promotedChatId]);
+        $pdo->prepare('UPDATE chat_references SET chat_id = :new_chat_id WHERE chat_id = :old_chat_id')->execute([
+            ':new_chat_id' => $promotedChatId,
+            ':old_chat_id' => $chatId,
+        ]);
+        $pdo->prepare('UPDATE chats SET parent_chat_id = :new_parent_id WHERE id = :promoted_chat_id AND user_id = :user_id')->execute([
+            ':new_parent_id' => $chat['parent_chat_id'],
+            ':promoted_chat_id' => $promotedChatId,
+            ':user_id' => $userId,
+        ]);
+        $pdo->prepare('UPDATE chats SET parent_chat_id = :promoted_chat_id WHERE parent_chat_id = :deleted_chat_id AND id <> :promoted_chat_id AND user_id = :user_id')->execute([
+            ':promoted_chat_id' => $promotedChatId,
+            ':deleted_chat_id' => $chatId,
+            ':user_id' => $userId,
+        ]);
+
+        branchChatsDeleteSingleChat($pdo, $chatId, $userId);
+        return;
+    }
+
     $stmt = $pdo->prepare(
         'WITH RECURSIVE chat_tree AS (
              SELECT id
@@ -586,8 +645,8 @@ try {
     $sourceChatId = (int)($input['chat_id'] ?? 0);
     $sourceChat = branchChatsFind($pdo, $sourceChatId, $userId);
     $sourceChatType = (int)$sourceChat['chat_type'];
-    $answerInNewChat = in_array($sourceChatType, [1, 2], true);
-    $referenceChat = $sourceChatType === 2;
+    $answerInNewChat = in_array($sourceChatType, [1, 2, 3], true);
+    $referenceChat = in_array($sourceChatType, [2, 3], true);
     $createBranch = $answerInNewChat || filter_var($input['create_branch'] ?? false, FILTER_VALIDATE_BOOLEAN);
     $text = trim((string)($input['texto'] ?? ''));
     $isRecipient = filter_var($input['is_recipient'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
