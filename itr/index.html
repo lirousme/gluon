@@ -39,7 +39,7 @@
         }
         ::-webkit-scrollbar {
             width: 6px;
-            height: 6px;
+            height: 16px;
         }
         ::-webkit-scrollbar-track {
             background: #0f172a;
@@ -71,7 +71,7 @@
 
     <!-- Top Header -->
     <header class="bg-slate-900/90 backdrop-blur border-b border-slate-800 text-white shadow-lg sticky top-0 z-30">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div class="w-full mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div class="flex items-center space-x-3">
                     <div class="p-2.5 bg-brand-600/20 border border-brand-500/30 rounded-xl text-brand-400 shadow-inner">
@@ -118,7 +118,7 @@
     </header>
 
     <!-- Main Container -->
-    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <main class="flex-grow w-full w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
         <!-- Controls & Filters Toolbar -->
         <div class="bg-slate-900 rounded-xl shadow-md border border-slate-800 p-4 mb-6 transition-all">
@@ -214,14 +214,24 @@
         </div>
 
         <!-- Table Card -->
-        <div class="bg-slate-900 rounded-xl shadow-xl border border-slate-800 overflow-hidden">
-            <div class="overflow-x-auto">
+<!-- Table Card -->
+        <div class="bg-slate-900 rounded-xl shadow-xl border border-slate-800 overflow-hidden flex flex-col">
+            
+            <!-- 1. Adicionado max-h e overflow-auto para a barra horizontal ficar sempre na tela -->
+            <div class="overflow-auto w-full max-h-[calc(100vh-280px)]">
+                
                 <table class="w-full text-left border-collapse min-w-[850px]" id="financialTable">
-                    <thead>
-                        <tr class="bg-slate-950 border-b border-slate-800 text-xs uppercase tracking-wider text-slate-400 font-semibold">
-                            <th scope="col" class="py-3.5 px-4 w-36">Código Conta</th>
-                            <th scope="col" class="py-3.5 px-4">Descrição da Conta</th>
-                            <th scope="col" id="thQuarterHeader" class="py-3.5 px-4 text-right w-44 bg-brand-950/40 text-brand-300 font-bold border-l border-brand-900/30">
+                    
+                    <!-- 2. Cabeçalho fixo no topo com "sticky top-0" -->
+                    <thead class="sticky top-0 z-20 shadow-md">
+                        <tr class="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-400 font-semibold">
+                            
+                            <!-- 3. Fundos sólidos (bg-slate-950) para impedir que as linhas vazem por baixo do cabeçalho ao rolar -->
+                            <th scope="col" class="hidden py-3.5 px-4 w-36 bg-slate-950">Código Conta</th>
+                            <th scope="col" class="py-3.5 px-4 bg-slate-950">Descrição da Conta</th>
+                            
+                            <!-- Removida a transparência (/40) do fundo verde para virar bg-brand-950 -->
+                            <th scope="col" id="thQuarterHeader" class="py-3.5 px-4 text-right w-44 bg-brand-950 text-brand-300 font-bold border-l border-brand-900/50">
                                 Trimestre Atual
                             </th>
                             <th scope="col" id="comparativeHeaders" class="hidden"></th>
@@ -238,6 +248,20 @@
                     </tbody>
                 </table>
             </div>
+            
+            <!-- Footer summary (Mantido igual, ficará sempre visível abaixo da barra de rolagem) -->
+            <div class="bg-slate-950/90 px-4 py-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-2">
+                <div>
+                    Mostrando <span id="recordCount" class="font-semibold text-slate-200">0</span> contas financeiras
+                </div>
+                <div class="flex items-center gap-4 text-slate-400">
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Sintética Principal</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block"></span> Analítica</span>
+                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-arrow-up text-emerald-400 text-[10px]"></i> Sobe/Positivo</span>
+                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-arrow-down text-rose-400 text-[10px]"></i> Desce/Negativo</span>
+                </div>
+            </div>
+        </div>
             <!-- Footer summary -->
             <div class="bg-slate-950/90 px-4 py-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-2">
                 <div>
@@ -910,7 +934,7 @@
                 }).join('');
 
                 tr.innerHTML = `
-                    <td class="py-2.5 px-4 font-mono text-xs text-slate-300 font-medium whitespace-nowrap">${item.code}</td>
+                    <td class="hidden py-2.5 px-4 font-mono text-xs text-slate-300 font-medium whitespace-nowrap">${item.code}</td>
                     <td class="py-2.5 px-4 font-sans text-xs" style="padding-left: ${16 + indentPx}px">${item.desc}</td>
                     <td class="py-2.5 px-4 text-right font-mono text-xs ${valColorClass} bg-brand-950/20 border-l border-brand-900/20">${formattedVal}</td>
                     ${comparativeCellsHtml}
