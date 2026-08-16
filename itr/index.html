@@ -138,10 +138,10 @@
                         </select>
                     </div>
 
-                    <!-- Dropdown Quarter/ITR -->
+                    <!-- Latest Quarter/ITR Status -->
                     <div class="flex-grow">
-                        <label for="selectItr" class="sr-only">Trimestre / ITR</label>
-                        <select id="selectItr" onchange="handleItrChange()" disabled class="w-full bg-slate-900 border border-slate-700 text-slate-400 text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium disabled:opacity-50 cursor-pointer">
+                        <label for="selectItr" class="sr-only">Trimestre / ITR automático</label>
+                        <select id="selectItr" disabled class="w-full bg-slate-900 border border-slate-700 text-slate-400 text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium disabled:opacity-70 cursor-not-allowed">
                             <option value="">-- Selecione a Empresa Primeiro --</option>
                         </select>
                     </div>
@@ -224,18 +224,12 @@
                             <th scope="col" id="thQuarterHeader" class="py-3.5 px-4 text-right w-44 bg-brand-950/40 text-brand-300 font-bold border-l border-brand-900/30">
                                 Trimestre Atual
                             </th>
-                            <!-- Adjusted align-right for values compatibility -->
-                            <th scope="col" id="thPrevQuarterHeader" class="py-3.5 px-4 text-right w-44 bg-slate-950 text-slate-300 font-semibold border-l border-slate-800" title="Valor em reais e variação percentual em relação ao Trimestre Anterior">
-                                Valor e Var. % (Trim. Ant.)
-                            </th>
-                            <th scope="col" id="thSameQPrevYrHeader" class="py-3.5 px-4 text-right w-44 bg-slate-950 text-slate-300 font-semibold border-l border-slate-800" title="Valor em reais e variação percentual em relação ao Mesmo Trimestre do Ano Anterior">
-                                Valor e Var. % (Mesmo Trim. Ant.)
-                            </th>
+                            <th scope="col" id="comparativeHeaders" class="hidden"></th>
                         </tr>
                     </thead>
                     <tbody id="tableBody" class="divide-y divide-slate-800/60 text-sm font-mono">
                         <tr>
-                            <td colspan="5" class="py-12 text-center text-slate-500 text-sm font-sans">
+                            <td colspan="999" class="py-12 text-center text-slate-500 text-sm font-sans">
                                 <i class="fa-solid fa-folder-open text-3xl mb-3 block text-slate-600"></i>
                                 Nenhuma conta carregada.<br>
                                 <span class="text-xs text-slate-500">Selecione uma empresa acima ou carregue um arquivo XML.</span>
@@ -384,11 +378,9 @@
         let currentQuarterTitle = "Trimestre Atual";
         let currentCvmCode = "";
 
-        // Comparative Quarters Data Maps: { [codigoConta]: valor }
-        let prevQAccountMap = {};
-        let sameQPrevYrAccountMap = {};
-        let prevQTitle = "Trim. Ant.";
-        let sameQPrevYrTitle = "Mesmo Trim. Ant.";
+        // Comparative Quarters loaded from all other files available for the selected company.
+        // Shape: [{ key, label, sortKey, accountMap: { [codigoConta]: valor } }]
+        let comparativePeriods = [];
 
         // Local Company & Files Catalog (Fallbacks if no manifest.json exists)
         let catalogData = {
@@ -493,41 +485,38 @@
             return 0;
         }
 
-        function handleEmpresaChange() {
+        async function handleEmpresaChange() {
             const cvmCode = document.getElementById('selectEmpresa').value;
             const selectItr = document.getElementById('selectItr');
 
             currentCvmCode = cvmCode;
             selectItr.innerHTML = '';
-            
+
             if (!cvmCode || !catalogData[cvmCode]) {
-                selectItr.disabled = true;
                 selectItr.innerHTML = '<option value="">-- Selecione a Empresa Primeiro --</option>';
                 return;
             }
 
             const emp = catalogData[cvmCode];
-            selectItr.disabled = false;
-            selectItr.innerHTML = '<option value="">-- Selecione o Trimestre / ITR --</option>';
+            document.getElementById('badgeEmpresa').textContent = emp.name;
+            document.getElementById('badgeCnpj').textContent = cvmCode;
 
             if (emp.files && emp.files.length > 0) {
-                const sortedFiles = [...emp.files].sort((a, b) => getFileSortKey(b) - getFileSortKey(a));
-                sortedFiles.forEach(file => {
-                    const opt = document.createElement('option');
-                    opt.value = `empresas/${cvmCode}/${file.name}`;
-                    opt.textContent = file.label || file.name;
-                    selectItr.appendChild(opt);
-                });
+                const sortedFiles = getSortedCompanyFiles(cvmCode);
+                const latestFile = sortedFiles[0];
+                selectItr.innerHTML = `<option value="empresas/${cvmCode}/${latestFile.name}">${latestFile.label || latestFile.name} (mais recente)</option>`;
+                await loadItrFile(`empresas/${cvmCode}/${latestFile.name}`, 'ITR mais recente e comparativos carregados automaticamente!');
             } else {
                 selectItr.innerHTML = '<option value="">Nenhum ITR cadastrado para esta empresa</option>';
             }
-
-            document.getElementById('badgeEmpresa').textContent = emp.name;
-            document.getElementById('badgeCnpj').textContent = cvmCode;
         }
 
-        async function handleItrChange() {
-            const filePath = document.getElementById('selectItr').value;
+        function getSortedCompanyFiles(cvmCode) {
+            const files = catalogData[cvmCode]?.files || [];
+            return [...files].sort((a, b) => getFileSortKey(b) - getFileSortKey(a));
+        }
+
+        async function loadItrFile(filePath, successMessage = "ITR do servidor carregado!") {
             if (!filePath) return;
 
             const loadingStatus = document.getElementById('loadingStatus');
@@ -536,10 +525,10 @@
             try {
                 const response = await fetch(filePath);
                 if (!response.ok) throw new Error(`Não foi possível baixar o arquivo (${response.status})`);
-                
+
                 const xmlText = await response.text();
                 await processXmlContent(xmlText);
-                showToast("ITR do servidor e dados comparativos carregados!", "success");
+                showToast(successMessage, "success");
             } catch (err) {
                 showToast(`Erro ao abrir o XML do servidor: ${err.message}`, "error");
             } finally {
@@ -596,20 +585,10 @@
             document.getElementById('badgeQuarterTitle').textContent = currentQuarterTitle;
             document.getElementById('thQuarterHeader').textContent = `${currentQuarterTitle} (Valor)`;
 
-            if (qInfo) {
-                prevQTitle = getPrevQuarterKey(qInfo.quarter, qInfo.year);
-                sameQPrevYrTitle = getSameQuarterPrevYearKey(qInfo.quarter, qInfo.year);
-            } else {
-                prevQTitle = "Trim. Ant.";
-                sameQPrevYrTitle = "Mesmo Trim. Ant.";
-            }
-
-            document.getElementById('thPrevQuarterHeader').textContent = `Valor e Var. % (${prevQTitle})`;
-            document.getElementById('thSameQPrevYrHeader').textContent = `Valor e Var. % (${sameQPrevYrTitle})`;
-
             parsedData = extractAccountsFromXmlDoc(xmlDoc);
 
-            await fetchComparativeXmls(prevQTitle, sameQPrevYrTitle);
+            await fetchComparativeXmls(currentQuarterTitle);
+            renderComparativeHeaders();
 
             const activeTabCount = parsedData.filter(d => activeTab === 'ALL' || d.stmtType === activeTab).length;
             if (activeTabCount === 0 && parsedData.length > 0) {
@@ -746,66 +725,59 @@
             return fallbackVal;
         }
 
-        async function fetchComparativeXmls(targetPrevKey, targetSameYrKey) {
-            prevQAccountMap = {};
-            sameQPrevYrAccountMap = {};
+        async function fetchComparativeXmls(currentKey) {
+            comparativePeriods = [];
 
             if (!currentCvmCode || !catalogData[currentCvmCode] || !catalogData[currentCvmCode].files) {
                 return;
             }
 
-            const files = catalogData[currentCvmCode].files;
-            
-            let prevFile = null;
-            let sameYrFile = null;
+            const files = getSortedCompanyFiles(currentCvmCode)
+                .filter(f => extractQuarterKeyFromFile(f) && extractQuarterKeyFromFile(f) !== currentKey);
 
-            files.forEach(f => {
-                const fKey = extractQuarterKeyFromFile(f);
-                if (fKey === targetPrevKey) prevFile = f;
-                if (fKey === targetSameYrKey) sameYrFile = f;
+            const periods = files.map(file => ({
+                key: extractQuarterKeyFromFile(file),
+                label: file.label || file.name,
+                sortKey: getFileSortKey(file),
+                accountMap: {},
+                file
+            }));
+
+            await Promise.allSettled(periods.map(period =>
+                fetch(`empresas/${currentCvmCode}/${period.file.name}`)
+                    .then(r => {
+                        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                        return r.text();
+                    })
+                    .then(xmlStr => {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(xmlStr, "text/xml");
+                        const accs = extractAccountsFromXmlDoc(doc);
+                        accs.forEach(a => {
+                            if (a.code) {
+                                period.accountMap[`${a.stmtType}::${a.code}`] = a.valQuarter;
+                                period.accountMap[a.code] = a.valQuarter;
+                            }
+                        });
+                    })
+                    .catch(err => console.warn(`Erro ao buscar XML comparativo ${period.key}:`, err))
+            ));
+
+            comparativePeriods = periods.sort((a, b) => b.sortKey - a.sortKey);
+        }
+
+        function renderComparativeHeaders() {
+            const headerRow = document.querySelector('#financialTable thead tr');
+            headerRow.querySelectorAll('.comparative-header').forEach(th => th.remove());
+
+            comparativePeriods.forEach(period => {
+                const th = document.createElement('th');
+                th.scope = 'col';
+                th.className = 'comparative-header py-3.5 px-4 text-right w-44 bg-slate-950 text-slate-300 font-semibold border-l border-slate-800';
+                th.title = `Valor em reais e variação percentual em relação a ${period.label}`;
+                th.textContent = `Valor e Var. % (${period.key})`;
+                headerRow.appendChild(th);
             });
-
-            const fetchPromises = [];
-
-            if (prevFile) {
-                fetchPromises.push(
-                    fetch(`empresas/${currentCvmCode}/${prevFile.name}`)
-                        .then(r => r.text())
-                        .then(xmlStr => {
-                            const parser = new DOMParser();
-                            const doc = parser.parseFromString(xmlStr, "text/xml");
-                            const accs = extractAccountsFromXmlDoc(doc);
-                            accs.forEach(a => {
-                                if (a.code) {
-                                    prevQAccountMap[`${a.stmtType}::${a.code}`] = a.valQuarter;
-                                    prevQAccountMap[a.code] = a.valQuarter;
-                                }
-                            });
-                        })
-                        .catch(err => console.warn("Erro ao buscar XML comparativo anterior:", err))
-                );
-            }
-
-            if (sameYrFile) {
-                fetchPromises.push(
-                    fetch(`empresas/${currentCvmCode}/${sameYrFile.name}`)
-                        .then(r => r.text())
-                        .then(xmlStr => {
-                            const parser = new DOMParser();
-                            const doc = parser.parseFromString(xmlStr, "text/xml");
-                            const accs = extractAccountsFromXmlDoc(doc);
-                            accs.forEach(a => {
-                                if (a.code) {
-                                    sameQPrevYrAccountMap[`${a.stmtType}::${a.code}`] = a.valQuarter;
-                                    sameQPrevYrAccountMap[a.code] = a.valQuarter;
-                                }
-                            });
-                        })
-                        .catch(err => console.warn("Erro ao buscar XML comparativo ano anterior:", err))
-                );
-            }
-
-            await Promise.allSettled(fetchPromises);
         }
 
         function parseQuarterAndYear(dateStr) {
@@ -900,7 +872,7 @@
             if (filtered.length === 0) {
                 tableBody.innerHTML = `
                     <tr>
-                        <td colspan="5" class="py-12 text-center text-slate-500 text-sm font-sans">
+                        <td colspan="999" class="py-12 text-center text-slate-500 text-sm font-sans">
                             <i class="fa-solid fa-filter-circle-xmark text-3xl mb-3 block text-slate-600"></i>
                             Nenhuma conta encontrada para o filtro selecionado.<br>
                             <span class="text-xs text-slate-500">Tente trocar de aba ou desmarcar 'Ocultar Zeradas'.</span>
@@ -930,23 +902,18 @@
                 const valColorClass = item.valQuarter < 0 ? 'text-rose-400 font-semibold' : 
                                      item.valQuarter > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-500';
 
-                // Fetching comparative values
-                const prevVal = getAccountValueFromMap(prevQAccountMap, item.code, item.stmtType);
-                const sameYrVal = getAccountValueFromMap(sameQPrevYrAccountMap, item.code, item.stmtType, item.valExercicioAnt);
-
                 // Passivos invertem a lógica de cor (Sobe dívida = Ruim, Cai = Bom)
-                const invertVariationColor = item.stmtType === 'BPP'; 
-                
-                const pctPrevHtml = renderComparativeValue(item.valQuarter, prevVal, invertVariationColor);
-                const pctSameYrHtml = renderComparativeValue(item.valQuarter, sameYrVal, invertVariationColor);
+                const invertVariationColor = item.stmtType === 'BPP';
+                const comparativeCellsHtml = comparativePeriods.map(period => {
+                    const oldVal = getAccountValueFromMap(period.accountMap, item.code, item.stmtType);
+                    return `<td class="py-2.5 px-4 text-right font-mono text-xs border-l border-slate-800">${renderComparativeValue(item.valQuarter, oldVal, invertVariationColor)}</td>`;
+                }).join('');
 
                 tr.innerHTML = `
                     <td class="py-2.5 px-4 font-mono text-xs text-slate-300 font-medium whitespace-nowrap">${item.code}</td>
                     <td class="py-2.5 px-4 font-sans text-xs" style="padding-left: ${16 + indentPx}px">${item.desc}</td>
                     <td class="py-2.5 px-4 text-right font-mono text-xs ${valColorClass} bg-brand-950/20 border-l border-brand-900/20">${formattedVal}</td>
-                    <!-- Alinhado à direita para ficar igual e visualmente nítido os valores com as colunas -->
-                    <td class="py-2.5 px-4 text-right font-mono text-xs border-l border-slate-800">${pctPrevHtml}</td>
-                    <td class="py-2.5 px-4 text-right font-mono text-xs border-l border-slate-800">${pctSameYrHtml}</td>
+                    ${comparativeCellsHtml}
                 `;
 
                 fragment.appendChild(tr);
@@ -1093,18 +1060,20 @@
                 return;
             }
 
-            let csvContent = `Código Conta;Descrição da Conta;${currentQuarterTitle};Var % ${prevQTitle};Var % ${sameQPrevYrTitle}\n`;
+            const comparativeHeaders = comparativePeriods.map(period => `Valor ${period.key};Var % ${period.key}`).join(';');
+            let csvContent = `Código Conta;Descrição da Conta;${currentQuarterTitle}${comparativeHeaders ? ';' + comparativeHeaders : ''}\n`;
+
             parsedData.forEach(item => {
                 const descClean = item.desc.replace(/;/g, ',');
                 const valClean = item.valQuarter.toString().replace('.', ',');
-                
-                const prevVal = getAccountValueFromMap(prevQAccountMap, item.code, item.stmtType);
-                const sameYrVal = getAccountValueFromMap(sameQPrevYrAccountMap, item.code, item.stmtType, item.valExercicioAnt);
-                
-                const pctPrev = (prevVal !== undefined && prevVal !== 0) ? (((item.valQuarter - prevVal) / Math.abs(prevVal)) * 100).toFixed(2).replace('.', ',') + '%' : '-';
-                const pctSameYr = (sameYrVal !== undefined && sameYrVal !== 0) ? (((item.valQuarter - sameYrVal) / Math.abs(sameYrVal)) * 100).toFixed(2).replace('.', ',') + '%' : '-';
+                const comparativeValues = comparativePeriods.flatMap(period => {
+                    const oldVal = getAccountValueFromMap(period.accountMap, item.code, item.stmtType);
+                    const oldValClean = typeof oldVal === 'number' ? oldVal.toString().replace('.', ',') : '-';
+                    const pct = (typeof oldVal === 'number' && oldVal !== 0) ? (((item.valQuarter - oldVal) / Math.abs(oldVal)) * 100).toFixed(2).replace('.', ',') + '%' : '-';
+                    return [oldValClean, pct];
+                });
 
-                csvContent += `"${item.code}";"${descClean}";"${valClean}";"${pctPrev}";"${pctSameYr}"\n`;
+                csvContent += [`"${item.code}"`, `"${descClean}"`, `"${valClean}"`, ...comparativeValues.map(v => `"${v}"`)].join(';') + "\n";
             });
 
             const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
