@@ -169,20 +169,29 @@
             <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 
                 <!-- Statement Tabs -->
-                <div class="flex flex-wrap items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800" id="statementTabs">
-                    <button onclick="switchTab('ALL')" id="tab-ALL" class="tab-btn px-3 py-1.5 rounded-md text-xs font-medium transition text-slate-400 hover:text-slate-200">
-                        Todas
-                    </button>
-                    <button onclick="switchTab('BPA')" id="tab-BPA" class="tab-btn active-tab px-3 py-1.5 rounded-md text-xs font-medium transition bg-brand-600 text-white shadow-sm">
-                        Ativo (BPA)
-                    </button>
-                    <button onclick="switchTab('BPP')" id="tab-BPP" class="tab-btn px-3 py-1.5 rounded-md text-xs font-medium transition text-slate-400 hover:text-slate-200">
-                        Passivo (BPP)
-                    </button>
-                    <button onclick="switchTab('DRE')" id="tab-DRE" class="tab-btn px-3 py-1.5 rounded-md text-xs font-medium transition text-slate-400 hover:text-slate-200">
-                        DRE
-                    </button>
-                </div>
+<div class="flex flex-wrap items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800" id="statementTabs">
+    <button onclick="switchTab('ALL')" id="tab-ALL" class="tab-btn px-3 py-1.5 rounded-md text-xs font-medium transition text-slate-400 hover:text-slate-200">
+        Todas
+    </button>
+    <button onclick="switchTab('BPA')" id="tab-BPA" class="tab-btn active-tab px-3 py-1.5 rounded-md text-xs font-medium transition bg-brand-600 text-white shadow-sm">
+        Ativo (BPA)
+    </button>
+    <button onclick="switchTab('BPP')" id="tab-BPP" class="tab-btn px-3 py-1.5 rounded-md text-xs font-medium transition text-slate-400 hover:text-slate-200">
+        Passivo (BPP)
+    </button>
+    <button onclick="switchTab('DRE')" id="tab-DRE" class="tab-btn px-3 py-1.5 rounded-md text-xs font-medium transition text-slate-400 hover:text-slate-200">
+        DRE
+    </button>
+    <button onclick="switchTab('DRA')" id="tab-DRA" class="tab-btn px-3 py-1.5 rounded-md text-xs font-medium transition text-slate-400 hover:text-slate-200">
+        DRA
+    </button>
+    <button onclick="switchTab('DFC')" id="tab-DFC" class="tab-btn px-3 py-1.5 rounded-md text-xs font-medium transition text-slate-400 hover:text-slate-200">
+        DFC
+    </button>
+    <button onclick="switchTab('DVA')" id="tab-DVA" class="tab-btn px-3 py-1.5 rounded-md text-xs font-medium transition text-slate-400 hover:text-slate-200">
+        DVA
+    </button>
+</div>
 
                 <!-- Search and Tools -->
                 <div class="flex flex-wrap items-center gap-3">
@@ -686,12 +695,27 @@
                 const rawCode = getNodeText(node, ['CodigoConta', 'CdConta', 'CodConta', 'CD_CONTA', 'Codigo']);
                 const desc = getNodeText(node, ['DescricaoConta', 'DsConta', 'Descricao', 'DS_CONTA']);
                 
-                let rawValQuarter = getNodeText(node, ['TrimestreAtual']);
-                if (!rawValQuarter) {
-                    rawValQuarter = getNodeText(node, ['UltimoExercicio', 'ValorTrimestreAtual', 'ValorConta', 'Valor', 'VL_CONTA']);
-                }
+                let rawValQuarter = getNodeText(node, [
+    'AcumuladoAtualExercicio',
+    'TrimestreAtual', 
+    'ValorAcumuladoTrimestreAtual', 
+    'ValorTrimestreAtual', 
+    'ValorTrimestre', 
+    'ValorConta', 
+    'Valor', 
+    'VL_CONTA', 
+    'UltimoExercicio'
+]);
 
-                const rawValExercicioAnt = getNodeText(node, ['ExercicioAnterior', 'ValorExercicioAnterior', 'TrimestreAnterior', 'VL_CONTA_PAST', 'ExercicioPenultimo']);
+let rawValExercicioAnt = getNodeText(node, [
+    'AcumuladoExercicioAnterior',
+    'ExercicioAnterior', 
+    'ValorAcumuladoExercicioAnterior', 
+    'ValorExercicioAnterior', 
+    'TrimestreAnterior', 
+    'VL_CONTA_PAST', 
+    'ExercicioPenultimo'
+]);
 
                 const code = rawCode ? rawCode.trim() : "";
                 const valQuarter = parseXmlValue(rawValQuarter);
@@ -700,29 +724,50 @@
                 if (!code && !desc) return;
 
                 let stmtType = "ALL";
-                let parentNode = node.parentNode;
-                while (parentNode && parentNode.nodeName) {
-                    const tag = parentNode.nodeName.toUpperCase();
-                    if (tag.includes("BPA") || tag.includes("BALANCOPATRIMONIALATIVO") || tag.includes("ATIVO")) {
-                        stmtType = "BPA";
-                        break;
-                    }
-                    if (tag.includes("BPP") || tag.includes("BALANCOPATRIMONIALPASSIVO") || tag.includes("PASSIVO")) {
-                        stmtType = "BPP";
-                        break;
-                    }
-                    if (tag.includes("DRE") || tag.includes("DEMONSTRACAODORESULTADO") || tag.includes("RESULTADO")) {
-                        stmtType = "DRE";
-                        break;
-                    }
-                    parentNode = parentNode.parentNode;
-                }
+let parentNode = node.parentNode;
 
-                if (stmtType === "ALL" && code) {
-                    if (code.startsWith("1")) stmtType = "BPA";
-                    else if (code.startsWith("2")) stmtType = "BPP";
-                    else if (code.startsWith("3")) stmtType = "DRE";
-                }
+while (parentNode && parentNode.nodeName) {
+    const tag = parentNode.nodeName.toUpperCase();
+    
+    if (tag.includes("BALANCOPATRIMONIALATIVO") || tag === "BPA") {
+        stmtType = "BPA";
+        break;
+    }
+    if (tag.includes("BALANCOPATRIMONIALPASSIVO") || tag === "BPP") {
+        stmtType = "BPP";
+        break;
+    }
+    // DRA DEVE vir antes de DRE por conter a palavra "RESULTADO" no nome
+    if (tag.includes("DEMONSTRACAORESULTADOABRANGENTE") || tag === "DRA") {
+        stmtType = "DRA";
+        break;
+    }
+    if (tag.includes("DEMONSTRACAORESULTADO") || tag === "DRE") {
+        stmtType = "DRE";
+        break;
+    }
+    if (tag.includes("DEMONSTRACAOFLUXOCAIXA") || tag === "DFC") {
+        stmtType = "DFC";
+        break;
+    }
+    if (tag.includes("DEMONSTRACAOVALORADICIONADO") || tag === "DVA") {
+        stmtType = "DVA";
+        break;
+    }
+    
+    parentNode = parentNode.parentNode;
+}
+
+// Fallback de contingência caso a tag não identifique corretamente (usando a raiz do código)
+if (stmtType === "ALL" && code) {
+    if (code.startsWith("1")) stmtType = "BPA";
+    else if (code.startsWith("2")) stmtType = "BPP";
+    else if (code.startsWith("3")) stmtType = "DRE";
+    else if (code.startsWith("4")) stmtType = "DRA";
+    else if (code.startsWith("5")) stmtType = "DMPL";
+    else if (code.startsWith("6")) stmtType = "DFC";
+    else if (code.startsWith("7")) stmtType = "DVA";
+}
 
                 accounts.push({
                     code: code || "-",
