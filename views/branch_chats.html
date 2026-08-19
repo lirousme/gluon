@@ -31,6 +31,11 @@
         .icon-button { width: 40px; height: 40px; border: 0; border-radius: 50%; background: transparent; display: grid; place-items: center; cursor: pointer; }
         .icon-button:hover, .icon-button:focus-visible { background: #ffffff12; outline: none; }
         .read-cycle-count { min-width: 34px; height: 34px; padding: 0 10px; border: 1px solid #ffffff1f; border-radius: 17px; display: inline-flex; align-items: center; justify-content: center; background: #111b21; color: #d1d7db; font-size: 13px; font-weight: 700; }
+        .audio-toggle { position: relative; width: 48px; height: 28px; border: 1px solid #ffffff22; border-radius: 999px; background: #111b21; color: #8696a0; display: inline-flex; align-items: center; justify-content: flex-end; padding: 0 6px; cursor: pointer; transition: background .18s ease, color .18s ease; }
+        .audio-toggle::before { content: ''; position: absolute; left: 4px; width: 20px; height: 20px; border-radius: 50%; background: #5f6b72; transition: transform .18s ease, background .18s ease; }
+        .audio-toggle.active { background: #064d41; color: #d9fff7; }
+        .audio-toggle.active::before { transform: translateX(18px); background: var(--green); }
+        .audio-toggle svg { width: 15px; height: 15px; position: relative; z-index: 1; }
         svg { width: 22px; height: 22px; fill: currentColor; }
         .search-wrap { padding: 8px 12px; border-bottom: 1px solid var(--line); }
         .search { width: 100%; height: 36px; border: 0; outline: 0; border-radius: 8px; background: var(--panel); color: #e9edef; padding: 0 14px; }
@@ -146,6 +151,7 @@
         <header class="sidebar-header">
             <div class="brand"><div class="logo">B</div><div><h1>Branch Chats</h1><p class="subtitle">Suas conversas</p></div></div>
             <span class="read-cycle-count" id="readCycleCount" title="Leituras neste ciclo" aria-label="0 de 8 leituras neste ciclo">0/8</span>
+            <button class="audio-toggle active" id="conversationAudioToggle" type="button" title="Reprodução automática ativada" aria-label="Desativar reprodução automática da conversa" aria-pressed="true"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05A4.5 4.5 0 0 0 16.5 12M19 5.5v13a8.5 8.5 0 0 0 0-13"/></svg></button>
             <button class="icon-button" id="newChat" title="Novo chat" aria-label="Criar novo chat">
                 <svg viewBox="0 0 24 24"><path d="M19 3H5a2 2 0 0 0-2 2v14l4-4h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2m-6 9h-2V9H8V7h3V4h2v3h3v2h-3z"/></svg>
             </button>
@@ -178,7 +184,7 @@
 <dialog id="chatDialog"><form class="modal-form" id="chatForm"><h2>Editar chat</h2><input id="chatTitleInput" type="text" maxlength="120" required aria-label="Nome do chat"><label>Máximo de leituras<input id="chatMaxInput" type="number" min="1" step="1" placeholder="Sem limite" aria-label="Máximo de leituras"></label><label id="chatTypeLabel">Tipo do chat<select id="chatTypeInput" aria-label="Tipo do chat"><option value="0">Chat normal</option><option value="1">Answer in a new chat</option><option value="2">Referência</option></select></label><label id="chatReferenceLabel" hidden>Texto da referência<textarea id="chatReferenceInput" maxlength="10000" placeholder="Digite a referência"></textarea></label><div class="modal-actions"><button class="danger" id="deleteChat" type="button">Excluir chat</button><button type="button" data-close="chatDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
 <dialog id="messageDialog"><form class="modal-form" id="messageForm"><h2>Editar mensagem</h2><textarea id="editMessageText" maxlength="10000" placeholder="Mensagem" aria-label="Texto da mensagem"></textarea><div class="edit-image-row" id="currentImageRow" hidden><img id="currentImage" alt="Imagem atual"><label><input id="removeCurrentImage" type="checkbox"> Remover imagem atual</label></div><label>Trocar/adicionar imagem <input id="editMessageImage" type="file" accept="image/jpeg,image/png,image/gif,image/webp"></label><div class="modal-actions"><button class="danger" id="deleteMessage" type="button">Excluir mensagem</button><button type="button" data-close="messageDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
 <script>
-    const state = { chats: [], activeId: null, activeChat: null, editingMessage: null, recipientMode: false, senderVariant: 'green', selectionMode: false, selectedMessages: new Set() };
+    const state = { chats: [], activeId: null, activeChat: null, editingMessage: null, recipientMode: false, senderVariant: 'green', selectionMode: false, selectedMessages: new Set(), currentMessages: [], audioAutoplayEnabled: true, currentAudioElement: null, playbackToken: 0 };
     const $ = id => document.getElementById(id);
     const api = '/api/branch_chats';
     const readCycleLimit = 8;
@@ -191,6 +197,10 @@
     function getReadCycleCount() { const count = Number(localStorage.getItem(readCycleStorageKey) || 0); return Number.isFinite(count) ? count % readCycleLimit : 0; }
     function updateReadCycleCount(count = getReadCycleCount()) { $('readCycleCount').textContent = `${count}/${readCycleLimit}`; $('readCycleCount').setAttribute('aria-label', `${count} de ${readCycleLimit} leituras neste ciclo`); }
     function incrementReadCycleCount() { const count = (getReadCycleCount() + 1) % readCycleLimit; localStorage.setItem(readCycleStorageKey, String(count)); updateReadCycleCount(count); return count; }
+    function updateConversationAudioToggle() { const enabled = state.audioAutoplayEnabled; $('conversationAudioToggle').classList.toggle('active', enabled); $('conversationAudioToggle').setAttribute('aria-pressed', String(enabled)); $('conversationAudioToggle').setAttribute('aria-label', enabled ? 'Desativar reprodução automática da conversa' : 'Ativar reprodução automática da conversa'); $('conversationAudioToggle').title = enabled ? 'Reprodução automática ativada' : 'Reprodução automática desativada'; }
+    function stopConversationPlayback() { state.playbackToken++; if (state.currentAudioElement) { state.currentAudioElement.pause(); state.currentAudioElement.currentTime = 0; state.currentAudioElement = null; } }
+    function playAudioSource(src, token = null) { return new Promise(resolve => { if (!src || (token !== null && token !== state.playbackToken)) return resolve(false); const audio = new Audio(src); state.currentAudioElement = audio; const cleanup = value => { audio.onended = audio.onerror = null; if (state.currentAudioElement === audio) state.currentAudioElement = null; resolve(value); }; audio.onended = () => cleanup(true); audio.onerror = () => cleanup(false); audio.play().catch(() => cleanup(false)); }); }
+    async function autoplayConversationAudio() { stopConversationPlayback(); if (!state.audioAutoplayEnabled || !state.activeId) return; const token = state.playbackToken; for (const message of state.currentMessages || []) { if (token !== state.playbackToken || !state.audioAutoplayEnabled) break; if (!message.audio_base64) continue; await playAudioSource(message.audio_base64, token); } }
     async function request(url, options) { const response = await fetch(url, options); const result = await response.json(); if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível concluir.'); return result.data; }
     function renderChats() {
         const query = $('search').value.trim().toLowerCase();
@@ -272,13 +282,13 @@
 
     async function playOrGenerateMessageAudio(messageId, button = null) {
         const item = (state.currentMessages || []).find(message => Number(message.id) === Number(messageId));
-        if (item?.audio_base64) { new Audio(item.audio_base64).play(); return; }
+        if (item?.audio_base64) { stopConversationPlayback(); playAudioSource(item.audio_base64); return; }
         if (button) button.disabled = true;
         try {
             const data = new FormData(); data.append('action', 'generate_message_audio'); data.append('chat_id', state.activeId); data.append('message_id', messageId);
             const result = await request(api, { method: 'POST', body: data });
             if (item) item.audio_base64 = result.audio_base64;
-            new Audio(result.audio_base64).play();
+            stopConversationPlayback(); playAudioSource(result.audio_base64);
             toast('Áudio gerado.');
         } catch (error) { toast(error.message); }
         finally { if (button) button.disabled = false; }
@@ -319,7 +329,7 @@
             updateReadStatus(data.chat);
             $('branchCountValue').textContent = data.chat.total_branches;
             $('branchCount').setAttribute('aria-label', `${data.chat.total_branches} ${Number(data.chat.total_branches) === 1 ? 'branch criado' : 'branches criados'}`);
-            $('chatHeader').hidden = false; $('composer').classList.remove('hidden'); $('app').classList.add('chat-open'); renderMessages(data.mensagens); renderChats(); $('messageBox').focus();
+            $('chatHeader').hidden = false; $('composer').classList.remove('hidden'); $('app').classList.add('chat-open'); renderMessages(data.mensagens); renderChats(); $('messageBox').focus(); autoplayConversationAudio();
         } catch (error) { toast(error.message); }
     }
     function updateReadStatus(chat) {
@@ -366,6 +376,7 @@
         $('more').setAttribute('aria-label', `${state.senderVariant === 'purple' ? 'Destinatário roxo' : state.senderVariant === 'orange' ? 'Remetente laranja' : recipient ? 'Destinatário azul' : 'Remetente verde'}. Clique para alternar cor; segure por 1,5 segundo para opções`);
         $('more').title = `${state.senderVariant} · segure para opções`;
     }
+    $('conversationAudioToggle').addEventListener('click', () => { state.audioAutoplayEnabled = !state.audioAutoplayEnabled; updateConversationAudioToggle(); if (state.audioAutoplayEnabled) autoplayConversationAudio(); else stopConversationPlayback(); });
     $('newChat').addEventListener('click', async () => { try { const chat = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_chat', timezone_offset_minutes: timezoneOffset() }) }); await loadChats(); await openChat(chat.id); } catch (error) { toast(error.message); } });
     $('createSelectedChat').addEventListener('click', async () => {
         if (!state.selectedMessages.size) return;
@@ -424,7 +435,7 @@
     document.addEventListener('click', () => { $('attachmentMenu').hidden = true; $('more').setAttribute('aria-expanded', 'false'); closeMessageMenus(); });
     $('attachmentMenu').addEventListener('click', event => event.stopPropagation());
     $('generateConversationAudio').addEventListener('click', async () => { $('attachmentMenu').hidden = true; if (!state.activeId) return; try { const data = new FormData(); data.append('action', 'generate_chat_audio'); data.append('chat_id', state.activeId);
-            const result = await request(api, { method: 'POST', body: data }); await openChat(state.activeId, true); toast(`Áudios gerados: ${result.generated_count}. Falhas: ${result.failed_count}.`); } catch (error) { toast(error.message); } });
+            const result = await request(api, { method: 'POST', body: data }); await openChat(state.activeId, true); toast(`Áudios gerados: ${result.generated_count}. Já existentes: ${result.skipped_count || 0}. Falhas: ${result.failed_count}.`); } catch (error) { toast(error.message); } });
     $('addImage').addEventListener('click', () => { $('imageInput').click(); $('attachmentMenu').hidden = true; $('more').setAttribute('aria-expanded', 'false'); });
     $('imageInput').addEventListener('change', () => { const file = $('imageInput').files[0]; $('imageChip').hidden = !file; $('imageName').textContent = file ? file.name : ''; });
     $('removeImage').addEventListener('click', () => { $('imageInput').value = ''; $('imageChip').hidden = true; });
@@ -443,6 +454,7 @@
         } catch (error) { toast(error.message); } finally { $('send').disabled = false; }
     });
     updateReadCycleCount();
+    updateConversationAudioToggle();
     loadChats();
 </script>
 </body>
