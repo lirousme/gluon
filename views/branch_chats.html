@@ -275,7 +275,8 @@
         if (item?.audio_base64) { new Audio(item.audio_base64).play(); return; }
         if (button) button.disabled = true;
         try {
-            const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'generate_message_audio', chat_id: state.activeId, message_id: messageId }) });
+            const data = new FormData(); data.append('action', 'generate_message_audio'); data.append('chat_id', state.activeId); data.append('message_id', messageId);
+            const result = await request(api, { method: 'POST', body: data });
             if (item) item.audio_base64 = result.audio_base64;
             new Audio(result.audio_base64).play();
             toast('Áudio gerado.');
@@ -422,7 +423,8 @@
     });
     document.addEventListener('click', () => { $('attachmentMenu').hidden = true; $('more').setAttribute('aria-expanded', 'false'); closeMessageMenus(); });
     $('attachmentMenu').addEventListener('click', event => event.stopPropagation());
-    $('generateConversationAudio').addEventListener('click', async () => { $('attachmentMenu').hidden = true; if (!state.activeId) return; try { const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'generate_chat_audio', chat_id: state.activeId }) }); await openChat(state.activeId, true); toast(`Áudios gerados: ${result.generated_count}. Falhas: ${result.failed_count}.`); } catch (error) { toast(error.message); } });
+    $('generateConversationAudio').addEventListener('click', async () => { $('attachmentMenu').hidden = true; if (!state.activeId) return; try { const data = new FormData(); data.append('action', 'generate_chat_audio'); data.append('chat_id', state.activeId);
+            const result = await request(api, { method: 'POST', body: data }); await openChat(state.activeId, true); toast(`Áudios gerados: ${result.generated_count}. Falhas: ${result.failed_count}.`); } catch (error) { toast(error.message); } });
     $('addImage').addEventListener('click', () => { $('imageInput').click(); $('attachmentMenu').hidden = true; $('more').setAttribute('aria-expanded', 'false'); });
     $('imageInput').addEventListener('change', () => { const file = $('imageInput').files[0]; $('imageChip').hidden = !file; $('imageName').textContent = file ? file.name : ''; });
     $('removeImage').addEventListener('click', () => { $('imageInput').value = ''; $('imageChip').hidden = true; });
