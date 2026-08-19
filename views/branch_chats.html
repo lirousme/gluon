@@ -58,6 +58,11 @@
         .messages { min-height: 0; flex: 1 1 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 26px clamp(18px, 7vw, 100px); scroll-behavior: smooth; }
         .message { max-width: min(68%, 650px); margin: 0 0 6px auto; padding: 7px 8px 5px; border-radius: 8px 0 8px 8px; background: #005c4b; box-shadow: 0 1px 1px #0004; overflow-wrap: anywhere; }
         .message.recipient { margin-right: auto; margin-left: 0; border-radius: 0 8px 8px 8px; background: #075eaa; }
+        .message.orange { background: #d96f18; }
+        .message.purple { background: #7c3cc8; }
+        .audio-button { width: 23px; height: 23px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #a7c8c1; display: grid; place-items: center; cursor: pointer; }
+        .audio-button:hover, .audio-button:focus-visible { background: #ffffff18; outline: none; }
+        .audio-button svg { width: 15px; height: 15px; }
         .message.read-marker, .message.recipient.read-marker { background: #d94f8f; color: #fff; }
         .message-image { display: block; max-width: 100%; max-height: 420px; border-radius: 6px; object-fit: cover; margin-bottom: 5px; }
         .message-text { white-space: pre-wrap; line-height: 1.4; }
@@ -93,8 +98,12 @@
         .send { background: var(--green); }
         .sender-toggle { background: var(--green); touch-action: none; user-select: none; -webkit-user-select: none; }
         .sender-toggle.recipient { background: #1476c9; }
+        .sender-toggle.orange { background: #d96f18; }
+        .sender-toggle.purple { background: #7c3cc8; }
         .sender-toggle:hover, .sender-toggle:focus-visible { background: #06bd98; }
         .sender-toggle.recipient:hover, .sender-toggle.recipient:focus-visible { background: #2587d7; }
+        .sender-toggle.orange:hover, .sender-toggle.orange:focus-visible { background: #e7812f; }
+        .sender-toggle.purple:hover, .sender-toggle.purple:focus-visible { background: #8d50d3; }
         .attachment-menu { position: absolute; left: 12px; bottom: calc(100% + 8px); width: 205px; padding: 8px; border-radius: 10px; background: #233138; box-shadow: 0 8px 28px #0009; transform-origin: bottom left; }
         .attachment-menu[hidden] { display: none; }
         .attachment-menu button { width: 100%; display: flex; align-items: center; gap: 12px; padding: 11px; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
@@ -157,7 +166,7 @@
         <section class="messages" id="messages"><div class="welcome"><svg viewBox="0 0 24 24"><path d="M16.75 13.96c-.25-.13-1.47-.72-1.7-.81-.23-.08-.39-.13-.56.13-.16.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-2-1.24-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.13-.15.17-.25.25-.42.08-.16.04-.31-.02-.43-.06-.13-.56-1.35-.77-1.84-.2-.49-.41-.42-.56-.43h-.48c-.17 0-.44.06-.67.31-.23.25-.87.85-.87 2.07s.89 2.4 1.01 2.57c.13.16 1.75 2.67 4.24 3.75.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.08.15-1.18-.07-.11-.23-.17-.48-.29M12.04 21.5h-.01a9.45 9.45 0 0 1-4.82-1.32l-.35-.2-3.58.94.96-3.49-.23-.36A9.44 9.44 0 0 1 2.56 12c0-5.2 4.24-9.44 9.46-9.44 2.53 0 4.9.98 6.68 2.77A9.38 9.38 0 0 1 21.46 12c0 5.2-4.24 9.45-9.42 9.45"/></svg><h2>Branch Chats</h2><p>Selecione uma conversa ao lado ou crie um novo chat para começar.</p></div></section>
         <form class="composer hidden" id="composer">
             <button class="icon-button sender-toggle" id="more" type="button" aria-label="Remetente. Clique para alternar; segure por 1,5 segundo para adicionar imagem" aria-pressed="false" aria-expanded="false" title="Remetente · segure para adicionar imagem"><svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4m0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4m0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg></button>
-            <div class="attachment-menu" id="attachmentMenu" hidden><button type="button" id="addImage"><svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2M8.5 13.5l2.5 3.01L14.5 12l4.5 6H5z"/></svg>Adicionar imagem</button></div>
+            <div class="attachment-menu" id="attachmentMenu" hidden><button type="button" id="generateConversationAudio"><svg viewBox="0 0 24 24"><path d="M12 3a4 4 0 0 0-4 4v4a4 4 0 1 0 8 0V7a4 4 0 0 0-4-4m-7 8h2a5 5 0 0 0 10 0h2a7 7 0 0 1-6 6.92V21h-2v-3.08A7 7 0 0 1 5 11"/></svg>Gerar áudio para toda conversa</button><button type="button" id="addImage"><svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2M8.5 13.5l2.5 3.01L14.5 12l4.5 6H5z"/></svg>Adicionar imagem</button></div>
             <div class="image-chip" id="imageChip" hidden><span id="imageName"></span><button type="button" id="removeImage" aria-label="Remover imagem">✕</button></div>
             <input id="imageInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" hidden>
             <textarea class="message-box" id="messageBox" rows="1" maxlength="10000" placeholder="Mensagem" aria-label="Mensagem"></textarea>
@@ -169,7 +178,7 @@
 <dialog id="chatDialog"><form class="modal-form" id="chatForm"><h2>Editar chat</h2><input id="chatTitleInput" type="text" maxlength="120" required aria-label="Nome do chat"><label>Máximo de leituras<input id="chatMaxInput" type="number" min="1" step="1" placeholder="Sem limite" aria-label="Máximo de leituras"></label><label id="chatTypeLabel">Tipo do chat<select id="chatTypeInput" aria-label="Tipo do chat"><option value="0">Chat normal</option><option value="1">Answer in a new chat</option><option value="2">Referência</option></select></label><label id="chatReferenceLabel" hidden>Texto da referência<textarea id="chatReferenceInput" maxlength="10000" placeholder="Digite a referência"></textarea></label><div class="modal-actions"><button class="danger" id="deleteChat" type="button">Excluir chat</button><button type="button" data-close="chatDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
 <dialog id="messageDialog"><form class="modal-form" id="messageForm"><h2>Editar mensagem</h2><textarea id="editMessageText" maxlength="10000" placeholder="Mensagem" aria-label="Texto da mensagem"></textarea><div class="edit-image-row" id="currentImageRow" hidden><img id="currentImage" alt="Imagem atual"><label><input id="removeCurrentImage" type="checkbox"> Remover imagem atual</label></div><label>Trocar/adicionar imagem <input id="editMessageImage" type="file" accept="image/jpeg,image/png,image/gif,image/webp"></label><div class="modal-actions"><button class="danger" id="deleteMessage" type="button">Excluir mensagem</button><button type="button" data-close="messageDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
 <script>
-    const state = { chats: [], activeId: null, activeChat: null, editingMessage: null, recipientMode: false, selectionMode: false, selectedMessages: new Set() };
+    const state = { chats: [], activeId: null, activeChat: null, editingMessage: null, recipientMode: false, senderVariant: 'green', selectionMode: false, selectedMessages: new Set() };
     const $ = id => document.getElementById(id);
     const api = '/api/branch_chats';
     const readCycleLimit = 8;
@@ -212,9 +221,10 @@
         messages.forEach(item => {
             if (Number(item.is_response)) { const divider = document.createElement('div'); divider.className = 'response-divider'; divider.setAttribute('role', 'separator'); const label = document.createElement('span'); label.textContent = 'Resposta'; divider.append(label); $('messages').append(divider); }
             const recipient = Boolean(Number(item.is_recipient));
+            const variant = item.color_variant || (recipient ? 'blue' : 'green');
             const row = document.createElement('div'); row.className = 'message-row ' + (recipient ? 'received' : 'sent');
             const selector = document.createElement('input'); selector.type = 'checkbox'; selector.className = 'message-selector'; selector.hidden = !state.selectionMode; selector.checked = state.selectedMessages.has(Number(item.id)); selector.setAttribute('aria-label', 'Selecionar mensagem');
-            const bubble = document.createElement('article'); bubble.className = 'message' + (recipient ? ' recipient' : '') + (Number(item.id) === Number(state.activeChat?.read_marker_message_id || 0) ? ' read-marker' : '');
+            const bubble = document.createElement('article'); bubble.className = 'message' + (recipient ? ' recipient' : '') + (['orange', 'purple'].includes(variant) ? ' ' + variant : '') + (Number(item.id) === Number(state.activeChat?.read_marker_message_id || 0) ? ' read-marker' : '');
             bubble.dataset.messageId = String(item.id);
             bubble.setAttribute('aria-label', recipient ? 'Mensagem do destinatário' : 'Mensagem do remetente');
             if (item.imagem_base64) { const image = document.createElement('img'); image.className = 'message-image'; image.src = item.imagem_base64; image.alt = 'Imagem enviada'; image.loading = 'lazy'; bubble.append(image); }
@@ -222,12 +232,15 @@
             const footer = document.createElement('span'); footer.className = 'message-footer';
             const time = document.createElement('span'); time.className = 'message-time'; time.textContent = formatTime(item.created_at);
             const actions = document.createElement('span'); actions.className = 'message-actions';
+            const audio = document.createElement('button'); audio.className = 'audio-button'; audio.type = 'button'; audio.title = item.audio_base64 ? 'Reproduzir áudio' : 'Gerar áudio'; audio.setAttribute('aria-label', audio.title); audio.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05A4.5 4.5 0 0 0 16.5 12"/></svg>';
+            audio.addEventListener('click', event => { event.stopPropagation(); playOrGenerateMessageAudio(item.id, audio); });
             const more = document.createElement('button'); more.className = 'message-more'; more.type = 'button'; more.title = 'Opções da mensagem'; more.setAttribute('aria-label', 'Opções da mensagem'); more.setAttribute('aria-expanded', 'false'); more.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4m0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4m0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg>';
             const menu = document.createElement('span'); menu.className = 'message-menu'; menu.hidden = true;
             const single = document.createElement('button'); single.type = 'button'; single.textContent = 'Branchar mensagem';
             const through = document.createElement('button'); through.type = 'button'; through.textContent = 'Branchar a partir daqui';
             const select = document.createElement('button'); select.type = 'button'; select.textContent = 'Selecionar';
             const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Editar';
+            const generateAudio = document.createElement('button'); generateAudio.type = 'button'; generateAudio.textContent = 'Gerar áudio';
             more.addEventListener('click', event => {
                 event.stopPropagation();
                 const opening = menu.hidden;
@@ -242,19 +255,34 @@
             through.addEventListener('click', () => branchFromMessage(item.id, 'through'));
             select.addEventListener('click', () => enterSelectionMode(item.id));
             edit.addEventListener('click', () => openMessageEditor(item));
+            generateAudio.addEventListener('click', () => playOrGenerateMessageAudio(item.id));
             selector.addEventListener('change', () => toggleMessageSelection(item.id, selector.checked));
             row.addEventListener('click', event => {
                 if (event.target.closest('.message-actions') || event.target === selector) return;
                 if (state.selectionMode) { selector.checked = !selector.checked; toggleMessageSelection(item.id, selector.checked); return; }
                 setReadMarker(item.id);
             });
-            menu.append(select, edit, single, through); actions.append(more, menu); footer.append(time, actions); bubble.append(footer);
+            menu.append(generateAudio, select, edit, single, through); actions.append(audio, more, menu); footer.append(time, actions); bubble.append(footer);
             row.classList.toggle('selected', selector.checked);
             if (recipient) row.append(selector, bubble); else row.append(bubble, selector);
             $('messages').append(row);
         });
         requestAnimationFrame(() => $('messages').scrollTop = $('messages').scrollHeight);
     }
+
+    async function playOrGenerateMessageAudio(messageId, button = null) {
+        const item = (state.currentMessages || []).find(message => Number(message.id) === Number(messageId));
+        if (item?.audio_base64) { new Audio(item.audio_base64).play(); return; }
+        if (button) button.disabled = true;
+        try {
+            const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'generate_message_audio', chat_id: state.activeId, message_id: messageId }) });
+            if (item) item.audio_base64 = result.audio_base64;
+            new Audio(result.audio_base64).play();
+            toast('Áudio gerado.');
+        } catch (error) { toast(error.message); }
+        finally { if (button) button.disabled = false; }
+    }
+
     function updateSelectionHeader() {
         $('chatHeader').classList.toggle('selection-active', state.selectionMode);
         $('messages').classList.toggle('selection-active', state.selectionMode);
@@ -325,14 +353,17 @@
             toast(error.message);
         }
     }
-    function setRecipientMode(recipient) {
+    function setRecipientMode(recipient, variant = null) {
         state.recipientMode = recipient;
+        state.senderVariant = variant || (recipient ? 'blue' : 'green');
         $('attachmentMenu').hidden = true;
         $('more').classList.toggle('recipient', recipient);
+        $('more').classList.toggle('orange', state.senderVariant === 'orange');
+        $('more').classList.toggle('purple', state.senderVariant === 'purple');
         $('more').setAttribute('aria-expanded', 'false');
         $('more').setAttribute('aria-pressed', String(recipient));
-        $('more').setAttribute('aria-label', `${recipient ? 'Destinatário' : 'Remetente'}. Clique para alternar; segure por 1,5 segundo para adicionar imagem`);
-        $('more').title = `${recipient ? 'Destinatário' : 'Remetente'} · segure para adicionar imagem`;
+        $('more').setAttribute('aria-label', `${state.senderVariant === 'purple' ? 'Destinatário roxo' : state.senderVariant === 'orange' ? 'Remetente laranja' : recipient ? 'Destinatário azul' : 'Remetente verde'}. Clique para alternar cor; segure por 1,5 segundo para opções`);
+        $('more').title = `${state.senderVariant} · segure para opções`;
     }
     $('newChat').addEventListener('click', async () => { try { const chat = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_chat', timezone_offset_minutes: timezoneOffset() }) }); await loadChats(); await openChat(chat.id); } catch (error) { toast(error.message); } });
     $('createSelectedChat').addEventListener('click', async () => {
@@ -383,12 +414,15 @@
     $('more').addEventListener('click', event => {
         event.stopPropagation();
         if (attachmentOpenedByHold) { attachmentOpenedByHold = false; return; }
-        setRecipientMode(!state.recipientMode);
+        const variants = ['green', 'blue', 'orange', 'purple'];
+        const next = variants[(variants.indexOf(state.senderVariant) + 1) % variants.length];
+        setRecipientMode(['blue', 'purple'].includes(next), next);
         $('attachmentMenu').hidden = true;
         $('more').setAttribute('aria-expanded', 'false');
     });
     document.addEventListener('click', () => { $('attachmentMenu').hidden = true; $('more').setAttribute('aria-expanded', 'false'); closeMessageMenus(); });
     $('attachmentMenu').addEventListener('click', event => event.stopPropagation());
+    $('generateConversationAudio').addEventListener('click', async () => { $('attachmentMenu').hidden = true; if (!state.activeId) return; try { const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'generate_chat_audio', chat_id: state.activeId }) }); await openChat(state.activeId, true); toast(`Áudios gerados: ${result.generated_count}. Falhas: ${result.failed_count}.`); } catch (error) { toast(error.message); } });
     $('addImage').addEventListener('click', () => { $('imageInput').click(); $('attachmentMenu').hidden = true; $('more').setAttribute('aria-expanded', 'false'); });
     $('imageInput').addEventListener('change', () => { const file = $('imageInput').files[0]; $('imageChip').hidden = !file; $('imageName').textContent = file ? file.name : ''; });
     $('removeImage').addEventListener('click', () => { $('imageInput').value = ''; $('imageChip').hidden = true; });
@@ -396,7 +430,7 @@
     $('messageBox').addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); $('composer').requestSubmit(); } });
     $('composer').addEventListener('submit', async event => {
         event.preventDefault(); const text = $('messageBox').value.trim(); const image = $('imageInput').files[0]; if (!text && !image) return;
-        const data = new FormData(); data.append('action', 'send_message'); data.append('chat_id', state.activeId); data.append('texto', text); data.append('is_recipient', state.recipientMode ? '1' : '0'); data.append('create_branch', '0'); data.append('timezone_offset_minutes', timezoneOffset()); if (image) data.append('imagem', image);
+        const data = new FormData(); data.append('action', 'send_message'); data.append('chat_id', state.activeId); data.append('texto', text); data.append('is_recipient', state.recipientMode ? '1' : '0'); data.append('color_variant', state.senderVariant); data.append('create_branch', '0'); data.append('timezone_offset_minutes', timezoneOffset()); if (image) data.append('imagem', image);
         $('send').disabled = true;
         try {
             const result = await request(api, { method: 'POST', body: data });
