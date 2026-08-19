@@ -154,12 +154,16 @@ function branchChatsRequestTts(PDO $pdo, int $userId, string $text, string $side
     return $audio ?? (is_string($response) ? $response : null);
 }
 
-function branchChatsGenerateAndPersistMessageAudio(PDO $pdo, int $messageId, int $userId, ?string &$errorDetails): bool
+function branchChatsGenerateAndPersistMessageAudio(PDO $pdo, int $messageId, int $userId, ?string &$errorDetails, bool $skipExisting = true): bool
 {
-    $stmt = $pdo->prepare('SELECT id, texto_encrypted, is_recipient, color_variant FROM mensagens WHERE id = ? AND user_id = ? LIMIT 1');
+    $stmt = $pdo->prepare('SELECT id, texto_encrypted, is_recipient, color_variant, audio_encrypted FROM mensagens WHERE id = ? AND user_id = ? LIMIT 1');
     $stmt->execute([$messageId, $userId]);
     $message = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$message) { $errorDetails = 'Mensagem não encontrada.'; return false; }
+    if ($skipExisting && branchChatsMessageAudioDataUri($message['audio_encrypted'] ?? null) !== null) {
+        $errorDetails = null;
+        return true;
+    }
     $text = trim(strip_tags((string)branchChatsDecryptMessageText($message['texto_encrypted'] ?? null)));
     if ($text === '') { $errorDetails = 'A mensagem não possui texto para gerar áudio.'; return false; }
     $variant = branchChatsNormalizeVariant($message['color_variant'] ?? null, (int)$message['is_recipient']);
@@ -649,14 +653,16 @@ try {
     if ($action === 'generate_chat_audio') {
         $chatId = (int)($input['chat_id'] ?? 0);
         branchChatsFind($pdo, $chatId, $userId);
-        $stmt = $pdo->prepare('SELECT m.id FROM chat_mensagens cm INNER JOIN mensagens m ON m.id = cm.mensagem_id WHERE cm.chat_id = ? AND m.user_id = ? AND m.texto_encrypted IS NOT NULL ORDER BY cm.position ASC');
+        $stmt = $pdo->prepare('SELECT m.id, m.audio_encrypted FROM chat_mensagens cm INNER JOIN mensagens m ON m.id = cm.mensagem_id WHERE cm.chat_id = ? AND m.user_id = ? AND m.texto_encrypted IS NOT NULL ORDER BY cm.position ASC');
         $stmt->execute([$chatId, $userId]);
-        $generated = 0; $failed = 0; $lastDetails = null;
-        foreach (array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN)) as $messageId) {
+        $generated = 0; $skipped = 0; $failed = 0; $lastDetails = null;
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $message) {
+            $messageId = (int)$message['id'];
+            if (branchChatsMessageAudioDataUri($message['audio_encrypted'] ?? null) !== null) { $skipped++; continue; }
             $details = null;
             if (branchChatsGenerateAndPersistMessageAudio($pdo, $messageId, $userId, $details)) $generated++; else { $failed++; $lastDetails = $details; }
         }
-        branchChatsRespond(['status' => 'success', 'data' => ['generated_count' => $generated, 'failed_count' => $failed, 'details' => $lastDetails]]);
+        branchChatsRespond(['status' => 'success', 'data' => ['generated_count' => $generated, 'skipped_count' => $skipped, 'failed_count' => $failed, 'details' => $lastDetails]]);
     }
 
     if ($action === 'delete_message') {
