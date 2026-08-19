@@ -48,7 +48,7 @@ function branchChatsNormalizeVariant($value, int $isRecipient): string
 function branchChatsAudioContext(string $variant): array
 {
     return match ($variant) {
-        'blue' => ['side' => 'back', 'language' => 'en-GB'],
+        'blue' => ['side' => 'back', 'language' => 'pt-BR'],
         'purple' => ['side' => 'back', 'language' => 'en-GB'],
         'orange' => ['side' => 'front', 'language' => 'en-GB'],
         default => ['side' => 'front', 'language' => 'pt-BR'],
