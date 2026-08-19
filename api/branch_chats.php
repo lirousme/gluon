@@ -535,10 +535,20 @@ try {
         branchChatsRespond(['status' => 'error', 'message' => 'Método não permitido.'], 405);
     }
 
-    $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
-    $input = strpos($contentType, 'application/json') !== false
-        ? (json_decode(file_get_contents('php://input'), true) ?: [])
-        : $_POST;
+    $contentType = $_SERVER['CONTENT_TYPE'] ?? ($_SERVER['HTTP_CONTENT_TYPE'] ?? '');
+    $rawInput = file_get_contents('php://input');
+    $jsonInput = null;
+    if (is_string($rawInput) && trim($rawInput) !== '' && (
+        stripos($contentType, 'application/json') !== false ||
+        str_starts_with(ltrim($rawInput), '{') ||
+        str_starts_with(ltrim($rawInput), '[')
+    )) {
+        $decodedInput = json_decode($rawInput, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decodedInput)) {
+            $jsonInput = $decodedInput;
+        }
+    }
+    $input = $jsonInput ?? $_POST;
     $action = trim((string)($input['action'] ?? ''));
 
     if ($action === 'create_chat') {
