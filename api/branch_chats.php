@@ -22,7 +22,6 @@ function branchChatsRespond(array $payload, int $status = 200): void
     exit;
 }
 
-
 function branchChatsEnsureAudioSchema(PDO $pdo): void
 {
     $columns = [
@@ -96,21 +95,26 @@ function branchChatsGetUserTtsProvider(PDO $pdo, int $userId): string
     return in_array($provider, ['fishaudio', 'openai', 'google'], true) ? $provider : 'fishaudio';
 }
 
-function branchChatsFishReferenceIdByLanguage(string $language): string
+function branchChatsFishReferenceIdByVariant(string $variant): string
 {
-    return match ($language) {
-        'pt-BR' => FISH_REFERENCE_ID_PT_BR,
-        'en-US' => FISH_REFERENCE_ID_EN_US,
-        'en-GB' => FISH_REFERENCE_ID_EN_GB,
-        default => FISH_REFERENCE_ID_BACK,
+    return match ($variant) {
+        'blue'   => FISH_REFERENCE_ID_BLUE,
+        'purple' => FISH_REFERENCE_ID_PURPLE,
+        'orange' => FISH_REFERENCE_ID_ORANGE,
+        'green'  => FISH_REFERENCE_ID_GREEN,
+        default  => FISH_REFERENCE_ID_GREEN,
     };
 }
 
-function branchChatsGoogleVoice(string $side, string $language): string
+function branchChatsGoogleVoice(string $variant): string
 {
-    if ($language === 'pt-BR') return 'pt-BR-Chirp3-HD-Algieba';
-    if ($language === 'en-GB') return 'en-GB-Chirp3-HD-Algieba';
-    return $side === 'front' ? 'pt-BR-Chirp3-HD-Algieba' : 'en-GB-Chirp3-HD-Algieba';
+    return match ($variant) {
+        'blue'   => 'pt-BR-Chirp3-HD-Rasalgethi', 
+        'purple' => 'en-GB-Chirp3-HD-Rasalgethi',
+        'orange' => 'en-GB-Chirp3-HD-Puck', // Atualizado para en-GB para casar com a linguagem solicitada na cor
+        'green'  => 'pt-BR-Chirp3-HD-Puck',
+        default  => 'pt-BR-Chirp3-HD-Algieba',
+    };
 }
 
 function branchChatsAdjustPronunciationForTts(PDO $pdo, string $text, string $language): string
@@ -125,29 +129,40 @@ function branchChatsAdjustPronunciationForTts(PDO $pdo, string $text, string $la
     return $text;
 }
 
-function branchChatsRequestTts(PDO $pdo, int $userId, string $text, string $side, string $language, ?string &$errorDetails): ?string
+function branchChatsRequestTts(PDO $pdo, int $userId, string $text, string $variant, string $language, ?string &$errorDetails): ?string
 {
     $text = branchChatsAdjustPronunciationForTts($pdo, $text, $language);
     $provider = branchChatsGetUserTtsProvider($pdo, $userId);
+    
     if ($provider === 'openai') {
         if (trim((string)OPENAI_API_KEY) === '') { $errorDetails = 'Chave OPENAI_API_KEY não configurada.'; return null; }
         $ch = curl_init('https://api.openai.com/v1/audio/speech');
-        $payload = json_encode(['model' => 'gpt-5.4', 'voice' => OPENAI_TTS_VOICE_DEFAULT, 'input' => $text, 'format' => 'mp3']);
+        $payload = json_encode(['model' => 'gpt-4o-audio-preview', 'voice' => OPENAI_TTS_VOICE_DEFAULT, 'input' => $text, 'format' => 'mp3']);
         $headers = ['Authorization: Bearer ' . OPENAI_API_KEY, 'Content-Type: application/json'];
     } elseif ($provider === 'google') {
         if (trim((string)GOOGLE_CLOUD_API_KEY) === '') { $errorDetails = 'Chave GOOGLE_CLOUD_API_KEY não configurada.'; return null; }
         $ch = curl_init('https://texttospeech.googleapis.com/v1/text:synthesize?key=' . rawurlencode(GOOGLE_CLOUD_API_KEY));
-        $payload = json_encode(['input' => ['text' => $text], 'voice' => ['languageCode' => $language, 'name' => branchChatsGoogleVoice($side, $language)], 'audioConfig' => ['audioEncoding' => 'MP3']]);
+        
+        $audioConfig = ['audioEncoding' => 'MP3'];
+        if ($language === 'en-GB') {
+            // Aumenta o volume do áudio. O máximo suportado pela API do Google é 16.0
+            $audioConfig['volumeGainDb'] = 6.0; 
+        }
+        
+        $payload = json_encode(['input' => ['text' => $text], 'voice' => ['languageCode' => $language, 'name' => branchChatsGoogleVoice($variant)], 'audioConfig' => $audioConfig]);
         $headers = ['Content-Type: application/json'];
     } else {
         if (trim((string)FISH_API_KEY) === '') { $errorDetails = 'Chave FISH_API_KEY não configurada.'; return null; }
         $ch = curl_init('https://api.fish.audio/v1/tts');
-        $payload = json_encode(['text' => $text, 'reference_id' => branchChatsFishReferenceIdByLanguage($language), 'format' => 'mp3']);
+        $payload = json_encode(['text' => $text, 'reference_id' => branchChatsFishReferenceIdByVariant($variant), 'format' => 'mp3']);
         $headers = ['Authorization: Bearer ' . FISH_API_KEY, 'Content-Type: application/json', 'model: s2'];
     }
+    
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); curl_setopt($ch, CURLOPT_POST, true); curl_setopt($ch, CURLOPT_POSTFIELDS, $payload); curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     $response = curl_exec($ch); $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE); $curlError = curl_error($ch); curl_close($ch);
+    
     if ($httpcode !== 200 || !$response) { $errorDetails = branchChatsBuildTtsProviderErrorDetails($provider, (int)$httpcode, $curlError, is_string($response) ? $response : null); return null; }
+    
     $decoded = json_decode($response, true);
     $audio = json_last_error() === JSON_ERROR_NONE ? branchChatsDecodeTtsAudioBinaryFromJsonPayload($decoded) : null;
     $errorDetails = null;
@@ -160,18 +175,25 @@ function branchChatsGenerateAndPersistMessageAudio(PDO $pdo, int $messageId, int
     $stmt->execute([$messageId, $userId]);
     $message = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$message) { $errorDetails = 'Mensagem não encontrada.'; return false; }
+    
     if ($skipExisting && branchChatsMessageAudioDataUri($message['audio_encrypted'] ?? null) !== null) {
         $errorDetails = null;
         return true;
     }
+    
     $text = trim(strip_tags((string)branchChatsDecryptMessageText($message['texto_encrypted'] ?? null)));
     if ($text === '') { $errorDetails = 'A mensagem não possui texto para gerar áudio.'; return false; }
+    
     $variant = branchChatsNormalizeVariant($message['color_variant'] ?? null, (int)$message['is_recipient']);
     $context = branchChatsAudioContext($variant);
-    $audio = branchChatsRequestTts($pdo, $userId, $text, $context['side'], $context['language'], $errorDetails);
+    
+    $audio = branchChatsRequestTts($pdo, $userId, $text, $variant, $context['language'], $errorDetails);
+    
     if (!is_string($audio) || $audio === '') return false;
+    
     $pdo->prepare('UPDATE mensagens SET audio_encrypted = ?, has_audio = 1, audio_language = ?, audio_variant = ? WHERE id = ? AND user_id = ?')
         ->execute([Security::encryptData(base64_encode($audio)), $context['language'], $variant, $messageId, $userId]);
+        
     return true;
 }
 
@@ -272,10 +294,6 @@ function branchChatsStoreImage(array $image): string
     return Security::encryptData('data:' . $mime . ';base64,' . base64_encode($contents));
 }
 
-/**
- * Descriptografa o texto de uma mensagem. O fallback temporário para texto puro
- * permite que registros criados antes da migração sejam lidos e recriptografados.
- */
 function branchChatsDecryptMessageText(?string $encryptedText): ?string
 {
     if ($encryptedText === null) {
@@ -286,10 +304,6 @@ function branchChatsDecryptMessageText(?string $encryptedText): ?string
     return $decrypted !== false ? $decrypted : $encryptedText;
 }
 
-/**
- * Retorna a imagem como data URI, mantendo no banco somente o conteúdo base64
- * criptografado. O fallback converte imagens da implementação antiga na leitura.
- */
 function branchChatsDecryptMessageImage(PDO $pdo, array $message): ?string
 {
     $storedImage = $message['imagem_encrypted'] ?? null;
@@ -630,7 +644,7 @@ try {
         if ($text === '' && ($encryptedImage === null || $encryptedImage === '')) {
             branchChatsRespond(['status' => 'error', 'message' => 'A mensagem precisa ter texto ou imagem.'], 422);
         }
-        $pdo->prepare('UPDATE mensagens SET texto_encrypted = :texto, imagem_encrypted = :imagem, audio_encrypted = NULL, has_audio = 0, audio_language = NULL, audio_variant = NULL WHERE id = :id AND user_id = :user_id')->execute([
+        $pdo->prepare('UPDATE mensagens SET texto_encrypted = :texto, imagem_encrypted = :imagem, audio_encrypted = NULL, has_audio = 0 WHERE id = :id AND user_id = :user_id')->execute([
             ':texto' => $text === '' ? null : Security::encryptData($text), ':imagem' => $encryptedImage, ':id' => $messageId, ':user_id' => $userId,
         ]);
         branchChatsRespond(['status' => 'success', 'data' => ['id' => $messageId]]);
@@ -860,7 +874,13 @@ try {
     $createBranch = $answerInNewChat || filter_var($input['create_branch'] ?? false, FILTER_VALIDATE_BOOLEAN);
     $text = trim((string)($input['texto'] ?? ''));
     $isRecipient = filter_var($input['is_recipient'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
+    
+    // Assegura que o variant seja orange, purple, blue ou green.
     $colorVariant = branchChatsNormalizeVariant($input['color_variant'] ?? null, $isRecipient);
+    
+    // Define a linguagem com base exclusivamente na cor
+    $audioLanguage = in_array($colorVariant, ['orange', 'purple'], true) ? 'en-GB' : 'pt-BR';
+    
     if (mb_strlen($text) > 10000) {
         branchChatsRespond(['status' => 'error', 'message' => 'A mensagem deve ter no máximo 10.000 caracteres.'], 422);
     }
@@ -889,21 +909,36 @@ try {
     }
 
     $encryptedText = $text !== '' ? Security::encryptData($text) : null;
-    $stmt = $pdo->prepare('INSERT INTO mensagens (user_id, texto_encrypted, imagem_encrypted, is_recipient, color_variant) VALUES (:user_id, :texto_encrypted, :imagem_encrypted, :is_recipient, :color_variant)');
-    $stmt->execute([':user_id' => $userId, ':texto_encrypted' => $encryptedText, ':imagem_encrypted' => $encryptedImage, ':is_recipient' => $isRecipient, ':color_variant' => $colorVariant]);
+    
+    // A coluna audio_language é preenchida no momento de inserção (criação)
+    $stmt = $pdo->prepare('INSERT INTO mensagens (user_id, texto_encrypted, imagem_encrypted, is_recipient, color_variant, audio_language) VALUES (:user_id, :texto_encrypted, :imagem_encrypted, :is_recipient, :color_variant, :audio_language)');
+    $stmt->execute([
+        ':user_id' => $userId,
+        ':texto_encrypted' => $encryptedText,
+        ':imagem_encrypted' => $encryptedImage,
+        ':is_recipient' => $isRecipient,
+        ':color_variant' => $colorVariant,
+        ':audio_language' => $audioLanguage
+    ]);
     $messageId = (int)$pdo->lastInsertId();
+    
     $stmt = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position, is_response) SELECT :chat_id, :message_id, COALESCE(MAX(position), 0) + 1, :is_response FROM chat_mensagens WHERE chat_id = :position_chat_id');
     $stmt->execute([':chat_id' => $targetChatId, ':message_id' => $messageId, ':is_response' => $answerInNewChat && !$referenceChat ? 1 : 0, ':position_chat_id' => $targetChatId]);
+    
     $pdo->prepare('UPDATE chats SET updated_at = CURRENT_TIMESTAMP WHERE id = :id')->execute([':id' => $targetChatId]);
+    
     $stmt = $pdo->prepare('SELECT id, created_at FROM mensagens WHERE id = :id');
     $stmt->execute([':id' => $messageId]);
     $message = $stmt->fetch();
+    
     $message['texto'] = $text !== '' ? $text : null;
     $message['imagem_base64'] = $encryptedImage !== null ? Security::decryptData($encryptedImage) : null;
     $message['is_recipient'] = $isRecipient;
     $message['color_variant'] = $colorVariant;
     $message['has_audio'] = 0;
     $message['audio_base64'] = null;
+    $message['audio_language'] = $audioLanguage; // Retorna na resposta o idioma que foi atrelado
+    
     $pdo->commit();
     branchChatsRespond(['status' => 'success', 'data' => ['message' => $message, 'chat_id' => $targetChatId, 'branched' => $createBranch, 'answered_in_new_chat' => $answerInNewChat]], 201);
 } catch (Throwable $e) {
