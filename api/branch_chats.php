@@ -13,6 +13,7 @@ if (!isset($_SESSION['user_id'])) {
 $userId = (int)$_SESSION['user_id'];
 $pdo = Database::getConnection();
 branchChatsEnsureAudioSchema($pdo);
+branchChatsEnsureReferenceAudioSchema($pdo);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 function branchChatsRespond(array $payload, int $status = 200): void
@@ -35,6 +36,28 @@ function branchChatsEnsureAudioSchema(PDO $pdo): void
         $stmt = $pdo->query("SHOW COLUMNS FROM mensagens LIKE " . $pdo->quote($column));
         if (!$stmt->fetchColumn()) $pdo->exec($sql);
     }
+}
+
+function branchChatsEnsureReferenceAudioSchema(PDO $pdo): void
+{
+    $columns = [
+        'reference_audio_encrypted' => 'ALTER TABLE chat_references ADD COLUMN reference_audio_encrypted LONGTEXT NULL AFTER reference_encrypted',
+        'reference_audio_language' => "ALTER TABLE chat_references ADD COLUMN reference_audio_language VARCHAR(10) NOT NULL DEFAULT 'pt-BR' AFTER reference_audio_encrypted",
+    ];
+    foreach ($columns as $column => $sql) {
+        $stmt = $pdo->query("SHOW COLUMNS FROM chat_references LIKE " . $pdo->quote($column));
+        if (!$stmt->fetchColumn()) $pdo->exec($sql);
+    }
+}
+
+function branchChatsNormalizeReferenceLanguage($value): string
+{
+    return in_array($value, ['pt-BR', 'en-GB'], true) ? $value : 'pt-BR';
+}
+
+function branchChatsReferenceVariant(string $language): string
+{
+    return $language === 'en-GB' ? 'orange' : 'green';
 }
 
 function branchChatsNormalizeVariant($value, int $isRecipient): string
@@ -197,6 +220,28 @@ function branchChatsGenerateAndPersistMessageAudio(PDO $pdo, int $messageId, int
     return true;
 }
 
+function branchChatsGenerateAndPersistReferenceAudio(PDO $pdo, int $chatId, int $userId, ?string &$errorDetails, bool $skipExisting = true): bool
+{
+    $chat = branchChatsFind($pdo, $chatId, $userId);
+    if (!in_array((int)$chat['chat_type'], [2, 3], true) || trim((string)($chat['reference'] ?? '')) === '') {
+        $errorDetails = 'O chat não possui texto de referência para gerar áudio.';
+        return false;
+    }
+    if ($skipExisting && !empty($chat['reference_audio_base64'])) {
+        $errorDetails = null;
+        return true;
+    }
+
+    $referenceOwnerId = (int)$chat['chat_type'] === 3 && !empty($chat['parent_chat_id']) ? (int)$chat['parent_chat_id'] : $chatId;
+    $language = branchChatsNormalizeReferenceLanguage($chat['reference_audio_language'] ?? null);
+    $audio = branchChatsRequestTts($pdo, $userId, trim((string)$chat['reference']), branchChatsReferenceVariant($language), $language, $errorDetails);
+    if (!is_string($audio) || $audio === '') return false;
+
+    $pdo->prepare('UPDATE chat_references SET reference_audio_encrypted = :audio, reference_audio_language = :language WHERE chat_id = :chat_id')
+        ->execute([':audio' => Security::encryptData(base64_encode($audio)), ':language' => $language, ':chat_id' => $referenceOwnerId]);
+    return true;
+}
+
 function branchChatsMessageAudioDataUri(?string $audioEncrypted): ?string
 {
     if (!$audioEncrypted) return null;
@@ -238,6 +283,8 @@ function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
     $stmt = $pdo->prepare(
         'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.`max`, c.read_marker_message_id, c.created_at, c.updated_at,
                 COALESCE(cr.reference_encrypted, parent_cr.reference_encrypted) AS reference_encrypted,
+                COALESCE(cr.reference_audio_encrypted, parent_cr.reference_audio_encrypted) AS reference_audio_encrypted,
+                COALESCE(cr.reference_audio_language, parent_cr.reference_audio_language, \'pt-BR\') AS reference_audio_language,
                 COALESCE(cv.view_count, 0) AS view_count, cv.last_viewed_at,
                 CASE WHEN cv.last_viewed_at IS NULL THEN NULL
                      ELSE DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY) END AS next_view_at,
@@ -257,7 +304,9 @@ function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
         branchChatsRespond(['status' => 'error', 'message' => 'Chat não encontrado.'], 404);
     }
     $chat['reference'] = branchChatsDecryptMessageText($chat['reference_encrypted'] ?? null);
-    unset($chat['reference_encrypted']);
+    $chat['reference_audio_base64'] = branchChatsMessageAudioDataUri($chat['reference_audio_encrypted'] ?? null);
+    $chat['reference_audio_language'] = branchChatsNormalizeReferenceLanguage($chat['reference_audio_language'] ?? null);
+    unset($chat['reference_encrypted'], $chat['reference_audio_encrypted']);
     $chat['early_review'] = false;
     if (!(bool)$chat['can_mark_viewed'] && branchChatsCanReviewEarly($pdo, $chatId, $userId)) {
         $chat['can_mark_viewed'] = 1;
@@ -592,7 +641,8 @@ try {
             branchChatsRespond(['status' => 'error', 'message' => 'Tipo de chat inválido.'], 422);
         }
         $reference = trim((string)($input['reference'] ?? ''));
-        if ($chatType === 2 && ($reference === '' || mb_strlen($reference) > 10000)) {
+        $referenceLanguage = branchChatsNormalizeReferenceLanguage($input['reference_language'] ?? ($currentChat['reference_audio_language'] ?? null));
+        if (in_array($chatType, [2, 3], true) && ($reference === '' || mb_strlen($reference) > 10000)) {
             branchChatsRespond(['status' => 'error', 'message' => 'Informe uma referência de até 10.000 caracteres.'], 422);
         }
         $maxInput = array_key_exists('max', $input) ? $input['max'] : $currentChat['max'];
@@ -602,16 +652,18 @@ try {
         }
         $pdo->beginTransaction();
         $pdo->prepare('UPDATE chats SET titulo = :titulo, chat_type = :chat_type, `max` = :max WHERE id = :id AND user_id = :user_id')->execute([':titulo' => $title, ':chat_type' => $chatType, ':max' => $max, ':id' => $chatId, ':user_id' => $userId]);
-        if ($chatType === 2) {
-            $pdo->prepare('INSERT INTO chat_references (chat_id, reference_encrypted) VALUES (:chat_id, :reference) ON DUPLICATE KEY UPDATE reference_encrypted = VALUES(reference_encrypted)')->execute([
-                ':chat_id' => $chatId,
+        if (in_array($chatType, [2, 3], true)) {
+            $referenceChatId = $chatType === 3 && !empty($currentChat['parent_chat_id']) ? (int)$currentChat['parent_chat_id'] : $chatId;
+            $pdo->prepare('INSERT INTO chat_references (chat_id, reference_encrypted, reference_audio_language, reference_audio_encrypted) VALUES (:chat_id, :reference, :language, NULL) ON DUPLICATE KEY UPDATE reference_audio_encrypted = IF(reference_encrypted = VALUES(reference_encrypted) AND reference_audio_language = VALUES(reference_audio_language), reference_audio_encrypted, NULL), reference_encrypted = VALUES(reference_encrypted), reference_audio_language = VALUES(reference_audio_language)')->execute([
+                ':chat_id' => $referenceChatId,
                 ':reference' => Security::encryptData($reference),
+                ':language' => $referenceLanguage,
             ]);
         } elseif ($chatType !== 3) {
             $pdo->prepare('DELETE FROM chat_references WHERE chat_id = :chat_id')->execute([':chat_id' => $chatId]);
         }
         $pdo->commit();
-        branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId, 'titulo' => $title, 'chat_type' => $chatType, 'max' => $max, 'reference' => $chatType === 2 ? $reference : ($currentChat['reference'] ?? null)]]);
+        branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId, 'titulo' => $title, 'chat_type' => $chatType, 'max' => $max, 'reference' => in_array($chatType, [2, 3], true) ? $reference : ($currentChat['reference'] ?? null), 'reference_audio_language' => in_array($chatType, [2, 3], true) ? $referenceLanguage : ($currentChat['reference_audio_language'] ?? 'pt-BR'), 'reference_audio_base64' => null]]);
     }
 
     if ($action === 'delete_chat') {
@@ -664,19 +716,32 @@ try {
         branchChatsRespond(['status' => 'success', 'data' => ['message_id' => $messageId, 'audio_base64' => branchChatsMessageAudioDataUri($stmt->fetchColumn())]]);
     }
 
+    if ($action === 'generate_reference_audio') {
+        $chatId = (int)($input['chat_id'] ?? 0);
+        $details = null;
+        if (!branchChatsGenerateAndPersistReferenceAudio($pdo, $chatId, $userId, $details, false)) branchChatsRespond(['status' => 'error', 'message' => 'Erro ao gerar áudio da referência.', 'details' => $details], 500);
+        $chat = branchChatsFind($pdo, $chatId, $userId);
+        branchChatsRespond(['status' => 'success', 'data' => ['chat_id' => $chatId, 'reference_audio_base64' => $chat['reference_audio_base64'] ?? null]]);
+    }
+
     if ($action === 'generate_chat_audio') {
         $chatId = (int)($input['chat_id'] ?? 0);
-        branchChatsFind($pdo, $chatId, $userId);
+        $chat = branchChatsFind($pdo, $chatId, $userId);
+        $referenceGenerated = 0; $referenceSkipped = 0; $referenceFailed = 0; $lastDetails = null;
+        if (in_array((int)$chat['chat_type'], [2, 3], true) && trim((string)($chat['reference'] ?? '')) !== '') {
+            if (!empty($chat['reference_audio_base64'])) $referenceSkipped = 1;
+            else { $details = null; if (branchChatsGenerateAndPersistReferenceAudio($pdo, $chatId, $userId, $details)) $referenceGenerated = 1; else { $referenceFailed = 1; $lastDetails = $details; } }
+        }
         $stmt = $pdo->prepare('SELECT m.id, m.audio_encrypted FROM chat_mensagens cm INNER JOIN mensagens m ON m.id = cm.mensagem_id WHERE cm.chat_id = ? AND m.user_id = ? AND m.texto_encrypted IS NOT NULL ORDER BY cm.position ASC');
         $stmt->execute([$chatId, $userId]);
-        $generated = 0; $skipped = 0; $failed = 0; $lastDetails = null;
+        $generated = 0; $skipped = 0; $failed = 0;
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $message) {
             $messageId = (int)$message['id'];
             if (branchChatsMessageAudioDataUri($message['audio_encrypted'] ?? null) !== null) { $skipped++; continue; }
             $details = null;
             if (branchChatsGenerateAndPersistMessageAudio($pdo, $messageId, $userId, $details)) $generated++; else { $failed++; $lastDetails = $details; }
         }
-        branchChatsRespond(['status' => 'success', 'data' => ['generated_count' => $generated, 'skipped_count' => $skipped, 'failed_count' => $failed, 'details' => $lastDetails]]);
+        branchChatsRespond(['status' => 'success', 'data' => ['generated_count' => $generated + $referenceGenerated, 'skipped_count' => $skipped + $referenceSkipped, 'failed_count' => $failed + $referenceFailed, 'details' => $lastDetails]]);
     }
 
     if ($action === 'delete_message') {
