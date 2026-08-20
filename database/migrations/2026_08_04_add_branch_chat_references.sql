@@ -1,6 +1,8 @@
 CREATE TABLE IF NOT EXISTS chat_references (
     chat_id INT UNSIGNED NOT NULL,
     reference_encrypted TEXT NOT NULL,
+    reference_audio_encrypted LONGTEXT NULL,
+    reference_audio_language VARCHAR(10) NOT NULL DEFAULT 'pt-BR',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (chat_id),
