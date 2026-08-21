@@ -204,7 +204,9 @@
     async function request(url, options) { const response = await fetch(url, options); const result = await response.json(); if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível concluir.'); return result.data; }
     function renderChats() {
         const query = $('search').value.trim().toLowerCase();
-        const rows = state.chats.filter(chat => chat.titulo.toLowerCase().includes(query));
+        const rows = state.chats
+            .filter(chat => chat.titulo.toLowerCase().includes(query))
+            .sort((a, b) => Number(b.view_count || 0) - Number(a.view_count || 0));
         $('chatList').replaceChildren();
         if (!rows.length) { const empty = document.createElement('div'); empty.className = 'empty-list'; empty.textContent = query ? 'Nenhuma conversa encontrada.' : 'Nenhum chat ainda. Crie sua primeira conversa.'; $('chatList').append(empty); return; }
         rows.forEach(chat => {
