@@ -249,7 +249,7 @@ function branchChatsMessageAudioDataUri(?string $audioEncrypted): ?string
     return is_string($audio) && $audio !== '' ? 'data:audio/mpeg;base64,' . $audio : null;
 }
 
-function branchChatsCanReviewEarly(PDO $pdo, int $chatId, int $userId): bool
+function branchChatsCanReviewEarly(PDO $pdo, int $chatId, int $userId, int $timezoneOffsetMinutes = 0): bool
 {
     $stmt = $pdo->prepare(
         'SELECT c.id
@@ -257,15 +257,15 @@ function branchChatsCanReviewEarly(PDO $pdo, int $chatId, int $userId): bool
          INNER JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
          WHERE c.user_id = :user_id
            AND cv.last_viewed_at IS NOT NULL
-           AND CURRENT_TIMESTAMP < DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY)
+           AND CURRENT_TIMESTAMP < ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count', $timezoneOffsetMinutes) . '
            AND NOT EXISTS (
                SELECT 1
                FROM chats due_chat
                LEFT JOIN chat_views due_view ON due_view.chat_id = due_chat.id AND due_view.user_id = :due_view_user_id
                WHERE due_chat.user_id = :due_user_id
-                 AND (due_view.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= DATE_ADD(due_view.last_viewed_at, INTERVAL due_view.view_count DAY))
+                 AND (due_view.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= ' . branchChatsNextViewExpression('due_view.last_viewed_at', 'due_view.view_count', $timezoneOffsetMinutes) . ')
            )
-         ORDER BY DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY) ASC, c.id ASC
+         ORDER BY ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count', $timezoneOffsetMinutes) . ' ASC, c.id ASC
          LIMIT 1'
     );
     $stmt->execute([
@@ -278,7 +278,7 @@ function branchChatsCanReviewEarly(PDO $pdo, int $chatId, int $userId): bool
     return (int)$stmt->fetchColumn() === $chatId;
 }
 
-function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
+function branchChatsFind(PDO $pdo, int $chatId, int $userId, int $timezoneOffsetMinutes = 0): array
 {
     $stmt = $pdo->prepare(
         'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.`max`, c.read_marker_message_id, c.created_at, c.updated_at,
@@ -287,8 +287,8 @@ function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
                 COALESCE(cr.reference_audio_language, parent_cr.reference_audio_language, \'pt-BR\') AS reference_audio_language,
                 COALESCE(cv.view_count, 0) AS view_count, cv.last_viewed_at,
                 CASE WHEN cv.last_viewed_at IS NULL THEN NULL
-                     ELSE DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY) END AS next_view_at,
-                CASE WHEN cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY)
+                     ELSE ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count', $timezoneOffsetMinutes) . ' END AS next_view_at,
+                CASE WHEN cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count', $timezoneOffsetMinutes) . '
                      THEN 1 ELSE 0 END AS can_mark_viewed,
                 (SELECT COUNT(*) FROM chats child WHERE child.parent_chat_id = c.id AND child.user_id = c.user_id) AS total_branches
          FROM chats c
@@ -308,7 +308,7 @@ function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
     $chat['reference_audio_language'] = branchChatsNormalizeReferenceLanguage($chat['reference_audio_language'] ?? null);
     unset($chat['reference_encrypted'], $chat['reference_audio_encrypted']);
     $chat['early_review'] = false;
-    if (!(bool)$chat['can_mark_viewed'] && branchChatsCanReviewEarly($pdo, $chatId, $userId)) {
+    if (!(bool)$chat['can_mark_viewed'] && branchChatsCanReviewEarly($pdo, $chatId, $userId, $timezoneOffsetMinutes)) {
         $chat['can_mark_viewed'] = 1;
         $chat['early_review'] = true;
     }
@@ -318,6 +318,50 @@ function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
 function branchChatsTimezoneOffset(array $input): int
 {
     return max(-840, min(840, (int)($input['timezone_offset_minutes'] ?? 0)));
+}
+
+function branchChatsNextViewExpression(string $lastViewedColumn = 'cv.last_viewed_at', string $viewCountColumn = 'cv.view_count', int $timezoneOffsetMinutes = 0): string
+{
+    $timezoneOffsetMinutes = max(-840, min(840, $timezoneOffsetMinutes));
+    return "DATE_SUB(DATE_ADD(DATE(DATE_ADD($lastViewedColumn, INTERVAL $timezoneOffsetMinutes MINUTE)), INTERVAL $viewCountColumn DAY), INTERVAL $timezoneOffsetMinutes MINUTE)";
+}
+
+function branchChatsLocalDate(int $timezoneOffsetMinutes): string
+{
+    return (new DateTimeImmutable('now', new DateTimeZone('UTC')))
+        ->modify(($timezoneOffsetMinutes >= 0 ? '+' : '') . $timezoneOffsetMinutes . ' minutes')
+        ->format('Y-m-d');
+}
+
+function branchChatsReadCycleStatus(PDO $pdo, int $userId, int $timezoneOffsetMinutes): array
+{
+    $localDate = branchChatsLocalDate($timezoneOffsetMinutes);
+    $stmt = $pdo->prepare('SELECT read_count FROM branch_chat_daily_reads WHERE user_id = :user_id AND local_date = :local_date');
+    $stmt->execute([':user_id' => $userId, ':local_date' => $localDate]);
+
+    return [
+        'read_cycle_count' => (int)($stmt->fetchColumn() ?: 0),
+        'read_cycle_limit' => 100,
+        'read_cycle_date' => $localDate,
+    ];
+}
+
+function branchChatsIncrementReadCycle(PDO $pdo, int $userId, int $timezoneOffsetMinutes): array
+{
+    $localDate = branchChatsLocalDate($timezoneOffsetMinutes);
+    $stmt = $pdo->prepare(
+        'INSERT INTO branch_chat_daily_reads (user_id, local_date, read_count, updated_at)
+         VALUES (:user_id, :local_date, 1, CURRENT_TIMESTAMP)
+         ON DUPLICATE KEY UPDATE read_count = LEAST(read_count + 1, 100), updated_at = CURRENT_TIMESTAMP'
+    );
+    $stmt->execute([':user_id' => $userId, ':local_date' => $localDate]);
+
+    return branchChatsReadCycleStatus($pdo, $userId, $timezoneOffsetMinutes);
+}
+
+function branchChatsDailyReadLimitReached(PDO $pdo, int $userId, int $timezoneOffsetMinutes): bool
+{
+    return branchChatsReadCycleStatus($pdo, $userId, $timezoneOffsetMinutes)['read_cycle_count'] >= 100;
 }
 
 function branchChatsDefaultTitle(int $timezoneOffsetMinutes): string
@@ -543,9 +587,10 @@ function branchChatsDecryptMessages(PDO $pdo, array $messages): array
 
 try {
     if ($method === 'GET') {
+        $timezoneOffsetMinutes = branchChatsTimezoneOffset($_GET);
         $chatId = isset($_GET['chat_id']) ? (int)$_GET['chat_id'] : 0;
         if ($chatId > 0) {
-            $chat = branchChatsFind($pdo, $chatId, $userId);
+            $chat = branchChatsFind($pdo, $chatId, $userId, $timezoneOffsetMinutes);
             $stmt = $pdo->prepare(
                 'SELECT m.id, m.texto_encrypted, m.imagem_encrypted, m.audio_encrypted, m.has_audio, m.audio_language, m.audio_variant, m.color_variant, m.is_recipient, m.created_at, cm.is_response
                  FROM chat_mensagens cm
@@ -567,7 +612,7 @@ try {
              FROM chats c
              LEFT JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
              WHERE c.user_id = :user_id
-               AND (cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY))
+               AND (cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count', $timezoneOffsetMinutes) . ')
              ORDER BY c.updated_at DESC, c.id DESC'
         );
         $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId]);
@@ -583,8 +628,8 @@ try {
                  INNER JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
                  WHERE c.user_id = :user_id
                    AND cv.last_viewed_at IS NOT NULL
-                   AND CURRENT_TIMESTAMP < DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY)
-                 ORDER BY DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY) ASC, c.id ASC
+                   AND CURRENT_TIMESTAMP < ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count', $timezoneOffsetMinutes) . '
+                 ORDER BY ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count', $timezoneOffsetMinutes) . ' ASC, c.id ASC
                  LIMIT 1'
             );
             $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId]);
@@ -754,9 +799,17 @@ try {
         branchChatsRespond(['status' => 'success', 'data' => ['id' => $messageId]]);
     }
 
+    if ($action === 'read_cycle_status') {
+        branchChatsRespond(['status' => 'success', 'data' => branchChatsReadCycleStatus($pdo, $userId, branchChatsTimezoneOffset($input))]);
+    }
+
     if ($action === 'mark_viewed') {
         $chatId = (int)($input['chat_id'] ?? 0);
-        branchChatsFind($pdo, $chatId, $userId);
+        $timezoneOffsetMinutes = branchChatsTimezoneOffset($input);
+        branchChatsFind($pdo, $chatId, $userId, $timezoneOffsetMinutes);
+        if (branchChatsDailyReadLimitReached($pdo, $userId, $timezoneOffsetMinutes)) {
+            branchChatsRespond(['status' => 'error', 'message' => 'Você atingiu o limite de 100 leituras para hoje neste fuso horário.'], 429);
+        }
 
         $pdo->beginTransaction();
         $stmt = $pdo->prepare(
@@ -766,7 +819,7 @@ try {
         $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
         $stmt = $pdo->prepare(
             'SELECT cv.view_count, cv.last_viewed_at, c.`max`,
-                    CASE WHEN last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= DATE_ADD(last_viewed_at, INTERVAL view_count DAY)
+                    CASE WHEN last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= ' . branchChatsNextViewExpression('last_viewed_at', 'view_count', $timezoneOffsetMinutes) . '
                          THEN 1 ELSE 0 END AS can_mark_viewed
              FROM chat_views cv
              INNER JOIN chats c ON c.id = cv.chat_id AND c.user_id = cv.user_id
@@ -774,7 +827,7 @@ try {
         );
         $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
         $view = $stmt->fetch();
-        if (!(bool)$view['can_mark_viewed'] && !branchChatsCanReviewEarly($pdo, $chatId, $userId)) {
+        if (!(bool)$view['can_mark_viewed'] && !branchChatsCanReviewEarly($pdo, $chatId, $userId, $timezoneOffsetMinutes)) {
             $pdo->rollBack();
             branchChatsRespond(['status' => 'error', 'message' => 'A próxima leitura ainda não está disponível.'], 409);
         }
@@ -785,6 +838,7 @@ try {
              WHERE chat_id = :chat_id AND user_id = :user_id'
         );
         $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
+        $cycle = branchChatsIncrementReadCycle($pdo, $userId, $timezoneOffsetMinutes);
         $pdo->prepare('UPDATE chats SET read_marker_message_id = NULL WHERE id = :id AND user_id = :user_id')->execute([':id' => $chatId, ':user_id' => $userId]);
         $viewCount = (int)$view['view_count'] + 1;
         if ($view['max'] !== null && $viewCount >= (int)$view['max']) {
@@ -793,15 +847,22 @@ try {
             branchChatsRespond(['status' => 'success', 'data' => [
                 'deleted' => true,
                 'view_count' => $viewCount,
+                'read_cycle_count' => $cycle['read_cycle_count'],
+                'read_cycle_limit' => $cycle['read_cycle_limit'],
+                'read_cycle_date' => $cycle['read_cycle_date'],
             ]]);
         }
         $pdo->commit();
-        $chat = branchChatsFind($pdo, $chatId, $userId);
+        $chat = branchChatsFind($pdo, $chatId, $userId, $timezoneOffsetMinutes);
         branchChatsRespond(['status' => 'success', 'data' => [
             'view_count' => (int)$chat['view_count'],
             'last_viewed_at' => $chat['last_viewed_at'],
             'next_view_at' => $chat['next_view_at'],
             'can_mark_viewed' => (bool)$chat['can_mark_viewed'],
+            'early_review' => (bool)$chat['early_review'],
+            'read_cycle_count' => $cycle['read_cycle_count'],
+            'read_cycle_limit' => $cycle['read_cycle_limit'],
+            'read_cycle_date' => $cycle['read_cycle_date'],
         ]]);
     }
 
