@@ -134,7 +134,7 @@ function branchChatsGoogleVoice(string $variant): string
     return match ($variant) {
         'blue'   => 'pt-BR-Chirp3-HD-Rasalgethi', 
         'purple' => 'en-GB-Chirp3-HD-Rasalgethi',
-        'orange' => 'en-GB-Chirp3-HD-Puck', // Atualizado para en-GB para casar com a linguagem solicitada na cor
+        'orange' => 'en-GB-Chirp3-HD-Puck', 
         'green'  => 'pt-BR-Chirp3-HD-Puck',
         default  => 'pt-BR-Chirp3-HD-Algieba',
     };
@@ -168,7 +168,6 @@ function branchChatsRequestTts(PDO $pdo, int $userId, string $text, string $vari
         
         $audioConfig = ['audioEncoding' => 'MP3'];
         if ($language === 'en-GB') {
-            // Aumenta o volume do áudio. O máximo suportado pela API do Google é 16.0
             $audioConfig['volumeGainDb'] = 6.0; 
         }
         
@@ -249,7 +248,13 @@ function branchChatsMessageAudioDataUri(?string $audioEncrypted): ?string
     return is_string($audio) && $audio !== '' ? 'data:audio/mpeg;base64,' . $audio : null;
 }
 
-function branchChatsCanReviewEarly(PDO $pdo, int $chatId, int $userId, int $timezoneOffsetMinutes = 0): bool
+// Removida a conversão de timezone da next view calculation; usa diretamente o UTC já gravado
+function branchChatsNextViewExpression(string $lastViewedColumn = 'cv.last_viewed_at', string $viewCountColumn = 'cv.view_count'): string
+{
+    return "DATE_ADD($lastViewedColumn, INTERVAL $viewCountColumn DAY)";
+}
+
+function branchChatsCanReviewEarly(PDO $pdo, int $chatId, int $userId): bool
 {
     $stmt = $pdo->prepare(
         'SELECT c.id
@@ -257,15 +262,15 @@ function branchChatsCanReviewEarly(PDO $pdo, int $chatId, int $userId, int $time
          INNER JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
          WHERE c.user_id = :user_id
            AND cv.last_viewed_at IS NOT NULL
-           AND CURRENT_TIMESTAMP < ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count', $timezoneOffsetMinutes) . '
+           AND CURRENT_TIMESTAMP < ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count') . '
            AND NOT EXISTS (
                SELECT 1
                FROM chats due_chat
                LEFT JOIN chat_views due_view ON due_view.chat_id = due_chat.id AND due_view.user_id = :due_view_user_id
                WHERE due_chat.user_id = :due_user_id
-                 AND (due_view.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= ' . branchChatsNextViewExpression('due_view.last_viewed_at', 'due_view.view_count', $timezoneOffsetMinutes) . ')
+                 AND (due_view.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= ' . branchChatsNextViewExpression('due_view.last_viewed_at', 'due_view.view_count') . ')
            )
-         ORDER BY ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count', $timezoneOffsetMinutes) . ' ASC, c.id ASC
+         ORDER BY ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count') . ' ASC, c.id ASC
          LIMIT 1'
     );
     $stmt->execute([
@@ -278,7 +283,7 @@ function branchChatsCanReviewEarly(PDO $pdo, int $chatId, int $userId, int $time
     return (int)$stmt->fetchColumn() === $chatId;
 }
 
-function branchChatsFind(PDO $pdo, int $chatId, int $userId, int $timezoneOffsetMinutes = 0): array
+function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
 {
     $stmt = $pdo->prepare(
         'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.`max`, c.read_marker_message_id, c.created_at, c.updated_at,
@@ -287,8 +292,8 @@ function branchChatsFind(PDO $pdo, int $chatId, int $userId, int $timezoneOffset
                 COALESCE(cr.reference_audio_language, parent_cr.reference_audio_language, \'pt-BR\') AS reference_audio_language,
                 COALESCE(cv.view_count, 0) AS view_count, cv.last_viewed_at,
                 CASE WHEN cv.last_viewed_at IS NULL THEN NULL
-                     ELSE ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count', $timezoneOffsetMinutes) . ' END AS next_view_at,
-                CASE WHEN cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count', $timezoneOffsetMinutes) . '
+                     ELSE ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count') . ' END AS next_view_at,
+                CASE WHEN cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count') . '
                      THEN 1 ELSE 0 END AS can_mark_viewed,
                 (SELECT COUNT(*) FROM chats child WHERE child.parent_chat_id = c.id AND child.user_id = c.user_id) AS total_branches
          FROM chats c
@@ -308,7 +313,7 @@ function branchChatsFind(PDO $pdo, int $chatId, int $userId, int $timezoneOffset
     $chat['reference_audio_language'] = branchChatsNormalizeReferenceLanguage($chat['reference_audio_language'] ?? null);
     unset($chat['reference_encrypted'], $chat['reference_audio_encrypted']);
     $chat['early_review'] = false;
-    if (!(bool)$chat['can_mark_viewed'] && branchChatsCanReviewEarly($pdo, $chatId, $userId, $timezoneOffsetMinutes)) {
+    if (!(bool)$chat['can_mark_viewed'] && branchChatsCanReviewEarly($pdo, $chatId, $userId)) {
         $chat['can_mark_viewed'] = 1;
         $chat['early_review'] = true;
     }
@@ -318,12 +323,6 @@ function branchChatsFind(PDO $pdo, int $chatId, int $userId, int $timezoneOffset
 function branchChatsTimezoneOffset(array $input): int
 {
     return max(-840, min(840, (int)($input['timezone_offset_minutes'] ?? 0)));
-}
-
-function branchChatsNextViewExpression(string $lastViewedColumn = 'cv.last_viewed_at', string $viewCountColumn = 'cv.view_count', int $timezoneOffsetMinutes = 0): string
-{
-    $timezoneOffsetMinutes = max(-840, min(840, $timezoneOffsetMinutes));
-    return "DATE_SUB(DATE_ADD(DATE(DATE_ADD($lastViewedColumn, INTERVAL $timezoneOffsetMinutes MINUTE)), INTERVAL $viewCountColumn DAY), INTERVAL $timezoneOffsetMinutes MINUTE)";
 }
 
 function branchChatsLocalDate(int $timezoneOffsetMinutes): string
@@ -341,7 +340,7 @@ function branchChatsReadCycleStatus(PDO $pdo, int $userId, int $timezoneOffsetMi
 
     return [
         'read_cycle_count' => (int)($stmt->fetchColumn() ?: 0),
-        'read_cycle_limit' => 100,
+        'read_cycle_limit' => 100, // Limite ajustado para 100 no backend
         'read_cycle_date' => $localDate,
     ];
 }
@@ -568,7 +567,6 @@ function branchChatsDecryptMessages(PDO $pdo, array $messages): array
         unset($message['imagem_encrypted']);
         unset($message['audio_encrypted']);
 
-        // Migração gradual dos registros antigos, sem manter texto puro no banco.
         if ($storedText !== null && Security::decryptData($storedText) === false) {
             $update ??= $pdo->prepare(
                 'UPDATE mensagens SET texto_encrypted = :texto_encrypted WHERE id = :id AND texto_encrypted = :texto_plain'
@@ -590,7 +588,7 @@ try {
         $timezoneOffsetMinutes = branchChatsTimezoneOffset($_GET);
         $chatId = isset($_GET['chat_id']) ? (int)$_GET['chat_id'] : 0;
         if ($chatId > 0) {
-            $chat = branchChatsFind($pdo, $chatId, $userId, $timezoneOffsetMinutes);
+            $chat = branchChatsFind($pdo, $chatId, $userId); // timezoneOffsetMinutes removido do Find
             $stmt = $pdo->prepare(
                 'SELECT m.id, m.texto_encrypted, m.imagem_encrypted, m.audio_encrypted, m.has_audio, m.audio_language, m.audio_variant, m.color_variant, m.is_recipient, m.created_at, cm.is_response
                  FROM chat_mensagens cm
@@ -612,7 +610,7 @@ try {
              FROM chats c
              LEFT JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
              WHERE c.user_id = :user_id
-               AND (cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count', $timezoneOffsetMinutes) . ')
+               AND (cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count') . ')
              ORDER BY c.updated_at DESC, c.id DESC'
         );
         $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId]);
@@ -628,8 +626,8 @@ try {
                  INNER JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
                  WHERE c.user_id = :user_id
                    AND cv.last_viewed_at IS NOT NULL
-                   AND CURRENT_TIMESTAMP < ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count', $timezoneOffsetMinutes) . '
-                 ORDER BY ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count', $timezoneOffsetMinutes) . ' ASC, c.id ASC
+                   AND CURRENT_TIMESTAMP < ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count') . '
+                 ORDER BY ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count') . ' ASC, c.id ASC
                  LIMIT 1'
             );
             $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId]);
@@ -789,16 +787,6 @@ try {
         branchChatsRespond(['status' => 'success', 'data' => ['generated_count' => $generated + $referenceGenerated, 'skipped_count' => $skipped + $referenceSkipped, 'failed_count' => $failed + $referenceFailed, 'details' => $lastDetails]]);
     }
 
-    if ($action === 'delete_message') {
-        $chatId = (int)($input['chat_id'] ?? 0);
-        $messageId = (int)($input['message_id'] ?? 0);
-        branchChatsFind($pdo, $chatId, $userId);
-        $stmt = $pdo->prepare('DELETE m FROM mensagens m INNER JOIN chat_mensagens cm ON cm.mensagem_id = m.id WHERE m.id = :message_id AND cm.chat_id = :chat_id AND m.user_id = :user_id');
-        $stmt->execute([':message_id' => $messageId, ':chat_id' => $chatId, ':user_id' => $userId]);
-        if ($stmt->rowCount() === 0) branchChatsRespond(['status' => 'error', 'message' => 'Mensagem não encontrada.'], 404);
-        branchChatsRespond(['status' => 'success', 'data' => ['id' => $messageId]]);
-    }
-
     if ($action === 'read_cycle_status') {
         branchChatsRespond(['status' => 'success', 'data' => branchChatsReadCycleStatus($pdo, $userId, branchChatsTimezoneOffset($input))]);
     }
@@ -806,7 +794,8 @@ try {
     if ($action === 'mark_viewed') {
         $chatId = (int)($input['chat_id'] ?? 0);
         $timezoneOffsetMinutes = branchChatsTimezoneOffset($input);
-        branchChatsFind($pdo, $chatId, $userId, $timezoneOffsetMinutes);
+        branchChatsFind($pdo, $chatId, $userId);
+        
         if (branchChatsDailyReadLimitReached($pdo, $userId, $timezoneOffsetMinutes)) {
             branchChatsRespond(['status' => 'error', 'message' => 'Você atingiu o limite de 100 leituras para hoje neste fuso horário.'], 429);
         }
@@ -817,9 +806,10 @@ try {
              VALUES (:chat_id, :user_id, 0, NULL)'
         );
         $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
+        
         $stmt = $pdo->prepare(
             'SELECT cv.view_count, cv.last_viewed_at, c.`max`,
-                    CASE WHEN last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= ' . branchChatsNextViewExpression('last_viewed_at', 'view_count', $timezoneOffsetMinutes) . '
+                    CASE WHEN last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= ' . branchChatsNextViewExpression('last_viewed_at', 'view_count') . '
                          THEN 1 ELSE 0 END AS can_mark_viewed
              FROM chat_views cv
              INNER JOIN chats c ON c.id = cv.chat_id AND c.user_id = cv.user_id
@@ -827,7 +817,8 @@ try {
         );
         $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
         $view = $stmt->fetch();
-        if (!(bool)$view['can_mark_viewed'] && !branchChatsCanReviewEarly($pdo, $chatId, $userId, $timezoneOffsetMinutes)) {
+        
+        if (!(bool)$view['can_mark_viewed'] && !branchChatsCanReviewEarly($pdo, $chatId, $userId)) {
             $pdo->rollBack();
             branchChatsRespond(['status' => 'error', 'message' => 'A próxima leitura ainda não está disponível.'], 409);
         }
@@ -840,6 +831,7 @@ try {
         $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
         $cycle = branchChatsIncrementReadCycle($pdo, $userId, $timezoneOffsetMinutes);
         $pdo->prepare('UPDATE chats SET read_marker_message_id = NULL WHERE id = :id AND user_id = :user_id')->execute([':id' => $chatId, ':user_id' => $userId]);
+        
         $viewCount = (int)$view['view_count'] + 1;
         if ($view['max'] !== null && $viewCount >= (int)$view['max']) {
             branchChatsDeleteChat($pdo, $chatId, $userId);
@@ -853,7 +845,8 @@ try {
             ]]);
         }
         $pdo->commit();
-        $chat = branchChatsFind($pdo, $chatId, $userId, $timezoneOffsetMinutes);
+        
+        $chat = branchChatsFind($pdo, $chatId, $userId);
         branchChatsRespond(['status' => 'success', 'data' => [
             'view_count' => (int)$chat['view_count'],
             'last_viewed_at' => $chat['last_viewed_at'],
@@ -988,6 +981,16 @@ try {
         branchChatsRespond(['status' => 'success', 'data' => ['chat_id' => $targetChatId]], 201);
     }
 
+    if ($action === 'delete_message') {
+        $chatId = (int)($input['chat_id'] ?? 0);
+        $messageId = (int)($input['message_id'] ?? 0);
+        branchChatsFind($pdo, $chatId, $userId);
+        $stmt = $pdo->prepare('DELETE m FROM mensagens m INNER JOIN chat_mensagens cm ON cm.mensagem_id = m.id WHERE m.id = :message_id AND cm.chat_id = :chat_id AND m.user_id = :user_id');
+        $stmt->execute([':message_id' => $messageId, ':chat_id' => $chatId, ':user_id' => $userId]);
+        if ($stmt->rowCount() === 0) branchChatsRespond(['status' => 'error', 'message' => 'Mensagem não encontrada.'], 404);
+        branchChatsRespond(['status' => 'success', 'data' => ['id' => $messageId]]);
+    }
+
     if ($action !== 'send_message') {
         branchChatsRespond(['status' => 'error', 'message' => 'Ação inválida.'], 422);
     }
@@ -1001,10 +1004,7 @@ try {
     $text = trim((string)($input['texto'] ?? ''));
     $isRecipient = filter_var($input['is_recipient'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
     
-    // Assegura que o variant seja orange, purple, blue ou green.
     $colorVariant = branchChatsNormalizeVariant($input['color_variant'] ?? null, $isRecipient);
-    
-    // Define a linguagem com base exclusivamente na cor
     $audioLanguage = in_array($colorVariant, ['orange', 'purple'], true) ? 'en-GB' : 'pt-BR';
     
     if (mb_strlen($text) > 10000) {
@@ -1036,7 +1036,6 @@ try {
 
     $encryptedText = $text !== '' ? Security::encryptData($text) : null;
     
-    // A coluna audio_language é preenchida no momento de inserção (criação)
     $stmt = $pdo->prepare('INSERT INTO mensagens (user_id, texto_encrypted, imagem_encrypted, is_recipient, color_variant, audio_language) VALUES (:user_id, :texto_encrypted, :imagem_encrypted, :is_recipient, :color_variant, :audio_language)');
     $stmt->execute([
         ':user_id' => $userId,
@@ -1063,7 +1062,7 @@ try {
     $message['color_variant'] = $colorVariant;
     $message['has_audio'] = 0;
     $message['audio_base64'] = null;
-    $message['audio_language'] = $audioLanguage; // Retorna na resposta o idioma que foi atrelado
+    $message['audio_language'] = $audioLanguage; 
     
     $pdo->commit();
     branchChatsRespond(['status' => 'success', 'data' => ['message' => $message, 'chat_id' => $targetChatId, 'branched' => $createBranch, 'answered_in_new_chat' => $answerInNewChat]], 201);
