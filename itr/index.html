@@ -55,6 +55,8 @@
         .level-2 { font-weight: 600; color: #f1f5f9; }
         .level-3 { font-weight: 500; color: #cbd5e1; }
         .level-4 { font-weight: 400; color: #94a3b8; }
+        .account-copy-target { cursor: copy; }
+        .account-copy-target:hover { color: #6ee7b7; text-decoration: underline; text-underline-offset: 3px; }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 antialiased min-h-screen flex flex-col relative" id="dropZone">
@@ -980,15 +982,99 @@ if (stmtType === "ALL" && code) {
 
                 tr.innerHTML = `
                     <td class="hidden py-2.5 px-4 font-mono text-xs text-slate-300 font-medium whitespace-nowrap">${item.code}</td>
-                    <td class="py-2.5 px-4 font-sans text-xs" style="padding-left: ${16 + indentPx}px">${item.desc}</td>
+                    <td class="py-2.5 px-4 font-sans text-xs account-copy-target" style="padding-left: ${16 + indentPx}px" title="Clique para copiar todos os trimestres disponíveis deste indicador">${item.desc}</td>
                     <td class="py-2.5 px-4 text-right font-mono text-xs ${valColorClass} bg-brand-950/20 border-l border-brand-900/20">${formattedVal}</td>
                     ${comparativeCellsHtml}
                 `;
+
+                const descriptionCell = tr.querySelector('.account-copy-target');
+                if (descriptionCell) {
+                    descriptionCell.addEventListener('click', () => copyIndicatorQuarterValues(item));
+                }
 
                 fragment.appendChild(tr);
             });
 
             tableBody.appendChild(fragment);
+        }
+
+
+        function isFourthQuarterKey(quarterKey) {
+            return /^4T\d{2}$/i.test((quarterKey || '').trim());
+        }
+
+        function buildAccountHierarchyLabel(item) {
+            if (!item || !item.code) return item?.desc || "Sem Descrição";
+
+            const hierarchy = [];
+            let currentCode = item.code;
+
+            while (currentCode && currentCode !== '-') {
+                const account = parsedData.find(candidate =>
+                    candidate.stmtType === item.stmtType && candidate.code === currentCode
+                );
+
+                if (account && !hierarchy.some(entry => entry.code === account.code)) {
+                    hierarchy.unshift({ code: account.code, desc: account.desc });
+                }
+
+                const lastDotIndex = currentCode.lastIndexOf('.');
+                if (lastDotIndex === -1) break;
+                currentCode = currentCode.substring(0, lastDotIndex);
+            }
+
+            if (hierarchy.length === 0) return item.desc || "Sem Descrição";
+            return hierarchy.map(entry => entry.desc).join(' - ');
+        }
+
+        async function copyTextToClipboard(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+                return;
+            }
+
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.setAttribute('readonly', '');
+            textarea.style.position = 'fixed';
+            textarea.style.left = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            textarea.remove();
+        }
+
+        async function copyIndicatorQuarterValues(item) {
+            const values = [];
+
+            if (!isFourthQuarterKey(currentQuarterTitle) && typeof item.valQuarter === 'number' && !isNaN(item.valQuarter)) {
+                values.push(`${currentQuarterTitle} (${formatCurrency(item.valQuarter)})`);
+            }
+
+            comparativePeriods.forEach(period => {
+                if (isFourthQuarterKey(period.key)) return;
+
+                const value = getAccountValueFromMap(period.accountMap, item.code, item.stmtType);
+                if (typeof value === 'number' && !isNaN(value)) {
+                    values.push(`${period.key} (${formatCurrency(value)})`);
+                }
+            });
+
+            if (values.length === 0) {
+                showToast("Não há trimestres disponíveis para copiar neste indicador.", "error");
+                return;
+            }
+
+            const hierarchyLabel = buildAccountHierarchyLabel(item);
+            const clipboardText = `${hierarchyLabel}: ${values.join(', ')}`;
+
+            try {
+                await copyTextToClipboard(clipboardText);
+                showToast("Valores do indicador copiados para a área de transferência!", "success");
+            } catch (err) {
+                console.error('Erro ao copiar indicador:', err);
+                showToast("Não foi possível copiar os valores do indicador.", "error");
+            }
         }
 
         // Render comparative block with explicitly bright, right-aligned monetary value + variation badge
