@@ -396,6 +396,47 @@ function branchChatsDecryptMessageText(?string $encryptedText): ?string
     return $decrypted !== false ? $decrypted : $encryptedText;
 }
 
+function branchChatsTextLength(?string $text): int
+{
+    if ($text === null) {
+        return 0;
+    }
+
+    return function_exists('mb_strlen') ? mb_strlen($text, 'UTF-8') : strlen($text);
+}
+
+function branchChatsAttachMessageCharacterTotals(PDO $pdo, array &$chats, int $userId): void
+{
+    if (!$chats) {
+        return;
+    }
+
+    $chatIds = array_values(array_unique(array_map('intval', array_column($chats, 'id'))));
+    if (!$chatIds) {
+        return;
+    }
+
+    $totals = array_fill_keys($chatIds, 0);
+    $placeholders = implode(',', array_fill(0, count($chatIds), '?'));
+    $stmt = $pdo->prepare(
+        'SELECT cm.chat_id, m.texto_encrypted
+         FROM chat_mensagens cm
+         INNER JOIN mensagens m ON m.id = cm.mensagem_id
+         WHERE cm.chat_id IN (' . $placeholders . ') AND m.user_id = ?'
+    );
+    $stmt->execute([...$chatIds, $userId]);
+
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $message) {
+        $chatId = (int)$message['chat_id'];
+        $totals[$chatId] = ($totals[$chatId] ?? 0) + branchChatsTextLength(branchChatsDecryptMessageText($message['texto_encrypted'] ?? null));
+    }
+
+    foreach ($chats as &$chat) {
+        $chat['total_message_characters'] = $totals[(int)$chat['id']] ?? 0;
+    }
+    unset($chat);
+}
+
 function branchChatsDecryptMessageImage(PDO $pdo, array $message): ?string
 {
     $storedImage = $message['imagem_encrypted'] ?? null;
@@ -633,6 +674,17 @@ try {
             $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId]);
             $chats = $stmt->fetchAll();
         }
+        branchChatsAttachMessageCharacterTotals($pdo, $chats, $userId);
+        usort($chats, static function (array $a, array $b): int {
+            $characterComparison = ((int)($b['total_message_characters'] ?? 0)) <=> ((int)($a['total_message_characters'] ?? 0));
+            if ($characterComparison !== 0) return $characterComparison;
+
+            $updatedComparison = strcmp((string)($b['updated_at'] ?? ''), (string)($a['updated_at'] ?? ''));
+            if ($updatedComparison !== 0) return $updatedComparison;
+
+            return ((int)($b['id'] ?? 0)) <=> ((int)($a['id'] ?? 0));
+        });
+
         foreach ($chats as &$chat) {
             $chat['ultima_mensagem'] = branchChatsDecryptMessageText($chat['ultima_mensagem_encrypted'] ?? null);
             unset($chat['ultima_mensagem_encrypted']);
