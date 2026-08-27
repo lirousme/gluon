@@ -583,6 +583,37 @@ function branchChatsDecryptMessages(PDO $pdo, array $messages): array
     return $messages;
 }
 
+function branchChatsCharacterCount(string $text): int
+{
+    return function_exists('mb_strlen') ? mb_strlen($text, 'UTF-8') : strlen($text);
+}
+
+function branchChatsAddMessageCharacterTotals(PDO $pdo, array &$chats, int $userId): void
+{
+    if ($chats === []) return;
+
+    $chatIds = array_values(array_unique(array_map(static fn (array $chat): int => (int)$chat['id'], $chats)));
+    $placeholders = implode(',', array_fill(0, count($chatIds), '?'));
+    $stmt = $pdo->prepare(
+        "SELECT cm.chat_id, m.texto_encrypted
+         FROM chat_mensagens cm
+         INNER JOIN mensagens m ON m.id = cm.mensagem_id
+         WHERE cm.chat_id IN ($placeholders) AND m.user_id = ?"
+    );
+    $stmt->execute(array_merge($chatIds, [$userId]));
+
+    $totals = array_fill_keys($chatIds, 0);
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $message) {
+        $text = branchChatsDecryptMessageText($message['texto_encrypted'] ?? null);
+        $totals[(int)$message['chat_id']] += branchChatsCharacterCount($text);
+    }
+
+    foreach ($chats as &$chat) {
+        $chat['total_caracteres'] = $totals[(int)$chat['id']] ?? 0;
+    }
+    unset($chat);
+}
+
 try {
     if ($method === 'GET') {
         $timezoneOffsetMinutes = branchChatsTimezoneOffset($_GET);
@@ -638,6 +669,7 @@ try {
             unset($chat['ultima_mensagem_encrypted']);
         }
         unset($chat);
+        branchChatsAddMessageCharacterTotals($pdo, $chats, $userId);
         branchChatsRespond(['status' => 'success', 'data' => $chats]);
     }
 
