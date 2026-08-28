@@ -149,7 +149,7 @@
 <div class="app" id="app">
     <aside class="sidebar">
         <header class="sidebar-header">
-            <div class="brand"><div class="logo">B</div><div><h1>Branch Chats</h1><p class="subtitle">Suas conversas</p></div></div>
+            <div class="brand"><div class="logo" id="availableReadCount" title="Chats com leitura disponível" aria-label="0 chats com leitura disponível">0</div><div><h1>Branch Chats</h1><p class="subtitle">Suas conversas</p></div></div>
             <span class="read-cycle-count" id="readCycleCount" title="Leituras registradas hoje neste fuso horário" aria-label="0 de 225 leituras hoje">0/225</span>
             <button class="audio-toggle active" id="conversationAudioToggle" type="button" title="Reprodução automática ativada" aria-label="Desativar reprodução automática da conversa" aria-pressed="true"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05A4.5 4.5 0 0 0 16.5 12M19 5.5v13a8.5 8.5 0 0 0 0-13"/></svg></button>
             <button class="icon-button" id="newChat" title="Novo chat" aria-label="Criar novo chat">
@@ -193,7 +193,15 @@
     const formatTime = value => value ? new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(utcDate(value)) : '';
     const formatDateTime = value => value ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(utcDate(value)) : '';
     function toast(message) { $('toast').textContent = message; $('toast').hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => $('toast').hidden = true, 3000); }
-    function updateReadCycleCount(count = 0, limit = readCycleLimit) { state.readCycleCount = count; state.readCycleLimit = limit; $('readCycleCount').textContent = `${count}/${limit}`; $('readCycleCount').setAttribute('aria-label', `${count} de ${limit} leituras hoje`); $('readCycleCount').title = 'Leituras registradas hoje neste fuso horário'; if (state.activeChat) updateReadStatus(state.activeChat); }
+    function updateAvailableReadCount() {
+        const dailyLimitReached = state.readCycleCount >= state.readCycleLimit;
+        const count = dailyLimitReached ? 0 : state.chats.filter(chat => Boolean(Number(chat.can_mark_viewed))).length;
+        const label = `${count} ${count === 1 ? 'chat com leitura disponível' : 'chats com leitura disponível'}`;
+        $('availableReadCount').textContent = String(count);
+        $('availableReadCount').title = label;
+        $('availableReadCount').setAttribute('aria-label', label);
+    }
+    function updateReadCycleCount(count = 0, limit = readCycleLimit) { state.readCycleCount = count; state.readCycleLimit = limit; $('readCycleCount').textContent = `${count}/${limit}`; $('readCycleCount').setAttribute('aria-label', `${count} de ${limit} leituras hoje`); $('readCycleCount').title = 'Leituras registradas hoje neste fuso horário'; updateAvailableReadCount(); if (state.activeChat) updateReadStatus(state.activeChat); }
     async function loadReadCycleCount() { try { const cycle = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'read_cycle_status', timezone_offset_minutes: timezoneOffset() }) }); updateReadCycleCount(Number(cycle.read_cycle_count || 0), Number(cycle.read_cycle_limit || readCycleLimit)); } catch (error) { toast(error.message); } }
     function applyReadCycleFromResponse(data) { if (data && 'read_cycle_count' in data) updateReadCycleCount(Number(data.read_cycle_count || 0), Number(data.read_cycle_limit || readCycleLimit)); }
     function updateConversationAudioToggle() { const enabled = state.audioAutoplayEnabled; $('conversationAudioToggle').classList.toggle('active', enabled); $('conversationAudioToggle').setAttribute('aria-pressed', String(enabled)); $('conversationAudioToggle').setAttribute('aria-label', enabled ? 'Desativar reprodução automática da conversa' : 'Ativar reprodução automática da conversa'); $('conversationAudioToggle').title = enabled ? 'Reprodução automática ativada' : 'Reprodução automática desativada'; }
@@ -219,7 +227,7 @@
             line.append(title, time); copy.append(line, preview); button.append(avatar, copy); button.addEventListener('click', () => openChat(Number(chat.id))); $('chatList').append(button);
         });
     }
-    async function loadChats() { try { state.chats = await request(api); renderChats(); } catch (error) { toast(error.message); } }
+    async function loadChats() { try { state.chats = await request(api); updateAvailableReadCount(); renderChats(); } catch (error) { toast(error.message); } }
     function setMainChatType(chatType) {
         const main = document.querySelector('.main');
         ['chat-type-1', 'chat-type-2', 'chat-type-3'].forEach(className => main.classList.remove(className));
