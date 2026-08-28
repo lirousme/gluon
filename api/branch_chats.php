@@ -14,6 +14,7 @@ $userId = (int)$_SESSION['user_id'];
 $pdo = Database::getConnection();
 branchChatsEnsureAudioSchema($pdo);
 branchChatsEnsureReferenceAudioSchema($pdo);
+branchChatsEnsureChatOpenSchema($pdo);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 function branchChatsRespond(array $payload, int $status = 200): void
@@ -47,6 +48,15 @@ function branchChatsEnsureReferenceAudioSchema(PDO $pdo): void
     foreach ($columns as $column => $sql) {
         $stmt = $pdo->query("SHOW COLUMNS FROM chat_references LIKE " . $pdo->quote($column));
         if (!$stmt->fetchColumn()) $pdo->exec($sql);
+    }
+}
+
+
+function branchChatsEnsureChatOpenSchema(PDO $pdo): void
+{
+    $stmt = $pdo->query("SHOW COLUMNS FROM chats LIKE " . $pdo->quote('is_open'));
+    if (!$stmt->fetchColumn()) {
+        $pdo->exec('ALTER TABLE chats ADD COLUMN is_open INT NOT NULL DEFAULT 0 CHECK (is_open IN (0, 1)) AFTER read_marker_message_id');
     }
 }
 
@@ -286,7 +296,7 @@ function branchChatsCanReviewEarly(PDO $pdo, int $chatId, int $userId): bool
 function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
 {
     $stmt = $pdo->prepare(
-        'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.`max`, c.read_marker_message_id, c.created_at, c.updated_at,
+        'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.`max`, c.read_marker_message_id, c.is_open, c.created_at, c.updated_at,
                 COALESCE(cr.reference_encrypted, parent_cr.reference_encrypted) AS reference_encrypted,
                 COALESCE(cr.reference_audio_encrypted, parent_cr.reference_audio_encrypted) AS reference_audio_encrypted,
                 COALESCE(cr.reference_audio_language, parent_cr.reference_audio_language, \'pt-BR\') AS reference_audio_language,
@@ -643,7 +653,7 @@ try {
         }
 
         $stmt = $pdo->prepare(
-            'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.created_at, c.updated_at,
+            'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.is_open, c.created_at, c.updated_at,
                     COALESCE(cv.view_count, 0) AS view_count,
                     1 AS can_mark_viewed,
                     (SELECT m.texto_encrypted FROM chat_mensagens cm INNER JOIN mensagens m ON m.id = cm.mensagem_id WHERE cm.chat_id = c.id ORDER BY cm.position DESC LIMIT 1) AS ultima_mensagem_encrypted,
@@ -659,7 +669,7 @@ try {
         $chats = $stmt->fetchAll();
         if (!$chats) {
             $stmt = $pdo->prepare(
-                'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.created_at, c.updated_at,
+                'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.is_open, c.created_at, c.updated_at,
                         COALESCE(cv.view_count, 0) AS view_count,
                         0 AS can_mark_viewed,
                         (SELECT m.texto_encrypted FROM chat_mensagens cm INNER JOIN mensagens m ON m.id = cm.mensagem_id WHERE cm.chat_id = c.id ORDER BY cm.position DESC LIMIT 1) AS ultima_mensagem_encrypted,
@@ -848,7 +858,20 @@ try {
     if ($action === 'mark_viewed') {
         $chatId = (int)($input['chat_id'] ?? 0);
         $timezoneOffsetMinutes = branchChatsTimezoneOffset($input);
-        branchChatsFind($pdo, $chatId, $userId);
+        $chatForView = branchChatsFind($pdo, $chatId, $userId);
+        if ((int)($chatForView['is_open'] ?? 0) === 1) {
+            $pdo->prepare('UPDATE chats SET is_open = 0 WHERE id = :id AND user_id = :user_id AND is_open = 1')->execute([':id' => $chatId, ':user_id' => $userId]);
+            $chat = branchChatsFind($pdo, $chatId, $userId);
+            branchChatsRespond(['status' => 'success', 'data' => [
+                'closed' => true,
+                'is_open' => (int)$chat['is_open'],
+                'view_count' => (int)$chat['view_count'],
+                'last_viewed_at' => $chat['last_viewed_at'],
+                'next_view_at' => $chat['next_view_at'],
+                'can_mark_viewed' => (bool)$chat['can_mark_viewed'],
+                'early_review' => (bool)$chat['early_review'],
+            ]]);
+        }
         
         if (branchChatsDailyReadLimitReached($pdo, $userId, $timezoneOffsetMinutes)) {
             branchChatsRespond(['status' => 'error', 'message' => 'Você atingiu o limite de 225 leituras para hoje neste fuso horário.'], 429);
