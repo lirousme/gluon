@@ -56,8 +56,11 @@ function branchChatsEnsureChatOpenSchema(PDO $pdo): void
 {
     $stmt = $pdo->query("SHOW COLUMNS FROM chats LIKE " . $pdo->quote('is_open'));
     if (!$stmt->fetchColumn()) {
-        $pdo->exec('ALTER TABLE chats ADD COLUMN is_open INT NOT NULL DEFAULT 0 CHECK (is_open IN (0, 1)) AFTER read_marker_message_id');
+        $pdo->exec('ALTER TABLE chats ADD COLUMN is_open INT NOT NULL DEFAULT 1 CHECK (is_open IN (0, 1)) AFTER read_marker_message_id');
+        return;
     }
+
+    $pdo->exec('ALTER TABLE chats MODIFY COLUMN is_open INT NOT NULL DEFAULT 1');
 }
 
 function branchChatsNormalizeReferenceLanguage($value): string
@@ -726,7 +729,7 @@ try {
     $action = trim((string)($input['action'] ?? ''));
 
     if ($action === 'create_chat') {
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, titulo) VALUES (:user_id, :titulo)');
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, titulo, is_open) VALUES (:user_id, :titulo, 1)');
         $stmt->execute([':user_id' => $userId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
         $chatId = (int)$pdo->lastInsertId();
         $stmt = $pdo->prepare('SELECT titulo FROM chats WHERE id = :id');
@@ -989,7 +992,7 @@ try {
         }
 
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo) VALUES (:user_id, :parent_id, :titulo)');
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, is_open) VALUES (:user_id, :parent_id, :titulo, 1)');
         $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
         $targetChatId = (int)$pdo->lastInsertId();
 
@@ -1037,7 +1040,7 @@ try {
         }
 
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo) VALUES (:user_id, :parent_id, :titulo)');
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, is_open) VALUES (:user_id, :parent_id, :titulo, 1)');
         $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
         $targetChatId = (int)$pdo->lastInsertId();
         $insert = $pdo->prepare(
@@ -1102,7 +1105,7 @@ try {
     $targetChatId = $sourceChatId;
     if ($createBranch) {
         $parentChatId = $sourceChatType === 3 && !empty($sourceChat['parent_chat_id']) ? (int)$sourceChat['parent_chat_id'] : $sourceChatId;
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, chat_type) VALUES (:user_id, :parent_id, :titulo, :chat_type)');
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, chat_type, is_open) VALUES (:user_id, :parent_id, :titulo, :chat_type, 1)');
         $stmt->execute([':user_id' => $userId, ':parent_id' => $parentChatId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input)), ':chat_type' => $referenceChat ? 3 : 0]);
         $targetChatId = (int)$pdo->lastInsertId();
         if (!$referenceChat) {
