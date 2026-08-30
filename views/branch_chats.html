@@ -216,7 +216,11 @@
         const query = $('search').value.trim().toLowerCase();
         const rows = state.chats
             .filter(chat => chat.titulo.toLowerCase().includes(query))
-            .sort((a, b) => Number(b.total_message_characters || 0) - Number(a.total_message_characters || 0));
+            .sort((a, b) => {
+                const readComparison = Number(b.view_count || 0) - Number(a.view_count || 0);
+                if (readComparison !== 0) return readComparison;
+                return Number(b.total_message_characters || 0) - Number(a.total_message_characters || 0);
+            });
         $('chatList').replaceChildren();
         if (!rows.length) { const empty = document.createElement('div'); empty.className = 'empty-list'; empty.textContent = query ? 'Nenhuma conversa encontrada.' : 'Nenhum chat ainda. Crie sua primeira conversa.'; $('chatList').append(empty); return; }
         rows.forEach(chat => {
