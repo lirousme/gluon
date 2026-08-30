@@ -353,7 +353,7 @@ function branchChatsReadCycleStatus(PDO $pdo, int $userId, int $timezoneOffsetMi
 
     return [
         'read_cycle_count' => (int)($stmt->fetchColumn() ?: 0),
-        'read_cycle_limit' => 480, // Limite ajustado para 480 no backend
+        'read_cycle_limit' => 999, // Limite ajustado para 999 no backend
         'read_cycle_date' => $localDate,
     ];
 }
@@ -364,7 +364,7 @@ function branchChatsIncrementReadCycle(PDO $pdo, int $userId, int $timezoneOffse
     $stmt = $pdo->prepare(
         'INSERT INTO branch_chat_daily_reads (user_id, local_date, read_count, updated_at)
          VALUES (:user_id, :local_date, 1, CURRENT_TIMESTAMP)
-         ON DUPLICATE KEY UPDATE read_count = LEAST(read_count + 1, 480), updated_at = CURRENT_TIMESTAMP'
+         ON DUPLICATE KEY UPDATE read_count = LEAST(read_count + 1, 999), updated_at = CURRENT_TIMESTAMP'
     );
     $stmt->execute([':user_id' => $userId, ':local_date' => $localDate]);
 
@@ -373,7 +373,7 @@ function branchChatsIncrementReadCycle(PDO $pdo, int $userId, int $timezoneOffse
 
 function branchChatsDailyReadLimitReached(PDO $pdo, int $userId, int $timezoneOffsetMinutes): bool
 {
-    return branchChatsReadCycleStatus($pdo, $userId, $timezoneOffsetMinutes)['read_cycle_count'] >= 480;
+    return branchChatsReadCycleStatus($pdo, $userId, $timezoneOffsetMinutes)['read_cycle_count'] >= 999;
 }
 
 function branchChatsDefaultTitle(int $timezoneOffsetMinutes): string
@@ -880,7 +880,7 @@ try {
         }
         
         if (branchChatsDailyReadLimitReached($pdo, $userId, $timezoneOffsetMinutes)) {
-            branchChatsRespond(['status' => 'error', 'message' => 'Você atingiu o limite de 480 leituras para hoje neste fuso horário.'], 429);
+            branchChatsRespond(['status' => 'error', 'message' => 'Você atingiu o limite de 999 leituras para hoje neste fuso horário.'], 429);
         }
 
         $pdo->beginTransaction();
