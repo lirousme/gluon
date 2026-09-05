@@ -15,6 +15,7 @@ $pdo = Database::getConnection();
 branchChatsEnsureAudioSchema($pdo);
 branchChatsEnsureReferenceAudioSchema($pdo);
 branchChatsEnsureChatOpenSchema($pdo);
+branchChatsEnsureSubstitutionDrillSchema($pdo);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 function branchChatsRespond(array $payload, int $status = 200): void
@@ -61,6 +62,14 @@ function branchChatsEnsureChatOpenSchema(PDO $pdo): void
     }
 
     $pdo->exec('ALTER TABLE chats MODIFY COLUMN is_open INT NOT NULL DEFAULT 1');
+}
+
+function branchChatsEnsureSubstitutionDrillSchema(PDO $pdo): void
+{
+    $stmt = $pdo->query("SHOW COLUMNS FROM chats LIKE " . $pdo->quote('preserve_on_parent_delete'));
+    if (!$stmt->fetchColumn()) {
+        $pdo->exec('ALTER TABLE chats ADD COLUMN preserve_on_parent_delete TINYINT(1) NOT NULL DEFAULT 0 AFTER parent_chat_id');
+    }
 }
 
 function branchChatsNormalizeReferenceLanguage($value): string
@@ -485,6 +494,22 @@ function branchChatsDeleteSingleChat(PDO $pdo, int $chatId, int $userId): void
 function branchChatsDeleteChat(PDO $pdo, int $chatId, int $userId): void
 {
     $chat = branchChatsFind($pdo, $chatId, $userId);
+
+    // Substitution drills reuse source messages, so they must remain available
+    // after their source chat is deleted. Detach them before traversing the
+    // ordinary branch tree (whose descendants are intentionally deleted).
+    $pdo->prepare(
+        'UPDATE chats
+         SET parent_chat_id = :new_parent_id
+         WHERE parent_chat_id = :chat_id
+           AND user_id = :user_id
+           AND preserve_on_parent_delete = 1'
+    )->execute([
+        ':new_parent_id' => $chat['parent_chat_id'] ?: null,
+        ':chat_id' => $chatId,
+        ':user_id' => $userId,
+    ]);
+
     $stmt = $pdo->prepare(
         'WITH RECURSIVE chat_tree AS (
              SELECT id
@@ -682,7 +707,7 @@ function branchChatsCreateSubstitutionDrill(PDO $pdo, int $userId, int $sourceCh
 
     $pdo->beginTransaction();
     try {
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, is_open) VALUES (:user_id, :parent_chat_id, :titulo, 1)');
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_chat_id, :titulo, 1, 1)');
         $stmt->execute([':user_id' => $userId, ':parent_chat_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle($timezoneOffsetMinutes)]);
         $targetChatId = (int)$pdo->lastInsertId();
 
