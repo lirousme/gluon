@@ -150,7 +150,7 @@
 </head>
 <body>
 <div class="app" id="app">
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
         <header class="sidebar-header">
             <div class="brand"><div class="logo" id="availableReadCount" title="Chats com leitura disponível" aria-label="0 chats com leitura disponível">0</div><div><h1>Branch Chats</h1><p class="subtitle">Suas conversas</p></div></div>
             <span class="read-cycle-count" id="readCycleCount" title="Leituras registradas hoje neste fuso horário" aria-label="0 de 999 leituras hoje">0/999</span>
@@ -217,9 +217,13 @@
         const rows = state.chats
             .filter(chat => chat.titulo.toLowerCase().includes(query))
             .sort((a, b) => {
-                const readComparison = Number(b.view_count || 0) - Number(a.view_count || 0);
-                if (readComparison !== 0) return readComparison;
-                return Number(b.total_message_characters || 0) - Number(a.total_message_characters || 0);
+                const createdAtComparison = String(a.created_at || '').localeCompare(String(b.created_at || ''));
+                if (createdAtComparison !== 0) return createdAtComparison;
+
+                const characterComparison = Number(b.total_message_characters || 0) - Number(a.total_message_characters || 0);
+                if (characterComparison !== 0) return characterComparison;
+
+                return Number(a.id || 0) - Number(b.id || 0);
             });
         $('chatList').replaceChildren();
         if (!rows.length) { const empty = document.createElement('div'); empty.className = 'empty-list'; empty.textContent = query ? 'Nenhuma conversa encontrada.' : 'Nenhum chat ainda. Crie sua primeira conversa.'; $('chatList').append(empty); return; }

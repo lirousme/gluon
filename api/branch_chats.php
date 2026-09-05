@@ -691,16 +691,13 @@ try {
         }
         branchChatsAttachMessageCharacterTotals($pdo, $chats, $userId);
         usort($chats, static function (array $a, array $b): int {
-            $readComparison = ((int)($b['view_count'] ?? 0)) <=> ((int)($a['view_count'] ?? 0));
-            if ($readComparison !== 0) return $readComparison;
+            $createdAtComparison = strcmp((string)($a['created_at'] ?? ''), (string)($b['created_at'] ?? ''));
+            if ($createdAtComparison !== 0) return $createdAtComparison;
 
             $characterComparison = ((int)($b['total_message_characters'] ?? 0)) <=> ((int)($a['total_message_characters'] ?? 0));
             if ($characterComparison !== 0) return $characterComparison;
 
-            $updatedComparison = strcmp((string)($b['updated_at'] ?? ''), (string)($a['updated_at'] ?? ''));
-            if ($updatedComparison !== 0) return $updatedComparison;
-
-            return ((int)($b['id'] ?? 0)) <=> ((int)($a['id'] ?? 0));
+            return ((int)($a['id'] ?? 0)) <=> ((int)($b['id'] ?? 0));
         });
 
         foreach ($chats as &$chat) {
