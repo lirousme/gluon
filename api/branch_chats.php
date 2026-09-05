@@ -89,6 +89,26 @@ function branchChatsNormalizeVariant($value, int $isRecipient): string
     return in_array($variant, $allowed, true) ? $variant : ($isRecipient ? 'blue' : 'green');
 }
 
+function branchChatsSubstitutionDrillVariant(array $sourceMessage, string $sourceLanguage): array
+{
+    $sourceVariant = branchChatsNormalizeVariant(
+        $sourceMessage['color_variant'] ?? null,
+        (int)($sourceMessage['is_recipient'] ?? 0)
+    );
+
+    // Keep the generated pair visually distinct from the input pair: blue ↔ green
+    // for Portuguese and purple ↔ orange for English.
+    if ($sourceLanguage === 'pt-BR') {
+        return $sourceVariant === 'blue'
+            ? ['variant' => 'green', 'is_recipient' => 0]
+            : ['variant' => 'blue', 'is_recipient' => 1];
+    }
+
+    return $sourceVariant === 'purple'
+        ? ['variant' => 'orange', 'is_recipient' => 0]
+        : ['variant' => 'purple', 'is_recipient' => 1];
+}
+
 function branchChatsAudioContext(string $variant): array
 {
     return match ($variant) {
@@ -711,10 +731,12 @@ function branchChatsCreateSubstitutionDrill(PDO $pdo, int $userId, int $sourceCh
         $stmt->execute([':user_id' => $userId, ':parent_chat_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle($timezoneOffsetMinutes)]);
         $targetChatId = (int)$pdo->lastInsertId();
 
-        $insertMessage = $pdo->prepare('INSERT INTO mensagens (user_id, texto_encrypted, is_recipient, color_variant, audio_language) VALUES (:user_id, :text, 0, :variant, :language)');
-        $insertMessage->execute([':user_id' => $userId, ':text' => Security::encryptData($generatedPortuguese), ':variant' => 'green', ':language' => 'pt-BR']);
+        $portugueseStyle = branchChatsSubstitutionDrillVariant($sourceMessages[0], 'pt-BR');
+        $englishStyle = branchChatsSubstitutionDrillVariant($sourceMessages[1], 'en-GB');
+        $insertMessage = $pdo->prepare('INSERT INTO mensagens (user_id, texto_encrypted, is_recipient, color_variant, audio_language) VALUES (:user_id, :text, :is_recipient, :variant, :language)');
+        $insertMessage->execute([':user_id' => $userId, ':text' => Security::encryptData($generatedPortuguese), ':is_recipient' => $portugueseStyle['is_recipient'], ':variant' => $portugueseStyle['variant'], ':language' => 'pt-BR']);
         $portugueseMessageId = (int)$pdo->lastInsertId();
-        $insertMessage->execute([':user_id' => $userId, ':text' => Security::encryptData($generatedEnglish), ':variant' => 'orange', ':language' => 'en-GB']);
+        $insertMessage->execute([':user_id' => $userId, ':text' => Security::encryptData($generatedEnglish), ':is_recipient' => $englishStyle['is_recipient'], ':variant' => $englishStyle['variant'], ':language' => 'en-GB']);
         $englishMessageId = (int)$pdo->lastInsertId();
 
         $insertChatMessage = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position) VALUES (:chat_id, :message_id, :position)');
