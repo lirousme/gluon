@@ -596,6 +596,117 @@ function branchChatsDecryptMessages(PDO $pdo, array $messages): array
     return $messages;
 }
 
+function branchChatsGeminiRequest(array $payload): array
+{
+    if (trim((string)GEMINI_API_KEY) === '') {
+        return [0, '', 'Chave GEMINI_API_KEY não configurada.'];
+    }
+
+    $model = preg_replace('/[^a-zA-Z0-9._-]/', '', (string)GEMINI_TRANSLATION_MODEL);
+    if ($model === '') {
+        return [0, '', 'Modelo Gemini inválido.'];
+    }
+
+    $url = rtrim(GEMINI_API_URL, '/') . '/' . rawurlencode($model) . ':generateContent';
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload, JSON_UNESCAPED_UNICODE));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json', 'x-goog-api-key: ' . GEMINI_API_KEY]);
+    $response = curl_exec($ch);
+    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    return [$httpCode, is_string($response) ? $response : '', $curlError];
+}
+
+function branchChatsGeminiText(array $response): string
+{
+    $parts = $response['candidates'][0]['content']['parts'] ?? [];
+    if (!is_array($parts)) return '';
+    $text = '';
+    foreach ($parts as $part) {
+        if (is_array($part) && is_string($part['text'] ?? null)) $text .= $part['text'];
+    }
+    return trim($text);
+}
+
+function branchChatsCreateSubstitutionDrill(PDO $pdo, int $userId, int $sourceChatId, string $role, int $timezoneOffsetMinutes): array
+{
+    $roles = ['Sujeito', 'Verbo', 'Objeto', 'Advérbio', 'Adjunto verbal'];
+    if (!in_array($role, $roles, true)) {
+        branchChatsRespond(['status' => 'error', 'message' => 'Opção de substitution drill inválida.'], 422);
+    }
+
+    branchChatsFind($pdo, $sourceChatId, $userId);
+    $stmt = $pdo->prepare(
+        'SELECT m.id, m.texto_encrypted, m.is_recipient, m.color_variant
+         FROM chat_mensagens cm
+         INNER JOIN mensagens m ON m.id = cm.mensagem_id
+         WHERE cm.chat_id = :chat_id AND m.user_id = :user_id
+         ORDER BY cm.position ASC
+         LIMIT 2'
+    );
+    $stmt->execute([':chat_id' => $sourceChatId, ':user_id' => $userId]);
+    $sourceMessages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if (count($sourceMessages) < 2) {
+        branchChatsRespond(['status' => 'error', 'message' => 'O chat precisa ter pelo menos duas mensagens para criar um substitution drill.'], 422);
+    }
+
+    $portuguese = trim(strip_tags((string)branchChatsDecryptMessageText($sourceMessages[0]['texto_encrypted'] ?? null)));
+    $english = trim(strip_tags((string)branchChatsDecryptMessageText($sourceMessages[1]['texto_encrypted'] ?? null)));
+    if ($portuguese === '' || $english === '') {
+        branchChatsRespond(['status' => 'error', 'message' => 'As duas primeiras mensagens do chat precisam conter texto em português e sua tradução em inglês.'], 422);
+    }
+
+    $prompt = "Você cria exercícios de substitution drill para estudantes de inglês. A primeira frase abaixo está em português brasileiro e a segunda é sua tradução em inglês. Gere uma nova frase natural, mantendo a mesma estrutura e sentido geral, mas substituindo somente o componente solicitado. A frase em inglês deve ser a tradução fiel da nova frase em português. Retorne APENAS um JSON válido, sem markdown, no formato {\"portuguese\":\"...\",\"english\":\"...\"}.\n\nComponente a substituir: {$role}\n\nFrase em português: {$portuguese}\nTradução em inglês: {$english}";
+    $payload = [
+        'contents' => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
+        'generationConfig' => ['temperature' => 0.35, 'responseMimeType' => 'application/json'],
+    ];
+    [$httpCode, $response, $curlError] = branchChatsGeminiRequest($payload);
+    if ($httpCode !== 200 || $response === '') {
+        $error = json_decode($response, true);
+        $details = is_array($error) ? trim((string)($error['error']['message'] ?? '')) : '';
+        branchChatsRespond(['status' => 'error', 'message' => 'Não foi possível gerar o substitution drill com o Gemini.' . (($details !== '' || $curlError !== '') ? ' Detalhes: ' . ($details !== '' ? $details : $curlError) : '')], 502);
+    }
+
+    $geminiResponse = json_decode($response, true);
+    $generated = is_array($geminiResponse) ? json_decode(branchChatsGeminiText($geminiResponse), true) : null;
+    $generatedPortuguese = trim((string)($generated['portuguese'] ?? ''));
+    $generatedEnglish = trim((string)($generated['english'] ?? ''));
+    if ($generatedPortuguese === '' || $generatedEnglish === '' || mb_strlen($generatedPortuguese) > 10000 || mb_strlen($generatedEnglish) > 10000) {
+        branchChatsRespond(['status' => 'error', 'message' => 'O Gemini não retornou um substitution drill válido.'], 502);
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, is_open) VALUES (:user_id, :parent_chat_id, :titulo, 1)');
+        $stmt->execute([':user_id' => $userId, ':parent_chat_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle($timezoneOffsetMinutes)]);
+        $targetChatId = (int)$pdo->lastInsertId();
+
+        $insertMessage = $pdo->prepare('INSERT INTO mensagens (user_id, texto_encrypted, is_recipient, color_variant, audio_language) VALUES (:user_id, :text, 0, :variant, :language)');
+        $insertMessage->execute([':user_id' => $userId, ':text' => Security::encryptData($generatedPortuguese), ':variant' => 'green', ':language' => 'pt-BR']);
+        $portugueseMessageId = (int)$pdo->lastInsertId();
+        $insertMessage->execute([':user_id' => $userId, ':text' => Security::encryptData($generatedEnglish), ':variant' => 'orange', ':language' => 'en-GB']);
+        $englishMessageId = (int)$pdo->lastInsertId();
+
+        $insertChatMessage = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position) VALUES (:chat_id, :message_id, :position)');
+        $insertChatMessage->execute([':chat_id' => $targetChatId, ':message_id' => $portugueseMessageId, ':position' => 1]);
+        $insertChatMessage->execute([':chat_id' => $targetChatId, ':message_id' => $englishMessageId, ':position' => 2]);
+        foreach ($sourceMessages as $index => $sourceMessage) {
+            $insertChatMessage->execute([':chat_id' => $targetChatId, ':message_id' => (int)$sourceMessage['id'], ':position' => $index + 3]);
+        }
+        $pdo->commit();
+    } catch (Throwable $exception) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $exception;
+    }
+
+    return ['chat_id' => $targetChatId, 'substitution_role' => $role];
+}
+
 try {
     if ($method === 'GET') {
         $timezoneOffsetMinutes = branchChatsTimezoneOffset($_GET);
@@ -675,6 +786,17 @@ try {
     }
     $input = $jsonInput ?? $_POST;
     $action = trim((string)($input['action'] ?? ''));
+
+    if ($action === 'create_substitution_drill') {
+        $result = branchChatsCreateSubstitutionDrill(
+            $pdo,
+            $userId,
+            (int)($input['chat_id'] ?? 0),
+            trim((string)($input['substitution_role'] ?? '')),
+            branchChatsTimezoneOffset($input)
+        );
+        branchChatsRespond(['status' => 'success', 'data' => $result], 201);
+    }
 
     if ($action === 'create_chat') {
         $stmt = $pdo->prepare('INSERT INTO chats (user_id, titulo, is_open) VALUES (:user_id, :titulo, 1)');
