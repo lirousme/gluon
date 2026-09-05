@@ -383,6 +383,22 @@ function branchChatsDefaultTitle(int $timezoneOffsetMinutes): string
         ->format('d/m/Y H:i');
 }
 
+function branchChatsTitleCreatedTimestamp(string $title): int
+{
+    if (!preg_match('/\b(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\b/', $title, $matches)) {
+        return PHP_INT_MAX;
+    }
+
+    $format = isset($matches[6]) && $matches[6] !== '' ? '!d/m/Y H:i:s' : '!d/m/Y H:i';
+    $date = DateTimeImmutable::createFromFormat($format, implode('/', [$matches[1], $matches[2], $matches[3]]) . ' ' . $matches[4] . ':' . $matches[5] . (isset($matches[6]) && $matches[6] !== '' ? ':' . $matches[6] : ''), new DateTimeZone('UTC'));
+    $errors = DateTimeImmutable::getLastErrors();
+    if ($date === false || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))) {
+        return PHP_INT_MAX;
+    }
+
+    return $date->getTimestamp();
+}
+
 function branchChatsStoreImage(array $image): string
 {
     if (($image['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || ($image['size'] ?? 0) > 8 * 1024 * 1024) {
@@ -407,47 +423,6 @@ function branchChatsDecryptMessageText(?string $encryptedText): ?string
 
     $decrypted = Security::decryptData($encryptedText);
     return $decrypted !== false ? $decrypted : $encryptedText;
-}
-
-function branchChatsTextLength(?string $text): int
-{
-    if ($text === null) {
-        return 0;
-    }
-
-    return function_exists('mb_strlen') ? mb_strlen($text, 'UTF-8') : strlen($text);
-}
-
-function branchChatsAttachMessageCharacterTotals(PDO $pdo, array &$chats, int $userId): void
-{
-    if (!$chats) {
-        return;
-    }
-
-    $chatIds = array_values(array_unique(array_map('intval', array_column($chats, 'id'))));
-    if (!$chatIds) {
-        return;
-    }
-
-    $totals = array_fill_keys($chatIds, 0);
-    $placeholders = implode(',', array_fill(0, count($chatIds), '?'));
-    $stmt = $pdo->prepare(
-        'SELECT cm.chat_id, m.texto_encrypted
-         FROM chat_mensagens cm
-         INNER JOIN mensagens m ON m.id = cm.mensagem_id
-         WHERE cm.chat_id IN (' . $placeholders . ') AND m.user_id = ?'
-    );
-    $stmt->execute([...$chatIds, $userId]);
-
-    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $message) {
-        $chatId = (int)$message['chat_id'];
-        $totals[$chatId] = ($totals[$chatId] ?? 0) + branchChatsTextLength(branchChatsDecryptMessageText($message['texto_encrypted'] ?? null));
-    }
-
-    foreach ($chats as &$chat) {
-        $chat['total_message_characters'] = $totals[(int)$chat['id']] ?? 0;
-    }
-    unset($chat);
 }
 
 function branchChatsDecryptMessageImage(PDO $pdo, array $message): ?string
@@ -689,13 +664,9 @@ try {
             $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId]);
             $chats = $stmt->fetchAll();
         }
-        branchChatsAttachMessageCharacterTotals($pdo, $chats, $userId);
         usort($chats, static function (array $a, array $b): int {
-            $createdAtComparison = strcmp((string)($a['created_at'] ?? ''), (string)($b['created_at'] ?? ''));
-            if ($createdAtComparison !== 0) return $createdAtComparison;
-
-            $characterComparison = ((int)($b['total_message_characters'] ?? 0)) <=> ((int)($a['total_message_characters'] ?? 0));
-            if ($characterComparison !== 0) return $characterComparison;
+            $titleDateComparison = branchChatsTitleCreatedTimestamp((string)($a['titulo'] ?? '')) <=> branchChatsTitleCreatedTimestamp((string)($b['titulo'] ?? ''));
+            if ($titleDateComparison !== 0) return $titleDateComparison;
 
             return ((int)($a['id'] ?? 0)) <=> ((int)($b['id'] ?? 0));
         });

@@ -212,16 +212,21 @@
     function playAudioSource(src, token = null) { return new Promise(resolve => { if (!src || (token !== null && token !== state.playbackToken)) return resolve(false); const audio = new Audio(src); state.currentAudioElement = audio; const cleanup = value => { audio.onended = audio.onerror = null; if (state.currentAudioElement === audio) state.currentAudioElement = null; resolve(value); }; audio.onended = () => cleanup(true); audio.onerror = () => cleanup(false); audio.play().catch(() => cleanup(false)); }); }
     async function autoplayConversationAudio() { stopConversationPlayback(); if (!state.audioAutoplayEnabled || !state.activeId) return; const token = state.playbackToken; if ([2, 3].includes(Number(state.activeChat?.chat_type)) && state.activeChat?.reference_audio_base64) await playAudioSource(state.activeChat.reference_audio_base64, token); for (const message of state.currentMessages || []) { if (token !== state.playbackToken || !state.audioAutoplayEnabled) break; if (!message.audio_base64) continue; await playAudioSource(message.audio_base64, token); } }
     async function request(url, options) { const response = await fetch(url, options); const result = await response.json(); if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível concluir.'); return result.data; }
+    function titleCreatedTimestamp(title) {
+        const match = String(title || '').match(/\b(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\b/);
+        if (!match) return Number.MAX_SAFE_INTEGER;
+        const [, day, month, year, hour, minute, second = '0'] = match;
+        const timestamp = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second));
+        const date = new Date(timestamp);
+        return date.getUTCFullYear() === Number(year) && date.getUTCMonth() === Number(month) - 1 && date.getUTCDate() === Number(day) && date.getUTCHours() === Number(hour) && date.getUTCMinutes() === Number(minute) && date.getUTCSeconds() === Number(second) ? timestamp : Number.MAX_SAFE_INTEGER;
+    }
     function renderChats() {
         const query = $('search').value.trim().toLowerCase();
         const rows = state.chats
             .filter(chat => chat.titulo.toLowerCase().includes(query))
             .sort((a, b) => {
-                const createdAtComparison = String(a.created_at || '').localeCompare(String(b.created_at || ''));
-                if (createdAtComparison !== 0) return createdAtComparison;
-
-                const characterComparison = Number(b.total_message_characters || 0) - Number(a.total_message_characters || 0);
-                if (characterComparison !== 0) return characterComparison;
+                const titleDateComparison = titleCreatedTimestamp(a.titulo) - titleCreatedTimestamp(b.titulo);
+                if (titleDateComparison !== 0) return titleDateComparison;
 
                 return Number(a.id || 0) - Number(b.id || 0);
             });
