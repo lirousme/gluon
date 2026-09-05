@@ -383,22 +383,6 @@ function branchChatsDefaultTitle(int $timezoneOffsetMinutes): string
         ->format('d/m/Y H:i');
 }
 
-function branchChatsTitleCreatedTimestamp(string $title): int
-{
-    if (!preg_match('/\b(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\b/', $title, $matches)) {
-        return PHP_INT_MAX;
-    }
-
-    $format = isset($matches[6]) && $matches[6] !== '' ? '!d/m/Y H:i:s' : '!d/m/Y H:i';
-    $date = DateTimeImmutable::createFromFormat($format, implode('/', [$matches[1], $matches[2], $matches[3]]) . ' ' . $matches[4] . ':' . $matches[5] . (isset($matches[6]) && $matches[6] !== '' ? ':' . $matches[6] : ''), new DateTimeZone('UTC'));
-    $errors = DateTimeImmutable::getLastErrors();
-    if ($date === false || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))) {
-        return PHP_INT_MAX;
-    }
-
-    return $date->getTimestamp();
-}
-
 function branchChatsStoreImage(array $image): string
 {
     if (($image['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || ($image['size'] ?? 0) > 8 * 1024 * 1024) {
@@ -641,7 +625,7 @@ try {
              LEFT JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
              WHERE c.user_id = :user_id
                AND (cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count') . ')
-             ORDER BY c.updated_at DESC, c.id DESC'
+             ORDER BY c.created_at ASC, c.id ASC'
         );
         $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId]);
         $chats = $stmt->fetchAll();
@@ -664,13 +648,6 @@ try {
             $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId]);
             $chats = $stmt->fetchAll();
         }
-        usort($chats, static function (array $a, array $b): int {
-            $titleDateComparison = branchChatsTitleCreatedTimestamp((string)($a['titulo'] ?? '')) <=> branchChatsTitleCreatedTimestamp((string)($b['titulo'] ?? ''));
-            if ($titleDateComparison !== 0) return $titleDateComparison;
-
-            return ((int)($a['id'] ?? 0)) <=> ((int)($b['id'] ?? 0));
-        });
-
         foreach ($chats as &$chat) {
             $chat['ultima_mensagem'] = branchChatsDecryptMessageText($chat['ultima_mensagem_encrypted'] ?? null);
             unset($chat['ultima_mensagem_encrypted']);
