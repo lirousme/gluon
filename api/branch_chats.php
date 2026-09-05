@@ -109,6 +109,15 @@ function branchChatsSubstitutionDrillVariant(array $sourceMessage, string $sourc
         : ['variant' => 'purple', 'is_recipient' => 1];
 }
 
+function branchChatsLanguageVariant(string $language, int $isRecipient): string
+{
+    if ($language === 'en-GB') {
+        return $isRecipient ? 'purple' : 'orange';
+    }
+
+    return $isRecipient ? 'blue' : 'green';
+}
+
 function branchChatsAudioContext(string $variant): array
 {
     return match ($variant) {
@@ -677,6 +686,93 @@ function branchChatsGeminiText(array $response): string
     return trim($text);
 }
 
+function branchChatsTranslateSingleDrillMessage(string $text): array
+{
+    $prompt = "Identifique se a frase a seguir está em português brasileiro ou em inglês. "
+        . "Traduza-a fielmente para o outro idioma. Retorne APENAS um JSON válido, sem markdown, "
+        . "no formato {\"source_language\":\"pt-BR ou en-GB\",\"portuguese\":\"...\",\"english\":\"...\"}.\n\nFrase: {$text}";
+    $payload = [
+        'contents' => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
+        'generationConfig' => ['temperature' => 0, 'responseMimeType' => 'application/json'],
+    ];
+    [$httpCode, $response, $curlError] = branchChatsGeminiRequest($payload);
+    if ($httpCode !== 200 || $response === '') {
+        $error = json_decode($response, true);
+        $details = is_array($error) ? trim((string)($error['error']['message'] ?? '')) : '';
+        branchChatsRespond(['status' => 'error', 'message' => 'Não foi possível identificar e traduzir a mensagem com o Gemini.' . (($details !== '' || $curlError !== '') ? ' Detalhes: ' . ($details !== '' ? $details : $curlError) : '')], 502);
+    }
+
+    $geminiResponse = json_decode($response, true);
+    $translation = is_array($geminiResponse) ? json_decode(branchChatsGeminiText($geminiResponse), true) : null;
+    $sourceLanguage = $translation['source_language'] ?? null;
+    $portuguese = trim((string)($translation['portuguese'] ?? ''));
+    $english = trim((string)($translation['english'] ?? ''));
+    if (!in_array($sourceLanguage, ['pt-BR', 'en-GB'], true) || $portuguese === '' || $english === '' || mb_strlen($portuguese) > 10000 || mb_strlen($english) > 10000) {
+        branchChatsRespond(['status' => 'error', 'message' => 'O Gemini não retornou uma identificação e tradução válidas.'], 502);
+    }
+
+    return ['source_language' => $sourceLanguage, 'portuguese' => $portuguese, 'english' => $english];
+}
+
+function branchChatsCreateMissingDrillTranslation(PDO $pdo, int $userId, int $chatId, array $sourceMessage): array
+{
+    $text = trim(strip_tags((string)branchChatsDecryptMessageText($sourceMessage['texto_encrypted'] ?? null)));
+    if ($text === '') {
+        branchChatsRespond(['status' => 'error', 'message' => 'A mensagem do chat precisa conter texto para criar um substitution drill.'], 422);
+    }
+
+    $translation = branchChatsTranslateSingleDrillMessage($text);
+    $sourceLanguage = $translation['source_language'];
+    $sourceIsRecipient = (int)($sourceMessage['is_recipient'] ?? 0);
+    $translationLanguage = $sourceLanguage === 'pt-BR' ? 'en-GB' : 'pt-BR';
+    $translationText = $translationLanguage === 'pt-BR' ? $translation['portuguese'] : $translation['english'];
+
+    $pdo->beginTransaction();
+    try {
+        // Keep the original message in the language-specific colour family too.
+        $pdo->prepare('UPDATE mensagens SET color_variant = :variant, audio_language = :language WHERE id = :message_id AND user_id = :user_id')
+            ->execute([
+                ':variant' => branchChatsLanguageVariant($sourceLanguage, $sourceIsRecipient),
+                ':language' => $sourceLanguage,
+                ':message_id' => $sourceMessage['id'],
+                ':user_id' => $userId,
+            ]);
+
+        if ($sourceLanguage === 'en-GB') {
+            // The source message is English, so move it after its generated Portuguese translation.
+            $pdo->prepare('UPDATE chat_mensagens SET position = 2 WHERE chat_id = :chat_id AND mensagem_id = :message_id AND position = 1')
+                ->execute([':chat_id' => $chatId, ':message_id' => $sourceMessage['id']]);
+        }
+
+        $insertMessage = $pdo->prepare('INSERT INTO mensagens (user_id, texto_encrypted, is_recipient, color_variant, audio_language) VALUES (:user_id, :text, :is_recipient, :variant, :language)');
+        $insertMessage->execute([
+            ':user_id' => $userId,
+            ':text' => Security::encryptData($translationText),
+            ':is_recipient' => $sourceIsRecipient,
+            ':variant' => branchChatsLanguageVariant($translationLanguage, $sourceIsRecipient),
+            ':language' => $translationLanguage,
+        ]);
+        $translationMessageId = (int)$pdo->lastInsertId();
+        $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position) VALUES (:chat_id, :message_id, :position)')
+            ->execute([':chat_id' => $chatId, ':message_id' => $translationMessageId, ':position' => $sourceLanguage === 'pt-BR' ? 2 : 1]);
+        $pdo->commit();
+    } catch (Throwable $exception) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $exception;
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT m.id, m.texto_encrypted, m.is_recipient, m.color_variant
+         FROM chat_mensagens cm
+         INNER JOIN mensagens m ON m.id = cm.mensagem_id
+         WHERE cm.chat_id = :chat_id AND m.user_id = :user_id
+         ORDER BY cm.position ASC
+         LIMIT 2'
+    );
+    $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
 function branchChatsCreateSubstitutionDrill(PDO $pdo, int $userId, int $sourceChatId, string $role, int $timezoneOffsetMinutes): array
 {
     $roles = ['Sujeito', 'Verbo', 'Objeto', 'Advérbio', 'Adjunto verbal'];
@@ -695,8 +791,11 @@ function branchChatsCreateSubstitutionDrill(PDO $pdo, int $userId, int $sourceCh
     );
     $stmt->execute([':chat_id' => $sourceChatId, ':user_id' => $userId]);
     $sourceMessages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if (count($sourceMessages) === 1) {
+        $sourceMessages = branchChatsCreateMissingDrillTranslation($pdo, $userId, $sourceChatId, $sourceMessages[0]);
+    }
     if (count($sourceMessages) < 2) {
-        branchChatsRespond(['status' => 'error', 'message' => 'O chat precisa ter pelo menos duas mensagens para criar um substitution drill.'], 422);
+        branchChatsRespond(['status' => 'error', 'message' => 'O chat precisa ter pelo menos uma mensagem para criar um substitution drill.'], 422);
     }
 
     $portuguese = trim(strip_tags((string)branchChatsDecryptMessageText($sourceMessages[0]['texto_encrypted'] ?? null)));
