@@ -549,41 +549,37 @@ function branchChatsDeleteChat(PDO $pdo, int $chatId, int $userId): void
         return;
     }
 
-    $descendantIds = array_values(array_filter($chatIds, static fn (int $id): bool => $id !== $chatId));
-    if ($descendantIds !== []) {
-        $descendantPlaceholders = implode(',', array_fill(0, count($descendantIds), '?'));
-        $stmt = $pdo->prepare(
-            "SELECT id
-             FROM chats
-             WHERE user_id = ? AND chat_type = 3 AND id IN ($descendantPlaceholders)
-             ORDER BY id ASC"
-        );
-        $stmt->execute(array_merge([$userId], $descendantIds));
-        $referenceChildIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    $stmt = $pdo->prepare(
+        'SELECT id
+         FROM chats
+         WHERE user_id = :user_id AND parent_chat_id = :chat_id AND chat_type = 3
+         ORDER BY id ASC'
+    );
+    $stmt->execute([':user_id' => $userId, ':chat_id' => $chatId]);
+    $referenceChildIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
 
-        if ($referenceChildIds !== []) {
-            $promotedChatId = $referenceChildIds[0];
-            $reparentIds = array_values(array_filter($descendantIds, static fn (int $id): bool => $id !== $promotedChatId));
+    if ($referenceChildIds !== []) {
+        $promotedChatId = $referenceChildIds[0];
+        $reparentIds = array_values(array_filter($referenceChildIds, static fn (int $id): bool => $id !== $promotedChatId));
 
-            $pdo->prepare('DELETE FROM chat_references WHERE chat_id = :chat_id')->execute([':chat_id' => $promotedChatId]);
-            $pdo->prepare('UPDATE chat_references SET chat_id = :new_chat_id WHERE chat_id = :old_chat_id')->execute([
-                ':new_chat_id' => $promotedChatId,
-                ':old_chat_id' => $chatId,
-            ]);
-            $pdo->prepare('UPDATE chats SET parent_chat_id = :new_parent_id WHERE id = :promoted_chat_id AND user_id = :user_id')->execute([
-                ':new_parent_id' => $chat['parent_chat_id'],
-                ':promoted_chat_id' => $promotedChatId,
-                ':user_id' => $userId,
-            ]);
-            if ($reparentIds !== []) {
-                $reparentPlaceholders = implode(',', array_fill(0, count($reparentIds), '?'));
-                $stmt = $pdo->prepare("UPDATE chats SET parent_chat_id = ? WHERE user_id = ? AND id IN ($reparentPlaceholders)");
-                $stmt->execute(array_merge([$promotedChatId, $userId], $reparentIds));
-            }
-
-            branchChatsDeleteSingleChat($pdo, $chatId, $userId);
-            return;
+        $pdo->prepare('DELETE FROM chat_references WHERE chat_id = :chat_id')->execute([':chat_id' => $promotedChatId]);
+        $pdo->prepare('UPDATE chat_references SET chat_id = :new_chat_id WHERE chat_id = :old_chat_id')->execute([
+            ':new_chat_id' => $promotedChatId,
+            ':old_chat_id' => $chatId,
+        ]);
+        $pdo->prepare('UPDATE chats SET parent_chat_id = :new_parent_id, chat_type = 2 WHERE id = :promoted_chat_id AND user_id = :user_id')->execute([
+            ':new_parent_id' => $chat['parent_chat_id'],
+            ':promoted_chat_id' => $promotedChatId,
+            ':user_id' => $userId,
+        ]);
+        if ($reparentIds !== []) {
+            $reparentPlaceholders = implode(',', array_fill(0, count($reparentIds), '?'));
+            $stmt = $pdo->prepare("UPDATE chats SET parent_chat_id = ? WHERE user_id = ? AND id IN ($reparentPlaceholders)");
+            $stmt->execute(array_merge([$promotedChatId, $userId], $reparentIds));
         }
+
+        branchChatsDeleteSingleChat($pdo, $chatId, $userId);
+        return;
     }
 
     $chatPlaceholders = implode(',', array_fill(0, count($chatIds), '?'));
