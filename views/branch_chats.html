@@ -171,7 +171,7 @@
         <header class="chat-header" id="chatHeader" hidden>
             <button class="icon-button back" id="back" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="m20 11-12.2.03 5.6-5.6L12 4l-8 8 8 8 1.4-1.43-5.6-5.6L20 13z"/></svg></button>
             <button class="icon-button avatar" id="editChat" type="button" title="Editar chat" aria-label="Editar nome ou excluir chat">B</button><div class="chat-heading"><h2 id="activeTitle"></h2><p class="subtitle" id="chatSubtitle">conversa privada</p></div>
-            <div class="substitution-drill"><button class="icon-button read-button" id="substutionDrill" type="button" title="Criar substitution drill" aria-label="Criar substitution drill" aria-expanded="false">Drill</button><div class="substitution-drill-menu" id="substutionDrillMenu" hidden><button type="button" data-substitution-role="Sujeito">Sujeito</button><button type="button" data-substitution-role="Verbo">Verbo</button><button type="button" data-substitution-role="Objeto">Objeto</button><button type="button" data-substitution-role="Advérbio">Advérbio</button><button type="button" data-substitution-role="Adjunto verbal">Adjunto verbal</button></div></div>
+            <div class="substitution-drill"><button class="icon-button read-button" id="substutionDrill" type="button" title="Criar substitution drill" aria-label="Criar substitution drill" aria-expanded="false">Drill</button><div class="substitution-drill-menu" id="substutionDrillMenu" hidden><button type="button" data-substitution-role="Sujeito">Sujeito</button><button type="button" data-substitution-role="Verbo">Verbo</button><button type="button" data-substitution-role="Objeto">Objeto</button><button type="button" data-substitution-role="Advérbio">Advérbio</button><button type="button" data-substitution-role="Adjunto verbal">Adjunto verbal</button><button type="button" data-substitution-role="Todos os usos">Todos os usos</button></div></div>
             <button class="icon-button read-button" id="markViewed" type="button">Lido</button>
             <button class="icon-button branch-count" id="branchCount" type="button" title="Branches criados a partir deste chat" aria-label="Nenhum branch criado">
                 <svg viewBox="0 0 24 24"><path d="M6 3a3 3 0 1 0 2 5.24v1.26A3.5 3.5 0 0 0 11.5 13H16v2.76A3 3 0 1 0 18 15V8.24a3 3 0 1 0-2 0V11h-4.5A1.5 1.5 0 0 1 10 9.5V8.24A3 3 0 0 0 6 3m0 2a1 1 0 1 1 0 2 1 1 0 0 1 0-2m12 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2m0 12a1 1 0 1 1 0 2 1 1 0 0 1 0-2"/></svg><span id="branchCountValue">0</span>
@@ -433,10 +433,16 @@
         button.disabled = true;
         button.textContent = 'Gerando…';
         try {
-            const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_substitution_drill', chat_id: state.activeId, substitution_role: button.dataset.substitutionRole, timezone_offset_minutes: timezoneOffset() }) });
+            const allUses = button.dataset.substitutionRole === 'Todos os usos';
+            const expression = $('messageBox').value.trim();
+            if (allUses && !expression) throw new Error('Digite no campo de mensagem a palavra ou expressão cujos usos você quer estudar.');
+            const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(allUses
+                ? { action: 'create_all_uses_drill', chat_id: state.activeId, expression, timezone_offset_minutes: timezoneOffset() }
+                : { action: 'create_substitution_drill', chat_id: state.activeId, substitution_role: button.dataset.substitutionRole, timezone_offset_minutes: timezoneOffset() }
+            ) });
             await loadChats();
-            await openChat(Number(result.chat_id));
-            toast(`Substitution drill de ${result.substitution_role} criado.`);
+            await openChat(Number(allUses ? result.chat_ids[0] : result.chat_id));
+            toast(allUses ? `${result.chat_ids.length} chats criados para todos os usos de “${expression}”.` : `Substitution drill de ${result.substitution_role} criado.`);
         } catch (error) { toast(error.message); }
         finally { button.disabled = false; button.textContent = originalText; }
     });
