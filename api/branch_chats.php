@@ -907,7 +907,7 @@ function branchChatsCreateAllUsesDrill(PDO $pdo, int $userId, int $sourceChatId,
             $insertChat->execute([':user_id' => $userId, ':parent_chat_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle($timezoneOffsetMinutes)]);
             $chatId = (int)$pdo->lastInsertId();
             $chatIds[] = $chatId;
-            $insertMessage->execute([':user_id' => $userId, ':text' => Security::encryptData($use['portuguese']), ':is_recipient' => 0, ':variant' => 'green', ':language' => 'pt-BR']);
+            $insertMessage->execute([':user_id' => $userId, ':text' => Security::encryptData($use['portuguese']), ':is_recipient' => 1, ':variant' => 'blue', ':language' => 'pt-BR']);
             $portugueseMessageId = (int)$pdo->lastInsertId();
             $insertMessage->execute([':user_id' => $userId, ':text' => Security::encryptData($use['english']), ':is_recipient' => 1, ':variant' => 'purple', ':language' => 'en-US']);
             $englishMessageId = (int)$pdo->lastInsertId();
