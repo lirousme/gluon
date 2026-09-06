@@ -183,10 +183,10 @@ function branchChatsFishReferenceIdByVariant(string $variant): string
 function branchChatsGoogleVoice(string $variant): string
 {
     return match ($variant) {
-        'blue'   => 'pt-BR-Chirp3-HD-Rasalgethi', 
-        'purple' => 'en-GB-Chirp3-HD-Rasalgethi',
-        'orange' => 'en-GB-Chirp3-HD-Puck', 
-        'green'  => 'pt-BR-Chirp3-HD-Puck',
+        'blue'   => 'pt-BR-Chirp3-HD-Achird', //Algieba
+        'purple' => 'en-GB-Chirp3-HD-Achird', //Enceladus //Alnilam
+        'orange' => 'en-GB-Chirp3-HD-Algenib', 
+        'green'  => 'pt-BR-Chirp3-HD-Algenib',
         default  => 'pt-BR-Chirp3-HD-Algieba',
     };
 }
