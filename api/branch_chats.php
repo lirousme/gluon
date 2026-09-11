@@ -1003,6 +1003,21 @@ try {
     $input = $jsonInput ?? $_POST;
     $action = trim((string)($input['action'] ?? ''));
 
+    if ($action === 'translate_message') {
+        $text = trim((string)($input['text'] ?? ''));
+        if ($text === '' || mb_strlen($text) > 10000) {
+            branchChatsRespond(['status' => 'error', 'message' => 'Informe um texto de até 10.000 caracteres para traduzir.'], 422);
+        }
+
+        $translation = branchChatsTranslateSingleDrillMessage($text);
+        $sourceLanguage = $translation['source_language'];
+        branchChatsRespond(['status' => 'success', 'data' => [
+            'source_language' => $sourceLanguage,
+            'target_language' => $sourceLanguage === 'en-GB' ? 'pt-BR' : 'en-GB',
+            'translation' => $sourceLanguage === 'en-GB' ? $translation['portuguese'] : $translation['english'],
+        ]]);
+    }
+
     if ($action === 'create_substitution_drill') {
         $result = branchChatsCreateSubstitutionDrill(
             $pdo,
