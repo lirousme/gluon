@@ -181,7 +181,7 @@ function buildNumeroPtBrCounts(tags = []){
 function getMarkedBackRoute(){
   const urlParams=new URLSearchParams(window.location.search);
   const from=urlParams.get('from');
-  return from?decodeURIComponent(from):'/views/flashcards.html';
+  return from?decodeURIComponent(from):'/gluon/views/flashcards.html';
 }
 function goBackToMarkedRoute(){
   if(window.history.length>1){window.history.back();return;}
@@ -193,7 +193,7 @@ function showLayerGroupMessage(){
   if(state.tagName) params.set('tag_name', state.tagName);
   params.set('from', encodeURIComponent(window.location.pathname+window.location.search));
   const q=params.toString();
-  window.location.href=`/views/card_da_tag.html${q?`?${q}`:''}`;
+  window.location.href=`/gluon/views/card_da_tag.html${q?`?${q}`:''}`;
 }
 function openTagFiltering(){
   const params=new URLSearchParams();
@@ -201,10 +201,10 @@ function openTagFiltering(){
   if(state.tagName) params.set('tag_name', state.tagName);
   params.set('from', encodeURIComponent(window.location.pathname+window.location.search));
   const q=params.toString();
-  window.location.href=`/views/tag_filtering.html${q?`?${q}`:''}`;
+  window.location.href=`/gluon/views/tag_filtering.html${q?`?${q}`:''}`;
 }
 function goToOrphanTags(){
-  window.location.href='/views/tags_sem_vinculos.html';
+  window.location.href='/gluon/views/tags_sem_vinculos.html';
 }
 async function api(action,payload={}){payload.action=action;const r=await fetch('/gluon/api/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();if(!r.ok||j.status!=='success'){const error=new Error(j.message||'Erro');error.response=j;throw error;}return j;}
 async function loadSessionUserId(){try{const r=await fetch('/gluon/api/user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'get_session'})});if(!r.ok)return;const j=await r.json();const parsed=Number(j?.id??j?.data?.id);if(Number.isInteger(parsed)&&parsed>0)state.sessionUserId=parsed;}catch(_){}}
@@ -287,7 +287,7 @@ function openTagFamily(tag){
   const nextTagId=Number(tag?.id||0);
   if(!nextTagId) return;
   const nextTagName=String(tag?.name||'').trim();
-  window.location.href=`/views/tag_family.html?tag_id=${encodeURIComponent(nextTagId)}&tag_name=${encodeURIComponent(nextTagName)}`;
+  window.location.href=`/gluon/views/tag_family.html?tag_id=${encodeURIComponent(nextTagId)}&tag_name=${encodeURIComponent(nextTagName)}`;
 }
 function getRelationTypeLabel(type){
   const found=state.relationTypes.find((item)=>Number(item.id)===Number(type));

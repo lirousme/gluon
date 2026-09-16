@@ -19,18 +19,18 @@ if ((int)$_SESSION['user_id'] !== 1) {
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen">
     <main class="max-w-xl mx-auto px-4 py-10">
-        <a href="/dashboard" class="text-blue-400 text-sm">&larr; Voltar ao dashboard</a>
+        <a href="/gluon/dashboard" class="text-blue-400 text-sm">&larr; Voltar ao dashboard</a>
         <h1 class="text-2xl font-bold mt-4">Painel ADM</h1>
         <p class="text-slate-400 mt-2">Área restrita para manutenção administrativa.</p>
 
         <div class="mt-8">
-            <a href="/configuracao-tts" class="inline-flex items-center justify-center w-full rounded-lg bg-blue-600 hover:bg-blue-500 transition-colors px-4 py-3 font-semibold">
+            <a href="/gluon/configuracao-tts" class="inline-flex items-center justify-center w-full rounded-lg bg-blue-600 hover:bg-blue-500 transition-colors px-4 py-3 font-semibold">
                 Configuração de TTS
             </a>
         </div>
 
         <div class="mt-3">
-            <a href="/topicos" class="inline-flex items-center justify-center w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 transition-colors px-4 py-3 font-semibold">
+            <a href="/gluon/topicos" class="inline-flex items-center justify-center w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 transition-colors px-4 py-3 font-semibold">
                 Matérias e Sub-matérias
             </a>
         </div>

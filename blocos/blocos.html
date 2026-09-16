@@ -109,7 +109,7 @@
         blockNameBtn.className = 'min-w-0 flex-1 text-left text-zinc-100 transition hover:text-zinc-300';
         blockNameBtn.textContent = block.nome_pt_br;
         blockNameBtn.addEventListener('click', () => {
-          window.location.href = `/blocos/cards.html?id_bloco=${encodeURIComponent(block.id)}`;
+          window.location.href = `/gluon/blocos/cards.html?id_bloco=${encodeURIComponent(block.id)}`;
         });
 
         const settingsBtn = document.createElement('button');

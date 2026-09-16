@@ -223,7 +223,7 @@
             getMarkedBackRoute() {
                 const urlParams = new URLSearchParams(window.location.search);
                 const from = urlParams.get('from');
-                return from ? decodeURIComponent(from) : '/dashboard';
+                return from ? decodeURIComponent(from) : '/gluon/dashboard';
             },
 
             buildViewUrl(view, id, extraParams = {}) {
@@ -750,7 +750,7 @@
                 payload.action = action;
                 try {
                     const res = await fetch(`/gluon/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    if (res.status === 401) window.location.href = '/'; 
+                    if (res.status === 401) window.location.href = '/gluon/';
                     const data = await res.json();
                     if (data.status !== 'success') throw new Error(data.message);
                     return data;

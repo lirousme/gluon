@@ -114,10 +114,10 @@
       return `${path}${query ? `?${query}` : ''}`;
     }
     function goToTagCards(tag = {}) {
-      window.location.href = buildTagRoute('/views/card_da_tag.html', tag);
+      window.location.href = buildTagRoute('/gluon/views/card_da_tag.html', tag);
     }
     function goToTagFamily(tag = {}) {
-      window.location.href = buildTagRoute('/views/tag_family.html', tag);
+      window.location.href = buildTagRoute('/gluon/views/tag_family.html', tag);
     }
     function normalizePinnedTag(filter = {}) {
       return { ...filter, id: Number(filter.id_tag || filter.id || 0) };

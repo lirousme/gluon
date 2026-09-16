@@ -11,7 +11,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-        <script src="/assets/zoom-lock.js" defer></script>
+        <script src="/gluon/assets/zoom-lock.js" defer></script>
     <title>Gluon - Perfil Público</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -78,7 +78,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
 
             <!-- Botão de Busca Global (Substituindo o Logo antigo) -->
-            <button onclick="window.location.href='/buscar'" class="flex items-center gap-3 cursor-pointer group outline-none hover:bg-slate-800/50 p-1.5 -ml-1.5 rounded-xl transition-colors" title="Buscar Usuários na Rede">
+            <button onclick="window.location.href='/gluon/buscar'" class="flex items-center gap-3 cursor-pointer group outline-none hover:bg-slate-800/50 p-1.5 -ml-1.5 rounded-xl transition-colors" title="Buscar Usuários na Rede">
                 <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-slate-800 border border-slate-600 flex items-center justify-center shadow-lg group-hover:border-gluon-primary/50 transition-colors">
                     <i class="fa-solid fa-magnifying-glass text-lg text-gluon-primary"></i>
                 </div>
@@ -105,7 +105,7 @@
                 
                 <div class="h-6 w-px bg-slate-700"></div>
                 
-                <button onclick="window.location.href='/adm'" id="btn-admin-header" class="hidden text-sm text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-2" title="Painel administrativo">
+                <button onclick="window.location.href='/gluon/adm'" id="btn-admin-header" class="hidden text-sm text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-2" title="Painel administrativo">
                     <i class="fa-solid fa-user-shield text-xl"></i>
                     <span class="hidden sm:inline font-medium">ADM</span>
                 </button>
@@ -114,7 +114,7 @@
                     <span class="font-medium">Seguindo</span>
                 </button>
 
-                <button onclick="window.location.href='/settings'" id="btn-profile-settings" class="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2" title="Meu Perfil">
+                <button onclick="window.location.href='/gluon/settings'" id="btn-profile-settings" class="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2" title="Meu Perfil">
                     <i class="fa-solid fa-circle-user text-xl"></i> 
                     <span class="hidden sm:inline font-medium">Perfil</span>
                 </button>
@@ -607,7 +607,7 @@
 
             buildViewUrl(view, id) {
                 const params = new URLSearchParams({ id: String(id), from: this.getCurrentRoute() });
-                return `/${view}?${params.toString()}`;
+                return `/gluon/${view}?${params.toString()}`;
             },
 
             navigateToItemView(type, id) {
@@ -882,7 +882,7 @@
                 if (this.isVisitingProfile() && this.state.profileUserId) {
                     params.set('target_user_id', String(this.state.profileUserId));
                 }
-                window.location.href = `/buscar?${params.toString()}`;
+                window.location.href = `/gluon/buscar?${params.toString()}`;
             },
 
             getProfileRootName() {
@@ -989,7 +989,7 @@
                 payload.action = action;
                 try {
                     const res = await fetch(`/gluon/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    if (res.status === 401) window.location.href = '/'; 
+                    if (res.status === 401) window.location.href = '/gluon/';
                     const data = await res.json();
                     if (data.status !== 'success') throw new Error(data.message);
                     return data;

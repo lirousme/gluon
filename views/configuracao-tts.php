@@ -20,7 +20,7 @@ if ((int)$_SESSION['user_id'] !== 1) {
 <body class="bg-slate-950 text-slate-100 min-h-screen">
     <main class="max-w-2xl mx-auto px-3 py-6">
         <div class="flex items-center justify-between gap-2 mb-4">
-            <a href="/adm" class="text-blue-400 text-sm">&larr; Voltar</a>
+            <a href="/gluon/adm" class="text-blue-400 text-sm">&larr; Voltar</a>
             <h1 class="text-lg font-bold">Configuração de TTS</h1>
             <span></span>
         </div>
