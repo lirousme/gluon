@@ -12,6 +12,7 @@ if ((int)$_SESSION['user_id'] !== 1) {
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+    <link rel="icon" href="/gluon/assets/favicon.svg" type="image/svg+xml">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <title>Administração</title>
