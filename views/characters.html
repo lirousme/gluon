@@ -17,7 +17,7 @@
 <script>
 const grid = document.getElementById('grid'), statusBox = document.getElementById('status');
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-async function api(action, payload = {}) { const response = await fetch('/api/flashcards', {method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body:JSON.stringify({...payload, action})}); const result = await response.json(); if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Erro na requisição.'); return result; }
+async function api(action, payload = {}) { const response = await fetch('/gluon/api/flashcards', {method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body:JSON.stringify({...payload, action})}); const result = await response.json(); if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Erro na requisição.'); return result; }
 async function load() {
   try {
     const result = await api('list_characters'), rows = new Map((result.data || []).map(row => [`${row.character_id}:${row.language}`, row]));

@@ -299,7 +299,7 @@
             const previousValue = select.dataset.previousValue || '';
             select.disabled = true;
             try {
-                const response = await fetch('/api/flashcards', {
+                const response = await fetch('/gluon/api/flashcards', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'update_flashcard_sentence_frequency', flashcard_id: cardId, ordem,
@@ -324,7 +324,7 @@
             table.hidden = true;
             pagination.hidden = true;
             try {
-                const response = await fetch('/api/flashcards', {
+                const response = await fetch('/gluon/api/flashcards', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'list_text_cards', page, tag_ids: state.selectedTagIds,
@@ -384,7 +384,7 @@
 
         async function loadTags() {
             try {
-                const response = await fetch('/api/flashcards?action=list_tags', { headers: { 'Accept': 'application/json' } });
+                const response = await fetch('/gluon/api/flashcards?action=list_tags', { headers: { 'Accept': 'application/json' } });
                 const result = await response.json();
                 if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível carregar as tags.');
                 state.tags = result.data || [];
@@ -397,7 +397,7 @@
 
         async function loadFrequenciasInformacionais() {
             try {
-                const response = await fetch('/api/flashcards?action=list_frequencias_informacionais', { headers: { 'Accept': 'application/json' } });
+                const response = await fetch('/gluon/api/flashcards?action=list_frequencias_informacionais', { headers: { 'Accept': 'application/json' } });
                 const result = await response.json();
                 if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível carregar as frequências.');
                 const frequencies = Array.isArray(result.data) ? result.data : [];

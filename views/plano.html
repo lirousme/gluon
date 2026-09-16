@@ -53,7 +53,7 @@ const planoApp = {
     },
 
     async api(action, payload = {}) {
-        const res = await fetch('/api/plano', {
+        const res = await fetch('/gluon/api/plano', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ action, directory_id: this.dirId, ...payload })
         });

@@ -127,7 +127,7 @@ let databaseColumns = new Set();
 function renderHeadings() { document.querySelector('#headings').innerHTML = fields.map(field => `<th scope="col" draggable="true" data-field="${escapeHtml(field)}" title="Arraste para reordenar. ${escapeHtml(field)} — clique com o botão direito para gerenciar" aria-sort="${sortField === field ? sortDirection : 'none'}"><button class="sort-button" type="button" data-field="${escapeHtml(field)}">${escapeHtml(labels[field] || field.replaceAll('_', ' '))}</button></th>`).join(''); }
 renderHeadings();
 async function loadRows() {
-    const [response, companiesResponse] = await Promise.all([fetch('/api/guiadeacoes'), fetch('/api/empresas')]);
+    const [response, companiesResponse] = await Promise.all([fetch('/gluon/api/guiadeacoes'), fetch('/gluon/api/empresas')]);
     const [result, companiesResult] = await Promise.all([response.json(), companiesResponse.ok ? companiesResponse.json() : Promise.resolve({ empresas: [] })]);
     if (!response.ok) throw new Error(result.message || 'Não foi possível carregar os registros.');
     result.custom_columns.forEach(column => { customColumns.set(column.nome, column); labels[column.nome] = column.rotulo; if (column.tipo === 'texto') textFields.add(column.nome); });
@@ -229,7 +229,7 @@ document.querySelector('#rows').addEventListener('dblclick', event => {
         statusBox.className = '';
         statusBox.textContent = 'Salvando alteração…';
         try {
-            const response = await fetch('/api/guiadeacoes', {
+            const response = await fetch('/gluon/api/guiadeacoes', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sigla: row.sigla, field, value: input.value })
@@ -276,14 +276,14 @@ document.querySelector('#headings').addEventListener('contextmenu', event => {
 columnForm.addEventListener('submit', async event => {
     event.preventDefault();
     const payload = editingColumn ? { action: 'rename_column', name: editingColumn.nome, label: document.querySelector('#column-label').value } : { label: document.querySelector('#column-label').value, name: document.querySelector('#column-name').value, type: document.querySelector('#column-type').value };
-    const response = await fetch('/api/guiadeacoes', { method: editingColumn ? 'PATCH' : 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+    const response = await fetch('/gluon/api/guiadeacoes', { method: editingColumn ? 'PATCH' : 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
     const result = await response.json();
     if (!response.ok) { statusBox.className = 'error'; statusBox.textContent = result.message; return; }
     columnModal.close(); statusBox.className = 'ok'; statusBox.textContent = result.message; customColumns.clear(); await loadRows();
 });
 document.querySelector('#delete-column').addEventListener('click', async () => {
     if (!editingColumn || !confirm(`Excluir definitivamente a coluna “${editingColumn.rotulo}” e todos os valores dela?`)) return;
-    const response = await fetch('/api/guiadeacoes', { method: 'DELETE', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: editingColumn.nome}) });
+    const response = await fetch('/gluon/api/guiadeacoes', { method: 'DELETE', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: editingColumn.nome}) });
     const result = await response.json();
     if (!response.ok) { statusBox.className = 'error'; statusBox.textContent = result.message; return; }
     columnModal.close(); fields = fields.filter(field => field !== editingColumn.nome); delete labels[editingColumn.nome]; customColumns.clear(); statusBox.className = 'ok'; statusBox.textContent = result.message; await loadRows();
@@ -331,7 +331,7 @@ headings.addEventListener('drop', async event => {
     statusBox.className = '';
     statusBox.textContent = 'Salvando ordem das colunas…';
     try {
-        const response = await fetch('/api/guiadeacoes', { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'reorder_columns', order: fields }) });
+        const response = await fetch('/gluon/api/guiadeacoes', { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'reorder_columns', order: fields }) });
         const result = await response.json();
         if (!response.ok) throw new Error(result.message || 'Não foi possível salvar a ordem das colunas.');
         statusBox.className = 'ok';
@@ -384,7 +384,7 @@ fileInput.addEventListener('change', async () => {
     statusBox.className = '';
     statusBox.textContent = 'Importando…';
     try {
-        const response = await fetch('/api/guiadeacoes', { method: 'POST', body: new FormData(form) });
+        const response = await fetch('/gluon/api/guiadeacoes', { method: 'POST', body: new FormData(form) });
         const result = await response.json();
         if (!response.ok) throw new Error(result.message || 'Falha na importação.');
         statusBox.className = 'ok';

@@ -7,7 +7,7 @@
  * Gerencia Login, Registro, Logout Seguro e "Manter Logado".
  */
 
-require_once __DIR__ . '/../gluon/config/database.php';
+require_once __DIR__ . '/../config/database.php';
 
 $pdo = Database::getConnection();
 $method = $_SERVER['REQUEST_METHOD'];

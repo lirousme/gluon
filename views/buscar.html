@@ -112,7 +112,7 @@
                 this.loader.classList.add('flex');
 
                 try {
-                    const res = await fetch(`/api/user`, {
+                    const res = await fetch(`/gluon/api/user`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -161,7 +161,7 @@
                 this.loader.classList.add('flex');
 
                 try {
-                    const res = await fetch(`/api/search`, {
+                    const res = await fetch(`/gluon/api/search`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ action: 'search_users', query: query })

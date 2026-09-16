@@ -89,7 +89,7 @@
             }
 
             try {
-                const response = await fetch(`/api/pares?id_diretorio=${directoryId}`);
+                const response = await fetch(`/gluon/api/pares?id_diretorio=${directoryId}`);
                 const data = await response.json();
                 if (data.status !== 'success') {
                     throw new Error(data.message || 'Falha ao carregar pares.');
@@ -107,7 +107,7 @@
             const pair = getCurrentPair();
             if (!pair) return;
 
-            const response = await fetch('/api/pares', {
+            const response = await fetch('/gluon/api/pares', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'concluir_revisao', id_par: pair.id })

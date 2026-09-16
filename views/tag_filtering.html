@@ -98,7 +98,7 @@
     }
     async function api(action, payload = {}) {
       payload.action = action;
-      const r = await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const r = await fetch('/gluon/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const j = await r.json();
       if (!r.ok || j.status !== 'success') throw new Error(j.message || 'Erro');
       return j;

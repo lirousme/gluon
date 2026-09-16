@@ -129,7 +129,7 @@
 
     async function loadBlocks() {
       try {
-        const response = await fetch('/api/blocos');
+        const response = await fetch('/gluon/api/blocos');
         const payload = await response.json();
 
         if (!response.ok || payload.status !== 'success') {
@@ -154,7 +154,7 @@
 
       try {
         const isEditing = editingBlockId !== null;
-        const response = await fetch('/api/blocos', {
+        const response = await fetch('/gluon/api/blocos', {
           method: isEditing ? 'PUT' : 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -183,7 +183,7 @@
       if (!confirm('Deseja realmente excluir este bloco?')) return;
 
       try {
-        const response = await fetch('/api/blocos', {
+        const response = await fetch('/gluon/api/blocos', {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json'

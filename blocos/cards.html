@@ -156,7 +156,7 @@
       }
 
       try {
-        const response = await fetch(`/api/cards?id_bloco=${encodeURIComponent(idBloco)}`);
+        const response = await fetch(`/gluon/api/cards?id_bloco=${encodeURIComponent(idBloco)}`);
         const payload = await response.json();
 
         if (!response.ok || payload.status !== 'success') {
@@ -189,7 +189,7 @@
       }
 
       try {
-        const response = await fetch('/api/cards', {
+        const response = await fetch('/gluon/api/cards', {
           method: editingCardId === null ? 'POST' : 'PUT',
           headers: {
             'Content-Type': 'application/json'
@@ -219,7 +219,7 @@
       if (!confirm('Deseja realmente excluir este card?')) return;
 
       try {
-        const response = await fetch('/api/cards', {
+        const response = await fetch('/gluon/api/cards', {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json'
