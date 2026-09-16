@@ -9,7 +9,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-        <script src="/assets/zoom-lock.js" defer></script>
+        <script src="/gluon/assets/zoom-lock.js" defer></script>
     <title>Gluon - Flashcards</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -990,7 +990,7 @@
         function getMarkedBackRoute() {
             const urlParams = new URLSearchParams(window.location.search);
             const from = urlParams.get('from');
-            return from ? decodeURIComponent(from) : '/dashboard';
+            return from ? decodeURIComponent(from) : '/gluon/dashboard';
         }
 
         function goBackToMarkedRoute() {
@@ -1526,7 +1526,7 @@ const flashcardApp = {
                     const res = await fetch(`/gluon/api/flashcards`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 
                     if (res.status === 401) {
-                        window.location.href = '/';
+                        window.location.href = '/gluon/';
                         return null;
                     }
 
@@ -3499,13 +3499,13 @@ const flashcardApp = {
             goToGenerateCardsView() {
                 if (this.isDirectoryRandomStudy()) return;
                 const from = encodeURIComponent(window.location.pathname + window.location.search);
-                window.location.href = `/gerar_cards?id=${encodeURIComponent(this.deckId)}&from=${from}`;
+                window.location.href = `/gluon/gerar_cards?id=${encodeURIComponent(this.deckId)}&from=${from}`;
             },
 
             goToGenerateCardsBatchView() {
                 if (this.isDirectoryRandomStudy()) return;
                 const from = encodeURIComponent(window.location.pathname + window.location.search);
-                window.location.href = `/gerar_cards_batch?id=${encodeURIComponent(this.deckId)}&from=${from}`;
+                window.location.href = `/gluon/gerar_cards_batch?id=${encodeURIComponent(this.deckId)}&from=${from}`;
             },
 
             // --- Funções de Imagem (Lightbox) ---
@@ -3688,7 +3688,7 @@ const flashcardApp = {
                 if (!editCardId && !duplicateCardId && this.deckInitialTagId) params.set('tag_id', String(this.deckInitialTagId));
                 if (editCardId) params.set('edit_card_id', String(editCardId));
                 if (duplicateCardId) params.set('duplicate_card_id', String(duplicateCardId));
-                window.location.href = `/ficha_do_card?${params.toString()}`;
+                window.location.href = `/gluon/ficha_do_card?${params.toString()}`;
             },
 
             copyCurrentCard() {

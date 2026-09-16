@@ -143,12 +143,12 @@
     }
 
     function isCardDaTagRoute(route = ''){
-      return getRoutePath(route) === '/views/card_da_tag.html';
+      return getRoutePath(route) === '/gluon/views/card_da_tag.html';
     }
 
     function isFichaDoCardRoute(route = ''){
       const path = getRoutePath(route);
-      return path === '/ficha_do_card' || path === '/views/ficha_do_card.html';
+      return path === '/gluon/ficha_do_card' || path === '/gluon/views/ficha_do_card.html';
     }
 
     function getStoredRouteHistory(){
@@ -196,7 +196,7 @@
       if(state.tagId) tagFamilyParams.set('tag_id', String(state.tagId));
       if(state.tagName) tagFamilyParams.set('tag_name', state.tagName);
       const query = tagFamilyParams.toString();
-      return `/views/tag_family.html${query ? `?${query}` : ''}`;
+      return `/gluon/views/tag_family.html${query ? `?${query}` : ''}`;
     }
 
     function getPreviousTrackedRoute(){
@@ -238,11 +238,11 @@
       customRulesParams.set('from', window.location.pathname + window.location.search);
       if(state.tagId) customRulesParams.set('tag_id', String(state.tagId));
       if(state.tagName) customRulesParams.set('tag_name', state.tagName);
-      window.location.href = `/views/regras_customizadas.html?${customRulesParams.toString()}`;
+      window.location.href = `/gluon/views/regras_customizadas.html?${customRulesParams.toString()}`;
     }
 
     function goToOrphanTags(){
-      window.location.href = '/views/tags_sem_vinculos.html';
+      window.location.href = '/gluon/views/tags_sem_vinculos.html';
     }
 
     async function api(action, payload = {}){
@@ -332,7 +332,7 @@
         if(state.tagId) createCardParams.set('tag_id', String(state.tagId));
         if(state.tagName) createCardParams.set('tag_name', state.tagName);
         createCardParams.set('from', window.location.pathname + window.location.search);
-        window.location.href = `/ficha_do_card?${createCardParams.toString()}`;
+        window.location.href = `/gluon/ficha_do_card?${createCardParams.toString()}`;
       } catch (error) {
         setStatus(error.message || 'Erro ao abrir a ficha do card.', 'error');
         if(button){
@@ -381,7 +381,7 @@
       editParams.set('id', String(deckId));
       editParams.set('edit_card_id', String(cardId));
       editParams.set('from', window.location.pathname + window.location.search);
-      return `/ficha_do_card?${editParams.toString()}`;
+      return `/gluon/ficha_do_card?${editParams.toString()}`;
     }
 
     function renderSubjectCards(){

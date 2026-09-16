@@ -92,7 +92,7 @@ $route = str_replace(['../', '..\\'], '', $route);
 // Evita cair em rotas de módulos isolados (ex: /pares) antes da autenticação.
 $public_routes = ['login'];
 if (!isset($_SESSION['user_id']) && !in_array($route, $public_routes, true)) {
-    header('Location: /login');
+    header('Location: /gluon/login');
     exit;
 }
 

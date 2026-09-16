@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-    <script src="/assets/zoom-lock.js" defer></script>
+    <script src="/gluon/assets/zoom-lock.js" defer></script>
     <title>Gluon - Informações do Prédio</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -22,7 +22,7 @@
 <body class="bg-gluon-dark text-slate-200 min-h-dvh font-sans selection:bg-gluon-primary selection:text-white">
     <header class="bg-gluon-secondary border-b border-slate-700/50 backdrop-blur-md bg-opacity-90">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
-            <button type="button" onclick="window.location.href='/dashboard'" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-200 hover:text-white hover:border-gluon-primary transition-colors" title="Voltar para dashboard">
+            <button type="button" onclick="window.location.href='/gluon/dashboard'" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-200 hover:text-white hover:border-gluon-primary transition-colors" title="Voltar para dashboard">
                 <i class="fa-solid fa-arrow-left"></i>
                 <span class="font-semibold text-sm">Voltar</span>
             </button>
@@ -30,7 +30,7 @@
             <h1 id="building-user-name" class="text-sm sm:text-base font-semibold text-slate-100 truncate">Carregando usuário...</h1>
 
             <div class="flex items-center gap-2">
-                <button type="button" onclick="window.location.href='/views/add_word.html'" class="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-600 border border-indigo-500 text-white hover:bg-indigo-500 transition-colors" title="Adicionar palavra">
+                <button type="button" onclick="window.location.href='/gluon/views/add_word.html'" class="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-600 border border-indigo-500 text-white hover:bg-indigo-500 transition-colors" title="Adicionar palavra">
                     <i class="fa-solid fa-plus"></i>
                 </button>
                 <button id="languageSwitchButton" type="button" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-200 hover:text-white hover:border-gluon-primary transition-colors" title="Alternar idioma">

@@ -50,7 +50,7 @@
                 window.history.back();
                 return;
             }
-            window.location.href = `/dashboard?id=${directoryId}`;
+            window.location.href = `/gluon/dashboard?id=${directoryId}`;
         }
 
         function getCurrentPair() {
@@ -157,7 +157,7 @@
 
         document.getElementById('btnVoltar').addEventListener('click', goBack);
         document.getElementById('btnCriarPares').addEventListener('click', () => {
-            window.location.href = `/criar_pares?id=${directoryId}`;
+            window.location.href = `/gluon/criar_pares?id=${directoryId}`;
         });
 
         loadPairs();

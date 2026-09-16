@@ -56,7 +56,7 @@
   <aside class="fixed left-4 top-6 z-30 hidden w-48 rounded-2xl border border-slate-700 bg-gluon-secondary/95 p-4 shadow-2xl shadow-slate-950/40 backdrop-blur lg:block" aria-label="Menu lateral esquerdo">
     <h2 class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Menu</h2>
     <nav class="space-y-2" aria-label="Ações da ficha">
-      <a href="/dicionario" class="flex items-center gap-2 rounded-xl border border-blue-400/30 bg-blue-500/10 px-3 py-2.5 text-sm font-semibold text-blue-100 transition-colors hover:border-blue-300/60 hover:bg-blue-500/20" title="Abrir Dicionário">
+      <a href="/gluon/dicionario" class="flex items-center gap-2 rounded-xl border border-blue-400/30 bg-blue-500/10 px-3 py-2.5 text-sm font-semibold text-blue-100 transition-colors hover:border-blue-300/60 hover:bg-blue-500/20" title="Abrir Dicionário">
         <i class="fa-solid fa-book-open text-blue-300" aria-hidden="true"></i>
         <span>Dicionário</span>
       </a>
@@ -247,7 +247,7 @@
       <section id="FrequenciaInformacionalPanel" class="pt-3 border-t border-slate-700 space-y-2">
         <div class="flex items-center justify-between gap-3">
           <label for="frequenciaInformacionalSelect" class="block text-xs font-semibold uppercase tracking-wide text-emerald-200">Frequência informacional</label>
-          <a href="/crud_frequencias_informacionais" class="text-xs font-semibold text-emerald-200 transition hover:text-emerald-100">Gerenciar</a>
+          <a href="/gluon/crud_frequencias_informacionais" class="text-xs font-semibold text-emerald-200 transition hover:text-emerald-100">Gerenciar</a>
         </div>
         <select id="frequenciaInformacionalSelect" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white">
           <option value="">Carregando frequências...</option>
@@ -1080,7 +1080,7 @@ const app = {
   async api(action, payload = {}) {
     payload.action = action;
     const res = await fetch('/gluon/api/flashcards', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-    if (res.status === 401) { window.location.href = '/'; return null; }
+    if (res.status === 401) { window.location.href = '/gluon/'; return null; }
     const raw = await res.text();
     let data = null;
     try { data = raw ? JSON.parse(raw) : null; }
@@ -1388,7 +1388,7 @@ const app = {
       window.history.back();
       return;
     }
-    window.location.href = '/dashboard';
+    window.location.href = '/gluon/dashboard';
   },
   redirectAfterSave(preferredTarget = '') {
     const apiTarget = this.normalizeBackTarget(preferredTarget);
@@ -1404,7 +1404,7 @@ const app = {
       return;
     }
 
-    window.location.replace('/dashboard');
+    window.location.replace('/gluon/dashboard');
   },
   async goToSourceDirectory() {
     try {
@@ -1414,7 +1414,7 @@ const app = {
         body: JSON.stringify({ action: 'get_source_directory' })
       });
       if (res.status === 401) {
-        window.location.href = '/';
+        window.location.href = '/gluon/';
         return;
       }
       const data = await res.json();
@@ -1432,7 +1432,7 @@ const app = {
     const frame = document.getElementById('notesModalFrame');
     if (!frame) return;
     const from = encodeURIComponent(window.location.pathname + window.location.search);
-    frame.src = `/editor?id=${sourceDirectoryId}&from=${from}&preview=1&embedded=1`;
+    frame.src = `/gluon/editor?id=${sourceDirectoryId}&from=${from}&preview=1&embedded=1`;
     notesModal.classList.remove('hidden');
     notesModal.classList.add('flex');
     requestAnimationFrame(() => {
@@ -1941,7 +1941,7 @@ const app = {
     const params = new URLSearchParams({ id: this.deckId, duplicate_card_id: String(this.editCardId) });
     const returnTarget = this.getReturnTarget();
     if (returnTarget) params.set('from', returnTarget);
-    window.location.href = `/ficha_do_card?${params.toString()}`;
+    window.location.href = `/gluon/ficha_do_card?${params.toString()}`;
   },
   async preloadEditCard() {
     if (!this.editCardId) return;
@@ -2024,7 +2024,7 @@ const app = {
 };
 
 backLink.onclick = () => app.goBack();
-if (!app.deckId) window.location.replace(app.getBackTarget() || '/dashboard');
+if (!app.deckId) window.location.replace(app.getBackTarget() || '/gluon/dashboard');
 tabFrontBtn.onclick = () => app.setActiveTab('front');
 tabBackBtn.onclick = () => app.setActiveTab('back');
 tabFrontImageBtn.onclick = () => app.setActiveTab('frontImage');

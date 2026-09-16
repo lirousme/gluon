@@ -81,7 +81,7 @@
                 <h1>Tabela de cards</h1>
                 <p class="subtitle">Os textos de cada card, organizados por idioma.</p>
             </div>
-            <a class="back" href="/dashboard" aria-label="Voltar ao dashboard"><span aria-hidden="true">←</span> Dashboard</a>
+            <a class="back" href="/gluon/dashboard" aria-label="Voltar ao dashboard"><span aria-hidden="true">←</span> Dashboard</a>
         </header>
 
         <section class="tag-filter" aria-labelledby="leftTagSearchLabel">
@@ -290,7 +290,7 @@
             const editLink = document.createElement('a');
             editLink.className = 'edit-card';
             editLink.textContent = 'Editar card';
-            editLink.href = `/ficha_do_card?id=${encodeURIComponent(card.directory_id)}&edit_card_id=${encodeURIComponent(card.id)}`;
+            editLink.href = `/gluon/ficha_do_card?id=${encodeURIComponent(card.directory_id)}&edit_card_id=${encodeURIComponent(card.id)}`;
             editCell.append(editLink);
             return editCell;
         }

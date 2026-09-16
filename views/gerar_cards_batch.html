@@ -8,7 +8,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-    <script src="/assets/zoom-lock.js" defer></script>
+    <script src="/gluon/assets/zoom-lock.js" defer></script>
     <title>Gluon - Gerar Cards (Batch)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -113,7 +113,7 @@
         function getMarkedBackRoute() {
             const urlParams = new URLSearchParams(window.location.search);
             const from = urlParams.get('from');
-            return from ? decodeURIComponent(from) : '/dashboard';
+            return from ? decodeURIComponent(from) : '/gluon/dashboard';
         }
 
         function goBackToMarkedRoute() {
@@ -304,7 +304,7 @@
                 payload.action = action;
                 try {
                     const res = await fetch('/gluon/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    if (res.status === 401) { window.location.href = '/'; return null; }
+                    if (res.status === 401) { window.location.href = '/gluon/'; return null; }
                     const data = await res.json();
                     if (data && typeof data === 'object' && Object.prototype.hasOwnProperty.call(data, 'debug_openai_response')) {
                         delete data.debug_openai_response;
@@ -457,7 +457,7 @@
 
                 let csv = '\uFEFFFrente,Verso\n';
                 res.data.forEach(card => {
-                    csv += `"${(card.front || '').replace(/"/g, '""')}","${(card.back || '').replace(/"/g, '""')}"\n`;
+                    csv += `"${(card.front || '').replace(/"/gluon/g, '""')}","${(card.back || '').replace(/"/gluon/g, '""')}"\n`;
                 });
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);

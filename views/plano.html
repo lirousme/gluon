@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-    <script src="/assets/zoom-lock.js" defer></script>
+    <script src="/gluon/assets/zoom-lock.js" defer></script>
     <title>Gluon - Plano</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -35,7 +35,7 @@ function q(name) { return new URLSearchParams(window.location.search).get(name);
 function goBack() {
     const from = q('from');
     if (from) { window.location.href = decodeURIComponent(from); return; }
-    window.location.href = '/dashboard';
+    window.location.href = '/gluon/dashboard';
 }
 
 const planoApp = {
@@ -57,7 +57,7 @@ const planoApp = {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ action, directory_id: this.dirId, ...payload })
         });
-        if (res.status === 401) window.location.href = '/';
+        if (res.status === 401) window.location.href = '/gluon/';
         return await res.json();
     },
 

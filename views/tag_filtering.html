@@ -90,7 +90,7 @@
     function getMarkedBackRoute() {
       const urlParams = new URLSearchParams(window.location.search);
       const from = urlParams.get('from');
-      return from ? decodeURIComponent(from) : '/views/tag_family.html';
+      return from ? decodeURIComponent(from) : '/gluon/views/tag_family.html';
     }
     function goBackToMarkedRoute() {
       if (window.history.length > 1) { window.history.back(); return; }
@@ -217,7 +217,7 @@
       if (!tag) return;
       const from = encodeURIComponent(window.location.pathname + window.location.search);
       const rawName = tag.name || tag.name_pt_br || '';
-      window.location.href = `/views/tag_family.html?tag_id=${encodeURIComponent(id)}&tag_name=${encodeURIComponent(rawName)}&from=${from}`;
+      window.location.href = `/gluon/views/tag_family.html?tag_id=${encodeURIComponent(id)}&tag_name=${encodeURIComponent(rawName)}&from=${from}`;
     }
 
     function renderResults(){

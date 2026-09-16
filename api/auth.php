@@ -171,7 +171,7 @@ elseif ($action === 'login') {
 
         setcookie('gluon_remember', $token, time() + $remember_lifetime, "/", "", isset($_SERVER['HTTPS']), true);
 
-        echo json_encode(['status' => 'success', 'message' => 'Login realizado com sucesso.', 'redirect' => '/dashboard']);
+        echo json_encode(['status' => 'success', 'message' => 'Login realizado com sucesso.', 'redirect' => '/gluon/dashboard']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Credenciais inválidas.']);
     }
