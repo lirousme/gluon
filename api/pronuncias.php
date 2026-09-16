@@ -2,7 +2,7 @@
 // Arquivo: pronuncias.php
 // Diretório: public_html/gluon/api/pronuncias.php
 
-require_once BASE_PATH . '/config/database.php';
+require_once __DIR__ . '/../config/database.php';
 
 if (!isset($_SESSION['user_id'])) {
     http_response_code(401);
