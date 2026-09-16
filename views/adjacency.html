@@ -167,7 +167,7 @@
             async api(action, payload = {}) {
                 payload.action = action;
                 payload.directory_id = this.dirId;
-                const res = await fetch(`/api/adjacency`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const res = await fetch(`/gluon/api/adjacency`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (res.status === 401) window.location.href = '/';
                 return await res.json();
             },

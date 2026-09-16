@@ -247,7 +247,7 @@
 
     async function api(action, payload = {}){
       payload.action = action;
-      const response = await fetch('/api/flashcards', {
+      const response = await fetch('/gluon/api/flashcards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

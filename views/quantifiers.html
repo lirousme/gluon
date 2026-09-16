@@ -199,7 +199,7 @@ const quantifiersApp = {
     hideCompleted: localStorage.getItem('quantifiers_hide_completed') === '1',
 
     async api(action, payload = {}) {
-        const res = await fetch('/api/quantifiers', {
+        const res = await fetch('/gluon/api/quantifiers', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ action, ...payload })

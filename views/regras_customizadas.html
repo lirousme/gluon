@@ -223,7 +223,7 @@
       },
       async api(action, payload = {}) {
         payload.action = action;
-        const response = await fetch('/api/flashcards', {
+        const response = await fetch('/gluon/api/flashcards', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -241,7 +241,7 @@
       },
       async loadSessionUserId() {
         try {
-          const res = await fetch('/api/user', {
+          const res = await fetch('/gluon/api/user', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'get_session' })

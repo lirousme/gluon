@@ -472,7 +472,7 @@
         }
 
         async function api(action, payload = {}) {
-            const response = await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify({ ...payload, action }) });
+            const response = await fetch('/gluon/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify({ ...payload, action }) });
             const result = await response.json();
             if (!response.ok || result.status !== 'success') { const error = new Error(result.message || 'Erro na requisição.'); error.response = result; throw error; }
             return result;
@@ -480,7 +480,7 @@
 
         async function loadSessionUserId() {
             try {
-                const response = await fetch('/api/user', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_session' }) });
+                const response = await fetch('/gluon/api/user', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_session' }) });
                 if (!response.ok) return;
                 const result = await response.json();
                 const parsed = Number(result?.id ?? result?.data?.id);
@@ -1122,13 +1122,13 @@
             const savedFiltersCount = document.getElementById('savedFiltersCount');
             try {
                 const [savedResponse, tagsResponse, familyResponse] = await Promise.all([
-                    fetch('/api/flashcards', {
+                    fetch('/gluon/api/flashcards', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                         body: JSON.stringify({ action: 'list_saved_filters' })
                     }),
-                    fetch('/api/flashcards?action=list_tags', { headers: { 'Accept': 'application/json' } }),
-                    fetch('/api/flashcards?action=list_tag_family_relations', { headers: { 'Accept': 'application/json' } })
+                    fetch('/gluon/api/flashcards?action=list_tags', { headers: { 'Accept': 'application/json' } }),
+                    fetch('/gluon/api/flashcards?action=list_tag_family_relations', { headers: { 'Accept': 'application/json' } })
                 ]);
                 const [savedResult, tagsResult, familyResult] = await Promise.all([savedResponse.json(), tagsResponse.json(), familyResponse.json()]);
                 if (!savedResponse.ok || savedResult.status !== 'success') throw new Error(savedResult.message || 'Não foi possível carregar as tags fixadas.');
@@ -1928,7 +1928,7 @@
                 const params = new URLSearchParams({ action: 'list_graph_tags_for_user', page: String(page), sort: state.tagSortDirection });
                 params.set('tag_link_types', state.selectedTagLinkTypes.join(','));
                 params.set('info_types', state.selectedInfoTypes.join(','));
-                const response = await fetch(`/api/flashcards?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
+                const response = await fetch(`/gluon/api/flashcards?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
                 const result = await response.json();
                 if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível carregar as tags.');
                 state.page = result.pagination.page;
@@ -1970,7 +1970,7 @@
                 params.set('tag_link_types', state.selectedTagLinkTypes.join(','));
                 params.set('info_types', state.selectedInfoTypes.join(','));
                 if (state.selectedFrequenciaInformacionalIds.length) params.set('frequencia_informacional_ids', state.selectedFrequenciaInformacionalIds.join(','));
-                const response = await fetch(`/api/flashcards?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
+                const response = await fetch(`/gluon/api/flashcards?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
                 const result = await response.json();
                 if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível carregar os cards.');
 
@@ -2000,7 +2000,7 @@
             createFilteredCardBtn.disabled = true;
             createFilteredCardBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Abrindo...';
             try {
-                const response = await fetch('/api/flashcards', {
+                const response = await fetch('/gluon/api/flashcards', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                     body: JSON.stringify({ action: 'get_user_system_deck' })

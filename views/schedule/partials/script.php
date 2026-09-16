@@ -749,7 +749,7 @@
             async api(endpoint, action, payload = {}) {
                 payload.action = action;
                 try {
-                    const res = await fetch(`/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    const res = await fetch(`/gluon/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     if (res.status === 401) window.location.href = '/'; 
                     const data = await res.json();
                     if (data.status !== 'success') throw new Error(data.message);

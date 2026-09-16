@@ -195,7 +195,7 @@
 <script>
     const state = { chats: [], activeId: null, activeChat: null, editingMessage: null, recipientMode: false, senderVariant: 'green', selectionMode: false, selectedMessages: new Set(), currentMessages: [], readCycleCount: 0, readCycleLimit: 999, audioAutoplayEnabled: true, currentAudioElement: null, playbackToken: 0 };
     const $ = id => document.getElementById(id);
-    const api = '/api/branch_chats';
+    const api = '/gluon/api/branch_chats';
     const readCycleLimit = 999;
     const timezoneOffset = () => -new Date().getTimezoneOffset();
     const utcDate = value => new Date(/[zZ]|[+-]\d\d:\d\d$/.test(value) ? value : value.replace(' ', 'T') + 'Z');

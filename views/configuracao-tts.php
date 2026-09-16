@@ -44,7 +44,7 @@ if ((int)$_SESSION['user_id'] !== 1) {
     </main>
 
 <script>
-const apiUrl = '/api/pronuncias';
+const apiUrl = '/gluon/api/pronuncias';
 
 async function request(action, payload = {}) {
     const response = await fetch(apiUrl, {

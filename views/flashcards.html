@@ -1307,7 +1307,7 @@ const flashcardApp = {
             },
             async loadSessionUser() {
                 try {
-                    const res = await fetch('/api/user', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_session' }) });
+                    const res = await fetch('/gluon/api/user', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_session' }) });
                     if (!res.ok) return;
                     const data = await res.json();
                     const parsedId = Number(data?.id ?? data?.data?.id);
@@ -1523,7 +1523,7 @@ const flashcardApp = {
                 payload.action = action;
                 const shouldLogReviewResult = action === 'update_score' || action === 'increment_tag_score' || action === 'increment_book_score';
                 try {
-                    const res = await fetch(`/api/flashcards`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    const res = await fetch(`/gluon/api/flashcards`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 
                     if (res.status === 401) {
                         window.location.href = '/';
@@ -2801,7 +2801,7 @@ const flashcardApp = {
             playTagAudio(tagId, language, onEnded = null, append = false) {
                 if (!append) this.stopAudio();
                 const ts = new Date().getTime();
-                this.currentAudioElement = new Audio(`/api/flashcards?action=get_tag_audio&tag_id=${tagId}&language=${encodeURIComponent(language)}&t=${ts}`);
+                this.currentAudioElement = new Audio(`/gluon/api/flashcards?action=get_tag_audio&tag_id=${tagId}&language=${encodeURIComponent(language)}&t=${ts}`);
                 this.currentAudioElement.volume = language === 'en_gb' ? 1 : 0.6;
                 if (typeof onEnded === 'function') {
                     this.currentAudioEndedHandler = onEnded;
@@ -2824,7 +2824,7 @@ const flashcardApp = {
                 }
                 this.stopAudio();
                 const ts = new Date().getTime(); // Bypassa o cache do navegador para ouvir o novo audio regerado
-                this.currentAudioElement = new Audio(`/api/flashcards?action=get_audio&card_id=${cardId}&side=${side}&t=${ts}`);
+                this.currentAudioElement = new Audio(`/gluon/api/flashcards?action=get_audio&card_id=${cardId}&side=${side}&t=${ts}`);
                 const sideLanguage = side === 'front' ? this.frontLanguage : this.backLanguage;
                 this.currentAudioElement.volume = sideLanguage === 'en-GB' ? 1 : 0.6;
                 if (typeof onEnded === 'function') {
