@@ -1,6 +1,6 @@
 <?php
 
-require_once BASE_PATH . '/config/database.php';
+require_once __DIR__ . '/../config/database.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -464,7 +464,7 @@ function branchChatsDecryptMessageImage(PDO $pdo, array $message): ?string
     if (str_starts_with($storedImage, 'data:image/')) {
         $dataUri = $storedImage;
     } elseif (str_starts_with($storedImage, '/uploads/branch_chats/')) {
-        $legacyFile = BASE_PATH . $storedImage;
+        $legacyFile = dirname(__DIR__) . $storedImage;
         if (is_file($legacyFile)) {
             $mime = (new finfo(FILEINFO_MIME_TYPE))->file($legacyFile);
             if (is_string($mime) && str_starts_with($mime, 'image/')) {
