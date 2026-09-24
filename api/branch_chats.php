@@ -524,9 +524,9 @@ function branchChatsDeleteChat(PDO $pdo, int $chatId, int $userId): void
 {
     $chat = branchChatsFind($pdo, $chatId, $userId);
 
-    // Substitution drills reuse source messages, so they must remain available
-    // after their source chat is deleted. Detach them before traversing the
-    // ordinary branch tree (whose descendants are intentionally deleted).
+    // Branches that reuse messages from this chat must remain available after
+    // their source chat is deleted. Detach them before traversing the ordinary
+    // branch tree (whose descendants are intentionally deleted).
     $pdo->prepare(
         'UPDATE chats
          SET parent_chat_id = :new_parent_id
@@ -1365,7 +1365,7 @@ try {
         }
 
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, is_open) VALUES (:user_id, :parent_id, :titulo, 1)');
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :titulo, 1, 1)');
         $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
         $targetChatId = (int)$pdo->lastInsertId();
 
@@ -1413,7 +1413,7 @@ try {
         }
 
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, is_open) VALUES (:user_id, :parent_id, :titulo, 1)');
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :titulo, 1, 1)');
         $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
         $targetChatId = (int)$pdo->lastInsertId();
         $insert = $pdo->prepare(
@@ -1478,8 +1478,9 @@ try {
     $targetChatId = $sourceChatId;
     if ($createBranch) {
         $parentChatId = $sourceChatType === 3 && !empty($sourceChat['parent_chat_id']) ? (int)$sourceChat['parent_chat_id'] : $sourceChatId;
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, chat_type, is_open) VALUES (:user_id, :parent_id, :titulo, :chat_type, 1)');
-        $stmt->execute([':user_id' => $userId, ':parent_id' => $parentChatId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input)), ':chat_type' => $referenceChat ? 3 : 0]);
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, chat_type, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :titulo, :chat_type, 1, :preserve_on_parent_delete)');
+        $preserveOnParentDelete = !$referenceChat ? 1 : 0;
+        $stmt->execute([':user_id' => $userId, ':parent_id' => $parentChatId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input)), ':chat_type' => $referenceChat ? 3 : 0, ':preserve_on_parent_delete' => $preserveOnParentDelete]);
         $targetChatId = (int)$pdo->lastInsertId();
         if (!$referenceChat) {
             $stmt = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position) SELECT :target_id, mensagem_id, position FROM chat_mensagens WHERE chat_id = :source_id');
