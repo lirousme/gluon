@@ -449,6 +449,10 @@
                 <i class="fa-solid fa-table"></i>
                 <span>Importar Tabela</span>
             </button>
+            <button id="btnImportVerbsPanel" onclick="flashcardApp.openVerbImportFromPanel()" class="w-full text-left bg-sky-600 hover:bg-sky-500 text-white font-medium py-2.5 px-3 rounded-lg shadow-lg transition-all flex items-center gap-2 text-sm">
+                <i class="fa-solid fa-language"></i>
+                <span>Importar Verbo</span>
+            </button>
             <button id="btnCreateTagPanel" onclick="flashcardApp.openCreateTagFromPanel()" class="w-full text-left bg-violet-500/15 hover:bg-violet-500/25 text-violet-300 border border-violet-500/40 font-medium py-2.5 px-3 rounded-lg shadow transition-all flex items-center gap-2 text-sm">
                 <i class="fa-solid fa-tags"></i>
                 <span>Criar nova tag</span>
@@ -960,6 +964,58 @@
         </div>
     </div>
 
+    <!-- Modal: Importar verbos a partir de planilha com 10 colunas -->
+    <div id="verbImportModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300 px-4 py-6">
+        <div class="bg-gluon-secondary border border-sky-900/50 rounded-xl shadow-2xl w-full max-w-4xl p-0 transform scale-95 transition-transform duration-300 overflow-hidden flex flex-col max-h-full" id="verbImportModalContent">
+            <div class="p-5 border-b border-sky-900/50 bg-sky-900/20 flex justify-between items-center shrink-0">
+                <h3 class="text-lg font-semibold text-sky-400 flex items-center gap-2">
+                    <i class="fa-solid fa-language"></i> Importar Verbo
+                </h3>
+                <button type="button" onclick="flashcardApp.closeModals()" class="text-slate-400 hover:text-white text-xl" aria-label="Fechar modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <form onsubmit="flashcardApp.saveVerbImport(event)" class="p-5 flex flex-col flex-1 overflow-hidden min-h-0">
+                <div class="mb-4 bg-slate-900/50 p-3 rounded-lg border border-slate-700 text-sm text-slate-300 shrink-0">
+                    <p class="font-medium text-white mb-1"><i class="fa-solid fa-circle-info text-sky-400 mr-1"></i> Como usar:</p>
+                    <p>Cole uma tabela com <strong>10 colunas</strong> do Excel/Planilha. As duas primeiras colunas serão ignoradas; cada linha gera até quatro cards com os pares <strong>3ª/4ª</strong>, <strong>5ª/6ª</strong>, <strong>7ª/8ª</strong> e <strong>9ª/10ª</strong> coluna.</p>
+                </div>
+
+                <div class="flex-1 flex flex-col relative gap-4 min-h-0">
+                    <textarea id="verbImportData" required placeholder="Cole aqui as 10 colunas da tabela (CTRL+V)..." class="shrink-0 w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-4 text-sky-400 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors resize-none font-mono text-sm h-16 sm:h-20" onfocus="this.select()"></textarea>
+
+                    <div id="verbImportTableContainer" class="hidden flex-1 overflow-y-auto bg-slate-900/50 border border-slate-700 rounded-lg relative no-scrollbar">
+                        <table class="w-full text-left text-sm text-slate-300 border-collapse">
+                            <thead class="bg-slate-800 text-slate-400 sticky top-0 shadow-md z-10">
+                                <tr>
+                                    <th class="px-4 py-3 font-medium w-12 text-center border-b border-slate-700">#</th>
+                                    <th class="px-4 py-3 font-medium w-1/2 border-b border-l border-slate-700">Frente</th>
+                                    <th class="px-4 py-3 font-medium w-1/2 border-b border-l border-slate-700">Verso</th>
+                                </tr>
+                            </thead>
+                            <tbody id="verbImportTableBody" class="divide-y divide-slate-700/50"></tbody>
+                        </table>
+                    </div>
+
+                    <div id="verbImportEmptyState" class="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-700 rounded-lg bg-slate-900/20 text-slate-500 min-h-[150px]">
+                        <i class="fa-solid fa-table-cells-large text-5xl mb-4 opacity-30"></i>
+                        <p class="font-medium">Nenhum par de frases encontrado</p>
+                        <p class="text-xs mt-1 opacity-70">Cole uma tabela de 10 colunas para visualizar os cards que serão criados.</p>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center pt-5 border-t border-slate-700 mt-5 shrink-0">
+                    <span id="verbImportCount" class="text-sm text-sky-400 font-medium bg-sky-900/20 px-3 py-1.5 rounded-md border border-sky-900/50 shadow-inner">0 cards</span>
+                    <div class="flex gap-3">
+                        <button type="button" onclick="flashcardApp.closeModals()" class="px-4 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors font-medium">Cancelar</button>
+                        <button type="submit" id="btnSaveVerbImport" class="px-4 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg shadow-lg font-medium transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> <span class="hidden sm:inline">Importar para o Deck</span><span class="sm:hidden">Importar</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Modal: Visualizador de Imagem (Lightbox) -->
     <div id="imageModal" class="fixed inset-0 bg-black/95 backdrop-blur-md hidden items-center justify-center z-[60] opacity-0 transition-opacity duration-300 p-2 sm:p-6" onclick="flashcardApp.closeImageModal()">
         <button type="button" class="absolute top-4 right-4 sm:top-6 sm:right-6 text-slate-300 hover:text-white text-3xl z-[70] transition-colors bg-black/50 hover:bg-black/80 w-12 h-12 rounded-full flex items-center justify-center" title="Fechar (ESC)">
@@ -1163,6 +1219,7 @@ const flashcardApp = {
                 this.setupKeyboardListeners();
                 this.setupSwipeListeners();
                 this.setupBulkListener();
+                this.setupVerbImportListener();
                 this.setupButtonIdCopyOnRightClick();
                 document.querySelectorAll('[data-card-language-select]').forEach(select => {
                     select.addEventListener('change', () => this.setActiveTextLanguage(select.dataset.cardLanguageSelect, select.value));
@@ -1233,6 +1290,7 @@ const flashcardApp = {
                     'btnDeckSettingsPanel',
                     'btnAddSinglePanel',
                     'btnAddBulkPanel',
+                    'btnImportVerbsPanel',
                     'btnGoToGenerateCards',
                     'btnGoToGenerateCardsBatch',
                     'btnResetBookScore'
@@ -1296,6 +1354,10 @@ const flashcardApp = {
             openBulkFromPanel() {
                 this.closeRightPanel();
                 this.openBulkModal();
+            },
+            openVerbImportFromPanel() {
+                this.closeRightPanel();
+                this.openVerbImportModal();
             },
             openCreateTagFromPanel() {
                 this.closeRightPanel();
@@ -3275,7 +3337,7 @@ const flashcardApp = {
 
                     if (imageModalOpen) return; // Não vira carta se imagem tá grande
 
-                    const blockingModalIds = ['settingsModal', 'singleModal', 'bulkModal', 'resetBookScoreModal', 'audioGenerationModal', 'tagModal'];
+                    const blockingModalIds = ['settingsModal', 'singleModal', 'bulkModal', 'verbImportModal', 'resetBookScoreModal', 'audioGenerationModal', 'tagModal'];
                     const modalsOpen = blockingModalIds.some((id) => {
                         const modal = document.getElementById(id);
                         return modal && !modal.classList.contains('hidden');
@@ -3444,6 +3506,60 @@ const flashcardApp = {
                         emptyState.classList.remove('hidden');
                     }
                 });
+            },
+
+            setupVerbImportListener() {
+                const textarea = document.getElementById('verbImportData');
+                textarea.addEventListener('input', () => {
+                    const parsed = this.parseVerbImportData(textarea.value);
+                    const countEl = document.getElementById('verbImportCount');
+                    const btnSave = document.getElementById('btnSaveVerbImport');
+                    const tableContainer = document.getElementById('verbImportTableContainer');
+                    const emptyState = document.getElementById('verbImportEmptyState');
+                    const tbody = document.getElementById('verbImportTableBody');
+
+                    countEl.innerText = `${parsed.length} card${parsed.length === 1 ? '' : 's'}`;
+                    btnSave.disabled = parsed.length === 0;
+                    tableContainer.classList.toggle('hidden', parsed.length === 0);
+                    emptyState.classList.toggle('hidden', parsed.length > 0);
+
+                    if (parsed.length === 0) {
+                        countEl.classList.add('text-slate-400', 'border-sky-900/50', 'bg-sky-900/20');
+                        countEl.classList.remove('text-sky-400', 'border-sky-500/50', 'bg-sky-500/20');
+                        tbody.innerHTML = '';
+                        return;
+                    }
+
+                    countEl.classList.remove('text-slate-400', 'border-sky-900/50', 'bg-sky-900/20');
+                    countEl.classList.add('text-sky-400', 'border-sky-500/50', 'bg-sky-500/20');
+                    tbody.innerHTML = parsed.map((card, index) => `
+                        <tr class="hover:bg-slate-800/50 transition-colors">
+                            <td class="px-4 py-2 text-center text-slate-500 font-medium">${index + 1}</td>
+                            <td class="px-4 py-2 border-l border-slate-700"><div class="truncate w-full max-w-[120px] sm:max-w-[250px] md:max-w-[350px]" title="${this.escapeHTML(card.front)}">${this.renderCardText(card.front)}</div></td>
+                            <td class="px-4 py-2 border-l border-slate-700"><div class="truncate w-full max-w-[120px] sm:max-w-[250px] md:max-w-[350px]" title="${this.escapeHTML(card.back)}">${this.renderCardText(card.back)}</div></td>
+                        </tr>
+                    `).join('');
+                });
+            },
+
+            parseVerbImportData(text) {
+                if (!text.trim()) return [];
+
+                return text
+                    .replace(/\r\n?/g, '\n')
+                    .split('\n')
+                    .flatMap((line) => {
+                        const columns = line.split('\t');
+                        if (columns.length < 10) return [];
+
+                        const cards = [];
+                        for (let index = 2; index < 10; index += 2) {
+                            const front = (columns[index] || '').trim();
+                            const back = (columns[index + 1] || '').trim();
+                            if (front) cards.push({ front, back });
+                        }
+                        return cards;
+                    });
             },
 
             parseExcelData(text) {
@@ -3758,8 +3874,32 @@ const flashcardApp = {
                 }, 20);
             },
 
+            openVerbImportModal() {
+                if (this.isDirectoryRandomStudy()) {
+                    this.showToast('A importação está disponível apenas no modo deck.', 'error');
+                    return;
+                }
+
+                document.getElementById('verbImportData').value = '';
+                document.getElementById('verbImportCount').innerText = '0 cards';
+                document.getElementById('btnSaveVerbImport').disabled = true;
+                document.getElementById('verbImportTableBody').innerHTML = '';
+                document.getElementById('verbImportTableContainer').classList.add('hidden');
+                document.getElementById('verbImportEmptyState').classList.remove('hidden');
+
+                const modal = document.getElementById('verbImportModal');
+                const content = document.getElementById('verbImportModalContent');
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => {
+                    modal.classList.remove('opacity-0');
+                    content.classList.remove('scale-95');
+                    document.getElementById('verbImportData').focus();
+                }, 20);
+            },
+
             closeModals() {
-                ['settings', 'single', 'bulk', 'resetBookScore', 'tag'].forEach(prefix => {
+                ['settings', 'single', 'bulk', 'verbImport', 'resetBookScore', 'tag'].forEach(prefix => {
                     const modal = document.getElementById(`${prefix}Modal`);
                     const content = document.getElementById(`${prefix}ModalContent`);
                     if(modal && !modal.classList.contains('hidden')) {
@@ -4013,6 +4153,27 @@ const flashcardApp = {
                     btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> <span class="hidden sm:inline">Importar para o Deck</span><span class="sm:hidden">Importar</span>';
                     btn.disabled = false;
                 }
+            },
+            async saveVerbImport(e) {
+                e.preventDefault();
+                const parsedCards = this.parseVerbImportData(document.getElementById('verbImportData').value);
+                if (parsedCards.length === 0) return;
+
+                const btn = document.getElementById('btnSaveVerbImport');
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Importando...';
+                btn.disabled = true;
+
+                const res = await this.api('add_bulk', { deck_id: this.deckId, cards: parsedCards });
+                if (res) {
+                    this.showToast(res.message, 'success');
+                    this.closeModals();
+                    await this.loadDeck();
+                    return;
+                }
+
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
             }
         };
 
