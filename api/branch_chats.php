@@ -1085,12 +1085,12 @@ function branchChatsCreateTenPhrasesDrill(PDO $pdo, int $userId, int $sourceChat
             $insertChat->execute([':user_id' => $userId, ':parent_chat_id' => $sourceChatId, ':id_grupo' => (int)branchChatsFind($pdo, $sourceChatId, $userId)['id_grupo'], ':titulo' => branchChatsDefaultTitle($timezoneOffsetMinutes)]);
             $chatId = (int)$pdo->lastInsertId();
             $chatIds[] = $chatId;
-            $insertMessage->execute([':user_id' => $userId, ':text' => Security::encryptData($phrase['english']), ':is_recipient' => 1, ':variant' => 'purple', ':language' => 'en-GB']);
-            $englishMessageId = (int)$pdo->lastInsertId();
             $insertMessage->execute([':user_id' => $userId, ':text' => Security::encryptData($phrase['portuguese']), ':is_recipient' => 1, ':variant' => 'blue', ':language' => 'pt-BR']);
             $portugueseMessageId = (int)$pdo->lastInsertId();
-            $insertChatMessage->execute([':chat_id' => $chatId, ':message_id' => $englishMessageId, ':position' => 1]);
-            $insertChatMessage->execute([':chat_id' => $chatId, ':message_id' => $portugueseMessageId, ':position' => 2]);
+            $insertMessage->execute([':user_id' => $userId, ':text' => Security::encryptData($phrase['english']), ':is_recipient' => 1, ':variant' => 'purple', ':language' => 'en-GB']);
+            $englishMessageId = (int)$pdo->lastInsertId();
+            $insertChatMessage->execute([':chat_id' => $chatId, ':message_id' => $portugueseMessageId, ':position' => 1]);
+            $insertChatMessage->execute([':chat_id' => $chatId, ':message_id' => $englishMessageId, ':position' => 2]);
         }
         $pdo->commit();
     } catch (Throwable $exception) {
