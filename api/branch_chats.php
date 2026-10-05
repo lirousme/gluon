@@ -443,12 +443,21 @@ function branchChatsDeleteGroup(PDO $pdo, int $groupId, int $userId): void
 
     $placeholders = implode(',', array_fill(0, count($groupIds), '?'));
     $stmt = $pdo->prepare(
-        "SELECT id
-         FROM chats
-         WHERE user_id = ? AND id_grupo IN ($placeholders)
-         ORDER BY id DESC"
+        "WITH RECURSIVE chat_tree AS (
+            SELECT c.id, c.parent_chat_id, 0 AS depth
+            FROM chats c
+            WHERE c.user_id = ? AND c.id_grupo IN ($placeholders)
+            UNION ALL
+            SELECT child.id, child.parent_chat_id, parent.depth + 1
+            FROM chats child
+            INNER JOIN chat_tree parent ON parent.id = child.parent_chat_id
+            WHERE child.user_id = ?
+        )
+        SELECT DISTINCT id
+        FROM chat_tree
+        ORDER BY depth DESC, id DESC"
     );
-    $stmt->execute(array_merge([$userId], $groupIds));
+    $stmt->execute(array_merge([$userId], $groupIds, [$userId]));
     $chatIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
 
     foreach ($chatIds as $chatId) {
