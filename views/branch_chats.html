@@ -42,7 +42,7 @@
         .avatar { width: 40px; height: 40px; }
         .avatar.open { background: linear-gradient(145deg, var(--orange), #a94f0e); }
         h1, h2, p { margin: 0; }
-        h1 { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        h1 { font-size: 17px; white-space: normal; overflow-wrap: anywhere; word-break: break-word; line-height: 1.2; }
         h2 { font-size: 16px; font-weight: 500; }
         .subtitle { margin-top: 3px; color: var(--muted); font-size: 12px; }
         .icon-button { width: 40px; height: 40px; border: 0; border-radius: 50%; background: transparent; display: grid; place-items: center; cursor: pointer; }
@@ -61,9 +61,9 @@
         .chat-item { width: 100%; min-height: 72px; display: flex; align-items: center; gap: 13px; padding: 10px 14px; border: 0; border-bottom: 1px solid #202c33; background: transparent; text-align: left; cursor: pointer; }
         .chat-item:hover, .chat-item.active { background: var(--panel); }
         .chat-copy { min-width: 0; flex: 1; }
-        .chat-line { display: flex; justify-content: space-between; gap: 8px; }
-        .chat-title { color: #e9edef; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .chat-time { color: var(--muted); font-size: 11px; flex: none; }
+        .chat-line { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+        .chat-title { color: #e9edef; font-size: 16px; white-space: normal; overflow-wrap: anywhere; word-break: break-word; line-height: 1.25; }
+        .chat-time { color: var(--muted); font-size: 11px; flex: none; padding-top: 2px; }
         .preview { margin-top: 7px; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .empty-list { color: var(--muted); text-align: center; padding: 45px 25px; line-height: 1.5; }
         .main { min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; position: relative; background-color: #0b141a; background-image: radial-gradient(#ffffff09 1px, transparent 1px); background-size: 22px 22px; }
