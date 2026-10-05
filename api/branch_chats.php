@@ -1526,7 +1526,7 @@ try {
         $sourceChatId = (int)($input['chat_id'] ?? 0);
         $messageId = (int)($input['message_id'] ?? 0);
         $branchMode = (string)($input['branch_mode'] ?? '');
-        branchChatsFind($pdo, $sourceChatId, $userId);
+        $sourceChat = branchChatsFind($pdo, $sourceChatId, $userId);
 
         if (!in_array($branchMode, ['single', 'through'], true) || $messageId < 1) {
             branchChatsRespond(['status' => 'error', 'message' => 'Opção de branch inválida.'], 422);
@@ -1574,7 +1574,7 @@ try {
             array_map('intval', is_array($input['message_ids'] ?? null) ? $input['message_ids'] : []),
             static fn (int $id): bool => $id > 0
         )));
-        branchChatsFind($pdo, $sourceChatId, $userId);
+        $sourceChat = branchChatsFind($pdo, $sourceChatId, $userId);
         if ($messageIds === []) {
             branchChatsRespond(['status' => 'error', 'message' => 'Selecione pelo menos uma mensagem.'], 422);
         }
