@@ -236,6 +236,18 @@
         const query = $('search').value.trim().toLowerCase();
         $('chatList').replaceChildren();
         if (state.currentGroup && Number(state.currentGroup.tipo) === 2) {
+            const createChat = document.createElement('button');
+            createChat.type = 'button';
+            createChat.className = 'chat-item';
+            createChat.innerHTML = '<div class="avatar">+</div><div class="chat-copy"><div class="chat-title">Novo chat</div><div class="preview">Criar uma nova conversa neste grupo</div></div>';
+            createChat.addEventListener('click', async () => {
+                try {
+                    const chat = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_chat', group_id: state.currentGroupId, timezone_offset_minutes: timezoneOffset() }) });
+                    await loadGroups(state.currentGroupId);
+                    await openChat(Number(chat.id));
+                } catch (error) { toast(error.message); }
+            });
+            $('chatList').append(createChat);
             const rows = state.chats.filter(chat => chat.titulo.toLowerCase().includes(query));
             if (!rows.length) {
                 const empty = document.createElement('div'); empty.className = 'empty-list';
