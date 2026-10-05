@@ -501,7 +501,9 @@ function branchChatsGroupData(PDO $pdo, int $userId, ?int $groupId): array
                 (SELECT COUNT(*) FROM chat_mensagens cm WHERE cm.chat_id = c.id) AS total_mensagens,
                 (SELECT COUNT(*) FROM chats child WHERE child.parent_chat_id = c.id AND child.user_id = c.user_id) AS total_branches
          FROM chats c LEFT JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
-         WHERE c.user_id = :user_id AND c.id_grupo = :id_grupo ORDER BY c.updated_at DESC, c.id DESC');
+         WHERE c.user_id = :user_id AND c.id_grupo = :id_grupo
+           AND (cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY))
+         ORDER BY c.updated_at DESC, c.id DESC');
     $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId, ':id_grupo' => $groupId]);
     $chats = $stmt->fetchAll();
     foreach ($chats as &$chat) {
@@ -542,10 +544,6 @@ function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
     $chat['reference_audio_language'] = branchChatsNormalizeReferenceLanguage($chat['reference_audio_language'] ?? null);
     unset($chat['reference_encrypted'], $chat['reference_audio_encrypted']);
     $chat['early_review'] = false;
-    if (!(bool)$chat['can_mark_viewed'] && branchChatsCanReviewEarly($pdo, $chatId, $userId)) {
-        $chat['can_mark_viewed'] = 1;
-        $chat['early_review'] = true;
-    }
     return $chat;
 }
 
@@ -1452,7 +1450,7 @@ try {
         $stmt->execute([':chat_id' => $chatId, ':user_id' => $userId]);
         $view = $stmt->fetch();
         
-        if (!(bool)$view['can_mark_viewed'] && !branchChatsCanReviewEarly($pdo, $chatId, $userId)) {
+        if (!(bool)$view['can_mark_viewed']) {
             $pdo->rollBack();
             branchChatsRespond(['status' => 'error', 'message' => 'A próxima leitura ainda não está disponível.'], 409);
         }
