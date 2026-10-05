@@ -1546,7 +1546,7 @@ try {
         }
 
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, id_grupo, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :titulo, 1, 1)');
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, id_grupo, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :id_grupo, :titulo, 1, 1)');
         $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':id_grupo' => (int)$sourceChat['id_grupo'], ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
         $targetChatId = (int)$pdo->lastInsertId();
 
@@ -1594,7 +1594,7 @@ try {
         }
 
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, id_grupo, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :titulo, 1, 1)');
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, id_grupo, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :id_grupo, :titulo, 1, 1)');
         $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':id_grupo' => (int)$sourceChat['id_grupo'], ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
         $targetChatId = (int)$pdo->lastInsertId();
         $insert = $pdo->prepare(
