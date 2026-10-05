@@ -158,14 +158,15 @@
 <div class="app" id="app">
     <aside class="sidebar" id="sidebar">
         <header class="sidebar-header">
-            <div class="brand"><div class="logo" id="availableReadCount" title="Chats com leitura disponível" aria-label="0 chats com leitura disponível">0</div><div><h1>Branch Chats</h1><p class="subtitle">Suas conversas</p></div></div>
+            <div class="brand"><div class="logo" id="availableReadCount" title="Chats com leitura disponível" aria-label="0 chats com leitura disponível">0</div><div><h1 id="sidebarTitle">Grupos</h1><p class="subtitle" id="sidebarSubtitle">Navegação de grupos</p></div></div>
             <span class="read-cycle-count" id="readCycleCount" title="Leituras registradas hoje neste fuso horário" aria-label="0 de 999 leituras hoje">0/999</span>
             <button class="audio-toggle active" id="conversationAudioToggle" type="button" title="Reprodução automática ativada" aria-label="Desativar reprodução automática da conversa" aria-pressed="true"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05A4.5 4.5 0 0 0 16.5 12M19 5.5v13a8.5 8.5 0 0 0 0-13"/></svg></button>
-            <button class="icon-button" id="newChat" title="Novo chat" aria-label="Criar novo chat">
-                <svg viewBox="0 0 24 24"><path d="M19 3H5a2 2 0 0 0-2 2v14l4-4h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2m-6 9h-2V9H8V7h3V4h2v3h3v2h-3z"/></svg>
+            <button class="icon-button" id="newGroup" title="Novo grupo" aria-label="Criar novo grupo">
+                <svg viewBox="0 0 24 24"><path d="M10 4 12 6h8v12H4V4zm-1 2H6v10h12V8h-7z"/></svg>
             </button>
+            <button class="icon-button" id="upGroup" type="button" title="Voltar ao grupo anterior" aria-label="Voltar ao grupo anterior" hidden><svg viewBox="0 0 24 24"><path d="m12 5-7 7 1.4 1.4L11 8.8V19h2V8.8l4.6 4.6L19 12z"/></svg></button>
         </header>
-        <div class="search-wrap"><input class="search" id="search" type="search" placeholder="Pesquisar ou iniciar nova conversa" aria-label="Pesquisar chats"></div>
+        <div class="search-wrap"><input class="search" id="search" type="search" placeholder="Pesquisar grupos" aria-label="Pesquisar grupos"></div>
         <div class="chat-list" id="chatList"></div>
     </aside>
     <main class="main">
@@ -192,9 +193,10 @@
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
 <dialog id="chatDialog"><form class="modal-form" id="chatForm"><h2>Editar chat</h2><input id="chatTitleInput" type="text" maxlength="120" required aria-label="Nome do chat"><label>Máximo de leituras<input id="chatMaxInput" type="number" min="1" step="1" placeholder="Sem limite" aria-label="Máximo de leituras"></label><label id="chatTypeLabel">Tipo do chat<select id="chatTypeInput" aria-label="Tipo do chat"><option value="0">Chat normal</option><option value="1">Answer in a new chat</option><option value="2">Referência</option></select></label><label id="chatReferenceLabel" hidden>Texto da referência<textarea id="chatReferenceInput" maxlength="10000" placeholder="Digite a referência"></textarea></label><label id="chatReferenceLanguageLabel" hidden>Idioma do áudio da referência<select id="chatReferenceLanguageInput" aria-label="Idioma do áudio da referência"><option value="pt-BR">pt-BR</option><option value="en-GB">en-GB</option></select></label><div class="modal-actions"><button class="danger" id="deleteChat" type="button">Excluir chat</button><button type="button" data-close="chatDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
+<dialog id="groupDialog"><form class="modal-form" id="groupForm"><h2>Novo grupo</h2><input id="groupNameInput" type="text" maxlength="120" required placeholder="Nome do grupo" aria-label="Nome do grupo"><label>Tipo<select id="groupTypeInput" aria-label="Tipo do grupo"><option value="1">Grupo de grupos</option><option value="2">Grupo de mensagens</option></select></label><div class="modal-actions"><button type="button" data-close="groupDialog">Cancelar</button><button class="primary" type="submit">Criar</button></div></form></dialog>
 <dialog id="messageDialog"><form class="modal-form" id="messageForm"><h2>Editar mensagem</h2><textarea id="editMessageText" maxlength="10000" placeholder="Mensagem" aria-label="Texto da mensagem"></textarea><div class="edit-image-row" id="currentImageRow" hidden><img id="currentImage" alt="Imagem atual"><label><input id="removeCurrentImage" type="checkbox"> Remover imagem atual</label></div><label>Trocar/adicionar imagem <input id="editMessageImage" type="file" accept="image/jpeg,image/png,image/gif,image/webp"></label><div class="modal-actions"><button class="danger" id="deleteMessage" type="button">Excluir mensagem</button><button type="button" data-close="messageDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
 <script>
-    const state = { chats: [], activeId: null, activeChat: null, editingMessage: null, recipientMode: false, senderVariant: 'green', selectionMode: false, selectedMessages: new Set(), currentMessages: [], readCycleCount: 0, readCycleLimit: 999, audioAutoplayEnabled: true, currentAudioElement: null, playbackToken: 0 };
+    const state = { groups: [], chats: [], currentGroupId: null, currentGroup: null, activeId: null, activeChat: null, editingMessage: null, recipientMode: false, senderVariant: 'green', selectionMode: false, selectedMessages: new Set(), currentMessages: [], readCycleCount: 0, readCycleLimit: 999, audioAutoplayEnabled: true, currentAudioElement: null, playbackToken: 0 };
     const $ = id => document.getElementById(id);
     const api = '/gluon/api/branch_chats';
     const readCycleLimit = 999;
@@ -221,22 +223,67 @@
     async function request(url, options) { const response = await fetch(url, options); const result = await response.json(); if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível concluir.'); return result.data; }
     function renderChats() {
         const query = $('search').value.trim().toLowerCase();
-        const rows = state.chats
-            .filter(chat => chat.titulo.toLowerCase().includes(query));
         $('chatList').replaceChildren();
-        if (!rows.length) { const empty = document.createElement('div'); empty.className = 'empty-list'; empty.textContent = query ? 'Nenhuma conversa encontrada.' : 'Nenhum chat ainda. Crie sua primeira conversa.'; $('chatList').append(empty); return; }
-        rows.forEach(chat => {
-            const button = document.createElement('button'); button.className = 'chat-item' + (Number(chat.id) === state.activeId ? ' active' : ''); button.type = 'button';
-            const avatar = document.createElement('div'); avatar.className = 'avatar'; avatar.classList.toggle('open', Number(chat.is_open || 0) === 1); avatar.textContent = String(Number(chat.view_count || 0));
+        if (state.currentGroup && Number(state.currentGroup.tipo) === 2) {
+            const rows = state.chats.filter(chat => chat.titulo.toLowerCase().includes(query));
+            if (!rows.length) {
+                const empty = document.createElement('div'); empty.className = 'empty-list';
+                empty.textContent = query ? 'Nenhum chat encontrado.' : 'Nenhum chat neste grupo. Crie um novo chat.';
+                $('chatList').append(empty); return;
+            }
+            rows.forEach(chat => {
+                const button = document.createElement('button'); button.className = 'chat-item' + (Number(chat.id) === state.activeId ? ' active' : ''); button.type = 'button';
+                const avatar = document.createElement('div'); avatar.className = 'avatar'; avatar.classList.toggle('open', Number(chat.is_open || 0) === 1); avatar.textContent = String(Number(chat.view_count || 0));
+                const copy = document.createElement('div'); copy.className = 'chat-copy';
+                const line = document.createElement('div'); line.className = 'chat-line';
+                const title = document.createElement('span'); title.className = 'chat-title'; title.textContent = chat.titulo;
+                const time = document.createElement('span'); time.className = 'chat-time'; time.textContent = formatTime(chat.updated_at);
+                const preview = document.createElement('div'); preview.className = 'preview'; preview.textContent = chat.ultima_mensagem || (Number(chat.total_mensagens) ? '📷 Imagem' : 'Conversa vazia');
+                line.append(title, time); copy.append(line, preview); button.append(avatar, copy); button.addEventListener('click', () => openChat(Number(chat.id))); $('chatList').append(button);
+            });
+            return;
+        }
+        const rows = state.groups.filter(group => group.nome.toLowerCase().includes(query));
+        if (!rows.length) {
+            const empty = document.createElement('div'); empty.className = 'empty-list'; empty.textContent = query ? 'Nenhum grupo encontrado.' : 'Nenhum subgrupo neste grupo.'; $('chatList').append(empty); return;
+        }
+        rows.forEach(group => {
+            const button = document.createElement('button'); button.className = 'chat-item'; button.type = 'button';
+            const avatar = document.createElement('div'); avatar.className = 'avatar'; avatar.textContent = Number(group.tipo) === 1 ? 'G' : 'C';
             const copy = document.createElement('div'); copy.className = 'chat-copy';
             const line = document.createElement('div'); line.className = 'chat-line';
-            const title = document.createElement('span'); title.className = 'chat-title'; title.textContent = chat.titulo;
-            const time = document.createElement('span'); time.className = 'chat-time'; time.textContent = formatTime(chat.updated_at);
-            const preview = document.createElement('div'); preview.className = 'preview'; preview.textContent = chat.ultima_mensagem || (Number(chat.total_mensagens) ? '📷 Imagem' : 'Conversa vazia');
-            line.append(title, time); copy.append(line, preview); button.append(avatar, copy); button.addEventListener('click', () => openChat(Number(chat.id))); $('chatList').append(button);
+            const title = document.createElement('span'); title.className = 'chat-title'; title.textContent = group.nome;
+            const time = document.createElement('span'); time.className = 'chat-time'; time.textContent = Number(group.tipo) === 1 ? 'grupos' : 'chats';
+            const preview = document.createElement('div'); preview.className = 'preview'; preview.textContent = Number(group.tipo) === 1 ? `${Number(group.total_subgrupos || 0)} subgrupo(s)` : `${Number(group.total_chats || 0)} chat(s)`;
+            line.append(title, time); copy.append(line, preview); button.append(avatar, copy); button.addEventListener('click', () => openGroup(Number(group.id))); $('chatList').append(button);
         });
     }
-    async function loadChats() { try { state.chats = await request(api); updateAvailableReadCount(); renderChats(); } catch (error) { toast(error.message); } }
+    async function loadGroups(groupId = null) {
+        try {
+            const suffix = groupId === null ? '' : `?group_id=${encodeURIComponent(groupId)}`;
+            const data = await request(api + suffix);
+            state.currentGroupId = groupId;
+            state.currentGroup = data.group;
+            state.groups = data.groups || [];
+            state.chats = data.chats || [];
+            const title = data.group ? data.group.nome : 'Grupos';
+            $('upGroup').hidden = !data.group;
+            $('sidebarTitle').textContent = title;
+            $('sidebarSubtitle').textContent = data.group ? (Number(data.group.tipo) === 1 ? 'Subgrupos' : 'Conversas') : 'Navegação de grupos';
+            $('search').placeholder = Number(data.group?.tipo) === 2 ? 'Pesquisar chats' : 'Pesquisar grupos';
+            $('search').setAttribute('aria-label', $('search').placeholder);
+            $('newGroup').title = Number(data.group?.tipo) === 1 ? 'Novo grupo' : 'Novo grupo de mensagens';
+            $('newGroup').setAttribute('aria-label', $('newGroup').title);
+            updateAvailableReadCount();
+            renderChats();
+        } catch (error) { toast(error.message); }
+    }
+    async function openGroup(id) {
+        try {
+            await loadGroups(id);
+            clearActiveChat();
+        } catch (error) { toast(error.message); }
+    }
     function setMainChatType(chatType) {
         const main = document.querySelector('.main');
         ['chat-type-1', 'chat-type-2', 'chat-type-3'].forEach(className => main.classList.remove(className));
@@ -344,7 +391,7 @@
     async function branchFromMessage(messageId, branchMode) {
         try {
             const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'branch_message', chat_id: state.activeId, message_id: messageId, branch_mode: branchMode, timezone_offset_minutes: timezoneOffset() }) });
-            closeMessageMenus(); await loadChats(); await openChat(Number(result.chat_id));
+            closeMessageMenus(); await loadGroups(); await openChat(Number(result.chat_id));
             toast(branchMode === 'single' ? 'Branch criado somente com esta mensagem.' : 'Branch criado até esta mensagem.');
         } catch (error) { toast(error.message); }
     }
@@ -412,17 +459,35 @@
         $('more').title = `${state.senderVariant} · segure para opções`;
     }
     $('conversationAudioToggle').addEventListener('click', () => { state.audioAutoplayEnabled = !state.audioAutoplayEnabled; updateConversationAudioToggle(); if (state.audioAutoplayEnabled) autoplayConversationAudio(); else stopConversationPlayback(); });
-    $('newChat').addEventListener('click', async () => { try { const chat = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_chat', timezone_offset_minutes: timezoneOffset() }) }); await loadChats(); await openChat(chat.id); } catch (error) { toast(error.message); } });
+    $('newGroup').addEventListener('click', async () => {
+        if (state.currentGroup && Number(state.currentGroup.tipo) === 2) {
+            try {
+                const chat = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_chat', group_id: state.currentGroupId, timezone_offset_minutes: timezoneOffset() }) });
+                await loadGroups(state.currentGroupId); await openChat(Number(chat.id));
+            } catch (error) { toast(error.message); }
+            return;
+        }
+        $('groupTypeInput').value = '1'; $('groupNameInput').value = ''; $('groupDialog').showModal(); $('groupNameInput').focus();
+    });
+    $('groupForm').addEventListener('submit', async event => {
+        event.preventDefault();
+        try {
+            const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_group', parent_id: state.currentGroupId, nome: $('groupNameInput').value, tipo: Number($('groupTypeInput').value) }) });
+            $('groupDialog').close(); await loadGroups(state.currentGroupId); toast(`Grupo "${result.nome}" criado.`);
+        } catch (error) { toast(error.message); }
+    });
     $('createSelectedChat').addEventListener('click', async () => {
         if (!state.selectedMessages.size) return;
         $('createSelectedChat').disabled = true;
         try {
             const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'branch_selected_messages', chat_id: state.activeId, message_ids: [...state.selectedMessages], timezone_offset_minutes: timezoneOffset() }) });
-            await loadChats(); await openChat(Number(result.chat_id)); toast('Novo chat criado com as mensagens selecionadas.');
+            await loadGroups(state.currentGroupId); await openChat(Number(result.chat_id)); toast('Novo chat criado com as mensagens selecionadas.');
         } catch (error) { $('createSelectedChat').disabled = false; toast(error.message); }
     });
     $('search').addEventListener('input', renderChats);
     $('back').addEventListener('click', () => $('app').classList.remove('chat-open'));
+    $('upGroup').addEventListener('click', () => { if (state.currentGroup) loadGroups(state.currentGroup.parent_id ?? null); });
+    $('sidebar').addEventListener('dblclick', () => { if (state.activeId) return; if (state.currentGroupId !== null) loadGroups(state.currentGroup?.parent_id ?? null); });
     $('branchCount').addEventListener('click', () => { const total = Number(state.activeChat?.total_branches || 0); toast(total ? `${total} ${total === 1 ? 'chat foi criado' : 'chats foram criados'} a partir desta conversa.` : 'Nenhum chat foi criado a partir desta conversa.'); });
     function closeSubstitutionDrillMenu() { $('substutionDrillMenu').hidden = true; $('substutionDrill').setAttribute('aria-expanded', 'false'); }
     $('substutionDrill').addEventListener('click', event => { event.stopPropagation(); const opening = $('substutionDrillMenu').hidden; closeSubstitutionDrillMenu(); if (opening) { $('substutionDrillMenu').hidden = false; $('substutionDrill').setAttribute('aria-expanded', 'true'); } });
@@ -448,7 +513,7 @@
                 $('messageBox').focus();
                 toast(result.source_language === 'en-GB' ? 'Texto traduzido para português brasileiro.' : 'Texto traduzido para inglês.');
             } else {
-                await loadChats();
+                await loadGroups(state.currentGroupId);
                 await openChat(Number(result.chat_ids[0]));
                 toast(`${result.chat_ids.length} chats criados com frases para “${expression}”.`);
             }
@@ -460,9 +525,9 @@
         try {
             const view = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'mark_viewed', chat_id: state.activeId, timezone_offset_minutes: timezoneOffset() }) });
             applyReadCycleFromResponse(view);
-            if (view.closed) { Object.assign(state.activeChat, view); updateReadStatus(state.activeChat); await loadChats(); toast('Chat fechado.'); return; }
-            if (view.deleted) { clearActiveChat(); await loadChats(); toast(`Leitura ${view.view_count} registrada. O chat atingiu o limite e foi excluído.`); return; }
-            Object.assign(state.activeChat, view, { read_marker_message_id: null }); updateReadStatus(state.activeChat); updateMessageMarkerClasses(); await loadChats();
+            if (view.closed) { Object.assign(state.activeChat, view); updateReadStatus(state.activeChat); await loadGroups(state.currentGroupId); toast('Chat fechado.'); return; }
+            if (view.deleted) { clearActiveChat(); await loadGroups(state.currentGroupId); toast(`Leitura ${view.view_count} registrada. O chat atingiu o limite e foi excluído.`); return; }
+            Object.assign(state.activeChat, view, { read_marker_message_id: null }); updateReadStatus(state.activeChat); updateMessageMarkerClasses(); await loadGroups(state.currentGroupId);
             toast(`Leitura ${view.view_count} registrada.`);
         } catch (error) { updateReadStatus(state.activeChat); toast(error.message); }
     });
@@ -470,12 +535,12 @@
     $('chatTypeInput').addEventListener('change', updateReferenceField);
     $('editChat').addEventListener('click', () => { const chatType = Number(state.activeChat?.chat_type || 0); $('chatTitleInput').value = state.activeChat?.titulo || ''; $('chatMaxInput').value = state.activeChat?.max ?? ''; $('chatTypeLabel').hidden = chatType === 3; $('chatTypeInput').value = String(chatType); $('chatReferenceInput').value = state.activeChat?.reference || ''; $('chatReferenceLanguageInput').value = state.activeChat?.reference_audio_language || 'pt-BR'; updateReferenceField(); $('chatDialog').showModal(); $('chatTitleInput').select(); });
     document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => $(button.dataset.close).close()));
-    $('chatForm').addEventListener('submit', async event => { event.preventDefault(); try { const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'update_chat', chat_id: state.activeId, titulo: $('chatTitleInput').value, max: $('chatMaxInput').value, chat_type: Number($('chatTypeInput').value), reference: $('chatReferenceInput').value, reference_language: $('chatReferenceLanguageInput').value }) }); state.activeChat.titulo = result.titulo; state.activeChat.chat_type = result.chat_type; state.activeChat.max = result.max; state.activeChat.reference = result.reference; state.activeChat.reference_audio_language = result.reference_audio_language; state.activeChat.reference_audio_base64 = result.reference_audio_base64; setMainChatType(result.chat_type); $('activeTitle').textContent = result.titulo; renderMessages(state.currentMessages || []); $('chatDialog').close(); await loadChats(); toast('Chat atualizado.'); } catch (error) { toast(error.message); } });
+    $('chatForm').addEventListener('submit', async event => { event.preventDefault(); try { const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'update_chat', chat_id: state.activeId, titulo: $('chatTitleInput').value, max: $('chatMaxInput').value, chat_type: Number($('chatTypeInput').value), reference: $('chatReferenceInput').value, reference_language: $('chatReferenceLanguageInput').value }) }); state.activeChat.titulo = result.titulo; state.activeChat.chat_type = result.chat_type; state.activeChat.max = result.max; state.activeChat.reference = result.reference; state.activeChat.reference_audio_language = result.reference_audio_language; state.activeChat.reference_audio_base64 = result.reference_audio_base64; setMainChatType(result.chat_type); $('activeTitle').textContent = result.titulo; renderMessages(state.currentMessages || []); $('chatDialog').close(); await loadGroups(state.currentGroupId); toast('Chat atualizado.'); } catch (error) { toast(error.message); } });
     function clearActiveChat() { state.activeId = null; state.activeChat = null; setMainChatType(null); $('chatHeader').hidden = true; $('composer').classList.add('hidden'); $('app').classList.remove('chat-open'); }
-    $('deleteChat').addEventListener('click', async () => { if (!confirm('Excluir este chat permanentemente? Os branches que reutilizam suas mensagens serão preservados.')) return; try { await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'delete_chat', chat_id: state.activeId }) }); $('chatDialog').close(); clearActiveChat(); await loadChats(); toast('Chat excluído. Os branches com mensagens compartilhadas foram preservados.'); } catch (error) { toast(error.message); } });
+    $('deleteChat').addEventListener('click', async () => { if (!confirm('Excluir este chat permanentemente? Os branches que reutilizam suas mensagens serão preservados.')) return; try { await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'delete_chat', chat_id: state.activeId }) }); $('chatDialog').close(); clearActiveChat(); await loadGroups(state.currentGroupId); toast('Chat excluído. Os branches com mensagens compartilhadas foram preservados.'); } catch (error) { toast(error.message); } });
     function openMessageEditor(item) { closeMessageMenus(); state.editingMessage = item; $('editMessageText').value = item.texto || ''; $('currentImageRow').hidden = !item.imagem_base64; $('currentImage').src = item.imagem_base64 || ''; $('removeCurrentImage').checked = false; $('editMessageImage').value = ''; $('messageDialog').showModal(); }
-    $('messageForm').addEventListener('submit', async event => { event.preventDefault(); const data = new FormData(); data.append('action', 'update_message'); data.append('chat_id', state.activeId); data.append('message_id', state.editingMessage.id); data.append('texto', $('editMessageText').value); data.append('remove_image', $('removeCurrentImage').checked ? '1' : '0'); const image = $('editMessageImage').files[0]; if (image) data.append('imagem', image); try { await request(api, { method: 'POST', body: data }); $('messageDialog').close(); await openChat(state.activeId); await loadChats(); toast('Mensagem atualizada.'); } catch (error) { toast(error.message); } });
-    $('deleteMessage').addEventListener('click', async () => { if (!confirm('Excluir esta mensagem permanentemente?')) return; try { await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'delete_message', chat_id: state.activeId, message_id: state.editingMessage.id }) }); $('messageDialog').close(); await openChat(state.activeId); await loadChats(); toast('Mensagem excluída.'); } catch (error) { toast(error.message); } });
+    $('messageForm').addEventListener('submit', async event => { event.preventDefault(); const data = new FormData(); data.append('action', 'update_message'); data.append('chat_id', state.activeId); data.append('message_id', state.editingMessage.id); data.append('texto', $('editMessageText').value); data.append('remove_image', $('removeCurrentImage').checked ? '1' : '0'); const image = $('editMessageImage').files[0]; if (image) data.append('imagem', image); try { await request(api, { method: 'POST', body: data }); $('messageDialog').close(); await openChat(state.activeId); await loadGroups(state.currentGroupId); toast('Mensagem atualizada.'); } catch (error) { toast(error.message); } });
+    $('deleteMessage').addEventListener('click', async () => { if (!confirm('Excluir esta mensagem permanentemente?')) return; try { await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'delete_message', chat_id: state.activeId, message_id: state.editingMessage.id }) }); $('messageDialog').close(); await openChat(state.activeId); await loadGroups(state.currentGroupId); toast('Mensagem excluída.'); } catch (error) { toast(error.message); } });
     let attachmentHoldTimer = null;
     let attachmentOpenedByHold = false;
     $('more').addEventListener('pointerdown', event => {
@@ -515,7 +580,7 @@
         try {
             const result = await request(api, { method: 'POST', body: data });
             $('messageBox').value = ''; $('messageBox').style.height = '42px'; $('imageInput').value = ''; $('imageChip').hidden = true;
-            await loadChats(); await openChat(Number(result.chat_id), true);
+            await loadGroups(state.currentGroupId); await openChat(Number(result.chat_id), true);
             if (result.answered_in_new_chat) toast('Resposta criada em um novo chat.');
             else if (result.branched) toast('Branch criado com a nova mensagem.');
         } catch (error) { toast(error.message); } finally { $('send').disabled = false; }
@@ -523,7 +588,7 @@
     updateReadCycleCount();
     loadReadCycleCount();
     updateConversationAudioToggle();
-    loadChats();
+    loadGroups(state.currentGroupId);
 </script>
 </body>
 </html>

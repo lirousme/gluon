@@ -334,10 +334,91 @@ function branchChatsCanReviewEarly(PDO $pdo, int $chatId, int $userId): bool
     return (int)$stmt->fetchColumn() === $chatId;
 }
 
+function branchChatsEnsureDefaultGroups(PDO $pdo, int $userId): void
+{
+    $stmt = $pdo->prepare('SELECT id FROM grupo_chats WHERE user_id = :user_id AND parent_id IS NULL ORDER BY id ASC LIMIT 1');
+    $stmt->execute([':user_id' => $userId]);
+    if ($stmt->fetchColumn()) return;
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare('INSERT INTO grupo_chats (user_id, parent_id, nome, tipo) VALUES (:user_id, NULL, :nome, 1)');
+        $stmt->execute([':user_id' => $userId, ':nome' => 'Grupos']);
+        $rootId = (int)$pdo->lastInsertId();
+        $stmt = $pdo->prepare('INSERT INTO grupo_chats (user_id, parent_id, nome, tipo) VALUES (:user_id, :parent_id, :nome, 2)');
+        $stmt->execute([':user_id' => $userId, ':parent_id' => $rootId, ':nome' => 'Chats']);
+        $groupId = (int)$pdo->lastInsertId();
+        $pdo->prepare('UPDATE chats SET id_grupo = :id_grupo WHERE user_id = :user_id AND id_grupo IS NULL')->execute([':id_grupo' => $groupId, ':user_id' => $userId]);
+        $pdo->commit();
+    } catch (Throwable $exception) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $exception;
+    }
+}
+
+function branchChatsFindGroup(PDO $pdo, int $groupId, int $userId): array
+{
+    $stmt = $pdo->prepare('SELECT id, user_id, parent_id, nome, tipo, created_at, updated_at FROM grupo_chats WHERE id = :id AND user_id = :user_id LIMIT 1');
+    $stmt->execute([':id' => $groupId, ':user_id' => $userId]);
+    $group = $stmt->fetch();
+    if (!$group) branchChatsRespond(['status' => 'error', 'message' => 'Grupo não encontrado.'], 404);
+    return $group;
+}
+
+function branchChatsValidateMessageGroup(PDO $pdo, int $groupId, int $userId): array
+{
+    $group = branchChatsFindGroup($pdo, $groupId, $userId);
+    if ((int)$group['tipo'] !== 2) branchChatsRespond(['status' => 'error', 'message' => 'O chat deve pertencer a um grupo de mensagens.'], 422);
+    return $group;
+}
+
+function branchChatsValidateGroupParent(PDO $pdo, ?int $parentId, int $userId): void
+{
+    if ($parentId === null) return;
+    $parent = branchChatsFindGroup($pdo, $parentId, $userId);
+    if ((int)$parent['tipo'] !== 1) branchChatsRespond(['status' => 'error', 'message' => 'Somente um grupo de grupos pode conter subgrupos.'], 422);
+}
+
+function branchChatsGroupData(PDO $pdo, int $userId, ?int $groupId): array
+{
+    if ($groupId === null) {
+        $stmt = $pdo->prepare('SELECT g.id, g.parent_id, g.nome, g.tipo, g.created_at, g.updated_at,
+                    (SELECT COUNT(*) FROM grupo_chats child WHERE child.parent_id = g.id AND child.user_id = g.user_id) AS total_subgrupos,
+                    (SELECT COUNT(*) FROM chats c WHERE c.id_grupo = g.id AND c.user_id = g.user_id) AS total_chats
+             FROM grupo_chats g WHERE g.user_id = :user_id AND g.parent_id IS NULL ORDER BY g.created_at ASC, g.id ASC');
+        $stmt->execute([':user_id' => $userId]);
+        return ['group' => null, 'groups' => $stmt->fetchAll(), 'chats' => []];
+    }
+    $group = branchChatsFindGroup($pdo, $groupId, $userId);
+    if ((int)$group['tipo'] === 1) {
+        $stmt = $pdo->prepare('SELECT g.id, g.parent_id, g.nome, g.tipo, g.created_at, g.updated_at,
+                    (SELECT COUNT(*) FROM grupo_chats child WHERE child.parent_id = g.id AND child.user_id = g.user_id) AS total_subgrupos,
+                    (SELECT COUNT(*) FROM chats c WHERE c.id_grupo = g.id AND c.user_id = g.user_id) AS total_chats
+             FROM grupo_chats g WHERE g.user_id = :user_id AND g.parent_id = :parent_id ORDER BY g.created_at ASC, g.id ASC');
+        $stmt->execute([':user_id' => $userId, ':parent_id' => $groupId]);
+        return ['group' => $group, 'groups' => $stmt->fetchAll(), 'chats' => []];
+    }
+    $stmt = $pdo->prepare('SELECT c.id, c.parent_chat_id, c.id_grupo, c.titulo, c.chat_type, c.is_open, c.created_at, c.updated_at,
+                COALESCE(cv.view_count, 0) AS view_count,
+                CASE WHEN cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count') . ' THEN 1 ELSE 0 END AS can_mark_viewed,
+                (SELECT m.texto_encrypted FROM chat_mensagens cm INNER JOIN mensagens m ON m.id = cm.mensagem_id WHERE cm.chat_id = c.id ORDER BY cm.position DESC LIMIT 1) AS ultima_mensagem_encrypted,
+                (SELECT COUNT(*) FROM chat_mensagens cm WHERE cm.chat_id = c.id) AS total_mensagens,
+                (SELECT COUNT(*) FROM chats child WHERE child.parent_chat_id = c.id AND child.user_id = c.user_id) AS total_branches
+         FROM chats c LEFT JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
+         WHERE c.user_id = :user_id AND c.id_grupo = :id_grupo ORDER BY c.updated_at DESC, c.id DESC');
+    $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId, ':id_grupo' => $groupId]);
+    $chats = $stmt->fetchAll();
+    foreach ($chats as &$chat) {
+        $chat['ultima_mensagem'] = branchChatsDecryptMessageText($chat['ultima_mensagem_encrypted'] ?? null);
+        unset($chat['ultima_mensagem_encrypted']);
+    }
+    unset($chat);
+    return ['group' => $group, 'groups' => [], 'chats' => $chats];
+}
+
 function branchChatsFind(PDO $pdo, int $chatId, int $userId): array
 {
     $stmt = $pdo->prepare(
-        'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.`max`, c.read_marker_message_id, c.is_open, c.created_at, c.updated_at,
+        'SELECT c.id, c.parent_chat_id, c.id_grupo, c.titulo, c.chat_type, c.`max`, c.read_marker_message_id, c.is_open, c.created_at, c.updated_at,
                 COALESCE(cr.reference_encrypted, parent_cr.reference_encrypted) AS reference_encrypted,
                 COALESCE(cr.reference_audio_encrypted, parent_cr.reference_audio_encrypted) AS reference_audio_encrypted,
                 COALESCE(cr.reference_audio_language, parent_cr.reference_audio_language, \'pt-BR\') AS reference_audio_language,
@@ -826,8 +907,8 @@ function branchChatsCreateSubstitutionDrill(PDO $pdo, int $userId, int $sourceCh
 
     $pdo->beginTransaction();
     try {
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_chat_id, :titulo, 1, 1)');
-        $stmt->execute([':user_id' => $userId, ':parent_chat_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle($timezoneOffsetMinutes)]);
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, id_grupo, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_chat_id, :id_grupo, :titulo, 1, 1)');
+        $stmt->execute([':user_id' => $userId, ':parent_chat_id' => $sourceChatId, ':id_grupo' => (int)branchChatsFind($pdo, $sourceChatId, $userId)['id_grupo'], ':titulo' => branchChatsDefaultTitle($timezoneOffsetMinutes)]);
         $targetChatId = (int)$pdo->lastInsertId();
 
         $portugueseStyle = branchChatsSubstitutionDrillVariant($sourceMessages[0], 'pt-BR');
@@ -899,12 +980,12 @@ function branchChatsCreateTenPhrasesDrill(PDO $pdo, int $userId, int $sourceChat
 
     $pdo->beginTransaction();
     try {
-        $insertChat = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_chat_id, :titulo, 1, 1)');
+        $insertChat = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, id_grupo, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_chat_id, :id_grupo, :titulo, 1, 1)');
         $insertMessage = $pdo->prepare('INSERT INTO mensagens (user_id, texto_encrypted, is_recipient, color_variant, audio_language) VALUES (:user_id, :text, :is_recipient, :variant, :language)');
         $insertChatMessage = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position) VALUES (:chat_id, :message_id, :position)');
         $chatIds = [];
         foreach ($validatedPhrases as $phrase) {
-            $insertChat->execute([':user_id' => $userId, ':parent_chat_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle($timezoneOffsetMinutes)]);
+            $insertChat->execute([':user_id' => $userId, ':parent_chat_id' => $sourceChatId, ':id_grupo' => (int)branchChatsFind($pdo, $sourceChatId, $userId)['id_grupo'], ':titulo' => branchChatsDefaultTitle($timezoneOffsetMinutes)]);
             $chatId = (int)$pdo->lastInsertId();
             $chatIds[] = $chatId;
             $insertMessage->execute([':user_id' => $userId, ':text' => Security::encryptData($phrase['english']), ':is_recipient' => 1, ':variant' => 'purple', ':language' => 'en-GB']);
@@ -980,6 +1061,7 @@ function branchChatsCheckLexicalChunkUsual(PDO $pdo, int $userId, int $chatId): 
 }
 
 try {
+    branchChatsEnsureDefaultGroups($pdo, $userId);
     if ($method === 'GET') {
         $timezoneOffsetMinutes = branchChatsTimezoneOffset($_GET);
         $chatId = isset($_GET['chat_id']) ? (int)$_GET['chat_id'] : 0;
@@ -997,46 +1079,10 @@ try {
             branchChatsRespond(['status' => 'success', 'data' => ['chat' => $chat, 'mensagens' => $messages]]);
         }
 
-        $stmt = $pdo->prepare(
-            'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.is_open, c.created_at, c.updated_at,
-                    COALESCE(cv.view_count, 0) AS view_count,
-                    1 AS can_mark_viewed,
-                    (SELECT m.texto_encrypted FROM chat_mensagens cm INNER JOIN mensagens m ON m.id = cm.mensagem_id WHERE cm.chat_id = c.id ORDER BY cm.position DESC LIMIT 1) AS ultima_mensagem_encrypted,
-                    (SELECT COUNT(*) FROM chat_mensagens cm WHERE cm.chat_id = c.id) AS total_mensagens,
-                    (SELECT COUNT(*) FROM chats child WHERE child.parent_chat_id = c.id AND child.user_id = c.user_id) AS total_branches
-             FROM chats c
-             LEFT JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
-             WHERE c.user_id = :user_id
-               AND (cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count') . ')
-             ORDER BY c.created_at ASC, c.id ASC'
-        );
-        $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId]);
-        $chats = $stmt->fetchAll();
-        if (!$chats) {
-            $stmt = $pdo->prepare(
-                'SELECT c.id, c.parent_chat_id, c.titulo, c.chat_type, c.is_open, c.created_at, c.updated_at,
-                        COALESCE(cv.view_count, 0) AS view_count,
-                        0 AS can_mark_viewed,
-                        (SELECT m.texto_encrypted FROM chat_mensagens cm INNER JOIN mensagens m ON m.id = cm.mensagem_id WHERE cm.chat_id = c.id ORDER BY cm.position DESC LIMIT 1) AS ultima_mensagem_encrypted,
-                        (SELECT COUNT(*) FROM chat_mensagens cm WHERE cm.chat_id = c.id) AS total_mensagens,
-                        (SELECT COUNT(*) FROM chats child WHERE child.parent_chat_id = c.id AND child.user_id = c.user_id) AS total_branches
-                 FROM chats c
-                 INNER JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
-                 WHERE c.user_id = :user_id
-                   AND cv.last_viewed_at IS NOT NULL
-                   AND CURRENT_TIMESTAMP < ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count') . '
-                 ORDER BY ' . branchChatsNextViewExpression('cv.last_viewed_at', 'cv.view_count') . ' ASC, c.id ASC
-                 LIMIT 1'
-            );
-            $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId]);
-            $chats = $stmt->fetchAll();
-        }
-        foreach ($chats as &$chat) {
-            $chat['ultima_mensagem'] = branchChatsDecryptMessageText($chat['ultima_mensagem_encrypted'] ?? null);
-            unset($chat['ultima_mensagem_encrypted']);
-        }
-        unset($chat);
-        branchChatsRespond(['status' => 'success', 'data' => $chats]);
+        $groupId = isset($_GET['group_id']) && $_GET['group_id'] !== '' ? (int)$_GET['group_id'] : null;
+        if ($groupId !== null && $groupId < 1) $groupId = null;
+        branchChatsRespond(['status' => 'success', 'data' => branchChatsGroupData($pdo, $userId, $groupId)]);
+
     }
 
     if ($method !== 'POST') {
@@ -1101,13 +1147,29 @@ try {
         branchChatsRespond(['status' => 'success', 'data' => $result], 201);
     }
 
+    if ($action === 'create_group') {
+        $name = trim((string)($input['nome'] ?? ''));
+        if ($name === '' || mb_strlen($name) > 120) branchChatsRespond(['status' => 'error', 'message' => 'Informe um nome de grupo de até 120 caracteres.'], 422);
+        $type = (int)($input['tipo'] ?? 0);
+        if (!in_array($type, [1, 2], true)) branchChatsRespond(['status' => 'error', 'message' => 'Tipo de grupo inválido.'], 422);
+        $parentId = array_key_exists('parent_id', $input) && $input['parent_id'] !== '' && $input['parent_id'] !== null ? (int)$input['parent_id'] : null;
+        branchChatsValidateGroupParent($pdo, $parentId, $userId);
+        if ($parentId === null && $type !== 1) branchChatsRespond(['status' => 'error', 'message' => 'Um grupo na raiz deve ser do tipo grupo de grupos.'], 422);
+        $stmt = $pdo->prepare('INSERT INTO grupo_chats (user_id, parent_id, nome, tipo) VALUES (:user_id, :parent_id, :nome, :tipo)');
+        $stmt->execute([':user_id' => $userId, ':parent_id' => $parentId, ':nome' => $name, ':tipo' => $type]);
+        $groupId = (int)$pdo->lastInsertId();
+        branchChatsRespond(['status' => 'success', 'data' => ['id' => $groupId, 'parent_id' => $parentId, 'nome' => $name, 'tipo' => $type]], 201);
+    }
+
     if ($action === 'create_chat') {
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, titulo, is_open) VALUES (:user_id, :titulo, 1)');
-        $stmt->execute([':user_id' => $userId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
+        $groupId = (int)($input['group_id'] ?? 0);
+        branchChatsValidateMessageGroup($pdo, $groupId, $userId);
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, id_grupo, titulo, is_open) VALUES (:user_id, :id_grupo, :titulo, 1)');
+        $stmt->execute([':user_id' => $userId, ':id_grupo' => $groupId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
         $chatId = (int)$pdo->lastInsertId();
-        $stmt = $pdo->prepare('SELECT titulo FROM chats WHERE id = :id');
+        $stmt = $pdo->prepare('SELECT id, id_grupo, titulo FROM chats WHERE id = :id');
         $stmt->execute([':id' => $chatId]);
-        branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId, 'titulo' => $stmt->fetchColumn()]], 201);
+        branchChatsRespond(['status' => 'success', 'data' => $stmt->fetch()], 201);
     }
 
     if ($action === 'update_chat') {
@@ -1365,8 +1427,8 @@ try {
         }
 
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :titulo, 1, 1)');
-        $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, id_grupo, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :titulo, 1, 1)');
+        $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':id_grupo' => (int)$sourceChat['id_grupo'], ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
         $targetChatId = (int)$pdo->lastInsertId();
 
         if ($branchMode === 'single') {
@@ -1413,8 +1475,8 @@ try {
         }
 
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :titulo, 1, 1)');
-        $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, id_grupo, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :titulo, 1, 1)');
+        $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':id_grupo' => (int)$sourceChat['id_grupo'], ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
         $targetChatId = (int)$pdo->lastInsertId();
         $insert = $pdo->prepare(
             'INSERT INTO chat_mensagens (chat_id, mensagem_id, position, is_response)
@@ -1478,9 +1540,9 @@ try {
     $targetChatId = $sourceChatId;
     if ($createBranch) {
         $parentChatId = $sourceChatType === 3 && !empty($sourceChat['parent_chat_id']) ? (int)$sourceChat['parent_chat_id'] : $sourceChatId;
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, titulo, chat_type, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :titulo, :chat_type, 1, :preserve_on_parent_delete)');
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, id_grupo, titulo, chat_type, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :id_grupo, :titulo, :chat_type, 1, :preserve_on_parent_delete)');
         $preserveOnParentDelete = !$referenceChat ? 1 : 0;
-        $stmt->execute([':user_id' => $userId, ':parent_id' => $parentChatId, ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input)), ':chat_type' => $referenceChat ? 3 : 0, ':preserve_on_parent_delete' => $preserveOnParentDelete]);
+        $stmt->execute([':user_id' => $userId, ':parent_id' => $parentChatId, ':id_grupo' => (int)$sourceChat['id_grupo'], ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input)), ':chat_type' => $referenceChat ? 3 : 0, ':preserve_on_parent_delete' => $preserveOnParentDelete]);
         $targetChatId = (int)$pdo->lastInsertId();
         if (!$referenceChat) {
             $stmt = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position) SELECT :target_id, mensagem_id, position FROM chat_mensagens WHERE chat_id = :source_id');
