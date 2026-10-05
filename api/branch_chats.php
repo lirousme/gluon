@@ -378,6 +378,94 @@ function branchChatsValidateGroupParent(PDO $pdo, ?int $parentId, int $userId): 
     if ((int)$parent['tipo'] !== 1) branchChatsRespond(['status' => 'error', 'message' => 'Somente um grupo de grupos pode conter subgrupos.'], 422);
 }
 
+function branchChatsGroupCounts(PDO $pdo, int $groupId, int $userId): array
+{
+    $stmt = $pdo->prepare('SELECT
+        (SELECT COUNT(*) FROM grupo_chats WHERE parent_id = :group_id AND user_id = :user_id) AS child_groups,
+        (SELECT COUNT(*) FROM chats WHERE id_grupo = :group_id_chats AND user_id = :user_id_chats) AS direct_chats');
+    $stmt->execute([
+        ':group_id' => $groupId,
+        ':user_id' => $userId,
+        ':group_id_chats' => $groupId,
+        ':user_id_chats' => $userId,
+    ]);
+    return array_map('intval', $stmt->fetch() ?: ['child_groups' => 0, 'direct_chats' => 0]);
+}
+
+function branchChatsUpdateGroup(PDO $pdo, int $groupId, int $userId, string $name, int $type): array
+{
+    if ($name === '' || mb_strlen($name) > 120) {
+        branchChatsRespond(['status' => 'error', 'message' => 'Informe um nome de grupo de até 120 caracteres.'], 422);
+    }
+    if (!in_array($type, [1, 2], true)) {
+        branchChatsRespond(['status' => 'error', 'message' => 'Tipo de grupo inválido.'], 422);
+    }
+    $group = branchChatsFindGroup($pdo, $groupId, $userId);
+    $counts = branchChatsGroupCounts($pdo, $groupId, $userId);
+    if ($type !== (int)$group['tipo']) {
+        if ($type === 2 && $counts['child_groups'] > 0) {
+            branchChatsRespond(['status' => 'error', 'message' => 'Remova os subgrupos antes de transformar este grupo em grupo de chats.'], 422);
+        }
+        if ($type === 1 && $counts['direct_chats'] > 0) {
+            branchChatsRespond(['status' => 'error', 'message' => 'Remova os chats deste grupo antes de transformá-lo em grupo de grupos.'], 422);
+        }
+    }
+    $pdo->prepare('UPDATE grupo_chats SET nome = :nome, tipo = :tipo WHERE id = :id AND user_id = :user_id')->execute([
+        ':nome' => $name, ':tipo' => $type, ':id' => $groupId, ':user_id' => $userId,
+    ]);
+    return ['id' => $groupId, 'parent_id' => $group['parent_id'], 'nome' => $name, 'tipo' => $type];
+}
+
+function branchChatsDeleteGroup(PDO $pdo, int $groupId, int $userId): void
+{
+    branchChatsFindGroup($pdo, $groupId, $userId);
+
+    $stmt = $pdo->prepare(
+        'WITH RECURSIVE group_tree AS (
+            SELECT id
+            FROM grupo_chats
+            WHERE id = :group_id AND user_id = :user_id
+            UNION ALL
+            SELECT child.id
+            FROM grupo_chats child
+            INNER JOIN group_tree parent ON parent.id = child.parent_id
+            WHERE child.user_id = :child_user_id
+        )
+        SELECT id FROM group_tree'
+    );
+    $stmt->execute([
+        ':group_id' => $groupId,
+        ':user_id' => $userId,
+        ':child_user_id' => $userId,
+    ]);
+    $groupIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    if ($groupIds === []) return;
+
+    $placeholders = implode(',', array_fill(0, count($groupIds), '?'));
+    $stmt = $pdo->prepare(
+        "SELECT id
+         FROM chats
+         WHERE user_id = ? AND id_grupo IN ($placeholders)
+         ORDER BY id DESC"
+    );
+    $stmt->execute(array_merge([$userId], $groupIds));
+    $chatIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+
+    foreach ($chatIds as $chatId) {
+        $exists = $pdo->prepare('SELECT 1 FROM chats WHERE id = :id AND user_id = :user_id LIMIT 1');
+        $exists->execute([':id' => $chatId, ':user_id' => $userId]);
+        if ($exists->fetchColumn()) {
+            branchChatsDeleteSingleChat($pdo, $chatId, $userId);
+        }
+    }
+
+    $stmt = $pdo->prepare(
+        "DELETE FROM grupo_chats
+         WHERE user_id = ? AND id IN ($placeholders)"
+    );
+    $stmt->execute(array_merge([$userId], $groupIds));
+}
+
 function branchChatsGroupData(PDO $pdo, int $userId, ?int $groupId): array
 {
     if ($groupId === null) {
@@ -1159,6 +1247,28 @@ try {
         $stmt->execute([':user_id' => $userId, ':parent_id' => $parentId, ':nome' => $name, ':tipo' => $type]);
         $groupId = (int)$pdo->lastInsertId();
         branchChatsRespond(['status' => 'success', 'data' => ['id' => $groupId, 'parent_id' => $parentId, 'nome' => $name, 'tipo' => $type]], 201);
+    }
+
+    if ($action === 'update_group') {
+        $groupId = (int)($input['group_id'] ?? 0);
+        $name = trim((string)($input['nome'] ?? ''));
+        $type = (int)($input['tipo'] ?? 0);
+        $result = branchChatsUpdateGroup($pdo, $groupId, $userId, $name, $type);
+        branchChatsRespond(['status' => 'success', 'data' => $result]);
+    }
+
+    if ($action === 'delete_group') {
+        $groupId = (int)($input['group_id'] ?? 0);
+        if ($groupId < 1) branchChatsRespond(['status' => 'error', 'message' => 'Grupo inválido.'], 422);
+        $pdo->beginTransaction();
+        try {
+            branchChatsDeleteGroup($pdo, $groupId, $userId);
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $exception;
+        }
+        branchChatsRespond(['status' => 'success', 'data' => ['id' => $groupId]]);
     }
 
     if ($action === 'create_chat') {
