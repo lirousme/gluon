@@ -15,6 +15,16 @@
         .app { display: grid; grid-template-columns: minmax(290px, 31%) 1fr; height: 100%; min-height: 0; max-width: 1600px; margin: auto; overflow: hidden; background: var(--bg); box-shadow: 0 0 30px #0008; }
         .sidebar { min-width: 0; min-height: 0; overflow: hidden; background: var(--bg); border-right: 1px solid var(--line); display: flex; flex-direction: column; }
         .sidebar-header, .chat-header { height: 64px; flex: 0 0 64px; display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--panel); }
+        .sidebar-sub-header { min-height: 52px; flex: 0 0 auto; display: flex; align-items: center; justify-content: flex-end; gap: 7px; padding: 8px 12px; background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); position: relative; }
+        .group-action-menu { position: absolute; z-index: 10; top: calc(100% + 6px); right: 50px; width: 210px; padding: 6px; border-radius: 10px; background: #233138; box-shadow: 0 10px 30px #000a; }
+        .group-action-menu[hidden] { display: none; }
+        .group-action-menu button { width: 100%; border: 0; border-radius: 7px; padding: 10px 12px; background: transparent; color: #e9edef; text-align: left; cursor: pointer; }
+        .group-action-menu button:hover, .group-action-menu button:focus-visible { background: #ffffff12; outline: none; }
+        .group-action-menu button:disabled { color: var(--muted); cursor: not-allowed; }
+        .group-modal-note { color: var(--muted); font-size: 12px; line-height: 1.4; }
+        .chat-title { white-space: normal; overflow-wrap: anywhere; word-break: break-word; line-height: 1.25; }
+        .group-action-button { border-radius: 9px; width: auto; min-width: 40px; padding: 0 9px; }
+        @media (max-width: 620px) { .sidebar-sub-header { gap: 3px; padding: 6px 8px; } .sidebar-sub-header .read-cycle-count { font-size: 11px; } .sidebar-sub-header .audio-toggle { width: 44px; } }
         .chat-header { position: relative; z-index: 2; }
         .substitution-drill { position: relative; }
         .substitution-drill-menu { position: absolute; z-index: 6; top: calc(100% + 7px); right: 0; width: 175px; padding: 7px; border-radius: 9px; background: #233138; box-shadow: 0 8px 28px #000a; }
@@ -32,7 +42,7 @@
         .avatar { width: 40px; height: 40px; }
         .avatar.open { background: linear-gradient(145deg, var(--orange), #a94f0e); }
         h1, h2, p { margin: 0; }
-        h1 { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        h1 { font-size: 17px; white-space: normal; overflow-wrap: anywhere; word-break: break-word; line-height: 1.2; }
         h2 { font-size: 16px; font-weight: 500; }
         .subtitle { margin-top: 3px; color: var(--muted); font-size: 12px; }
         .icon-button { width: 40px; height: 40px; border: 0; border-radius: 50%; background: transparent; display: grid; place-items: center; cursor: pointer; }
@@ -51,16 +61,16 @@
         .chat-item { width: 100%; min-height: 72px; display: flex; align-items: center; gap: 13px; padding: 10px 14px; border: 0; border-bottom: 1px solid #202c33; background: transparent; text-align: left; cursor: pointer; }
         .chat-item:hover, .chat-item.active { background: var(--panel); }
         .chat-copy { min-width: 0; flex: 1; }
-        .chat-line { display: flex; justify-content: space-between; gap: 8px; }
-        .chat-title { color: #e9edef; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .chat-time { color: var(--muted); font-size: 11px; flex: none; }
+        .chat-line { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+        .chat-title { color: #e9edef; font-size: 16px; white-space: normal; overflow-wrap: anywhere; word-break: break-word; line-height: 1.25; }
+        .chat-time { color: var(--muted); font-size: 11px; flex: none; padding-top: 2px; }
         .preview { margin-top: 7px; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .empty-list { color: var(--muted); text-align: center; padding: 45px 25px; line-height: 1.5; }
         .main { min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; position: relative; background-color: #0b141a; background-image: radial-gradient(#ffffff09 1px, transparent 1px); background-size: 22px 22px; }
         .main.chat-type-1 { background-color: #24132f; }
         .main.chat-type-2, .main.chat-type-3 { background-color: #0b3d2e; }
         .back { display: none; }
-        .chat-heading { min-width: 0; flex: 1; }
+        .chat-heading { min-width: 0; flex: 1; overflow-wrap: anywhere; } .chat-heading h2 { white-space: normal; overflow-wrap: anywhere; word-break: break-word; line-height: 1.25; }
         .branch-count { width: auto; min-width: 40px; padding: 0 10px; border-radius: 20px; gap: 5px; }
         .branch-count svg { width: 19px; height: 19px; }
         .branch-count span { color: #d1d7db; font-size: 13px; font-weight: 700; }
@@ -159,13 +169,14 @@
     <aside class="sidebar" id="sidebar">
         <header class="sidebar-header">
             <div class="brand"><div class="logo" id="availableReadCount" title="Chats com leitura disponível" aria-label="0 chats com leitura disponível">0</div><div><h1 id="sidebarTitle">Grupos</h1><p class="subtitle" id="sidebarSubtitle">Navegação de grupos</p></div></div>
+        </header>
+        <div class="sidebar-sub-header" id="sidebarSubHeader">
             <span class="read-cycle-count" id="readCycleCount" title="Leituras registradas hoje neste fuso horário" aria-label="0 de 999 leituras hoje">0/999</span>
             <button class="audio-toggle active" id="conversationAudioToggle" type="button" title="Reprodução automática ativada" aria-label="Desativar reprodução automática da conversa" aria-pressed="true"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05A4.5 4.5 0 0 0 16.5 12M19 5.5v13a8.5 8.5 0 0 0 0-13"/></svg></button>
-            <button class="icon-button" id="newGroup" title="Novo grupo" aria-label="Criar novo grupo">
-                <svg viewBox="0 0 24 24"><path d="M10 4 12 6h8v12H4V4zm-1 2H6v10h12V8h-7z"/></svg>
-            </button>
-            <button class="icon-button" id="upGroup" type="button" title="Voltar ao grupo anterior" aria-label="Voltar ao grupo anterior" hidden><svg viewBox="0 0 24 24"><path d="m12 5-7 7 1.4 1.4L11 8.8V19h2V8.8l4.6 4.6L19 12z"/></svg></button>
-        </header>
+            <button class="icon-button group-action-button" id="newGroup" title="Criar grupo" aria-label="Criar grupo"><svg viewBox="0 0 24 24"><path d="M10 4 12 6h8v12H4V4zm-1 2H6v10h12V8h-7z"/></svg></button>
+            <button class="icon-button group-action-button" id="upGroup" type="button" title="Voltar ao grupo anterior" aria-label="Voltar ao grupo anterior" hidden><svg viewBox="0 0 24 24"><path d="m12 5-7 7 1.4 1.4L11 8.8V19h2V8.8l4.6 4.6L19 12z"/></svg></button>
+            <div class="group-action-menu" id="groupActionMenu" hidden><button type="button" id="createGroupMenuItem">Criar novo grupo</button><button type="button" id="editGroupMenuItem">Editar grupo</button></div>
+        </div>
         <div class="search-wrap"><input class="search" id="search" type="search" placeholder="Pesquisar grupos" aria-label="Pesquisar grupos"></div>
         <div class="chat-list" id="chatList"></div>
     </aside>
@@ -193,10 +204,10 @@
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
 <dialog id="chatDialog"><form class="modal-form" id="chatForm"><h2>Editar chat</h2><input id="chatTitleInput" type="text" maxlength="120" required aria-label="Nome do chat"><label>Máximo de leituras<input id="chatMaxInput" type="number" min="1" step="1" placeholder="Sem limite" aria-label="Máximo de leituras"></label><label id="chatTypeLabel">Tipo do chat<select id="chatTypeInput" aria-label="Tipo do chat"><option value="0">Chat normal</option><option value="1">Answer in a new chat</option><option value="2">Referência</option></select></label><label id="chatReferenceLabel" hidden>Texto da referência<textarea id="chatReferenceInput" maxlength="10000" placeholder="Digite a referência"></textarea></label><label id="chatReferenceLanguageLabel" hidden>Idioma do áudio da referência<select id="chatReferenceLanguageInput" aria-label="Idioma do áudio da referência"><option value="pt-BR">pt-BR</option><option value="en-GB">en-GB</option></select></label><div class="modal-actions"><button class="danger" id="deleteChat" type="button">Excluir chat</button><button type="button" data-close="chatDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
-<dialog id="groupDialog"><form class="modal-form" id="groupForm"><h2>Novo grupo</h2><input id="groupNameInput" type="text" maxlength="120" required placeholder="Nome do grupo" aria-label="Nome do grupo"><label>Tipo<select id="groupTypeInput" aria-label="Tipo do grupo"><option value="1">Grupo de grupos</option><option value="2">Grupo de mensagens</option></select></label><div class="modal-actions"><button type="button" data-close="groupDialog">Cancelar</button><button class="primary" type="submit">Criar</button></div></form></dialog>
+<dialog id="groupDialog"><form class="modal-form" id="groupForm"><h2 id="groupDialogTitle">Novo grupo</h2><input id="groupNameInput" type="text" maxlength="120" required placeholder="Nome do grupo" aria-label="Nome do grupo"><label>Tipo<select id="groupTypeInput" aria-label="Tipo do grupo"><option value="1">Grupo de grupos</option><option value="2">Grupo de chats</option></select></label><p class="group-modal-note" id="groupTypeNote">Grupo de grupos pode conter subgrupos. Grupo de chats contém conversas.</p><div class="modal-actions"><button class="danger" id="deleteGroup" type="button" hidden>Excluir grupo</button><button type="button" data-close="groupDialog">Cancelar</button><button class="primary" id="saveGroup" type="submit">Criar</button></div></form></dialog><dialog id="deleteGroupDialog"><form class="modal-form" id="deleteGroupForm"><h2>Excluir grupo?</h2><p>Isso apagará este grupo, todos os subgrupos descendentes, todos os chats desses grupos e as mensagens que não pertencerem a outros chats.</p><div class="modal-actions"><button type="button" data-close="deleteGroupDialog">Cancelar</button><button class="danger" id="confirmDeleteGroup" type="submit">Confirmar exclusão</button></div></form></dialog>
 <dialog id="messageDialog"><form class="modal-form" id="messageForm"><h2>Editar mensagem</h2><textarea id="editMessageText" maxlength="10000" placeholder="Mensagem" aria-label="Texto da mensagem"></textarea><div class="edit-image-row" id="currentImageRow" hidden><img id="currentImage" alt="Imagem atual"><label><input id="removeCurrentImage" type="checkbox"> Remover imagem atual</label></div><label>Trocar/adicionar imagem <input id="editMessageImage" type="file" accept="image/jpeg,image/png,image/gif,image/webp"></label><div class="modal-actions"><button class="danger" id="deleteMessage" type="button">Excluir mensagem</button><button type="button" data-close="messageDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
 <script>
-    const state = { groups: [], chats: [], currentGroupId: null, currentGroup: null, activeId: null, activeChat: null, editingMessage: null, recipientMode: false, senderVariant: 'green', selectionMode: false, selectedMessages: new Set(), currentMessages: [], readCycleCount: 0, readCycleLimit: 999, audioAutoplayEnabled: true, currentAudioElement: null, playbackToken: 0 };
+    const state = { groups: [], chats: [], currentGroupId: null, currentGroup: null, groupDialogMode: 'create', activeId: null, activeChat: null, editingMessage: null, recipientMode: false, senderVariant: 'green', selectionMode: false, selectedMessages: new Set(), currentMessages: [], readCycleCount: 0, readCycleLimit: 999, audioAutoplayEnabled: true, currentAudioElement: null, playbackToken: 0 };
     const $ = id => document.getElementById(id);
     const api = '/gluon/api/branch_chats';
     const readCycleLimit = 999;
@@ -225,6 +236,18 @@
         const query = $('search').value.trim().toLowerCase();
         $('chatList').replaceChildren();
         if (state.currentGroup && Number(state.currentGroup.tipo) === 2) {
+            const createChat = document.createElement('button');
+            createChat.type = 'button';
+            createChat.className = 'chat-item';
+            createChat.innerHTML = '<div class="avatar">+</div><div class="chat-copy"><div class="chat-title">Novo chat</div><div class="preview">Criar uma nova conversa neste grupo</div></div>';
+            createChat.addEventListener('click', async () => {
+                try {
+                    const chat = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_chat', group_id: state.currentGroupId, timezone_offset_minutes: timezoneOffset() }) });
+                    await loadGroups(state.currentGroupId);
+                    await openChat(Number(chat.id));
+                } catch (error) { toast(error.message); }
+            });
+            $('chatList').append(createChat);
             const rows = state.chats.filter(chat => chat.titulo.toLowerCase().includes(query));
             if (!rows.length) {
                 const empty = document.createElement('div'); empty.className = 'empty-list';
@@ -258,6 +281,57 @@
             line.append(title, time); copy.append(line, preview); button.append(avatar, copy); button.addEventListener('click', () => openGroup(Number(group.id))); $('chatList').append(button);
         });
     }
+    function closeGroupActionMenu() { $('groupActionMenu').hidden = true; $('newGroup').setAttribute('aria-expanded', 'false'); }
+    function openCreateGroupDialog() {
+        closeGroupActionMenu();
+        state.groupDialogMode = 'create';
+        $('groupDialogTitle').textContent = 'Novo grupo';
+        $('groupNameInput').value = '';
+        $('groupTypeInput').value = '1';
+        $('groupTypeNote').textContent = state.currentGroup && Number(state.currentGroup.tipo) === 2 ? 'Este grupo contém chats e não pode receber subgrupos.' : 'Grupo de grupos pode conter subgrupos. Grupo de chats contém conversas.';
+        $('deleteGroup').hidden = true;
+        $('saveGroup').textContent = 'Criar';
+        $('groupDialog').showModal();
+        $('groupNameInput').focus();
+    }
+    function openEditGroupDialog() {
+        if (!state.currentGroup) return;
+        closeGroupActionMenu();
+        state.groupDialogMode = 'edit';
+        $('groupDialogTitle').textContent = 'Editar grupo';
+        $('groupNameInput').value = state.currentGroup.nome;
+        $('groupTypeInput').value = String(state.currentGroup.tipo);
+        $('groupTypeNote').textContent = 'Você pode trocar o tipo se o grupo não tiver conteúdo incompatível com o novo tipo.';
+        $('deleteGroup').hidden = false;
+        $('saveGroup').textContent = 'Salvar';
+        $('groupDialog').showModal();
+        $('groupNameInput').focus();
+    }
+    async function saveGroup(event) {
+        event.preventDefault();
+        try {
+            const action = state.groupDialogMode === 'edit' ? 'update_group' : 'create_group';
+            const body = { action, nome: $('groupNameInput').value, tipo: Number($('groupTypeInput').value) };
+            if (action === 'create_group') body.parent_id = state.currentGroupId;
+            else body.group_id = state.currentGroupId;
+            const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+            $('groupDialog').close();
+            await loadGroups(state.currentGroupId);
+            toast(action === 'create_group' ? `Grupo "${result.nome}" criado.` : 'Grupo atualizado.');
+        } catch (error) { toast(error.message); }
+    }
+    function deleteCurrentGroup() { if (state.currentGroup) { $('groupDialog').close(); $('deleteGroupDialog').showModal(); } }
+    async function confirmDeleteCurrentGroup(event) {
+        event.preventDefault();
+        try {
+            const parentId = state.currentGroup?.parent_id ?? null;
+            await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'delete_group', group_id: state.currentGroupId }) });
+            $('deleteGroupDialog').close();
+            clearActiveChat();
+            await loadGroups(parentId);
+            toast('Grupo e todo o seu conteúdo descendente foram excluídos.');
+        } catch (error) { toast(error.message); }
+    }
     async function loadGroups(groupId = null) {
         try {
             const suffix = groupId === null ? '' : `?group_id=${encodeURIComponent(groupId)}`;
@@ -272,7 +346,7 @@
             $('sidebarSubtitle').textContent = data.group ? (Number(data.group.tipo) === 1 ? 'Subgrupos' : 'Conversas') : 'Navegação de grupos';
             $('search').placeholder = Number(data.group?.tipo) === 2 ? 'Pesquisar chats' : 'Pesquisar grupos';
             $('search').setAttribute('aria-label', $('search').placeholder);
-            $('newGroup').title = Number(data.group?.tipo) === 1 ? 'Novo grupo' : 'Novo grupo de mensagens';
+            $('newGroup').title = data.group ? 'Ações do grupo' : 'Criar grupo';
             $('newGroup').setAttribute('aria-label', $('newGroup').title);
             updateAvailableReadCount();
             renderChats();
@@ -391,7 +465,7 @@
     async function branchFromMessage(messageId, branchMode) {
         try {
             const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'branch_message', chat_id: state.activeId, message_id: messageId, branch_mode: branchMode, timezone_offset_minutes: timezoneOffset() }) });
-            closeMessageMenus(); await loadGroups(); await openChat(Number(result.chat_id));
+            closeMessageMenus(); await loadGroups(state.currentGroupId); await openChat(Number(result.chat_id));
             toast(branchMode === 'single' ? 'Branch criado somente com esta mensagem.' : 'Branch criado até esta mensagem.');
         } catch (error) { toast(error.message); }
     }
@@ -459,23 +533,24 @@
         $('more').title = `${state.senderVariant} · segure para opções`;
     }
     $('conversationAudioToggle').addEventListener('click', () => { state.audioAutoplayEnabled = !state.audioAutoplayEnabled; updateConversationAudioToggle(); if (state.audioAutoplayEnabled) autoplayConversationAudio(); else stopConversationPlayback(); });
-    $('newGroup').addEventListener('click', async () => {
-        if (state.currentGroup && Number(state.currentGroup.tipo) === 2) {
-            try {
-                const chat = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_chat', group_id: state.currentGroupId, timezone_offset_minutes: timezoneOffset() }) });
-                await loadGroups(state.currentGroupId); await openChat(Number(chat.id));
-            } catch (error) { toast(error.message); }
-            return;
+    $('newGroup').addEventListener('click', event => {
+        event.stopPropagation();
+        if (!state.currentGroup) { openCreateGroupDialog(); return; }
+        const opening = $('groupActionMenu').hidden;
+        closeGroupActionMenu();
+        if (opening) {
+            $('groupActionMenu').hidden = false;
+            $('newGroup').setAttribute('aria-expanded', 'true');
+            $('createGroupMenuItem').disabled = Number(state.currentGroup.tipo) === 2;
+            $('createGroupMenuItem').title = Number(state.currentGroup.tipo) === 2 ? 'Um grupo de chats não pode conter subgrupos.' : '';
         }
-        $('groupTypeInput').value = '1'; $('groupNameInput').value = ''; $('groupDialog').showModal(); $('groupNameInput').focus();
     });
-    $('groupForm').addEventListener('submit', async event => {
-        event.preventDefault();
-        try {
-            const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'create_group', parent_id: state.currentGroupId, nome: $('groupNameInput').value, tipo: Number($('groupTypeInput').value) }) });
-            $('groupDialog').close(); await loadGroups(state.currentGroupId); toast(`Grupo "${result.nome}" criado.`);
-        } catch (error) { toast(error.message); }
-    });
+    $('createGroupMenuItem').addEventListener('click', () => { if (!(state.currentGroup && Number(state.currentGroup.tipo) === 2)) openCreateGroupDialog(); });
+    $('editGroupMenuItem').addEventListener('click', openEditGroupDialog);
+    document.addEventListener('click', event => { if (!event.target.closest('#sidebarSubHeader')) closeGroupActionMenu(); });
+    $('groupForm').addEventListener('submit', saveGroup);
+    $('deleteGroup').addEventListener('click', deleteCurrentGroup);
+    $('deleteGroupForm').addEventListener('submit', confirmDeleteCurrentGroup);
     $('createSelectedChat').addEventListener('click', async () => {
         if (!state.selectedMessages.size) return;
         $('createSelectedChat').disabled = true;
