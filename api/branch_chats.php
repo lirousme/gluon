@@ -985,7 +985,7 @@ function branchChatsCreateTenPhrasesDrill(PDO $pdo, int $userId, int $sourceChat
         $insertChatMessage = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position) VALUES (:chat_id, :message_id, :position)');
         $chatIds = [];
         foreach ($validatedPhrases as $phrase) {
-            $insertChat->execute([':user_id' => $userId, ':parent_chat_id' => $sourceChatId, ':id_grupo' => (int)branchChatsFind($pdo, $sourceChatId, $userId)['id_grupo', ':titulo' => branchChatsDefaultTitle($timezoneOffsetMinutes)]);
+            $insertChat->execute([':user_id' => $userId, ':parent_chat_id' => $sourceChatId, ':id_grupo' => (int)branchChatsFind($pdo, $sourceChatId, $userId)['id_grupo'], ':titulo' => branchChatsDefaultTitle($timezoneOffsetMinutes)]);
             $chatId = (int)$pdo->lastInsertId();
             $chatIds[] = $chatId;
             $insertMessage->execute([':user_id' => $userId, ':text' => Security::encryptData($phrase['english']), ':is_recipient' => 1, ':variant' => 'purple', ':language' => 'en-GB']);
