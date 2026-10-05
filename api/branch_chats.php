@@ -1526,7 +1526,7 @@ try {
         $sourceChatId = (int)($input['chat_id'] ?? 0);
         $messageId = (int)($input['message_id'] ?? 0);
         $branchMode = (string)($input['branch_mode'] ?? '');
-        branchChatsFind($pdo, $sourceChatId, $userId);
+        $sourceChat = branchChatsFind($pdo, $sourceChatId, $userId);
 
         if (!in_array($branchMode, ['single', 'through'], true) || $messageId < 1) {
             branchChatsRespond(['status' => 'error', 'message' => 'Opção de branch inválida.'], 422);
@@ -1546,7 +1546,7 @@ try {
         }
 
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, id_grupo, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :titulo, 1, 1)');
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, id_grupo, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :id_grupo, :titulo, 1, 1)');
         $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':id_grupo' => (int)$sourceChat['id_grupo'], ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
         $targetChatId = (int)$pdo->lastInsertId();
 
@@ -1574,7 +1574,7 @@ try {
             array_map('intval', is_array($input['message_ids'] ?? null) ? $input['message_ids'] : []),
             static fn (int $id): bool => $id > 0
         )));
-        branchChatsFind($pdo, $sourceChatId, $userId);
+        $sourceChat = branchChatsFind($pdo, $sourceChatId, $userId);
         if ($messageIds === []) {
             branchChatsRespond(['status' => 'error', 'message' => 'Selecione pelo menos uma mensagem.'], 422);
         }
@@ -1594,7 +1594,7 @@ try {
         }
 
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, id_grupo, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :titulo, 1, 1)');
+        $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, id_grupo, titulo, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :id_grupo, :titulo, 1, 1)');
         $stmt->execute([':user_id' => $userId, ':parent_id' => $sourceChatId, ':id_grupo' => (int)$sourceChat['id_grupo'], ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input))]);
         $targetChatId = (int)$pdo->lastInsertId();
         $insert = $pdo->prepare(
