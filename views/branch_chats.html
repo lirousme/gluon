@@ -184,7 +184,7 @@
         <header class="chat-header" id="chatHeader" hidden>
             <button class="icon-button back" id="back" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="m20 11-12.2.03 5.6-5.6L12 4l-8 8 8 8 1.4-1.43-5.6-5.6L20 13z"/></svg></button>
             <button class="icon-button avatar" id="editChat" type="button" title="Editar chat" aria-label="Editar nome ou excluir chat">B</button><div class="chat-heading"><h2 id="activeTitle"></h2><p class="subtitle" id="chatSubtitle">conversa privada</p></div>
-            <div class="substitution-drill"><button class="icon-button read-button" id="substutionDrill" type="button" title="Ferramentas de estudo" aria-label="Ferramentas de estudo" aria-expanded="false">Drill</button><div class="substitution-drill-menu" id="substutionDrillMenu" hidden><button type="button" data-substitution-role="Traduzir">Traduzir</button><button type="button" data-substitution-role="2 Frases">2 Frases</button><button type="button" data-substitution-role="10 Frases">10 Frases</button></div></div>
+            <div class="substitution-drill"><button class="icon-button read-button" id="substutionDrill" type="button" title="Ferramentas de estudo" aria-label="Ferramentas de estudo" aria-expanded="false">Drill</button><div class="substitution-drill-menu" id="substutionDrillMenu" hidden><button type="button" data-substitution-role="Traduzir">Traduzir</button><button type="button" data-substitution-role="1 Frase">1 Frase</button><button type="button" data-substitution-role="2 Frases">2 Frases</button><button type="button" data-substitution-role="10 Frases">10 Frases</button></div></div>
             <button class="icon-button read-button" id="markViewed" type="button">Lido</button>
             <button class="icon-button branch-count" id="branchCount" type="button" title="Branches criados a partir deste chat" aria-label="Nenhum branch criado">
                 <svg viewBox="0 0 24 24"><path d="M6 3a3 3 0 1 0 2 5.24v1.26A3.5 3.5 0 0 0 11.5 13H16v2.76A3 3 0 1 0 18 15V8.24a3 3 0 1 0-2 0V11h-4.5A1.5 1.5 0 0 1 10 9.5V8.24A3 3 0 0 0 6 3m0 2a1 1 0 1 1 0 2 1 1 0 0 1 0-2m12 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2m0 12a1 1 0 1 1 0 2 1 1 0 0 1 0-2"/></svg><span id="branchCountValue">0</span>
@@ -580,7 +580,7 @@
             if (!expression) throw new Error(translate ? 'Digite no campo de mensagem o texto que deseja traduzir.' : 'Digite no campo de mensagem a expressão para a qual você quer criar frases.');
             const result = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(translate
                 ? { action: 'translate_message', text: expression }
-                : { action: role === '2 Frases' ? 'create_two_phrases_drill' : 'create_ten_phrases_drill', chat_id: state.activeId, expression, timezone_offset_minutes: timezoneOffset() }
+                : { action: role === '1 Frase' ? 'create_one_phrase_drill' : (role === '2 Frases' ? 'create_two_phrases_drill' : 'create_ten_phrases_drill'), chat_id: state.activeId, expression, timezone_offset_minutes: timezoneOffset() }
             ) });
             if (translate) {
                 $('messageBox').value = result.translation;
