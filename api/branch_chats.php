@@ -1032,7 +1032,7 @@ function branchChatsCreateSubstitutionDrill(PDO $pdo, int $userId, int $sourceCh
 function branchChatsCreatePhrasesDrill(PDO $pdo, int $userId, int $sourceChatId, string $expression, int $timezoneOffsetMinutes, int $phraseCount): array
 {
     branchChatsFind($pdo, $sourceChatId, $userId);
-    if (!in_array($phraseCount, [2, 10], true)) {
+    if (!in_array($phraseCount, [1, 2, 10], true)) {
         branchChatsRespond(['status' => 'error', 'message' => 'Quantidade de frases inválida.'], 422);
     }
     $expression = trim($expression);
@@ -1250,14 +1250,14 @@ try {
         branchChatsRespond(['status' => 'success', 'data' => $result], 201);
     }
 
-    if (in_array($action, ['create_two_phrases_drill', 'create_ten_phrases_drill'], true)) {
+    if (in_array($action, ['create_one_phrase_drill', 'create_two_phrases_drill', 'create_ten_phrases_drill'], true)) {
         $result = branchChatsCreatePhrasesDrill(
             $pdo,
             $userId,
             (int)($input['chat_id'] ?? 0),
             (string)($input['expression'] ?? ''),
             branchChatsTimezoneOffset($input),
-            $action === 'create_two_phrases_drill' ? 2 : 10
+            $action === 'create_one_phrase_drill' ? 1 : ($action === 'create_two_phrases_drill' ? 2 : 10)
         );
         branchChatsRespond(['status' => 'success', 'data' => $result], 201);
     }
