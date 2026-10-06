@@ -1077,6 +1077,12 @@ function branchChatsCreatePhrasesDrill(PDO $pdo, int $userId, int $sourceChatId,
             branchChatsRespond(['status' => 'error', 'message' => 'O Gemini retornou uma frase sem textos válidos.'], 502);
         }
 
+        foreach ($expressions as $requiredExpression) {
+            if (!preg_match('/(?<![\\p{L}\\p{N}_])' . preg_quote($requiredExpression, '/') . '(?![\\p{L}\\p{N}_])/iu', $english)) {
+                branchChatsRespond(['status' => 'error', 'message' => 'O Gemini retornou uma frase que não contém todas as expressões solicitadas.'], 502);
+            }
+        }
+
         if (!preg_match('/[.!?]$/u', $english)) {
             $english .= '.';
         }
