@@ -302,7 +302,7 @@ function branchChatsMessageAudioDataUri(?string $audioEncrypted): ?string
 // Removida a conversão de timezone da next view calculation; usa diretamente o UTC já gravado
 function branchChatsNextViewExpression(string $lastViewedColumn = 'cv.last_viewed_at', string $viewCountColumn = 'cv.view_count'): string
 {
-    return "DATE_ADD($lastViewedColumn, INTERVAL $viewCountColumn DAY)";
+    return "DATE_ADD($lastViewedColumn, INTERVAL $viewCountColumn HOUR)";
 }
 
 function branchChatsCanReviewEarly(PDO $pdo, int $chatId, int $userId): bool
@@ -502,7 +502,7 @@ function branchChatsGroupData(PDO $pdo, int $userId, ?int $groupId): array
                 (SELECT COUNT(*) FROM chats child WHERE child.parent_chat_id = c.id AND child.user_id = c.user_id) AS total_branches
          FROM chats c LEFT JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
          WHERE c.user_id = :user_id AND c.id_grupo = :id_grupo
-           AND (cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count DAY))
+           AND (cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count HOUR))
          ORDER BY c.updated_at DESC, c.id DESC');
     $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId, ':id_grupo' => $groupId]);
     $chats = $stmt->fetchAll();
