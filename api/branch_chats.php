@@ -1848,9 +1848,10 @@ try {
     $sourceChatId = (int)($input['chat_id'] ?? 0);
     $sourceChat = branchChatsFind($pdo, $sourceChatId, $userId);
     $sourceChatType = (int)$sourceChat['chat_type'];
+    $slotChat = in_array($sourceChatType, [4, 5], true);
     $answerInNewChat = in_array($sourceChatType, [1, 2, 3], true);
-    $referenceChat = in_array($sourceChatType, [2, 3], true);
-    $createBranch = $answerInNewChat || filter_var($input['create_branch'] ?? false, FILTER_VALIDATE_BOOLEAN);
+    $referenceChat = in_array($sourceChatType, [2, 3, 4, 5], true);
+    $createBranch = $answerInNewChat || (!$slotChat && filter_var($input['create_branch'] ?? false, FILTER_VALIDATE_BOOLEAN));
     $text = trim((string)($input['texto'] ?? ''));
     $isRecipient = filter_var($input['is_recipient'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
     
@@ -1873,12 +1874,25 @@ try {
 
     $pdo->beginTransaction();
     $targetChatId = $sourceChatId;
+    if ($slotChat) {
+        $pdo->prepare('SELECT id FROM chats WHERE id = :id AND user_id = :user_id FOR UPDATE')->execute([':id' => $sourceChatId, ':user_id' => $userId]);
+        $countStmt = $pdo->prepare('SELECT COUNT(*) FROM chat_mensagens WHERE chat_id = :chat_id');
+        $countStmt->execute([':chat_id' => $sourceChatId]);
+        $createBranch = (int)$countStmt->fetchColumn() >= 2;
+    }
     if ($createBranch) {
-        $parentChatId = $sourceChatType === 3 && !empty($sourceChat['parent_chat_id']) ? (int)$sourceChat['parent_chat_id'] : $sourceChatId;
+        $parentChatId = in_array($sourceChatType, [3, 5], true) && !empty($sourceChat['parent_chat_id']) ? (int)$sourceChat['parent_chat_id'] : $sourceChatId;
+        $newChatType = in_array($sourceChatType, [2, 3], true) ? 3 : (in_array($sourceChatType, [4, 5], true) ? 5 : 0);
+        $preserveOnParentDelete = $referenceChat ? 0 : 1;
         $stmt = $pdo->prepare('INSERT INTO chats (user_id, parent_chat_id, id_grupo, titulo, chat_type, is_open, preserve_on_parent_delete) VALUES (:user_id, :parent_id, :id_grupo, :titulo, :chat_type, 1, :preserve_on_parent_delete)');
-        $preserveOnParentDelete = !$referenceChat ? 1 : 0;
-        $stmt->execute([':user_id' => $userId, ':parent_id' => $parentChatId, ':id_grupo' => (int)$sourceChat['id_grupo'], ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input)), ':chat_type' => $referenceChat ? 3 : 0, ':preserve_on_parent_delete' => $preserveOnParentDelete]);
+        $stmt->execute([':user_id' => $userId, ':parent_id' => $parentChatId, ':id_grupo' => (int)$sourceChat['id_grupo'], ':titulo' => branchChatsDefaultTitle(branchChatsTimezoneOffset($input)), ':chat_type' => $newChatType, ':preserve_on_parent_delete' => $preserveOnParentDelete]);
         $targetChatId = (int)$pdo->lastInsertId();
+        if ($newChatType === 5) {
+            $referenceText = trim((string)($sourceChat['reference'] ?? ''));
+            $referenceLanguage = branchChatsNormalizeReferenceLanguage($sourceChat['reference_audio_language'] ?? null);
+            $pdo->prepare('INSERT INTO chat_references (chat_id, reference_encrypted, reference_audio_language, reference_audio_encrypted) VALUES (:chat_id, :reference, :language, NULL)')
+                ->execute([':chat_id' => $targetChatId, ':reference' => Security::encryptData($referenceText), ':language' => $referenceLanguage]);
+        }
         if (!$referenceChat) {
             $stmt = $pdo->prepare('INSERT INTO chat_mensagens (chat_id, mensagem_id, position) SELECT :target_id, mensagem_id, position FROM chat_mensagens WHERE chat_id = :source_id');
             $stmt->execute([':target_id' => $targetChatId, ':source_id' => $sourceChatId]);
