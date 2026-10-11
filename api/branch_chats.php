@@ -273,7 +273,7 @@ function branchChatsGenerateAndPersistMessageAudio(PDO $pdo, int $messageId, int
 function branchChatsGenerateAndPersistReferenceAudio(PDO $pdo, int $chatId, int $userId, ?string &$errorDetails, bool $skipExisting = true): bool
 {
     $chat = branchChatsFind($pdo, $chatId, $userId);
-    if (!in_array((int)$chat['chat_type'], [2, 3], true) || trim((string)($chat['reference'] ?? '')) === '') {
+    if (!in_array((int)$chat['chat_type'], [2, 3, 4, 5], true) || trim((string)($chat['reference'] ?? '')) === '') {
         $errorDetails = 'O chat não possui texto de referência para gerar áudio.';
         return false;
     }
@@ -1515,14 +1515,14 @@ try {
             branchChatsRespond(['status' => 'error', 'message' => 'Informe um nome de até 120 caracteres.'], 422);
         }
         $chatType = (int)($input['chat_type'] ?? 0);
-        if ((int)$currentChat['chat_type'] === 3) {
-            $chatType = 3;
-        } elseif (!in_array($chatType, [0, 1, 2], true)) {
+        if (in_array((int)$currentChat['chat_type'], [3, 5], true)) {
+            $chatType = (int)$currentChat['chat_type'];
+        } elseif (!in_array($chatType, [0, 1, 2, 4], true)) {
             branchChatsRespond(['status' => 'error', 'message' => 'Tipo de chat inválido.'], 422);
         }
         $reference = trim((string)($input['reference'] ?? ''));
         $referenceLanguage = branchChatsNormalizeReferenceLanguage($input['reference_language'] ?? ($currentChat['reference_audio_language'] ?? null));
-        if (in_array($chatType, [2, 3], true) && ($reference === '' || mb_strlen($reference) > 10000)) {
+        if (in_array($chatType, [2, 4], true) && ($reference === '' || mb_strlen($reference) > 10000)) {
             branchChatsRespond(['status' => 'error', 'message' => 'Informe uma referência de até 10.000 caracteres.'], 422);
         }
         $maxInput = array_key_exists('max', $input) ? $input['max'] : $currentChat['max'];
@@ -1532,8 +1532,8 @@ try {
         }
         $pdo->beginTransaction();
         $pdo->prepare('UPDATE chats SET titulo = :titulo, chat_type = :chat_type, `max` = :max WHERE id = :id AND user_id = :user_id')->execute([':titulo' => $title, ':chat_type' => $chatType, ':max' => $max, ':id' => $chatId, ':user_id' => $userId]);
-        if (in_array($chatType, [2, 3], true)) {
-            $referenceChatId = $chatType === 3 && !empty($currentChat['parent_chat_id']) ? (int)$currentChat['parent_chat_id'] : $chatId;
+        if (in_array($chatType, [2, 4], true)) {
+            $referenceChatId = $chatId;
             $pdo->prepare('INSERT INTO chat_references (chat_id, reference_encrypted, reference_audio_language, reference_audio_encrypted) VALUES (:chat_id, :reference, :language, NULL) ON DUPLICATE KEY UPDATE reference_audio_encrypted = IF(reference_encrypted = VALUES(reference_encrypted) AND reference_audio_language = VALUES(reference_audio_language), reference_audio_encrypted, NULL), reference_encrypted = VALUES(reference_encrypted), reference_audio_language = VALUES(reference_audio_language)')->execute([
                 ':chat_id' => $referenceChatId,
                 ':reference' => Security::encryptData($reference),
@@ -1543,7 +1543,7 @@ try {
             $pdo->prepare('DELETE FROM chat_references WHERE chat_id = :chat_id')->execute([':chat_id' => $chatId]);
         }
         $pdo->commit();
-        branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId, 'titulo' => $title, 'chat_type' => $chatType, 'max' => $max, 'reference' => in_array($chatType, [2, 3], true) ? $reference : ($currentChat['reference'] ?? null), 'reference_audio_language' => in_array($chatType, [2, 3], true) ? $referenceLanguage : ($currentChat['reference_audio_language'] ?? 'pt-BR'), 'reference_audio_base64' => null]]);
+        branchChatsRespond(['status' => 'success', 'data' => ['id' => $chatId, 'titulo' => $title, 'chat_type' => $chatType, 'max' => $max, 'reference' => in_array($chatType, [2, 4], true) ? $reference : ($currentChat['reference'] ?? null), 'reference_audio_language' => in_array($chatType, [2, 4], true) ? $referenceLanguage : ($currentChat['reference_audio_language'] ?? 'pt-BR'), 'reference_audio_base64' => null]]);
     }
 
     if ($action === 'delete_chat') {
@@ -1608,7 +1608,7 @@ try {
         $chatId = (int)($input['chat_id'] ?? 0);
         $chat = branchChatsFind($pdo, $chatId, $userId);
         $referenceGenerated = 0; $referenceSkipped = 0; $referenceFailed = 0; $lastDetails = null;
-        if (in_array((int)$chat['chat_type'], [2, 3], true) && trim((string)($chat['reference'] ?? '')) !== '') {
+        if (in_array((int)$chat['chat_type'], [2, 3, 4, 5], true) && trim((string)($chat['reference'] ?? '')) !== '') {
             if (!empty($chat['reference_audio_base64'])) $referenceSkipped = 1;
             else { $details = null; if (branchChatsGenerateAndPersistReferenceAudio($pdo, $chatId, $userId, $details)) $referenceGenerated = 1; else { $referenceFailed = 1; $lastDetails = $details; } }
         }
