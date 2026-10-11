@@ -79,7 +79,7 @@ function branchChatsNormalizeReferenceLanguage($value): string
 
 function branchChatsReferenceVariant(string $language): string
 {
-    return $language === 'en-GB' ? 'orange' : 'green';
+    return 'reference';
 }
 
 function branchChatsNormalizeVariant($value, int $isRecipient): string
@@ -180,12 +180,18 @@ function branchChatsFishReferenceIdByVariant(string $variant): string
     };
 }
 
-function branchChatsGoogleVoice(string $variant): string
+function branchChatsGoogleVoice(string $variant, string $language): string
 {
+    if ($variant === 'reference') {
+        return $language === 'en-GB'
+            ? 'en-GB-Chirp3-HD-Achernar'
+            : 'pt-BR-Chirp3-HD-Achernar';
+    }
+
     return match ($variant) {
         'blue'   => 'pt-BR-Chirp3-HD-Puck', //Algieba
         'purple' => 'en-GB-Chirp3-HD-Puck', //Enceladus //Alnilam
-        'orange' => 'en-GB-Chirp3-HD-Pulcherrima', 
+        'orange' => 'en-GB-Chirp3-HD-Pulcherrima',
         'green'  => 'pt-BR-Chirp3-HD-Pulcherrima',
         default  => 'pt-BR-Chirp3-HD-Algieba',
     };
@@ -222,7 +228,7 @@ function branchChatsRequestTts(PDO $pdo, int $userId, string $text, string $vari
             $audioConfig['volumeGainDb'] = 6.0; 
         }
         
-        $payload = json_encode(['input' => ['text' => $text], 'voice' => ['languageCode' => $language, 'name' => branchChatsGoogleVoice($variant)], 'audioConfig' => $audioConfig]);
+        $payload = json_encode(['input' => ['text' => $text], 'voice' => ['languageCode' => $language, 'name' => branchChatsGoogleVoice($variant, $language)], 'audioConfig' => $audioConfig]);
         $headers = ['Content-Type: application/json'];
     } else {
         if (trim((string)FISH_API_KEY) === '') { $errorDetails = 'Chave FISH_API_KEY não configurada.'; return null; }
