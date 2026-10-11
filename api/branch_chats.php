@@ -1539,7 +1539,7 @@ try {
                 ':reference' => Security::encryptData($reference),
                 ':language' => $referenceLanguage,
             ]);
-        } elseif ($chatType !== 3) {
+        } elseif (!in_array($chatType, [3, 5], true)) {
             $pdo->prepare('DELETE FROM chat_references WHERE chat_id = :chat_id')->execute([':chat_id' => $chatId]);
         }
         $pdo->commit();
@@ -1875,7 +1875,9 @@ try {
     $pdo->beginTransaction();
     $targetChatId = $sourceChatId;
     if ($slotChat) {
-        $pdo->prepare('SELECT id FROM chats WHERE id = :id AND user_id = :user_id FOR UPDATE')->execute([':id' => $sourceChatId, ':user_id' => $userId]);
+        $lockStmt = $pdo->prepare('SELECT id FROM chats WHERE id = :id AND user_id = :user_id FOR UPDATE');
+        $lockStmt->execute([':id' => $sourceChatId, ':user_id' => $userId]);
+        $lockStmt->fetchColumn();
         $countStmt = $pdo->prepare('SELECT COUNT(*) FROM chat_mensagens WHERE chat_id = :chat_id');
         $countStmt->execute([':chat_id' => $sourceChatId]);
         $createBranch = (int)$countStmt->fetchColumn() >= 2;
