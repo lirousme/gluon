@@ -509,7 +509,7 @@ function branchChatsGroupData(PDO $pdo, int $userId, ?int $groupId): array
          FROM chats c LEFT JOIN chat_views cv ON cv.chat_id = c.id AND cv.user_id = :view_user_id
          WHERE c.user_id = :user_id AND c.id_grupo = :id_grupo
            AND (cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count MINUTE))
-         ORDER BY COALESCE(cv.view_count, 0) DESC, c.created_at ASC, c.id ASC');
+         ORDER BY COALESCE(cv.view_count, 0) ASC, c.created_at ASC, c.id ASC');
     $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId, ':id_grupo' => $groupId]);
     $chats = $stmt->fetchAll();
     foreach ($chats as &$chat) {
