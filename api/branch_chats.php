@@ -182,10 +182,12 @@ function branchChatsFishReferenceIdByVariant(string $variant): string
 
 function branchChatsGoogleVoice(string $variant, string $language): string
 {
+    if ($language === 'en-GB') {
+        return 'en-US-Chirp3-HD-Achird';
+    }
+
     if ($variant === 'reference') {
-        return $language === 'en-GB'
-            ? 'en-GB-Chirp3-HD-Algieba'
-            : 'pt-BR-Chirp3-HD-Algieba';
+        return 'pt-BR-Chirp3-HD-Achernar';
     }
 
     return match ($variant) {
@@ -228,7 +230,7 @@ function branchChatsRequestTts(PDO $pdo, int $userId, string $text, string $vari
             $audioConfig['volumeGainDb'] = 6.0; 
         }
         
-        $payload = json_encode(['input' => ['text' => $text], 'voice' => ['languageCode' => $language, 'name' => branchChatsGoogleVoice($variant, $language)], 'audioConfig' => $audioConfig]);
+        $payload = json_encode(['input' => ['text' => $text], 'voice' => ['languageCode' => $language === 'en-GB' ? 'en-US' : $language, 'name' => branchChatsGoogleVoice($variant, $language)], 'audioConfig' => $audioConfig]);
         $headers = ['Content-Type: application/json'];
     } else {
         if (trim((string)FISH_API_KEY) === '') { $errorDetails = 'Chave FISH_API_KEY não configurada.'; return null; }
