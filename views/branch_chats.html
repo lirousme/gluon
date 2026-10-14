@@ -52,6 +52,8 @@
         .audio-toggle::before { content: ''; position: absolute; left: 4px; width: 20px; height: 20px; border-radius: 50%; background: #5f6b72; transition: transform .18s ease, background .18s ease; }
         .audio-toggle.active { background: #064d41; color: #d9fff7; }
         .audio-toggle.active::before { transform: translateX(18px); background: var(--green); }
+        .playlist-toggle.active { background: #123e78; color: #e2efff; }
+        .playlist-toggle.active::before { transform: translateX(18px); background: #3b82f6; }
         .audio-toggle svg { width: 15px; height: 15px; position: relative; z-index: 1; }
         svg { width: 22px; height: 22px; fill: currentColor; }
         .search-wrap { padding: 8px 12px; border-bottom: 1px solid var(--line); }
@@ -172,6 +174,7 @@
         </header>
         <div class="sidebar-sub-header" id="sidebarSubHeader">
             <span class="read-cycle-count" id="readCycleCount" title="Leituras registradas hoje neste fuso horário" aria-label="0 de 999 leituras hoje">0/999</span>
+            <button class="audio-toggle playlist-toggle" id="automaticChatPlaylistToggle" type="button" title="Playlist automática desativada" aria-label="Ativar playlist automática dos chats" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M4 6h11v2H4zm0 5h11v2H4zm0 5h7v2H4zm13-5 5 3-5 3z"/></svg></button>
             <button class="audio-toggle active" id="conversationAudioToggle" type="button" title="Reprodução automática ativada" aria-label="Desativar reprodução automática da conversa" aria-pressed="true"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05A4.5 4.5 0 0 0 16.5 12M19 5.5v13a8.5 8.5 0 0 0 0-13"/></svg></button>
             <button class="icon-button group-action-button" id="newGroup" title="Criar grupo" aria-label="Criar grupo"><svg viewBox="0 0 24 24"><path d="M10 4 12 6h8v12H4V4zm-1 2H6v10h12V8h-7z"/></svg></button>
             <button class="icon-button group-action-button" id="upGroup" type="button" title="Voltar ao grupo anterior" aria-label="Voltar ao grupo anterior" hidden><svg viewBox="0 0 24 24"><path d="m12 5-7 7 1.4 1.4L11 8.8V19h2V8.8l4.6 4.6L19 12z"/></svg></button>
@@ -207,7 +210,7 @@
 <dialog id="groupDialog"><form class="modal-form" id="groupForm"><h2 id="groupDialogTitle">Novo grupo</h2><input id="groupNameInput" type="text" maxlength="120" required placeholder="Nome do grupo" aria-label="Nome do grupo"><label>Tipo<select id="groupTypeInput" aria-label="Tipo do grupo"><option value="1">Grupo de grupos</option><option value="2">Grupo de chats</option></select></label><p class="group-modal-note" id="groupTypeNote">Grupo de grupos pode conter subgrupos. Grupo de chats contém conversas.</p><div class="modal-actions"><button class="danger" id="deleteGroup" type="button" hidden>Excluir grupo</button><button type="button" data-close="groupDialog">Cancelar</button><button class="primary" id="saveGroup" type="submit">Criar</button></div></form></dialog><dialog id="deleteGroupDialog"><form class="modal-form" id="deleteGroupForm"><h2>Excluir grupo?</h2><p>Isso apagará este grupo, todos os subgrupos descendentes, todos os chats desses grupos e as mensagens que não pertencerem a outros chats.</p><div class="modal-actions"><button type="button" data-close="deleteGroupDialog">Cancelar</button><button class="danger" id="confirmDeleteGroup" type="submit">Confirmar exclusão</button></div></form></dialog>
 <dialog id="messageDialog"><form class="modal-form" id="messageForm"><h2>Editar mensagem</h2><textarea id="editMessageText" maxlength="10000" placeholder="Mensagem" aria-label="Texto da mensagem"></textarea><div class="edit-image-row" id="currentImageRow" hidden><img id="currentImage" alt="Imagem atual"><label><input id="removeCurrentImage" type="checkbox"> Remover imagem atual</label></div><label>Trocar/adicionar imagem <input id="editMessageImage" type="file" accept="image/jpeg,image/png,image/gif,image/webp"></label><div class="modal-actions"><button class="danger" id="deleteMessage" type="button">Excluir mensagem</button><button type="button" data-close="messageDialog">Cancelar</button><button class="primary" type="submit">Salvar</button></div></form></dialog>
 <script>
-    const state = { groups: [], chats: [], currentGroupId: null, currentGroup: null, groupDialogMode: 'create', activeId: null, activeChat: null, editingMessage: null, recipientMode: false, senderVariant: 'green', selectionMode: false, selectedMessages: new Set(), currentMessages: [], readCycleCount: 0, readCycleLimit: 999, audioAutoplayEnabled: true, currentAudioElement: null, playbackToken: 0 };
+    const state = { groups: [], chats: [], currentGroupId: null, currentGroup: null, groupDialogMode: 'create', activeId: null, activeChat: null, editingMessage: null, recipientMode: false, senderVariant: 'green', selectionMode: false, selectedMessages: new Set(), currentMessages: [], readCycleCount: 0, readCycleLimit: 999, audioAutoplayEnabled: true, automaticChatPlaylistEnabled: false, playlistToken: 0, currentAudioElement: null, playbackToken: 0 };
     const $ = id => document.getElementById(id);
     const api = '/gluon/api/branch_chats';
     const readCycleLimit = 999;
@@ -230,7 +233,36 @@
     function updateConversationAudioToggle() { const enabled = state.audioAutoplayEnabled; $('conversationAudioToggle').classList.toggle('active', enabled); $('conversationAudioToggle').setAttribute('aria-pressed', String(enabled)); $('conversationAudioToggle').setAttribute('aria-label', enabled ? 'Desativar reprodução automática da conversa' : 'Ativar reprodução automática da conversa'); $('conversationAudioToggle').title = enabled ? 'Reprodução automática ativada' : 'Reprodução automática desativada'; }
     function stopConversationPlayback() { state.playbackToken++; if (state.currentAudioElement) { state.currentAudioElement.pause(); state.currentAudioElement.currentTime = 0; state.currentAudioElement = null; } }
     function playAudioSource(src, token = null) { return new Promise(resolve => { if (!src || (token !== null && token !== state.playbackToken)) return resolve(false); const audio = new Audio(src); state.currentAudioElement = audio; const cleanup = value => { audio.onended = audio.onerror = null; if (state.currentAudioElement === audio) state.currentAudioElement = null; resolve(value); }; audio.onended = () => cleanup(true); audio.onerror = () => cleanup(false); audio.play().catch(() => cleanup(false)); }); }
+    function updateAutomaticChatPlaylistToggle() { const enabled = state.automaticChatPlaylistEnabled; $('automaticChatPlaylistToggle').classList.toggle('active', enabled); $('automaticChatPlaylistToggle').setAttribute('aria-pressed', String(enabled)); $('automaticChatPlaylistToggle').setAttribute('aria-label', enabled ? 'Desativar playlist automática dos chats' : 'Ativar playlist automática dos chats'); $('automaticChatPlaylistToggle').title = enabled ? 'Playlist automática dos chats ativada' : 'Playlist automática dos chats desativada'; }
     async function autoplayConversationAudio() { stopConversationPlayback(); if (!state.audioAutoplayEnabled || !state.activeId) return; const token = state.playbackToken; if ([2, 3].includes(Number(state.activeChat?.chat_type)) && state.activeChat?.reference_audio_base64) await playAudioSource(state.activeChat.reference_audio_base64, token); for (const message of state.currentMessages || []) { if (token !== state.playbackToken || !state.audioAutoplayEnabled) break; if (!message.audio_base64) continue; await playAudioSource(message.audio_base64, token); } }
+    async function playCurrentChatForPlaylist(playlistToken, chatId) {
+        stopConversationPlayback();
+        if (!state.automaticChatPlaylistEnabled || playlistToken !== state.playlistToken || Number(state.activeId) !== Number(chatId)) return false;
+        const playbackToken = state.playbackToken;
+        if ([2, 3].includes(Number(state.activeChat?.chat_type)) && state.activeChat?.reference_audio_base64) {
+            const played = await playAudioSource(state.activeChat.reference_audio_base64, playbackToken);
+            if (!played && playbackToken === state.playbackToken) return false;
+        }
+        for (const message of state.currentMessages || []) {
+            if (!state.automaticChatPlaylistEnabled || playlistToken !== state.playlistToken || playbackToken !== state.playbackToken || Number(state.activeId) !== Number(chatId)) return false;
+            if (!message.audio_base64) continue;
+            const played = await playAudioSource(message.audio_base64, playbackToken);
+            if (!played && playbackToken === state.playbackToken) return false;
+        }
+        if (!state.automaticChatPlaylistEnabled || playlistToken !== state.playlistToken || Number(state.activeId) !== Number(chatId)) return false;
+        const currentIndex = state.chats.findIndex(chat => Number(chat.id) === Number(chatId));
+        const nextChat = currentIndex >= 0 ? state.chats.slice(currentIndex + 1).find(chat => Number(chat.id) !== Number(chatId)) : null;
+        if (!nextChat) { state.automaticChatPlaylistEnabled = false; updateAutomaticChatPlaylistToggle(); toast('Playlist automática concluída: não há mais chats na lista.'); return false; }
+        const marked = await markCurrentChatViewed(true);
+        if (!marked || !state.automaticChatPlaylistEnabled || playlistToken !== state.playlistToken) return false;
+        await openChat(Number(nextChat.id));
+        return true;
+    }
+    async function startAutomaticChatPlaylist(chatId = state.activeId) {
+        if (!state.automaticChatPlaylistEnabled || !chatId) return;
+        const token = ++state.playlistToken;
+        await playCurrentChatForPlaylist(token, Number(chatId));
+    }
     async function request(url, options) { const response = await fetch(url, options); const result = await response.json(); if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Não foi possível concluir.'); return result.data; }
     function renderChats() {
         const query = $('search').value.trim().toLowerCase();
@@ -479,7 +511,7 @@
             updateReadStatus(data.chat);
             $('branchCountValue').textContent = data.chat.total_branches;
             $('branchCount').setAttribute('aria-label', `${data.chat.total_branches} ${Number(data.chat.total_branches) === 1 ? 'branch criado' : 'branches criados'}`);
-            $('chatHeader').hidden = false; $('composer').classList.remove('hidden'); $('app').classList.add('chat-open'); renderMessages(data.mensagens); renderChats(); $('messageBox').focus(); autoplayConversationAudio();
+            $('chatHeader').hidden = false; $('composer').classList.remove('hidden'); $('app').classList.add('chat-open'); renderMessages(data.mensagens); renderChats(); $('messageBox').focus(); if (state.automaticChatPlaylistEnabled) startAutomaticChatPlaylist(id); else autoplayConversationAudio();
         } catch (error) { toast(error.message); }
     }
     function updateReadStatus(chat) {
@@ -532,7 +564,8 @@
         $('more').setAttribute('aria-label', `${state.senderVariant === 'purple' ? 'Destinatário roxo' : state.senderVariant === 'orange' ? 'Remetente laranja' : recipient ? 'Destinatário azul' : 'Remetente verde'}. Clique para alternar cor; segure por 1,5 segundo para opções`);
         $('more').title = `${state.senderVariant} · segure para opções`;
     }
-    $('conversationAudioToggle').addEventListener('click', () => { state.audioAutoplayEnabled = !state.audioAutoplayEnabled; updateConversationAudioToggle(); if (state.audioAutoplayEnabled) autoplayConversationAudio(); else stopConversationPlayback(); });
+    $('conversationAudioToggle').addEventListener('click', () => { state.audioAutoplayEnabled = !state.audioAutoplayEnabled; updateConversationAudioToggle(); if (state.audioAutoplayEnabled && !state.automaticChatPlaylistEnabled) autoplayConversationAudio(); else if (!state.audioAutoplayEnabled) stopConversationPlayback(); });
+    $('automaticChatPlaylistToggle').addEventListener('click', () => { state.automaticChatPlaylistEnabled = !state.automaticChatPlaylistEnabled; updateAutomaticChatPlaylistToggle(); state.playlistToken++; if (state.automaticChatPlaylistEnabled && state.activeId) startAutomaticChatPlaylist(state.activeId); else if (!state.automaticChatPlaylistEnabled) stopConversationPlayback(); });
     $('newGroup').addEventListener('click', event => {
         event.stopPropagation();
         if (!state.currentGroup) { openCreateGroupDialog(); return; }
@@ -595,17 +628,20 @@
         } catch (error) { toast(error.message); }
         finally { button.disabled = false; button.textContent = originalText; }
     });
-    $('markViewed').addEventListener('click', async () => {
+    async function markCurrentChatViewed(silent = false) {
+        if (!state.activeId || !state.activeChat) return false;
         $('markViewed').disabled = true;
         try {
             const view = await request(api, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'mark_viewed', chat_id: state.activeId, timezone_offset_minutes: timezoneOffset() }) });
             applyReadCycleFromResponse(view);
-            if (view.closed) { Object.assign(state.activeChat, view); updateReadStatus(state.activeChat); await loadGroups(state.currentGroupId); toast('Chat fechado.'); return; }
-            if (view.deleted) { clearActiveChat(); await loadGroups(state.currentGroupId); toast(`Leitura ${view.view_count} registrada. O chat atingiu o limite e foi excluído.`); return; }
+            if (view.closed) { Object.assign(state.activeChat, view); updateReadStatus(state.activeChat); await loadGroups(state.currentGroupId); if (!silent) toast('Chat fechado.'); return true; }
+            if (view.deleted) { clearActiveChat(); await loadGroups(state.currentGroupId); if (!silent) toast(`Leitura ${view.view_count} registrada. O chat atingiu o limite e foi excluído.`); return true; }
             Object.assign(state.activeChat, view, { read_marker_message_id: null }); updateReadStatus(state.activeChat); updateMessageMarkerClasses(); await loadGroups(state.currentGroupId);
-            toast(`Leitura ${view.view_count} registrada.`);
-        } catch (error) { updateReadStatus(state.activeChat); toast(error.message); }
-    });
+            if (!silent) toast(`Leitura ${view.view_count} registrada.`);
+            return true;
+        } catch (error) { if (state.activeChat) updateReadStatus(state.activeChat); toast(error.message); return false; }
+    }
+    $('markViewed').addEventListener('click', () => markCurrentChatViewed(false));
     function updateReferenceField() { const show = ['2', '3'].includes($('chatTypeInput').value) || Number(state.activeChat?.chat_type || 0) === 3; $('chatReferenceLabel').hidden = !show; $('chatReferenceLanguageLabel').hidden = !show; }
     $('chatTypeInput').addEventListener('change', updateReferenceField);
     $('editChat').addEventListener('click', () => { const chatType = Number(state.activeChat?.chat_type || 0); $('chatTitleInput').value = state.activeChat?.titulo || ''; $('chatMaxInput').value = state.activeChat?.max ?? ''; $('chatTypeLabel').hidden = chatType === 3; $('chatTypeInput').value = String(chatType); $('chatReferenceInput').value = state.activeChat?.reference || ''; $('chatReferenceLanguageInput').value = state.activeChat?.reference_audio_language || 'pt-BR'; updateReferenceField(); $('chatDialog').showModal(); $('chatTitleInput').select(); });
@@ -663,6 +699,7 @@
     updateReadCycleCount();
     loadReadCycleCount();
     updateConversationAudioToggle();
+    updateAutomaticChatPlaylistToggle();
     loadGroups(state.currentGroupId);
 </script>
 </body>
