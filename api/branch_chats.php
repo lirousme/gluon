@@ -342,6 +342,30 @@ function branchChatsCanReviewEarly(PDO $pdo, int $chatId, int $userId): bool
     return (int)$stmt->fetchColumn() === $chatId;
 }
 
+/**
+ * Alterna os chats do maior para o menor número de leituras:
+ * maior, menor, segundo maior, segundo menor, etc.
+ * A ordenação original por leituras e data é aplicada antes desta alternância.
+ */
+function branchChatsAlternateChatOrder(array $chats): array
+{
+    $ordered = [];
+    $left = 0;
+    $right = count($chats) - 1;
+
+    while ($left <= $right) {
+        $ordered[] = $chats[$left];
+        $left++;
+
+        if ($left <= $right) {
+            $ordered[] = $chats[$right];
+            $right--;
+        }
+    }
+
+    return $ordered;
+}
+
 function branchChatsEnsureDefaultGroups(PDO $pdo, int $userId): void
 {
     $stmt = $pdo->prepare('SELECT id FROM grupo_chats WHERE user_id = :user_id AND parent_id IS NULL ORDER BY id ASC LIMIT 1');
@@ -513,7 +537,7 @@ function branchChatsGroupData(PDO $pdo, int $userId, ?int $groupId): array
            AND (cv.last_viewed_at IS NULL OR CURRENT_TIMESTAMP >= DATE_ADD(cv.last_viewed_at, INTERVAL cv.view_count MINUTE))
          ORDER BY COALESCE(cv.view_count, 0) DESC, c.created_at ASC, c.id ASC');
     $stmt->execute([':user_id' => $userId, ':view_user_id' => $userId, ':id_grupo' => $groupId]);
-    $chats = $stmt->fetchAll();
+    $chats = branchChatsAlternateChatOrder($stmt->fetchAll());
     foreach ($chats as &$chat) {
         $chat['ultima_mensagem'] = branchChatsDecryptMessageText($chat['ultima_mensagem_encrypted'] ?? null);
         unset($chat['ultima_mensagem_encrypted']);
